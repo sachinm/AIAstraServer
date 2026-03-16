@@ -1,0 +1,113 @@
+Kundli AI Query Server - Startup Guide
+======================================
+
+This guide walks you through installing, configuring, and running the Kundli AI Query server built on Node.js with ESM, vector search, and Groq LLM integration.
+
+✅ 1. Install Node.js (v18 or newer recommended)
+-----------------------------------------------
+Check your version:
+    node -v
+
+If Node.js is not installed, get it from:
+    https://nodejs.org
+
+
+📁 2. Project Structure
+-----------------------
+Ensure your project folder looks like this:
+
+kundli-ai-server/
+├── server.js                # Express server
+├── parse-kundli.js         # Converts `notes.txt` → `kundli.json`
+├── notes.txt               # Exported chart from Jagannatha Hora
+├── kundli.json             # Structured Kundli JSON (auto-generated)
+├── package.json            # Node dependencies and ESM flag
+
+
+🧱 3. Initialize the Project
+----------------------------
+If `package.json` is missing, run:
+
+    npm init -y
+
+Then edit `package.json` to enable ESM modules:
+
+{
+  "type": "module",
+  ...
+}
+
+This allows using `import` instead of `require`.
+
+
+📦 4. Install Dependencies
+--------------------------
+Run this to install required packages:
+
+    npm install express openai compute-cosine-similarity ml-kmeans
+
+Optional for development (auto-reload):
+
+    npm install --save-dev nodemon
+
+
+📝 5. Export Kundli Text File
+-----------------------------
+In Jagannatha Hora software:
+
+- Export your chart to plain text format.
+- Save the file as `notes.txt` in the project root.
+
+
+⚙️ 6. Parse the Kundli
+----------------------
+Convert the text file into structured JSON by running:
+
+    node parse-kundli.js
+
+✅ This creates `kundli.json` automatically.
+
+
+🔑 7. Set Your Groq API Key
+---------------------------
+In `server.js`, find this line:
+
+    const GROQ_API_KEY = 'your-groq-api-key-here';
+
+Replace it with your actual API key from:
+    https://console.groq.com
+
+
+▶️ 8. Start the Server
+----------------------
+Start the server with:
+
+    node server.js
+
+Or use `nodemon` for development:
+
+    npx nodemon server.js
+
+Expected output:
+
+    🚀 Server running at http://localhost:3000
+
+
+🧪 9. Send a Test Query
+-----------------------
+Use curl or any REST client like Postman:
+
+    curl -X POST http://localhost:3000/query \
+      -H "Content-Type: application/json" \
+      -d '{"question": "What is my career path according to this chart?"}'
+
+You’ll receive an AI-generated astrologically sound response.
+
+
+🧠 Notes
+--------
+- The system uses a simple hashing trick (`fakeEmbed`) to simulate embeddings.
+- It breaks the Kundli data into meaningful chunks and embeds them.
+- Then it ranks chunks by relevance using cosine similarity.
+- The prompt mimics PVR Narasimha Rao’s analytical and humble style.
+

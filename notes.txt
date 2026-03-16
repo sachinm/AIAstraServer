@@ -1,0 +1,143 @@
+
+
+Natal Chart
+
+Date:          April 27, 2002
+Time:          5:05:00 pm
+Time Zone:     5:30:00 (East of GMT)
+Place:         77 E 01' 00", 28 N 55' 00"
+               South Grafton, India
+Altitude:      0.00 meters
+
+Lunar Yr-Mo:   Chitrabhanu - Chaitra
+Tithi:         Krishna Pratipat (Su) (58.71% left)
+Vedic Weekday: Saturday (Sa)
+Nakshatra:     Swaati (Ra) (14.07% left)
+Yoga:          Siddhi (Ma) (15.30% left)
+Karana:        Balava (Mo) (17.43% left)
+Hora Lord:     Venus (5 min sign: Cp)
+Mahakala Hora: Sun (5 min sign: Ar)
+Kaala Lord:    Mercury (Mahakala: Mercury)
+
+Sunrise:       5:48:41 am
+Sunset:        6:50:58 pm
+Janma Ghatis:  28.1797
+
+Ayanamsa:      23-52-25.41
+Sidereal Time: 7:04:12
+
+Body                    Longitude        Nakshatra Pada Rasi Navamsa
+
+Lagna                   20 Vi 12' 57.44" Hast      4    Vi   Cn
+Sun - PiK               13 Ar 10' 10.48" Aswi      4    Ar   Cn
+Moon - AmK              18 Li 07' 26.10" Swat      4    Li   Pi
+Mars - MK               15 Ta 28' 26.03" Rohi      2    Ta   Ta
+Mercury - DK             2 Ta 15' 58.24" Krit      2    Ta   Cp
+Jupiter - BK            16 Ge 30' 54.68" Ardr      3    Ge   Aq
+Venus - PK               8 Ta 15' 13.92" Krit      4    Ta   Pi
+Saturn - AK             19 Ta 14' 17.44" Rohi      3    Ta   Ge
+Rahu - GK               26 Ta 19' 11.54" Mrig      1    Ta   Le
+Ketu                    26 Sc 19' 11.54" Jye       3    Sc   Aq
+Maandi                  27 Ar 45' 37.12" Krit      1    Ar   Sg
+Gulika                  12 Ar 42' 41.20" Aswi      4    Ar   Cn
+Bhava Lagna              1 Li 47' 28.23" Chit      3    Li   Li
+Hora Lagna              20 Pi 52' 10.01" Reva      2    Pi   Cp
+Ghati Lagna             18 Le 06' 15.36" PPha      2    Le   Vi
+Vighati Lagna            4 Vi 16' 42.10" UPha      3    Vi   Aq
+Varnada Lagna           20 Le 12' 57.44" PPha      3    Le   Ar
+Sree Lagna              29 Cn 33' 42.09" Asre      4    Cn   Pi
+Pranapada Lagna          4 Vi 44' 06.12" UPha      3    Vi   Aq
+Indu Lagna              18 Ta 07' 26.10" Rohi      3    Ta   Ge
+Bhrigu Bindu             7 Le 13' 18.82" Magh      3    Le   Ge
+Dhooma                  26 Le 30' 10.48" PPha      4    Le   Sc
+Vyatipata                3 Sc 29' 49.52" Anu       1    Sc   Le
+Parivesha                3 Ta 29' 49.52" Krit      3    Ta   Aq
+Indra Chapa             26 Aq 30' 10.48" PBha      2    Aq   Ta
+Upaketu                 13 Pi 10' 10.48" UBha      3    Pi   Li
+Kaala                   16 Ge 34' 47.29" Ardr      3    Ge   Aq
+Mrityu                  28 Cn 31' 46.07" Asre      4    Cn   Pi
+Artha Prahara           19 Le 44' 38.51" PPha      2    Le   Vi
+Yama Ghantaka           11 Vi 15' 46.00" Hast      1    Vi   Ar
+Prana Sphuta            23 Le 47' 28.40" PPha      4    Le   Sc
+Deha Sphuta              7 Vi 42' 09.99" UPha      4    Vi   Pi
+Mrityu Sphuta           12 Cn 08' 58.89" Push      3    Cn   Li
+Sookshma TriSphuta      13 Ta 38' 37.28" Rohi      2    Ta   Ta
+Tithi Sphuta             4 Li 57' 15.62" Chit      4    Li   Sc
+Yoga Sphuta (Sun-Moon)   1 Sc 17' 36.57" Visa      4    Sc   Cn
+Rahu Tithi Sphuta       13 Ta 09' 01.06" Rohi      1    Ta   Ar
+Kshetra Sphuta          20 Aq 06' 46.82" PBha      1    Aq   Ar
+Beeja Sphuta             7 Le 56' 19.08" Magh      3    Le   Ge
+TriSphuta               21 Ar 03' 04.74" Bhar      3    Ar   Li
+ChatusSphuta             4 Ta 13' 15.22" Krit      3    Ta   Aq
+PanchaSphuta             0 Cn 32' 26.75" Puna      4    Cn   Cn
+V2                      20 Sc 12' 57.44" Jye       2    Sc   Cn
+V3                      20 Sg 12' 57.44" PSha      3    Sg   Le
+V4                      20 Pi 12' 57.44" Reva      2    Pi   Sc
+V5                      20 Ar 12' 57.44" Bhar      3    Ar   Sg
+V6                      20 Cn 12' 57.44" Asre      2    Cn   Pi
+V7                      20 Le 12' 57.44" PPha      3    Le   Ar
+V8                      20 Sc 12' 57.44" Jye       2    Sc   Cn
+V9                      20 Sg 12' 57.44" PSha      3    Sg   Le
+V10                     20 Pi 12' 57.44" Reva      2    Pi   Sc
+V11                     20 Ar 12' 57.44" Bhar      3    Ar   Sg
+V12                     20 Cn 12' 57.44" Asre      2    Cn   Pi
+Kunda                   17 Cn 29' 32.59" Asre      1    Cn   Sg
+Yoga Sphuta              4 Aq 37' 36.57" Dhan      4    Aq   Sc
+Avayoga Sphuta          11 Le 17' 36.57" Magh      4    Le   Cn
+
++-----------------------------------------------+
+|HL         |Su   Md    |Ma   Me    |Ju         |
+|           |Gk         |Ve   Sa    |           |
+|           |           |Ra         |           |
+|           |           |           |           |
+|           |           |           |           |
+|-----------+-----------------------+-----------|
+|           |                       |           |
+|           |                       |           |
+|           |                       |           |
+|           |                       |           |
+|           |                       |           |
+|-----------|         Rasi          |-----------|
+|AL         |                       |GL         |
+|           |                       |           |
+|           |                       |           |
+|           |                       |           |
+|           |                       |           |
+|-----------+-----------------------+-----------|
+|           |Ke         |Mo         |As         |
+|           |           |           |           |
+|           |           |           |           |
+|           |           |           |           |
+|           |           |           |           |
++-----------------------------------------------+
+ 
+Vimsottari Dasa ():
+
+Rah  Rah 1986-11-11  Jup 1989-07-23  Sat 1991-12-17  
+     Merc 1994-10-24  Ket 1997-05-09  Ven 1998-05-28  
+     Sun 2001-05-28  Moon 2002-04-21  Mars 2003-10-24  
+Jup  Jup 2004-11-11  Sat 2006-12-28  Merc 2009-07-11  
+     Ket 2011-10-18  Ven 2012-09-23  Sun 2015-05-22  
+     Moon 2016-03-09  Mars 2017-07-11  Rah 2018-06-16  
+Sat  Sat 2020-11-11  Merc 2023-11-14  Ket 2026-07-24  
+     Ven 2027-09-03  Sun 2030-11-02  Moon 2031-10-16  
+     Mars 2033-05-12  Rah 2034-06-22  Jup 2037-04-27  
+Merc  Merc 2039-11-12  Ket 2042-04-06  Ven 2043-04-03  
+      Sun 2046-02-02  Moon 2046-12-11  Mars 2048-05-09  
+      Rah 2049-05-06  Jup 2051-11-27  Sat 2054-03-01  
+Ket  Ket 2056-11-11  Ven 2057-04-06  Sun 2058-06-07  
+     Moon 2058-10-15  Mars 2059-05-13  Rah 2059-10-13  
+     Jup 2060-10-30  Sat 2061-10-06  Merc 2062-11-14  
+Ven  Ven 2063-11-12  Sun 2067-03-10  Moon 2068-03-09  
+     Mars 2069-11-11  Rah 2071-01-10  Jup 2074-01-09  
+     Sat 2076-09-11  Merc 2079-11-12  Ket 2082-09-12  
+Sun  Sun 2083-11-12  Moon 2084-02-26  Mars 2084-08-30  
+     Rah 2085-01-03  Jup 2085-11-29  Sat 2086-09-18  
+     Merc 2087-08-31  Ket 2088-07-05  Ven 2088-11-11  
+Moon  Moon 2089-11-11  Mars 2090-09-12  Rah 2091-04-09  
+      Jup 2092-10-12  Sat 2094-02-08  Merc 2095-09-12  
+      Ket 2097-02-08  Ven 2097-09-12  Sun 2099-05-10  
+Mars  Mars 2099-11-12  Rah 2100-04-07  Jup 2101-04-25  
+      Sat 2102-04-01  Merc 2103-05-11  Ket 2104-05-07  
+      Ven 2104-10-07  Sun 2105-12-06  Moon 2106-04-10  
+
