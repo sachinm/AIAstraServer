@@ -67,7 +67,7 @@ export interface AstroKundliVimsottariDasa {
 const HOROSCOPE_PATH = '/api/export-horoscope';
 /** Per-request timeout (each of the 8 data points is one request). Override with ASTROKUNDLI_TIMEOUT_MS env. */
 const DEFAULT_TIMEOUT_MS = 15_000;
-const HEALTH_CHECK_TIMEOUT_MS = 5_000;
+const HEALTH_CHECK_TIMEOUT_MS = 15_000;
 
 function getHoroscopeTimeoutMs(): number {
   const env = process.env.ASTROKUNDLI_TIMEOUT_MS;

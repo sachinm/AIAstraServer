@@ -38,11 +38,12 @@ export function getAstroKundliBaseUrl(): string {
       ? 'ASTROKUNDLI_BASE_URL_PROD'
       : env === 'development'
         ? 'ASTROKUNDLI_BASE_URL_DEV'
-        : 'ASTROKUNDLI_BASE_URL_LOCAL'; // loca
+        : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local
   const url = process.env[key];
+  console.log('AstroKundli base endpoint: ', url);
   if (!url || typeof url !== 'string' || url.trim() === '') {
     throw new Error(
-      `${key} must be set for NODE_ENV=${env}. Example: http://localhost:${env === 'production' ? 8767 : env === 'staging' ? 8766 : 8765}`
+      `${key} must be set for NODE_ENV=${env}. Example: http://localhost:${env === 'production' ? 8767 : env === 'development' ? 8766 : 8765}`
     );
   }
   return url.trim().replace(/\/$/, '');
@@ -59,8 +60,9 @@ export function isAstroKundliConfigured(): boolean {
       ? 'ASTROKUNDLI_BASE_URL_PROD'
       : env === 'development'
         ? 'ASTROKUNDLI_BASE_URL_DEV'
-        : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local
+        : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local | development
   const url = process.env[key];
+  console.log('AstroKundli configured endpoint: ', url);
   return Boolean(url && typeof url === 'string' && url.trim() !== '');
 }
 
