@@ -66,8 +66,8 @@ export interface AstroKundliVimsottariDasa {
 /** Export endpoint: POST {baseUrl}/api/export-horoscope. Local dev: ASTROKUNDLI_BASE_URL_LOCAL=http://localhost:8765 */
 const HOROSCOPE_PATH = '/api/export-horoscope';
 /** Per-request timeout (each of the 8 data points is one request). Override with ASTROKUNDLI_TIMEOUT_MS env. */
-const DEFAULT_TIMEOUT_MS = 15_000;
-const HEALTH_CHECK_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 45_000;
+const HEALTH_CHECK_TIMEOUT_MS = 45_000;
 
 function getHoroscopeTimeoutMs(): number {
   const env = process.env.ASTROKUNDLI_TIMEOUT_MS;
