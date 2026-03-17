@@ -26,6 +26,7 @@ app.use(express.json());
 
 // Dev/local: allow any origin so dev:network (Vite --host) works from any LAN IP.
 const DEV_ALLOWED_ORIGINS = [
+  'https://aiastraweb.onrender.com',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:5174',
