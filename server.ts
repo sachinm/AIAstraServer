@@ -55,8 +55,33 @@ app.use(
 const yoga = createYoga({
   schema,
   context: buildContext,
+  maskedErrors: false,
 });
-app.use(yoga.graphqlEndpoint, yoga as express.RequestHandler);
+
+app.use(yoga.graphqlEndpoint, async (req, res, next) => {
+  const startedAt = Date.now();
+  let body = '';
+  try {
+    body = JSON.stringify(req.body);
+  } catch {
+    // ignore
+  }
+  console.log('[GraphQL] incoming', {
+    path: req.path,
+    method: req.method,
+    startedAt: new Date(startedAt).toISOString(),
+    bodySnippet: body.slice(0, 300),
+  });
+  try {
+    await (yoga as unknown as express.RequestHandler)(req, res, next);
+  } finally {
+    console.log('[GraphQL] completed', {
+      path: req.path,
+      durationMs: Date.now() - startedAt,
+      statusCode: res.statusCode,
+    });
+  }
+});
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
@@ -149,6 +174,7 @@ async function start(): Promise<void> {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureSuperadmin();
+    console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {
       checkAstroKundliEndpoint()
         .then(({ ok, message }) => {
