@@ -37,7 +37,7 @@ export function getAstroKundliBaseUrl(): string {
     env === 'production'
       ? 'ASTROKUNDLI_BASE_URL_PROD'
       : env === 'staging'
-        ? 'ASTROKUNDLI_BASE_URL_STAGING'
+        ? 'ASTROKUNDLI_BASE_URL_DEVELOPMENT'
         : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local | development
   const url = process.env[key];
   if (!url || typeof url !== 'string' || url.trim() === '') {
