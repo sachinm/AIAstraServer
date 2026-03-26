@@ -18,7 +18,7 @@ import { checkDatabaseConnection } from './src/lib/dbCheck.js';
 import { getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
 import { processKundliSyncQueue } from './src/services/kundliQueueService.js';
 import { queueLogError } from './src/lib/queueLogger.js';
-import { checkAstroKundliEndpoint } from './src/lib/astroKundliClient.js';
+import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
@@ -188,6 +188,9 @@ async function start(): Promise<void> {
         .catch((err) => {
           console.warn('⚠️ AstroKundli endpoint check failed:', (err as Error).message);
         });
+      probeAstroKundliWithBogusParams().catch((err) => {
+        console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
+      });
       // Queue runs on-demand after signup/login; run once on startup to process any pending rows
       processKundliSyncQueue(prisma).catch((err) => {
         queueLogError({

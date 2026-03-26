@@ -69,6 +69,7 @@ const HOROSCOPE_PATH = '/api/export-horoscope';
 /** Per-request timeout (each of the 8 data points is one request). Override with ASTROKUNDLI_TIMEOUT_MS env. */
 const DEFAULT_TIMEOUT_MS = 45_000;
 const HEALTH_CHECK_TIMEOUT_MS = 45_000;
+const STARTUP_PROBE_TIMEOUT_MS = 20_000;
 
 function getHoroscopeTimeoutMs(): number {
   const env = process.env.ASTROKUNDLI_TIMEOUT_MS;
@@ -280,6 +281,83 @@ export async function checkAstroKundliEndpoint(): Promise<{
           ? `${baseUrl} timeout after ${HEALTH_CHECK_TIMEOUT_MS}ms`
           : `${baseUrl} error: ${msg}`,
     };
+  }
+}
+
+/**
+ * Startup probe: intentionally send bogus params to the export endpoint so we can
+ * verify request/response/error logging for the 3rd-party integration.
+ * This probe is non-critical and should never crash server startup.
+ */
+export async function probeAstroKundliWithBogusParams(): Promise<void> {
+  let baseUrl: string;
+  try {
+    baseUrl = getAstroKundliBaseUrl();
+  } catch (err) {
+    console.warn('[AstroKundli] startup bogus-probe skipped (base URL missing)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  const url = `${baseUrl}${HOROSCOPE_PATH}`;
+  const apiKey = getAstroKundliApiKey();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers['X-API-Key'] = apiKey;
+  }
+
+  const bogusBody = {
+    dob: '2000-01-01',
+    tob: '00:00',
+    place: 'Pune,IN',
+    type: 'biodata',
+    ayanamsa: 'LAHIRI',
+  };
+
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
+
+  console.log('[AstroKundli] startup bogus-probe outgoing', {
+    url,
+    method: 'POST',
+    timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
+    hasApiKey: Boolean(apiKey),
+    body: bogusBody,
+  });
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bogusBody),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const rawText = await res.text();
+    const previewMaxLen = 1500;
+    const truncated = rawText.length > previewMaxLen;
+
+    console.log('[AstroKundli] startup bogus-probe response', {
+      url,
+      status: res.status,
+      ok: res.ok,
+      durationMs: Date.now() - startedAt,
+      response_preview: truncated ? rawText.slice(0, previewMaxLen) + '...[truncated]' : rawText,
+      truncated,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('[AstroKundli] startup bogus-probe error', {
+      url,
+      durationMs: Date.now() - startedAt,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
