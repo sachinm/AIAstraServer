@@ -42,7 +42,6 @@ export function getAstroKundliBaseUrl(): string {
         ? 'ASTROKUNDLI_BASE_URL_DEV'
         : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local
   const url = process.env[key];
-  console.log('AstroKundli base endpoint: ', url);
   if (!url || typeof url !== 'string' || url.trim() === '') {
     throw new Error(
       `${key} must be set for NODE_ENV=${env}. Example: http://localhost:${env === 'production' ? 8767 : env === 'staging' ? 8766 : env === 'development' ? 8765 : 8765}`
@@ -66,7 +65,6 @@ export function isAstroKundliConfigured(): boolean {
         ? 'ASTROKUNDLI_BASE_URL_DEV'
         : 'ASTROKUNDLI_BASE_URL_LOCAL'; // local | development
   const url = process.env[key];
-  console.log('AstroKundli configured endpoint: ', url);
   return Boolean(url && typeof url === 'string' && url.trim() !== '');
 }
 
@@ -86,7 +84,8 @@ export function isAstroKundliLogResponseEnabled(): boolean {
 }
 
 const DEFAULT_KUNDLI_QUEUE_BATCH_SIZE = 2;
-const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 10;
+/** Default 2: remote AstroKundli is often single-worker; many parallel POSTs queue behind each other and hit client timeouts. */
+const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 2;
 
 /**
  * Max number of Kundli users to process in parallel per queue run.
@@ -105,7 +104,7 @@ export function getKundliQueueBatchSize(): number {
 /**
  * Max concurrent AstroKundli API requests per user (data points fetched in chunks).
  * Lower values reduce server load; peak concurrent calls = batch size × this value.
- * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer, default 4).
+ * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer, default 2).
  */
 export function getKundliQueueMaxFetchesPerUser(): number {
   const raw = process.env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER;

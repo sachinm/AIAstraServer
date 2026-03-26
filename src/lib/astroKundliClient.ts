@@ -66,10 +66,11 @@ export interface AstroKundliVimsottariDasa {
 
 /** Export endpoint: POST {baseUrl}/api/export-horoscope. Local dev: ASTROKUNDLI_BASE_URL_LOCAL=http://localhost:8765 */
 const HOROSCOPE_PATH = '/api/export-horoscope';
-/** Per-request timeout (each of the 8 data points is one request). Override with ASTROKUNDLI_TIMEOUT_MS env. */
-const DEFAULT_TIMEOUT_MS = 45_000;
+/** Per-request timeout (each of the 8 data points is one request). Remote hosts (e.g. Render) often need >45s under load. Override with ASTROKUNDLI_TIMEOUT_MS. */
+const DEFAULT_TIMEOUT_MS = 120_000;
 const HEALTH_CHECK_TIMEOUT_MS = 45_000;
 const STARTUP_PROBE_TIMEOUT_MS = 20_000;
+const STARTUP_BOGUS_PROBE_RUN_KEY = Symbol.for('adastra.astroKundli.startup-bogus-probe-ran');
 
 function getHoroscopeTimeoutMs(): number {
   const env = process.env.ASTROKUNDLI_TIMEOUT_MS;
@@ -290,6 +291,10 @@ export async function checkAstroKundliEndpoint(): Promise<{
  * This probe is non-critical and should never crash server startup.
  */
 export async function probeAstroKundliWithBogusParams(): Promise<void> {
+  const globalState = globalThis as Record<symbol, unknown>;
+  if (globalState[STARTUP_BOGUS_PROBE_RUN_KEY]) return;
+  globalState[STARTUP_BOGUS_PROBE_RUN_KEY] = true;
+
   let baseUrl: string;
   try {
     baseUrl = getAstroKundliBaseUrl();
