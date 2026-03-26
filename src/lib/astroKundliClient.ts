@@ -21,7 +21,8 @@ export type KundliJsonField = (typeof KUNDLI_JSON_FIELDS)[number];
 export interface AstroKundliRequestParams {
   dob: string; // "YYYY-MM-DD" or "YYYY,MM,DD"
   tob: string; // "HH:MM:SS"
-  place: string; // "City, Country" or lat/lon/tz if API supports
+  /** `CityPart,CC` — city uses underscores instead of spaces; country is ISO alpha-2 (Python-friendly). */
+  place: string;
   ayanamsa?: string; // default "LAHIRI"
 }
 
@@ -96,9 +97,86 @@ export function authToAstroKundliParams(auth: AuthLikeForKundli): AstroKundliReq
 
   const dob = normalizeDob(dobRaw);
   const tob = normalizeTob(tobRaw);
-  const place = placeRaw.trim() || 'Unknown';
+  const place = normalizePlaceForAstroKundli(placeRaw);
 
   return { dob, tob, place, ayanamsa: 'LAHIRI' };
+}
+
+/** Common country names / aliases → ISO 3166-1 alpha-2 (lowercase keys). */
+const COUNTRY_NAME_TO_CODE: Record<string, string> = {
+  india: 'IN',
+  in: 'IN',
+  bharat: 'IN',
+  'united states': 'US',
+  usa: 'US',
+  us: 'US',
+  america: 'US',
+  'united kingdom': 'GB',
+  uk: 'GB',
+  gb: 'GB',
+  england: 'GB',
+  scotland: 'GB',
+  wales: 'GB',
+  canada: 'CA',
+  ca: 'CA',
+  australia: 'AU',
+  au: 'AU',
+  nepal: 'NP',
+  np: 'NP',
+  bangladesh: 'BD',
+  bd: 'BD',
+  pakistan: 'PK',
+  pk: 'PK',
+  'sri lanka': 'LK',
+  'sri-lanka': 'LK',
+  lk: 'LK',
+  uae: 'AE',
+  'united arab emirates': 'AE',
+  ae: 'AE',
+  singapore: 'SG',
+  sg: 'SG',
+  germany: 'DE',
+  de: 'DE',
+  france: 'FR',
+  fr: 'FR',
+  japan: 'JP',
+  jp: 'JP',
+  china: 'CN',
+  cn: 'CN',
+  mexico: 'MX',
+  mx: 'MX',
+  brazil: 'BR',
+  br: 'BR',
+};
+
+/**
+ * AstroKundli Python expects a single comma: `<cityPart>,<countryCode>` with no spaces.
+ * Multi-word cities (e.g. "New Delhi, India") become `New_Delhi,IN` so parsing stays stable.
+ */
+export function normalizePlaceForAstroKundli(raw: string): string {
+  const s = raw.trim().replace(/\s*,\s*/g, ',');
+  if (!s) return 'Unknown';
+
+  const segments = s.split(',').map((p) => p.trim()).filter(Boolean);
+  if (segments.length < 2) {
+    const cityOnly = segments[0] ?? s;
+    const underscored = cityOnly.replace(/\s+/g, '_');
+    return underscored === '' ? 'Unknown' : `${underscored},ZZ`;
+  }
+
+  const countryPart = segments[segments.length - 1]!;
+  const cityPart = segments.slice(0, -1).join(', ');
+  const countryCode = resolveCountryCode(countryPart);
+  const cityUnderscored = cityPart.replace(/\s+/g, '_');
+  return `${cityUnderscored},${countryCode}`;
+}
+
+function resolveCountryCode(raw: string): string {
+  const t = raw.trim();
+  if (!t) return 'ZZ';
+  if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
+  const key = t.toLowerCase();
+  return COUNTRY_NAME_TO_CODE[key] ?? 'ZZ';
 }
 
 function normalizeDob(raw: string): string {
@@ -159,12 +237,24 @@ export async function checkAstroKundliEndpoint(): Promise<{
   }
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+  const startedAt = Date.now();
+  console.log('[AstroKundli] health-check outgoing', {
+    url: baseUrl,
+    method: 'GET',
+    timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
+  });
   try {
     const res = await fetch(baseUrl, {
       method: 'GET',
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+    console.log('[AstroKundli] health-check response', {
+      url: baseUrl,
+      status: res.status,
+      ok: res.ok,
+      durationMs: Date.now() - startedAt,
+    });
     if (res.ok || res.status === 404) {
       return { ok: true, message: `${baseUrl} reachable (HTTP ${res.status})` };
     }
@@ -175,6 +265,11 @@ export async function checkAstroKundliEndpoint(): Promise<{
   } catch (err) {
     clearTimeout(timeoutId);
     const msg = err instanceof Error ? err.message : String(err);
+    console.error('[AstroKundli] health-check error', {
+      url: baseUrl,
+      durationMs: Date.now() - startedAt,
+      error: msg,
+    });
     const isRefused = /ECONNREFUSED|fetch failed|Failed to fetch/i.test(msg);
     const isTimeout = /abort|timeout/i.test(msg);
     return {
@@ -222,6 +317,15 @@ export async function fetchHoroscopeChart(
   const timeoutMs = getHoroscopeTimeoutMs();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+
+  console.log('[AstroKundli] outgoing', {
+    url,
+    method: 'POST',
+    type,
+    timeoutMs,
+    hasApiKey: Boolean(apiKey),
+  });
 
   try {
     const res = await fetch(url, {
@@ -233,17 +337,28 @@ export async function fetchHoroscopeChart(
     clearTimeout(timeoutId);
 
     const json = (await res.json()) as AstroKundliResponse<Record<string, unknown>>;
+    const responseStr = JSON.stringify(json);
+    const maxLen = 1500;
+    const truncated = responseStr.length > maxLen;
+    console.log('[AstroKundli] response', {
+      url,
+      type,
+      status: res.status,
+      ok: res.ok,
+      durationMs: Date.now() - startedAt,
+      response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
+      truncated,
+    });
 
     if (isAstroKundliLogResponseEnabled()) {
-      const responseStr = JSON.stringify(json);
-      const maxLen = 5000;
-      const truncated = responseStr.length > maxLen;
+      const queueMaxLen = 5000;
+      const queueTruncated = responseStr.length > queueMaxLen;
       queueLog({
         event: 'astrokundli_api_response',
         type,
         http_status: res.status,
-        response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
-        truncated,
+        response_preview: queueTruncated ? responseStr.slice(0, queueMaxLen) + '...[truncated]' : responseStr,
+        truncated: queueTruncated,
       });
     }
 
@@ -258,6 +373,13 @@ export async function fetchHoroscopeChart(
     return parseAstroKundliResponse(json);
   } catch (err) {
     clearTimeout(timeoutId);
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error('[AstroKundli] error', {
+      url,
+      type,
+      durationMs: Date.now() - startedAt,
+      error: errorMessage,
+    });
     if (err instanceof Error) {
       throw err;
     }
