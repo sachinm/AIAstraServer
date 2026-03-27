@@ -114,3 +114,42 @@ export function getKundliQueueMaxFetchesPerUser(): number {
   }
   return DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER;
 }
+
+/** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
+export type ChatLlmProvider = 'groq' | 'gemini';
+
+/**
+ * Reads CHAT_LLM_PROVIDER (case-insensitive). Defaults to `groq` for backward compatibility.
+ * Use `gemini` to route chat to Gemini (`GEMINI_API_KEY`, `GEMINI_API_URL`, `GEMINI_FLASH_MODEL_ID`).
+ */
+export function getChatLlmProvider(): ChatLlmProvider {
+  const raw = process.env.CHAT_LLM_PROVIDER?.trim().toLowerCase() || 'gemini';
+  if (raw === 'gemini') return 'gemini';
+  return 'groq';
+}
+
+/**
+ * Base path for Gemini REST `models/{id}:generateContent` (no trailing slash).
+ * Default: Google Generative Language API v1beta.
+ */
+export function getGeminiModelsBaseUrl(): string {
+  return (
+    process.env.GEMINI_API_URL?.trim() ||
+    'https://generativelanguage.googleapis.com/v1beta/models'
+  ).replace(/\/$/, '');
+}
+
+/** Model id for chat (e.g. gemini-2.5-flash). */
+export function getGeminiChatModelId(): string {
+  return process.env.GEMINI_FLASH_MODEL_ID?.trim() || 'gemini-2.0-flash';
+}
+
+/**
+ * Full URL for POST generateContent (without `?key=`).
+ * Example: .../v1beta/models/gemini-2.0-flash:generateContent
+ */
+export function getGeminiGenerateContentUrl(): string {
+  const base = getGeminiModelsBaseUrl();
+  const model = getGeminiChatModelId();
+  return `${base}/${model}:generateContent`;
+}

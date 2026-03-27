@@ -2,7 +2,7 @@ import { createSchema } from 'graphql-yoga';
 import type { Prisma } from '@prisma/client';
 import { login, signup } from '../services/authService.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
-import { chatWithGroq } from '../services/groqChatService.js';
+import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
 import { requireRoles } from './rbac.js';
@@ -292,7 +292,7 @@ const resolvers = {
             error: 'Your chart is still being prepared. Chat will be available once your Kundli data has finished syncing from AstroKundli.',
           };
         }
-        const chatResult = await chatWithGroq(db, userId, question);
+        const chatResult = await chatWithConfiguredProvider(db, userId, question);
         let chat: { id: string } | null = null;
         if (chatId?.trim()) {
           chat = await db.chat.findFirst({
