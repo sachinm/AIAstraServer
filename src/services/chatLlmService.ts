@@ -8,14 +8,20 @@ import { chatWithGemini } from './geminiChatService.js';
 
 export type ChatTurnResult = ChatWithGroqResult;
 
+export type ChatWithLlmOptions = {
+  /** Fired for each streamed token delta (Gemini SSE + Groq stream). */
+  onDelta?: (delta: string) => void;
+};
+
 export async function chatWithConfiguredProvider(
   prisma: PrismaClient,
   userId: string,
-  question: string
+  question: string,
+  options?: ChatWithLlmOptions
 ): Promise<ChatTurnResult> {
   const provider = getChatLlmProvider();
   if (provider === 'gemini') {
-    return chatWithGemini(prisma, userId, question);
+    return chatWithGemini(prisma, userId, question, options);
   }
-  return chatWithGroq(prisma, userId, question);
+  return chatWithGroq(prisma, userId, question, options);
 }

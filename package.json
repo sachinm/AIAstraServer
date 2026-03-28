@@ -47,6 +47,7 @@
     "node-fetch": "^3.3.2",
     "p-limit": "^7.0.0",
     "pdf-parse-fixed": "^1.1.1",
+    "undici": "^6.21.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { login, signup } from '../services/authService.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
+import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
 import { requireRoles } from './rbac.js';
@@ -291,53 +292,12 @@ const resolvers = {
         return { success: false, answer: null, error: 'Not authenticated' };
       }
       try {
-        const user = await db.auth.findUnique({
-          where: { id: userId },
-          select: { id: true, kundli_added: true },
-        });
-        if (!user) {
-          return { success: false, answer: null, error: 'User not found' };
-        }
-        if (!user.kundli_added) {
-          return {
-            success: false,
-            answer: null,
-            error: 'Your chart is still being prepared. Chat will be available once your Kundli data has finished syncing from AstroKundli.',
-          };
+        const pre = await validateAskForUser(db, userId);
+        if (!pre.ok) {
+          return { success: false, answer: null, error: pre.error };
         }
         const chatResult = await chatWithConfiguredProvider(db, userId, question);
-        let chat: { id: string } | null = null;
-        if (chatId?.trim()) {
-          chat = await db.chat.findFirst({
-            where: { id: chatId.trim(), user_id: userId },
-            select: { id: true },
-          });
-        }
-        if (!chat) {
-          await db.chat.updateMany({
-            where: { user_id: userId },
-            data: { is_active: false },
-          });
-          chat = await db.chat.create({
-            data: { user_id: userId, is_active: true },
-            select: { id: true },
-          });
-        }
-        const message = await db.message.create({
-          data: {
-            chat_id: chat.id,
-            question,
-            ai_answer: chatResult.answerText,
-          },
-        });
-        await db.chatLog.create({
-          data: {
-            chat_id: chat.id,
-            message_id: message.id,
-            request_payload: chatResult.requestPayload as Prisma.InputJsonValue,
-            response_payload: chatResult.responsePayload as Prisma.InputJsonValue,
-          },
-        });
+        await persistAskTurn(db, userId, chatId, question, chatResult);
         return { success: true, answer: chatResult.answerText, error: null };
       } catch (err) {
         const msg = (err as Error)?.message || 'Query failed';

@@ -2,9 +2,12 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   getChatLlmProvider,
   getGeminiGenerateContentUrl,
+  getGeminiStreamGenerateContentUrl,
   getGeminiChatModelId,
   getGeminiModelsBaseUrl,
   getGeminiMaxOutputTokens,
+  getGeminiUndiciBodyTimeoutMs,
+  getGeminiUndiciHeadersTimeoutMs,
 } from '../../src/config/env.js';
 
 describe('chat LLM env helpers', () => {
@@ -45,6 +48,9 @@ describe('chat LLM env helpers', () => {
     expect(getGeminiGenerateContentUrl()).toBe(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-test-model:generateContent'
     );
+    expect(getGeminiStreamGenerateContentUrl()).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-test-model:streamGenerateContent'
+    );
   });
 
   it('getGeminiModelsBaseUrl strips trailing slash', () => {
@@ -69,5 +75,27 @@ describe('chat LLM env helpers', () => {
     save('GEMINI_MAX_OUTPUT_TOKENS');
     process.env.GEMINI_MAX_OUTPUT_TOKENS = '16384';
     expect(getGeminiMaxOutputTokens()).toBe(16384);
+  });
+
+  it('Gemini undici timeouts default to 600000ms when unset', () => {
+    save('GEMINI_HTTP_TIMEOUT_MS');
+    save('GEMINI_FETCH_HEADERS_TIMEOUT_MS');
+    save('GEMINI_FETCH_BODY_TIMEOUT_MS');
+    delete process.env.GEMINI_HTTP_TIMEOUT_MS;
+    delete process.env.GEMINI_FETCH_HEADERS_TIMEOUT_MS;
+    delete process.env.GEMINI_FETCH_BODY_TIMEOUT_MS;
+    expect(getGeminiUndiciHeadersTimeoutMs()).toBe(600_000);
+    expect(getGeminiUndiciBodyTimeoutMs()).toBe(600_000);
+  });
+
+  it('GEMINI_HTTP_TIMEOUT_MS sets both undici timeouts', () => {
+    save('GEMINI_HTTP_TIMEOUT_MS');
+    save('GEMINI_FETCH_HEADERS_TIMEOUT_MS');
+    save('GEMINI_FETCH_BODY_TIMEOUT_MS');
+    delete process.env.GEMINI_FETCH_HEADERS_TIMEOUT_MS;
+    delete process.env.GEMINI_FETCH_BODY_TIMEOUT_MS;
+    process.env.GEMINI_HTTP_TIMEOUT_MS = '450000';
+    expect(getGeminiUndiciHeadersTimeoutMs()).toBe(450_000);
+    expect(getGeminiUndiciBodyTimeoutMs()).toBe(450_000);
   });
 });

@@ -117,7 +117,8 @@ export interface ChatWithGroqResult {
 export async function chatWithGroq(
   prisma: PrismaClient,
   userId: string,
-  userQuestion: string
+  userQuestion: string,
+  options?: { onDelta?: (delta: string) => void }
 ): Promise<ChatWithGroqResult> {
   const systemPrompt = await loadSystemPrompt(prisma, GROQ_CHAT_SYSTEM_PROMPT_NAME);
   const kundliRow = await fetchLatestKundliForUser(prisma, userId);
@@ -168,7 +169,10 @@ export async function chatWithGroq(
   for await (const chunk of stream) {
     lastChunk = chunk as { choices?: Array<{ finish_reason?: string }>; usage?: unknown };
     const delta = (chunk as { choices?: Array<{ delta?: { content?: string } }> })?.choices?.[0]?.delta?.content;
-    if (typeof delta === 'string') fullContent += delta;
+    if (typeof delta === 'string') {
+      fullContent += delta;
+      options?.onDelta?.(delta);
+    }
   }
 
   const answerText = fullContent.trim() || 'No response generated.';

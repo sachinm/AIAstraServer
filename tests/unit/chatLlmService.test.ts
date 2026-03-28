@@ -41,7 +41,7 @@ describe('chatWithConfiguredProvider', () => {
     const prisma = {} as PrismaClient;
     const out = await chatWithConfiguredProvider(prisma, 'uid', 'hello');
     expect(out.answerText).toBe('from-groq');
-    expect(groqMock).toHaveBeenCalledWith(prisma, 'uid', 'hello');
+    expect(groqMock).toHaveBeenCalledWith(prisma, 'uid', 'hello', undefined);
     expect(geminiMock).not.toHaveBeenCalled();
   });
 
@@ -58,7 +58,7 @@ describe('chatWithConfiguredProvider', () => {
     const prisma = {} as PrismaClient;
     const out = await chatWithConfiguredProvider(prisma, 'uid', 'hello');
     expect(out.answerText).toBe('from-gemini');
-    expect(geminiMock).toHaveBeenCalledWith(prisma, 'uid', 'hello');
+    expect(geminiMock).toHaveBeenCalledWith(prisma, 'uid', 'hello', undefined);
     expect(groqMock).not.toHaveBeenCalled();
   });
 });

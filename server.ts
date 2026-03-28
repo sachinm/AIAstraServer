@@ -19,6 +19,8 @@ import { getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/
 import { processKundliSyncQueue } from './src/services/kundliQueueService.js';
 import { queueLogError } from './src/lib/queueLogger.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
+import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
+import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
@@ -100,6 +102,54 @@ function getUserIdFromRequest(req: express.Request): string | null {
     return null;
   }
 }
+
+/**
+ * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
+ * Same persistence as GraphQL `ask`. Requires `Authorization: Bearer <jwt>`.
+ */
+app.post('/api/chat/ask-stream', async (req, res) => {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { question, chatId } = req.body as { question?: string; chatId?: string | null };
+  if (!question || typeof question !== 'string' || !question.trim()) {
+    return res.status(400).json({ error: 'question is required' });
+  }
+
+  const pre = await validateAskForUser(prisma, userId);
+  if (!pre.ok) {
+    return res.status(400).json({ error: pre.error });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.status(200);
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
+
+  const writeSse = (obj: unknown) => {
+    res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  };
+
+  try {
+    const q = question.trim();
+    const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
+      onDelta: (delta) => {
+        if (delta) writeSse({ type: 'token', delta });
+      },
+    });
+    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult);
+    writeSse({ type: 'done', chatId: finalChatId, answer: chatResult.answerText });
+  } catch (e) {
+    writeSse({ type: 'error', message: (e as Error).message || 'Chat failed' });
+  } finally {
+    res.end();
+  }
+});
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {

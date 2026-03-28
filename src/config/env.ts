@@ -123,7 +123,7 @@ export type ChatLlmProvider = 'groq' | 'gemini';
  * Use `gemini` to route chat to Gemini (`GEMINI_API_KEY`, `GEMINI_API_URL`, `GEMINI_FLASH_MODEL_ID`).
  */
 export function getChatLlmProvider(): ChatLlmProvider {
-  const raw = process.env.CHAT_LLM_PROVIDER?.trim().toLowerCase() || 'gemini';
+  const raw = process.env.CHAT_LLM_PROVIDER?.trim().toLowerCase() || 'groq';
   if (raw === 'gemini') return 'gemini';
   return 'groq';
 }
@@ -154,8 +154,18 @@ export function getGeminiGenerateContentUrl(): string {
   return `${base}/${model}:generateContent`;
 }
 
-/** Default matches previous hardcoded Gemini `generationConfig.maxOutputTokens`. */
-const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 50000;
+/**
+ * Same model path as {@link getGeminiGenerateContentUrl} but `:streamGenerateContent`.
+ * Call with query `alt=sse` for newline-delimited SSE `data:` JSON chunks.
+ */
+export function getGeminiStreamGenerateContentUrl(): string {
+  const base = getGeminiModelsBaseUrl();
+  const model = getGeminiChatModelId();
+  return `${base}/${model}:streamGenerateContent`;
+}
+
+/** Default when GEMINI_MAX_OUTPUT_TOKENS is unset (matches prior hardcoded chat default). */
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 8192;
 const MIN_GEMINI_MAX_OUTPUT_TOKENS = 256;
 /** Hard cap to avoid accidental huge values; model/API may enforce a lower max. */
 const MAX_GEMINI_MAX_OUTPUT_TOKENS_CAP = 65_536;
@@ -173,4 +183,35 @@ export function getGeminiMaxOutputTokens(): number {
     }
   }
   return DEFAULT_GEMINI_MAX_OUTPUT_TOKENS;
+}
+
+/**
+ * Node's native `fetch` (undici) defaults headersTimeout/bodyTimeout to **300s**.
+ * Gemini can use the full 300s+ for one `generateContent`, which triggers UND_ERR_HEADERS_TIMEOUT
+ * / aborted signal — often surfaced to the client as "signal is aborted without reason".
+ * Override with GEMINI_HTTP_TIMEOUT_MS (applies to both) or the specific vars. **0** = no timeout (undici).
+ */
+const DEFAULT_GEMINI_HTTP_TIMEOUT_MS = 600_000;
+
+function parseNonNegativeTimeoutMs(raw: string | undefined): number | undefined {
+  if (raw == null || raw.trim() === '') return undefined;
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.floor(n);
+}
+
+export function getGeminiUndiciHeadersTimeoutMs(): number {
+  return (
+    parseNonNegativeTimeoutMs(process.env.GEMINI_FETCH_HEADERS_TIMEOUT_MS) ??
+    parseNonNegativeTimeoutMs(process.env.GEMINI_HTTP_TIMEOUT_MS) ??
+    DEFAULT_GEMINI_HTTP_TIMEOUT_MS
+  );
+}
+
+export function getGeminiUndiciBodyTimeoutMs(): number {
+  return (
+    parseNonNegativeTimeoutMs(process.env.GEMINI_FETCH_BODY_TIMEOUT_MS) ??
+    parseNonNegativeTimeoutMs(process.env.GEMINI_HTTP_TIMEOUT_MS) ??
+    DEFAULT_GEMINI_HTTP_TIMEOUT_MS
+  );
 }
