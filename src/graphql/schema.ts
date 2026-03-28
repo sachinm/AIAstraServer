@@ -39,6 +39,18 @@ const typeDefs = /* GraphQL */ `
     error: String
   }
 
+  type KundliDisplayDataResult {
+    success: Boolean!
+    error: String
+    biodata: String
+    d1: String
+    d7: String
+    d9: String
+    d10: String
+    vimsottari_dasa: String
+    narayana_dasa: String
+  }
+
   type LoginResult {
     success: Boolean!
     message: String
@@ -183,6 +195,7 @@ const typeDefs = /* GraphQL */ `
     meDetails: UserDetails
     myBiodata: BiodataResult
     myContent: UserContentResult
+    myKundliDisplayData: KundliDisplayDataResult
     ask(question: String!, chatId: ID): AskResult
     chats: ChatsResult
     activeChat: ChatResult
@@ -449,6 +462,76 @@ const resolvers = {
         return {
           success: false,
           content: null,
+          error: (err as Error)?.message || 'Server error',
+        };
+      }
+    },
+    async myKundliDisplayData(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      const empty = {
+        success: false as const,
+        error: null as string | null,
+        biodata: null as string | null,
+        d1: null as string | null,
+        d7: null as string | null,
+        d9: null as string | null,
+        d10: null as string | null,
+        vimsottari_dasa: null as string | null,
+        narayana_dasa: null as string | null,
+      };
+      const result = withAuth(context, () => null);
+      if (result && 'success' in result && !result.success) {
+        return { ...empty, error: result.error };
+      }
+      const { userId, prisma: db } = context;
+      if (!userId) {
+        return { ...empty, error: 'Not authenticated' };
+      }
+      const jsonToString = (value: Prisma.JsonValue | null | undefined): string | null => {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string') return value;
+        return JSON.stringify(value);
+      };
+      try {
+        const user = await db.auth.findUnique({
+          where: { id: userId },
+          select: { id: true, is_active: true, kundli_added: true },
+        });
+        if (!user || !user.is_active) {
+          return { ...empty, error: 'Not available' };
+        }
+        if (!user.kundli_added) {
+          return { ...empty, error: 'Kundli sync not complete' };
+        }
+        const kundli = await db.kundli.findFirst({
+          where: { user_id: userId },
+          orderBy: { created_at: 'desc' },
+          select: {
+            biodata: true,
+            d1: true,
+            d7: true,
+            d9: true,
+            d10: true,
+            vimsottari_dasa: true,
+            narayana_dasa: true,
+          },
+        });
+        if (!kundli) {
+          return { ...empty, error: 'No kundli found' };
+        }
+        return {
+          success: true,
+          error: null,
+          biodata: jsonToString(kundli.biodata),
+          d1: jsonToString(kundli.d1),
+          d7: jsonToString(kundli.d7),
+          d9: jsonToString(kundli.d9),
+          d10: jsonToString(kundli.d10),
+          vimsottari_dasa: jsonToString(kundli.vimsottari_dasa),
+          narayana_dasa: jsonToString(kundli.narayana_dasa),
+        };
+      } catch (err) {
+        return {
+          ...empty,
           error: (err as Error)?.message || 'Server error',
         };
       }
