@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { login, signup } from '../services/authService.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
+import { logChatProviderError, toPublicChatErrorMessage } from '../services/chatPublicError.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
@@ -300,8 +301,8 @@ const resolvers = {
         await persistAskTurn(db, userId, chatId, question, chatResult, false);
         return { success: true, answer: chatResult.answerText, error: null };
       } catch (err) {
-        const msg = (err as Error)?.message || 'Query failed';
-        return { success: false, answer: null, error: msg };
+        logChatProviderError('graphql ask', err);
+        return { success: false, answer: null, error: toPublicChatErrorMessage(err) };
       }
     },
     async meDetails(_parent: unknown, _args: unknown, context: GraphQLContext) {

@@ -107,6 +107,8 @@ export interface ChatWithGroqResult {
   answerText: string;
   requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown>;
+  /** Gemini 2.5+ thinking trace when enabled (not persisted on Message row; optional log metadata). */
+  thinkingText?: string;
 }
 
 /**

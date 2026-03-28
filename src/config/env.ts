@@ -141,7 +141,41 @@ export function getGeminiModelsBaseUrl(): string {
 
 /** Model id for chat (e.g. gemini-2.5-flash). */
 export function getGeminiChatModelId(): string {
-  return process.env.GEMINI_FLASH_MODEL_ID?.trim() || 'gemini-2.0-flash';
+  return process.env.GEMINI_FLASH_MODEL_ID?.trim() || 'gemini-2.5-flash';
+}
+
+/**
+ * Optional `thinkingBudget` for Gemini 2.5+ when thoughts are streamed.
+ * 0 = dynamic default per Google; unset uses env or 8192.
+ */
+export function getGeminiThinkingBudget(): number {
+  const raw = process.env.GEMINI_THINKING_BUDGET?.trim();
+  if (raw === undefined || raw === '') return 8192;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 8192;
+  return Math.floor(n);
+}
+
+/** When false, omit thinkingConfig (no thought stream). Default true. */
+export function isGeminiIncludeThoughtsEnabled(): boolean {
+  const raw = process.env.GEMINI_INCLUDE_THOUGHTS?.trim().toLowerCase();
+  if (raw === '0' || raw === 'false' || raw === 'off') return false;
+  return true;
+}
+
+/**
+ * Options for `@langchain/google-genai` client when `GEMINI_API_URL` points at the REST models base.
+ */
+export function getGeminiGoogleGenAiClientOptions(): { baseUrl?: string; apiVersion?: string } {
+  const raw = process.env.GEMINI_API_URL?.trim();
+  if (!raw) return { apiVersion: 'v1beta' };
+  try {
+    const u = new URL(raw);
+    const apiVersion = u.pathname.includes('v1alpha') ? 'v1alpha' : 'v1beta';
+    return { baseUrl: u.origin, apiVersion };
+  } catch {
+    return { apiVersion: 'v1beta' };
+  }
 }
 
 /**

@@ -1,31 +1,23 @@
 /**
- * Gemini chat – REST `generateContent` with system prompt from DB and the same Kundli packaging as Groq.
+ * Gemini chat via LangGraph + @langchain/google-genai (streamGenerateContent under the hood).
+ * Streams answer tokens and optional Gemini 2.5 “thinking” parts for SSE clients.
  */
 import type { PrismaClient } from '@prisma/client';
-import { Agent, fetch as undiciFetch } from 'undici';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { HumanMessage, SystemMessage, isAIMessage, isAIMessageChunk } from '@langchain/core/messages';
+import type { AIMessage, AIMessageChunk, BaseMessage, BaseMessageChunk } from '@langchain/core/messages';
+import { END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
 import { loadSystemPrompt } from './kundliService.js';
 import { fetchLatestKundliForUser } from '../../kundli-rag.js';
 import { buildUserMessageWithKundli } from './groqChatService.js';
 import type { ChatWithGroqResult } from './groqChatService.js';
 import {
+  getGeminiChatModelId,
+  getGeminiGoogleGenAiClientOptions,
   getGeminiMaxOutputTokens,
-  getGeminiStreamGenerateContentUrl,
-  getGeminiUndiciBodyTimeoutMs,
-  getGeminiUndiciHeadersTimeoutMs,
+  isGeminiIncludeThoughtsEnabled,
+  getGeminiThinkingBudget,
 } from '../config/env.js';
-
-/** Reused undici Agent so connections pool; timeouts read from env on first use. */
-let geminiUndiciAgent: Agent | undefined;
-
-function getGeminiUndiciAgent(): Agent {
-  if (!geminiUndiciAgent) {
-    geminiUndiciAgent = new Agent({
-      headersTimeout: getGeminiUndiciHeadersTimeoutMs(),
-      bodyTimeout: getGeminiUndiciBodyTimeoutMs(),
-    });
-  }
-  return geminiUndiciAgent;
-}
 
 const GEMINI_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 
@@ -35,153 +27,71 @@ function getGeminiApiKey(): string {
   return key;
 }
 
-interface GeminiGenerateContentResponse {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }>; role?: string };
-    finishReason?: string;
-  }>;
-  promptFeedback?: { blockReason?: string };
-  usageMetadata?: Record<string, unknown>;
-  error?: { message?: string; code?: number; status?: string };
-}
-
-function extractAnswerText(parsed: GeminiGenerateContentResponse): string {
-  const block = parsed.promptFeedback?.blockReason;
-  if (block) {
-    return `Response blocked (${block}).`;
+/** Text + thought from streamed chunks or a final {@link AIMessage} (same content shapes). */
+function extractTextAndThoughtFromAiMessageLike(msg: AIMessage | AIMessageChunk): { text: string; thought: string } {
+  let text = '';
+  let thought = '';
+  const c = msg.content;
+  if (typeof c === 'string' && c) {
+    text = c;
+  } else if (Array.isArray(c)) {
+    for (const block of c) {
+      if (!block || typeof block !== 'object') continue;
+      const b = block as { type?: string; thinking?: string; text?: string };
+      if (b.type === 'thinking' && typeof b.thinking === 'string') thought += b.thinking;
+      else if (b.type === 'text' && typeof b.text === 'string') text += b.text;
+    }
   }
-  const parts = parsed.candidates?.[0]?.content?.parts;
-  if (!parts?.length) {
-    return 'No response generated.';
-  }
-  const text = parts
-    .map((p) => (typeof p.text === 'string' ? p.text : ''))
-    .join('')
-    .trim();
-  return text || 'No response generated.';
+  const fallbackText = typeof msg.text === 'string' ? msg.text : '';
+  if (!text && fallbackText) text = fallbackText;
+  return { text, thought };
 }
 
-/** Text delta in one streamed `GenerateContentResponse` chunk (Gemini sends incremental parts). */
-function extractStreamDelta(parsed: GeminiGenerateContentResponse): string {
-  if (parsed.promptFeedback?.blockReason) return '';
-  const parts = parsed.candidates?.[0]?.content?.parts;
-  if (!parts?.length) return '';
-  return parts.map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+function buildChatModel(): ChatGoogleGenerativeAI {
+  const { baseUrl, apiVersion } = getGeminiGoogleGenAiClientOptions();
+  const includeThoughts = isGeminiIncludeThoughtsEnabled();
+  const thinkingBudget = getGeminiThinkingBudget();
+
+  return new ChatGoogleGenerativeAI({
+    model: getGeminiChatModelId(),
+    apiKey: getGeminiApiKey(),
+    baseUrl,
+    apiVersion,
+    temperature: 1,
+    maxOutputTokens: getGeminiMaxOutputTokens(),
+    topP: 1,
+    streaming: true,
+    ...(includeThoughts
+      ? {
+          thinkingConfig: {
+            includeThoughts: true,
+            thinkingBudget,
+          },
+        }
+      : {}),
+  });
 }
 
-function throwIfGeminiApiError(parsed: GeminiGenerateContentResponse): void {
-  const err = parsed.error;
-  if (!err) return;
-  const msg =
-    typeof err.message === 'string'
-      ? err.message
-      : typeof err === 'object' && err && 'message' in err
-        ? String((err as { message?: string }).message)
-        : 'Gemini API error';
-  throw new Error(msg || 'Gemini API error');
+function buildGeminiAgentGraph(model: ChatGoogleGenerativeAI) {
+  return new StateGraph(MessagesAnnotation)
+    .addNode('agent', async (state) => {
+      const response = await model.invoke(state.messages);
+      return { messages: [response] };
+    })
+    .addEdge(START, 'agent')
+    .addEdge('agent', END)
+    .compile();
 }
 
 /**
- * Consumes Gemini `streamGenerateContent?alt=sse` body: SSE events with `data: {json}`.
- */
-async function consumeGeminiSseStream(
-  body: ReadableStream<Uint8Array>,
-  onDelta?: (delta: string) => void
-): Promise<{ answerText: string; lastChunk: GeminiGenerateContentResponse | null; rawPreview: string }> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let accumulated = '';
-  let lastChunk: GeminiGenerateContentResponse | null = null;
-  const rawSnippets: string[] = [];
-  const maxPreviewChars = 4000;
-
-  const handleJsonLine = (jsonStr: string): void => {
-    const trimmed = jsonStr.trim();
-    if (!trimmed || trimmed === '[DONE]') return;
-    let parsed: GeminiGenerateContentResponse;
-    try {
-      parsed = JSON.parse(trimmed) as GeminiGenerateContentResponse;
-    } catch {
-      return;
-    }
-    throwIfGeminiApiError(parsed);
-    lastChunk = parsed;
-    const block = parsed.promptFeedback?.blockReason;
-    if (block) {
-      accumulated = `Response blocked (${block}).`;
-      return;
-    }
-    const delta = extractStreamDelta(parsed);
-    if (delta) {
-      accumulated += delta;
-      onDelta?.(delta);
-    }
-    if (rawSnippets.join('').length < maxPreviewChars) {
-      rawSnippets.push(trimmed.length > 1200 ? `${trimmed.slice(0, 1200)}…` : trimmed);
-    }
-  };
-
-  const processEventBlock = (block: string): void => {
-    for (const line of block.split('\n')) {
-      const t = line.trimEnd();
-      if (!t.startsWith('data:')) continue;
-      handleJsonLine(t.slice(5).trimStart());
-    }
-  };
-
-  const flushBuffer = (): void => {
-    let sep: number;
-    while ((sep = buffer.indexOf('\n\n')) >= 0) {
-      const event = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + 2);
-      processEventBlock(event);
-    }
-  };
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-        flushBuffer();
-      }
-      if (done) {
-        buffer += decoder.decode();
-        flushBuffer();
-        if (buffer.trim()) processEventBlock(buffer);
-        break;
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const trimmedAnswer = accumulated.trim();
-  const answerText =
-    trimmedAnswer ||
-    (lastChunk ? extractAnswerText(lastChunk) : '') ||
-    'No response generated.';
-
-  return {
-    answerText,
-    lastChunk,
-    rawPreview:
-      rawSnippets.join('\n').length > maxPreviewChars
-        ? `${rawSnippets.join('\n').slice(0, maxPreviewChars)}…[truncated]`
-        : rawSnippets.join('\n'),
-  };
-}
-
-/**
- * One chat turn via Gemini `streamGenerateContent` (SSE); accumulates deltas into `answerText`
- * for GraphQL (same shape as Groq streaming).
+ * One chat turn: system prompt + Kundli-packaged messages, LangGraph agent node, stream
+ * `streamMode: "messages"` for SSE deltas (answer + optional thinking).
  */
 export async function chatWithGemini(
   prisma: PrismaClient,
   userId: string,
   userQuestion: string,
-  options?: { onDelta?: (delta: string) => void }
+  options?: { onDelta?: (delta: string) => void; onThoughtDelta?: (delta: string) => void }
 ): Promise<ChatWithGroqResult> {
   const systemPrompt = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
   const kundliRow = await fetchLatestKundliForUser(prisma, userId);
@@ -199,79 +109,96 @@ export async function chatWithGemini(
     userQuestion
   );
 
-  const contents = [
-    ...kundliUserContents.map((text) => ({
-      role: 'user' as const,
-      parts: [{ text }],
-    })),
-    { role: 'user' as const, parts: [{ text: questionText }] },
+  const messages = [
+    new SystemMessage({ content: systemPrompt }),
+    ...kundliUserContents.map((text) => new HumanMessage({ content: text })),
+    new HumanMessage({ content: questionText }),
   ];
 
-  const maxOutputTokens = getGeminiMaxOutputTokens();
+  const model = buildChatModel();
+  const graph = buildGeminiAgentGraph(model);
 
-  const requestBody: Record<string, unknown> = {
-    systemInstruction: {
-      parts: [{ text: systemPrompt }],
-    },
-    contents,
-    generationConfig: {
+  let answerText = '';
+  let thinkingText = '';
+  let lastUsage: Record<string, unknown> | null = null;
+
+  const stream = await graph.stream({ messages }, { streamMode: 'messages' });
+  for await (const item of stream) {
+    const tuple = item as unknown as [unknown, unknown];
+    const raw = (Array.isArray(tuple) ? tuple[0] : tuple) as unknown;
+
+    if (isAIMessageChunk(raw as BaseMessageChunk)) {
+      const msg = raw as AIMessageChunk;
+      if (msg.usage_metadata && typeof msg.usage_metadata === 'object') {
+        lastUsage = msg.usage_metadata as Record<string, unknown>;
+      }
+      const { text, thought } = extractTextAndThoughtFromAiMessageLike(msg);
+      if (thought) {
+        thinkingText += thought;
+        options?.onThoughtDelta?.(thought);
+      }
+      if (text) {
+        answerText += text;
+        options?.onDelta?.(text);
+      }
+      continue;
+    }
+
+    /**
+     * LangGraph also emits the node’s final {@link AIMessage} via `handleChainEnd` (not a chunk).
+     * If token callbacks produced no visible text (common with some Gemini + thinking setups),
+     * this is often the only place the full answer appears — we must not skip it.
+     */
+    if (isAIMessage(raw as BaseMessage)) {
+      const msg = raw as AIMessage;
+      if (msg.usage_metadata && typeof msg.usage_metadata === 'object') {
+        lastUsage = msg.usage_metadata as Record<string, unknown>;
+      }
+      const { text, thought } = extractTextAndThoughtFromAiMessageLike(msg);
+      if (thought) {
+        thinkingText += thought;
+        options?.onThoughtDelta?.(thought);
+      }
+      if (text && !answerText.trim()) {
+        answerText = text;
+        options?.onDelta?.(text);
+      }
+    }
+  }
+
+  const answerTextOut = answerText.trim() || 'No response generated.';
+  const thinkingOut = thinkingText.trim();
+
+  const requestPayload: Record<string, unknown> = {
+    provider: 'gemini',
+    transport: 'langgraph',
+    graph: 'single_agent_messages',
+    model: getGeminiChatModelId(),
+    thinking: isGeminiIncludeThoughtsEnabled()
+      ? { includeThoughts: true, thinkingBudget: getGeminiThinkingBudget() }
+      : { disabled: true },
+    message_count: messages.length,
+    generation: {
       temperature: 1,
-      maxOutputTokens,
+      maxOutputTokens: getGeminiMaxOutputTokens(),
       topP: 1,
     },
   };
 
-  const streamPath = getGeminiStreamGenerateContentUrl();
-  const requestPayload: Record<string, unknown> = {
-    provider: 'gemini',
-    url: streamPath,
-    stream: true,
-    alt: 'sse',
-    ...requestBody,
-  };
-
-  const apiKey = getGeminiApiKey();
-  const url = `${streamPath}?alt=sse&key=${encodeURIComponent(apiKey)}`;
-
-  const res = await undiciFetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
-    dispatcher: getGeminiUndiciAgent(),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    let parsed: GeminiGenerateContentResponse = {};
-    try {
-      parsed = errText ? (JSON.parse(errText) as GeminiGenerateContentResponse) : {};
-    } catch {
-      /* plain-text error body */
-    }
-    const msg =
-      parsed.error?.message ||
-      (errText && errText.length < 2000 ? errText : null) ||
-      `HTTP ${res.status}`;
-    throw new Error(msg || `Gemini request failed with status ${res.status}`);
-  }
-
-  if (!res.body) {
-    throw new Error('Gemini stream response has no body');
-  }
-
-  const { answerText, lastChunk, rawPreview } = await consumeGeminiSseStream(
-    res.body as ReadableStream<Uint8Array>,
-    options?.onDelta
-  );
-
   const responsePayload: Record<string, unknown> = {
     provider: 'gemini',
     streamed: true,
-    content: answerText,
-    finish_reason: lastChunk?.candidates?.[0]?.finishReason ?? null,
-    usage: lastChunk?.usageMetadata ?? null,
-    raw_preview: rawPreview,
+    langgraph_stream_mode: 'messages',
+    content: answerTextOut,
+    thinking: thinkingOut || undefined,
+    finish_reason: null,
+    usage: lastUsage,
   };
 
-  return { answerText, requestPayload, responsePayload };
+  return {
+    answerText: answerTextOut,
+    thinkingText: thinkingOut || undefined,
+    requestPayload,
+    responsePayload,
+  };
 }

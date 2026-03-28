@@ -21,6 +21,7 @@ import { queueLogError } from './src/lib/queueLogger.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
+import { logChatProviderError, toPublicChatErrorMessage } from './src/services/chatPublicError.js';
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
@@ -169,11 +170,15 @@ app.post('/api/chat/ask-stream', async (req, res) => {
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
       },
+      onThoughtDelta: (delta) => {
+        if (delta) writeSse({ type: 'thought', delta });
+      },
     });
     const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
     writeSse({ type: 'done', chatId: finalChatId, answer: chatResult.answerText });
   } catch (e) {
-    writeSse({ type: 'error', message: (e as Error).message || 'Chat failed' });
+    logChatProviderError('ask-stream', e);
+    writeSse({ type: 'error', message: toPublicChatErrorMessage(e) });
   } finally {
     if (pingTimer) clearInterval(pingTimer);
     res.end();

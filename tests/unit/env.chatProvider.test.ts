@@ -62,7 +62,7 @@ describe('chat LLM env helpers', () => {
   it('getGeminiChatModelId uses default when unset', () => {
     save('GEMINI_FLASH_MODEL_ID');
     delete process.env.GEMINI_FLASH_MODEL_ID;
-    expect(getGeminiChatModelId()).toBe('gemini-2.0-flash');
+    expect(getGeminiChatModelId()).toBe('gemini-2.5-flash');
   });
 
   it('getGeminiMaxOutputTokens defaults to 8192 when unset', () => {
