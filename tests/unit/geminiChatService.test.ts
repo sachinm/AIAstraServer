@@ -24,11 +24,13 @@ const mockKundliRow = {
 
 describe('chatWithGemini', () => {
   const originalKey = process.env.GEMINI_API_KEY;
+  const originalMaxOut = process.env.GEMINI_MAX_OUTPUT_TOKENS;
   const originalFetch = globalThis.fetch;
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     process.env.GEMINI_API_KEY = 'test-gemini-key';
+    delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
     vi.spyOn(kundliRag, 'fetchLatestKundliForUser').mockResolvedValue(mockKundliRow);
     fetchSpy = vi.fn();
     globalThis.fetch = fetchSpy as unknown as typeof fetch;
@@ -37,6 +39,8 @@ describe('chatWithGemini', () => {
   afterEach(() => {
     if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = originalKey;
+    if (originalMaxOut === undefined) delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
+    else process.env.GEMINI_MAX_OUTPUT_TOKENS = originalMaxOut;
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
@@ -74,6 +78,23 @@ describe('chatWithGemini', () => {
     expect((call[1] as { method?: string })?.method).toBe('POST');
     const body = JSON.parse((call[1] as { body: string }).body);
     expect(body.generationConfig?.maxOutputTokens).toBe(8192);
+  });
+
+  it('uses GEMINI_MAX_OUTPUT_TOKENS when set', async () => {
+    process.env.GEMINI_MAX_OUTPUT_TOKENS = '4096';
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+        }),
+    });
+
+    const prisma = {} as PrismaClient;
+    await chatWithGemini(prisma, 'user-1', 'Hi');
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as { body: string }).body);
+    expect(body.generationConfig?.maxOutputTokens).toBe(4096);
   });
 
   it('throws when Gemini returns non-OK HTTP', async () => {

@@ -6,7 +6,7 @@ import { loadSystemPrompt } from './kundliService.js';
 import { fetchLatestKundliForUser } from '../../kundli-rag.js';
 import { buildUserMessageWithKundli } from './groqChatService.js';
 import type { ChatWithGroqResult } from './groqChatService.js';
-import { getGeminiGenerateContentUrl } from '../config/env.js';
+import { getGeminiGenerateContentUrl, getGeminiMaxOutputTokens } from '../config/env.js';
 
 const GEMINI_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 
@@ -74,6 +74,8 @@ export async function chatWithGemini(
     { role: 'user' as const, parts: [{ text: questionText }] },
   ];
 
+  const maxOutputTokens = getGeminiMaxOutputTokens();
+
   const requestBody: Record<string, unknown> = {
     systemInstruction: {
       parts: [{ text: systemPrompt }],
@@ -81,7 +83,7 @@ export async function chatWithGemini(
     contents,
     generationConfig: {
       temperature: 1,
-      maxOutputTokens: 8192,
+      maxOutputTokens,
       topP: 1,
     },
   };

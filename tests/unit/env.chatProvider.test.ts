@@ -4,6 +4,7 @@ import {
   getGeminiGenerateContentUrl,
   getGeminiChatModelId,
   getGeminiModelsBaseUrl,
+  getGeminiMaxOutputTokens,
 } from '../../src/config/env.js';
 
 describe('chat LLM env helpers', () => {
@@ -56,5 +57,17 @@ describe('chat LLM env helpers', () => {
     save('GEMINI_FLASH_MODEL_ID');
     delete process.env.GEMINI_FLASH_MODEL_ID;
     expect(getGeminiChatModelId()).toBe('gemini-2.0-flash');
+  });
+
+  it('getGeminiMaxOutputTokens defaults to 8192 when unset', () => {
+    save('GEMINI_MAX_OUTPUT_TOKENS');
+    delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
+    expect(getGeminiMaxOutputTokens()).toBe(8192);
+  });
+
+  it('getGeminiMaxOutputTokens reads GEMINI_MAX_OUTPUT_TOKENS', () => {
+    save('GEMINI_MAX_OUTPUT_TOKENS');
+    process.env.GEMINI_MAX_OUTPUT_TOKENS = '16384';
+    expect(getGeminiMaxOutputTokens()).toBe(16384);
   });
 });

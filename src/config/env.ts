@@ -153,3 +153,24 @@ export function getGeminiGenerateContentUrl(): string {
   const model = getGeminiChatModelId();
   return `${base}/${model}:generateContent`;
 }
+
+/** Default matches previous hardcoded Gemini `generationConfig.maxOutputTokens`. */
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 50000;
+const MIN_GEMINI_MAX_OUTPUT_TOKENS = 256;
+/** Hard cap to avoid accidental huge values; model/API may enforce a lower max. */
+const MAX_GEMINI_MAX_OUTPUT_TOKENS_CAP = 65_536;
+
+/**
+ * `generationConfig.maxOutputTokens` for Gemini chat (`generateContent`).
+ * Override with GEMINI_MAX_OUTPUT_TOKENS (integer, 256–65536). Increase if replies truncate mid-answer.
+ */
+export function getGeminiMaxOutputTokens(): number {
+  const raw = process.env.GEMINI_MAX_OUTPUT_TOKENS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= MIN_GEMINI_MAX_OUTPUT_TOKENS && n <= MAX_GEMINI_MAX_OUTPUT_TOKENS_CAP) {
+      return Math.floor(n);
+    }
+  }
+  return DEFAULT_GEMINI_MAX_OUTPUT_TOKENS;
+}
