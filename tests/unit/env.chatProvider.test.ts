@@ -6,6 +6,7 @@ import {
   getGeminiChatModelId,
   getGeminiModelsBaseUrl,
   getGeminiMaxOutputTokens,
+  getGeminiThinkingBudget,
   getGeminiUndiciBodyTimeoutMs,
   getGeminiUndiciHeadersTimeoutMs,
 } from '../../src/config/env.js';
@@ -97,5 +98,17 @@ describe('chat LLM env helpers', () => {
     process.env.GEMINI_HTTP_TIMEOUT_MS = '450000';
     expect(getGeminiUndiciHeadersTimeoutMs()).toBe(450_000);
     expect(getGeminiUndiciBodyTimeoutMs()).toBe(450_000);
+  });
+
+  it('getGeminiThinkingBudget defaults to 8192 when unset', () => {
+    save('GEMINI_THINKING_BUDGET');
+    delete process.env.GEMINI_THINKING_BUDGET;
+    expect(getGeminiThinkingBudget()).toBe(8192);
+  });
+
+  it('getGeminiThinkingBudget clamps above API max (24576)', () => {
+    save('GEMINI_THINKING_BUDGET');
+    process.env.GEMINI_THINKING_BUDGET = '50000';
+    expect(getGeminiThinkingBudget()).toBe(24_576);
   });
 });

@@ -144,16 +144,20 @@ export function getGeminiChatModelId(): string {
   return process.env.GEMINI_FLASH_MODEL_ID?.trim() || 'gemini-2.5-flash';
 }
 
+/** Google Generative Language API rejects values above this for `thinkingConfig.thinkingBudget`. */
+const MAX_GEMINI_THINKING_BUDGET = 24_576;
+
 /**
  * Optional `thinkingBudget` for Gemini 2.5+ when thoughts are streamed.
  * 0 = dynamic default per Google; unset uses env or 8192.
+ * Values above {@link MAX_GEMINI_THINKING_BUDGET} are clamped (API max).
  */
 export function getGeminiThinkingBudget(): number {
   const raw = process.env.GEMINI_THINKING_BUDGET?.trim();
   if (raw === undefined || raw === '') return 8192;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return 8192;
-  return Math.floor(n);
+  return Math.min(Math.floor(n), MAX_GEMINI_THINKING_BUDGET);
 }
 
 /** When false, omit thinkingConfig (no thought stream). Default true. */
