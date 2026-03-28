@@ -139,9 +139,30 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   type ResWithFlush = express.Response & { flush?: () => void };
   const flush = () => (res as ResWithFlush).flush?.();
 
+  /** Keep each `data:` line bounded — some proxies reject very large SSE frames. */
+  const SSE_DELTA_CHUNK_CHARS = Math.max(
+    2048,
+    Math.min(32_768, Number(process.env.CHAT_SSE_MAX_DELTA_CHARS) || 12_000)
+  );
+
   const writeSse = (obj: unknown) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
     flush();
+  };
+
+  /**
+   * Streamed answer/thought deltas: chunk + never throw into the LLM callback (a broken pipe or
+   * proxy drop would otherwise abort `chatWithConfiguredProvider` before persist).
+   */
+  const writeSseDeltas = (type: 'token' | 'thought', delta: string) => {
+    for (let i = 0; i < delta.length; i += SSE_DELTA_CHUNK_CHARS) {
+      const slice = delta.slice(i, i + SSE_DELTA_CHUNK_CHARS);
+      try {
+        writeSse({ type, delta: slice });
+      } catch (wsErr) {
+        logChatProviderError(`ask-stream sse-${type}`, wsErr);
+      }
+    }
   };
 
   /**
@@ -170,10 +191,10 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     writeSse({ type: 'start' });
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
       onDelta: (delta) => {
-        if (delta) writeSse({ type: 'token', delta });
+        if (delta) writeSseDeltas('token', delta);
       },
       onThoughtDelta: (delta) => {
-        if (delta) writeSse({ type: 'thought', delta });
+        if (delta) writeSseDeltas('thought', delta);
       },
     });
     const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
