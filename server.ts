@@ -105,7 +105,8 @@ function getUserIdFromRequest(req: express.Request): string | null {
 }
 
 /**
- * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
+ * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId}` (no full answer on `done` —
+ * avoids oversized SSE lines / proxy issues; client uses token deltas or refetches messages).
  * Same persistence as GraphQL `ask`. Requires `Authorization: Bearer <jwt>`.
  */
 app.post('/api/chat/ask-stream', async (req, res) => {
@@ -163,6 +164,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   pingTimer = setInterval(writeSseComment, ssePingMs);
   writeSseComment();
 
+  let persistedChatId: string | undefined;
   try {
     const q = question.trim();
     writeSse({ type: 'start' });
@@ -175,10 +177,16 @@ app.post('/api/chat/ask-stream', async (req, res) => {
       },
     });
     const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
-    writeSse({ type: 'done', chatId: finalChatId, answer: chatResult.answerText });
+    persistedChatId = finalChatId;
+    writeSse({ type: 'done', chatId: finalChatId });
   } catch (e) {
     logChatProviderError('ask-stream', e);
-    writeSse({ type: 'error', message: toPublicChatErrorMessage(e) });
+    const errPayload: { type: 'error'; message: string; chatId?: string } = {
+      type: 'error',
+      message: toPublicChatErrorMessage(e),
+    };
+    if (persistedChatId) errPayload.chatId = persistedChatId;
+    writeSse(errPayload);
   } finally {
     if (pingTimer) clearInterval(pingTimer);
     res.end();
