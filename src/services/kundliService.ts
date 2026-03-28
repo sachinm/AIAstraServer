@@ -7,6 +7,7 @@ import {
 import { createJSONLLMClient, getLLMClient } from '../lib/llmClient.js';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { PrismaClient } from '@prisma/client';
+import { PVR_ORACLE_MARKDOWN_FORMAT_APPENDIX } from '../config/chatOracleMarkdownAppendix.js';
 
 const TOP_K = 5;
 
@@ -19,6 +20,10 @@ export async function loadSystemPrompt(
     select: { prompt: true },
   });
   if (!row?.prompt) throw new Error('System prompt not found');
+  const base = row.prompt.trimEnd();
+  if (name === 'pvr_oracle') {
+    return `${base}\n\n${PVR_ORACLE_MARKDOWN_FORMAT_APPENDIX}`;
+  }
   return row.prompt;
 }
 
