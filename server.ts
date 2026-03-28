@@ -131,14 +131,40 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     res.flushHeaders();
   }
 
+  /** Reduce Nagle delays on small SSE frames (token deltas). */
+  req.socket?.setNoDelay?.(true);
+
   type ResWithFlush = express.Response & { flush?: () => void };
+  const flush = () => (res as ResWithFlush).flush?.();
+
   const writeSse = (obj: unknown) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
-    (res as ResWithFlush).flush?.();
+    flush();
   };
+
+  /**
+   * SSE comment lines (ignored by our client parser). Many proxies buffer until enough bytes;
+   * periodic pings keep the connection “live” during long time-to-first-token (e.g. Gemini).
+   */
+  const ssePingMs = Math.max(
+    5000,
+    Math.min(60_000, Number(process.env.CHAT_SSE_PING_MS) || 12_000)
+  );
+  let pingTimer: ReturnType<typeof setInterval> | undefined;
+  const writeSseComment = () => {
+    try {
+      res.write(': ping\n\n');
+      flush();
+    } catch {
+      /* client gone */
+    }
+  };
+  pingTimer = setInterval(writeSseComment, ssePingMs);
+  writeSseComment();
 
   try {
     const q = question.trim();
+    writeSse({ type: 'start' });
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
@@ -149,6 +175,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   } catch (e) {
     writeSse({ type: 'error', message: (e as Error).message || 'Chat failed' });
   } finally {
+    if (pingTimer) clearInterval(pingTimer);
     res.end();
   }
 });
