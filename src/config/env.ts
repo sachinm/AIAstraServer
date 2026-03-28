@@ -253,3 +253,18 @@ export function getGeminiUndiciBodyTimeoutMs(): number {
     DEFAULT_GEMINI_HTTP_TIMEOUT_MS
   );
 }
+
+/** When `CHAT_THINKING_LOG=0`, skip `[chat thinking]` console lines. Default: log. */
+export function isChatThinkingLogEnabled(): boolean {
+  return process.env.CHAT_THINKING_LOG?.trim() !== '0';
+}
+
+/** Per-request GraphQL Yoga `incoming` / `completed` lines. Default: off. */
+export function isGraphqlRequestLogEnabled(): boolean {
+  return process.env.GRAPHQL_REQUEST_LOG?.trim() === '1';
+}
+
+/** Verbose AstroKundli `outgoing` / `response` per horoscope fetch. Default: off. */
+export function isAstroKundliHttpDebugEnabled(): boolean {
+  return process.env.ASTROKUNDLI_HTTP_DEBUG?.trim() === '1';
+}

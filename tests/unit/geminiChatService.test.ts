@@ -27,9 +27,11 @@ describe('chatWithGemini', () => {
   const originalKey = process.env.GEMINI_API_KEY;
   const originalMaxOut = process.env.GEMINI_MAX_OUTPUT_TOKENS;
   const originalIncludeThoughts = process.env.GEMINI_INCLUDE_THOUGHTS;
+  const originalThinkingLog = process.env.CHAT_THINKING_LOG;
 
   beforeEach(() => {
     process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.CHAT_THINKING_LOG = '0';
     delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
     delete process.env.GEMINI_INCLUDE_THOUGHTS;
     vi.spyOn(kundliRag, 'fetchLatestKundliForUser').mockResolvedValue(mockKundliRow);
@@ -59,16 +61,18 @@ describe('chatWithGemini', () => {
     else process.env.GEMINI_MAX_OUTPUT_TOKENS = originalMaxOut;
     if (originalIncludeThoughts === undefined) delete process.env.GEMINI_INCLUDE_THOUGHTS;
     else process.env.GEMINI_INCLUDE_THOUGHTS = originalIncludeThoughts;
+    if (originalThinkingLog === undefined) delete process.env.CHAT_THINKING_LOG;
+    else process.env.CHAT_THINKING_LOG = originalThinkingLog;
     vi.restoreAllMocks();
   });
 
-  it('streams via LangGraph + Google SDK and concatenates answer + payloads', async () => {
+  it('streams via Google SDK and concatenates answer + payloads', async () => {
     const prisma = {} as PrismaClient;
     const result = await chatWithGemini(prisma, 'user-1', 'What about education?');
 
     expect(result.answerText).toContain('Jupiter in the 5th favors learning.');
     expect(result.requestPayload.provider).toBe('gemini');
-    expect(result.requestPayload.transport).toBe('langgraph');
+    expect(result.requestPayload.transport).toBe('stream');
     expect(result.responsePayload.provider).toBe('gemini');
     expect(result.responsePayload.streamed).toBe(true);
   });

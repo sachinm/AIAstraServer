@@ -1,12 +1,11 @@
 /**
- * Gemini chat via LangGraph + @langchain/google-genai (streamGenerateContent under the hood).
+ * Gemini chat via @langchain/google-genai (streamGenerateContent under the hood).
  * Streams answer tokens and optional Gemini 2.5 “thinking” parts for SSE clients.
  */
 import type { PrismaClient } from '@prisma/client';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { HumanMessage, SystemMessage, isAIMessage, isAIMessageChunk } from '@langchain/core/messages';
-import type { AIMessage, AIMessageChunk, BaseMessage, BaseMessageChunk } from '@langchain/core/messages';
-import { END, MessagesAnnotation, START, StateGraph } from '@langchain/langgraph';
+import { HumanMessage, SystemMessage, isAIMessageChunk } from '@langchain/core/messages';
+import type { AIMessageChunk, BaseMessageChunk } from '@langchain/core/messages';
 import { loadSystemPrompt } from './kundliService.js';
 import { fetchLatestKundliForUser } from '../../kundli-rag.js';
 import { buildUserMessageWithKundli } from './groqChatService.js';
@@ -18,6 +17,7 @@ import {
   isGeminiIncludeThoughtsEnabled,
   getGeminiThinkingBudget,
 } from '../config/env.js';
+import { logChatThinking } from './chatThinkingLog.js';
 
 const GEMINI_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 
@@ -27,8 +27,8 @@ function getGeminiApiKey(): string {
   return key;
 }
 
-/** Text + thought from streamed chunks or a final {@link AIMessage} (same content shapes). */
-function extractTextAndThoughtFromAiMessageLike(msg: AIMessage | AIMessageChunk): { text: string; thought: string } {
+/** Text + thought from streamed {@link AIMessageChunk} content (same shapes as final message). */
+function extractTextAndThoughtFromAiMessageLike(msg: AIMessageChunk): { text: string; thought: string } {
   let text = '';
   let thought = '';
   const c = msg.content;
@@ -72,20 +72,9 @@ function buildChatModel(): ChatGoogleGenerativeAI {
   });
 }
 
-function buildGeminiAgentGraph(model: ChatGoogleGenerativeAI) {
-  return new StateGraph(MessagesAnnotation)
-    .addNode('agent', async (state) => {
-      const response = await model.invoke(state.messages);
-      return { messages: [response] };
-    })
-    .addEdge(START, 'agent')
-    .addEdge('agent', END)
-    .compile();
-}
-
 /**
- * One chat turn: system prompt + Kundli-packaged messages, LangGraph agent node, stream
- * `streamMode: "messages"` for SSE deltas (answer + optional thinking).
+ * One chat turn: system prompt + Kundli-packaged messages, direct model stream
+ * (token + optional thinking deltas for SSE).
  */
 export async function chatWithGemini(
   prisma: PrismaClient,
@@ -93,6 +82,13 @@ export async function chatWithGemini(
   userQuestion: string,
   options?: { onDelta?: (delta: string) => void; onThoughtDelta?: (delta: string) => void }
 ): Promise<ChatWithGroqResult> {
+  const includeThoughts = isGeminiIncludeThoughtsEnabled();
+  logChatThinking('turn_start', {
+    model: getGeminiChatModelId(),
+    includeThoughts,
+    thinkingBudget: includeThoughts ? getGeminiThinkingBudget() : null,
+  });
+
   const systemPrompt = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
   const kundliRow = await fetchLatestKundliForUser(prisma, userId);
   const { kundliUserContents, userQuestion: questionText } = buildUserMessageWithKundli(
@@ -116,65 +112,54 @@ export async function chatWithGemini(
   ];
 
   const model = buildChatModel();
-  const graph = buildGeminiAgentGraph(model);
 
   let answerText = '';
   let thinkingText = '';
   let lastUsage: Record<string, unknown> | null = null;
+  let thoughtChunkCount = 0;
+  let tokenChunkCount = 0;
 
-  const stream = await graph.stream({ messages }, { streamMode: 'messages' });
-  for await (const item of stream) {
-    const tuple = item as unknown as [unknown, unknown];
-    const raw = (Array.isArray(tuple) ? tuple[0] : tuple) as unknown;
-
-    if (isAIMessageChunk(raw as BaseMessageChunk)) {
-      const msg = raw as AIMessageChunk;
-      if (msg.usage_metadata && typeof msg.usage_metadata === 'object') {
-        lastUsage = msg.usage_metadata as Record<string, unknown>;
-      }
-      const { text, thought } = extractTextAndThoughtFromAiMessageLike(msg);
-      if (thought) {
-        thinkingText += thought;
-        options?.onThoughtDelta?.(thought);
-      }
-      if (text) {
-        answerText += text;
-        options?.onDelta?.(text);
-      }
-      continue;
+  const stream = await model.stream(messages);
+  for await (const chunk of stream) {
+    if (!isAIMessageChunk(chunk as BaseMessageChunk)) continue;
+    const msg = chunk as AIMessageChunk;
+    if (msg.usage_metadata && typeof msg.usage_metadata === 'object') {
+      lastUsage = msg.usage_metadata as Record<string, unknown>;
     }
-
-    /**
-     * LangGraph also emits the node’s final {@link AIMessage} via `handleChainEnd` (not a chunk).
-     * If token callbacks produced no visible text (common with some Gemini + thinking setups),
-     * this is often the only place the full answer appears — we must not skip it.
-     */
-    if (isAIMessage(raw as BaseMessage)) {
-      const msg = raw as AIMessage;
-      if (msg.usage_metadata && typeof msg.usage_metadata === 'object') {
-        lastUsage = msg.usage_metadata as Record<string, unknown>;
-      }
-      const { text, thought } = extractTextAndThoughtFromAiMessageLike(msg);
-      if (thought) {
-        thinkingText += thought;
-        options?.onThoughtDelta?.(thought);
-      }
-      if (text && !answerText.trim()) {
-        answerText = text;
-        options?.onDelta?.(text);
-      }
+    const { text, thought } = extractTextAndThoughtFromAiMessageLike(msg);
+    if (thought) {
+      thinkingText += thought;
+      thoughtChunkCount += 1;
+      logChatThinking('stream_thought_delta', {
+        chunkIndex: thoughtChunkCount,
+        deltaChars: thought.length,
+        totalChars: thinkingText.length,
+      });
+      options?.onThoughtDelta?.(thought);
+    }
+    if (text) {
+      answerText += text;
+      tokenChunkCount += 1;
+      options?.onDelta?.(text);
     }
   }
 
   const answerTextOut = answerText.trim() || 'No response generated.';
   const thinkingOut = thinkingText.trim();
 
+  logChatThinking('turn_end', {
+    answerChars: answerTextOut.length,
+    thinkingChars: thinkingOut.length,
+    thoughtChunks: thoughtChunkCount,
+    tokenChunks: tokenChunkCount,
+    usage: lastUsage,
+  });
+
   const requestPayload: Record<string, unknown> = {
     provider: 'gemini',
-    transport: 'langgraph',
-    graph: 'single_agent_messages',
+    transport: 'stream',
     model: getGeminiChatModelId(),
-    thinking: isGeminiIncludeThoughtsEnabled()
+    thinking: includeThoughts
       ? { includeThoughts: true, thinkingBudget: getGeminiThinkingBudget() }
       : { disabled: true },
     message_count: messages.length,
@@ -188,11 +173,14 @@ export async function chatWithGemini(
   const responsePayload: Record<string, unknown> = {
     provider: 'gemini',
     streamed: true,
-    langgraph_stream_mode: 'messages',
     content: answerTextOut,
     thinking: thinkingOut || undefined,
     finish_reason: null,
     usage: lastUsage,
+    stream_stats: {
+      thought_chunks: thoughtChunkCount,
+      token_chunks: tokenChunkCount,
+    },
   };
 
   return {

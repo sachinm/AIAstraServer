@@ -70,5 +70,15 @@ export async function persistAskTurn(
       client_delivery_sse: clientDeliverySse,
     },
   });
+  const thinkingTrimmed = chatResult.thinkingText?.trim();
+  if (thinkingTrimmed) {
+    await db.chatLogThinking.create({
+      data: {
+        chat_id: chat.id,
+        message_id: message.id,
+        content: thinkingTrimmed,
+      },
+    });
+  }
   return { chatId: chat.id };
 }

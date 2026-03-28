@@ -15,7 +15,12 @@ import { schema } from './src/graphql/schema.js';
 import { buildContext, getJwtSecret } from './src/graphql/context.js';
 import { ensureSuperadmin } from './src/ensureSuperadmin.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
-import { getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
+import {
+  getNodeEnv,
+  isAstroKundliConfigured,
+  isDevOrLocal,
+  isGraphqlRequestLogEnabled,
+} from './src/config/env.js';
 import { processKundliSyncQueue } from './src/services/kundliQueueService.js';
 import { queueLogError } from './src/lib/queueLogger.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
@@ -69,20 +74,24 @@ app.use(yoga.graphqlEndpoint, async (req, res, next) => {
   } catch {
     // ignore
   }
-  console.log('[GraphQL] incoming', {
-    path: req.path,
-    method: req.method,
-    startedAt: new Date(startedAt).toISOString(),
-    bodySnippet: body.slice(0, 300),
-  });
+  if (isGraphqlRequestLogEnabled()) {
+    console.log('[GraphQL] incoming', {
+      path: req.path,
+      method: req.method,
+      startedAt: new Date(startedAt).toISOString(),
+      bodySnippet: body.slice(0, 300),
+    });
+  }
   try {
     await (yoga as unknown as express.RequestHandler)(req, res, next);
   } finally {
-    console.log('[GraphQL] completed', {
-      path: req.path,
-      durationMs: Date.now() - startedAt,
-      statusCode: res.statusCode,
-    });
+    if (isGraphqlRequestLogEnabled()) {
+      console.log('[GraphQL] completed', {
+        path: req.path,
+        durationMs: Date.now() - startedAt,
+        statusCode: res.statusCode,
+      });
+    }
   }
 });
 
@@ -199,7 +208,12 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     });
     const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
     persistedChatId = finalChatId;
-    writeSse({ type: 'done', chatId: finalChatId });
+    const thinkingTrim = chatResult.thinkingText?.trim();
+    writeSse({
+      type: 'done',
+      chatId: finalChatId,
+      ...(thinkingTrim ? { thinking: thinkingTrim } : {}),
+    });
   } catch (e) {
     logChatProviderError('ask-stream', e);
     const errPayload: { type: 'error'; message: string; chatId?: string } = {

@@ -1,5 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import { getAstroKundliBaseUrl, getAstroKundliApiKey, isAstroKundliLogResponseEnabled } from '../config/env.js';
+import {
+  getAstroKundliBaseUrl,
+  getAstroKundliApiKey,
+  isAstroKundliHttpDebugEnabled,
+  isAstroKundliLogResponseEnabled,
+} from '../config/env.js';
 import { decrypt } from './encrypt.js';
 import { queueLog } from './queueLogger.js';
 
@@ -240,23 +245,12 @@ export async function checkAstroKundliEndpoint(): Promise<{
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
   const startedAt = Date.now();
-  console.log('[AstroKundli] health-check outgoing', {
-    url: baseUrl,
-    method: 'GET',
-    timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
-  });
   try {
     const res = await fetch(baseUrl, {
       method: 'GET',
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    console.log('[AstroKundli] health-check response', {
-      url: baseUrl,
-      status: res.status,
-      ok: res.ok,
-      durationMs: Date.now() - startedAt,
-    });
     if (res.ok || res.status === 404) {
       return { ok: true, message: `${baseUrl} reachable (HTTP ${res.status})` };
     }
@@ -327,13 +321,15 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
 
-  console.log('[AstroKundli] startup bogus-probe outgoing', {
-    url,
-    method: 'POST',
-    timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
-    hasApiKey: Boolean(apiKey),
-    body: bogusBody,
-  });
+  if (isAstroKundliHttpDebugEnabled()) {
+    console.log('[AstroKundli] startup bogus-probe outgoing', {
+      url,
+      method: 'POST',
+      timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
+      hasApiKey: Boolean(apiKey),
+      body: bogusBody,
+    });
+  }
 
   try {
     const res = await fetch(url, {
@@ -348,14 +344,16 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
     const previewMaxLen = 1500;
     const truncated = rawText.length > previewMaxLen;
 
-    console.log('[AstroKundli] startup bogus-probe response', {
-      url,
-      status: res.status,
-      ok: res.ok,
-      durationMs: Date.now() - startedAt,
-      response_preview: truncated ? rawText.slice(0, previewMaxLen) + '...[truncated]' : rawText,
-      truncated,
-    });
+    if (isAstroKundliHttpDebugEnabled()) {
+      console.log('[AstroKundli] startup bogus-probe response', {
+        url,
+        status: res.status,
+        ok: res.ok,
+        durationMs: Date.now() - startedAt,
+        response_preview: truncated ? rawText.slice(0, previewMaxLen) + '...[truncated]' : rawText,
+        truncated,
+      });
+    }
   } catch (err) {
     clearTimeout(timeoutId);
     console.error('[AstroKundli] startup bogus-probe error', {
@@ -402,13 +400,15 @@ export async function fetchHoroscopeChart(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
 
-  console.log('[AstroKundli] outgoing', {
-    url,
-    method: 'POST',
-    type,
-    timeoutMs,
-    hasApiKey: Boolean(apiKey),
-  });
+  if (isAstroKundliHttpDebugEnabled()) {
+    console.log('[AstroKundli] outgoing', {
+      url,
+      method: 'POST',
+      type,
+      timeoutMs,
+      hasApiKey: Boolean(apiKey),
+    });
+  }
 
   try {
     const res = await fetch(url, {
@@ -423,15 +423,17 @@ export async function fetchHoroscopeChart(
     const responseStr = JSON.stringify(json);
     const maxLen = 1500;
     const truncated = responseStr.length > maxLen;
-    console.log('[AstroKundli] response', {
-      url,
-      type,
-      status: res.status,
-      ok: res.ok,
-      durationMs: Date.now() - startedAt,
-      response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
-      truncated,
-    });
+    if (isAstroKundliHttpDebugEnabled()) {
+      console.log('[AstroKundli] response', {
+        url,
+        type,
+        status: res.status,
+        ok: res.ok,
+        durationMs: Date.now() - startedAt,
+        response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
+        truncated,
+      });
+    }
 
     if (isAstroKundliLogResponseEnabled()) {
       const queueMaxLen = 5000;
