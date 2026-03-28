@@ -297,7 +297,7 @@ const resolvers = {
           return { success: false, answer: null, error: pre.error };
         }
         const chatResult = await chatWithConfiguredProvider(db, userId, question);
-        await persistAskTurn(db, userId, chatId, question, chatResult);
+        await persistAskTurn(db, userId, chatId, question, chatResult, false);
         return { success: true, answer: chatResult.answerText, error: null };
       } catch (err) {
         const msg = (err as Error)?.message || 'Query failed';

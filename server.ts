@@ -170,7 +170,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
         if (delta) writeSse({ type: 'token', delta });
       },
     });
-    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult);
+    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
     writeSse({ type: 'done', chatId: finalChatId, answer: chatResult.answerText });
   } catch (e) {
     writeSse({ type: 'error', message: (e as Error).message || 'Chat failed' });

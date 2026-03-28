@@ -27,13 +27,15 @@ export async function validateAskForUser(
 
 /**
  * Resolves or creates the active chat, saves the message and ChatLog (same rules as GraphQL `ask`).
+ * @param clientDeliverySse - `true` when this turn used POST `/api/chat/ask-stream` (matches web `VITE_CHAT_STREAM` on); `false` for GraphQL `ask`.
  */
 export async function persistAskTurn(
   db: PrismaClient,
   userId: string,
   chatId: string | null | undefined,
   question: string,
-  chatResult: ChatTurnResult
+  chatResult: ChatTurnResult,
+  clientDeliverySse: boolean
 ): Promise<{ chatId: string }> {
   let chat: { id: string } | null = null;
   if (chatId?.trim()) {
@@ -65,6 +67,7 @@ export async function persistAskTurn(
       message_id: message.id,
       request_payload: chatResult.requestPayload as Prisma.InputJsonValue,
       response_payload: chatResult.responsePayload as Prisma.InputJsonValue,
+      client_delivery_sse: clientDeliverySse,
     },
   });
   return { chatId: chat.id };
