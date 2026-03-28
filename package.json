@@ -40,7 +40,7 @@
     "groq-sdk": "^0.30.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "langchain": "^1.2.19",
+    "langchain": "^1.2.37",
     "luxon": "^3.7.1",
     "ml-kmeans": "^6.0.0",
     "morgan": "^1.10.1",
