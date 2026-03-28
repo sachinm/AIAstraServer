@@ -131,8 +131,10 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     res.flushHeaders();
   }
 
+  type ResWithFlush = express.Response & { flush?: () => void };
   const writeSse = (obj: unknown) => {
     res.write(`data: ${JSON.stringify(obj)}\n\n`);
+    (res as ResWithFlush).flush?.();
   };
 
   try {
