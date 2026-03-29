@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { createYoga } from 'graphql-yoga';
 import { config } from 'dotenv';
 import jwt from 'jsonwebtoken';
@@ -64,7 +65,20 @@ const yoga = createYoga({
   maskedErrors: false,
 });
 
-app.use(yoga.graphqlEndpoint, async (req, res, next) => {
+const graphqlRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDevOrLocal() ? 2000 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  handler: (_req, res) => {
+    res.status(429).json({
+      errors: [{ message: 'Too many requests. Please try again later.' }],
+    });
+  },
+});
+
+app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
   const startedAt = Date.now();
   let body = '';
   try {

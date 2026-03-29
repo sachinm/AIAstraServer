@@ -1,4 +1,3 @@
-import type { PrismaClient } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../graphql/context.js';
@@ -7,10 +6,25 @@ import { encrypt } from '../lib/encrypt.js';
 import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { assertRecaptchaIfConfigured } from './recaptchaService.js';
+import { sendMagicLinkEmail } from './emailService.js';
+import { generateMagicLinkCode, normalizeMagicLinkCode } from '../lib/magicLinkCode.js';
 import type { z } from 'zod';
 import type { signUpSchema } from '../lib/validators.js';
 
 const DEFAULT_EXPIRY = '7d';
+
+/** Shown for any password login failure (no user enumeration). */
+export const LOGIN_FAILED_OBFUSCATED =
+  'Unable to sign in. Check your email and password and try again.';
+
+/** Same response whether or not the email exists. */
+export const MAGIC_LINK_REQUEST_MESSAGE =
+  "If that email is registered, you'll receive a message with an 8-character code. The code expires in 5 minutes.";
+
+export const MAGIC_LINK_LOGIN_FAILED =
+  'Unable to sign in. Check your code and try again.';
+
+const MAGIC_LINK_TTL_MS = 5 * 60 * 1000;
 
 export type LoginResult =
   | { success: true; token: string; user: string; role: string }
@@ -63,12 +77,12 @@ export async function login(
 
   const parsed = validateLoginInput({ username, password });
   if (!parsed.success) {
-    return { success: false, message: 'Invalid input' };
+    return { success: false, message: LOGIN_FAILED_OBFUSCATED };
   }
   const { username: u, password: p } = parsed.data;
   const user = await validateLogin(u, p);
   if (!user) {
-    return { success: false, message: 'Invalid username or password' };
+    return { success: false, message: LOGIN_FAILED_OBFUSCATED };
   }
   await enqueueKundliSync(prisma, user.id).catch((err) => {
     console.error('enqueueKundliSync after login failed:', (err as Error).message);
@@ -87,12 +101,133 @@ export async function login(
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 
+export type MagicLinkRequestResult =
+  | { success: true; message: string }
+  | { success: false; message: string };
+
+/**
+ * Request a magic-link code (email). Always returns the same user-visible message when successful path.
+ */
+export async function requestMagicLink(
+  emailRaw: string,
+  recaptchaToken?: string | null
+): Promise<MagicLinkRequestResult> {
+  const gate = await assertRecaptchaIfConfigured(recaptchaToken);
+  if (!gate.ok) {
+    return { success: false, message: gate.message };
+  }
+
+  const email = emailRaw.trim();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!emailOk) {
+    return { success: true, message: MAGIC_LINK_REQUEST_MESSAGE };
+  }
+
+  const user = await prisma.auth.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true, email: true },
+  });
+
+  if (user) {
+    const plain = generateMagicLinkCode();
+    const hash = await hashPassword(plain);
+    const expires = new Date(Date.now() + MAGIC_LINK_TTL_MS);
+    await prisma.auth.update({
+      where: { id: user.id },
+      data: {
+        magic_link_code_hash: hash,
+        magic_link_expires_at: expires,
+      },
+    });
+    try {
+      await sendMagicLinkEmail(user.email, plain);
+    } catch (err) {
+      console.error('Magic link email send failed:', (err as Error).message);
+    }
+  }
+
+  return { success: true, message: MAGIC_LINK_REQUEST_MESSAGE };
+}
+
+/**
+ * Complete magic-link login with 8-character code from email.
+ */
+export async function loginWithMagicLink(
+  emailRaw: string,
+  codeRaw: string,
+  recaptchaToken?: string | null
+): Promise<LoginResult> {
+  const gate = await assertRecaptchaIfConfigured(recaptchaToken);
+  if (!gate.ok) {
+    return { success: false, message: gate.message };
+  }
+
+  const email = emailRaw.trim();
+  const code = normalizeMagicLinkCode(codeRaw);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || code.length !== 8) {
+    return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
+  }
+
+  const user = await prisma.auth.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: {
+      id: true,
+      role: true,
+      magic_link_code_hash: true,
+      magic_link_expires_at: true,
+    },
+  });
+
+  if (!user?.magic_link_code_hash || !user.magic_link_expires_at) {
+    return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
+  }
+
+  if (new Date() > user.magic_link_expires_at) {
+    return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
+  }
+
+  const match = await comparePassword(code, user.magic_link_code_hash);
+  if (!match) {
+    return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
+  }
+
+  await prisma.auth.update({
+    where: { id: user.id },
+    data: {
+      magic_link_code_hash: null,
+      magic_link_expires_at: null,
+    },
+  });
+
+  await enqueueKundliSync(prisma, user.id).catch((err) => {
+    console.error(
+      'enqueueKundliSync after magic link login failed:',
+      (err as Error).message
+    );
+  });
+  processKundliSyncQueue(prisma).catch((err) => {
+    console.error(
+      'processKundliSyncQueue after magic link login failed:',
+      (err as Error).message
+    );
+  });
+
+  const token = issueToken(user.id, user.role ?? 'user');
+  return {
+    success: true,
+    token,
+    user: user.id,
+    role: user.role ?? 'user',
+  };
+}
+
 /**
  * Signup: create user. Returns { success, token, user } or { success: false, message }.
  */
 export async function signup(
   input: unknown,
-  recaptchaToken?: string | null
+  recaptchaToken?: string | null,
+  clientIp?: string | null
 ): Promise<SignUpResult> {
   const gate = await assertRecaptchaIfConfigured(recaptchaToken);
   if (!gate.ok) {
@@ -138,6 +273,7 @@ export async function signup(
       time_of_birth: timeOfBirthEnc ?? time_of_birth ?? null,
       email,
       gender: gender ?? null,
+      signup_ip: clientIp?.trim() || null,
     },
   });
 

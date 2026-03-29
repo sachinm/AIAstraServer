@@ -4,7 +4,11 @@
  * "me resolver" test runs without DB (mocked context).
  */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
-import { login, signup } from '../src/services/authService.js';
+import {
+  login,
+  signup,
+  LOGIN_FAILED_OBFUSCATED,
+} from '../src/services/authService.js';
 import { prisma } from '../src/lib/prisma.js';
 
 const unique = () =>
@@ -74,7 +78,7 @@ describe('Auth flow', () => {
     const result = await login(username, 'wrongpassword');
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.message).toBeDefined();
+      expect(result.message).toBe(LOGIN_FAILED_OBFUSCATED);
     }
     expect(
       result.success ? result.token : undefined

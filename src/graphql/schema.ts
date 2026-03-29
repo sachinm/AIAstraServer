@@ -1,6 +1,12 @@
 import { createSchema } from 'graphql-yoga';
 import type { Prisma } from '@prisma/client';
-import { login, signup } from '../services/authService.js';
+import {
+  login,
+  signup,
+  requestMagicLink,
+  loginWithMagicLink,
+} from '../services/authService.js';
+import { getClientIp } from '../lib/requestMeta.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
@@ -62,6 +68,11 @@ const typeDefs = /* GraphQL */ `
     token: String
     user: ID
     role: String
+  }
+
+  type MagicLinkRequestResult {
+    success: Boolean!
+    message: String
   }
 
   type AskResult {
@@ -225,6 +236,8 @@ const typeDefs = /* GraphQL */ `
   type Mutation {
     login(username: String!, password: String!, recaptchaToken: String): LoginResult!
     signup(input: SignUpInput!): SignUpResult!
+    requestMagicLink(email: String!, recaptchaToken: String): MagicLinkRequestResult!
+    loginWithMagicLink(email: String!, code: String!, recaptchaToken: String): LoginResult!
     uploadKundli(fileBase64: String!): UploadKundliResult!
     createChat: ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
@@ -795,12 +808,34 @@ const resolvers = {
     async signup(
       _parent: unknown,
       { input }: { input: Record<string, unknown> },
-      _context: GraphQLContext
+      context: GraphQLContext
     ) {
       const recaptchaToken =
         typeof input.recaptchaToken === 'string' ? input.recaptchaToken : null;
       const { recaptchaToken: _t, ...rest } = input;
-      return signup(rest, recaptchaToken);
+      const clientIp = getClientIp(context.request);
+      return signup(rest, recaptchaToken, clientIp);
+    },
+    async requestMagicLink(
+      _parent: unknown,
+      {
+        email,
+        recaptchaToken,
+      }: { email: string; recaptchaToken?: string | null },
+      _context: GraphQLContext
+    ) {
+      return requestMagicLink(email, recaptchaToken ?? null);
+    },
+    async loginWithMagicLink(
+      _parent: unknown,
+      {
+        email,
+        code,
+        recaptchaToken,
+      }: { email: string; code: string; recaptchaToken?: string | null },
+      _context: GraphQLContext
+    ) {
+      return loginWithMagicLink(email, code, recaptchaToken ?? null);
     },
     async uploadKundli(
       _parent: unknown,

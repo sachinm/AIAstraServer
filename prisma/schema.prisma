@@ -21,6 +21,11 @@ model Auth {
   kundli_added         Boolean?               @default(false)
   role                 String?                @default("user")
   created_at           DateTime               @default(now()) @map("created_at")
+  /// Client IP at account creation (from proxy headers when present).
+  signup_ip            String?                @map("signup_ip")
+  /// Bcrypt hash of the current magic-link code (plain code is only sent by email).
+  magic_link_code_hash String?                @map("magic_link_code_hash")
+  magic_link_expires_at DateTime?             @map("magic_link_expires_at") @db.Timestamptz(6)
   chats                Chat[]
   kundlis              Kundli[]
   userGeneratedContent UserGeneratedContent[]
