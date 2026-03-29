@@ -6,6 +6,7 @@ import { hashPassword, comparePassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
+import { assertRecaptchaIfConfigured } from './recaptchaService.js';
 import type { z } from 'zod';
 import type { signUpSchema } from '../lib/validators.js';
 
@@ -50,7 +51,16 @@ export function issueToken(userId: string, role = 'user'): string {
 /**
  * Login: validate credentials and return { success, token, user } or { success: false, message }.
  */
-export async function login(username: string, password: string): Promise<LoginResult> {
+export async function login(
+  username: string,
+  password: string,
+  recaptchaToken?: string | null
+): Promise<LoginResult> {
+  const gate = await assertRecaptchaIfConfigured(recaptchaToken);
+  if (!gate.ok) {
+    return { success: false, message: gate.message };
+  }
+
   const parsed = validateLoginInput({ username, password });
   if (!parsed.success) {
     return { success: false, message: 'Invalid input' };
@@ -80,7 +90,15 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 /**
  * Signup: create user. Returns { success, token, user } or { success: false, message }.
  */
-export async function signup(input: unknown): Promise<SignUpResult> {
+export async function signup(
+  input: unknown,
+  recaptchaToken?: string | null
+): Promise<SignUpResult> {
+  const gate = await assertRecaptchaIfConfigured(recaptchaToken);
+  if (!gate.ok) {
+    return { success: false, message: gate.message };
+  }
+
   const parsed = validateSignUpInput(input);
   if (!parsed.success) {
     return { success: false, message: 'Invalid input' };

@@ -3,7 +3,7 @@
  * Requires DATABASE_URL and JWT_SECRET in env for DB tests. Uses real Prisma/DB.
  * "me resolver" test runs without DB (mocked context).
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { login, signup } from '../src/services/authService.js';
 import { prisma } from '../src/lib/prisma.js';
 
@@ -14,6 +14,10 @@ const hasDb =
 
 describe('Auth flow', () => {
   let testUserId: string | null = null;
+
+  beforeAll(() => {
+    delete process.env.RECAPTCHA_SECRET_KEY;
+  });
 
   afterAll(async () => {
     if (testUserId && hasDb) {

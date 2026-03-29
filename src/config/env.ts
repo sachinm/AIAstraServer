@@ -215,3 +215,23 @@ export function getGeminiUndiciBodyTimeoutMs(): number {
     DEFAULT_GEMINI_HTTP_TIMEOUT_MS
   );
 }
+
+/** Secret for https://www.google.com/recaptcha/api/siteverify. If unset, login/signup skip reCAPTCHA. */
+export function getRecaptchaSecret(): string | undefined {
+  const s = process.env.RECAPTCHA_SECRET_KEY?.trim();
+  return s || undefined;
+}
+
+const DEFAULT_RECAPTCHA_MIN_SCORE = 0.5;
+
+/**
+ * Minimum v3 score (0–1). Ignored for v2 responses (no score field). Default 0.5.
+ */
+export function getRecaptchaMinScore(): number {
+  const raw = process.env.RECAPTCHA_MIN_SCORE?.trim();
+  if (raw) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  return DEFAULT_RECAPTCHA_MIN_SCORE;
+}

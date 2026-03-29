@@ -4,6 +4,10 @@ import { login, signup } from '../services/authService.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
+import {
+  logChatProviderError,
+  publicMessageFromChatProviderError,
+} from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
 import { requireRoles } from './rbac.js';
@@ -215,10 +219,11 @@ const typeDefs = /* GraphQL */ `
     place_of_birth: String
     time_of_birth: String
     gender: String
+    recaptchaToken: String
   }
 
   type Mutation {
-    login(username: String!, password: String!): LoginResult!
+    login(username: String!, password: String!, recaptchaToken: String): LoginResult!
     signup(input: SignUpInput!): SignUpResult!
     uploadKundli(fileBase64: String!): UploadKundliResult!
     createChat: ChatResult!
@@ -300,8 +305,12 @@ const resolvers = {
         await persistAskTurn(db, userId, chatId, question, chatResult, false);
         return { success: true, answer: chatResult.answerText, error: null };
       } catch (err) {
-        const msg = (err as Error)?.message || 'Query failed';
-        return { success: false, answer: null, error: msg };
+        logChatProviderError('graphql ask', err);
+        return {
+          success: false,
+          answer: null,
+          error: publicMessageFromChatProviderError(err),
+        };
       }
     },
     async meDetails(_parent: unknown, _args: unknown, context: GraphQLContext) {
@@ -774,17 +783,24 @@ const resolvers = {
   Mutation: {
     async login(
       _parent: unknown,
-      { username, password }: { username: string; password: string },
+      {
+        username,
+        password,
+        recaptchaToken,
+      }: { username: string; password: string; recaptchaToken?: string | null },
       _context: GraphQLContext
     ) {
-      return login(username, password);
+      return login(username, password, recaptchaToken ?? null);
     },
     async signup(
       _parent: unknown,
-      { input }: { input: unknown },
+      { input }: { input: Record<string, unknown> },
       _context: GraphQLContext
     ) {
-      return signup(input);
+      const recaptchaToken =
+        typeof input.recaptchaToken === 'string' ? input.recaptchaToken : null;
+      const { recaptchaToken: _t, ...rest } = input;
+      return signup(rest, recaptchaToken);
     },
     async uploadKundli(
       _parent: unknown,
