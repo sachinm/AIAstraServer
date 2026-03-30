@@ -11,6 +11,29 @@ import { PVR_ORACLE_MARKDOWN_FORMAT_APPENDIX } from '../config/chatOracleMarkdow
 
 const TOP_K = 5;
 
+/** Civil “today” for readings (consistent for deployed servers; aligns with common Vedic chart context). */
+function formatTodayForSystemPrompt(): string {
+  return new Intl.DateTimeFormat('en-IN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date());
+}
+
+function buildTemporalReadingAppendix(): string {
+  const today = formatTodayForSystemPrompt();
+  return [
+    '---',
+    `**Today's date:** ${today}.`,
+    '',
+    'Unless the user\'s question clearly asks about a specific past or future time or period, anchor your vedic astrologyreading to **today**.',
+    '',
+    'If they do specify another time or period, and it makessense to do so relate it to **today**: compare or contrast with present and upcoming astrological placements and dasas/transits conditions, and explain how today\'s transits and dasha (and other timing factors as given in the chart data) support, qualify, or affect the present and future.',
+  ].join('\n');
+}
+
 export async function loadSystemPrompt(
   prisma: PrismaClient,
   name: string
@@ -21,10 +44,11 @@ export async function loadSystemPrompt(
   });
   if (!row?.prompt) throw new Error('System prompt not found');
   const base = row.prompt.trimEnd();
+  const temporal = buildTemporalReadingAppendix();
   if (name === 'pvr_oracle') {
-    return `${base}\n\n${PVR_ORACLE_MARKDOWN_FORMAT_APPENDIX}`;
+    return `${base}\n\n${temporal}\n\n${PVR_ORACLE_MARKDOWN_FORMAT_APPENDIX}`;
   }
-  return row.prompt;
+  return `${base}\n\n${temporal}`;
 }
 
 function fakeEmbed(text: string): number[] {
