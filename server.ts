@@ -27,6 +27,9 @@ import {
   publicMessageFromChatProviderError,
 } from './src/services/publicChatError.js';
 
+/** AstroKundli kundli sync: `processKundliSyncQueue` interval when ASTROKUNDLI is configured. */
+const KUNDLI_QUEUE_INTERVAL_MS = 30_000;
+
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
 app.use(express.json());
@@ -289,14 +292,19 @@ async function start(): Promise<void> {
       probeAstroKundliWithBogusParams().catch((err) => {
         console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
       });
-      // Queue runs on-demand after signup/login; run once on startup to process any pending rows
-      processKundliSyncQueue(prisma).catch((err) => {
-        queueLogError({
-          event: 'kundli_queue_tick_failed',
-          error: (err as Error).message,
+      const runKundliQueueTick = (): void => {
+        processKundliSyncQueue(prisma).catch((err) => {
+          queueLogError({
+            event: 'kundli_queue_tick_failed',
+            error: (err as Error).message,
+          });
         });
-      });
-      console.log('Kundli sync queue: on-demand (triggered after signup/login); ran once on startup.');
+      };
+      runKundliQueueTick();
+      setInterval(runKundliQueueTick, KUNDLI_QUEUE_INTERVAL_MS);
+      console.log(
+        `Kundli sync queue: every ${KUNDLI_QUEUE_INTERVAL_MS / 1000}s + on signup/login.`
+      );
     } else {
       console.log('Kundli sync queue not started: ASTROKUNDLI_BASE_URL_* not set for this env. Chart sync will not run.');
     }
