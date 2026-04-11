@@ -83,12 +83,20 @@ export function isAstroKundliLogResponseEnabled(): boolean {
   return process.env.ASTROKUNDLI_LOG_RESPONSE === '1';
 }
 
-/** Default ~1.1s: upstream may geocode via OSM Nominatim (public limit ~1 req/s per client). */
-const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 1_100;
+/**
+ * Default gap between export-horoscope POST **starts** in this process.
+ * OSM Nominatim usage policy is effectively one geocode per second; each slice (biodata, d1, …)
+ * is a separate POST and may trigger geocoding upstream, so a full Kundli needs ~8× this delay
+ * in wall time unless the API skips geocode (lat/lon/tz).
+ */
+const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 1_200;
+
+/** When spacing is enabled (>0), never go below this so env typos cannot violate ~1 req/s. */
+export const ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS = 1_050;
 
 /**
- * Minimum quiet time between consecutive POST /api/export-horoscope calls from this process.
- * Requests are also serialized in the client so parallel Kundli fetches do not stampede the 3rd party.
+ * Configured minimum milliseconds between consecutive POST /api/export-horoscope **starts**
+ * (see `astroKundliClient` — it enforces start-to-start timing plus a floor).
  * Set ASTROKUNDLI_REQUEST_SPACING_MS (integer ms, 0–120000; 0 disables the delay only — serialization remains).
  */
 export function getAstroKundliRequestSpacingMs(): number {

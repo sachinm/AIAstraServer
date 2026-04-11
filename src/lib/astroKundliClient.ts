@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import {
   getAstroKundliBaseUrl,
   getAstroKundliApiKey,
+  ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS,
   getAstroKundliRequestSpacingMs,
   isAstroKundliLogResponseEnabled,
 } from '../config/env.js';
@@ -90,12 +91,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Milliseconds between consecutive export-horoscope POST starts when throttling is on (Nominatim ~1 req/s). */
+function effectiveExportHoroscopeSpacingMs(): number {
+  const configured = getAstroKundliRequestSpacingMs();
+  if (configured <= 0) return 0;
+  return Math.max(configured, ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS);
+}
+
 /**
- * Serialize export-horoscope POSTs and enforce a minimum gap between them so the upstream
- * service is less likely to hit OSM Nominatim 429 when geocoding the same place per request.
+ * Serialize export-horoscope POSTs and enforce a minimum **start-to-start** gap so upstream
+ * geocoding (OSM Nominatim, ~1 request/s) is not exceeded even when many Kundli slices are
+ * requested in parallel: each slice is one POST, so 8 types need ≥ ~8× the gap in wall time
+ * per user unless the API skips geocode. This throttle is per Node process only.
  */
 let horoscopeExportTail: Promise<void> = Promise.resolve();
-let lastHoroscopeExportEndedAt = 0;
+let lastHoroscopeExportRequestStartAt = 0;
 
 async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T> {
   const prev = horoscopeExportTail;
@@ -105,14 +115,15 @@ async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T>
   });
   await prev;
   try {
-    const spacingMs = getAstroKundliRequestSpacingMs();
-    if (spacingMs > 0) {
-      const waitMs = Math.max(0, spacingMs - (Date.now() - lastHoroscopeExportEndedAt));
+    const spacingMs = effectiveExportHoroscopeSpacingMs();
+    if (spacingMs > 0 && lastHoroscopeExportRequestStartAt > 0) {
+      const earliestNextStart = lastHoroscopeExportRequestStartAt + spacingMs;
+      const waitMs = Math.max(0, earliestNextStart - Date.now());
       if (waitMs > 0) await sleep(waitMs);
     }
+    lastHoroscopeExportRequestStartAt = Date.now();
     return await run();
   } finally {
-    lastHoroscopeExportEndedAt = Date.now();
     release();
   }
 }
@@ -406,8 +417,9 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
  * Fetch a single horoscope chart/slice from the AstroKundli API.
  * One request = one data point for the given `type` (biodata, d1, d7, etc.).
  * Returns the JSON payload to store in the corresponding Kundli column.
- * Calls are serialized with a configurable quiet gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default ~1.1s)
- * so parallel callers (e.g. Kundli queue chunks) do not trigger upstream OSM Nominatim rate limits.
+ * Serialized with a configurable **start-to-start** gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default 1.2s,
+ * floored when non-zero) so parallel callers do not violate OSM Nominatim’s ~1 geocode/s policy
+ * across the 8 separate POSTs per Kundli.
  */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,
