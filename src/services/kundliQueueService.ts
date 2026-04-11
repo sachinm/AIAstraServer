@@ -80,13 +80,14 @@ function logAstroKundliCall(
  * Process Kundli rows (users) per run. For each row we fetch missing data points in
  * chunks to cap concurrent AstroKundli API calls. Peak concurrency = batch size ×
  * max fetches per user (see env: KUNDLI_QUEUE_BATCH_SIZE, KUNDLI_QUEUE_MAX_FETCHES_PER_USER).
- * Rows with queue_status 'pending' or 'in_progress' are eligible (in_progress = retry partial).
+ * Rows with queue_status 'pending' are eligible. After a row is moved to 'in_progress',
+ * any processing failure resets it to 'pending' so the worker can retry.
  */
 export async function processKundliSyncQueue(prisma: PrismaClient): Promise<void> {
   const batchSize = getKundliQueueBatchSize();
   const rows = await prisma.kundli.findMany({
     where: {
-      queue_status: { in: [QUEUE_STATUS_PENDING, QUEUE_STATUS_IN_PROGRESS] },
+      queue_status: QUEUE_STATUS_PENDING,
     },
     orderBy: { created_at: 'asc' },
     take: batchSize,
@@ -136,7 +137,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
     await prisma.kundli.update({
       where: { id: kundliId },
       data: {
-        queue_status: QUEUE_STATUS_IN_PROGRESS,
+        queue_status: QUEUE_STATUS_PENDING,
         queue_completed_at: null,
         last_sync_error: msg,
       },
@@ -145,117 +146,154 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
     return;
   }
 
-  const missingFields = KUNDLI_JSON_FIELDS.filter(
-    (field) => !isJsonFieldFilled((row as Record<string, unknown>)[field])
-  ) as KundliJsonField[];
+  try {
+    const missingFields = KUNDLI_JSON_FIELDS.filter(
+      (field) => !isJsonFieldFilled((row as Record<string, unknown>)[field])
+    ) as KundliJsonField[];
 
-  if (missingFields.length === 0) {
-    await prisma.auth.update({
-      where: { id: userId },
-      data: { kundli_added: true },
-    });
-    await prisma.kundli.update({
+    if (missingFields.length === 0) {
+      await prisma.auth.update({
+        where: { id: userId },
+        data: { kundli_added: true },
+      });
+      await prisma.kundli.update({
+        where: { id: kundliId },
+        data: {
+          queue_status: QUEUE_STATUS_COMPLETED,
+          queue_completed_at: new Date(),
+        },
+      });
+      return;
+    }
+
+    // Fetch missing data points in chunks to cap concurrent API calls (avoid overwhelming server).
+    const maxConcurrent = getKundliQueueMaxFetchesPerUser();
+    const startAll = Date.now();
+    const updates: Partial<Record<KundliJsonField, unknown>> = {};
+    for (let i = 0; i < missingFields.length; i += maxConcurrent) {
+      const chunk = missingFields.slice(i, i + maxConcurrent);
+      const results = await Promise.allSettled(
+        chunk.map((field) => fetchHoroscopeChart(params, field))
+      );
+      const durationMs = Date.now() - startAll;
+      results.forEach((result, j) => {
+        const field = chunk[j];
+        if (result.status === 'fulfilled') {
+          updates[field] = result.value;
+          logAstroKundliCall(userId, kundliId, field, 'passed', durationMs);
+        } else {
+          const errMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          const outcome = errMessage.includes('HTTP') ? 'failed' : 'error';
+          logAstroKundliCall(userId, kundliId, field, outcome, durationMs, errMessage);
+        }
+      });
+    }
+    const durationMs = Date.now() - startAll;
+
+    // Persist all fetched fields in one update (parallel-friendly, single DB round-trip).
+    const dataUpdate = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    ) as Record<string, object>;
+    if (Object.keys(dataUpdate).length > 0) {
+      try {
+        await prisma.kundli.update({
+          where: { id: kundliId },
+          data: dataUpdate,
+        });
+      } catch (updateErr) {
+        const persistMsg = (updateErr as Error).message;
+        for (const field of Object.keys(dataUpdate)) {
+          logAstroKundliCall(
+            userId,
+            kundliId,
+            field as KundliJsonField,
+            'error',
+            durationMs,
+            persistMsg
+          );
+        }
+        await prisma.kundli.update({
+          where: { id: kundliId },
+          data: {
+            queue_status: QUEUE_STATUS_PENDING,
+            queue_completed_at: null,
+            last_sync_error: `Kundli persist failed: ${persistMsg}`,
+          },
+        });
+        return;
+      }
+    }
+
+    const updatedRow = await prisma.kundli.findUnique({
       where: { id: kundliId },
-      data: {
-        queue_status: QUEUE_STATUS_COMPLETED,
-        queue_completed_at: new Date(),
+      select: {
+        biodata: true,
+        d1: true,
+        d7: true,
+        d9: true,
+        d10: true,
+        charakaraka: true,
+        vimsottari_dasa: true,
+        narayana_dasa: true,
       },
     });
-    return;
-  }
-
-  // Fetch missing data points in chunks to cap concurrent API calls (avoid overwhelming server).
-  const maxConcurrent = getKundliQueueMaxFetchesPerUser();
-  const startAll = Date.now();
-  const updates: Partial<Record<KundliJsonField, unknown>> = {};
-  for (let i = 0; i < missingFields.length; i += maxConcurrent) {
-    const chunk = missingFields.slice(i, i + maxConcurrent);
-    const results = await Promise.allSettled(
-      chunk.map((field) => fetchHoroscopeChart(params, field))
+    const allFieldsFilled = updatedRow && KUNDLI_JSON_FIELDS.every(
+      (field) => isJsonFieldFilled((updatedRow as Record<string, unknown>)[field])
     );
-    const durationMs = Date.now() - startAll;
-    results.forEach((result, j) => {
-      const field = chunk[j];
-      if (result.status === 'fulfilled') {
-        updates[field] = result.value;
-        logAstroKundliCall(userId, kundliId, field, 'passed', durationMs);
-      } else {
-        const errMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
-        const outcome = errMessage.includes('HTTP') ? 'failed' : 'error';
-        logAstroKundliCall(userId, kundliId, field, outcome, durationMs, errMessage);
-      }
-    });
-  }
-  const durationMs = Date.now() - startAll;
 
-  // Persist all fetched fields in one update (parallel-friendly, single DB round-trip).
-  const dataUpdate = Object.fromEntries(
-    Object.entries(updates).filter(([, v]) => v !== undefined)
-  ) as Record<string, object>;
-  if (Object.keys(dataUpdate).length > 0) {
+    // Only mark completed when all 8 Kundli data points are filled from AstroKundli.
+    if (allFieldsFilled) {
+      await prisma.auth.update({
+        where: { id: userId },
+        data: { kundli_added: true },
+      });
+      await prisma.kundli.update({
+        where: { id: kundliId },
+        data: {
+          queue_status: QUEUE_STATUS_COMPLETED,
+          queue_completed_at: new Date(),
+        },
+      });
+    } else {
+      queueLog({
+        event: 'kundli_partial_sync',
+        user_id: userId,
+        kundli_id: kundliId,
+        message: 'Not all data points filled; queue_status reset to pending for retry.',
+      });
+      await prisma.kundli.update({
+        where: { id: kundliId },
+        data: {
+          queue_status: QUEUE_STATUS_PENDING,
+          queue_completed_at: null,
+          last_sync_error: 'Partial sync; missing data points will be retried on next run.',
+        },
+      });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    queueLogError({
+      event: 'kundli_queue_row_processing_failed',
+      kundli_id: kundliId,
+      user_id: userId,
+      error: msg,
+    });
     try {
       await prisma.kundli.update({
         where: { id: kundliId },
-        data: dataUpdate,
+        data: {
+          queue_status: QUEUE_STATUS_PENDING,
+          queue_completed_at: null,
+          last_sync_error: msg,
+        },
       });
-    } catch (updateErr) {
-      for (const field of Object.keys(dataUpdate)) {
-        logAstroKundliCall(
-          userId,
-          kundliId,
-          field as KundliJsonField,
-          'error',
-          durationMs,
-          (updateErr as Error).message
-        );
-      }
+    } catch (revertErr) {
+      queueLogError({
+        event: 'kundli_queue_revert_to_pending_failed',
+        kundli_id: kundliId,
+        user_id: userId,
+        error: (revertErr as Error).message,
+      });
     }
-  }
-
-  const updatedRow = await prisma.kundli.findUnique({
-    where: { id: kundliId },
-    select: {
-      biodata: true,
-      d1: true,
-      d7: true,
-      d9: true,
-      d10: true,
-      charakaraka: true,
-      vimsottari_dasa: true,
-      narayana_dasa: true,
-    },
-  });
-  const allFieldsFilled = updatedRow && KUNDLI_JSON_FIELDS.every(
-    (field) => isJsonFieldFilled((updatedRow as Record<string, unknown>)[field])
-  );
-
-  // Only mark completed when all 8 Kundli data points are filled from AstroKundli.
-  if (allFieldsFilled) {
-    await prisma.auth.update({
-      where: { id: userId },
-      data: { kundli_added: true },
-    });
-    await prisma.kundli.update({
-      where: { id: kundliId },
-      data: {
-        queue_status: QUEUE_STATUS_COMPLETED,
-        queue_completed_at: new Date(),
-      },
-    });
-  } else {
-    queueLog({
-      event: 'kundli_partial_sync',
-      user_id: userId,
-      kundli_id: kundliId,
-      message: 'Not all data points filled; queue_status stays in_progress for retry.',
-    });
-    await prisma.kundli.update({
-      where: { id: kundliId },
-      data: {
-        queue_status: QUEUE_STATUS_IN_PROGRESS,
-        queue_completed_at: null,
-        last_sync_error: 'Partial sync; missing data points will be retried on next run.',
-      },
-    });
   }
 }

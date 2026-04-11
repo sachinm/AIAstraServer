@@ -83,6 +83,23 @@ export function isAstroKundliLogResponseEnabled(): boolean {
   return process.env.ASTROKUNDLI_LOG_RESPONSE === '1';
 }
 
+/** Default ~1.1s: upstream may geocode via OSM Nominatim (public limit ~1 req/s per client). */
+const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 1_100;
+
+/**
+ * Minimum quiet time between consecutive POST /api/export-horoscope calls from this process.
+ * Requests are also serialized in the client so parallel Kundli fetches do not stampede the 3rd party.
+ * Set ASTROKUNDLI_REQUEST_SPACING_MS (integer ms, 0–120000; 0 disables the delay only — serialization remains).
+ */
+export function getAstroKundliRequestSpacingMs(): number {
+  const raw = process.env.ASTROKUNDLI_REQUEST_SPACING_MS;
+  if (raw != null && raw !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 120_000) return Math.round(n);
+  }
+  return DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS;
+}
+
 const DEFAULT_KUNDLI_QUEUE_BATCH_SIZE = 2;
 /** Default 2: remote AstroKundli is often single-worker; many parallel POSTs queue behind each other and hit client timeouts. */
 const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 2;

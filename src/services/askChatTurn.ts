@@ -3,6 +3,7 @@
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ChatTurnResult } from './chatLlmService.js';
+import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 
 export type AskPreconditionResult = { ok: true } | { ok: false; error: string };
 
@@ -54,6 +55,9 @@ export async function persistAskTurn(
       select: { id: true },
     });
   }
+  const priorMessageCount = await db.message.count({
+    where: { chat_id: chat.id },
+  });
   const message = await db.message.create({
     data: {
       chat_id: chat.id,
@@ -61,6 +65,15 @@ export async function persistAskTurn(
       ai_answer: chatResult.answerText,
     },
   });
+  if (priorMessageCount === 0) {
+    const title = deriveChatTitleFromQuestion(question);
+    if (title) {
+      await db.chat.update({
+        where: { id: chat.id },
+        data: { name: title },
+      });
+    }
+  }
   await db.chatLog.create({
     data: {
       chat_id: chat.id,

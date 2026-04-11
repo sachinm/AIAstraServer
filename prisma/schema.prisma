@@ -85,6 +85,7 @@ model UserGeneratedContent {
 model Chat {
   id         String    @id @default(dbgenerated("(uuid_generate_v4())::text"))
   user_id    String
+  /// Short title shown in the UI: first user question, trimmed to 50 chars (set when the first message is saved).
   name       String?
   is_active  Boolean   @default(true) @map("is_active")
   created_at DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

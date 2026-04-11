@@ -1,5 +1,10 @@
 import type { Prisma } from '@prisma/client';
-import { getAstroKundliBaseUrl, getAstroKundliApiKey, isAstroKundliLogResponseEnabled } from '../config/env.js';
+import {
+  getAstroKundliBaseUrl,
+  getAstroKundliApiKey,
+  getAstroKundliRequestSpacingMs,
+  isAstroKundliLogResponseEnabled,
+} from '../config/env.js';
 import { decrypt } from './encrypt.js';
 import { queueLog } from './queueLogger.js';
 
@@ -79,6 +84,37 @@ function getHoroscopeTimeoutMs(): number {
     if (Number.isFinite(n) && n > 0) return Math.round(n);
   }
   return DEFAULT_TIMEOUT_MS;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Serialize export-horoscope POSTs and enforce a minimum gap between them so the upstream
+ * service is less likely to hit OSM Nominatim 429 when geocoding the same place per request.
+ */
+let horoscopeExportTail: Promise<void> = Promise.resolve();
+let lastHoroscopeExportEndedAt = 0;
+
+async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T> {
+  const prev = horoscopeExportTail;
+  let release!: () => void;
+  horoscopeExportTail = new Promise<void>((r) => {
+    release = r;
+  });
+  await prev;
+  try {
+    const spacingMs = getAstroKundliRequestSpacingMs();
+    if (spacingMs > 0) {
+      const waitMs = Math.max(0, spacingMs - (Date.now() - lastHoroscopeExportEndedAt));
+      if (waitMs > 0) await sleep(waitMs);
+    }
+    return await run();
+  } finally {
+    lastHoroscopeExportEndedAt = Date.now();
+    release();
+  }
 }
 
 /** Auth-like record with optional encrypted DOB/TOB/POB */
@@ -370,10 +406,17 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
  * Fetch a single horoscope chart/slice from the AstroKundli API.
  * One request = one data point for the given `type` (biodata, d1, d7, etc.).
  * Returns the JSON payload to store in the corresponding Kundli column.
- * Designed to be called in parallel for multiple types (e.g. all 8 KUNDLI_JSON_FIELDS)
- * from the queue service for concurrent I/O.
+ * Calls are serialized with a configurable quiet gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default ~1.1s)
+ * so parallel callers (e.g. Kundli queue chunks) do not trigger upstream OSM Nominatim rate limits.
  */
 export async function fetchHoroscopeChart(
+  params: AstroKundliRequestParams,
+  type: KundliJsonField
+): Promise<Prisma.JsonValue> {
+  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
+}
+
+async function fetchHoroscopeChartImpl(
   params: AstroKundliRequestParams,
   type: KundliJsonField
 ): Promise<Prisma.JsonValue> {

@@ -19,6 +19,7 @@ import { enqueueKundliSync } from '../services/kundliQueueService.js';
 import { requireRoles } from './rbac.js';
 import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
 import type { GraphQLContext } from './context.js';
+import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 
 const ADMIN_ROLES = ['admin', 'superadmin'] as const;
 
@@ -990,6 +991,18 @@ const resolvers = {
         const message = await db.message.create({
           data: { chat_id: chatId, question, ai_answer: aiAnswer },
         });
+        const messageCount = await db.message.count({
+          where: { chat_id: chatId },
+        });
+        if (messageCount === 1) {
+          const title = deriveChatTitleFromQuestion(question);
+          if (title) {
+            await db.chat.update({
+              where: { id: chatId },
+              data: { name: title },
+            });
+          }
+        }
         return {
           success: true,
           message: {
