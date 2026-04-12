@@ -1,6 +1,6 @@
 /**
  * Groq chat service – calls Groq API (openai/gpt-oss-120b) with system prompt from DB
- * and user's Kundli data (biodata, d1, d7, d9, d10, charakaraka, vimsottari_dasa, narayana_dasa) with clear markup.
+ * and user's Kundli data (biodata, d1, d2, d4, d7, d9, d10, charakaraka, vimsottari_dasa, narayana_dasa) with clear markup.
  * Uses groq-sdk directly; LangGraph/ChatGroq can be re-enabled when @langchain/core exports
  * utils/standard_schema (see ERR_PACKAGE_PATH_NOT_EXPORTED with @langchain/groq).
  */
@@ -16,6 +16,8 @@ const GROQ_MODEL = 'openai/gpt-oss-120b';
 const KUNDLI_FIELD_LABELS: Record<string, string> = {
   biodata: 'Birth/place/time metadata (date, time, place, timezone, ayanamsa)',
   d1: 'D-1 Rashi chart (planets, houses, lagna)',
+  d2: 'D-2 Hora chart',
+  d4: 'D-4 Chaturthamsa chart',
   d7: 'D-7 Saptamsa chart',
   d9: 'D-9 Navamsa chart',
   d10: 'D-10 Dasamsa chart',
@@ -28,6 +30,8 @@ const KUNDLI_FIELD_LABELS: Record<string, string> = {
 export const KUNDLI_FIELD_TITLES: Record<string, string> = {
   biodata: "birth/place/time metadata (biodata)",
   d1: "D-1 chart (Rashi chart)",
+  d2: "D-2 chart (Hora)",
+  d4: "D-4 chart (Chaturthamsa)",
   d7: "D-7 chart (Saptamsa)",
   d9: "D-9 chart (Navamsa)",
   d10: "D-10 chart (Dasamsa)",
@@ -63,6 +67,8 @@ export function buildUserMessageWithKundli(
   kundli: {
     biodata: unknown;
     d1: unknown;
+    d2?: unknown;
+    d4?: unknown;
     d7?: unknown;
     d9: unknown;
     d10: unknown;
@@ -76,6 +82,8 @@ export function buildUserMessageWithKundli(
   const fields: KundliKey[] = [
     'biodata',
     'd1',
+    'd2',
+    'd4',
     'd7',
     'd9',
     'd10',
@@ -126,6 +134,8 @@ export async function chatWithGroq(
     {
       biodata: kundliRow.biodata,
       d1: kundliRow.d1,
+      d2: kundliRow.d2,
+      d4: kundliRow.d4,
       d7: kundliRow.d7,
       d9: kundliRow.d9,
       d10: kundliRow.d10,

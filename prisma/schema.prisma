@@ -38,6 +38,8 @@ model Kundli {
   user_id            String
   biodata            Json?
   d1                 Json?
+  d2                 Json?
+  d4                 Json?
   d7                 Json?
   d9                 Json?
   d10                Json?

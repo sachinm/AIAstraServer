@@ -20,6 +20,8 @@ describe('astroKundliClient', () => {
       expect(KUNDLI_JSON_FIELDS).toEqual([
         'biodata',
         'd1',
+        'd2',
+        'd4',
         'd7',
         'd9',
         'd10',
@@ -55,7 +57,7 @@ describe('astroKundliClient', () => {
       });
       expect(params.dob).toBe('1996-12-07');
       expect(params.tob).toBe('10:34:00');
-      expect(params.place).toBe('Chennai, IN');
+      expect(params.place).toBe('Chennai,IN');
       expect(params.ayanamsa).toBe('LAHIRI');
     });
 

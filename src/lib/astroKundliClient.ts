@@ -13,12 +13,14 @@ import { queueLog } from './queueLogger.js';
 export const KUNDLI_JSON_FIELDS = [
   'biodata',
   'd1',
+  'd2',
+  'd4',
   'd7',
   'd9',
   'd10',
   'charakaraka',
   'vimsottari_dasa',
-  'narayana_dasa'
+  'narayana_dasa',
 ] as const;
 
 export type KundliJsonField = (typeof KUNDLI_JSON_FIELDS)[number];
@@ -101,7 +103,7 @@ function effectiveExportHoroscopeSpacingMs(): number {
 /**
  * Serialize export-horoscope POSTs and enforce a minimum **start-to-start** gap so upstream
  * geocoding (OSM Nominatim, ~1 request/s) is not exceeded even when many Kundli slices are
- * requested in parallel: each slice is one POST, so 8 types need ≥ ~8× the gap in wall time
+ * requested in parallel: each slice is one POST, so KUNDLI_JSON_FIELDS.length types need ≥ that many × the gap in wall time
  * per user unless the API skips geocode. This throttle is per Node process only.
  */
 let horoscopeExportTail: Promise<void> = Promise.resolve();
@@ -419,7 +421,7 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
  * Returns the JSON payload to store in the corresponding Kundli column.
  * Serialized with a configurable **start-to-start** gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default 1.2s,
  * floored when non-zero) so parallel callers do not violate OSM Nominatim’s ~1 geocode/s policy
- * across the 8 separate POSTs per Kundli.
+ * across each separate POST per Kundli slice (see KUNDLI_JSON_FIELDS).
  */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,

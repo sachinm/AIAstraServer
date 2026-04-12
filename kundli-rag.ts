@@ -6,6 +6,8 @@ export interface KundliRow {
   user_id: string;
   biodata: unknown;
   d1: unknown;
+  d2?: unknown;
+  d4?: unknown;
   d7?: unknown;
   d9: unknown;
   d10: unknown;
@@ -28,6 +30,8 @@ export async function fetchLatestKundliForUser(
       user_id: true,
       biodata: true,
       d1: true,
+      d2: true,
+      d4: true,
       d7: true,
       d9: true,
       d10: true,
@@ -60,6 +64,8 @@ export function kundliRowToChunks(row: KundliRow): string[] {
 
   tryPush('Biodata', row.biodata);
   tryPush('Chart D1', row.d1);
+  tryPush('Chart D2', row.d2);
+  tryPush('Chart D4', row.d4);
   tryPush('Chart D7', row.d7);
   tryPush('Chart D9', row.d9);
   tryPush('Chart D10', row.d10);

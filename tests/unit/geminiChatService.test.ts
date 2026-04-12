@@ -37,6 +37,8 @@ const mockKundliRow = {
   user_id: 'user-1',
   biodata: { date: '2000-01-01' },
   d1: { chart: 'd1' },
+  d2: null,
+  d4: null,
   d7: null,
   d9: null,
   d10: null,

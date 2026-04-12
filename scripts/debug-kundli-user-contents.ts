@@ -25,6 +25,8 @@ async function main() {
     {
       biodata: row.biodata,
       d1: row.d1,
+      d2: row.d2,
+      d4: row.d4,
       d7: row.d7,
       d9: row.d9,
       d10: row.d10,

@@ -229,6 +229,8 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
       select: {
         biodata: true,
         d1: true,
+        d2: true,
+        d4: true,
         d7: true,
         d9: true,
         d10: true,
@@ -241,7 +243,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
       (field) => isJsonFieldFilled((updatedRow as Record<string, unknown>)[field])
     );
 
-    // Only mark completed when all 8 Kundli data points are filled from AstroKundli.
+    // Only mark completed when all KUNDLI_JSON_FIELDS slices are filled from AstroKundli.
     if (allFieldsFilled) {
       await prisma.auth.update({
         where: { id: userId },

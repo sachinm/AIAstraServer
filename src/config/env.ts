@@ -86,7 +86,7 @@ export function isAstroKundliLogResponseEnabled(): boolean {
 /**
  * Default gap between export-horoscope POST **starts** in this process.
  * OSM Nominatim usage policy is effectively one geocode per second; each slice (biodata, d1, …)
- * is a separate POST and may trigger geocoding upstream, so a full Kundli needs ~8× this delay
+ * is a separate POST and may trigger geocoding upstream, so a full Kundli needs ~(number of slices)× this delay
  * in wall time unless the API skips geocode (lat/lon/tz).
  */
 const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 1_200;
@@ -129,13 +129,13 @@ export function getKundliQueueBatchSize(): number {
 /**
  * Max concurrent AstroKundli API requests per user (data points fetched in chunks).
  * Lower values reduce server load; peak concurrent calls = batch size × this value.
- * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer, default 2).
+ * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer 1–16, default 2).
  */
 export function getKundliQueueMaxFetchesPerUser(): number {
   const raw = process.env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER;
   if (raw != null && raw !== '') {
     const n = Number(raw);
-    if (Number.isInteger(n) && n >= 1 && n <= 8) return n;
+    if (Number.isInteger(n) && n >= 1 && n <= 16) return n;
   }
   return DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER;
 }

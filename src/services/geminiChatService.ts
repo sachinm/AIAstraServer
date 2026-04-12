@@ -189,6 +189,8 @@ export async function chatWithGemini(
     {
       biodata: kundliRow.biodata,
       d1: kundliRow.d1,
+      d2: kundliRow.d2,
+      d4: kundliRow.d4,
       d7: kundliRow.d7,
       d9: kundliRow.d9,
       d10: kundliRow.d10,

@@ -56,6 +56,8 @@ const typeDefs = /* GraphQL */ `
     error: String
     biodata: String
     d1: String
+    d2: String
+    d4: String
     d7: String
     d9: String
     d10: String
@@ -455,6 +457,8 @@ const resolvers = {
         error: null as string | null,
         biodata: null as string | null,
         d1: null as string | null,
+        d2: null as string | null,
+        d4: null as string | null,
         d7: null as string | null,
         d9: null as string | null,
         d10: null as string | null,
@@ -491,6 +495,8 @@ const resolvers = {
           select: {
             biodata: true,
             d1: true,
+            d2: true,
+            d4: true,
             d7: true,
             d9: true,
             d10: true,
@@ -506,6 +512,8 @@ const resolvers = {
           error: null,
           biodata: jsonToString(kundli.biodata),
           d1: jsonToString(kundli.d1),
+          d2: jsonToString(kundli.d2),
+          d4: jsonToString(kundli.d4),
           d7: jsonToString(kundli.d7),
           d9: jsonToString(kundli.d9),
           d10: jsonToString(kundli.d10),
@@ -760,6 +768,8 @@ const resolvers = {
           user_id: row.user_id,
           biodata: row.biodata,
           d1: row.d1,
+          d2: row.d2,
+          d4: row.d4,
           d7: (row as { d7?: unknown }).d7,
           d9: row.d9,
           d10: row.d10,
@@ -860,6 +870,8 @@ const resolvers = {
         const kundliJson = JSON.parse(buf.toString()) as Record<string, unknown>;
         const biodata = kundliJson.biodata ?? null;
         const d1 = kundliJson.D1 ?? null;
+        const d2 = kundliJson.d2 ?? kundliJson.D2 ?? null;
+        const d4 = kundliJson.d4 ?? kundliJson.D4 ?? null;
         const d9 = kundliJson.D9 ?? null;
         const d10 = kundliJson.D10 ?? null;
         const charakaraka = kundliJson.charaKaraka ?? null;
@@ -871,6 +883,8 @@ const resolvers = {
             user_id: userId,
             biodata: biodata ?? undefined,
             d1: d1 ?? undefined,
+            d2: d2 ?? undefined,
+            d4: d4 ?? undefined,
             d7: d7 ?? undefined,
             d9: d9 ?? undefined,
             d10: d10 ?? undefined,

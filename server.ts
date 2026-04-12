@@ -32,6 +32,28 @@ const KUNDLI_QUEUE_INTERVAL_MS = 30_000;
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
+
+// Behind Render (and most PaaS), the proxy sets X-Forwarded-For. express-rate-limit requires
+// trust proxy to be enabled or it throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+// When TRUST_PROXY is unset: default to 1 on Render / production / staging; opt out with 0 | false.
+// Force on locally: TRUST_PROXY=1 | true.
+const nodeEnv = getNodeEnv();
+const trustProxyDeployedDefault =
+  process.env.RENDER === 'true' || nodeEnv === 'production' || nodeEnv === 'staging';
+const trustProxyEnv = process.env.TRUST_PROXY?.trim();
+const trustProxyRaw = (
+  trustProxyEnv !== undefined && trustProxyEnv !== ''
+    ? trustProxyEnv
+    : trustProxyDeployedDefault
+      ? '1'
+      : ''
+).toLowerCase();
+const trustProxyEnabled =
+  trustProxyRaw === '1' || trustProxyRaw === 'true';
+if (trustProxyEnabled) {
+  app.set('trust proxy', 1);
+}
+
 app.use(express.json());
 
 // Dev/local: allow any origin so dev:network (Vite --host) works from any LAN IP.

@@ -1,6 +1,6 @@
 /**
  * Unit tests for buildUserMessageWithKundli: ensure all Kundli data points
- * (biodata, d1, d7, d9, d10, charakaraka, vimsottari_dasa, narayana_dasa) appear
+ * (biodata, d1, d2, d4, d7, d9, d10, charakaraka, vimsottari_dasa, narayana_dasa) appear
  * in kundliUserContents, with one test per data point and one overall coverage test.
  */
 import { describe, it, expect } from 'vitest';
@@ -14,6 +14,8 @@ import {
 const EXPECTED_FIELDS = [
   'biodata',
   'd1',
+  'd2',
+  'd4',
   'd7',
   'd9',
   'd10',
@@ -44,6 +46,8 @@ describe('buildUserMessageWithKundli', () => {
   const emptyKundli = {
     biodata: null,
     d1: null,
+    d2: null,
+    d4: null,
     d7: null,
     d9: null,
     d10: null,
@@ -52,9 +56,9 @@ describe('buildUserMessageWithKundli', () => {
     narayana_dasa: null,
   };
 
-  it('returns exactly 8 kundliUserContents and each expected data point appears once', () => {
+  it('returns exactly 10 kundliUserContents and each expected data point appears once', () => {
     const result = buildUserMessageWithKundli(emptyKundli, ' My question ');
-    expect(result.kundliUserContents).toHaveLength(8);
+    expect(result.kundliUserContents).toHaveLength(10);
     expect(result.userQuestion).toBe('My question');
 
     const parsedTitles = result.kundliUserContents
@@ -62,7 +66,7 @@ describe('buildUserMessageWithKundli', () => {
       .filter((t): t is string => t !== null);
     const expectedTitles = EXPECTED_FIELDS.map((k) => KUNDLI_FIELD_TITLES[k]);
     expect(parsedTitles.sort()).toEqual([...expectedTitles].sort());
-    expect(new Set(parsedTitles).size).toBe(8);
+    expect(new Set(parsedTitles).size).toBe(10);
   });
 
   it('each content block contains either JSON data or "(no data available)"', () => {
@@ -116,6 +120,8 @@ describe('buildUserMessageWithKundli', () => {
     const kundliNoNarayana = {
       biodata: null,
       d1: null,
+      d2: null,
+      d4: null,
       d7: null,
       d9: null,
       d10: null,
