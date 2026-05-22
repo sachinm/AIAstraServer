@@ -5,12 +5,36 @@ import {
   fetchHoroscopeChart,
   authToAstroKundliParams,
 } from '../lib/astroKundliClient.js';
-import { getNodeEnv, getAstroKundliBaseUrl, getKundliQueueBatchSize, getKundliQueueMaxFetchesPerUser } from '../config/env.js';
+import {
+  getNodeEnv,
+  getAstroKundliBaseUrl,
+  getKundliQueueBatchSize,
+  getKundliQueueMaxFetchesPerUser,
+  getKundliQueueRowStaggerMs,
+} from '../config/env.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
 const QUEUE_STATUS_IN_PROGRESS = 'in_progress';
 const QUEUE_STATUS_COMPLETED = 'completed';
+
+/** DB columns synced via AstroKundli `KUNDLI_JSON_FIELDS` (used after status → in_progress for a fresh snapshot). */
+const KUNDLI_JSON_COLUMNS_SELECT = {
+  biodata: true,
+  d1: true,
+  d2: true,
+  d4: true,
+  d7: true,
+  d9: true,
+  d10: true,
+  charakaraka: true,
+  vimsottari_dasa: true,
+  narayana_dasa: true,
+} as const;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 
 /**
@@ -77,9 +101,9 @@ function logAstroKundliCall(
 }
 
 /**
- * Process Kundli rows (users) per run. For each row we fetch missing data points in
- * chunks to cap concurrent AstroKundli API calls. Peak concurrency = batch size ×
- * max fetches per user (see env: KUNDLI_QUEUE_BATCH_SIZE, KUNDLI_QUEUE_MAX_FETCHES_PER_USER).
+ * Process Kundli rows (users) per run. Each row’s missing slices are fetched in chunks
+ * (see KUNDLI_QUEUE_MAX_FETCHES_PER_USER). Rows are staggered by KUNDLI_QUEUE_ROW_STAGGER_MS
+ * (default 2s per index) so multiple pending rows in one tick do not hammer the upstream API.
  * Rows with queue_status 'pending' are eligible. After a row is moved to 'in_progress',
  * any processing failure resets it to 'pending' so the worker can retry.
  */
@@ -96,7 +120,17 @@ export async function processKundliSyncQueue(prisma: PrismaClient): Promise<void
 
   queueLog({ event: 'kundli_queue_tick_start', pending_count: rows.length });
 
-  await Promise.all(rows.map((row) => processOneKundliRow(prisma, row)));
+  const staggerMs = getKundliQueueRowStaggerMs();
+  await Promise.all(
+    rows.map((row, index) =>
+      (async () => {
+        if (staggerMs > 0 && index > 0) {
+          await sleep(index * staggerMs);
+        }
+        await processOneKundliRow(prisma, row);
+      })()
+    )
+  );
 }
 
 type KundliRowWithUser = Prisma.KundliGetPayload<{ include: { user: true } }>;
@@ -146,9 +180,23 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
     return;
   }
 
+  const freshKundli = await prisma.kundli.findUnique({
+    where: { id: kundliId },
+    select: KUNDLI_JSON_COLUMNS_SELECT,
+  });
+  if (!freshKundli) {
+    queueLogError({
+      event: 'kundli_queue_row_missing_after_in_progress',
+      kundli_id: kundliId,
+      user_id: userId,
+      error: 'Kundli row not found after status update',
+    });
+    return;
+  }
+
   try {
     const missingFields = KUNDLI_JSON_FIELDS.filter(
-      (field) => !isJsonFieldFilled((row as Record<string, unknown>)[field])
+      (field) => !isJsonFieldFilled((freshKundli as Record<string, unknown>)[field])
     ) as KundliJsonField[];
 
     if (missingFields.length === 0) {
@@ -226,18 +274,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
 
     const updatedRow = await prisma.kundli.findUnique({
       where: { id: kundliId },
-      select: {
-        biodata: true,
-        d1: true,
-        d2: true,
-        d4: true,
-        d7: true,
-        d9: true,
-        d10: true,
-        charakaraka: true,
-        vimsottari_dasa: true,
-        narayana_dasa: true,
-      },
+      select: KUNDLI_JSON_COLUMNS_SELECT,
     });
     const allFieldsFilled = updatedRow && KUNDLI_JSON_FIELDS.every(
       (field) => isJsonFieldFilled((updatedRow as Record<string, unknown>)[field])

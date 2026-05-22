@@ -89,10 +89,11 @@ export function isAstroKundliLogResponseEnabled(): boolean {
  * is a separate POST and may trigger geocoding upstream, so a full Kundli needs ~(number of slices)× this delay
  * in wall time unless the API skips geocode (lat/lon/tz).
  */
-const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 1_200;
+/** Aligns with strict upstream limits (e.g. one export POST per second per client). */
+const DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS = 2_000;
 
-/** When spacing is enabled (>0), never go below this so env typos cannot violate ~1 req/s. */
-export const ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS = 1_050;
+/** When spacing is enabled (>0), never go below this (upstream: ~1 req/s). */
+export const ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS = 1_100;
 
 /**
  * Configured minimum milliseconds between consecutive POST /api/export-horoscope **starts**
@@ -109,8 +110,11 @@ export function getAstroKundliRequestSpacingMs(): number {
 }
 
 const DEFAULT_KUNDLI_QUEUE_BATCH_SIZE = 2;
-/** Default 2: remote AstroKundli is often single-worker; many parallel POSTs queue behind each other and hit client timeouts. */
-const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 2;
+/** Default 1: one slice per chunk avoids stacking two export POSTs before the global throttle gap. */
+const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 1;
+
+/** Delay before starting each additional Kundli row in the same queue tick (staggers multi-row work). */
+const DEFAULT_KUNDLI_QUEUE_ROW_STAGGER_MS = 2_000;
 
 /**
  * Max number of Kundli users to process in parallel per queue run.
@@ -129,7 +133,7 @@ export function getKundliQueueBatchSize(): number {
 /**
  * Max concurrent AstroKundli API requests per user (data points fetched in chunks).
  * Lower values reduce server load; peak concurrent calls = batch size × this value.
- * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer 1–16, default 2).
+ * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer 1–16, default 1).
  */
 export function getKundliQueueMaxFetchesPerUser(): number {
   const raw = process.env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER;
@@ -138,6 +142,19 @@ export function getKundliQueueMaxFetchesPerUser(): number {
     if (Number.isInteger(n) && n >= 1 && n <= 16) return n;
   }
   return DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER;
+}
+
+/**
+ * Milliseconds to wait before starting each subsequent row in `processKundliSyncQueue` (index 1 waits 1×, index 2 waits 2×, …).
+ * Reduces 429 when several pending Kundlis are processed in one tick. Set KUNDLI_QUEUE_ROW_STAGGER_MS (0–120000; 0 disables).
+ */
+export function getKundliQueueRowStaggerMs(): number {
+  const raw = process.env.KUNDLI_QUEUE_ROW_STAGGER_MS;
+  if (raw != null && raw !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 120_000) return Math.round(n);
+  }
+  return DEFAULT_KUNDLI_QUEUE_ROW_STAGGER_MS;
 }
 
 /** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
@@ -259,4 +276,10 @@ export function getRecaptchaMinScore(): number {
     if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
   }
   return DEFAULT_RECAPTCHA_MIN_SCORE;
+}
+
+/** Secret for https://challenges.cloudflare.com/turnstile/v0/siteverify. If unset, login/signup skip Turnstile. */
+export function getTurnstileSecret(): string | undefined {
+  const s = process.env.TURNSTILE_SECRET_KEY?.trim();
+  return s || undefined;
 }

@@ -234,13 +234,14 @@ const typeDefs = /* GraphQL */ `
     time_of_birth: String
     gender: String
     recaptchaToken: String
+    turnstileToken: String
   }
 
   type Mutation {
-    login(username: String!, password: String!, recaptchaToken: String): LoginResult!
+    login(username: String!, password: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     signup(input: SignUpInput!): SignUpResult!
-    requestMagicLink(email: String!, recaptchaToken: String): MagicLinkRequestResult!
-    loginWithMagicLink(email: String!, code: String!, recaptchaToken: String): LoginResult!
+    requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
+    loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     uploadKundli(fileBase64: String!): UploadKundliResult!
     createChat: ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
@@ -811,10 +812,23 @@ const resolvers = {
         username,
         password,
         recaptchaToken,
-      }: { username: string; password: string; recaptchaToken?: string | null },
-      _context: GraphQLContext
+        turnstileToken,
+      }: {
+        username: string;
+        password: string;
+        recaptchaToken?: string | null;
+        turnstileToken?: string | null;
+      },
+      context: GraphQLContext
     ) {
-      return login(username, password, recaptchaToken ?? null);
+      const clientIp = getClientIp(context.request);
+      return login(
+        username,
+        password,
+        recaptchaToken ?? null,
+        turnstileToken ?? null,
+        clientIp
+      );
     },
     async signup(
       _parent: unknown,
@@ -823,19 +837,32 @@ const resolvers = {
     ) {
       const recaptchaToken =
         typeof input.recaptchaToken === 'string' ? input.recaptchaToken : null;
-      const { recaptchaToken: _t, ...rest } = input;
+      const turnstileToken =
+        typeof input.turnstileToken === 'string' ? input.turnstileToken : null;
+      const { recaptchaToken: _r, turnstileToken: _t, ...rest } = input;
       const clientIp = getClientIp(context.request);
-      return signup(rest, recaptchaToken, clientIp);
+      return signup(rest, recaptchaToken, turnstileToken, clientIp);
     },
     async requestMagicLink(
       _parent: unknown,
       {
         email,
         recaptchaToken,
-      }: { email: string; recaptchaToken?: string | null },
-      _context: GraphQLContext
+        turnstileToken,
+      }: {
+        email: string;
+        recaptchaToken?: string | null;
+        turnstileToken?: string | null;
+      },
+      context: GraphQLContext
     ) {
-      return requestMagicLink(email, recaptchaToken ?? null);
+      const clientIp = getClientIp(context.request);
+      return requestMagicLink(
+        email,
+        recaptchaToken ?? null,
+        turnstileToken ?? null,
+        clientIp
+      );
     },
     async loginWithMagicLink(
       _parent: unknown,
@@ -843,10 +870,23 @@ const resolvers = {
         email,
         code,
         recaptchaToken,
-      }: { email: string; code: string; recaptchaToken?: string | null },
-      _context: GraphQLContext
+        turnstileToken,
+      }: {
+        email: string;
+        code: string;
+        recaptchaToken?: string | null;
+        turnstileToken?: string | null;
+      },
+      context: GraphQLContext
     ) {
-      return loginWithMagicLink(email, code, recaptchaToken ?? null);
+      const clientIp = getClientIp(context.request);
+      return loginWithMagicLink(
+        email,
+        code,
+        recaptchaToken ?? null,
+        turnstileToken ?? null,
+        clientIp
+      );
     },
     async uploadKundli(
       _parent: unknown,

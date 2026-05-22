@@ -337,7 +337,9 @@ export async function checkAstroKundliEndpoint(): Promise<{
 /**
  * Startup probe: intentionally send bogus params to the export endpoint so we can
  * verify request/response/error logging for the 3rd-party integration.
- * This probe is non-critical and should never crash server startup.
+ * Uses the same `withHoroscopeExportThrottle` as real chart fetches so this POST does not
+ * race the Kundli queue or bypass rate limits on the upstream service.
+ * Non-critical: never throws to caller.
  */
 export async function probeAstroKundliWithBogusParams(): Promise<void> {
   const globalState = globalThis as Record<symbol, unknown>;
@@ -373,40 +375,48 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
   };
 
   const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
-
-  console.log('[AstroKundli] startup bogus-probe outgoing', {
+  console.log('[AstroKundli] startup bogus-probe scheduled (serialized with export-horoscope POSTs)', {
     url,
-    method: 'POST',
-    timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
     hasApiKey: Boolean(apiKey),
-    body: bogusBody,
   });
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(bogusBody),
-      signal: controller.signal,
+    const { status, ok, rawText } = await withHoroscopeExportThrottle(async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
+      try {
+        console.log('[AstroKundli] startup bogus-probe outgoing', {
+          url,
+          method: 'POST',
+          timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
+          hasApiKey: Boolean(apiKey),
+          body: bogusBody,
+        });
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(bogusBody),
+          signal: controller.signal,
+        });
+        const text = await res.text();
+        return { status: res.status, ok: res.ok, rawText: text };
+      } finally {
+        clearTimeout(timeoutId);
+      }
     });
-    clearTimeout(timeoutId);
 
-    const rawText = await res.text();
     const previewMaxLen = 1500;
     const truncated = rawText.length > previewMaxLen;
 
     console.log('[AstroKundli] startup bogus-probe response', {
       url,
-      status: res.status,
-      ok: res.ok,
+      status,
+      ok,
       durationMs: Date.now() - startedAt,
       response_preview: truncated ? rawText.slice(0, previewMaxLen) + '...[truncated]' : rawText,
       truncated,
     });
   } catch (err) {
-    clearTimeout(timeoutId);
     console.error('[AstroKundli] startup bogus-probe error', {
       url,
       durationMs: Date.now() - startedAt,
@@ -419,7 +429,7 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
  * Fetch a single horoscope chart/slice from the AstroKundli API.
  * One request = one data point for the given `type` (biodata, d1, d7, etc.).
  * Returns the JSON payload to store in the corresponding Kundli column.
- * Serialized with a configurable **start-to-start** gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default 1.2s,
+ * Serialized with a configurable **start-to-start** gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default 2s,
  * floored when non-zero) so parallel callers do not violate OSM Nominatim’s ~1 geocode/s policy
  * across each separate POST per Kundli slice (see KUNDLI_JSON_FIELDS).
  */

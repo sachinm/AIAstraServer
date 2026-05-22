@@ -21,6 +21,7 @@ describe('Auth flow', () => {
 
   beforeAll(() => {
     delete process.env.RECAPTCHA_SECRET_KEY;
+    delete process.env.TURNSTILE_SECRET_KEY;
   });
 
   afterAll(async () => {

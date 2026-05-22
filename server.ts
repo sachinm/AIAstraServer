@@ -311,9 +311,7 @@ async function start(): Promise<void> {
         .catch((err) => {
           console.warn('⚠️ AstroKundli endpoint check failed:', (err as Error).message);
         });
-      probeAstroKundliWithBogusParams().catch((err) => {
-        console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
-      });
+
       const runKundliQueueTick = (): void => {
         processKundliSyncQueue(prisma).catch((err) => {
           queueLogError({
@@ -322,11 +320,20 @@ async function start(): Promise<void> {
           });
         });
       };
-      runKundliQueueTick();
-      setInterval(runKundliQueueTick, KUNDLI_QUEUE_INTERVAL_MS);
-      console.log(
-        `Kundli sync queue: every ${KUNDLI_QUEUE_INTERVAL_MS / 1000}s + on signup/login.`
-      );
+
+      // Run bogus export probe before the first queue tick so two POSTs never hit upstream at once.
+      void (async () => {
+        try {
+          await probeAstroKundliWithBogusParams();
+        } catch (err) {
+          console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
+        }
+        runKundliQueueTick();
+        setInterval(runKundliQueueTick, KUNDLI_QUEUE_INTERVAL_MS);
+        console.log(
+          `Kundli sync queue: every ${KUNDLI_QUEUE_INTERVAL_MS / 1000}s + on signup/login.`
+        );
+      })();
     } else {
       console.log('Kundli sync queue not started: ASTROKUNDLI_BASE_URL_* not set for this env. Chart sync will not run.');
     }
