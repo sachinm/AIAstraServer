@@ -811,7 +811,6 @@ const resolvers = {
       {
         username,
         password,
-        recaptchaToken,
         turnstileToken,
       }: {
         username: string;
@@ -822,32 +821,23 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return login(
-        username,
-        password,
-        recaptchaToken ?? null,
-        turnstileToken ?? null,
-        clientIp
-      );
+      return login(username, password, turnstileToken ?? null, clientIp);
     },
     async signup(
       _parent: unknown,
       { input }: { input: Record<string, unknown> },
       context: GraphQLContext
     ) {
-      const recaptchaToken =
-        typeof input.recaptchaToken === 'string' ? input.recaptchaToken : null;
       const turnstileToken =
         typeof input.turnstileToken === 'string' ? input.turnstileToken : null;
       const { recaptchaToken: _r, turnstileToken: _t, ...rest } = input;
       const clientIp = getClientIp(context.request);
-      return signup(rest, recaptchaToken, turnstileToken, clientIp);
+      return signup(rest, turnstileToken, clientIp);
     },
     async requestMagicLink(
       _parent: unknown,
       {
         email,
-        recaptchaToken,
         turnstileToken,
       }: {
         email: string;
@@ -857,19 +847,13 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return requestMagicLink(
-        email,
-        recaptchaToken ?? null,
-        turnstileToken ?? null,
-        clientIp
-      );
+      return requestMagicLink(email, turnstileToken ?? null, clientIp);
     },
     async loginWithMagicLink(
       _parent: unknown,
       {
         email,
         code,
-        recaptchaToken,
         turnstileToken,
       }: {
         email: string;
@@ -880,13 +864,7 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return loginWithMagicLink(
-        email,
-        code,
-        recaptchaToken ?? null,
-        turnstileToken ?? null,
-        clientIp
-      );
+      return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
     },
     async uploadKundli(
       _parent: unknown,

@@ -5,24 +5,7 @@ import { hashPassword, comparePassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
-import { assertRecaptchaIfConfigured } from './recaptchaService.js';
 import { assertTurnstileIfConfigured } from './turnstileService.js';
-
-type HumanVerificationGateResult =
-  | { ok: true }
-  | { ok: false; message: string };
-
-async function assertHumanVerificationIfConfigured(
-  recaptchaToken?: string | null,
-  turnstileToken?: string | null,
-  remoteIp?: string | null
-): Promise<HumanVerificationGateResult> {
-  const recaptcha = await assertRecaptchaIfConfigured(recaptchaToken);
-  if (!recaptcha.ok) return recaptcha;
-  const turnstile = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
-  if (!turnstile.ok) return turnstile;
-  return { ok: true };
-}
 import { sendMagicLinkEmail } from './emailService.js';
 import { generateMagicLinkCode, normalizeMagicLinkCode } from '../lib/magicLinkCode.js';
 import type { z } from 'zod';
@@ -85,15 +68,10 @@ export function issueToken(userId: string, role = 'user'): string {
 export async function login(
   username: string,
   password: string,
-  recaptchaToken?: string | null,
   turnstileToken?: string | null,
   remoteIp?: string | null
 ): Promise<LoginResult> {
-  const gate = await assertHumanVerificationIfConfigured(
-    recaptchaToken,
-    turnstileToken,
-    remoteIp
-  );
+  const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
   }
@@ -133,15 +111,10 @@ export type MagicLinkRequestResult =
  */
 export async function requestMagicLink(
   emailRaw: string,
-  recaptchaToken?: string | null,
   turnstileToken?: string | null,
   remoteIp?: string | null
 ): Promise<MagicLinkRequestResult> {
-  const gate = await assertHumanVerificationIfConfigured(
-    recaptchaToken,
-    turnstileToken,
-    remoteIp
-  );
+  const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
   }
@@ -184,15 +157,10 @@ export async function requestMagicLink(
 export async function loginWithMagicLink(
   emailRaw: string,
   codeRaw: string,
-  recaptchaToken?: string | null,
   turnstileToken?: string | null,
   remoteIp?: string | null
 ): Promise<LoginResult> {
-  const gate = await assertHumanVerificationIfConfigured(
-    recaptchaToken,
-    turnstileToken,
-    remoteIp
-  );
+  const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
   }
@@ -261,15 +229,10 @@ export async function loginWithMagicLink(
  */
 export async function signup(
   input: unknown,
-  recaptchaToken?: string | null,
   turnstileToken?: string | null,
   clientIp?: string | null
 ): Promise<SignUpResult> {
-  const gate = await assertHumanVerificationIfConfigured(
-    recaptchaToken,
-    turnstileToken,
-    clientIp
-  );
+  const gate = await assertTurnstileIfConfigured(turnstileToken, clientIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
   }
