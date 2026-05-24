@@ -10,11 +10,22 @@ import {
   LOGIN_FAILED_OBFUSCATED,
 } from '../src/services/authService.js';
 import { prisma } from '../src/lib/prisma.js';
+import { hashIdentifier } from '../src/lib/identifierHash.js';
 
 const unique = () =>
   `testuser_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const hasDb =
   !!process.env.DATABASE_URL && !process.env.DATABASE_URL_IS_PLACEHOLDER;
+
+function auditRequest(headers: Record<string, string> = {}): Request {
+  return new Request('https://api.example.com/graphql', {
+    headers: {
+      'user-agent': 'vitest',
+      'cf-connecting-ip': '203.0.113.50',
+      ...headers,
+    },
+  });
+}
 
 describe('Auth flow', () => {
   let testUserId: string | null = null;
@@ -22,11 +33,14 @@ describe('Auth flow', () => {
   beforeAll(() => {
     delete process.env.RECAPTCHA_SECRET_KEY;
     delete process.env.TURNSTILE_SECRET_KEY;
+    process.env.JWT_SECRET =
+      process.env.JWT_SECRET ?? 'test-jwt-secret-min-32-characters-long';
   });
 
   afterAll(async () => {
     if (testUserId && hasDb) {
       try {
+        await prisma.loginAttempt.deleteMany({ where: { user_id: testUserId } });
         await prisma.auth.delete({ where: { id: testUserId } });
       } catch (_) {}
     }
@@ -55,7 +69,12 @@ describe('Auth flow', () => {
       testUserId = signupResult.user;
     }
 
-    const loginResult = await login(username, password);
+    const loginResult = await login(
+      username,
+      password,
+      null,
+      auditRequest()
+    );
     expect(loginResult.success).toBe(true);
     if (loginResult.success && signupResult.success) {
       expect(loginResult.token).toBeDefined();
@@ -76,7 +95,7 @@ describe('Auth flow', () => {
     const row = await prisma.auth.findFirst({ where: { username } });
     if (row) testUserId = row.id;
 
-    const result = await login(username, 'wrongpassword');
+    const result = await login(username, 'wrongpassword', null, auditRequest());
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.message).toBe(LOGIN_FAILED_OBFUSCATED);
@@ -84,6 +103,20 @@ describe('Auth flow', () => {
     expect(
       result.success ? result.token : undefined
     ).toBeUndefined();
+
+    const attempts = await prisma.loginAttempt.findMany({
+      where: { user_id: row!.id },
+      orderBy: { occurred_at: 'desc' },
+      take: 1,
+    });
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.outcome).toBe('failure');
+    expect(attempts[0]?.failure_reason).toBe('invalid_credentials');
+    expect(attempts[0]?.auth_method).toBe('password');
+    expect(attempts[0]?.client_ip).toBe('203.0.113.50');
+    expect(attempts[0]?.identifier_hash).toBe(
+      hashIdentifier(username, 'username')
+    );
   });
 
   it('me resolver never returns password or PII fields', async () => {

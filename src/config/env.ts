@@ -283,3 +283,17 @@ export function getTurnstileSecret(): string | undefined {
   const s = process.env.TURNSTILE_SECRET_KEY?.trim();
   return s || undefined;
 }
+
+/**
+ * Pepper for HMAC-SHA256 of login identifiers in audit logs.
+ * Uses IDENTIFIER_HASH_PEPPER when set; otherwise JWT_SECRET (required at startup).
+ */
+export function getIdentifierHashPepper(): string {
+  const pepper = process.env.IDENTIFIER_HASH_PEPPER?.trim();
+  if (pepper) return pepper;
+  const jwt = process.env.JWT_SECRET?.trim();
+  if (jwt && jwt.length >= 32) return jwt;
+  throw new Error(
+    'IDENTIFIER_HASH_PEPPER or JWT_SECRET (min 32 chars) must be set for login audit hashing'
+  );
+}

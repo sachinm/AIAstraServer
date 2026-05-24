@@ -29,8 +29,36 @@ model Auth {
   chats                Chat[]
   kundlis              Kundli[]
   userGeneratedContent UserGeneratedContent[]
+  loginAttempts        LoginAttempt[]
 
   @@map("auth")
+}
+
+model LoginAttempt {
+  id              String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  occurred_at     DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  outcome         String
+  failure_reason  String?  @map("failure_reason")
+  auth_method     String   @map("auth_method")
+  user_id         String?  @map("user_id")
+  identifier_type String?  @map("identifier_type")
+  identifier_hash String?  @map("identifier_hash")
+  client_ip       String?  @map("client_ip")
+  user_agent      String?  @map("user_agent")
+  accept_language String?  @map("accept_language")
+  origin          String?  @map("origin")
+  country_code    String?  @map("country_code")
+  device_class    String?  @map("device_class")
+  browser         String?  @map("browser")
+  os              String?  @map("os")
+  turnstile_ok    Boolean? @map("turnstile_ok")
+  request_id      String?  @map("request_id")
+  user            Auth?    @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id, occurred_at], map: "idx_login_attempts_user_occurred")
+  @@index([identifier_hash, occurred_at], map: "idx_login_attempts_identifier_occurred")
+  @@index([client_ip, occurred_at], map: "idx_login_attempts_ip_occurred")
+  @@map("login_attempts")
 }
 
 model Kundli {

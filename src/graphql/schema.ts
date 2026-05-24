@@ -820,8 +820,7 @@ const resolvers = {
       },
       context: GraphQLContext
     ) {
-      const clientIp = getClientIp(context.request);
-      return login(username, password, turnstileToken ?? null, clientIp);
+      return login(username, password, turnstileToken ?? null, context.request);
     },
     async signup(
       _parent: unknown,
@@ -846,8 +845,7 @@ const resolvers = {
       },
       context: GraphQLContext
     ) {
-      const clientIp = getClientIp(context.request);
-      return requestMagicLink(email, turnstileToken ?? null, clientIp);
+      return requestMagicLink(email, turnstileToken ?? null, context.request);
     },
     async loginWithMagicLink(
       _parent: unknown,
@@ -863,8 +861,12 @@ const resolvers = {
       },
       context: GraphQLContext
     ) {
-      const clientIp = getClientIp(context.request);
-      return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      return loginWithMagicLink(
+        email,
+        code,
+        turnstileToken ?? null,
+        context.request
+      );
     },
     async uploadKundli(
       _parent: unknown,

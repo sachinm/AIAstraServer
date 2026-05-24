@@ -26,6 +26,7 @@ import {
   logChatProviderError,
   publicMessageFromChatProviderError,
 } from './src/services/publicChatError.js';
+import { redactGraphqlBodyForLog } from './src/lib/requestMeta.js';
 
 /** AstroKundli kundli sync: `processKundliSyncQueue` interval when ASTROKUNDLI is configured. */
 const KUNDLI_QUEUE_INTERVAL_MS = 30_000;
@@ -107,7 +108,7 @@ app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
   const startedAt = Date.now();
   let body = '';
   try {
-    body = JSON.stringify(req.body);
+    body = redactGraphqlBodyForLog(req.body);
   } catch {
     // ignore
   }

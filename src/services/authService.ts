@@ -8,6 +8,11 @@ import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.
 import { assertTurnstileIfConfigured } from './turnstileService.js';
 import { sendMagicLinkEmail } from './emailService.js';
 import { generateMagicLinkCode, normalizeMagicLinkCode } from '../lib/magicLinkCode.js';
+import {
+  recordLoginAttemptSafe,
+  resolveAuthUserByIdentifier,
+} from './loginAuditService.js';
+import { getClientIp } from '../lib/requestMeta.js';
 import type { z } from 'zod';
 import type { signUpSchema } from '../lib/validators.js';
 
@@ -69,22 +74,57 @@ export async function login(
   username: string,
   password: string,
   turnstileToken?: string | null,
-  remoteIp?: string | null
+  request?: Request | null
 ): Promise<LoginResult> {
+  const remoteIp = request ? getClientIp(request) : null;
   const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'password',
+      outcome: 'failure',
+      failureReason: 'turnstile_failed',
+      identifier: username,
+      turnstileOk: false,
+    });
     return { success: false, message: gate.message };
   }
 
   const parsed = validateLoginInput({ username, password });
   if (!parsed.success) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'password',
+      outcome: 'failure',
+      failureReason: 'validation_error',
+      identifier: username,
+      turnstileOk: true,
+    });
     return { success: false, message: LOGIN_FAILED_OBFUSCATED };
   }
   const { username: u, password: p } = parsed.data;
+  const resolvedUser = await resolveAuthUserByIdentifier(u);
   const user = await validateLogin(u, p);
   if (!user) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'password',
+      outcome: 'failure',
+      failureReason: 'invalid_credentials',
+      identifier: u,
+      userId: resolvedUser?.id ?? null,
+      turnstileOk: true,
+    });
     return { success: false, message: LOGIN_FAILED_OBFUSCATED };
   }
+  recordLoginAttemptSafe({
+    request,
+    authMethod: 'password',
+    outcome: 'success',
+    identifier: u,
+    userId: user.id,
+    turnstileOk: true,
+  });
   await enqueueKundliSync(prisma, user.id).catch((err) => {
     console.error('enqueueKundliSync after login failed:', (err as Error).message);
   });
@@ -112,16 +152,32 @@ export type MagicLinkRequestResult =
 export async function requestMagicLink(
   emailRaw: string,
   turnstileToken?: string | null,
-  remoteIp?: string | null
+  request?: Request | null
 ): Promise<MagicLinkRequestResult> {
+  const remoteIp = request ? getClientIp(request) : null;
   const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_request',
+      outcome: 'failure',
+      failureReason: 'turnstile_failed',
+      identifier: emailRaw,
+      turnstileOk: false,
+    });
     return { success: false, message: gate.message };
   }
 
   const email = emailRaw.trim();
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   if (!emailOk) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_request',
+      outcome: 'success',
+      identifier: emailRaw,
+      turnstileOk: true,
+    });
     return { success: true, message: MAGIC_LINK_REQUEST_MESSAGE };
   }
 
@@ -148,6 +204,15 @@ export async function requestMagicLink(
     }
   }
 
+  recordLoginAttemptSafe({
+    request,
+    authMethod: 'magic_link_request',
+    outcome: 'success',
+    identifier: email,
+    userId: user?.id ?? null,
+    turnstileOk: true,
+  });
+
   return { success: true, message: MAGIC_LINK_REQUEST_MESSAGE };
 }
 
@@ -158,16 +223,33 @@ export async function loginWithMagicLink(
   emailRaw: string,
   codeRaw: string,
   turnstileToken?: string | null,
-  remoteIp?: string | null
+  request?: Request | null
 ): Promise<LoginResult> {
+  const remoteIp = request ? getClientIp(request) : null;
   const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_verify',
+      outcome: 'failure',
+      failureReason: 'turnstile_failed',
+      identifier: emailRaw,
+      turnstileOk: false,
+    });
     return { success: false, message: gate.message };
   }
 
   const email = emailRaw.trim();
   const code = normalizeMagicLinkCode(codeRaw);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || code.length !== 8) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_verify',
+      outcome: 'failure',
+      failureReason: 'validation_error',
+      identifier: emailRaw,
+      turnstileOk: true,
+    });
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
@@ -182,15 +264,42 @@ export async function loginWithMagicLink(
   });
 
   if (!user?.magic_link_code_hash || !user.magic_link_expires_at) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_verify',
+      outcome: 'failure',
+      failureReason: 'magic_link_invalid',
+      identifier: email,
+      userId: user?.id ?? null,
+      turnstileOk: true,
+    });
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
   if (new Date() > user.magic_link_expires_at) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_verify',
+      outcome: 'failure',
+      failureReason: 'magic_link_invalid',
+      identifier: email,
+      userId: user.id,
+      turnstileOk: true,
+    });
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
   const match = await comparePassword(code, user.magic_link_code_hash);
   if (!match) {
+    recordLoginAttemptSafe({
+      request,
+      authMethod: 'magic_link_verify',
+      outcome: 'failure',
+      failureReason: 'magic_link_invalid',
+      identifier: email,
+      userId: user.id,
+      turnstileOk: true,
+    });
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
@@ -213,6 +322,15 @@ export async function loginWithMagicLink(
       'processKundliSyncQueue after magic link login failed:',
       (err as Error).message
     );
+  });
+
+  recordLoginAttemptSafe({
+    request,
+    authMethod: 'magic_link_verify',
+    outcome: 'success',
+    identifier: email,
+    userId: user.id,
+    turnstileOk: true,
   });
 
   const token = issueToken(user.id, user.role ?? 'user');
