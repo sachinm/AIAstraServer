@@ -17,8 +17,6 @@ import { buildContext, getJwtSecret } from './src/graphql/context.js';
 import { ensureSuperadmin } from './src/ensureSuperadmin.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
 import { getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
-import { processKundliSyncQueue } from './src/services/kundliQueueService.js';
-import { queueLogError } from './src/lib/queueLogger.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
@@ -311,26 +309,16 @@ async function start(): Promise<void> {
           console.warn('⚠️ AstroKundli endpoint check failed:', (err as Error).message);
         });
 
-      const runKundliQueueTick = (): void => {
-        processKundliSyncQueue(prisma).catch((err) => {
-          queueLogError({
-            event: 'kundli_queue_tick_failed',
-            error: (err as Error).message,
-          });
-        });
-      };
-
-      // One startup probe + one initial queue drain; further sync is event-driven
-      // (enqueueKundliSync / processKundliSyncQueue on login, magic-link, signup, admin refresh).
+      // Health + optional bogus probe only. No startup queue drain / no setInterval —
+      // Kundli sync is event-driven (login/magic-link/signup/admin refresh). SNS/worker later.
       void (async () => {
         try {
           await probeAstroKundliWithBogusParams();
         } catch (err) {
           console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
         }
-        runKundliQueueTick();
         console.log(
-          'Kundli sync queue: event-driven (signup/login/magic-link/admin refresh); no periodic interval.'
+          'Kundli sync queue: event-driven only (signup/login/magic-link/admin refresh); no startup drain or periodic poll (SNS later).'
         );
       })();
     } else {
