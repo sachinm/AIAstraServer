@@ -75,7 +75,7 @@ app.use(
         ? prodOrigins
         : true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With'],
     credentials: true,
     maxAge: 86400,
   })
@@ -127,9 +127,13 @@ app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-/** Parse Authorization Bearer and return userId or null */
+/** Prefer X-Astra-Authorization Bearer, else Authorization (CF OAC vs App Runner). */
 function getUserIdFromRequest(req: express.Request): string | null {
-  const authHeader = req.headers.authorization;
+  const headers = req.headers;
+  const custom = headers['x-astra-authorization'];
+  const customVal = Array.isArray(custom) ? custom[0] : custom;
+  const standard = headers.authorization;
+  const authHeader = customVal || standard;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) return null;
   try {
@@ -145,7 +149,7 @@ function getUserIdFromRequest(req: express.Request): string | null {
 
 /**
  * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
- * Same persistence as GraphQL `ask`. Requires `Authorization: Bearer <jwt>`.
+ * Same persistence as GraphQL `ask`. JWT via X-Astra-Authorization or Authorization.
  */
 app.post('/api/chat/ask-stream', async (req, res) => {
   const userId = getUserIdFromRequest(req);
