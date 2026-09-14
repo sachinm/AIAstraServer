@@ -7,7 +7,8 @@ import {
 } from '../lib/astroKundliClient.js';
 import {
   getNodeEnv,
-  getAstroKundliBaseUrl,
+  getAstroKundliEndpointLabel,
+  getAstroKundliTransport,
   getKundliQueueBatchSize,
   getKundliQueueMaxFetchesPerUser,
   getKundliQueueRowStaggerMs,
@@ -84,7 +85,6 @@ function logAstroKundliCall(
   errMessage?: string
 ): void {
   const env = getNodeEnv();
-  const baseUrl = getAstroKundliBaseUrl();
   const payload: Record<string, unknown> = {
     event: 'astrokundli_call',
     user_id: userId,
@@ -94,7 +94,8 @@ function logAstroKundliCall(
     duration_ms: durationMs,
     timestamp: new Date().toISOString(),
     env,
-    base_url: baseUrl,
+    transport: getAstroKundliTransport(),
+    base_url: getAstroKundliEndpointLabel(),
   };
   if (errMessage) payload.error_message = errMessage;
   queueLog(payload);

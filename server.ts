@@ -27,8 +27,7 @@ import {
   publicMessageFromChatProviderError,
 } from './src/services/publicChatError.js';
 
-/** AstroKundli kundli sync: `processKundliSyncQueue` interval when ASTROKUNDLI is configured. */
-const KUNDLI_QUEUE_INTERVAL_MS = 30_000;
+/** Event-driven Kundli sync only (login/signup/admin); no periodic setInterval tick. */
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
@@ -321,7 +320,8 @@ async function start(): Promise<void> {
         });
       };
 
-      // Run bogus export probe before the first queue tick so two POSTs never hit upstream at once.
+      // One startup probe + one initial queue drain; further sync is event-driven
+      // (enqueueKundliSync / processKundliSyncQueue on login, magic-link, signup, admin refresh).
       void (async () => {
         try {
           await probeAstroKundliWithBogusParams();
@@ -329,13 +329,12 @@ async function start(): Promise<void> {
           console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
         }
         runKundliQueueTick();
-        setInterval(runKundliQueueTick, KUNDLI_QUEUE_INTERVAL_MS);
         console.log(
-          `Kundli sync queue: every ${KUNDLI_QUEUE_INTERVAL_MS / 1000}s + on signup/login.`
+          'Kundli sync queue: event-driven (signup/login/magic-link/admin refresh); no periodic interval.'
         );
       })();
     } else {
-      console.log('Kundli sync queue not started: ASTROKUNDLI_BASE_URL_* not set for this env. Chart sync will not run.');
+      console.log('Kundli sync queue not started: AstroKundli not configured for this env (HTTP base URL or lambda transport). Chart sync will not run.');
     }
   });
 }

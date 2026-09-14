@@ -1,7 +1,11 @@
 import type { Prisma } from '@prisma/client';
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import {
   getAstroKundliBaseUrl,
   getAstroKundliApiKey,
+  getAstroKundliTransport,
+  getAstroKundliLambdaFunctionName,
+  getAstroKundliLambdaRegion,
   ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS,
   getAstroKundliRequestSpacingMs,
   isAstroKundliLogResponseEnabled,
@@ -87,6 +91,151 @@ function getHoroscopeTimeoutMs(): number {
     if (Number.isFinite(n) && n > 0) return Math.round(n);
   }
   return DEFAULT_TIMEOUT_MS;
+}
+
+let cachedLambdaClient: LambdaClient | undefined;
+let cachedLambdaClientRegion: string | undefined;
+
+function getLambdaClient(): LambdaClient {
+  const region = getAstroKundliLambdaRegion();
+  if (!cachedLambdaClient || cachedLambdaClientRegion !== region) {
+    cachedLambdaClient = new LambdaClient({ region });
+    cachedLambdaClientRegion = region;
+  }
+  return cachedLambdaClient;
+}
+
+/** APIGW HTTP API v2 event shape expected by Mangum-wrapped FastAPI. */
+function buildApigwHttpApiV2Event(
+  method: string,
+  rawPath: string,
+  bodyObj: unknown | undefined,
+  headers: Record<string, string>
+): Record<string, unknown> {
+  const body =
+    bodyObj === undefined ? undefined : typeof bodyObj === 'string' ? bodyObj : JSON.stringify(bodyObj);
+  const hdrs: Record<string, string> = { ...headers };
+  if (body !== undefined && !hdrs['content-type'] && !hdrs['Content-Type']) {
+    hdrs['content-type'] = 'application/json';
+  }
+  return {
+    version: '2.0',
+    routeKey: `${method} ${rawPath}`,
+    rawPath,
+    rawQueryString: '',
+    headers: hdrs,
+    requestContext: {
+      accountId: '000000000000',
+      apiId: 'aiastra-internal',
+      domainName: 'lambda.internal',
+      domainPrefix: 'lambda',
+      http: {
+        method,
+        path: rawPath,
+        protocol: 'HTTP/1.1',
+        sourceIp: '127.0.0.1',
+        userAgent: 'aiastra-server/astroKundliClient',
+      },
+      requestId: `aiastra-${Date.now()}`,
+      routeKey: `${method} ${rawPath}`,
+      stage: '$default',
+      time: new Date().toISOString(),
+      timeEpoch: Date.now(),
+    },
+    isBase64Encoded: false,
+    ...(body !== undefined ? { body } : {}),
+  };
+}
+
+interface LambdaInvokeHttpResult {
+  statusCode: number;
+  bodyText: string;
+  parsed: unknown;
+}
+
+/**
+ * Invoke private Lambda with an APIGW v2-shaped event. Parses either:
+ * - Mangum/APIGW proxy: { statusCode, body }
+ * - Direct payload: { type, data } (or other JSON)
+ */
+async function invokeAstroKundliLambda(
+  method: string,
+  rawPath: string,
+  bodyObj: unknown | undefined,
+  headers: Record<string, string>,
+  timeoutMs: number
+): Promise<LambdaInvokeHttpResult> {
+  const functionName = getAstroKundliLambdaFunctionName();
+  const region = getAstroKundliLambdaRegion();
+  const event = buildApigwHttpApiV2Event(method, rawPath, bodyObj, headers);
+  const client = getLambdaClient();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const out = await client.send(
+      new InvokeCommand({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse',
+        Payload: Buffer.from(JSON.stringify(event), 'utf8'),
+      }),
+      { abortSignal: controller.signal }
+    );
+
+    if (out.FunctionError) {
+      const errPayload = out.Payload ? Buffer.from(out.Payload).toString('utf8') : '';
+      throw new Error(
+        `Lambda ${functionName} FunctionError=${out.FunctionError}${errPayload ? `: ${errPayload.slice(0, 500)}` : ''}`
+      );
+    }
+
+    const raw = out.Payload ? Buffer.from(out.Payload).toString('utf8') : '';
+    let parsed: unknown = undefined;
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = undefined;
+      }
+    }
+
+    // Mangum / APIGW proxy integration response
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'statusCode' in parsed &&
+      typeof (parsed as { statusCode: unknown }).statusCode === 'number'
+    ) {
+      const statusCode = (parsed as { statusCode: number }).statusCode;
+      const bodyField = (parsed as { body?: unknown }).body;
+      let bodyText = '';
+      if (typeof bodyField === 'string') bodyText = bodyField;
+      else if (bodyField !== undefined) bodyText = JSON.stringify(bodyField);
+      let inner: unknown = undefined;
+      if (bodyText) {
+        try {
+          inner = JSON.parse(bodyText);
+        } catch {
+          inner = undefined;
+        }
+      }
+      return { statusCode, bodyText, parsed: inner ?? parsed };
+    }
+
+    // Direct { type, data } (or similar) payload
+    return {
+      statusCode: 200,
+      bodyText: raw,
+      parsed: parsed ?? raw,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function lambdaTargetLabel(): string {
+  return `lambda://${getAstroKundliLambdaFunctionName()}@${getAstroKundliLambdaRegion()}`;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -277,6 +426,48 @@ export async function checkAstroKundliEndpoint(): Promise<{
   ok: boolean;
   message: string;
 }> {
+  if (getAstroKundliTransport() === 'lambda') {
+    const target = lambdaTargetLabel();
+    const startedAt = Date.now();
+    console.log('[AstroKundli] health-check outgoing', {
+      transport: 'lambda',
+      target,
+      method: 'GET',
+      path: '/',
+      timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
+    });
+    try {
+      const result = await invokeAstroKundliLambda('GET', '/', undefined, {}, HEALTH_CHECK_TIMEOUT_MS);
+      console.log('[AstroKundli] health-check response', {
+        transport: 'lambda',
+        target,
+        status: result.statusCode,
+        ok: result.statusCode < 500,
+        durationMs: Date.now() - startedAt,
+      });
+      // Any non-5xx (including 404 from root) means invoke path works.
+      if (result.statusCode < 500) {
+        return { ok: true, message: `${target} reachable (invoke HTTP ${result.statusCode})` };
+      }
+      return { ok: false, message: `${target} returned HTTP ${result.statusCode}` };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[AstroKundli] health-check error', {
+        transport: 'lambda',
+        target,
+        durationMs: Date.now() - startedAt,
+        error: msg,
+      });
+      const isTimeout = /abort|timeout/i.test(msg);
+      return {
+        ok: false,
+        message: isTimeout
+          ? `${target} timeout after ${HEALTH_CHECK_TIMEOUT_MS}ms`
+          : `${target} error: ${msg}`,
+      };
+    }
+  }
+
   let baseUrl: string;
   try {
     baseUrl = getAstroKundliBaseUrl();
@@ -290,6 +481,7 @@ export async function checkAstroKundliEndpoint(): Promise<{
   const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
   const startedAt = Date.now();
   console.log('[AstroKundli] health-check outgoing', {
+    transport: 'http',
     url: baseUrl,
     method: 'GET',
     timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
@@ -301,6 +493,7 @@ export async function checkAstroKundliEndpoint(): Promise<{
     });
     clearTimeout(timeoutId);
     console.log('[AstroKundli] health-check response', {
+      transport: 'http',
       url: baseUrl,
       status: res.status,
       ok: res.ok,
@@ -317,6 +510,7 @@ export async function checkAstroKundliEndpoint(): Promise<{
     clearTimeout(timeoutId);
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[AstroKundli] health-check error', {
+      transport: 'http',
       url: baseUrl,
       durationMs: Date.now() - startedAt,
       error: msg,
@@ -346,17 +540,7 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
   if (globalState[STARTUP_BOGUS_PROBE_RUN_KEY]) return;
   globalState[STARTUP_BOGUS_PROBE_RUN_KEY] = true;
 
-  let baseUrl: string;
-  try {
-    baseUrl = getAstroKundliBaseUrl();
-  } catch (err) {
-    console.warn('[AstroKundli] startup bogus-probe skipped (base URL missing)', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return;
-  }
-
-  const url = `${baseUrl}${HOROSCOPE_PATH}`;
+  const transport = getAstroKundliTransport();
   const apiKey = getAstroKundliApiKey();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -374,25 +558,64 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
     ayanamsa: 'LAHIRI',
   };
 
+  let targetLabel: string;
+  if (transport === 'lambda') {
+    targetLabel = `${lambdaTargetLabel()}${HOROSCOPE_PATH}`;
+  } else {
+    try {
+      targetLabel = `${getAstroKundliBaseUrl()}${HOROSCOPE_PATH}`;
+    } catch (err) {
+      console.warn('[AstroKundli] startup bogus-probe skipped (base URL missing)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+  }
+
   const startedAt = Date.now();
   console.log('[AstroKundli] startup bogus-probe scheduled (serialized with export-horoscope POSTs)', {
-    url,
+    transport,
+    url: targetLabel,
     hasApiKey: Boolean(apiKey),
   });
 
   try {
     const { status, ok, rawText } = await withHoroscopeExportThrottle(async () => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
-      try {
+      if (transport === 'lambda') {
         console.log('[AstroKundli] startup bogus-probe outgoing', {
-          url,
+          transport: 'lambda',
+          url: targetLabel,
           method: 'POST',
           timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
           hasApiKey: Boolean(apiKey),
           body: bogusBody,
         });
-        const res = await fetch(url, {
+        const result = await invokeAstroKundliLambda(
+          'POST',
+          HOROSCOPE_PATH,
+          bogusBody,
+          headers,
+          STARTUP_PROBE_TIMEOUT_MS
+        );
+        return {
+          status: result.statusCode,
+          ok: result.statusCode >= 200 && result.statusCode < 300,
+          rawText: result.bodyText || (typeof result.parsed === 'string' ? result.parsed : JSON.stringify(result.parsed ?? {})),
+        };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), STARTUP_PROBE_TIMEOUT_MS);
+      try {
+        console.log('[AstroKundli] startup bogus-probe outgoing', {
+          transport: 'http',
+          url: targetLabel,
+          method: 'POST',
+          timeoutMs: STARTUP_PROBE_TIMEOUT_MS,
+          hasApiKey: Boolean(apiKey),
+          body: bogusBody,
+        });
+        const res = await fetch(targetLabel, {
           method: 'POST',
           headers,
           body: JSON.stringify(bogusBody),
@@ -409,7 +632,8 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
     const truncated = rawText.length > previewMaxLen;
 
     console.log('[AstroKundli] startup bogus-probe response', {
-      url,
+      transport,
+      url: targetLabel,
       status,
       ok,
       durationMs: Date.now() - startedAt,
@@ -418,21 +642,14 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
     });
   } catch (err) {
     console.error('[AstroKundli] startup bogus-probe error', {
-      url,
+      transport,
+      url: targetLabel,
       durationMs: Date.now() - startedAt,
       error: err instanceof Error ? err.message : String(err),
     });
   }
 }
 
-/**
- * Fetch a single horoscope chart/slice from the AstroKundli API.
- * One request = one data point for the given `type` (biodata, d1, d7, etc.).
- * Returns the JSON payload to store in the corresponding Kundli column.
- * Serialized with a configurable **start-to-start** gap (`ASTROKUNDLI_REQUEST_SPACING_MS`, default 2s,
- * floored when non-zero) so parallel callers do not violate OSM Nominatim’s ~1 geocode/s policy
- * across each separate POST per Kundli slice (see KUNDLI_JSON_FIELDS).
- */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,
   type: KundliJsonField
@@ -444,8 +661,7 @@ async function fetchHoroscopeChartImpl(
   params: AstroKundliRequestParams,
   type: KundliJsonField
 ): Promise<Prisma.JsonValue> {
-  const baseUrl = getAstroKundliBaseUrl();
-  const url = `${baseUrl}${HOROSCOPE_PATH}`;
+  const transport = getAstroKundliTransport();
   const apiKey = getAstroKundliApiKey();
 
   const body = {
@@ -465,12 +681,16 @@ async function fetchHoroscopeChartImpl(
   }
 
   const timeoutMs = getHoroscopeTimeoutMs();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
 
+  const targetLabel =
+    transport === 'lambda'
+      ? `${lambdaTargetLabel()}${HOROSCOPE_PATH}`
+      : `${getAstroKundliBaseUrl()}${HOROSCOPE_PATH}`;
+
   console.log('[AstroKundli] outgoing', {
-    url,
+    transport,
+    url: targetLabel,
     method: 'POST',
     type,
     timeoutMs,
@@ -478,23 +698,56 @@ async function fetchHoroscopeChartImpl(
   });
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+    let status: number;
+    let ok: boolean;
+    let json: AstroKundliResponse<Record<string, unknown>>;
 
-    const json = (await res.json()) as AstroKundliResponse<Record<string, unknown>>;
+    if (transport === 'lambda') {
+      const result = await invokeAstroKundliLambda(
+        'POST',
+        HOROSCOPE_PATH,
+        body,
+        headers,
+        timeoutMs
+      );
+      status = result.statusCode;
+      ok = status >= 200 && status < 300;
+      if (result.parsed && typeof result.parsed === 'object') {
+        json = result.parsed as AstroKundliResponse<Record<string, unknown>>;
+      } else {
+        try {
+          json = JSON.parse(result.bodyText) as AstroKundliResponse<Record<string, unknown>>;
+        } catch {
+          json = { error: result.bodyText || `HTTP ${status}` };
+        }
+      }
+    } else {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(targetLabel, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        status = res.status;
+        ok = res.ok;
+        json = (await res.json()) as AstroKundliResponse<Record<string, unknown>>;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
     const responseStr = JSON.stringify(json);
     const maxLen = 1500;
     const truncated = responseStr.length > maxLen;
     console.log('[AstroKundli] response', {
-      url,
+      transport,
+      url: targetLabel,
       type,
-      status: res.status,
-      ok: res.ok,
+      status,
+      ok,
       durationMs: Date.now() - startedAt,
       response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
       truncated,
@@ -505,27 +758,28 @@ async function fetchHoroscopeChartImpl(
       const queueTruncated = responseStr.length > queueMaxLen;
       queueLog({
         event: 'astrokundli_api_response',
+        transport,
         type,
-        http_status: res.status,
+        http_status: status,
         response_preview: queueTruncated ? responseStr.slice(0, queueMaxLen) + '...[truncated]' : responseStr,
         truncated: queueTruncated,
       });
     }
 
-    if (!res.ok) {
+    if (!ok) {
       const errMsg =
         json?.error ?? (typeof json === 'object' && json && 'message' in json
           ? String((json as { message?: string }).message)
-          : `HTTP ${res.status}`);
+          : `HTTP ${status}`);
       throw new Error(errMsg);
     }
 
     return parseAstroKundliResponse(json);
   } catch (err) {
-    clearTimeout(timeoutId);
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('[AstroKundli] error', {
-      url,
+      transport,
+      url: targetLabel,
       type,
       durationMs: Date.now() - startedAt,
       error: errorMessage,
