@@ -50,11 +50,50 @@ export function getAstroKundliBaseUrl(): string {
   return url.trim().replace(/\/$/, '');
 }
 
+/** AstroKundli client transport: HTTP (local/dev) or private Lambda invoke (App Runner). */
+export type AstroKundliTransport = 'http' | 'lambda';
+
 /**
- * Returns true if AstroKundli is configured (base URL set) for the current env.
+ * How the server reaches AstroKundli / pyjhora.
+ * ASTROKUNDLI_TRANSPORT=http|lambda (default http).
+ */
+export function getAstroKundliTransport(): AstroKundliTransport {
+  const raw = process.env.ASTROKUNDLI_TRANSPORT?.trim().toLowerCase();
+  if (raw === 'lambda') return 'lambda';
+  return 'http';
+}
+
+/**
+ * Lambda function name when transport is lambda.
+ * ASTROKUNDLI_LAMBDA_FUNCTION_NAME (default aiastra-pyjhora).
+ */
+export function getAstroKundliLambdaFunctionName(): string {
+  const name = process.env.ASTROKUNDLI_LAMBDA_FUNCTION_NAME?.trim();
+  return name && name.length > 0 ? name : 'aiastra-pyjhora';
+}
+
+/**
+ * AWS region for Lambda invoke.
+ * ASTROKUNDLI_LAMBDA_REGION, else AWS_REGION, else us-east-1.
+ */
+export function getAstroKundliLambdaRegion(): string {
+  const region =
+    process.env.ASTROKUNDLI_LAMBDA_REGION?.trim() ||
+    process.env.AWS_REGION?.trim() ||
+    'us-east-1';
+  return region;
+}
+
+/**
+ * Returns true if AstroKundli is configured for the current env.
+ * - http: base URL env var set
+ * - lambda: function name set (default aiastra-pyjhora counts as configured)
  * Use to skip starting the queue worker when the 3rd party is not available.
  */
 export function isAstroKundliConfigured(): boolean {
+  if (getAstroKundliTransport() === 'lambda') {
+    return Boolean(getAstroKundliLambdaFunctionName());
+  }
   const env = getNodeEnv();
   const key =
     env === 'production'
@@ -71,6 +110,21 @@ export function isAstroKundliConfigured(): boolean {
 /**
  * Returns the optional AstroKundli API key if the 3rd party requires it.
  */
+/**
+ * Safe label for logs (never throws in lambda mode).
+ * http → base URL; lambda → function name@region.
+ */
+export function getAstroKundliEndpointLabel(): string {
+  if (getAstroKundliTransport() === 'lambda') {
+    return `lambda://${getAstroKundliLambdaFunctionName()}@${getAstroKundliLambdaRegion()}`;
+  }
+  try {
+    return getAstroKundliBaseUrl();
+  } catch {
+    return '(astrokundli base URL unset)';
+  }
+}
+
 export function getAstroKundliApiKey(): string | undefined {
   return process.env.ASTROKUNDLI_API_KEY?.trim() || undefined;
 }
