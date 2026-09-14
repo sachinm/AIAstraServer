@@ -16,7 +16,7 @@ import { schema } from './src/graphql/schema.js';
 import { buildContext, getJwtSecret } from './src/graphql/context.js';
 import { ensureSuperadmin } from './src/ensureSuperadmin.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
-import { getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
+import { getAstroKundliTransport, getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
@@ -296,31 +296,37 @@ async function start(): Promise<void> {
     await ensureSuperadmin();
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {
-      checkAstroKundliEndpoint()
-        .then(({ ok, message }) => {
-          if (ok) {
-            console.log(`✅ AstroKundli endpoint: ${message}`);
-          } else {
-            console.warn(`⚠️ AstroKundli endpoint down: ${message}`);
-            console.warn('   Kundli sync will fail for users until the endpoint is reachable.');
-          }
-        })
-        .catch((err) => {
-          console.warn('⚠️ AstroKundli endpoint check failed:', (err as Error).message);
-        });
-
-      // Health + optional bogus probe only. No startup queue drain / no setInterval —
-      // Kundli sync is event-driven (login/magic-link/signup/admin refresh). SNS/worker later.
-      void (async () => {
-        try {
-          await probeAstroKundliWithBogusParams();
-        } catch (err) {
-          console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
-        }
+      const kundliTransport = getAstroKundliTransport();
+      if (kundliTransport === 'lambda') {
+        // Prod Lambda: no boot health-check / bogus-probe invokes (quota). Auth/admin sync only; SNS later.
         console.log(
-          'Kundli sync queue: event-driven only (signup/login/magic-link/admin refresh); no startup drain or periodic poll (SNS later).'
+          'Kundli sync: lambda transport — event-driven only (signup/login/magic-link/admin refresh); skipping startup health-check and bogus probe.'
         );
-      })();
+      } else {
+        checkAstroKundliEndpoint()
+          .then(({ ok, message }) => {
+            if (ok) {
+              console.log(`✅ AstroKundli endpoint: ${message}`);
+            } else {
+              console.warn(`⚠️ AstroKundli endpoint down: ${message}`);
+              console.warn('   Kundli sync will fail for users until the endpoint is reachable.');
+            }
+          })
+          .catch((err) => {
+            console.warn('⚠️ AstroKundli endpoint check failed:', (err as Error).message);
+          });
+
+        void (async () => {
+          try {
+            await probeAstroKundliWithBogusParams();
+          } catch (err) {
+            console.warn('⚠️ AstroKundli startup bogus-probe failed:', (err as Error).message);
+          }
+          console.log(
+            'Kundli sync queue: event-driven only (signup/login/magic-link/admin refresh); no startup drain or periodic poll (SNS later).'
+          );
+        })();
+      }
     } else {
       console.log('Kundli sync queue not started: AstroKundli not configured for this env (HTTP base URL or lambda transport). Chart sync will not run.');
     }
