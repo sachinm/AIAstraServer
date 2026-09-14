@@ -24,10 +24,14 @@ export interface GraphQLContext {
 }
 
 /**
- * Build GraphQL context from request. Extracts userId and role from Authorization: Bearer <token>.
+ * Build GraphQL context from request.
+ * Prefer X-Astra-Authorization: Bearer <token>, then Authorization.
+ * CloudFront OAC owns Authorization toward the Lambda Function URL (SigV4);
+ * App Runner keeps working with Authorization alone.
  */
 export function buildContext({ request }: GraphQLContextParams): GraphQLContext {
-  const authHeader = request.headers.get('Authorization');
+  const custom = request.headers.get('X-Astra-Authorization');
+  const authHeader = custom || request.headers.get('Authorization');
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   let userId: string | null = null;
