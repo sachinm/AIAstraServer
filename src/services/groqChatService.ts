@@ -63,6 +63,36 @@ export interface BuildUserMessageWithKundliResult {
  * plus the user's question. Each field is intended to be sent as its own
  * {"role": "user", "content": "..."} so the LLM sees clearly separated data points.
  */
+/** Lean chat context (Phase A default): core chart + dasha + karakas only. */
+export const CHAT_KUNDLI_LEAN_FIELDS = [
+  'biodata',
+  'd1',
+  'd9',
+  'vimsottari_dasa',
+  'charakaraka',
+] as const;
+
+/** Full chat context when CHAT_KUNDLI_CONTEXT=full. */
+export const CHAT_KUNDLI_FULL_FIELDS = [
+  'biodata',
+  'd1',
+  'd2',
+  'd4',
+  'd7',
+  'd9',
+  'd10',
+  'charakaraka',
+  'vimsottari_dasa',
+  'narayana_dasa',
+] as const;
+
+function resolveChatKundliFields(): readonly (keyof typeof KUNDLI_FIELD_LABELS)[] {
+  const mode = (process.env.CHAT_KUNDLI_CONTEXT?.trim().toLowerCase() === 'full')
+    ? 'full'
+    : 'lean';
+  return mode === 'full' ? CHAT_KUNDLI_FULL_FIELDS : CHAT_KUNDLI_LEAN_FIELDS;
+}
+
 export function buildUserMessageWithKundli(
   kundli: {
     biodata: unknown;
@@ -71,7 +101,7 @@ export function buildUserMessageWithKundli(
     d4?: unknown;
     d7?: unknown;
     d9: unknown;
-    d10: unknown;
+    d10?: unknown;
     charakaraka: unknown;
     vimsottari_dasa: unknown;
     narayana_dasa?: unknown;
@@ -79,22 +109,11 @@ export function buildUserMessageWithKundli(
   userQuestion: string
 ): BuildUserMessageWithKundliResult {
   type KundliKey = keyof typeof KUNDLI_FIELD_LABELS;
-  const fields: KundliKey[] = [
-    'biodata',
-    'd1',
-    'd2',
-    'd4',
-    'd7',
-    'd9',
-    'd10',
-    'charakaraka',
-    'vimsottari_dasa',
-    'narayana_dasa',
-  ];
+  const fields = resolveChatKundliFields() as KundliKey[];
 
   const kundliUserContents: string[] = [];
   for (const key of fields) {
-    const value = (kundli as Record<KundliKey, unknown>)[key];
+    const value = (kundli as Record<string, unknown>)[key];
     const hasValue = value !== null && value !== undefined;
     kundliUserContents.push(formatFieldContent(key, value, hasValue));
   }

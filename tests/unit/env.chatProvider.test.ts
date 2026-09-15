@@ -6,6 +6,9 @@ import {
   getGeminiChatModelId,
   getGeminiModelsBaseUrl,
   getGeminiMaxOutputTokens,
+  getGeminiTemperature,
+  getGeminiTopP,
+  getChatKundliContextMode,
   getGeminiUndiciBodyTimeoutMs,
   getGeminiUndiciHeadersTimeoutMs,
 } from '../../src/config/env.js';
@@ -65,10 +68,10 @@ describe('chat LLM env helpers', () => {
     expect(getGeminiChatModelId()).toBe('gemini-2.0-flash');
   });
 
-  it('getGeminiMaxOutputTokens defaults to 8192 when unset', () => {
+  it('getGeminiMaxOutputTokens defaults to 2048 when unset', () => {
     save('GEMINI_MAX_OUTPUT_TOKENS');
     delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
-    expect(getGeminiMaxOutputTokens()).toBe(8192);
+    expect(getGeminiMaxOutputTokens()).toBe(2048);
   });
 
   it('getGeminiMaxOutputTokens reads GEMINI_MAX_OUTPUT_TOKENS', () => {
@@ -97,5 +100,29 @@ describe('chat LLM env helpers', () => {
     process.env.GEMINI_HTTP_TIMEOUT_MS = '450000';
     expect(getGeminiUndiciHeadersTimeoutMs()).toBe(450_000);
     expect(getGeminiUndiciBodyTimeoutMs()).toBe(450_000);
+  });
+
+  it('getGeminiTemperature defaults to 0.5 when unset', () => {
+    save('GEMINI_TEMPERATURE');
+    delete process.env.GEMINI_TEMPERATURE;
+    expect(getGeminiTemperature()).toBe(0.5);
+  });
+
+  it('getGeminiTopP defaults to 0.9 when unset', () => {
+    save('GEMINI_TOP_P');
+    delete process.env.GEMINI_TOP_P;
+    expect(getGeminiTopP()).toBe(0.9);
+  });
+
+  it('getChatKundliContextMode defaults to lean', () => {
+    save('CHAT_KUNDLI_CONTEXT');
+    delete process.env.CHAT_KUNDLI_CONTEXT;
+    expect(getChatKundliContextMode()).toBe('lean');
+  });
+
+  it('getChatKundliContextMode returns full when set', () => {
+    save('CHAT_KUNDLI_CONTEXT');
+    process.env.CHAT_KUNDLI_CONTEXT = 'full';
+    expect(getChatKundliContextMode()).toBe('full');
   });
 });

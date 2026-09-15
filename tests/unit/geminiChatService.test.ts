@@ -10,10 +10,11 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 vi.mock('../../src/services/kundliService.js', () => ({
-  loadSystemPrompt: vi.fn().mockResolvedValue('You are a Vedic oracle.'),
+  loadSystemPrompt: vi.fn(),
 }));
 
 import * as kundliRag from '../../kundli-rag.js';
+import { loadSystemPrompt } from '../../src/services/kundliService.js';
 import { chatWithGemini } from '../../src/services/geminiChatService.js';
 import type { PrismaClient } from '@prisma/client';
 
@@ -55,6 +56,8 @@ describe('chatWithGemini', () => {
   beforeEach(() => {
     process.env.GEMINI_API_KEY = 'test-gemini-key';
     delete process.env.GEMINI_MAX_OUTPUT_TOKENS;
+    delete process.env.CHAT_KUNDLI_CONTEXT;
+    vi.mocked(loadSystemPrompt).mockResolvedValue('You are a Vedic oracle.');
     vi.spyOn(kundliRag, 'fetchLatestKundliForUser').mockResolvedValue(mockKundliRow);
     mockUndiciFetch.mockReset();
   });
@@ -102,7 +105,13 @@ describe('chatWithGemini', () => {
     expect((call[1] as { method?: string })?.method).toBe('POST');
     expect((call[1] as { dispatcher?: unknown }).dispatcher).toBeDefined();
     const body = JSON.parse((call[1] as { body: string }).body);
-    expect(body.generationConfig?.maxOutputTokens).toBe(8192);
+    expect(body.generationConfig?.maxOutputTokens).toBe(2048);
+    expect(body.generationConfig?.temperature).toBe(0.5);
+    expect(body.generationConfig?.topP).toBe(0.9);
+    const sysText = body.systemInstruction?.parts?.[0]?.text as string;
+    expect(sysText).toContain('Prefer concise answers');
+    // lean Kundli: 5 fields + question
+    expect(body.contents.length).toBe(6);
   });
 
   it('invokes onDelta for each streamed text chunk', async () => {
