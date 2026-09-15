@@ -260,8 +260,8 @@ export function getGeminiStreamGenerateContentUrl(): string {
   return `${base}/${model}:streamGenerateContent`;
 }
 
-/** Default when GEMINI_MAX_OUTPUT_TOKENS is unset (matches prior hardcoded chat default). */
-const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 8192;
+/** Default when GEMINI_MAX_OUTPUT_TOKENS is unset (Phase A latency: shorter replies). */
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 2048;
 const MIN_GEMINI_MAX_OUTPUT_TOKENS = 256;
 /** Hard cap to avoid accidental huge values; model/API may enforce a lower max. */
 const MAX_GEMINI_MAX_OUTPUT_TOKENS_CAP = 65_536;
@@ -279,6 +279,51 @@ export function getGeminiMaxOutputTokens(): number {
     }
   }
   return DEFAULT_GEMINI_MAX_OUTPUT_TOKENS;
+}
+
+/** Default Gemini chat temperature (Phase A latency / focused answers). */
+const DEFAULT_GEMINI_TEMPERATURE = 0.5;
+
+/**
+ * `generationConfig.temperature` for Gemini chat.
+ * Override with GEMINI_TEMPERATURE (0–2).
+ */
+export function getGeminiTemperature(): number {
+  const raw = process.env.GEMINI_TEMPERATURE;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 2) return n;
+  }
+  return DEFAULT_GEMINI_TEMPERATURE;
+}
+
+/** Default Gemini chat topP (Phase A). */
+const DEFAULT_GEMINI_TOP_P = 0.9;
+
+/**
+ * `generationConfig.topP` for Gemini chat.
+ * Override with GEMINI_TOP_P (0–1).
+ */
+export function getGeminiTopP(): number {
+  const raw = process.env.GEMINI_TOP_P;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  }
+  return DEFAULT_GEMINI_TOP_P;
+}
+
+/** How much Kundli context to pack into chat prompts. */
+export type ChatKundliContextMode = 'lean' | 'full';
+
+/**
+ * Lean (default): biodata, d1, d9, vimsottari_dasa, charakaraka.
+ * Full: all chart/dasa fields. Set CHAT_KUNDLI_CONTEXT=full to expand.
+ */
+export function getChatKundliContextMode(): ChatKundliContextMode {
+  const raw = process.env.CHAT_KUNDLI_CONTEXT?.trim().toLowerCase();
+  if (raw === 'full') return 'full';
+  return 'lean';
 }
 
 /**

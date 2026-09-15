@@ -9,10 +9,17 @@ import { buildUserMessageWithKundli } from './groqChatService.js';
 import type { ChatWithGroqResult } from './groqChatService.js';
 import {
   getGeminiMaxOutputTokens,
+  getGeminiTemperature,
+  getGeminiTopP,
   getGeminiStreamGenerateContentUrl,
   getGeminiUndiciBodyTimeoutMs,
   getGeminiUndiciHeadersTimeoutMs,
+  getChatKundliContextMode,
 } from '../config/env.js';
+
+/** Appended only to Gemini systemInstruction (does not mutate DB `pvr_oracle`). */
+const GEMINI_CONCISE_ANSWER_APPENDIX =
+  'Prefer concise answers: lead with a brief direct reply, keep chart analysis focused, and avoid unnecessary length.';
 
 /** Reused undici Agent so connections pool; timeouts read from env on first use. */
 let geminiUndiciAgent: Agent | undefined;
@@ -183,8 +190,16 @@ export async function chatWithGemini(
   userQuestion: string,
   options?: { onDelta?: (delta: string) => void }
 ): Promise<ChatWithGroqResult> {
-  const systemPrompt = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
+  const t0 = Date.now();
+  let tAfterPrompt = t0;
+  let tAfterKundli = t0;
+
+  const systemPromptBase = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
+  tAfterPrompt = Date.now();
+  const systemPrompt = `${String(systemPromptBase ?? '').trimEnd()}\n\n${GEMINI_CONCISE_ANSWER_APPENDIX}`;
+
   const kundliRow = await fetchLatestKundliForUser(prisma, userId);
+  tAfterKundli = Date.now();
   const { kundliUserContents, userQuestion: questionText } = buildUserMessageWithKundli(
     {
       biodata: kundliRow.biodata,
@@ -201,6 +216,8 @@ export async function chatWithGemini(
     userQuestion
   );
 
+  const kundliCharCount = kundliUserContents.reduce((n, s) => n + s.length, 0);
+
   const contents = [
     ...kundliUserContents.map((text) => ({
       role: 'user' as const,
@@ -210,6 +227,8 @@ export async function chatWithGemini(
   ];
 
   const maxOutputTokens = getGeminiMaxOutputTokens();
+  const temperature = getGeminiTemperature();
+  const topP = getGeminiTopP();
 
   const requestBody: Record<string, unknown> = {
     systemInstruction: {
@@ -217,9 +236,9 @@ export async function chatWithGemini(
     },
     contents,
     generationConfig: {
-      temperature: 1,
+      temperature,
       maxOutputTokens,
-      topP: 1,
+      topP,
     },
   };
 
@@ -235,6 +254,7 @@ export async function chatWithGemini(
   const apiKey = getGeminiApiKey();
   const url = `${streamPath}?alt=sse&key=${encodeURIComponent(apiKey)}`;
 
+  const tBeforeGemini = Date.now();
   const res = await undiciFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -264,6 +284,23 @@ export async function chatWithGemini(
   const { answerText, lastChunk, rawPreview } = await consumeGeminiSseStream(
     res.body as ReadableStream<Uint8Array>,
     options?.onDelta
+  );
+  const tEnd = Date.now();
+
+  // Timing only — never log API keys, prompts, or Kundli payloads.
+  console.log(
+    JSON.stringify({
+      msg: 'chatWithGemini timing',
+      kundliContext: getChatKundliContextMode(),
+      promptLoadMs: tAfterPrompt - t0,
+      kundliFetchMs: tAfterKundli - tAfterPrompt,
+      geminiCallMs: tEnd - tBeforeGemini,
+      totalMs: tEnd - t0,
+      kundliCharCountApprox: kundliCharCount,
+      maxOutputTokens,
+      temperature,
+      topP,
+    })
   );
 
   const responsePayload: Record<string, unknown> = {
