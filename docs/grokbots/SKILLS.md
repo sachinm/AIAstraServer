@@ -34,3 +34,5 @@ Lessons to reuse across projects. Add dated bullets when something bites twice.
 - Free tier: do not enable Gemini `cachedContents` for latency (storage limit can be 0). Tune thinkingBudget/maxOut only; conserve smokes (~20 calls/day) — batch knobs, one re-check.
 
 - Phase A latency (free tier): thinkingBudget **512** + maxOut **8192** hit ~21s with thinking on and no loop (1024 was ~34.6s). Cache off until paid.
+
+- **Phase A GREEN** (2026-09-15): lock `GEMINI_THINKING_BUDGET=512`, `GEMINI_MAX_OUTPUT_TOKENS=8192`, `INCLUDE_THOUGHTS=0`, `CACHE_ENABLED=0`, loop-guard on. ~21s with thinking. Cache only after paid billing confirmed.

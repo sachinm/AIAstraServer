@@ -1,4 +1,4 @@
-﻿# Grok bots — AI Astra Server
+# Grok bots � AI Astra Server
 
 **READ THIS FILE FIRST** before any eng/ops work on this repo.
 
@@ -13,15 +13,15 @@ How Narayan, Lakshmi, and project bots (especially Astra) plan, execute, test, a
 ## Methodology (every step)
 1. State the **planned goal** this work advances.
 2. For each step: how it gets us closer; **what** we test; **how** we test; is this the **best approach**?
-3. After: **success or mistake** — write learnings into `docs/grokbots/` (this README index, `plan-*/README.md`, `SKILLS.md`).
-4. Fail-fast: concrete plan before long runs; surface hangs/blocks in ~15–20s; no blind retries without a revised plan.
+3. After: **success or mistake** � write learnings into `docs/grokbots/` (this README index, `plan-*/README.md`, `SKILLS.md`).
+4. Fail-fast: concrete plan before long runs; surface hangs/blocks in ~15�20s; no blind retries without a revised plan.
 5. Hard rules: no secrets in chat; on-demand cloud agents off unless Sachin enables; prefer KING-SM; Amplify GraphQL stays on CloudFront (do not retarget to Render from web-env dumps).
 
 ## Plan index
 | Plan | Folder | Status |
 |------|--------|--------|
-| Phase 2 Amplify→CF→Lambda | [plan-phase2-cf-lambda](./plan-phase2-cf-lambda/README.md) | Complete (App Runner retired) |
-| Phase A chat latency / quality | [plan-phase-a-chat-latency](./plan-phase-a-chat-latency/README.md) | In progress (completeness re-smoke) |
+| Phase 2 Amplify?CF?Lambda | [plan-phase2-cf-lambda](./plan-phase2-cf-lambda/README.md) | Complete (App Runner retired) |
+| Phase A chat latency / quality | [plan-phase-a-chat-latency](./plan-phase-a-chat-latency/README.md) | **GREEN** (~21s @ thinkingBudget 512; cache held)
 
 ## Skills
 Reusable lessons: [SKILLS.md](./SKILLS.md)
