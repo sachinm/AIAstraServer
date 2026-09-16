@@ -32,3 +32,5 @@ Lessons to reuse across projects. Add dated bullets when something bites twice.
 - Sachin (2026-09-15): prefer thinking ON (`thinkingBudget≈1024`) over chasing complete long tables; mid-answer cutoff acceptable with loop-guard. Keep `INCLUDE_THOUGHTS=0` so UI does not show thought parts.
 
 - Free tier: do not enable Gemini `cachedContents` for latency (storage limit can be 0). Tune thinkingBudget/maxOut only; conserve smokes (~20 calls/day) — batch knobs, one re-check.
+
+- Phase A latency (free tier): thinkingBudget **512** + maxOut **8192** hit ~21s with thinking on and no loop (1024 was ~34.6s). Cache off until paid.
