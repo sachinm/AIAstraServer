@@ -13,6 +13,7 @@ import {
   getKundliQueueMaxFetchesPerUser,
   getKundliQueueRowStaggerMs,
 } from '../config/env.js';
+import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
@@ -212,6 +213,9 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
           queue_completed_at: new Date(),
         },
       });
+      void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
+        console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
+      });
       return;
     }
 
@@ -293,6 +297,9 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
           queue_status: QUEUE_STATUS_COMPLETED,
           queue_completed_at: new Date(),
         },
+      });
+      void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
+        console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
       });
     } else {
       queueLog({

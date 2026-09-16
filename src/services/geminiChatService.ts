@@ -1,5 +1,6 @@
 /**
- * Gemini chat – REST `generateContent` with system prompt from DB and the same Kundli packaging as Groq.
+ * Gemini chat – REST `streamGenerateContent` with system prompt from DB and the same Kundli packaging as Groq.
+ * Uses Gemini explicit cachedContents when a valid DynamoDB pointer exists.
  */
 import type { PrismaClient } from '@prisma/client';
 import { Agent, fetch as undiciFetch } from 'undici';
@@ -16,10 +17,14 @@ import {
   getGeminiUndiciHeadersTimeoutMs,
   getChatKundliContextMode,
 } from '../config/env.js';
+import {
+  ensureGeminiCacheForUser,
+  GEMINI_CONCISE_ANSWER_APPENDIX,
+  isGeminiCacheEnabled,
+  resolveGeminiCacheNameForChat,
+} from './geminiCacheService.js';
 
-/** Appended only to Gemini systemInstruction (does not mutate DB `pvr_oracle`). */
-const GEMINI_CONCISE_ANSWER_APPENDIX =
-  'Prefer concise answers: lead with a brief direct reply, keep chart analysis focused, and avoid unnecessary length.';
+const GEMINI_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 
 /** Reused undici Agent so connections pool; timeouts read from env on first use. */
 let geminiUndiciAgent: Agent | undefined;
@@ -33,8 +38,6 @@ function getGeminiUndiciAgent(): Agent {
   }
   return geminiUndiciAgent;
 }
-
-const GEMINI_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 
 function getGeminiApiKey(): string {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -88,22 +91,47 @@ function throwIfGeminiApiError(parsed: GeminiGenerateContentResponse): void {
   throw new Error(msg || 'Gemini API error');
 }
 
+
+/** Cheap n-gram loop detector: same recent window repeats too often → stop stream. */
+function detectRepetitionLoop(text: string): boolean {
+  if (text.length < 400) return false;
+  const window = Math.min(48, Math.max(24, Math.floor(text.length / 10)));
+  const needle = text.slice(-window);
+  if (needle.trim().length < 20) return false;
+  const hay = text.slice(Math.max(0, text.length - 2500));
+  let count = 0;
+  let idx = 0;
+  while ((idx = hay.indexOf(needle, idx)) !== -1) {
+    count += 1;
+    if (count >= 4) return true;
+    idx += Math.max(1, Math.floor(window / 2));
+  }
+  return false;
+}
+
 /**
  * Consumes Gemini `streamGenerateContent?alt=sse` body: SSE events with `data: {json}`.
  */
 async function consumeGeminiSseStream(
   body: ReadableStream<Uint8Array>,
   onDelta?: (delta: string) => void
-): Promise<{ answerText: string; lastChunk: GeminiGenerateContentResponse | null; rawPreview: string }> {
+): Promise<{
+  answerText: string;
+  lastChunk: GeminiGenerateContentResponse | null;
+  rawPreview: string;
+  stoppedForLoop: boolean;
+}> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let accumulated = '';
   let lastChunk: GeminiGenerateContentResponse | null = null;
+  let stoppedForLoop = false;
   const rawSnippets: string[] = [];
   const maxPreviewChars = 4000;
 
   const handleJsonLine = (jsonStr: string): void => {
+    if (stoppedForLoop) return;
     const trimmed = jsonStr.trim();
     if (!trimmed || trimmed === '[DONE]') return;
     let parsed: GeminiGenerateContentResponse;
@@ -123,6 +151,14 @@ async function consumeGeminiSseStream(
     if (delta) {
       accumulated += delta;
       onDelta?.(delta);
+      if (detectRepetitionLoop(accumulated)) {
+        stoppedForLoop = true;
+        try {
+          void reader.cancel('repetition-loop');
+        } catch {
+          /* ignore */
+        }
+      }
     }
     if (rawSnippets.join('').length < maxPreviewChars) {
       rawSnippets.push(trimmed.length > 1200 ? `${trimmed.slice(0, 1200)}…` : trimmed);
@@ -147,7 +183,7 @@ async function consumeGeminiSseStream(
   };
 
   try {
-    while (true) {
+    while (!stoppedForLoop) {
       const { done, value } = await reader.read();
       if (value) {
         buffer += decoder.decode(value, { stream: true });
@@ -159,6 +195,7 @@ async function consumeGeminiSseStream(
         if (buffer.trim()) processEventBlock(buffer);
         break;
       }
+      if (stoppedForLoop) break;
     }
   } finally {
     reader.releaseLock();
@@ -173,6 +210,7 @@ async function consumeGeminiSseStream(
   return {
     answerText,
     lastChunk,
+    stoppedForLoop,
     rawPreview:
       rawSnippets.join('\n').length > maxPreviewChars
         ? `${rawSnippets.join('\n').slice(0, maxPreviewChars)}…[truncated]`
@@ -193,54 +231,94 @@ export async function chatWithGemini(
   const t0 = Date.now();
   let tAfterPrompt = t0;
   let tAfterKundli = t0;
-
-  const systemPromptBase = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
-  tAfterPrompt = Date.now();
-  const systemPrompt = `${String(systemPromptBase ?? '').trimEnd()}\n\n${GEMINI_CONCISE_ANSWER_APPENDIX}`;
-
-  const kundliRow = await fetchLatestKundliForUser(prisma, userId);
-  tAfterKundli = Date.now();
-  const { kundliUserContents, userQuestion: questionText } = buildUserMessageWithKundli(
-    {
-      biodata: kundliRow.biodata,
-      d1: kundliRow.d1,
-      d2: kundliRow.d2,
-      d4: kundliRow.d4,
-      d7: kundliRow.d7,
-      d9: kundliRow.d9,
-      d10: kundliRow.d10,
-      charakaraka: kundliRow.charakaraka,
-      vimsottari_dasa: kundliRow.vimsottari_dasa,
-      narayana_dasa: kundliRow.narayana_dasa,
-    },
-    userQuestion
-  );
-
-  const kundliCharCount = kundliUserContents.reduce((n, s) => n + s.length, 0);
-
-  const contents = [
-    ...kundliUserContents.map((text) => ({
-      role: 'user' as const,
-      parts: [{ text }],
-    })),
-    { role: 'user' as const, parts: [{ text: questionText }] },
-  ];
+  let tAfterCache = t0;
 
   const maxOutputTokens = getGeminiMaxOutputTokens();
   const temperature = getGeminiTemperature();
   const topP = getGeminiTopP();
 
-  const requestBody: Record<string, unknown> = {
-    systemInstruction: {
-      parts: [{ text: systemPrompt }],
-    },
-    contents,
-    generationConfig: {
-      temperature,
-      maxOutputTokens,
-      topP,
-    },
-  };
+  let cacheName: string | null = null;
+  if (isGeminiCacheEnabled()) {
+    try {
+      cacheName = await resolveGeminiCacheNameForChat(prisma, userId);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          msg: 'geminiCache resolve failed',
+          error: (err as Error).message,
+        })
+      );
+      cacheName = null;
+    }
+  }
+  tAfterCache = Date.now();
+
+  let requestBody: Record<string, unknown>;
+  let kundliCharCount = 0;
+  let usedCache = false;
+
+  if (cacheName) {
+    usedCache = true;
+    tAfterPrompt = tAfterCache;
+    tAfterKundli = tAfterCache;
+    requestBody = {
+      cachedContent: cacheName,
+      contents: [{ role: 'user', parts: [{ text: userQuestion.trim() }] }],
+      generationConfig: {
+        temperature,
+        maxOutputTokens,
+        topP,
+      },
+    };
+  } else {
+    const systemPromptBase = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
+    tAfterPrompt = Date.now();
+    const systemPrompt = `${String(systemPromptBase ?? '').trimEnd()}\n\n${GEMINI_CONCISE_ANSWER_APPENDIX}`;
+
+    const kundliRow = await fetchLatestKundliForUser(prisma, userId);
+    tAfterKundli = Date.now();
+    const { kundliUserContents, userQuestion: questionText } = buildUserMessageWithKundli(
+      {
+        biodata: kundliRow.biodata,
+        d1: kundliRow.d1,
+        d2: kundliRow.d2,
+        d4: kundliRow.d4,
+        d7: kundliRow.d7,
+        d9: kundliRow.d9,
+        d10: kundliRow.d10,
+        charakaraka: kundliRow.charakaraka,
+        vimsottari_dasa: kundliRow.vimsottari_dasa,
+        narayana_dasa: kundliRow.narayana_dasa,
+      },
+      userQuestion
+    );
+
+    kundliCharCount = kundliUserContents.reduce((n, s) => n + s.length, 0);
+
+    const contents = [
+      ...kundliUserContents.map((text) => ({
+        role: 'user' as const,
+        parts: [{ text }],
+      })),
+      { role: 'user' as const, parts: [{ text: questionText }] },
+    ];
+
+    requestBody = {
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
+      contents,
+      generationConfig: {
+        temperature,
+        maxOutputTokens,
+        topP,
+      },
+    };
+
+    if (isGeminiCacheEnabled()) {
+      void ensureGeminiCacheForUser(prisma, userId);
+    }
+  }
 
   const streamPath = getGeminiStreamGenerateContentUrl();
   const requestPayload: Record<string, unknown> = {
@@ -248,6 +326,8 @@ export async function chatWithGemini(
     url: streamPath,
     stream: true,
     alt: 'sse',
+    usedCache,
+    ...(usedCache ? { cachedContent: cacheName } : {}),
     ...requestBody,
   };
 
@@ -281,25 +361,30 @@ export async function chatWithGemini(
     throw new Error('Gemini stream response has no body');
   }
 
-  const { answerText, lastChunk, rawPreview } = await consumeGeminiSseStream(
+  const { answerText, lastChunk, rawPreview, stoppedForLoop } = await consumeGeminiSseStream(
     res.body as ReadableStream<Uint8Array>,
     options?.onDelta
   );
   const tEnd = Date.now();
+  const finishReason = lastChunk?.candidates?.[0]?.finishReason ?? null;
 
   // Timing only — never log API keys, prompts, or Kundli payloads.
   console.log(
     JSON.stringify({
       msg: 'chatWithGemini timing',
       kundliContext: getChatKundliContextMode(),
+      usedCache,
       promptLoadMs: tAfterPrompt - t0,
       kundliFetchMs: tAfterKundli - tAfterPrompt,
+      cacheResolveMs: tAfterCache - t0,
       geminiCallMs: tEnd - tBeforeGemini,
       totalMs: tEnd - t0,
       kundliCharCountApprox: kundliCharCount,
       maxOutputTokens,
       temperature,
       topP,
+      finishReason,
+      stoppedForLoop,
     })
   );
 
@@ -307,9 +392,11 @@ export async function chatWithGemini(
     provider: 'gemini',
     streamed: true,
     content: answerText,
-    finish_reason: lastChunk?.candidates?.[0]?.finishReason ?? null,
+    finish_reason: finishReason,
     usage: lastChunk?.usageMetadata ?? null,
     raw_preview: rawPreview,
+    used_cache: usedCache,
+    loop_stopped: stoppedForLoop,
   };
 
   return { answerText, requestPayload, responsePayload };
