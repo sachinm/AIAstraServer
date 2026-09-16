@@ -66,3 +66,8 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 3. Cutoff/completeness chase **DEFERRED**.
 4. Zero Astra probes; Lakshmi baseline → one batched thinkingBudget/maxOut flip → one re-check.
 5. Cache PR #4 / DDB/IAM may stay ready; Amplify traffic on cache **held**.
+
+## Baseline + tune (2026-09-15 ~7:43pm PT)
+- Baseline light PASS: 34.6s, thinking on, no loop, cutoff OK (not ≤30s).
+- One batched flip: `GEMINI_THINKING_BUDGET=512` (maxOut 8192, cache off). Awaiting single re-check.
+
