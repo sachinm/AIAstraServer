@@ -91,22 +91,47 @@ function throwIfGeminiApiError(parsed: GeminiGenerateContentResponse): void {
   throw new Error(msg || 'Gemini API error');
 }
 
+
+/** Cheap n-gram loop detector: same recent window repeats too often → stop stream. */
+function detectRepetitionLoop(text: string): boolean {
+  if (text.length < 400) return false;
+  const window = Math.min(48, Math.max(24, Math.floor(text.length / 10)));
+  const needle = text.slice(-window);
+  if (needle.trim().length < 20) return false;
+  const hay = text.slice(Math.max(0, text.length - 2500));
+  let count = 0;
+  let idx = 0;
+  while ((idx = hay.indexOf(needle, idx)) !== -1) {
+    count += 1;
+    if (count >= 4) return true;
+    idx += Math.max(1, Math.floor(window / 2));
+  }
+  return false;
+}
+
 /**
  * Consumes Gemini `streamGenerateContent?alt=sse` body: SSE events with `data: {json}`.
  */
 async function consumeGeminiSseStream(
   body: ReadableStream<Uint8Array>,
   onDelta?: (delta: string) => void
-): Promise<{ answerText: string; lastChunk: GeminiGenerateContentResponse | null; rawPreview: string }> {
+): Promise<{
+  answerText: string;
+  lastChunk: GeminiGenerateContentResponse | null;
+  rawPreview: string;
+  stoppedForLoop: boolean;
+}> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let accumulated = '';
   let lastChunk: GeminiGenerateContentResponse | null = null;
+  let stoppedForLoop = false;
   const rawSnippets: string[] = [];
   const maxPreviewChars = 4000;
 
   const handleJsonLine = (jsonStr: string): void => {
+    if (stoppedForLoop) return;
     const trimmed = jsonStr.trim();
     if (!trimmed || trimmed === '[DONE]') return;
     let parsed: GeminiGenerateContentResponse;
@@ -126,6 +151,14 @@ async function consumeGeminiSseStream(
     if (delta) {
       accumulated += delta;
       onDelta?.(delta);
+      if (detectRepetitionLoop(accumulated)) {
+        stoppedForLoop = true;
+        try {
+          void reader.cancel('repetition-loop');
+        } catch {
+          /* ignore */
+        }
+      }
     }
     if (rawSnippets.join('').length < maxPreviewChars) {
       rawSnippets.push(trimmed.length > 1200 ? `${trimmed.slice(0, 1200)}…` : trimmed);
@@ -150,7 +183,7 @@ async function consumeGeminiSseStream(
   };
 
   try {
-    while (true) {
+    while (!stoppedForLoop) {
       const { done, value } = await reader.read();
       if (value) {
         buffer += decoder.decode(value, { stream: true });
@@ -162,6 +195,7 @@ async function consumeGeminiSseStream(
         if (buffer.trim()) processEventBlock(buffer);
         break;
       }
+      if (stoppedForLoop) break;
     }
   } finally {
     reader.releaseLock();
@@ -176,6 +210,7 @@ async function consumeGeminiSseStream(
   return {
     answerText,
     lastChunk,
+    stoppedForLoop,
     rawPreview:
       rawSnippets.join('\n').length > maxPreviewChars
         ? `${rawSnippets.join('\n').slice(0, maxPreviewChars)}…[truncated]`
@@ -326,7 +361,7 @@ export async function chatWithGemini(
     throw new Error('Gemini stream response has no body');
   }
 
-  const { answerText, lastChunk, rawPreview } = await consumeGeminiSseStream(
+  const { answerText, lastChunk, rawPreview, stoppedForLoop } = await consumeGeminiSseStream(
     res.body as ReadableStream<Uint8Array>,
     options?.onDelta
   );
@@ -349,6 +384,7 @@ export async function chatWithGemini(
       temperature,
       topP,
       finishReason,
+      stoppedForLoop,
     })
   );
 
@@ -360,6 +396,7 @@ export async function chatWithGemini(
     usage: lastChunk?.usageMetadata ?? null,
     raw_preview: rawPreview,
     used_cache: usedCache,
+    loop_stopped: stoppedForLoop,
   };
 
   return { answerText, requestPayload, responsePayload };
