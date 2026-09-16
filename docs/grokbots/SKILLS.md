@@ -26,3 +26,5 @@ Lessons to reuse across projects. Add dated bullets when something bites twice.
 
 - `gemini-2.5-flash` defaults to **thinking**; if `GEMINI_THINKING_BUDGET=0` is only in Lambda/SM env and not in `generationConfig.thinkingConfig`, visible answers hit `MAX_TOKENS` early (short mid-sentence cuts at modest maxOut). Always send `thinkingConfig` in the request body.
 - Stream n-gram loop guard stops repetition collapse; still log `stoppedForLoop` + `finishReason` together.
+
+- After thinking off, long table-heavy outlook answers can still hit `MAX_TOKENS` at 8192. Prefer ~16000 with loop guard rather than 50000.

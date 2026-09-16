@@ -30,3 +30,9 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 
 ## Status
 **IN PROGRESS** — thinkingConfig wire-up on KING-SM branch `feature/gemini-context-cache`; redeploy + completeness re-smoke next. Cache Amplify cutover **held**.
+
+## Dig (2026-09-15 ~7:36pm PT) — thinking-off smoke FAIL ~43s
+- Timing log confirms `thinkingBudget:0`, `includeThoughts:false`, `stoppedForLoop:false`, `finishReason=MAX_TOKENS`, `maxOutputTokens=8192`, `geminiCallMs≈35900`.
+- Thinking-off worked; answer format (Karmic Timeline table) still needs more than 8192 output tokens.
+- **Fix (env-only):** raise `GEMINI_MAX_OUTPUT_TOKENS` to **16000** (SM + Lambda). Keep thinking off + loop guard. Avoid 50000 (repetition collapse).
+- Re-test: same outlook prompt; expect `finishReason=STOP` (or complete table) without loop.
