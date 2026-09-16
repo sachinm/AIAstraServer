@@ -28,3 +28,5 @@ Lessons to reuse across projects. Add dated bullets when something bites twice.
 - Stream n-gram loop guard stops repetition collapse; still log `stoppedForLoop` + `finishReason` together.
 
 - After thinking off, long table-heavy outlook answers can still hit `MAX_TOKENS` at 8192. Prefer ~16000 with loop guard rather than 50000.
+
+- Sachin (2026-09-15): prefer thinking ON (`thinkingBudget≈1024`) over chasing complete long tables; mid-answer cutoff acceptable with loop-guard. Keep `INCLUDE_THOUGHTS=0` so UI does not show thought parts.

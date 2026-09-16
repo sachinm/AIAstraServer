@@ -36,3 +36,10 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 - Thinking-off worked; answer format (Karmic Timeline table) still needs more than 8192 output tokens.
 - **Fix (env-only):** raise `GEMINI_MAX_OUTPUT_TOKENS` to **16000** (SM + Lambda). Keep thinking off + loop guard. Avoid 50000 (repetition collapse).
 - Re-test: same outlook prompt; expect `finishReason=STOP` (or complete table) without loop.
+
+## Decision (2026-09-15 ~7:37pm PT) — Sachin: cutoff OK, thinking ON
+- Completeness gate **relaxed**: mid-answer / mid-table cutoff is ACCEPTABLE.
+- Phase A green criteria now: **no repetition loop** + **thinking enabled** + no capacity/hard failures.
+- Live env: `GEMINI_THINKING_BUDGET=1024`, `GEMINI_MAX_OUTPUT_TOKENS=8192`, `INCLUDE_THOUGHTS=0`, `CACHE_ENABLED=0`, loop-guard on.
+- Image `thinking-off-20260916022820` already sends `thinkingConfig` from env — **no rebuild** required to turn thinking back on.
+- Light smoke (not full completeness): loop-free + timing log shows `thinkingBudget:1024`.
