@@ -54,3 +54,8 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 - Keep `GEMINI_CACHE_ENABLED=0`. Do **not** enable context cache for ≤30s latency.
 - Path to ≤30s = `thinkingBudget` / `maxOut` env tune only (after baseline). Conserve smokes (~20 calls): batch knobs, one re-check after tune.
 - Cache PR/infra can remain parked until paid quota (if ever).
+
+## Smoke budget (Sachin/Narayan)
+- Free tier ~20 Gemini calls — **Astra: NO extra probes/smokes**.
+- Lakshmi only: (1) baseline at 1024/8192 (2) ONE post-tune re-check after a single batched env flip.
+- Tune from baseline wall-clock + CloudWatch only. Astra does not declare Phase A green.
