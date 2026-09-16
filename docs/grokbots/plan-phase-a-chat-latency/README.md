@@ -48,3 +48,9 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 - Phase A green = **≤30s wall-clock** + **thinking ON** + **no repetition loop** + no hard/capacity fail.
 - Mid-answer cutoff still OK.
 - Order: Lakshmi baseline at 1024/8192 → env-only tune (lower thinkingBudget and/or maxOut) → re-smoke latency after each change.
+
+## Cache deferred (Sachin 2026-09-15 ~7:41pm PT)
+- Gemini **FREE tier**: `cachedContents` storage limit=0; capacity/high-demand risk accepted.
+- Keep `GEMINI_CACHE_ENABLED=0`. Do **not** enable context cache for ≤30s latency.
+- Path to ≤30s = `thinkingBudget` / `maxOut` env tune only (after baseline). Conserve smokes (~20 calls): batch knobs, one re-check after tune.
+- Cache PR/infra can remain parked until paid quota (if ever).
