@@ -358,6 +358,23 @@ export function getGeminiUndiciBodyTimeoutMs(): number {
 }
 
 
+
+/** Gemini 2.5 thinking budget (tokens). 0 disables thinking so maxOut is for the answer. */
+export function getGeminiThinkingBudget(): number {
+  const raw = process.env.GEMINI_THINKING_BUDGET;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 24576) return Math.floor(n);
+  }
+  return 0;
+}
+
+/** Whether to include thought parts in the response (usually false for chat). */
+export function getGeminiIncludeThoughts(): boolean {
+  const raw = process.env.GEMINI_INCLUDE_THOUGHTS?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 /** DynamoDB table for Gemini cachedContents pointers (userId → cacheName). Empty disables cache. */
 export function getGeminiCacheTableName(): string {
   return process.env.GEMINI_CACHE_TABLE?.trim() || '';

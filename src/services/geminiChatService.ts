@@ -12,6 +12,8 @@ import {
   getGeminiMaxOutputTokens,
   getGeminiTemperature,
   getGeminiTopP,
+  getGeminiThinkingBudget,
+  getGeminiIncludeThoughts,
   getGeminiStreamGenerateContentUrl,
   getGeminiUndiciBodyTimeoutMs,
   getGeminiUndiciHeadersTimeoutMs,
@@ -218,6 +220,23 @@ async function consumeGeminiSseStream(
   };
 }
 
+
+function buildGeminiGenerationConfig(): Record<string, unknown> {
+  const thinkingBudget = getGeminiThinkingBudget();
+  const includeThoughts = getGeminiIncludeThoughts();
+  const generationConfig: Record<string, unknown> = {
+    temperature: getGeminiTemperature(),
+    maxOutputTokens: getGeminiMaxOutputTokens(),
+    topP: getGeminiTopP(),
+    // Gemini 2.5 defaults to thinking; budget 0 keeps maxOut for visible answer tokens.
+    thinkingConfig: {
+      thinkingBudget,
+      includeThoughts,
+    },
+  };
+  return generationConfig;
+}
+
 /**
  * One chat turn via Gemini `streamGenerateContent` (SSE); accumulates deltas into `answerText`
  * for GraphQL (same shape as Groq streaming).
@@ -264,11 +283,7 @@ export async function chatWithGemini(
     requestBody = {
       cachedContent: cacheName,
       contents: [{ role: 'user', parts: [{ text: userQuestion.trim() }] }],
-      generationConfig: {
-        temperature,
-        maxOutputTokens,
-        topP,
-      },
+      generationConfig: buildGeminiGenerationConfig(),
     };
   } else {
     const systemPromptBase = await loadSystemPrompt(prisma, GEMINI_CHAT_SYSTEM_PROMPT_NAME);
@@ -308,11 +323,7 @@ export async function chatWithGemini(
         parts: [{ text: systemPrompt }],
       },
       contents,
-      generationConfig: {
-        temperature,
-        maxOutputTokens,
-        topP,
-      },
+      generationConfig: buildGeminiGenerationConfig(),
     };
 
     if (isGeminiCacheEnabled()) {
@@ -385,6 +396,8 @@ export async function chatWithGemini(
       topP,
       finishReason,
       stoppedForLoop,
+      thinkingBudget: getGeminiThinkingBudget(),
+      includeThoughts: getGeminiIncludeThoughts(),
     })
   );
 
