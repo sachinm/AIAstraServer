@@ -59,3 +59,10 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 - Free tier ~20 Gemini calls — **Astra: NO extra probes/smokes**.
 - Lakshmi only: (1) baseline at 1024/8192 (2) ONE post-tune re-check after a single batched env flip.
 - Tune from baseline wall-clock + CloudWatch only. Astra does not declare Phase A green.
+
+## Policy flip (Sachin via Narayan ~7:42pm PT)
+1. Gemini **paid** coming for caching — keep `CACHE_ENABLED=0` until Sachin confirms billing live (do not enable cachedContents yet).
+2. **≤30s is PRIMARY**.
+3. Cutoff/completeness chase **DEFERRED**.
+4. Zero Astra probes; Lakshmi baseline → one batched thinkingBudget/maxOut flip → one re-check.
+5. Cache PR #4 / DDB/IAM may stay ready; Amplify traffic on cache **held**.
