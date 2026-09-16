@@ -261,7 +261,7 @@ export function getGeminiStreamGenerateContentUrl(): string {
 }
 
 /** Default when GEMINI_MAX_OUTPUT_TOKENS is unset (Phase A latency: shorter replies). */
-const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 2048;
+const DEFAULT_GEMINI_MAX_OUTPUT_TOKENS = 8192;
 const MIN_GEMINI_MAX_OUTPUT_TOKENS = 256;
 /** Hard cap to avoid accidental huge values; model/API may enforce a lower max. */
 const MAX_GEMINI_MAX_OUTPUT_TOKENS_CAP = 65_536;
@@ -355,6 +355,40 @@ export function getGeminiUndiciBodyTimeoutMs(): number {
     parseNonNegativeTimeoutMs(process.env.GEMINI_HTTP_TIMEOUT_MS) ??
     DEFAULT_GEMINI_HTTP_TIMEOUT_MS
   );
+}
+
+
+/** DynamoDB table for Gemini cachedContents pointers (userId → cacheName). Empty disables cache. */
+export function getGeminiCacheTableName(): string {
+  return process.env.GEMINI_CACHE_TABLE?.trim() || '';
+}
+
+/** TTL for new Gemini cachedContents (seconds). Default 7 days. */
+const DEFAULT_GEMINI_CACHE_TTL_SECONDS = 604_800;
+
+export function getGeminiCacheTtlSeconds(): number {
+  const raw = process.env.GEMINI_CACHE_TTL_SECONDS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 3600 && n <= 7_776_000) return Math.floor(n);
+  }
+  return DEFAULT_GEMINI_CACHE_TTL_SECONDS;
+}
+
+/**
+ * Base URL for Gemini CachedContents REST (`…/v1beta`), derived from GEMINI_API_URL
+ * which normally ends in `/models`.
+ */
+export function getGeminiCachedContentsApiBase(): string {
+  const modelsBase = (
+    process.env.GEMINI_API_URL?.trim() ||
+    'https://generativelanguage.googleapis.com/v1beta/models'
+  ).replace(/\/$/, '');
+  if (modelsBase.endsWith('/models')) {
+    return modelsBase.slice(0, -'/models'.length);
+  }
+  // Already a v1beta (or similar) root
+  return modelsBase.replace(/\/models\/?$/, '') || 'https://generativelanguage.googleapis.com/v1beta';
 }
 
 /** Secret for https://www.google.com/recaptcha/api/siteverify. If unset, login/signup skip reCAPTCHA. */

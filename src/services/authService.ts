@@ -5,6 +5,7 @@ import { hashPassword, comparePassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
+import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { assertTurnstileIfConfigured } from './turnstileService.js';
 import { sendMagicLinkEmail } from './emailService.js';
 import { generateMagicLinkCode, normalizeMagicLinkCode } from '../lib/magicLinkCode.js';
@@ -90,6 +91,9 @@ export async function login(
   });
   processKundliSyncQueue(prisma).catch((err) => {
     console.error('processKundliSyncQueue after login failed:', (err as Error).message);
+  });
+  ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
+    console.error('ensureGeminiCacheForUser after login failed:', (err as Error).message);
   });
   const token = issueToken(user.id, user.role ?? 'user');
   return {
@@ -214,6 +218,9 @@ export async function loginWithMagicLink(
       (err as Error).message
     );
   });
+  ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
+    console.error('ensureGeminiCacheForUser after magic link login failed:', (err as Error).message);
+  });
 
   const token = issueToken(user.id, user.role ?? 'user');
   return {
@@ -285,6 +292,9 @@ export async function signup(
   });
   processKundliSyncQueue(prisma).catch((err) => {
     console.error('processKundliSyncQueue after signup failed:', (err as Error).message);
+  });
+  ensureGeminiCacheForUser(prisma, created.id).catch((err) => {
+    console.error('ensureGeminiCacheForUser after signup failed:', (err as Error).message);
   });
   const token = issueToken(created.id, created.role ?? 'user');
   return {
