@@ -43,3 +43,8 @@ Quality-first: keep 8192 + loop guard; disable thinking in-request rather than r
 - Live env: `GEMINI_THINKING_BUDGET=1024`, `GEMINI_MAX_OUTPUT_TOKENS=8192`, `INCLUDE_THOUGHTS=0`, `CACHE_ENABLED=0`, loop-guard on.
 - Image `thinking-off-20260916022820` already sends `thinkingConfig` from env — **no rebuild** required to turn thinking back on.
 - Light smoke (not full completeness): loop-free + timing log shows `thinkingBudget:1024`.
+
+## Goal update (Sachin 2026-09-15 ~7:38pm PT)
+- Phase A green = **≤30s wall-clock** + **thinking ON** + **no repetition loop** + no hard/capacity fail.
+- Mid-answer cutoff still OK.
+- Order: Lakshmi baseline at 1024/8192 → env-only tune (lower thinkingBudget and/or maxOut) → re-smoke latency after each change.
