@@ -33,3 +33,10 @@
 
 ## Learnings → SKILLS.md
 See repo `docs/grokbots/SKILLS.md` (thinkingConfig must be in request body; free-tier no cache; 512/8192 winning knobs; smoke budget).
+
+## PAUSED (Narayan 2026-09-15 ~7:49pm PT)
+- **STOP** all Gemini testing / smokes / knob flips (free-tier daily quota).
+- Locked: THINKING_BUDGET=512, MAX_OUTPUT_TOKENS=8192, INCLUDE_THOUGHTS=0, CACHE_ENABLED=0, loop-guard on, model gemini-2.5-flash.
+- ≤30s follow-up **PAUSED** until Sachin confirms Gemini **paid billing** live → then cache enable + re-measure.
+- Cognito: approved **after** paid-cache; first artifact `docs/grokbots/plan-cognito-auth` when he kicks it — **not now**.
+- Astra **idle**.
