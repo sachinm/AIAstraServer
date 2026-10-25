@@ -1,0 +1,25 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "aiastradb", schema "public" at "dpg-d6sdjcp5pdvs73dpa8a0-a.virginia-postgres.render.com:5432"
+
+14 migrations found in prisma/migrations
+
+Applying migration `20261024100000_reading_m1_kundli_coords`
+Applying migration `20261024100100_reading_m2_kundli_facts`
+Applying migration `20261024100200_reading_m3_transit_snapshots`
+Applying migration `20261024100300_reading_m4_reading_runs`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261024100000_reading_m1_kundli_coords/
+    └─ migration.sql
+  └─ 20261024100100_reading_m2_kundli_facts/
+    └─ migration.sql
+  └─ 20261024100200_reading_m3_transit_snapshots/
+    └─ migration.sql
+  └─ 20261024100300_reading_m4_reading_runs/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+exit 0

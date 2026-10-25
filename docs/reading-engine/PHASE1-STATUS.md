@@ -14,7 +14,7 @@ With `READING_ENGINE=1` and no stored dossier, the server falls back to the lega
 
 - Contract and validation: `facts.v1` and `transits.v1` JSON schemas, loaded with ajv, and the Lambda brief in [09-lambda-contract.md](./09-lambda-contract.md).
 - Data layer: Lambda client for `facts` and `transits`, database store, in-process cache (5 minutes), prefetch in parallel with intake, lazy transit build with an 8 second timeout, a facts build after each kundli sync, and a backfill script.
-- Migrations M1 to M4: coordinates and facts status on kundlis, `kundli_facts`, `transit_snapshots`, `reading_runs`. The Prisma schema matches the SQL (checked offline).
+- Migrations M1 to M4: coordinates and facts status on kundlis, `kundli_facts`, `transit_snapshots`, `reading_runs`. Applied to the live Render database on 2026-10-24 with Sachin's approval and verified (QA-LIST P1-13).
 - Evidence packs: 15 subject frames, selector with sections in cache order, transit selection and clipping, current dasha re-selected by date.
 - Intake: rules first (about 0 ms), model only when unsure, fixed reply for self-harm questions.
 - Orchestrator: `single` flow (default, one streamed call) and `graph` flow (parallel promise, dasha, transit and nakshatra specialists, a reconcile step, then a streamed synthesis). Fast lane for short yes/no questions.
@@ -53,6 +53,7 @@ Latency and cost against a real model were not measured. The fake model's timing
 | p50 latency not worse than baseline | blocked: no baseline, no key |
 | `npx tsc --noEmit` clean | met |
 | Production flag flip | not done, by design |
+| Migrations on the live database | done 2026-10-24 (QA-LIST P1-13) |
 
 ## Blocked, and what unblocks it
 
@@ -60,7 +61,6 @@ Latency and cost against a real model were not measured. The fake model's timing
 |---|---|---|
 | Real-model eval of the 12 questions | `GEMINI_API_KEY` in `.env`; free tier allows about 20 calls a day | `npm run eval:readings -- --engine phase1 --questions Q2,Q8,Q9`, then all 12 |
 | Baseline on the legacy path | database and `.env` | `npm run eval:readings -- --engine current` |
-| Apply migrations M1 to M4 | database access; Sachin to run | `npx prisma migrate deploy` |
 | Real `kundli_facts` and transit builds | the Lambda serving `facts` and `transits` | `npm run facts:backfill`, `npm run transits:build` |
 | Gemini billing | Sachin to confirm; Phase 1 uses `gemini-2.5-flash` | none |
 | Pushing, AWS, Terraform | Sachin | none |

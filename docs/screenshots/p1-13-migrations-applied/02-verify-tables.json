@@ -1,0 +1,100 @@
+{
+ "migrations": [
+  {
+   "migration_name": "20261024100000_reading_m1_kundli_coords",
+   "finished": true,
+   "rolled_back": false
+  },
+  {
+   "migration_name": "20261024100100_reading_m2_kundli_facts",
+   "finished": true,
+   "rolled_back": false
+  },
+  {
+   "migration_name": "20261024100200_reading_m3_transit_snapshots",
+   "finished": true,
+   "rolled_back": false
+  },
+  {
+   "migration_name": "20261024100300_reading_m4_reading_runs",
+   "finished": true,
+   "rolled_back": false
+  }
+ ],
+ "newCols": [
+  {
+   "column_name": "facts_status",
+   "data_type": "text",
+   "column_default": "'pending'::text"
+  },
+  {
+   "column_name": "lat",
+   "data_type": "double precision",
+   "column_default": null
+  },
+  {
+   "column_name": "lon",
+   "data_type": "double precision",
+   "column_default": null
+  },
+  {
+   "column_name": "place_resolved",
+   "data_type": "text",
+   "column_default": null
+  },
+  {
+   "column_name": "tz",
+   "data_type": "double precision",
+   "column_default": null
+  }
+ ],
+ "tables": [
+  {
+   "table_name": "kundli_facts",
+   "columns": 10
+  },
+  {
+   "table_name": "reading_runs",
+   "columns": 27
+  },
+  {
+   "table_name": "transit_snapshots",
+   "columns": 8
+  }
+ ],
+ "indexes": [
+  {
+   "indexname": "kundli_facts_kundli_version"
+  },
+  {
+   "indexname": "kundli_facts_pkey"
+  },
+  {
+   "indexname": "reading_runs_chat"
+  },
+  {
+   "indexname": "reading_runs_message_id_key"
+  },
+  {
+   "indexname": "reading_runs_pkey"
+  },
+  {
+   "indexname": "reading_runs_user_created"
+  },
+  {
+   "indexname": "transit_snapshots_kundli_range"
+  },
+  {
+   "indexname": "transit_snapshots_pkey"
+  },
+  {
+   "indexname": "transit_snapshots_range"
+  }
+ ],
+ "kundlis": [
+  {
+   "total": 25,
+   "pending": 25
+  }
+ ]
+}
