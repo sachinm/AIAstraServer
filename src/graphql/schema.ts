@@ -21,7 +21,7 @@ import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
 import type { GraphQLContext } from './context.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 
-const ADMIN_ROLES = ['admin', 'superadmin'] as const;
+const ADMIN_ROLES = ['admin', 'superadmin', 'aiastra_admin'] as const;
 
 const typeDefs = /* GraphQL */ `
   type User {

@@ -65,7 +65,7 @@ Before the rule in section 1 was stated this strictly, the 24 existing dossiers 
 4. Cross-check against each kundli's Radha D-1: Lagna and all nine grahas in the same sign for all 24; largest longitude difference 0.015°.
 5. Store in `kundli_facts` (engine commit marked `local-drafts-…`) and `transit_snapshots`; `facts_status = ready`.
 
-Evidence: `docs/screenshots/p1-14-facts-backfill/`, QA-LIST P1-14. Under the rule in section 1, these tools are not to be used again. Whether to keep or remove the 24 stored dossiers and transit charts is Sachin's decision. They are identifiable by `kundli_facts.engine_commit LIKE 'local-drafts-%'` and by `transit_snapshots` rows created on 2026-10-24/25.
+Evidence: `docs/screenshots/p1-14-facts-backfill/`, QA-LIST P1-14. Under the rule in section 1, these tools are not to be used again. **Decision (Sachin, 2026-10-25): keep the 24 stored dossiers and transit charts for now; build no more.** They are identifiable by `kundli_facts.engine_commit LIKE 'local-drafts-%'` and by `transit_snapshots` rows created on 2026-10-24/25.
 
 ## 6. What the chat path does with this data
 

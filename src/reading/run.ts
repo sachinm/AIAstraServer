@@ -45,6 +45,8 @@ export interface RunReadingOptions {
   dataLoader?: (asOf: string) => Promise<ReadingData | null>;
   onFactsMissing?: (kundliId: string) => void;
   onStale?: (kundliId: string) => void;
+  /** Confirmed intent from the clarifier: intake is skipped */
+  intent?: Intent;
 }
 
 export interface ReadingRunRecord {
@@ -153,7 +155,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   // 2. intake
   emit({ type: 'stage', name: 'intake', status: 'start' });
-  const intake = await runIntake(question, asOf, { history: opts.history });
+  const intake = opts.intent ? { intent: opts.intent, usage: null, source: 'confirmed' as const, ms: 0 } : await runIntake(question, asOf, { history: opts.history });
   const intent = intake.intent;
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);

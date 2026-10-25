@@ -4,6 +4,8 @@ Added 2026-10-25. Code: `src/reading/buckets/taxonomy.ts`, `src/reading/buckets/
 
 **Scope:** English only for now (Sachin, 2026-10-25). Hindi and other languages come later, with answers in the asker's language.
 
+**Runs after the declined-topics gate** (file 18): death, violence, harm, crime and the other listed topics never reach the classifier. Health questions reach it only for roles allowed to discuss them.
+
 ## 1. What it does
 
 Before any model call, every question is put into one of 14 buckets (or `unknown`). The classifier also extracts the slots the question already gives and lists the slots the bucket needs that are still missing. It is a pure function with no I/O, typically well under 1 ms (p95 under 5 ms is a test).
@@ -113,7 +115,7 @@ Below the threshold (`READING_CLASSIFIER_THRESHOLD`, default 0.70) the question 
 | What does my chart say? | spirituality 0.4 | spirituality_direction | 0.60 | One weak cue: uncapped 0.74, capped at 0.60, so the model or the clarifier decides. |
 | How is my relationship with my father? | love 0.9, family 0.9 | family_children / parents_siblings | 0.51 | Tie-break 5 picks family; equal scores give margin 0, so confidence stays low and the model stage confirms. |
 | Ketu is transiting over my natal Jupiter, what does that mean for me? | none | time_window_outlook / transit_meaning | 0.80 | Planet plus transit cue with no life area. Template T4. |
-| When will I die? | health 1.0 | health_windows | 0.88 | Flagged `death_timing`: template T10 with the policy answer and a redirect to health-vigilance windows. |
+| When will I die? | health 1.0 | health_windows | 0.88 | Never reaches the classifier in practice: the declined-topics gate (file 18) stops it first with a fixed reply. |
 | Hello | none | unknown | 0.20 | Flagged `no_subject`: coaching shows how to ask. |
 
 ## 4. Slots
@@ -150,7 +152,7 @@ The kind comes from the opening words: "when", "how long", "which month" = timin
 
 | Flag | Triggers | What happens |
 |---|---|---|
-| death_timing | "when will I die", "how long will I live", "when will my … die" | T10 policy answer; redirect to health-vigilance windows; never a date |
+| death_timing | "when will I die", "how long will I live", "when will my … die" | declined before classification (file 18); no reading, no redirect |
 | lottery_numbers | lottery or jackpot plus "number(s)" | T10; redirect to gain windows only |
 | exact_amount | "how much money", "how many lakhs", "what salary will I" | T10; redirect to growth windows, no amounts |
 | exact_clock_time | "at 3 pm", "3:30 pm" | T10; redirect to the day's quality, not the minute |
