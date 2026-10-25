@@ -17,6 +17,7 @@ import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
+import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
 const QUEUE_STATUS_IN_PROGRESS = 'in_progress';
@@ -278,6 +279,8 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
         });
         return;
       }
+      // vertical store (docs/reading-engine/20): same items as kundli_data rows, best effort
+      await writeLegacyColumnsThrough(prisma, kundliId, dataUpdate);
     }
 
     const updatedRow = await prisma.kundli.findUnique({
