@@ -247,7 +247,8 @@ const typeDefs = /* GraphQL */ `
 
   input SignUpInput {
     username: String!
-    password: String!
+    """Ignored. Accounts get a server-generated password; sign-in is by emailed code."""
+    password: String
     email: String!
     date_of_birth: String!
     place_of_birth: String

@@ -41,14 +41,13 @@ describe('validators', () => {
       }
     });
 
-    it('rejects short password', () => {
+    it('does not require a password (sign-in is by emailed code)', () => {
       const result = validateSignUpInput({
         username: 'u1',
-        password: 'short',
         email: 'u1@test.com',
         date_of_birth: '1990-01-01',
       });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
 
     it('rejects invalid email', () => {

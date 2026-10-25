@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 const MAX_USERNAME = 128;
-const MIN_PASSWORD = 6;
 const MAX_PASSWORD = 256;
 const MAX_EMAIL = 256;
 const MAX_DATE = 32;
@@ -16,10 +15,6 @@ export const loginSchema = z.object({
 
 export const signUpSchema = z.object({
   username: z.string().min(1, 'Username is required').max(MAX_USERNAME),
-  password: z
-    .string()
-    .min(MIN_PASSWORD, `Password must be at least ${MIN_PASSWORD} characters`)
-    .max(MAX_PASSWORD),
   email: z.string().email('Invalid email').max(MAX_EMAIL),
   date_of_birth: z.string().min(1, 'Date of birth is required').max(MAX_DATE),
   place_of_birth: z.string().max(MAX_PLACE).optional().nullable(),
