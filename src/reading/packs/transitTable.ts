@@ -15,6 +15,8 @@ export interface TransitSelectionInput {
   horizon: { from: string; to: string; months: number };
   /** Planets the user named (canonical codes); forced into the selection */
   mentionsPlanets?: string[];
+  /** Today. A chart cached on an earlier day still answers "now" correctly because the current row is selected by date. */
+  asOf?: string;
 }
 
 export interface SelectedTransitRow {
@@ -113,19 +115,21 @@ export function selectTransits(input: TransitSelectionInput): TransitSection {
     .filter((s) => ['Ju', 'Sa'].includes(s.planet) && s.date >= horizon.from && s.date <= horizon.to)
     .map((s) => ({ planet: s.planet, kind: s.kind, date: s.date, sign: s.sign }));
 
+  const today = input.asOf ?? chart.as_of;
   const now: TransitSection['now'] = {};
-  for (const [p, v] of Object.entries(chart.now)) {
-    if (!planets.has(p)) continue;
-    now[p] = { sign: v.sign_name, house_from_lagna: v.house_from_lagna, house_from_moon: v.house_from_moon, over_natal: v.over_natal };
+  for (const r of chart.rows) {
+    if (!planets.has(r.planet) || r.from > today || r.to < today) continue;
+    now[r.planet] = { sign: SIGNS[r.sign] ?? r.sign_name, house_from_lagna: r.house_from_lagna, house_from_moon: r.house_from_moon, over_natal: r.over_natal };
   }
+  const sadeNow = chart.sade_sati.periods.find((x) => x.from <= today && today <= x.to);
 
   return {
-    as_of: chart.as_of,
+    as_of: today,
     now,
     rows,
     focus_hits,
     double_transit,
-    sade_sati: { now: chart.sade_sati.now ? chart.sade_sati.now.phase : null, periods: sade_periods },
+    sade_sati: { now: sadeNow ? sadeNow.phase : null, periods: sade_periods },
     stations,
     dropped_rows: dropped,
   };

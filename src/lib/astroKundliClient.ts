@@ -657,9 +657,25 @@ export async function fetchHoroscopeChart(
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
 }
 
+/**
+ * Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body.
+ * When lat/lon/tz are supplied nothing is geocoded upstream, so the per-process spacing throttle (which exists for
+ * Nominatim) is skipped and chat-path calls are not delayed behind queue work.
+ */
+export async function fetchEngineExport(
+  params: AstroKundliRequestParams,
+  type: string,
+  extra: Record<string, unknown> = {}
+): Promise<Prisma.JsonValue> {
+  const hasCoords = extra.lat != null && extra.lon != null && extra.tz != null;
+  if (hasCoords) return fetchHoroscopeChartImpl(params, type, extra);
+  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+}
+
 async function fetchHoroscopeChartImpl(
   params: AstroKundliRequestParams,
-  type: KundliJsonField
+  type: string,
+  extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
   const transport = getAstroKundliTransport();
   const apiKey = getAstroKundliApiKey();
@@ -670,6 +686,7 @@ async function fetchHoroscopeChartImpl(
     place: params.place,
     type,
     ayanamsa: params.ayanamsa ?? 'LAHIRI',
+    ...extra,
   };
 
   const headers: Record<string, string> = {

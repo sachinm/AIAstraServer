@@ -4,6 +4,43 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ChatTurnResult } from './chatLlmService.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
+import type { ReadingRunRecord } from '../reading/run.js';
+
+/** Observability row for one reading. A failure here must never fail the chat turn. */
+async function persistReadingRun(db: PrismaClient, userId: string, chatId: string, messageId: string, r: ReadingRunRecord): Promise<void> {
+  try {
+    await db.readingRun.create({
+      data: {
+        id: r.runId,
+        user_id: userId,
+        chat_id: chatId,
+        message_id: messageId,
+        status: r.status,
+        question: r.question,
+        intent: r.intent as unknown as Prisma.InputJsonValue,
+        facts_version: r.factsVersion,
+        dossier_hash: r.dossierHash,
+        transit_snapshot_id: r.transitSnapshotId,
+        pack_hashes: r.packHashes as unknown as Prisma.InputJsonValue,
+        findings: (r.findings ?? undefined) as Prisma.InputJsonValue | undefined,
+        windows: (r.windows ?? undefined) as Prisma.InputJsonValue | undefined,
+        agreement: (r.agreement ?? undefined) as Prisma.InputJsonValue | undefined,
+        answer: r.answer,
+        models: r.models as unknown as Prisma.InputJsonValue,
+        usage: r.usage as unknown as Prisma.InputJsonValue,
+        cost_usd: r.costUsd,
+        timings_ms: r.timingsMs as unknown as Prisma.InputJsonValue,
+        cache: r.cache as unknown as Prisma.InputJsonValue,
+        dropped_claims: r.droppedClaims,
+        errors: r.errors as unknown as Prisma.InputJsonValue,
+        prompt_version: r.promptVersion,
+        completed_at: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ msg: 'reading run persist failed', runId: r.runId, error: (err as Error).message.slice(0, 300) }));
+  }
+}
 
 export type AskPreconditionResult = { ok: true } | { ok: false; error: string };
 
@@ -37,7 +74,7 @@ export async function persistAskTurn(
   question: string,
   chatResult: ChatTurnResult,
   clientDeliverySse: boolean
-): Promise<{ chatId: string }> {
+): Promise<{ chatId: string; messageId: string }> {
   let chat: { id: string } | null = null;
   if (chatId?.trim()) {
     chat = await db.chat.findFirst({
@@ -83,5 +120,6 @@ export async function persistAskTurn(
       client_delivery_sse: clientDeliverySse,
     },
   });
-  return { chatId: chat.id };
+  if (chatResult.reading) await persistReadingRun(db, userId, chat.id, message.id, chatResult.reading);
+  return { chatId: chat.id, messageId: message.id };
 }

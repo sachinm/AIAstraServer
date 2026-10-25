@@ -1,0 +1,114 @@
+/**
+ * Local fake of the Gemini REST API for tests and the offline demo: records every request body (so tests can assert the prompt
+ * layout used for prefix caching), answers specialists with structured JSON that cites real and bogus evidence ids (to exercise
+ * the grounding gate), answers intake with JSON, and streams a markdown answer for the synthesizer. Not a quality model.
+ */
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
+export interface FakeRequest {
+  model: string;
+  stream: boolean;
+  body: any;
+  at: number;
+}
+
+export interface FakeGeminiOptions {
+  /** ms to wait before answering a non-streaming (specialist / intake) call */
+  specialistDelayMs?: number;
+  /** analyst names whose call should fail with HTTP 500 */
+  failAnalysts?: string[];
+  /** ms between streamed chunks */
+  chunkDelayMs?: number;
+  /** extra text appended to the streamed answer */
+  answer?: string;
+}
+
+export interface FakeGemini {
+  url: string;
+  requests: FakeRequest[];
+  close: () => Promise<void>;
+  reset: () => void;
+}
+
+function userText(body: any): string[] {
+  return (body?.contents?.[0]?.parts ?? []).map((p: any) => String(p.text ?? ''));
+}
+
+function analystOf(parts: string[]): string | null {
+  const m = /ANALYST: (\w+)/.exec(parts.join('\n'));
+  return m ? m[1]! : null;
+}
+
+export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<FakeGemini> {
+  const requests: FakeRequest[] = [];
+  const server = http.createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', async () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      const m = /\/models\/([^:]+):(generateContent|streamGenerateContent)/.exec(req.url ?? '');
+      const model = m?.[1] ?? '';
+      const stream = m?.[2] === 'streamGenerateContent';
+      requests.push({ model, stream, body, at: Date.now() });
+      const parts = userText(body);
+      const promptTokens = Math.ceil(parts.join('').length / 3.2) + Math.ceil(String(body?.systemInstruction?.parts?.[0]?.text ?? '').length / 3.2);
+      const seen = requests.slice(0, -1).some((r) => JSON.stringify(r.body?.systemInstruction) === JSON.stringify(body?.systemInstruction) && userText(r.body)[0] === parts[0]);
+      const usage = { promptTokenCount: promptTokens, cachedContentTokenCount: seen ? Math.floor(promptTokens * 0.7) : 0, candidatesTokenCount: 220, thoughtsTokenCount: 0 };
+
+      if (!stream) {
+        const analyst = analystOf(parts);
+        await new Promise((r) => setTimeout(r, opts.specialistDelayMs ?? 0));
+        if (analyst && opts.failAnalysts?.includes(analyst)) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: `fake failure for ${analyst}` } }));
+          return;
+        }
+        let payload: unknown;
+        if (body?.generationConfig?.responseSchema?.properties?.subjects) {
+          payload = {
+            subjects: [{ id: 'career_work', weight: 1 }], horizon: '1y', questionType: 'timing', format: 'timeline', focusPoints: [], mentionsPlanets: [],
+            confidence: 0.9, clarifyText: 'You are asking about career over the next year.', followUps: [], safety: 'ok',
+          };
+        } else {
+          payload = {
+            verdict: 'moderate',
+            claims: [
+              { text: `[${analyst}] The 10th lord Mercury sits in the 9th house.`, evidence: ['detail.houses.10.lord', 'detail.houses.10.lord_house'], polarity: 'supports', weight: 3 },
+              { text: `[${analyst}] A claim with an id that is not in the pack.`, evidence: ['nope.not.in.pack'], polarity: 'neutral', weight: 1 },
+            ],
+            windows: [
+              { from: '2026-11-01', to: '2027-03-01', label: 'Saturn-Ketu-Sun supporter', polarity: 'favourable', evidence: ['dasha.current.md'] },
+              { from: '2019-01-01', to: '2019-06-01', label: 'outside horizon', polarity: 'favourable', evidence: [] },
+            ],
+            caveats: [],
+            keyFacts: ['detail.houses.10.lord'],
+          };
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] }, finishReason: 'STOP' }], usageMetadata: usage }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      const text = opts.answer ?? 'Direct answer: the chart supports a gradual improvement.\n\n| Window | Dasha | Trigger |\n|---|---|---|\n| Nov 2026 - Mar 2027 | Saturn-Ketu-Sun | Jupiter in Leo |\n\nHow to read this: promise is moderate.';
+      const pieces = text.match(/.{1,24}/gs) ?? [text];
+      for (let i = 0; i < pieces.length; i++) {
+        const last = i === pieces.length - 1;
+        res.write(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: pieces[i] }] }, ...(last ? { finishReason: 'STOP' } : {}) }], ...(last ? { usageMetadata: usage } : {}) })}\n\n`);
+        if (opts.chunkDelayMs) await new Promise((r) => setTimeout(r, opts.chunkDelayMs));
+      }
+      res.end();
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}/v1beta/models`,
+    requests,
+    reset: () => {
+      requests.length = 0;
+    },
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}

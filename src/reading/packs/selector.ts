@@ -147,7 +147,15 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   void lagnaSign;
 
   // frame houses and their lords / co-lords
-  const frameHouses = [...new Set(frame.houses)];
+  // A planet the user named brings its own houses (where it sits, what it owns) into the frame, e.g. "Ketu over my
+  // Jupiter" adds Jupiter's houses. Capped so a long list of planets cannot blow up the pack.
+  const mentionHouses: number[] = [];
+  for (const m of intent.mentionsPlanets ?? []) {
+    const b = d.bodies[m];
+    if (!b) continue;
+    mentionHouses.push(b.house, ...(b.owns ?? []));
+  }
+  const frameHouses = [...new Set([...frame.houses, ...mentionHouses])].slice(0, 8);
   const lordCodes = new Set<string>();
   for (const h of frameHouses) {
     const hh = d.houses[String(h)];
@@ -283,6 +291,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       interestingNatal: [...lordCodes, ...karakaCodes],
       horizon: hz,
       mentionsPlanets: intent.mentionsPlanets,
+      asOf,
     });
   } else {
     missing.push('transits unavailable');
