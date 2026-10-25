@@ -1,0 +1,23 @@
+Reading bench: model stubbed (fake Gemini), chart G1, 12 questions x 5 runs
+
+| Stage | n | p50 | p95 | budget (p95) | ok |
+|---|---|---|---|---|---|
+| cachedTokens.graph | 60 | 13571 | 19430 |  |  |
+| cachedTokens.single | 60 | 4904 | 5299 |  |  |
+| classify | 60 | 0.18 | 0.72 | 5 | yes |
+| dataWait.graph | 60 | 0.00 | 0.00 |  |  |
+| dataWait.single | 60 | 0.00 | 0.00 |  |  |
+| firstToken.graph | 60 | 37 | 121 | 10000 | yes |
+| firstToken.single | 60 | 12 | 44 | 10000 | yes |
+| graph.reconcile | 50 | 0.00 | 1.00 |  |  |
+| intake.graph | 60 | 0.00 | 20 |  |  |
+| intake.single | 60 | 0.00 | 28 |  |  |
+| intentEvent | 120 | 6.02 | 31 | 1200 | yes |
+| modelCalls.graph | 60 | 4.00 | 5.00 |  |  |
+| modelCalls.single | 60 | 1.00 | 2.00 |  |  |
+| pack | 60 | 0.68 | 4.51 | 150 | yes |
+| promptTokens.graph | 60 | 19524 | 27760 |  |  |
+| promptTokens.single | 60 | 7106 | 7571 |  |  |
+| reconcile | 60 | 0.12 | 0.35 | 50 | yes |
+| total.graph | 60 | 39 | 124 | 40000 | yes |
+| total.single | 60 | 13 | 50 | 40000 | yes |
