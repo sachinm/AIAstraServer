@@ -221,6 +221,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const tail = tailFor(intent, question, asOf);
   const thinking = readingSynthThinking();
   const maxOutputTokens = readingSynthMaxTokens();
+  const cacheOwner = { userId, kundliId: data.kundliId };
 
   let answer = '';
   let finishReason: string | null = null;
@@ -236,7 +237,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta
     );
     usages.push(r.usage);
@@ -255,7 +256,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const tGraph = Date.now();
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
-      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash,
+      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner,
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;

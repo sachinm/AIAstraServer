@@ -19,7 +19,8 @@
     "facts:backfill": "tsx scripts/build-facts-for-all.ts",
     "transits:build": "tsx scripts/build-transit-charts.ts",
     "eval:readings": "tsx evals/run.ts",
-    "bench:reading": "tsx scripts/bench-reading.ts"
+    "bench:reading": "tsx scripts/bench-reading.ts",
+    "cache:sweep": "tsx scripts/cache-sweep.ts"
   },
   "keywords": [],
   "author": "",

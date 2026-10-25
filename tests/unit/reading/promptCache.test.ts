@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { callGemini } from '../../../src/reading/llm/gemini.js';
 import { buildRequestBody } from '../../../src/reading/llm/gemini.js';
-import { cacheStats, clearPromptCache, settlePromptCache, prefixKey } from '../../../src/reading/llm/promptCache.js';
+import { cacheStats, clearPromptCache, settlePromptCache, prefixKey, setCacheRegistry } from '../../../src/reading/llm/promptCache.js';
+import { memoryCacheRegistry } from '../../../src/reading/llm/cacheRegistry.js';
 import { startFakeGemini, type FakeGemini } from '../../helpers/fakeGemini.js';
 
 let fake: FakeGemini;
@@ -14,6 +15,7 @@ beforeEach(() => {
   Object.assign(process.env, { GEMINI_API_URL: fake.url, GEMINI_API_KEY: 'k' });
   fake.reset();
   clearPromptCache();
+  setCacheRegistry(memoryCacheRegistry());
 });
 afterEach(() => {
   for (const k of Object.keys(process.env)) if (!(k in env0)) delete process.env[k];
@@ -39,7 +41,7 @@ describe('explicit prompt cache', () => {
     const created = fake.cacheCreates[0] as { model: string; systemInstruction: unknown; contents: Array<{ parts: Array<{ text: string }> }>; ttl: string };
     expect(created.model).toBe('models/gemini-2.5-flash');
     expect(created.contents[0]!.parts[0]!.text).toMatch(/^BASE CHART/);
-    expect(created.ttl).toBe('3600s');
+    expect(created.ttl).toBe('1800s');
     const r = await call(); // third use: served from the cache
     const last = fake.requests.at(-1)!.body;
     expect(last.cachedContent).toBe('cachedContents/fake-1');

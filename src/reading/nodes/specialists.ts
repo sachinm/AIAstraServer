@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { readingSpecialistTimeoutMs } from '../config.js';
 import { callGemini } from '../llm/gemini.js';
+import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
 import type { SubjectId } from '../packs/frames.js';
@@ -116,6 +117,8 @@ export async function runSpecialist(args: {
   question: string;
   system: string;
   asOf: string;
+  /** owner of the explicit prompt cache (promptCache.ts) */
+  cacheOwner?: CacheOwner;
 }): Promise<{ finding: Finding; usage: Usage }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
@@ -135,6 +138,7 @@ export async function runSpecialist(args: {
     parts: [renderBase(pack), renderSubject(pack, analyst), tail],
     responseSchema: FINDING_RESPONSE_SCHEMA,
     cachePrefix: true,
+    cacheOwner: args.cacheOwner,
     thinking: 'off',
     maxOutputTokens: 1800,
     temperature: 0.2,
