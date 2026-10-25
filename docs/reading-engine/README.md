@@ -18,6 +18,8 @@ This document is the plan. The companion files hold the detail:
 | [09-response-templates.md](./09-response-templates.md) | Ten fixed response templates (summary first, dates always, "How I read this" collapsed) and the slots reconcile fills before the model writes |
 | [10-subject-prompt-matrix.md](./10-subject-prompt-matrix.md) | One row per life question (romance to compatibility) with the houses, karakas, vargas, dashas, transits and other data each needs; the data build list |
 | [11-analysis-methods.md](./11-analysis-methods.md) | Triangulation across promise, dasha, transit, second-school and annual layers; strengthen/weaken rules; deciders per situation; fortune tier; agent responsibilities and DAG joins |
+| [13-two-track-clarify-and-provenance.md](./13-two-track-clarify-and-provenance.md) | The clarifier agent narrows criteria (timeframe, who, background) in sub-second turns while the reading agents already run on cached charts and narrow as slots resolve; the trace that records and shows how the answer was reached |
+| [14-life-timeline.md](./14-life-timeline.md) | Private Life Timeline: the past 18 years read back for calibration feedback, the next 5–18 years as dated event windows with calibrated likelihood; event classes, pipeline, data model, policies, phases |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 
