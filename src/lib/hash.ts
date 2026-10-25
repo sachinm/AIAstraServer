@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const SALT_ROUNDS = 10;
 
@@ -17,4 +18,12 @@ export async function comparePassword(
   hashedPassword: string
 ): Promise<boolean> {
   return bcrypt.compare(plainPassword, hashedPassword);
+}
+
+/**
+ * Strong random secret for accounts that never log in with a password (email code is the only login).
+ * It is hashed and stored, never returned or shown to anyone.
+ */
+export function generateAccountPassword(): string {
+  return crypto.randomBytes(32).toString('base64url');
 }
