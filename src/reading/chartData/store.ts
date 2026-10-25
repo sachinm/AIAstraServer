@@ -110,7 +110,7 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
   return { id, variant: '', params: {}, type };
 }
 
-function isMissingTable(err: unknown): boolean {
+export function isMissingTable(err: unknown): boolean {
   const e = err as { code?: string; message?: string };
   return e?.code === 'P2021' || e?.code === '42P01' || /does not exist/i.test(e?.message ?? '');
 }
