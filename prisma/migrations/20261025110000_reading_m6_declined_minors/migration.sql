@@ -1,0 +1,6 @@
+-- Reading engine M6: children under 18 are not discussed (docs/reading-engine/18-declined-topics.md).
+-- Adds the two topic rows so the database lists them; the code floor already enforces them.
+INSERT INTO "declined_topics" ("id", "category", "label", "reply", "sort_order", "notes", "updated_by") VALUES
+  ('minors', 'decline', 'Children under 18 (anything about a minor)', 'AI Astra does not answer questions about children under 18.', 115, 'Examples: Will my 12 year old do well in school? | Is my teenager going through a bad phase? | Which stream should my daughter take after class 10? | How is my baby doing? | Will my 13 year old daughter get married soon?', 'migration-m6'),
+  ('child_age_unconfirmed', 'decline', 'A question about the person''s own child whose age (18+) is not confirmed', 'AI Astra answers questions about your children only when they are 18 or older. If your child is 18 or older, please include their age, for example "my 25-year-old daughter".', 116, 'Examples: Will my daughter get married soon? | Will my son''s business grow? | How is my son doing? | Will my son clear his exams? | How will my kids do in the coming years?', 'migration-m6')
+ON CONFLICT ("id") DO NOTHING;

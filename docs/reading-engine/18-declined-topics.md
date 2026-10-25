@@ -31,6 +31,8 @@ A match returns one fixed reply and nothing else is computed: no reading, no cla
 | 6 | `extremism` | deny | terrorism, extremism, bombs, explosives, weapons to attack | "AI Astra cannot help with that." |
 | 7 | `sexual_minors` | deny | any sexual content involving minors | "AI Astra cannot help with that." |
 | 8 | `death_lifespan` | decline | death, lifespan, longevity, maraka, "when will … die", for anyone | "AI Astra does not answer questions about death, lifespan or longevity, for you or anyone else." |
+| 8a | `minors` | decline | anything about a child under 18: a stated age under 18 ("my 13 year old"), teen / toddler / infant, school, class 10, board exams, "my baby". A stated minor age wins over any adult-sounding cue ("my 13 year old daughter … married") | "AI Astra does not answer questions about children under 18." |
+| 8b | `child_age_unconfirmed` | decline | a question about the person's own child ("my son", "my daughter", "my kids") with no stated age of 18 or more. Words like marriage, job or university do not prove age | Clarify-capable clients: the clarifier first asks "Is your daughter 18 or older?" (*18 or older* / *Under 18*); under 18 or an unclear answer ends with the minors decline. Other clients: "AI Astra answers questions about your children only when they are 18 or older. If your child is 18 or older, please include their age, for example \"my 25-year-old daughter\"." |
 | 9 | `baby_sex` | decline | predicting or choosing a baby's sex | "AI Astra does not predict or help choose a baby's sex." |
 | 10 | `third_party_surveillance` | decline | someone else's private actions: cheating, affairs, lying | "AI Astra does not answer questions about someone else's private actions …" |
 | 11 | `gambling_markets` | decline | lottery or betting numbers, stock, coin or team picks, satta and matka | "AI Astra does not give lottery or betting numbers …" |
@@ -40,7 +42,7 @@ A match returns one fixed reply and nothing else is computed: no reading, no cla
 | 15 | `legal_advice` | decline | whether to sign, sue, plead or settle | "AI Astra does not give legal advice. Please talk to a lawyer. You can still ask about timing in your chart for a legal matter." |
 | 16 | `health` | role_gated | illness, disease, diagnosis, symptoms, medication, accidents, injuries, surgery, hospital, recovery, mental-health conditions | "AI Astra does not answer questions about illness, disease, diagnosis, accidents or injuries." |
 
-Checks run in this order: deny topics first, then decline, then role-gated. So "I want to die" is handled as self-harm, not as a death question.
+Checks run in this order: deny topics first, then decline (death, baby's sex, minors, unconfirmed child age, …), then role-gated. Having a child ("When will we have a child?", "Will I conceive this year?") is about the parent and is answered. So "I want to die" is handled as self-harm, not as a death question.
 
 ### What is not caught (tested)
 

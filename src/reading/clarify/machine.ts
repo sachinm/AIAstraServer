@@ -19,7 +19,8 @@ import { humanDate } from '../nodes/intake.js';
 
 export type ClarifyMode = 'always' | 'when_missing' | 'never';
 export type ClarifyStatus = 'ASKING' | 'PROPOSED' | 'CONFIRMED' | 'READY' | 'ABANDONED';
-export type Criterion = SlotId | 'bucket';
+/** child_age is a safety check (file 18, topic child_age_unconfirmed), asked first and not counted in the cap */
+export type Criterion = SlotId | 'bucket' | 'child_age';
 
 export const MAX_QUESTIONS = 2;
 export const ABANDON_AFTER_MS = 10 * 60_000;
@@ -70,6 +71,8 @@ export interface ClarifyState {
   unanswerable: string | null;
   /** bucket the question started in (differs when the clarifier changed it) */
   originalBucket: BucketId;
+  /** age of the person's child the question is about: confirmed adult, minor (declined), or not asked */
+  childAge: 'adult' | 'minor' | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -123,7 +126,8 @@ function personAsk(): Ask {
   const chips: Chip[] = [
     { label: 'Me', value: 'me' },
     { label: 'My partner', value: 'partner' },
-    { label: 'My child', value: 'child' },
+    // children under 18 are not discussed (src/reading/policy/declined.ts, topic minors)
+    { label: 'My adult child (18+)', value: 'child' },
     { label: 'My parent', value: 'parent' },
   ];
   return { criterion: 'subject_person', question: "Is this about your own chart or someone else's?", chips, allowFreeText: true };
@@ -138,8 +142,36 @@ function otherPersonAsk(): Ask {
   return { criterion: 'other_person', question: 'Whose chart should I compare with yours? I will need their birth details.', chips, allowFreeText: true };
 }
 
+const REL_LABEL: Record<string, string> = { son: 'son', daughter: 'daughter', child: 'child' };
+
+export function childAgeAsk(s: ClarifyState): Ask {
+  const rel = REL_LABEL[s.slots.subject_person?.value ?? ''] ?? 'child';
+  return {
+    criterion: 'child_age',
+    question: `Is your ${rel} 18 or older?`,
+    chips: [
+      { label: '18 or older', value: 'adult' },
+      { label: 'Under 18', value: 'minor' },
+    ],
+    allowFreeText: true,
+  };
+}
+
+/** "adult" / "minor" chips, or typed text with an age or yes/no. Anything unclear counts as not confirmed. */
+export function parseChildAge(value: string): 'adult' | 'minor' {
+  const v = value.trim().toLowerCase();
+  if (v === 'adult') return 'adult';
+  if (v === 'minor') return 'minor';
+  const n = /\b(\d{1,3})\b/.exec(v);
+  if (n) return Number(n[1]) >= 18 ? 'adult' : 'minor';
+  if (/^(yes|yeah|yep|y|over eighteen|older)\b/.test(v)) return 'adult';
+  return 'minor';
+}
+
 export function askFor(c: Criterion, s: ClarifyState): Ask {
   switch (c) {
+    case 'child_age':
+      return childAgeAsk(s);
     case 'horizon':
       return horizonAsk(s);
     case 'bucket':
@@ -162,6 +194,8 @@ export interface StartOptions {
   threshold: number;
   card?: HeadlineCard | null;
   now?: number;
+  /** the question is about the person's own child with no stated age: confirm 18+ before anything else */
+  needsChildAge?: boolean;
 }
 
 /** CLASSIFIED -> READY | ASKING | PROPOSED. */
@@ -183,10 +217,15 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
     card: opts.card ?? null,
     unanswerable: c.unanswerable,
     originalBucket: c.bucket,
+    childAge: null,
     createdAt: now,
     updatedAt: now,
   };
   // policy questions (death timing, lottery numbers, exact amounts …) are answered by the T10 policy template, not clarified
+  if (opts.needsChildAge) {
+    const ask = childAgeAsk(s);
+    return { ...s, status: 'ASKING', pending: ask, turns: [{ ask, at: now }], updatedAt: now };
+  }
   if (opts.mode === 'never' || (c.unanswerable && c.unanswerable !== 'no_subject')) return finalizeReady(s);
   const open = openCriteria(s, c.confidence, opts.threshold);
   if (open.length === 0) return opts.mode === 'always' ? propose(s, now) : finalizeReady(s);
@@ -194,7 +233,7 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
 }
 
 function askNext(s: ClarifyState, open: Criterion[], now: number): ClarifyState {
-  const asked = s.turns.length;
+  const asked = s.turns.filter((t) => t.ask.criterion !== 'child_age').length;
   if (asked >= MAX_QUESTIONS || open.length === 0) return propose(applyDefaults(s, open), now);
   const ask = askFor(open[0]!, s);
   return { ...s, status: 'ASKING', pending: ask, turns: [...s.turns, { ask, at: now }], updatedAt: now };
@@ -225,6 +264,17 @@ export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: bo
   const now = opts.now ?? Date.now();
   if (s.status !== 'ASKING' || !s.pending) return s;
   const c = s.pending.criterion;
+  if (c === 'child_age') {
+    const age = parseChildAge(value);
+    const turns = s.turns.map((t, i) => (i === s.turns.length - 1 ? { ...t, answer: { value: age, viaChip: opts.viaChip, resolved: true } } : t));
+    // under 18 (or not confirmed): the conversation ends with the minors decline
+    if (age === 'minor') return { ...s, turns, pending: null, childAge: 'minor', status: 'ABANDONED', updatedAt: now };
+    const confirmed: ClarifyState = { ...s, turns, pending: null, childAge: 'adult' };
+    const cls = { confidence: 0.99 };
+    const open = openCriteria(confirmed, cls.confidence, opts.threshold);
+    if (open.length === 0) return propose(confirmed, now);
+    return askNext(confirmed, open, now);
+  }
   const next: ClarifyState = { ...s, slots: { ...s.slots }, alsoBuckets: [...s.alsoBuckets] };
   const resolved = resolveValue(next, c, value, opts.viaChip);
   const turns = next.turns.map((t, i) => (i === next.turns.length - 1 ? { ...t, answer: { value: value.slice(0, 300), viaChip: opts.viaChip, resolved } } : t));

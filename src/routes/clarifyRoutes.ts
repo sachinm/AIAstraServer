@@ -114,6 +114,7 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
       }
       const result = await chatWithConfiguredProvider(deps.prisma, userId, c.state.question, {
         intent: c.intent,
+        childAgeConfirmed: c.state.childAge === 'adult',
         onDelta: (delta) => {
           if (delta) sse.write({ type: 'token', delta });
         },

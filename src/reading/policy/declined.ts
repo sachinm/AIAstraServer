@@ -62,7 +62,9 @@ export const BUILTIN_TOPICS: DeclinedTopic[] = [
   T({ id: 'sexual_minors', category: 'deny', label: 'Sexual content involving minors', reply: DENY_REPLY, sortOrder: 70, examples: [] }),
   // ---- decline ----
   T({ id: 'death_lifespan', category: 'decline', label: 'Death, lifespan or longevity (anyone)', reply: 'AI Astra does not answer questions about death, lifespan or longevity, for you or anyone else.', sortOrder: 100, examples: ['When will I die?', 'How long will my father live?', 'What is my lifespan?', 'Will my mother die this year?', 'Is there a maraka period for me?'] }),
+  T({ id: 'minors', category: 'decline', label: 'Children under 18 (anything about a minor)', reply: 'AI Astra does not answer questions about children under 18.', sortOrder: 115, examples: ['Will my 12 year old do well in school?', 'Is my teenager going through a bad phase?', 'Which stream should my daughter take after class 10?', 'How is my baby doing?', 'Will my 13 year old daughter get married soon?'] }),
   T({ id: 'baby_sex', category: 'decline', label: "Predicting or choosing a baby's sex", reply: "AI Astra does not predict or help choose a baby's sex.", sortOrder: 110, examples: ['Will my baby be a boy or a girl?', 'How can I conceive a son?'] }),
+  T({ id: 'child_age_unconfirmed', category: 'decline', label: "A question about the person's own child whose age (18+) is not confirmed", reply: 'AI Astra answers questions about your children only when they are 18 or older. If your child is 18 or older, please include their age, for example "my 25-year-old daughter".', sortOrder: 116, examples: ['Will my daughter get married soon?', "Will my son's business grow?", 'How is my son doing?', 'Will my son clear his exams?', 'How will my kids do in the coming years?'] }),
   T({ id: 'third_party_surveillance', category: 'decline', label: "Someone else's private actions (cheating, lying)", reply: "AI Astra does not answer questions about someone else's private actions, such as whether a partner is cheating.", sortOrder: 120, examples: ['Is my wife cheating on me?', 'Is my husband having an affair?'] }),
   T({ id: 'gambling_markets', category: 'decline', label: 'Lottery or betting numbers, stock or crypto picks', reply: 'AI Astra does not give lottery or betting numbers, or say which stock, coin or bet to pick.', sortOrder: 130, examples: ['Give me the lottery numbers for tomorrow', 'Which stock should I buy?', 'Which crypto will go up?'] }),
   T({ id: 'public_events', category: 'decline', label: 'Elections, disasters, wars or market crashes', reply: 'AI Astra reads your own chart. It does not forecast elections, disasters, wars or market moves.', sortOrder: 140, examples: ['Who will win the election?', 'Will there be an earthquake this year?', 'Will the stock market crash?'] }),
@@ -71,7 +73,7 @@ export const BUILTIN_TOPICS: DeclinedTopic[] = [
   T({ id: 'legal_advice', category: 'decline', label: 'Legal advice', reply: 'AI Astra does not give legal advice. Please talk to a lawyer. You can still ask about timing in your chart for a legal matter.', sortOrder: 170, examples: ['Should I sign this contract?', 'Should I sue my employer?'] }),
   // ---- role-gated ----
   T({ id: 'health', category: 'role_gated', label: 'Illness, disease, diagnosis, accidents, injuries, surgery or recovery', reply: 'AI Astra does not answer questions about illness, disease, diagnosis, accidents or injuries.', sortOrder: 200, examples: ['Do I have cancer?', 'Will my surgery go well?', 'When will my health improve?', 'Will I have an accident this year?'] }),
-];
+].sort((a, b) => a.sortOrder - b.sortOrder);
 
 // ---- detectors (the code floor; database phrases and words add to these) ----------------------------------
 
@@ -111,6 +113,8 @@ const DETECT: Record<string, (t: Txt) => boolean> = {
     }
     return false;
   },
+  minors: (t) => isAboutMinor(t),
+  child_age_unconfirmed: (t) => childAgeStatus(t.p.trim()) === 'unconfirmed',
   baby_sex: (t) => anyOf(t, ['boy or a girl', 'boy or girl', 'girl or a boy', 'girl or boy', 'conceive a son', 'conceive a boy', 'conceive a girl', 'baby gender', 'gender of my baby', 'gender of the baby', 'sex of my baby', 'sex of the baby', 'pregnancy a boy', 'pregnancy a girl', 'will it be a boy', 'will it be a girl']),
   third_party_surveillance: (t) => anyOf(t, ['is my wife cheating', 'is my husband cheating', 'is my partner cheating', 'is my girlfriend cheating', 'is my boyfriend cheating', 'cheating on me', 'having an affair', 'is my wife loyal', 'is my husband loyal', 'lying to me', 'secret relationship']),
   gambling_markets: (t) => anyOf(t, ['lottery number', 'lottery numbers', 'winning number', 'winning numbers', 'jackpot number', 'which number will win', 'which stock', 'which stocks', 'which share', 'which shares', 'which crypto', 'which coin', 'which team will win', 'who will win the match', 'betting tip', 'betting tips', 'satta', 'matka', 'which horse']),
@@ -120,6 +124,54 @@ const DETECT: Record<string, (t: Txt) => boolean> = {
   legal_advice: (t) => anyOf(t, ['should i sign this contract', 'should i sue', 'should i file a case', 'should i plead', 'plead guilty', 'should i settle the case', 'legal advice', 'is this legal']),
   health: (t) => isHealthQuestion(t),
 };
+
+const MINOR_WORDS = new Set(['teen', 'teens', 'teenager', 'teenagers', 'toddler', 'toddlers', 'infant', 'infants', 'newborn', 'kindergarten', 'preschool', 'nursery', 'underage', 'minor', 'schoolgirl', 'schoolboy']);
+const OWN_CHILD = new Set(['son', 'sons', 'daughter', 'daughters', 'child', 'childs', 'children', 'childrens', 'kid', 'kids', 'baby', 'babys']);
+/** Ages stated in the question ("my 12 year old", "aged 25", "she is 13"), in years. */
+function statedAges(toks: string[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < toks.length; i++) {
+    if (!/^\d{1,3}$/.test(toks[i]!)) continue;
+    const n = Number(toks[i]);
+    const next = toks[i + 1];
+    const prev = toks[i - 1];
+    if ((next === 'year' || next === 'years' || next === 'yr' || next === 'yrs' || next === 'yo') || prev === 'aged' || prev === 'age' || ((prev === 'is' || prev === 'turned' || prev === 'turning') && i >= 2)) out.push(n);
+  }
+  return out;
+}
+
+/** "my son", "our daughter", "my kids": the question is about the person's own child. */
+function ownChildRef(toks: string[]): boolean {
+  return toks.some((w, i) => OWN_CHILD.has(w) && (toks[i - 1] === 'my' || toks[i - 1] === 'our' || (/^\d{1,3}$/.test(toks[i - 1] ?? '') && (toks[i - 2] === 'my' || toks[i - 2] === 'our'))));
+}
+
+export type ChildAge = 'minor' | 'adult_stated' | 'unconfirmed' | 'none';
+
+/**
+ * Age status of a child the question is about. A stated age under 18 or child-stage words (teen, toddler, school,
+ * class 10, board exams) is `minor`. A stated age of 18 or more is `adult_stated`. Any other question about the
+ * person's own child is `unconfirmed`: words like "marriage" or "job" do not prove age (Sachin, 2026-10-25), so the
+ * age must be confirmed before anything is read. Having a child ("when will we have a child?") is `none`.
+ */
+export function childAgeStatus(question: string): ChildAge {
+  const norm = normalize(question);
+  const toks = norm.split(' ').filter(Boolean);
+  const t: Txt = { p: ` ${norm} `, tokens: toks };
+  const ages = statedAges(toks);
+  if (ages.some((n) => n < 18)) return 'minor';
+  if (toks.some((w) => MINOR_WORDS.has(w))) return 'minor';
+  if (anyOf(t, ['board exam', 'board exams', 'high school', 'middle school', 'primary school', 'class 10', 'class 12', '10th board', '12th board', 'grade school'])) return 'minor';
+  const own = ownChildRef(toks);
+  if (own && (toks.includes('school') || toks.includes('class') || toks.includes('grade'))) return 'minor';
+  // "my baby" / "our baby" is an infant
+  if (toks.some((w, i) => (w === 'baby' || w === 'babys') && (toks[i - 1] === 'my' || toks[i - 1] === 'our'))) return 'minor';
+  if (ages.some((n) => n >= 18) && (own || toks.some((w) => OWN_CHILD.has(w)))) return 'adult_stated';
+  return own ? 'unconfirmed' : 'none';
+}
+
+function isAboutMinor(t: Txt): boolean {
+  return childAgeStatus(t.p.trim()) === 'minor';
+}
 
 const HEALTH_WORDS = new Set(['health', 'healthy', 'unhealthy', 'illness', 'illnesses', 'ill', 'sick', 'sickness', 'disease', 'diseases', 'diagnosis', 'diagnose',
   'diagnosed', 'surgery', 'surgeries', 'hospital', 'hospitalised', 'hospitalized', 'injury', 'injuries', 'injured', 'accident', 'accidents', 'cancer', 'diabetes',
@@ -212,6 +264,8 @@ export interface DeclineOptions {
   role?: string | null;
   /** Topics to check (default: the built-ins); pass the result of loadDeclinedTopics() */
   topics?: DeclinedTopic[];
+  /** The clarifier confirmed the child is 18 or older: the age-unconfirmed topic no longer applies */
+  childAgeConfirmed?: boolean;
 }
 
 function roleAllowed(topic: DeclinedTopic, role: string | null | undefined): boolean {
@@ -221,16 +275,16 @@ function roleAllowed(topic: DeclinedTopic, role: string | null | undefined): boo
 }
 
 /** First matching topic in check order, ignoring roles. */
-export function detectTopic(question: string, topics: DeclinedTopic[] = BUILTIN_TOPICS): DeclinedTopic | null {
+export function detectTopic(question: string, topics: DeclinedTopic[] = BUILTIN_TOPICS, skip: string[] = []): DeclinedTopic | null {
   const norm = normalize(question);
   const t: Txt = { p: ` ${norm} `, tokens: norm.split(' ').filter(Boolean) };
-  for (const topic of topics) if (topic.enabled && matchesTopic(topic, t)) return topic;
+  for (const topic of topics) if (topic.enabled && !skip.includes(topic.id) && matchesTopic(topic, t)) return topic;
   return null;
 }
 
 /** The topic that stops this question for this user, or null when it can be answered. */
 export function detectDeclined(question: string, opts: DeclineOptions = {}): DeclinedTopic | null {
-  const topic = detectTopic(question, opts.topics);
+  const topic = detectTopic(question, opts.topics, opts.childAgeConfirmed ? ['child_age_unconfirmed'] : []);
   if (topic && roleAllowed(topic, opts.role)) return null;
   return topic;
 }
@@ -256,9 +310,9 @@ async function roleOf(prisma: PrismaClient, userId: string): Promise<string | nu
  * The gate every entry point calls first. Uses the cached database list (or the built-in floor while it loads, so
  * the first question never waits), and looks up the user's role only when a role-gated topic matched.
  */
-export async function declinedFor(prisma: PrismaClient, userId: string, question: string): Promise<DeclinedTopic | null> {
+export async function declinedFor(prisma: PrismaClient, userId: string, question: string, opts: { childAgeConfirmed?: boolean } = {}): Promise<DeclinedTopic | null> {
   const topics = cache && Date.now() - cache.at < CACHE_MS ? cache.topics : (void loadDeclinedTopics(prisma).catch(() => undefined), cache?.topics ?? BUILTIN_TOPICS);
-  const topic = detectTopic(question, topics);
+  const topic = detectTopic(question, topics, opts.childAgeConfirmed ? ['child_age_unconfirmed'] : []);
   if (!topic) return null;
   if (topic.category !== 'role_gated') return topic;
   const role = await roleOf(prisma, userId).catch(() => null);

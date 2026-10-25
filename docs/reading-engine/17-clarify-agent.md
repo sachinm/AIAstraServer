@@ -38,7 +38,8 @@ Criteria are asked one per turn, in this order. A criterion is skipped when the 
 |---|---|---|---|---|
 | 1 | life area (`bucket`) | the area is unknown, the classifier is below 0.70, or the question names three or more areas | the candidate areas ("Career and job" = `career_job` …) | the classifier's top area |
 | 2 | period (`horizon`) | the area needs a period and none was named | "Until 7 Sep 2027" (end of the running sub-period), Next 3 months, Next 6 months, Rest of this year, Next 12 months; free text | the area's default: 6 months for career and money, 12 months for marriage and education, 3 years for property and children |
-| 3 | whose chart (`subject_person`) | the area needs it (family and children) and the question did not say | Me, My partner, My child, My parent | your own chart |
+| 0 | child's age (`child_age`) | the question is about the person's own child and gives no age of 18 or more; asked first, not counted in the two-question cap | 18 or older, Under 18 | none: under 18 or unclear ends with the minors decline |
+| 3 | whose chart (`subject_person`) | the area needs it (family and children) and the question did not say | Me, My partner, My adult child (18+), My parent | your own chart |
 | 4 | which part (`sub_bucket`) | the area needs it (career) and the question did not say | Changing jobs, Promotion or recognition, Finding a job, Trouble with boss or team, What kind of work suits me | all of the area |
 | 5 | second chart (`other_person`) | compatibility questions that do not name the other person | My partner, A prospective match, A family member | (a second chart is required) |
 
@@ -64,12 +65,13 @@ These are produced by the state machine as of 24 Oct 2026, with a chart whose ru
 > **Clarifier:** Is this about changing jobs, a promotion, finding work, trouble at work, or direction? → *Promotion or recognition*
 > **Clarifier:** I will read: "Is my career going anywhere", focusing on promotion or recognition over the next 12 months (24 Oct 2026 to 24 Oct 2027), using the D-10 chart, your 10th, 6th, 1st houses, your Saturn–Ketu period and the transits.
 
-**"Will my son clear his exams?"** The question is about another person.
+**"Will my daughter get married soon?"** The question is about the person's own child, with no age given.
 
-> The classifier records the person as *son* from "my son".
-> **Clarifier:** Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?
-> **Person:** types "next 6 months" (read by the rules, no model needed)
-> **Clarifier:** I will read: "Will my son clear his exams" (about your son, read from your chart) over the next 6 months …
+> **Clarifier:** Is your daughter 18 or older? *[18 or older] [Under 18]*
+> **Person:** taps *Under 18* → **App:** "AI Astra does not answer questions about children under 18." (the conversation ends)
+> **Person:** taps *18 or older* → the clarifier continues with the period question, and the reading proceeds for an adult child, read from the person's own chart.
+
+A stated age decides on its own: "my 13 year old daughter" is declined straight away, whatever else the question says, and "my 25 year old son" needs no age question. Words like "marriage" or "job" never count as proof of age.
 
 **"How will my work, money and marriage go over the next 3 years?"** (golden Q12) The question names three areas.
 
@@ -94,7 +96,7 @@ These are produced by the state machine as of 24 Oct 2026, with a chart whose ru
 | What the person writes | What is recorded | How it is read |
 |---|---|---|
 | "When will I …", "my …", "we …" | `me` | the person's own chart |
-| "Will my son clear …", "for my mother", "my wife's career" | `son`, `mother`, `spouse` | from the person's own chart, through the house and karaka of that relation (5th and Jupiter for children, 4th and Moon for the mother, 9th and Sun for the father, 7th and Venus for the spouse); the proposal says "(about your son, read from your chart)" |
+| "for my mother", "my wife's career", "my 25 year old son's business" | `mother`, `spouse`, `son` (adult) | from the person's own chart, through the house and karaka of that relation (5th and Jupiter for children, 4th and Moon for the mother, 9th and Sun for the father, 7th and Venus for the spouse); the proposal says "(about your son, read from your chart)" |
 | family and children questions that do not say whose chart | asked: "Is this about your own chart or someone else's?" | as chosen |
 | compatibility ("are my partner and I compatible") | `other_person = partner` | needs the second person's birth details; a two-chart reading (template T8) is not built yet, so for now the reading explains what the person's own chart says about partnership and asks for the partner's details |
 
