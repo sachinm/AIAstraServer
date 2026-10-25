@@ -1,13 +1,11 @@
 /**
- * Auth flow tests: signup, login, and that sensitive fields are never returned.
+ * Auth flow tests: signup creates no-password accounts, and sensitive fields are never returned.
  * Requires DATABASE_URL and JWT_SECRET in env for DB tests. Uses real Prisma/DB.
  * "me resolver" test runs without DB (mocked context).
  */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import {
-  login,
   signup,
-  LOGIN_FAILED_OBFUSCATED,
 } from '../src/services/authService.js';
 import { prisma } from '../src/lib/prisma.js';
 
@@ -52,29 +50,6 @@ describe('Auth flow', () => {
     const row = await prisma.auth.findFirst({ where: { username } });
     if (row) testUserId = row.id;
     expect(row).not.toBeNull();
-  });
-
-  it('login with wrong password fails', async () => {
-    if (!hasDb) return;
-    const username = unique();
-    const email = `${username}@test.local`;
-    await signup({
-      username,
-      password: 'rightpass123',
-      email,
-      date_of_birth: '1990-01-01',
-    });
-    const row = await prisma.auth.findFirst({ where: { username } });
-    if (row) testUserId = row.id;
-
-    const result = await login(username, 'wrongpassword');
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.message).toBe(LOGIN_FAILED_OBFUSCATED);
-    }
-    expect(
-      result.success ? result.token : undefined
-    ).toBeUndefined();
   });
 
   it('me resolver never returns password or PII fields', async () => {

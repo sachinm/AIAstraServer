@@ -1,7 +1,6 @@
 import { createSchema } from 'graphql-yoga';
 import type { Prisma } from '@prisma/client';
 import {
-  login,
   signup,
   requestMagicLink,
   loginWithMagicLink,
@@ -94,6 +93,8 @@ const typeDefs = /* GraphQL */ `
   type SignUpResult {
     success: Boolean!
     message: String
+    """Stable machine code for a refused signup, e.g. EMAIL_EXISTS. Null otherwise."""
+    code: String
     token: String
     user: ID
     role: String
@@ -259,7 +260,6 @@ const typeDefs = /* GraphQL */ `
   }
 
   type Mutation {
-    login(username: String!, password: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     signup(input: SignUpInput!): SignUpResult!
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
     loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
@@ -848,23 +848,6 @@ const resolvers = {
     },
   },
   Mutation: {
-    async login(
-      _parent: unknown,
-      {
-        username,
-        password,
-        turnstileToken,
-      }: {
-        username: string;
-        password: string;
-        recaptchaToken?: string | null;
-        turnstileToken?: string | null;
-      },
-      context: GraphQLContext
-    ) {
-      const clientIp = getClientIp(context.request);
-      return login(username, password, turnstileToken ?? null, clientIp);
-    },
     async signup(
       _parent: unknown,
       { input }: { input: Record<string, unknown> },

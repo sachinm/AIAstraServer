@@ -74,9 +74,10 @@ import {
   signup,
   requestMagicLink,
   loginWithMagicLink,
-  login,
-  LOGIN_FAILED_OBFUSCATED,
   MAGIC_LINK_LOGIN_FAILED,
+  MAGIC_LINK_REQUEST_MESSAGE,
+  EMAIL_EXISTS_CODE,
+  EMAIL_EXISTS_MESSAGE,
 } from '../../../src/services/authService.js';
 import { generateAccountPassword, comparePassword } from '../../../src/lib/hash.js';
 import { validateSignUpInput } from '../../../src/lib/validators.js';
@@ -136,10 +137,18 @@ describe('signup without a password', () => {
     if (parsed.success) expect(parsed.data).not.toHaveProperty('password');
   });
 
-  it('rejects a duplicate email regardless of letter case', async () => {
+  it('refuses a duplicate email regardless of letter case, with a stable code', async () => {
     await signup(birth, null, null);
     const again = await signup({ ...birth, username: 'asha2', email: 'ASHA@example.com' }, null, null);
-    expect(again).toEqual({ success: false, message: 'Username or email already exists' });
+    expect(again).toEqual({ success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE });
+    expect(EMAIL_EXISTS_MESSAGE).toBe('This email is already registered. Please sign in instead.');
+    expect(fake.rows).toHaveLength(1);
+  });
+
+  it('refuses a duplicate username with a generic message (no email code)', async () => {
+    await signup(birth, null, null);
+    const again = await signup({ ...birth, email: 'other@example.com' }, null, null);
+    expect(again).toEqual({ success: false, message: 'Username already exists' });
     expect(fake.rows).toHaveLength(1);
   });
 });
@@ -159,11 +168,6 @@ describe('generated account password', () => {
     expect(a).not.toBe(b);
   });
 
-  it('cannot be used to log in with the password path', async () => {
-    await signup(birth, null, null);
-    const result = await login('asha', 'anything-at-all');
-    expect(result).toEqual({ success: false, message: LOGIN_FAILED_OBFUSCATED });
-  });
 });
 
 describe('email code login end to end', () => {
@@ -210,9 +214,16 @@ describe('email code login end to end', () => {
     expect(result.success).toBe(false);
   });
 
-  it('requesting a code for an unknown email looks the same and sends nothing', async () => {
-    const result = await requestMagicLink('nobody@example.com', null, null);
-    expect(result.success).toBe(true);
-    expect(fake.sent).toHaveLength(0);
+  it('requesting a code gets the same response for unknown and known emails', async () => {
+    await signup(birth, null, null);
+    const known = await requestMagicLink('asha@example.com', null, null);
+    const unknown = await requestMagicLink('nobody@example.com', null, null);
+    expect(known).toEqual({ success: true, message: MAGIC_LINK_REQUEST_MESSAGE });
+    expect(unknown).toEqual(known);
+  });
+
+  it('a code for an unknown email cannot be used to sign in', async () => {
+    const result = await loginWithMagicLink('nobody@example.com', 'ABCD2345', null, null);
+    expect(result).toEqual({ success: false, message: MAGIC_LINK_LOGIN_FAILED });
   });
 });

@@ -1,11 +1,11 @@
 import { prisma } from '../lib/prisma.js';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../graphql/context.js';
-import { comparePassword, generateAccountPassword, hashPassword } from '../lib/hash.js';
+import { generateAccountPassword, hashPassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
 import { sendLoginCode, verifyLoginCode } from '../auth/emailCode.js';
-import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
+import { validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { assertTurnstileIfConfigured } from './turnstileService.js';
@@ -13,10 +13,6 @@ import type { z } from 'zod';
 import type { signUpSchema } from '../lib/validators.js';
 
 const DEFAULT_EXPIRY = '7d';
-
-/** Shown for any password login failure (no user enumeration). */
-export const LOGIN_FAILED_OBFUSCATED =
-  'Unable to sign in. Check your email and password and try again.';
 
 /** Same response whether or not the email exists. */
 export const MAGIC_LINK_REQUEST_MESSAGE =
@@ -32,30 +28,15 @@ export type LoginResult =
   | { success: true; token: string; user: string; role: string }
   | { success: false; message: string };
 
+/** Stable code for a signup refused because the email is already registered. */
+export const EMAIL_EXISTS_CODE = 'EMAIL_EXISTS';
+export const EMAIL_EXISTS_MESSAGE =
+  'This email is already registered. Please sign in instead.';
+
 /** Signup does not sign the user in: they confirm the emailed code first (loginWithMagicLink). */
 export type SignUpResult =
   | { success: true; message: string }
-  | { success: false; message: string };
-
-/**
- * Validate credentials and return user id and role. Returns null if invalid.
- * Accepts username OR email as the identifier.
- */
-export async function validateLogin(
-  usernameOrEmail: string,
-  password: string
-): Promise<{ id: string; role: string | null } | null> {
-  const user = await prisma.auth.findFirst({
-    where: {
-      OR: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
-    },
-    select: { id: true, role: true, password: true },
-  });
-  if (!user) return null;
-  const ok = await comparePassword(password, user.password);
-  if (!ok) return null;
-  return { id: user.id, role: user.role };
-}
+  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE };
 
 /**
  * Issue a JWT for the given user (opaque: only sub and role).
@@ -63,48 +44,6 @@ export async function validateLogin(
 export function issueToken(userId: string, role = 'user'): string {
   const secret = getJwtSecret();
   return jwt.sign({ sub: userId, role }, secret, { expiresIn: DEFAULT_EXPIRY });
-}
-
-/**
- * Password login (legacy). The web app no longer offers it, and accounts created by signup hold a
- * random password that is never disclosed, so they cannot use it.
- */
-export async function login(
-  username: string,
-  password: string,
-  turnstileToken?: string | null,
-  remoteIp?: string | null
-): Promise<LoginResult> {
-  const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
-  if (!gate.ok) {
-    return { success: false, message: gate.message };
-  }
-
-  const parsed = validateLoginInput({ username, password });
-  if (!parsed.success) {
-    return { success: false, message: LOGIN_FAILED_OBFUSCATED };
-  }
-  const { username: u, password: p } = parsed.data;
-  const user = await validateLogin(u, p);
-  if (!user) {
-    return { success: false, message: LOGIN_FAILED_OBFUSCATED };
-  }
-  await enqueueKundliSync(prisma, user.id).catch((err) => {
-    console.error('enqueueKundliSync after login failed:', (err as Error).message);
-  });
-  processKundliSyncQueue(prisma).catch((err) => {
-    console.error('processKundliSyncQueue after login failed:', (err as Error).message);
-  });
-  ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
-    console.error('ensureGeminiCacheForUser after login failed:', (err as Error).message);
-  });
-  const token = issueToken(user.id, user.role ?? 'user');
-  return {
-    success: true,
-    token,
-    user: user.id,
-    role: user.role ?? 'user',
-  };
 }
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
@@ -203,13 +142,20 @@ export async function signup(
     gender,
   } = parsed.data;
 
-  const existing = await prisma.auth.findFirst({
-    where: {
-      OR: [{ username }, { email: { equals: email, mode: 'insensitive' } }],
-    },
+  const emailTaken = await prisma.auth.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true },
   });
-  if (existing) {
-    return { success: false, message: 'Username or email already exists' };
+  if (emailTaken) {
+    return { success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE };
+  }
+
+  const usernameTaken = await prisma.auth.findFirst({
+    where: { username },
+    select: { id: true },
+  });
+  if (usernameTaken) {
+    return { success: false, message: 'Username already exists' };
   }
 
   const hashedPassword = await hashPassword(generateAccountPassword());
