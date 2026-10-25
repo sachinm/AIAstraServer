@@ -15,6 +15,10 @@ export type ChatTurnResult = ChatWithGroqResult & {
   reading?: ReadingRunRecord;
 };
 
+/** Shown when a kundli has no chart-facts dossier yet and the legacy fallback is off (the default). */
+export const CHART_PREPARING_MESSAGE =
+  'Your chart is still being prepared for detailed readings (planet placements, divisional charts, dasha periods and transits). This usually takes a few minutes after your birth details are saved. Please ask again shortly.';
+
 export type ChatWithLlmOptions = {
   /** Fired for each streamed token delta (Gemini SSE + Groq stream). */
   onDelta?: (delta: string) => void;
@@ -45,11 +49,19 @@ export async function chatWithConfiguredProvider(
         });
         return { answerText: r.answerText, requestPayload: r.requestPayload, responsePayload: r.responsePayload, reading: r.record };
       } catch (err) {
-        if (err instanceof ReadingUnavailableError && readingFallbackToLegacy()) {
-          console.log(JSON.stringify({ msg: 'reading engine unavailable; using legacy chat path', reason: err.reason }));
-          options?.onEvent?.({ type: 'info', reason: err.reason });
+        if (!(err instanceof ReadingUnavailableError)) throw err;
+        options?.onEvent?.({ type: 'info', reason: err.reason });
+        if (readingFallbackToLegacy()) {
+          console.log(JSON.stringify({ msg: 'reading engine unavailable; using legacy chat path (READING_FALLBACK_LEGACY=1)', reason: err.reason }));
         } else {
-          throw err;
+          // New chat path only: say plainly that the chart is being prepared (the build was scheduled by onFactsMissing).
+          console.warn(JSON.stringify({ msg: 'reading engine unavailable; no legacy fallback', reason: err.reason }));
+          options?.onDelta?.(CHART_PREPARING_MESSAGE);
+          return {
+            answerText: CHART_PREPARING_MESSAGE,
+            requestPayload: { engine: 'reading', status: err.reason },
+            responsePayload: { engine: 'reading', status: err.reason },
+          };
         }
       }
     }

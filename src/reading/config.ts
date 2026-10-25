@@ -1,10 +1,10 @@
-/** Environment switches for the reading engine. All optional; defaults keep today's chat path untouched. */
+/** Environment switches for the reading engine. All optional. The reading engine is the chat path by default. */
 
 export type ReadingFlow = 'single' | 'graph';
 
-/** READING_ENGINE=1 routes chat through the reading engine; 0 (default) keeps the legacy path (kill switch). */
+/** The reading engine answers chat by default (Sachin, 2026-10-24: "we must use the new chat path"). READING_ENGINE=0 is the kill switch. */
 export function isReadingEngineEnabled(): boolean {
-  return process.env.READING_ENGINE?.trim() === '1';
+  return process.env.READING_ENGINE?.trim() !== '0';
 }
 
 /**
@@ -20,9 +20,12 @@ export function readingFactsSource(): 'db' | 'fixture' {
   return process.env.READING_FACTS_SOURCE?.trim().toLowerCase() === 'fixture' ? 'fixture' : 'db';
 }
 
-/** When the dossier is not ready (engine does not serve it yet, build pending) fall back to the legacy path. Default on. */
+/**
+ * Emergency opt-in only (READING_FALLBACK_LEGACY=1): when a kundli has no dossier yet, answer on the legacy path.
+ * Off by default: the reading engine then says the chart is being prepared and schedules the build.
+ */
 export function readingFallbackToLegacy(): boolean {
-  return process.env.READING_FALLBACK_LEGACY?.trim() !== '0';
+  return process.env.READING_FALLBACK_LEGACY?.trim() === '1';
 }
 
 /** Build a dossier after kundli sync / lazily on a miss. Default: on when the engine is enabled. */
