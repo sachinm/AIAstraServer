@@ -21,6 +21,7 @@ import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
+import { isCacheSweepEvent, runScheduledSweep, startHourlySweep } from './src/reading/llm/cacheSweep.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -53,6 +54,13 @@ if (trustProxyEnabled) {
 }
 
 app.use(express.json());
+
+// Lambda Web Adapter forwards non-HTTP events (EventBridge schedules) here as POST bodies (AWS_LWA_PASS_THROUGH_PATH).
+// Only the LLM cache sweep event is handled; anything else is acknowledged and ignored.
+app.post('/events', async (req, res) => {
+  if (!isCacheSweepEvent(req.body)) return res.status(204).end();
+  res.json(await runScheduledSweep());
+});
 
 // Dev/local: allow any origin so dev:network (Vite --host) works from any LAN IP.
 const DEV_ALLOWED_ORIGINS = [
@@ -319,6 +327,7 @@ async function start(): Promise<void> {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureSuperadmin();
+    if (startHourlySweep()) console.log('LLM cache sweep: hourly');
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {
       const kundliTransport = getAstroKundliTransport();

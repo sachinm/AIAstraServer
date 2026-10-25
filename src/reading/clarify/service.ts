@@ -14,12 +14,13 @@ import type { Intent, Usage } from '../types.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
 import { phraseAsk, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
+import { guidanceFor } from '../coach/content.js';
 import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
 
 export const CARD_BUDGET_MS = 300;
 
 export type ClarifyEvent =
-  | { type: 'clarify'; runId: string; criterion: Ask['criterion']; question: string; chips: Ask['chips']; allowFreeText: boolean; turn: number; understanding: string }
+  | { type: 'clarify'; runId: string; criterion: Ask['criterion']; question: string; chips: Ask['chips']; allowFreeText: boolean; turn: number; understanding: string; guidance?: string }
   | { type: 'propose'; runId: string; exactQuery: string; assumed: string | null; slots: ClarifyState['slots'] };
 
 export interface ClarifyStepResult {
@@ -43,14 +44,16 @@ async function headlineCard(prisma: PrismaClient, userId: string, asOf: string):
 }
 
 function understandingLine(s: ClarifyState): string {
-  return `You are asking about ${BUCKETS[s.bucket].displayName.toLowerCase()}.`;
+  return s.bucket === 'unknown' ? 'I could not tell which area of life this is about.' : `You are asking about ${BUCKETS[s.bucket].displayName.toLowerCase()}.`;
 }
 
 async function eventFor(runId: string, s: ClarifyState, usage: Usage[]): Promise<ClarifyEvent | null> {
   if (s.status === 'ASKING' && s.pending) {
     const { ask, usage: u } = await phraseAsk(s, s.pending);
     if (u) usage.push(u);
-    return { type: 'clarify', runId, criterion: ask.criterion, question: ask.question, chips: ask.chips, allowFreeText: ask.allowFreeText, turn: s.turns.length, understanding: understandingLine(s) };
+    // a question with no life area also gets one line on how to ask (coach/content.ts)
+    const guide = ask.criterion === 'bucket' ? guidanceFor(s.bucket, s.bucket === 'unknown' ? 'no_subject' : null) : null;
+    return { type: 'clarify', runId, criterion: ask.criterion, question: ask.question, chips: ask.chips, allowFreeText: ask.allowFreeText, turn: s.turns.length, understanding: understandingLine(s), ...(guide ? { guidance: guide.text } : {}) };
   }
   if (s.status === 'PROPOSED' && s.exactQuery) return { type: 'propose', runId, exactQuery: s.exactQuery, assumed: assumptionText(s), slots: s.slots };
   return null;

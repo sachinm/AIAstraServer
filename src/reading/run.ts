@@ -27,6 +27,7 @@ import { FRAMES, horizonRange } from './packs/frames.js';
 import { buildEvidencePack, hashPack, hashText, mergeSubjectPacks, renderBase, renderSubject, type EvidencePack } from './packs/selector.js';
 import { PROMPTS, PROMPT_VERSION } from './prompts/generated.js';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
+import { guidanceFor } from './coach/content.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -118,7 +119,10 @@ function keyFactsCard(pack: EvidencePack, intent: Intent): string {
 }
 
 function tailFor(intent: Intent, question: string, asOf: string): string {
-  const parts = [`TODAY: ${asOf}`, `UNDERSTOOD AS: ${intent.clarifyText}`, PROMPTS[`formats/${intent.format}`]!];
+  // the bucket classifier picks one of the ten templates (docs/reading-engine/09); the older format prompts remain the fallback
+  const template = intent.classification?.template;
+  const shape = template && PROMPTS[`templates/${template}`] ? `${PROMPTS['templates/_rules']}\n\n${PROMPTS[`templates/${template}`]}` : PROMPTS[`formats/${intent.format}`]!;
+  const parts = [`TODAY: ${asOf}`, `UNDERSTOOD AS: ${intent.clarifyText}`, shape];
   if (intent.safety === 'medical') parts.push('The question touches health: give the astrological indication only and say plainly that it is not medical advice.');
   if (intent.safety === 'legal') parts.push('The question touches legal matters: give the astrological indication only and say plainly that it is not legal advice.');
   parts.push(`QUESTION: ${question}`);
@@ -135,6 +139,16 @@ function summarizeIntent(intent: Intent) {
     planets: intent.mentionsPlanets,
     confidence: intent.confidence,
     text: intent.clarifyText,
+    // bucket-first classification: lets the UI draw the template frame before the first token (file 09 §6)
+    ...(intent.classification
+      ? {
+          bucket: intent.classification.bucket,
+          subBucket: intent.classification.subBucket,
+          template: intent.classification.template,
+          missing: intent.classification.missing,
+          ...(guidanceFor(intent.classification.bucket, intent.classification.unanswerable) ? { guidance: guidanceFor(intent.classification.bucket, intent.classification.unanswerable)!.text } : {}),
+        }
+      : {}),
   };
 }
 
@@ -207,6 +221,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const tail = tailFor(intent, question, asOf);
   const thinking = readingSynthThinking();
   const maxOutputTokens = readingSynthMaxTokens();
+  const cacheOwner = { userId, kundliId: data.kundliId };
 
   let answer = '';
   let finishReason: string | null = null;
@@ -222,7 +237,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta
     );
     usages.push(r.usage);
@@ -241,6 +256,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const tGraph = Date.now();
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
+      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner,
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;

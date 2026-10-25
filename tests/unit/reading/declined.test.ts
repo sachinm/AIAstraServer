@@ -51,6 +51,11 @@ describe('children under 18', () => {
       expect(detectDeclined(q, { childAgeConfirmed: true })).toBeNull();
     });
   }
+  it('a period is not an age ("in the next 2 years")', () => {
+    expect(detectTopic('When in the next 2 years is marriage most likely for me?')).toBeNull();
+    expect(detectTopic('Will my 30 year old son be happy in the next 2 years?')).toBeNull();
+    expect(detectTopic('My son is 15, how will the next 2 years go for him?')?.id).toBe('minors');
+  });
   it('an adult cue does not override a stated minor age (bogus queries)', () => {
     expect(detectTopic('Will my 13 year old daughter get married soon?')?.id).toBe('minors');
     expect(detectDeclined('Will my 13 year old daughter get married soon?', { childAgeConfirmed: true })?.id).toBe('minors');

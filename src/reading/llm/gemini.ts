@@ -11,6 +11,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 import { getGeminiModelsBaseUrl, getGeminiUndiciBodyTimeoutMs, getGeminiUndiciHeadersTimeoutMs } from '../../config/env.js';
 import type { Usage } from '../types.js';
+import { cacheNameFor, invalidateCache, type CacheOwner } from './promptCache.js';
 
 export type Thinking = 'off' | 'low' | 'medium' | 'high';
 
@@ -29,6 +30,10 @@ export interface GeminiCallOptions {
   topP?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** system + parts[0] form a stable prefix that may be served from the explicit prompt cache (promptCache.ts) */
+  cachePrefix?: boolean;
+  /** Who the cached prefix belongs to (logout deletes that user's caches) */
+  cacheOwner?: CacheOwner;
 }
 
 export interface GeminiResult {
@@ -66,7 +71,7 @@ export function thinkingConfigFor(model: string, thinking: Thinking): Record<str
   return { thinkingLevel: thinking === 'off' ? 'low' : thinking, includeThoughts: false };
 }
 
-export function buildRequestBody(o: GeminiCallOptions): Record<string, unknown> {
+export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null = null): Record<string, unknown> {
   const generationConfig: Record<string, unknown> = {
     temperature: o.temperature ?? 0.4,
     topP: o.topP ?? 0.9,
@@ -77,11 +82,14 @@ export function buildRequestBody(o: GeminiCallOptions): Record<string, unknown> 
     generationConfig.responseMimeType = 'application/json';
     generationConfig.responseSchema = o.responseSchema;
   }
+  // with an explicit cache the system instruction and the first part live in the cache; send only the rest
+  const parts = cacheName ? o.parts.slice(1) : o.parts;
   const body: Record<string, unknown> = {
-    contents: [{ role: 'user', parts: o.parts.map((text) => ({ text })) }],
+    contents: [{ role: 'user', parts: parts.map((text) => ({ text })) }],
     generationConfig,
   };
-  if (o.system) body.systemInstruction = { parts: [{ text: o.system }] };
+  if (cacheName) body.cachedContent = cacheName;
+  else if (o.system) body.systemInstruction = { parts: [{ text: o.system }] };
   return body;
 }
 
@@ -160,10 +168,26 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
 }
 
 /** Non-streaming call (specialists, intake). Returns the full text. */
+function cacheFor(o: GeminiCallOptions): string | null {
+  return o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner) : null;
+}
+
 export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
+  const cacheName = cacheFor(o);
+  try {
+    return await callGeminiOnce(o, cacheName);
+  } catch (err) {
+    if (!cacheName) throw err;
+    // the cache was rejected (expired or deleted): forget it and answer uncached
+    invalidateCache(o.model, o.system, o.parts[0]!);
+    return callGeminiOnce(o, null);
+  }
+}
+
+async function callGeminiOnce(o: GeminiCallOptions, cacheName: string | null): Promise<GeminiResult> {
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:generateContent?key=${encodeURIComponent(apiKey())}`;
-  const { res, clear } = await post(url, buildRequestBody(o), o);
+  const { res, clear } = await post(url, buildRequestBody(o, cacheName), o);
   try {
     const json = (await res.json()) as GeminiChunk;
     if (json.error?.message) throw new Error(json.error.message);
@@ -180,7 +204,16 @@ export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
 export async function streamGemini(o: GeminiCallOptions, onDelta?: (delta: string) => void): Promise<GeminiResult> {
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey())}`;
-  const { res, abort, clear } = await post(url, buildRequestBody(o), o);
+  const cacheName = cacheFor(o);
+  let posted: Awaited<ReturnType<typeof post>>;
+  try {
+    posted = await post(url, buildRequestBody(o, cacheName), o);
+  } catch (err) {
+    if (!cacheName) throw err;
+    invalidateCache(o.model, o.system, o.parts[0]!);
+    posted = await post(url, buildRequestBody(o, null), o);
+  }
+  const { res, abort, clear } = posted;
   if (!res.body) {
     clear();
     throw new Error('Gemini stream response has no body');

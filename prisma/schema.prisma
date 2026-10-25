@@ -62,6 +62,7 @@ model Kundli {
   facts_status       String                 @default("pending") @map("facts_status")
   facts              KundliFacts[]
   transitCharts      TransitSnapshot[]
+  chartData          KundliData[]
   user               Auth                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   content            UserGeneratedContent[]
 
@@ -160,6 +161,55 @@ model KundliFacts {
   @@map("kundli_facts")
 }
 
+/// The keyword list of chart data types Radha can serve (reading engine M7, docs/reading-engine/20 §4). Seeded from
+/// src/reading/chartData/catalog.ts; rows override served/tier/calc_version/enabled.
+model ChartDataType {
+  id            String       @id
+  family        String
+  radha_type    String       @map("radha_type")
+  change_class  String       @map("change_class")
+  tier          String
+  variant_kind  String       @map("variant_kind")
+  served        Boolean      @default(false)
+  calc_version  String?      @map("calc_version")
+  legacy_column String?      @map("legacy_column")
+  sort_order    Int          @default(500) @map("sort_order")
+  label         String
+  enabled       Boolean      @default(true)
+  updated_at    DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  rows          KundliData[]
+
+  @@map("chart_data_types")
+}
+
+/// One row per (kundli, chart data type, variant): the vertical kundli store (reading engine M7).
+/// The row is also the fetch lock: status 'fetching' + fetch_started_at, reclaimable after the Radha timeout.
+model KundliData {
+  id               String        @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id        String        @map("kundli_id")
+  data_type        String        @map("data_type")
+  /// '' for natal rows; canonical key of params (e.g. 'year=2027') otherwise
+  variant          String        @default("")
+  params           Json          @default("{}")
+  ayanamsa         String        @default("LAHIRI")
+  calc_version     String?       @map("calc_version")
+  engine_commit    String?       @map("engine_commit")
+  payload          Json?
+  payload_hash     String?       @map("payload_hash")
+  /// ready | fetching | failed | unsupported
+  status           String        @default("fetching")
+  error            String?
+  fetch_started_at DateTime?     @map("fetch_started_at") @db.Timestamptz(6)
+  fetched_at       DateTime?     @map("fetched_at") @db.Timestamptz(6)
+  valid_to         DateTime?     @map("valid_to") @db.Timestamptz(6)
+  kundli           Kundli        @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  type             ChartDataType @relation(fields: [data_type], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([kundli_id, data_type, variant, ayanamsa], name: "kundli_data_key", map: "kundli_data_key")
+  @@index([data_type, status], map: "idx_kundli_data_type_status")
+  @@map("kundli_data")
+}
+
 /// Global transit snapshots, one row per date range (reading engine M3).
 model TransitSnapshot {
   id               String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
@@ -233,4 +283,26 @@ model DeclinedTopic {
   updated_by    String?  @map("updated_by")
 
   @@map("declined_topics")
+}
+
+/// Registry of explicit LLM prompt caches (docs/reading-engine/20 §8, R-7). One live row per cache: every instance looks
+/// here before creating one (one cache per chart prefix), logout deletes the user's rows' caches, and the sweeper deletes
+/// idle ones and reconciles against the provider's list. No foreign keys: rows are short-lived bookkeeping.
+model LlmCacheEntry {
+  name         String    @id
+  provider     String
+  user_id      String?   @map("user_id")
+  kundli_id    String?   @map("kundli_id")
+  prefix_hash  String    @map("prefix_hash")
+  model        String
+  created_at   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  last_used_at DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  expires_at   DateTime  @map("expires_at") @db.Timestamptz(6)
+  deleted_at   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  delete_error String?   @map("delete_error")
+
+  @@index([prefix_hash, expires_at], map: "llm_cache_entries_prefix")
+  @@index([user_id], map: "llm_cache_entries_user")
+  @@index([last_used_at], map: "llm_cache_entries_last_used")
+  @@map("llm_cache_entries")
 }

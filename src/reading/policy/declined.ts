@@ -135,7 +135,9 @@ function statedAges(toks: string[]): number[] {
     const n = Number(toks[i]);
     const next = toks[i + 1];
     const prev = toks[i - 1];
-    if ((next === 'year' || next === 'years' || next === 'yr' || next === 'yrs' || next === 'yo') || prev === 'aged' || prev === 'age' || ((prev === 'is' || prev === 'turned' || prev === 'turning') && i >= 2)) out.push(n);
+    // an age, not a period: "12 years old", "12 yo", "aged 12", "is 12", "turning 12" ("in the next 2 years" is a period)
+    const yearsOld = (next === 'year' || next === 'years' || next === 'yr' || next === 'yrs') && toks[i + 2] === 'old';
+    if (yearsOld || next === 'yo' || prev === 'aged' || prev === 'age' || ((prev === 'is' || prev === 'turned' || prev === 'turning') && i >= 2)) out.push(n);
   }
   return out;
 }

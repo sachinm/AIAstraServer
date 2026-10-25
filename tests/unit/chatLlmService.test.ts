@@ -33,6 +33,7 @@ describe('chatWithConfiguredProvider', () => {
   afterEach(() => {
     if (originalProvider === undefined) delete process.env.CHAT_LLM_PROVIDER;
     else process.env.CHAT_LLM_PROVIDER = originalProvider;
+    delete process.env.READING_ENGINE;
     vi.clearAllMocks();
   });
 
@@ -55,7 +56,9 @@ describe('chatWithConfiguredProvider', () => {
 
   it('routes to Gemini when CHAT_LLM_PROVIDER is gemini (case-insensitive)', async () => {
     process.env.CHAT_LLM_PROVIDER = 'GEMINI';
-    const prisma = {} as PrismaClient;
+    // the reading engine is the default chat path; this test covers the legacy Gemini route (kill switch)
+    process.env.READING_ENGINE = '0';
+    const prisma = { declinedTopic: { findMany: async () => [] } } as unknown as PrismaClient;
     const out = await chatWithConfiguredProvider(prisma, 'uid', 'hello');
     expect(out.answerText).toBe('from-gemini');
     expect(geminiMock).toHaveBeenCalledWith(prisma, 'uid', 'hello', undefined);

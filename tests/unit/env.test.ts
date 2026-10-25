@@ -51,9 +51,9 @@ describe('config/env', () => {
   });
 
   describe('getAstroKundliBaseUrl', () => {
-    it('returns ASTROKUNDLI_BASE_URL_LOCAL when NODE_ENV is development', async () => {
+    it('returns ASTROKUNDLI_BASE_URL_DEV when NODE_ENV is development', async () => {
       process.env.NODE_ENV = 'development';
-      process.env.ASTROKUNDLI_BASE_URL_LOCAL = 'http://localhost:8765';
+      process.env.ASTROKUNDLI_BASE_URL_DEV = 'http://localhost:8765';
       const { getAstroKundliBaseUrl } = await import('../../src/config/env.js');
       expect(getAstroKundliBaseUrl()).toBe('http://localhost:8765');
     });
@@ -72,11 +72,11 @@ describe('config/env', () => {
       expect(getAstroKundliBaseUrl()).toBe('http://localhost:8767');
     });
 
-    it('throws when ASTROKUNDLI_BASE_URL_LOCAL is missing in development', async () => {
+    it('throws when ASTROKUNDLI_BASE_URL_DEV is missing in development', async () => {
       process.env.NODE_ENV = 'development';
-      delete process.env.ASTROKUNDLI_BASE_URL_LOCAL;
+      delete process.env.ASTROKUNDLI_BASE_URL_DEV;
       const { getAstroKundliBaseUrl } = await import('../../src/config/env.js');
-      expect(() => getAstroKundliBaseUrl()).toThrow(/ASTROKUNDLI_BASE_URL_LOCAL/);
+      expect(() => getAstroKundliBaseUrl()).toThrow(/ASTROKUNDLI_BASE_URL_DEV/);
     });
   });
 
@@ -109,14 +109,14 @@ describe('config/env', () => {
   describe('isAstroKundliConfigured', () => {
     it('returns true when base URL is set for current env', async () => {
       process.env.NODE_ENV = 'development';
-      process.env.ASTROKUNDLI_BASE_URL_LOCAL = 'http://localhost:8765';
+      process.env.ASTROKUNDLI_BASE_URL_DEV = 'http://localhost:8765';
       const { isAstroKundliConfigured } = await import('../../src/config/env.js');
       expect(isAstroKundliConfigured()).toBe(true);
     });
 
     it('returns false when base URL is empty for current env', async () => {
       process.env.NODE_ENV = 'development';
-      process.env.ASTROKUNDLI_BASE_URL_LOCAL = '';
+      process.env.ASTROKUNDLI_BASE_URL_DEV = '';
       const { isAstroKundliConfigured } = await import('../../src/config/env.js');
       expect(isAstroKundliConfigured()).toBe(false);
     });

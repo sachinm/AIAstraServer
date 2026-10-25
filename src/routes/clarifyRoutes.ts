@@ -14,6 +14,7 @@ import { getChatLlmProvider } from '../config/env.js';
 import { isReadingEngineEnabled } from '../reading/config.js';
 import { answerClarify, beginClarify, confirmAndBuildIntent } from '../reading/clarify/service.js';
 import { PrismaClarifyStore, type ClarifyStore } from '../reading/clarify/store.js';
+import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
@@ -72,6 +73,8 @@ export async function clarifyOnAsk(deps: ClarifyRouteDeps, userId: string, quest
   sse.write({ type: 'start' });
   sse.write(r.event);
   sse.write({ type: 'done', status: 'clarifying', runId: r.runId, ms: r.ms });
+  // Track B: the natal layers run while the person reads the question (graph flow only, capped, same request)
+  await prewarmWithCap(prewarmNatalLayers(deps.prisma, userId, r.state));
   return true;
 }
 

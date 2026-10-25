@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { readingSpecialistTimeoutMs } from '../config.js';
 import { callGemini } from '../llm/gemini.js';
+import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
 import type { SubjectId } from '../packs/frames.js';
@@ -21,6 +22,8 @@ export const claimZ = z.object({
   evidence: z.array(z.string()).default([]),
   polarity: z.enum(['supports', 'obstructs', 'neutral']).default('neutral'),
   weight: z.number().int().min(1).max(3).default(2),
+  /** which school's rule the claim applies (docs/reading-engine/10 §4) */
+  tradition: z.enum(['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord']).default('parashara'),
 });
 export const windowZ = z.object({
   from: z.string(),
@@ -31,6 +34,8 @@ export const windowZ = z.object({
 });
 export const findingZ = z.object({
   verdict: z.enum(['strong', 'moderate', 'weak', 'denied', 'mixed']).default('mixed'),
+  /** this analyst's layer as a signed strength −3…+3 (file 11 §1) */
+  layerScore: z.number().int().min(-3).max(3).default(0),
   claims: z.array(claimZ).default([]),
   windows: z.array(windowZ).default([]),
   caveats: z.array(z.string()).default([]),
@@ -41,6 +46,10 @@ export interface Finding {
   analyst: SpecialistAnalyst;
   subject: SubjectId;
   verdict: z.infer<typeof findingZ>['verdict'];
+  /** −3…+3; undefined for findings from before layer scoring */
+  layerScore?: number;
+  /** ok | skipped (optional agent timed out) | failed (required agent failed after its retry) | cached */
+  status?: 'ok' | 'skipped' | 'failed' | 'cached';
   claims: Array<z.infer<typeof claimZ>>;
   windows: Array<z.infer<typeof windowZ>>;
   caveats: string[];
@@ -51,6 +60,7 @@ export const FINDING_RESPONSE_SCHEMA = {
   type: 'OBJECT',
   properties: {
     verdict: { type: 'STRING', enum: ['strong', 'moderate', 'weak', 'denied', 'mixed'] },
+    layerScore: { type: 'INTEGER' },
     claims: {
       type: 'ARRAY',
       items: {
@@ -60,8 +70,9 @@ export const FINDING_RESPONSE_SCHEMA = {
           evidence: { type: 'ARRAY', items: { type: 'STRING' } },
           polarity: { type: 'STRING', enum: ['supports', 'obstructs', 'neutral'] },
           weight: { type: 'INTEGER' },
+          tradition: { type: 'STRING', enum: ['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord'] },
         },
-        required: ['text', 'evidence', 'polarity', 'weight'],
+        required: ['text', 'evidence', 'polarity', 'weight', 'tradition'],
       },
     },
     windows: {
@@ -81,7 +92,7 @@ export const FINDING_RESPONSE_SCHEMA = {
     caveats: { type: 'ARRAY', items: { type: 'STRING' } },
     keyFacts: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['verdict', 'claims', 'windows', 'caveats', 'keyFacts'],
+  required: ['verdict', 'layerScore', 'claims', 'windows', 'caveats', 'keyFacts'],
 };
 
 export function analystsFor(intent: Intent): SpecialistAnalyst[] {
@@ -106,6 +117,8 @@ export async function runSpecialist(args: {
   question: string;
   system: string;
   asOf: string;
+  /** owner of the explicit prompt cache (promptCache.ts) */
+  cacheOwner?: CacheOwner;
 }): Promise<{ finding: Finding; usage: Usage }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
@@ -115,6 +128,7 @@ export async function runSpecialist(args: {
     PROMPTS[analyst],
     `Subject: ${args.subject}. Horizon: ${typeof intent.horizon === 'string' ? intent.horizon : `${intent.horizon.from} to ${intent.horizon.to}`}. Focus: ${intent.focusPoints.join('; ') || 'none'}.`,
     'Return at most 8 claims. Each claim is one sentence about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Dates must come from the pack.',
+    'Tag every claim with the tradition whose rule you applied (parashara, jaimini, nakshatra, kp_starlord). Give layerScore: your layer as one signed strength from -3 (clearly denied or obstructed) to +3 (clearly promised or supported), 0 when balanced.',
     `QUESTION: ${args.question}`,
   ].join('\n');
   const r = await callGemini({
@@ -123,6 +137,8 @@ export async function runSpecialist(args: {
     system: args.system,
     parts: [renderBase(pack), renderSubject(pack, analyst), tail],
     responseSchema: FINDING_RESPONSE_SCHEMA,
+    cachePrefix: true,
+    cacheOwner: args.cacheOwner,
     thinking: 'off',
     maxOutputTokens: 1800,
     temperature: 0.2,
@@ -135,7 +151,7 @@ export async function runSpecialist(args: {
     throw new Error(`specialist ${analyst} returned unparsable JSON (${r.finishReason ?? 'no finish reason'}): ${(err as Error).message.slice(0, 120)}`);
   }
   return {
-    finding: { analyst, subject: args.subject, verdict: parsed.verdict, claims: parsed.claims.slice(0, 8), windows: parsed.windows, caveats: parsed.caveats, keyFacts: parsed.keyFacts.slice(0, 6) },
+    finding: { analyst, subject: args.subject, verdict: parsed.verdict, layerScore: parsed.layerScore, status: 'ok', claims: parsed.claims.slice(0, 8), windows: parsed.windows, caveats: parsed.caveats, keyFacts: parsed.keyFacts.slice(0, 6) },
     usage: r.usage,
   };
 }
