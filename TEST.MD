@@ -12,4 +12,3 @@ Branch: `feature/reading-phase0-baseline` (Phase 0 of `docs/reading-engine/08-ro
 
 | Id | Test | Steps | Expected | Folder |
 |---|---|---|---|---|
-| P0-03 | Baseline evals on the current chat path (07-evaluation §5) | 1. `.env` with `DATABASE_URL`, `GEMINI_API_KEY` present. 2. `npm run eval:readings -- --chart G1 --engine current`. 3. Store answers + grounding under `evals/baseline/`. | 12 answers stored, grounding report written | `p0-03-baseline-evals` |
