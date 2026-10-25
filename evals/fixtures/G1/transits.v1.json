@@ -1,0 +1,2923 @@
+{
+ "as_of": "2026-10-24",
+ "ayanamsa": "TRUE_CITRA",
+ "double_transit": [
+  {
+   "from": "2026-10-24",
+   "houses": [
+    7
+   ],
+   "jupiter_sign": 3,
+   "saturn_sign": 11,
+   "to": "2026-10-30"
+  },
+  {
+   "from": "2026-10-31",
+   "houses": [
+    4
+   ],
+   "jupiter_sign": 4,
+   "saturn_sign": 11,
+   "to": "2027-01-24"
+  },
+  {
+   "from": "2027-01-25",
+   "houses": [
+    7
+   ],
+   "jupiter_sign": 3,
+   "saturn_sign": 11,
+   "to": "2027-06-02"
+  },
+  {
+   "from": "2027-06-03",
+   "houses": [
+    5
+   ],
+   "jupiter_sign": 3,
+   "saturn_sign": 0,
+   "to": "2027-06-25"
+  },
+  {
+   "from": "2027-06-26",
+   "houses": [
+    8
+   ],
+   "jupiter_sign": 4,
+   "saturn_sign": 0,
+   "to": "2027-10-19"
+  },
+  {
+   "from": "2027-10-20",
+   "houses": [
+    4
+   ],
+   "jupiter_sign": 4,
+   "saturn_sign": 11,
+   "to": "2027-11-25"
+  },
+  {
+   "from": "2027-11-26",
+   "houses": [
+    1,
+    7,
+    9
+   ],
+   "jupiter_sign": 5,
+   "saturn_sign": 11,
+   "to": "2028-02-22"
+  },
+  {
+   "from": "2028-02-23",
+   "houses": [
+    5
+   ],
+   "jupiter_sign": 5,
+   "saturn_sign": 0,
+   "to": "2028-02-27"
+  },
+  {
+   "from": "2028-02-28",
+   "houses": [
+    8
+   ],
+   "jupiter_sign": 4,
+   "saturn_sign": 0,
+   "to": "2028-07-23"
+  },
+  {
+   "from": "2028-07-24",
+   "houses": [
+    5
+   ],
+   "jupiter_sign": 5,
+   "saturn_sign": 0,
+   "to": "2028-10-24"
+  }
+ ],
+ "from": "2026-10-24",
+ "kind": "natal_overlay",
+ "lunations": [
+  {
+   "date": "2026-10-26",
+   "kind": "full",
+   "nak": "Ashwini",
+   "sign": 0,
+   "sign_name": "Aries"
+  },
+  {
+   "date": "2026-11-09",
+   "kind": "new",
+   "nak": "Vishakha",
+   "sign": 6,
+   "sign_name": "Libra"
+  },
+  {
+   "date": "2026-11-24",
+   "kind": "full",
+   "nak": "Krittika",
+   "sign": 1,
+   "sign_name": "Taurus"
+  },
+  {
+   "date": "2026-12-09",
+   "kind": "new",
+   "nak": "Jyeshtha",
+   "sign": 7,
+   "sign_name": "Scorpio"
+  },
+  {
+   "date": "2026-12-24",
+   "kind": "full",
+   "nak": "Ardra",
+   "sign": 2,
+   "sign_name": "Gemini"
+  },
+  {
+   "date": "2027-01-08",
+   "kind": "new",
+   "nak": "Purva Ashadha",
+   "sign": 8,
+   "sign_name": "Sagittarius"
+  },
+  {
+   "date": "2027-01-22",
+   "kind": "full",
+   "nak": "Pushya",
+   "sign": 3,
+   "sign_name": "Cancer"
+  },
+  {
+   "date": "2027-02-06",
+   "kind": "new",
+   "nak": "Dhanishta",
+   "sign": 9,
+   "sign_name": "Capricorn"
+  },
+  {
+   "date": "2027-02-21",
+   "kind": "full",
+   "nak": "Magha",
+   "sign": 4,
+   "sign_name": "Leo"
+  },
+  {
+   "date": "2027-03-08",
+   "kind": "new",
+   "nak": "Purva Bhadrapada",
+   "sign": 10,
+   "sign_name": "Aquarius"
+  },
+  {
+   "date": "2027-03-22",
+   "kind": "full",
+   "nak": "Uttara Phalguni",
+   "sign": 5,
+   "sign_name": "Virgo"
+  },
+  {
+   "date": "2027-04-07",
+   "kind": "new",
+   "nak": "Revati",
+   "sign": 11,
+   "sign_name": "Pisces"
+  },
+  {
+   "date": "2027-04-21",
+   "kind": "full",
+   "nak": "Chitra",
+   "sign": 6,
+   "sign_name": "Libra"
+  }
+ ],
+ "natal": {
+  "al_sign": 9,
+  "lagna_sign": 5,
+  "moon_nak": "Swati",
+  "moon_sign": 6
+ },
+ "now": {
+  "Ju": {
+   "from": "2026-10-24",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "over_natal": [],
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2026-10-30"
+  },
+  "Ke": {
+   "from": "2026-10-24",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "over_natal": [],
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2026-12-05"
+  },
+  "Ma": {
+   "from": "2026-10-24",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "over_natal": [],
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2026-11-11"
+  },
+  "Me": {
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "over_natal": [
+    "Mo"
+   ],
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-12-01"
+  },
+  "Ra": {
+   "from": "2026-10-24",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "over_natal": [],
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2026-12-05"
+  },
+  "Sa": {
+   "from": "2026-10-24",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "over_natal": [],
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2027-06-02"
+  },
+  "Su": {
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "over_natal": [
+    "Mo"
+   ],
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-11-15"
+  },
+  "Ve": {
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "over_natal": [
+    "Mo"
+   ],
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-11-05"
+  }
+ },
+ "rows": [
+  {
+   "bav": 4,
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-11-15"
+  },
+  {
+   "bav": 2,
+   "from": "2026-10-24",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    2,
+    5,
+    6,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2026-11-11"
+  },
+  {
+   "bav": 2,
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-12-01"
+  },
+  {
+   "bav": 4,
+   "from": "2026-10-24",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    3,
+    5,
+    7,
+    11
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-10-24",
+     "nak": "Ashlesha",
+     "over_natal_nak": [],
+     "to": "2026-10-30"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ju",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2026-10-30"
+  },
+  {
+   "bav": 5,
+   "from": "2026-10-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": true,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-11-05"
+  },
+  {
+   "bav": 5,
+   "from": "2026-10-24",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    4,
+    7,
+    9
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-10-24",
+     "nak": "Uttara Bhadrapada",
+     "over_natal_nak": [],
+     "to": "2027-02-07"
+    },
+    {
+     "from": "2027-02-08",
+     "nak": "Revati",
+     "over_natal_nak": [],
+     "to": "2027-06-02"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Sa",
+   "retro_on_entry": true,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2027-06-02"
+  },
+  {
+   "from": "2026-10-24",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-10-24",
+     "nak": "Dhanishta",
+     "over_natal_nak": [],
+     "to": "2026-12-05"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ra",
+   "retro_on_entry": true,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2026-12-05"
+  },
+  {
+   "from": "2026-10-24",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-10-24",
+     "nak": "Magha",
+     "over_natal_nak": [],
+     "to": "2026-12-05"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ke",
+   "retro_on_entry": true,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2026-12-05"
+  },
+  {
+   "bav": 4,
+   "from": "2026-10-31",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    4,
+    6,
+    8,
+    12
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-10-31",
+     "nak": "Magha",
+     "over_natal_nak": [],
+     "to": "2027-01-24"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ju",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-01-24"
+  },
+  {
+   "bav": 5,
+   "from": "2026-11-06",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": true,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2026-11-21"
+  },
+  {
+   "bav": 4,
+   "from": "2026-11-12",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    3,
+    6,
+    7,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-03-09"
+  },
+  {
+   "bav": 6,
+   "from": "2026-11-16",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2026-12-15"
+  },
+  {
+   "bav": 5,
+   "from": "2026-11-22",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2026-12-31"
+  },
+  {
+   "bav": 4,
+   "from": "2026-12-02",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2026-12-21"
+  },
+  {
+   "from": "2026-12-06",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-12-06",
+     "nak": "Dhanishta",
+     "over_natal_nak": [],
+     "to": "2027-04-09"
+    },
+    {
+     "from": "2027-04-10",
+     "nak": "Shravana",
+     "over_natal_nak": [],
+     "to": "2027-12-17"
+    },
+    {
+     "from": "2027-12-18",
+     "nak": "Uttara Ashadha",
+     "over_natal_nak": [],
+     "to": "2028-06-23"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ra",
+   "retro_on_entry": true,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2028-06-23"
+  },
+  {
+   "from": "2026-12-06",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "nak_segments": [
+    {
+     "from": "2026-12-06",
+     "nak": "Ashlesha",
+     "over_natal_nak": [],
+     "to": "2027-08-13"
+    },
+    {
+     "from": "2027-08-14",
+     "nak": "Pushya",
+     "over_natal_nak": [],
+     "to": "2028-04-21"
+    },
+    {
+     "from": "2028-04-22",
+     "nak": "Punarvasu",
+     "over_natal_nak": [],
+     "to": "2028-06-23"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ke",
+   "retro_on_entry": true,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2028-06-23"
+  },
+  {
+   "bav": 5,
+   "from": "2026-12-16",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2027-01-13"
+  },
+  {
+   "bav": 5,
+   "from": "2026-12-22",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2027-01-09"
+  },
+  {
+   "bav": 3,
+   "from": "2027-01-01",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2027-01-28"
+  },
+  {
+   "bav": 6,
+   "from": "2027-01-10",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2027-01-27"
+  },
+  {
+   "bav": 4,
+   "from": "2027-01-14",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2027-02-12"
+  },
+  {
+   "bav": 4,
+   "from": "2027-01-25",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    3,
+    5,
+    7,
+    11
+   ],
+   "nak_segments": [
+    {
+     "from": "2027-01-25",
+     "nak": "Ashlesha",
+     "over_natal_nak": [],
+     "to": "2027-06-25"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ju",
+   "retro_on_entry": true,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2027-06-25"
+  },
+  {
+   "bav": 5,
+   "from": "2027-01-28",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2027-02-23"
+  },
+  {
+   "bav": 4,
+   "from": "2027-01-29",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2027-02-23"
+  },
+  {
+   "bav": 6,
+   "from": "2027-02-13",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2027-03-14"
+  },
+  {
+   "bav": 6,
+   "from": "2027-02-24",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": true,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2027-03-11"
+  },
+  {
+   "bav": 7,
+   "from": "2027-02-24",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2027-03-20"
+  },
+  {
+   "bav": 2,
+   "from": "2027-03-10",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    2,
+    5,
+    6,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": true,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2027-04-25"
+  },
+  {
+   "bav": 5,
+   "from": "2027-03-12",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2027-04-04"
+  },
+  {
+   "bav": 4,
+   "from": "2027-03-15",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2027-04-13"
+  },
+  {
+   "bav": 5,
+   "from": "2027-03-21",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2027-04-14"
+  },
+  {
+   "bav": 6,
+   "from": "2027-04-05",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2027-04-21"
+  },
+  {
+   "bav": 4,
+   "from": "2027-04-14",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2027-05-14"
+  },
+  {
+   "bav": 6,
+   "from": "2027-04-15",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2027-05-09"
+  },
+  {
+   "bav": 3,
+   "from": "2027-04-22",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2027-05-05"
+  },
+  {
+   "bav": 4,
+   "from": "2027-04-26",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    3,
+    6,
+    7,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-07-04"
+  },
+  {
+   "bav": 6,
+   "from": "2027-05-06",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2027-05-22"
+  },
+  {
+   "bav": 3,
+   "from": "2027-05-10",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2027-06-03"
+  },
+  {
+   "bav": 3,
+   "from": "2027-05-15",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2027-06-14"
+  },
+  {
+   "bav": 4,
+   "from": "2027-05-23",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2027-07-29"
+  },
+  {
+   "bav": 5,
+   "from": "2027-06-03",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    5,
+    8,
+    10
+   ],
+   "nak_segments": [
+    {
+     "from": "2027-06-03",
+     "nak": "Ashwini",
+     "over_natal_nak": [
+      "Su"
+     ],
+     "to": "2027-10-19"
+    }
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Sa",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2027-10-19"
+  },
+  {
+   "bav": 3,
+   "from": "2027-06-04",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2027-06-27"
+  },
+  {
+   "bav": 3,
+   "from": "2027-06-15",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2027-07-16"
+  },
+  {
+   "bav": 4,
+   "from": "2027-06-26",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    4,
+    6,
+    8,
+    12
+   ],
+   "nak_segments": [
+    {
+     "from": "2027-06-26",
+     "nak": "Magha",
+     "over_natal_nak": [],
+     "to": "2027-08-29"
+    },
+    {
+     "from": "2027-08-30",
+     "nak": "Purva Phalguni",
+     "over_natal_nak": [],
+     "to": "2027-11-03"
+    },
+    {
+     "from": "2027-11-04",
+     "nak": "Uttara Phalguni",
+     "over_natal_nak": [],
+     "to": "2027-11-25"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ju",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-11-25"
+  },
+  {
+   "bav": 2,
+   "from": "2027-06-28",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2027-07-22"
+  },
+  {
+   "bav": 3,
+   "from": "2027-07-05",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    4,
+    7,
+    8
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2027-08-23"
+  },
+  {
+   "bav": 4,
+   "from": "2027-07-17",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2027-08-16"
+  },
+  {
+   "bav": 5,
+   "from": "2027-07-23",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2027-08-15"
+  },
+  {
+   "bav": 4,
+   "from": "2027-07-30",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2027-08-13"
+  },
+  {
+   "bav": 5,
+   "from": "2027-08-14",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-08-30"
+  },
+  {
+   "bav": 4,
+   "from": "2027-08-16",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-09-08"
+  },
+  {
+   "bav": 4,
+   "from": "2027-08-17",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2027-09-16"
+  },
+  {
+   "bav": 2,
+   "from": "2027-08-24",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    5,
+    8,
+    9
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2027-10-07"
+  },
+  {
+   "bav": 4,
+   "from": "2027-08-31",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2027-09-20"
+  },
+  {
+   "bav": 5,
+   "from": "2027-09-09",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2027-10-02"
+  },
+  {
+   "bav": 1,
+   "from": "2027-09-17",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2027-10-17"
+  },
+  {
+   "bav": 2,
+   "from": "2027-09-21",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2027-10-20"
+  },
+  {
+   "bav": 5,
+   "from": "2027-10-03",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2027-10-26"
+  },
+  {
+   "bav": 4,
+   "from": "2027-10-08",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    6,
+    9,
+    10
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2027-11-17"
+  },
+  {
+   "bav": 4,
+   "from": "2027-10-18",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2027-11-16"
+  },
+  {
+   "bav": 5,
+   "from": "2027-10-20",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    4,
+    7,
+    9
+   ],
+   "nak_segments": [
+    {
+     "from": "2027-10-20",
+     "nak": "Revati",
+     "over_natal_nak": [],
+     "to": "2028-02-22"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Sa",
+   "retro_on_entry": true,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2028-02-22"
+  },
+  {
+   "bav": 4,
+   "from": "2027-10-21",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Me",
+   "retro_on_entry": true,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2027-11-04"
+  },
+  {
+   "bav": 3,
+   "from": "2027-10-27",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2027-11-20"
+  },
+  {
+   "bav": 2,
+   "from": "2027-11-05",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2027-11-25"
+  },
+  {
+   "bav": 6,
+   "from": "2027-11-17",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2027-12-15"
+  },
+  {
+   "bav": 4,
+   "from": "2027-11-18",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    7,
+    10,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2027-12-26"
+  },
+  {
+   "bav": 4,
+   "from": "2027-11-21",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2027-12-14"
+  },
+  {
+   "bav": 4,
+   "from": "2027-11-26",
+   "house_from_al": 11,
+   "house_from_lagna": 3,
+   "house_from_moon": 2,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ke"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 7,
+   "sign_name": "Scorpio",
+   "to": "2027-12-14"
+  },
+  {
+   "bav": 5,
+   "from": "2027-11-26",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    5,
+    7,
+    9
+   ],
+   "nak_segments": [
+    {
+     "from": "2027-11-26",
+     "nak": "Uttara Phalguni",
+     "over_natal_nak": [],
+     "to": "2028-02-27"
+    }
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ju",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2028-02-27"
+  },
+  {
+   "bav": 5,
+   "from": "2027-12-15",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2028-01-01"
+  },
+  {
+   "bav": 7,
+   "from": "2027-12-15",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2028-01-07"
+  },
+  {
+   "bav": 5,
+   "from": "2027-12-16",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2028-01-14"
+  },
+  {
+   "bav": 2,
+   "from": "2027-12-27",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    8,
+    11,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2028-02-02"
+  },
+  {
+   "bav": 6,
+   "from": "2028-01-02",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2028-03-08"
+  },
+  {
+   "bav": 5,
+   "from": "2028-01-08",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2028-02-01"
+  },
+  {
+   "bav": 4,
+   "from": "2028-01-15",
+   "house_from_al": 1,
+   "house_from_lagna": 5,
+   "house_from_moon": 4,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 29,
+   "sign": 9,
+   "sign_name": "Capricorn",
+   "to": "2028-02-12"
+  },
+  {
+   "bav": 6,
+   "from": "2028-02-02",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2028-02-27"
+  },
+  {
+   "bav": 4,
+   "from": "2028-02-03",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    1,
+    6,
+    9,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2028-03-11"
+  },
+  {
+   "bav": 6,
+   "from": "2028-02-13",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2028-03-13"
+  },
+  {
+   "bav": 5,
+   "from": "2028-02-23",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    5,
+    8,
+    10
+   ],
+   "nak_segments": [
+    {
+     "from": "2028-02-23",
+     "nak": "Ashwini",
+     "over_natal_nak": [
+      "Su"
+     ],
+     "to": "2028-06-14"
+    },
+    {
+     "from": "2028-06-15",
+     "nak": "Bharani",
+     "over_natal_nak": [],
+     "to": "2028-10-24"
+    }
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Sa",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 4,
+   "from": "2028-02-28",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    4,
+    6,
+    8,
+    12
+   ],
+   "nak_segments": [
+    {
+     "from": "2028-02-28",
+     "nak": "Uttara Phalguni",
+     "over_natal_nak": [],
+     "to": "2028-03-25"
+    },
+    {
+     "from": "2028-03-26",
+     "nak": "Purva Phalguni",
+     "over_natal_nak": [],
+     "to": "2028-07-01"
+    },
+    {
+     "from": "2028-07-02",
+     "nak": "Uttara Phalguni",
+     "over_natal_nak": [],
+     "to": "2028-07-23"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ju",
+   "retro_on_entry": true,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2028-07-23"
+  },
+  {
+   "bav": 3,
+   "from": "2028-02-28",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2028-03-27"
+  },
+  {
+   "bav": 5,
+   "from": "2028-03-09",
+   "house_from_al": 2,
+   "house_from_lagna": 6,
+   "house_from_moon": 5,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 35,
+   "sign": 10,
+   "sign_name": "Aquarius",
+   "to": "2028-03-27"
+  },
+  {
+   "bav": 6,
+   "from": "2028-03-12",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    2,
+    7,
+    10
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2028-04-19"
+  },
+  {
+   "bav": 4,
+   "from": "2028-03-14",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2028-04-12"
+  },
+  {
+   "bav": 6,
+   "from": "2028-03-28",
+   "house_from_al": 3,
+   "house_from_lagna": 7,
+   "house_from_moon": 6,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 38,
+   "sign": 11,
+   "sign_name": "Pisces",
+   "to": "2028-04-11"
+  },
+  {
+   "bav": 3,
+   "from": "2028-03-28",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2028-07-31"
+  },
+  {
+   "bav": 3,
+   "from": "2028-04-12",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2028-04-26"
+  },
+  {
+   "bav": 4,
+   "from": "2028-04-13",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2028-05-13"
+  },
+  {
+   "bav": 2,
+   "from": "2028-04-20",
+   "house_from_al": 4,
+   "house_from_lagna": 8,
+   "house_from_moon": 7,
+   "influences_houses": [
+    2,
+    3,
+    8,
+    11
+   ],
+   "over_natal": [
+    "Su"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 23,
+   "sign": 0,
+   "sign_name": "Aries",
+   "to": "2028-05-30"
+  },
+  {
+   "bav": 6,
+   "from": "2028-04-27",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2028-07-04"
+  },
+  {
+   "bav": 3,
+   "from": "2028-05-14",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    9
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2028-06-14"
+  },
+  {
+   "bav": 3,
+   "from": "2028-05-31",
+   "house_from_al": 5,
+   "house_from_lagna": 9,
+   "house_from_moon": 8,
+   "influences_houses": [
+    3,
+    4,
+    9,
+    12
+   ],
+   "over_natal": [
+    "Ma",
+    "Me",
+    "Ve",
+    "Sa",
+    "Ra"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 22,
+   "sign": 1,
+   "sign_name": "Taurus",
+   "to": "2028-07-11"
+  },
+  {
+   "bav": 3,
+   "from": "2028-06-15",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2028-07-15"
+  },
+  {
+   "from": "2028-06-24",
+   "house_from_al": 12,
+   "house_from_lagna": 4,
+   "house_from_moon": 3,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "nak_segments": [
+    {
+     "from": "2028-06-24",
+     "nak": "Uttara Ashadha",
+     "over_natal_nak": [],
+     "to": "2028-08-25"
+    },
+    {
+     "from": "2028-08-26",
+     "nak": "Purva Ashadha",
+     "over_natal_nak": [],
+     "to": "2028-10-24"
+    }
+   ],
+   "over_natal": [],
+   "planet": "Ra",
+   "retro_on_entry": true,
+   "sav": 28,
+   "sign": 8,
+   "sign_name": "Sagittarius",
+   "to": "2028-10-24"
+  },
+  {
+   "from": "2028-06-24",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "nak_segments": [
+    {
+     "from": "2028-06-24",
+     "nak": "Punarvasu",
+     "over_natal_nak": [],
+     "to": "2028-10-24"
+    }
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Ke",
+   "retro_on_entry": true,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 4,
+   "from": "2028-07-05",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2028-07-20"
+  },
+  {
+   "bav": 3,
+   "from": "2028-07-12",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    1,
+    4,
+    5,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2028-08-25"
+  },
+  {
+   "bav": 4,
+   "from": "2028-07-16",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2028-08-15"
+  },
+  {
+   "bav": 4,
+   "from": "2028-07-21",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2028-08-04"
+  },
+  {
+   "bav": 5,
+   "from": "2028-07-24",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    5,
+    7,
+    9
+   ],
+   "nak_segments": [
+    {
+     "from": "2028-07-24",
+     "nak": "Uttara Phalguni",
+     "over_natal_nak": [],
+     "to": "2028-09-12"
+    },
+    {
+     "from": "2028-09-13",
+     "nak": "Hasta",
+     "over_natal_nak": [
+      "La"
+     ],
+     "to": "2028-10-24"
+    }
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ju",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 2,
+   "from": "2028-08-01",
+   "house_from_al": 6,
+   "house_from_lagna": 10,
+   "house_from_moon": 9,
+   "influences_houses": [
+    4,
+    10
+   ],
+   "over_natal": [
+    "Ju"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 2,
+   "sign_name": "Gemini",
+   "to": "2028-08-30"
+  },
+  {
+   "bav": 5,
+   "from": "2028-08-05",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2028-08-22"
+  },
+  {
+   "bav": 4,
+   "from": "2028-08-16",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2028-09-15"
+  },
+  {
+   "bav": 4,
+   "from": "2028-08-23",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Me",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 2,
+   "from": "2028-08-26",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    2,
+    5,
+    6,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2028-10-13"
+  },
+  {
+   "bav": 5,
+   "from": "2028-08-31",
+   "house_from_al": 7,
+   "house_from_lagna": 11,
+   "house_from_moon": 10,
+   "influences_houses": [
+    5,
+    11
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 30,
+   "sign": 3,
+   "sign_name": "Cancer",
+   "to": "2028-09-26"
+  },
+  {
+   "bav": 1,
+   "from": "2028-09-16",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2028-10-16"
+  },
+  {
+   "bav": 4,
+   "from": "2028-09-27",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    6,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2028-10-22"
+  },
+  {
+   "bav": 4,
+   "from": "2028-10-14",
+   "house_from_al": 8,
+   "house_from_lagna": 12,
+   "house_from_moon": 11,
+   "influences_houses": [
+    3,
+    6,
+    7,
+    12
+   ],
+   "over_natal": [],
+   "planet": "Ma",
+   "retro_on_entry": false,
+   "sav": 25,
+   "sign": 4,
+   "sign_name": "Leo",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 4,
+   "from": "2028-10-17",
+   "house_from_al": 10,
+   "house_from_lagna": 2,
+   "house_from_moon": 1,
+   "influences_houses": [
+    2,
+    8
+   ],
+   "over_natal": [
+    "Mo"
+   ],
+   "planet": "Su",
+   "retro_on_entry": false,
+   "sav": 28,
+   "sign": 6,
+   "sign_name": "Libra",
+   "to": "2028-10-24"
+  },
+  {
+   "bav": 5,
+   "from": "2028-10-23",
+   "house_from_al": 9,
+   "house_from_lagna": 1,
+   "house_from_moon": 12,
+   "influences_houses": [
+    1,
+    7
+   ],
+   "over_natal": [
+    "La"
+   ],
+   "planet": "Ve",
+   "retro_on_entry": false,
+   "sav": 27,
+   "sign": 5,
+   "sign_name": "Virgo",
+   "to": "2028-10-24"
+  }
+ ],
+ "sade_sati": {
+  "now": null,
+  "periods": []
+ },
+ "stations": [
+  {
+   "date": "2026-10-24",
+   "kind": "retro_start",
+   "lon": 206.767,
+   "nak": "Vishakha",
+   "planet": "Me",
+   "sign": 6
+  },
+  {
+   "date": "2026-11-13",
+   "kind": "retro_end",
+   "lon": 190.82,
+   "nak": "Swati",
+   "planet": "Me",
+   "sign": 6
+  },
+  {
+   "date": "2026-11-14",
+   "kind": "retro_end",
+   "lon": 178.65,
+   "nak": "Chitra",
+   "planet": "Ve",
+   "sign": 5
+  },
+  {
+   "date": "2026-12-11",
+   "kind": "retro_end",
+   "lon": 343.714,
+   "nak": "Uttara Bhadrapada",
+   "planet": "Sa",
+   "sign": 11
+  },
+  {
+   "date": "2026-12-13",
+   "kind": "retro_start",
+   "lon": 122.808,
+   "nak": "Magha",
+   "planet": "Ju",
+   "sign": 4
+  },
+  {
+   "date": "2027-01-10",
+   "kind": "retro_start",
+   "lon": 136.208,
+   "nak": "Purva Phalguni",
+   "planet": "Ma",
+   "sign": 4
+  },
+  {
+   "date": "2027-02-09",
+   "kind": "retro_start",
+   "lon": 311.756,
+   "nak": "Shatabhisha",
+   "planet": "Me",
+   "sign": 10
+  },
+  {
+   "date": "2027-03-03",
+   "kind": "retro_end",
+   "lon": 296.695,
+   "nak": "Dhanishta",
+   "planet": "Me",
+   "sign": 9
+  },
+  {
+   "date": "2027-04-01",
+   "kind": "retro_end",
+   "lon": 116.696,
+   "nak": "Ashlesha",
+   "planet": "Ma",
+   "sign": 3
+  },
+  {
+   "date": "2027-04-13",
+   "kind": "retro_end",
+   "lon": 112.765,
+   "nak": "Ashlesha",
+   "planet": "Ju",
+   "sign": 3
+  },
+  {
+   "date": "2027-06-10",
+   "kind": "retro_start",
+   "lon": 72.13,
+   "nak": "Ardra",
+   "planet": "Me",
+   "sign": 2
+  },
+  {
+   "date": "2027-07-05",
+   "kind": "retro_end",
+   "lon": 63.239,
+   "nak": "Mrigashira",
+   "planet": "Me",
+   "sign": 2
+  },
+  {
+   "date": "2027-08-10",
+   "kind": "retro_start",
+   "lon": 3.652,
+   "nak": "Ashwini",
+   "planet": "Sa",
+   "sign": 0
+  },
+  {
+   "date": "2027-10-07",
+   "kind": "retro_start",
+   "lon": 190.701,
+   "nak": "Swati",
+   "planet": "Me",
+   "sign": 6
+  },
+  {
+   "date": "2027-10-28",
+   "kind": "retro_end",
+   "lon": 175.085,
+   "nak": "Chitra",
+   "planet": "Me",
+   "sign": 5
+  },
+  {
+   "date": "2027-12-24",
+   "kind": "retro_end",
+   "lon": 356.787,
+   "nak": "Revati",
+   "planet": "Sa",
+   "sign": 11
+  },
+  {
+   "date": "2028-01-12",
+   "kind": "retro_start",
+   "lon": 153.276,
+   "nak": "Uttara Phalguni",
+   "planet": "Ju",
+   "sign": 5
+  },
+  {
+   "date": "2028-01-24",
+   "kind": "retro_start",
+   "lon": 295.46,
+   "nak": "Dhanishta",
+   "planet": "Me",
+   "sign": 9
+  },
+  {
+   "date": "2028-02-14",
+   "kind": "retro_end",
+   "lon": 279.744,
+   "nak": "Uttara Ashadha",
+   "planet": "Me",
+   "sign": 9
+  },
+  {
+   "date": "2028-05-11",
+   "kind": "retro_start",
+   "lon": 55.441,
+   "nak": "Mrigashira",
+   "planet": "Ve",
+   "sign": 1
+  },
+  {
+   "date": "2028-05-14",
+   "kind": "retro_end",
+   "lon": 143.294,
+   "nak": "Purva Phalguni",
+   "planet": "Ju",
+   "sign": 4
+  },
+  {
+   "date": "2028-05-21",
+   "kind": "retro_start",
+   "lon": 52.069,
+   "nak": "Rohini",
+   "planet": "Me",
+   "sign": 1
+  },
+  {
+   "date": "2028-06-14",
+   "kind": "retro_end",
+   "lon": 43.511,
+   "nak": "Rohini",
+   "planet": "Me",
+   "sign": 1
+  },
+  {
+   "date": "2028-06-23",
+   "kind": "retro_end",
+   "lon": 38.934,
+   "nak": "Krittika",
+   "planet": "Ve",
+   "sign": 1
+  },
+  {
+   "date": "2028-08-23",
+   "kind": "retro_start",
+   "lon": 17.071,
+   "nak": "Bharani",
+   "planet": "Sa",
+   "sign": 0
+  },
+  {
+   "date": "2028-09-19",
+   "kind": "retro_start",
+   "lon": 174.353,
+   "nak": "Chitra",
+   "planet": "Me",
+   "sign": 5
+  },
+  {
+   "date": "2028-10-11",
+   "kind": "retro_end",
+   "lon": 159.239,
+   "nak": "Uttara Phalguni",
+   "planet": "Me",
+   "sign": 5
+  }
+ ],
+ "to": "2028-10-24",
+ "v": 1
+}

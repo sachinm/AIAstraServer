@@ -9,26 +9,27 @@ datasource db {
 }
 
 model Auth {
-  id                   String                 @id @default(dbgenerated("(uuid_generate_v4())::text"))
-  username             String
-  password             String
-  date_of_birth        String
-  place_of_birth       String?
-  time_of_birth        String?
-  email                String
-  gender               String?
-  is_active            Boolean?               @default(true)
-  kundli_added         Boolean?               @default(false)
-  role                 String?                @default("user")
-  created_at           DateTime               @default(now()) @map("created_at")
+  id                    String                 @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  username              String
+  password              String
+  date_of_birth         String
+  place_of_birth        String?
+  time_of_birth         String?
+  email                 String
+  gender                String?
+  is_active             Boolean?               @default(true)
+  kundli_added          Boolean?               @default(false)
+  role                  String?                @default("user")
+  created_at            DateTime               @default(now()) @map("created_at")
   /// Client IP at account creation (from proxy headers when present).
-  signup_ip            String?                @map("signup_ip")
+  signup_ip             String?                @map("signup_ip")
   /// Bcrypt hash of the current magic-link code (plain code is only sent by email).
-  magic_link_code_hash String?                @map("magic_link_code_hash")
-  magic_link_expires_at DateTime?             @map("magic_link_expires_at") @db.Timestamptz(6)
-  chats                Chat[]
-  kundlis              Kundli[]
-  userGeneratedContent UserGeneratedContent[]
+  magic_link_code_hash  String?                @map("magic_link_code_hash")
+  magic_link_expires_at DateTime?              @map("magic_link_expires_at") @db.Timestamptz(6)
+  chats                 Chat[]
+  readingRuns           ReadingRun[]
+  kundlis               Kundli[]
+  userGeneratedContent  UserGeneratedContent[]
 
   @@map("auth")
 }
@@ -52,6 +53,15 @@ model Kundli {
   queue_started_at   DateTime?              @map("queue_started_at")
   queue_completed_at DateTime?              @map("queue_completed_at")
   last_sync_error    String?                @map("last_sync_error")
+  /// Coordinates stored once (reading engine M1) so nothing geocodes again.
+  lat                Float?
+  lon                Float?
+  tz                 Float?
+  place_resolved     String?                @map("place_resolved")
+  /// pending | building | ready | failed
+  facts_status       String                 @default("pending") @map("facts_status")
+  facts              KundliFacts[]
+  transitCharts      TransitSnapshot[]
   user               Auth                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   content            UserGeneratedContent[]
 
@@ -85,46 +95,123 @@ model UserGeneratedContent {
 }
 
 model Chat {
-  id         String    @id @default(dbgenerated("(uuid_generate_v4())::text"))
-  user_id    String
+  id          String       @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id     String
   /// Short title shown in the UI: first user question, trimmed to 50 chars (set when the first message is saved).
-  name       String?
-  is_active  Boolean   @default(true) @map("is_active")
-  created_at DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  user       Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  messages   Message[]
-  chatLogs   ChatLog[]
+  name        String?
+  is_active   Boolean      @default(true) @map("is_active")
+  created_at  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        Auth         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  messages    Message[]
+  chatLogs    ChatLog[]
+  readingRuns ReadingRun[]
 
   @@index([user_id], map: "idx_chats_user_id")
   @@map("chats")
 }
 
 model Message {
-  id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  id         String      @id @default(dbgenerated("(uuid_generate_v4())::text"))
   chat_id    String
   question   String
-  ai_answer  String   @map("ai_answer")
-  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ai_answer  String      @map("ai_answer")
+  created_at DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  chat       Chat        @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   chatLog    ChatLog?
+  readingRun ReadingRun?
 
   @@index([chat_id], map: "idx_messages_chat_id")
   @@map("messages")
 }
 
 model ChatLog {
-  id                 String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
-  chat_id            String   @map("chat_id")
-  message_id         String   @unique @map("message_id")
-  request_payload    Json     @map("request_payload")
-  response_payload   Json     @map("response_payload")
+  id                  String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  chat_id             String   @map("chat_id")
+  message_id          String   @unique @map("message_id")
+  request_payload     Json     @map("request_payload")
+  response_payload    Json     @map("response_payload")
   /// True when the answer was delivered via POST /api/chat/ask-stream (SSE). False for GraphQL `ask`.
   /// Matches the web app when VITE_CHAT_STREAM is enabled (default); not sent from the client—set by the server.
-  client_delivery_sse Boolean @default(false) @map("client_delivery_sse")
-  created_at         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  chat               Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  message            Message  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  client_delivery_sse Boolean  @default(false) @map("client_delivery_sse")
+  created_at          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  chat                Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  message             Message  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([chat_id], map: "idx_chat_logs_chat_id")
   @@map("chat_logs")
+}
+
+/// Chart-facts dossier per kundli and facts version (reading engine M2).
+model KundliFacts {
+  id            String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id     String   @map("kundli_id")
+  facts_version Int      @map("facts_version")
+  engine_commit String   @map("engine_commit")
+  ayanamsa      String   @default("LAHIRI")
+  dossier       Json
+  natal_points  Json     @map("natal_points")
+  dossier_hash  String   @map("dossier_hash")
+  /// Hash of the legacy kundli columns the dossier was built from; a change triggers a rebuild.
+  source_hash   String   @map("source_hash")
+  built_at      DateTime @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli        Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([kundli_id, facts_version], map: "kundli_facts_kundli_version")
+  @@map("kundli_facts")
+}
+
+/// Global transit snapshots, one row per date range (reading engine M3).
+model TransitSnapshot {
+  id               String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  from_date        DateTime @map("from_date") @db.Date
+  to_date          DateTime @map("to_date") @db.Date
+  /// null = global snapshot; set = transit chart placed against this kundli's natal chart
+  kundli_id        String?  @map("kundli_id")
+  kundli           Kundli?  @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ayanamsa         String   @default("LAHIRI")
+  snapshot_version Int      @map("snapshot_version")
+  snapshot         Json
+  built_at         DateTime @default(now()) @map("built_at") @db.Timestamptz(6)
+
+  @@index([from_date, to_date], map: "transit_snapshots_range")
+  @@index([kundli_id, from_date, to_date], map: "transit_snapshots_kundli_range")
+  @@map("transit_snapshots")
+}
+
+/// One row per reading (reading engine M4): intent, pack hashes, findings, timings, usage, cache.
+model ReadingRun {
+  id                  String    @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id             String    @map("user_id")
+  chat_id             String?   @map("chat_id")
+  message_id          String?   @unique @map("message_id")
+  status              String
+  question            String
+  intent              Json?
+  intent_confirmed    Json?     @map("intent_confirmed")
+  facts_version       Int?      @map("facts_version")
+  dossier_hash        String?   @map("dossier_hash")
+  transit_snapshot_id String?   @map("transit_snapshot_id")
+  pack_hashes         Json?     @map("pack_hashes")
+  findings            Json?
+  windows             Json?
+  agreement           Json?
+  answer              String?
+  models              Json?
+  usage               Json?
+  cost_usd            Decimal?  @map("cost_usd") @db.Decimal(10, 6)
+  timings_ms          Json?     @map("timings_ms")
+  cache               Json?
+  dropped_claims      Int?      @map("dropped_claims")
+  grounding           Json?
+  errors              Json?
+  prompt_version      String    @map("prompt_version")
+  created_at          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  completed_at        DateTime? @map("completed_at") @db.Timestamptz(6)
+  user                Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  chat                Chat?     @relation(fields: [chat_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  message             Message?  @relation(fields: [message_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([user_id, created_at(sort: Desc)], map: "reading_runs_user_created")
+  @@index([chat_id], map: "reading_runs_chat")
+  @@map("reading_runs")
 }

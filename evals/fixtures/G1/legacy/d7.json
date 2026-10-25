@@ -1,0 +1,371 @@
+[
+ {
+  "body": "Lagna",
+  "longitude": "21 Cn 26' 13.00\"",
+  "nakshatra": "Asre",
+  "pada": "2",
+  "rasi": "Cn",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Sun",
+  "longitude": "2 Cn 04' 36.00\"",
+  "nakshatra": "Puna",
+  "pada": "4",
+  "rasi": "Cn",
+  "navamsa": "N/A",
+  "karaka": "Father (authority)"
+ },
+ {
+  "body": "Moon",
+  "longitude": "6 Aq 45' 26.00\"",
+  "nakshatra": "Sat",
+  "pada": "1",
+  "rasi": "Aq",
+  "navamsa": "N/A",
+  "karaka": "Minister (advisor)"
+ },
+ {
+  "body": "Mars",
+  "longitude": "18 Aq 12' 25.00\"",
+  "nakshatra": "Sat",
+  "pada": "4",
+  "rasi": "Aq",
+  "navamsa": "N/A",
+  "karaka": "Mother (nourisher)"
+ },
+ {
+  "body": "Mercury",
+  "longitude": "15 Sc 45' 11.00\"",
+  "nakshatra": "Anu",
+  "pada": "4",
+  "rasi": "Sc",
+  "navamsa": "N/A",
+  "karaka": "Spouse (partner)"
+ },
+ {
+  "body": "Jupiter",
+  "longitude": "25 Vi 29' 46.00\"",
+  "nakshatra": "Chit",
+  "pada": "1",
+  "rasi": "Vi",
+  "navamsa": "N/A",
+  "karaka": "Brother (associate)"
+ },
+ {
+  "body": "Venus",
+  "longitude": "27 Sg 40' 00.00\"",
+  "nakshatra": "USha",
+  "pada": "1",
+  "rasi": "Sg",
+  "navamsa": "N/A",
+  "karaka": "Son (follower)"
+ },
+ {
+  "body": "Saturn",
+  "longitude": "14 Pi 33' 25.00\"",
+  "nakshatra": "UBha",
+  "pada": "4",
+  "rasi": "Pi",
+  "navamsa": "N/A",
+  "karaka": "Self"
+ },
+ {
+  "body": "Rahu",
+  "longitude": "4 Ta 07' 44.00\"",
+  "nakshatra": "Kri",
+  "pada": "3",
+  "rasi": "Ta",
+  "navamsa": "N/A",
+  "karaka": "Cousin (rival)"
+ },
+ {
+  "body": "Ketu",
+  "longitude": "4 Sc 07' 44.00\"",
+  "nakshatra": "Anu",
+  "pada": "1",
+  "rasi": "Sc",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Maandi",
+  "longitude": "27 Li 44' 21.00\"",
+  "nakshatra": "Visa",
+  "pada": "3",
+  "rasi": "Li",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Gulika",
+  "longitude": "12 Ge 41' 20.00\"",
+  "nakshatra": "Ardr",
+  "pada": "2",
+  "rasi": "Ge",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Bhava Lagna",
+  "longitude": "19 Ar 31' 31.00\"",
+  "nakshatra": "Bha",
+  "pada": "2",
+  "rasi": "Ar",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Hora Lagna",
+  "longitude": "8 Le 36' 39.00\"",
+  "nakshatra": "Magh",
+  "pada": "3",
+  "rasi": "Le",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Ghati Lagna",
+  "longitude": "5 Ge 52' 02.00\"",
+  "nakshatra": "Mrig",
+  "pada": "4",
+  "rasi": "Ge",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Vighati Lagna",
+  "longitude": "5 Ar 34' 12.00\"",
+  "nakshatra": "Asw",
+  "pada": "2",
+  "rasi": "Ar",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Varnada Lagna",
+  "longitude": "21 Sg 26' 13.00\"",
+  "nakshatra": "PSha",
+  "pada": "3",
+  "rasi": "Sg",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Sree Lagna",
+  "longitude": "23 Ge 52' 43.00\"",
+  "nakshatra": "Puna",
+  "pada": "2",
+  "rasi": "Ge",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Pranapada Lagna",
+  "longitude": "22 Li 46' 36.00\"",
+  "nakshatra": "Visa",
+  "pada": "1",
+  "rasi": "Li",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Indu Lagna",
+  "longitude": "6 Sc 45' 26.00\"",
+  "nakshatra": "Anu",
+  "pada": "2",
+  "rasi": "Sc",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Bhrigu Bindhu Lagna",
+  "longitude": "20 Vi 26' 35.00\"",
+  "nakshatra": "Hast",
+  "pada": "4",
+  "rasi": "Vi",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Dhuma",
+  "longitude": "15 Le 24' 36.00\"",
+  "nakshatra": "PPha",
+  "pada": "1",
+  "rasi": "Le",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Vyatipaata",
+  "longitude": "14 Sc 35' 24.00\"",
+  "nakshatra": "Anu",
+  "pada": "4",
+  "rasi": "Sc",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Parivesha",
+  "longitude": "14 Ta 35' 24.00\"",
+  "nakshatra": "Roh",
+  "pada": "2",
+  "rasi": "Ta",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Indra Chapa",
+  "longitude": "N/A",
+  "nakshatra": "Asw",
+  "pada": "1",
+  "rasi": "Ar",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Upaketu",
+  "longitude": "2 Ge 04' 36.00\"",
+  "nakshatra": "Mrig",
+  "pada": "3",
+  "rasi": "Ge",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Kaala",
+  "longitude": "16 Vi 33' 45.00\"",
+  "nakshatra": "Hast",
+  "pada": "2",
+  "rasi": "Vi",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Mrityu",
+  "longitude": "28 Cn 30' 49.00\"",
+  "nakshatra": "Asre",
+  "pada": "4",
+  "rasi": "Cn",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Artha",
+  "longitude": "19 Sg 43' 44.00\"",
+  "nakshatra": "PSha",
+  "pada": "2",
+  "rasi": "Sg",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "Yama",
+  "longitude": "11 Ta 14' 54.00\"",
+  "nakshatra": "Roh",
+  "pada": "1",
+  "rasi": "Ta",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V2",
+  "longitude": "21 Ta 26' 13.00\"",
+  "nakshatra": "Roh",
+  "pada": "4",
+  "rasi": "Ta",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V3",
+  "longitude": "21 Ar 26' 13.00\"",
+  "nakshatra": "Bha",
+  "pada": "3",
+  "rasi": "Ar",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V4",
+  "longitude": "21 Ta 26' 13.00\"",
+  "nakshatra": "Roh",
+  "pada": "4",
+  "rasi": "Ta",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V5",
+  "longitude": "21 Sg 26' 13.00\"",
+  "nakshatra": "PSha",
+  "pada": "3",
+  "rasi": "Sg",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V6",
+  "longitude": "21 Vi 26' 13.00\"",
+  "nakshatra": "Hast",
+  "pada": "4",
+  "rasi": "Vi",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V7",
+  "longitude": "21 Le 26' 13.00\"",
+  "nakshatra": "PPha",
+  "pada": "3",
+  "rasi": "Le",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V8",
+  "longitude": "21 Cp 26' 13.00\"",
+  "nakshatra": "Srav",
+  "pada": "4",
+  "rasi": "Cp",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V9",
+  "longitude": "21 Ar 26' 13.00\"",
+  "nakshatra": "Bha",
+  "pada": "3",
+  "rasi": "Ar",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V10",
+  "longitude": "21 Cp 26' 13.00\"",
+  "nakshatra": "Srav",
+  "pada": "4",
+  "rasi": "Cp",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V11",
+  "longitude": "21 Le 26' 13.00\"",
+  "nakshatra": "PPha",
+  "pada": "3",
+  "rasi": "Le",
+  "navamsa": "N/A",
+  "karaka": ""
+ },
+ {
+  "body": "V12",
+  "longitude": "21 Vi 26' 13.00\"",
+  "nakshatra": "Hast",
+  "pada": "4",
+  "rasi": "Vi",
+  "navamsa": "N/A",
+  "karaka": ""
+ }
+]

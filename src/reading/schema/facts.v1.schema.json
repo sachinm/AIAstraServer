@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://aiastra.local/schemas/facts.v1.schema.json",
+  "title": "AI Astra chart facts dossier, facts_version 1",
+  "description": "Contract for the pyjhora Lambda `facts` export. Numeric and normalised: longitudes in decimal degrees, signs 0-11, houses 1-12, dates ISO-8601. Node reads this; it never computes it. Extra properties are allowed so the engine can add fields without a Node release.",
+  "type": "object",
+  "required": ["v", "engine", "as_of", "birth", "panchanga", "bodies", "houses", "vargas", "karakas", "arudhas", "dasha", "nakshatra_profile", "relations", "ashtakavarga"],
+  "properties": {
+    "v": { "const": 1 },
+    "engine": {
+      "type": "object",
+      "required": ["pyjhora", "commit", "ayanamsa", "houses"],
+      "properties": {
+        "pyjhora": { "type": "string" },
+        "commit": { "type": "string" },
+        "ayanamsa": { "type": "string" },
+        "houses": { "const": "whole_sign" }
+      }
+    },
+    "as_of": { "$ref": "#/definitions/isoDate" },
+    "birth": {
+      "type": "object",
+      "required": ["date", "time", "tz", "lat", "lon"],
+      "properties": {
+        "date": { "$ref": "#/definitions/isoDate" },
+        "time": { "type": "string", "pattern": "^\\d{2}:\\d{2}:\\d{2}$" },
+        "tz": { "type": "number", "minimum": -12, "maximum": 14 },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "place": { "type": "string" }
+      }
+    },
+    "panchanga": { "type": "object" },
+    "bodies": {
+      "type": "object",
+      "required": ["La", "Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"],
+      "additionalProperties": { "$ref": "#/definitions/body" }
+    },
+    "houses": {
+      "type": "object",
+      "required": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+      "additionalProperties": { "$ref": "#/definitions/house" }
+    },
+    "vargas": {
+      "type": "object",
+      "propertyNames": { "enum": ["D1", "D2", "D3", "D4", "D7", "D9", "D10", "D12", "D30", "D60"] },
+      "required": ["D1", "D9", "D10"],
+      "additionalProperties": { "$ref": "#/definitions/varga" }
+    },
+    "karakas": {
+      "type": "object",
+      "required": ["chara"],
+      "properties": {
+        "chara": {
+          "type": "object",
+          "required": ["AK", "AmK", "BK", "MK", "PiK", "PK", "GK", "DK"],
+          "additionalProperties": { "$ref": "#/definitions/planet" }
+        },
+        "karakamsa": { "type": "object" }
+      }
+    },
+    "arudhas": {
+      "type": "object",
+      "required": ["AL", "UL", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sign", "house"],
+        "properties": { "sign": { "$ref": "#/definitions/sign" }, "house": { "$ref": "#/definitions/house1to12" } }
+      }
+    },
+    "special_lagnas": { "type": "object" },
+    "yogas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "planets", "houses", "class"],
+        "properties": {
+          "name": { "type": "string" },
+          "planets": { "type": "array", "items": { "type": "string" } },
+          "houses": { "type": "array", "items": { "$ref": "#/definitions/house1to12" } },
+          "class": { "type": "string" }
+        }
+      }
+    },
+    "doshas": { "type": "array", "items": { "type": "object", "required": ["name", "present"] } },
+    "ashtakavarga": {
+      "type": "object",
+      "required": ["sav", "bav"],
+      "properties": {
+        "sav": { "type": "array", "minItems": 12, "maxItems": 12, "items": { "type": "integer", "minimum": 0 } },
+        "bav": { "type": "object", "additionalProperties": { "type": "array", "minItems": 12, "maxItems": 12, "items": { "type": "integer", "minimum": 0, "maximum": 8 } } }
+      }
+    },
+    "dasha": {
+      "type": "object",
+      "required": ["vimshottari", "narayana"],
+      "properties": {
+        "vimshottari": {
+          "type": "object",
+          "required": ["current", "mahadashas", "periods"],
+          "properties": {
+            "current": {
+              "type": "object",
+              "required": ["md", "ad"],
+              "properties": {
+                "md": { "$ref": "#/definitions/planet" },
+                "ad": { "$ref": "#/definitions/planet" },
+                "pd": { "$ref": "#/definitions/planet" },
+                "md_start": { "$ref": "#/definitions/isoDate" },
+                "md_end": { "$ref": "#/definitions/isoDate" },
+                "ad_start": { "$ref": "#/definitions/isoDate" },
+                "ad_end": { "$ref": "#/definitions/isoDate" },
+                "pd_start": { "$ref": "#/definitions/isoDate" },
+                "pd_end": { "$ref": "#/definitions/isoDate" }
+              }
+            },
+            "mahadashas": {
+              "type": "array",
+              "minItems": 9,
+              "items": { "type": "object", "required": ["md", "start", "end"], "properties": { "md": { "$ref": "#/definitions/planet" }, "start": { "$ref": "#/definitions/isoDate" }, "end": { "$ref": "#/definitions/isoDate" } } }
+            },
+            "periods": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["level", "md", "ad", "start", "end"],
+                "properties": {
+                  "level": { "enum": ["ad", "pd"] },
+                  "md": { "$ref": "#/definitions/planet" },
+                  "ad": { "$ref": "#/definitions/planet" },
+                  "pd": { "$ref": "#/definitions/planet" },
+                  "start": { "$ref": "#/definitions/isoDate" },
+                  "end": { "$ref": "#/definitions/isoDate" }
+                }
+              }
+            }
+          }
+        },
+        "narayana": {
+          "type": "object",
+          "required": ["current", "periods"],
+          "properties": { "periods": { "type": "array", "items": { "type": "object", "required": ["md_sign", "ad_sign", "start", "end"] } } }
+        }
+      }
+    },
+    "nakshatra_profile": {
+      "type": "object",
+      "required": ["janma", "lagna", "taras_from_janma"],
+      "properties": {
+        "janma": { "type": "object", "required": ["name", "pada", "lord"] },
+        "lagna": { "type": "object", "required": ["name", "pada", "lord"] },
+        "taras_from_janma": { "type": "object", "minProperties": 27 }
+      }
+    },
+    "relations": {
+      "type": "object",
+      "required": ["lord_of", "houses_of", "functional"],
+      "properties": {
+        "lord_of": { "type": "object", "minProperties": 12, "additionalProperties": { "$ref": "#/definitions/planet" } },
+        "functional": { "type": "object", "required": ["benefic", "malefic", "neutral"] }
+      }
+    }
+  },
+  "definitions": {
+    "isoDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "sign": { "type": "integer", "minimum": 0, "maximum": 11 },
+    "house1to12": { "type": "integer", "minimum": 1, "maximum": 12 },
+    "planet": { "enum": ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"] },
+    "nak": {
+      "type": "object",
+      "required": ["idx", "name", "pada", "lord"],
+      "properties": {
+        "idx": { "type": "integer", "minimum": 0, "maximum": 26 },
+        "name": { "type": "string" },
+        "pada": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "lord": { "$ref": "#/definitions/planet" }
+      }
+    },
+    "body": {
+      "type": "object",
+      "required": ["lon", "sign", "deg_in_sign", "house", "nak"],
+      "properties": {
+        "lon": { "type": "number", "minimum": 0, "maximum": 360 },
+        "sign": { "$ref": "#/definitions/sign" },
+        "sign_name": { "type": "string" },
+        "deg_in_sign": { "type": "number", "minimum": 0, "exclusiveMaximum": 30 },
+        "house": { "$ref": "#/definitions/house1to12" },
+        "nak": { "$ref": "#/definitions/nak" },
+        "dignity": { "enum": ["exalted", "moolatrikona", "own", "friend", "neutral", "enemy", "debilitated"] },
+        "retro": { "type": "boolean" },
+        "combust": { "type": "boolean" },
+        "owns": { "type": "array", "items": { "$ref": "#/definitions/house1to12" } },
+        "flags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "house": {
+      "type": "object",
+      "required": ["sign", "lord", "lord_house", "occupants"],
+      "properties": {
+        "sign": { "$ref": "#/definitions/sign" },
+        "lord": { "$ref": "#/definitions/planet" },
+        "lord_house": { "$ref": "#/definitions/house1to12" },
+        "occupants": { "type": "array", "items": { "type": "string" } },
+        "aspected_by": { "type": "object" },
+        "argala": { "type": "object" },
+        "sav": { "type": "integer" },
+        "class": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "varga": {
+      "type": "object",
+      "required": ["lagna_sign", "lagna_lord", "planets", "houses", "d1_lord_positions"],
+      "properties": {
+        "lagna_sign": { "$ref": "#/definitions/sign" },
+        "lagna_lord": { "$ref": "#/definitions/planet" },
+        "planets": {
+          "type": "object",
+          "required": ["Su", "Mo", "Ma", "Me", "Ju", "Ve", "Sa", "Ra", "Ke"],
+          "additionalProperties": {
+            "type": "object",
+            "required": ["sign", "house", "dignity", "vargottama"],
+            "properties": { "sign": { "$ref": "#/definitions/sign" }, "house": { "$ref": "#/definitions/house1to12" }, "dignity": { "type": "string" }, "vargottama": { "type": "boolean" } }
+          }
+        },
+        "houses": { "type": "object", "minProperties": 12 },
+        "d1_lord_positions": {
+          "type": "object",
+          "minProperties": 12,
+          "additionalProperties": { "type": "object", "required": ["lord", "varga_house", "varga_dignity"] }
+        }
+      }
+    }
+  }
+}
