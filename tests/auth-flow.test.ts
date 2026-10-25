@@ -13,8 +13,10 @@ import { prisma } from '../src/lib/prisma.js';
 
 const unique = () =>
   `testuser_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+// these tests sign up real users: they run only against a database chosen for tests (never the one in a
+// developer .env, which may be production). Opt in with ALLOW_DB_TESTS=1.
 const hasDb =
-  !!process.env.DATABASE_URL && !process.env.DATABASE_URL_IS_PLACEHOLDER;
+  process.env.ALLOW_DB_TESTS === '1' && !!process.env.DATABASE_URL && !process.env.DATABASE_URL_IS_PLACEHOLDER;
 
 describe('Auth flow', () => {
   let testUserId: string | null = null;

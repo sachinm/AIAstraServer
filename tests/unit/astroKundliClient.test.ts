@@ -10,8 +10,11 @@ vi.mock('../../src/lib/encrypt.js', () => ({
   decrypt: vi.fn((x: string | null) => (x && x.startsWith('enc:') ? 'decrypted' : x)),
 }));
 
-vi.mock('../../src/config/env.js', () => ({
+vi.mock('../../src/config/env.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/config/env.js')>()),
   getAstroKundliBaseUrl: vi.fn(() => 'http://localhost:8765'),
+  // the endpoint check is the HTTP path; the Lambda transport is tested separately
+  getAstroKundliTransport: vi.fn(() => 'http'),
 }));
 
 describe('astroKundliClient', () => {
