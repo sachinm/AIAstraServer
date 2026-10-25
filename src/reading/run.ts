@@ -27,6 +27,7 @@ import { FRAMES, horizonRange } from './packs/frames.js';
 import { buildEvidencePack, hashPack, hashText, mergeSubjectPacks, renderBase, renderSubject, type EvidencePack } from './packs/selector.js';
 import { PROMPTS, PROMPT_VERSION } from './prompts/generated.js';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
+import { guidanceFor } from './coach/content.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -135,6 +136,16 @@ function summarizeIntent(intent: Intent) {
     planets: intent.mentionsPlanets,
     confidence: intent.confidence,
     text: intent.clarifyText,
+    // bucket-first classification: lets the UI draw the template frame before the first token (file 09 §6)
+    ...(intent.classification
+      ? {
+          bucket: intent.classification.bucket,
+          subBucket: intent.classification.subBucket,
+          template: intent.classification.template,
+          missing: intent.classification.missing,
+          ...(guidanceFor(intent.classification.bucket, intent.classification.unanswerable) ? { guidance: guidanceFor(intent.classification.bucket, intent.classification.unanswerable)!.text } : {}),
+        }
+      : {}),
   };
 }
 
