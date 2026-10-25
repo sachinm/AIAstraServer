@@ -11,7 +11,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 import { getGeminiModelsBaseUrl, getGeminiUndiciBodyTimeoutMs, getGeminiUndiciHeadersTimeoutMs } from '../../config/env.js';
 import type { Usage } from '../types.js';
-import { cacheNameFor, invalidateCache } from './promptCache.js';
+import { cacheNameFor, invalidateCache, type CacheOwner } from './promptCache.js';
 
 export type Thinking = 'off' | 'low' | 'medium' | 'high';
 
@@ -32,6 +32,8 @@ export interface GeminiCallOptions {
   signal?: AbortSignal;
   /** system + parts[0] form a stable prefix that may be served from the explicit prompt cache (promptCache.ts) */
   cachePrefix?: boolean;
+  /** Who the cached prefix belongs to (logout deletes that user's caches) */
+  cacheOwner?: CacheOwner;
 }
 
 export interface GeminiResult {
@@ -167,7 +169,7 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
 
 /** Non-streaming call (specialists, intake). Returns the full text. */
 function cacheFor(o: GeminiCallOptions): string | null {
-  return o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey()) : null;
+  return o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner) : null;
 }
 
 export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {

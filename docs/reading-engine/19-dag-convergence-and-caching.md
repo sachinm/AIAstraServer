@@ -89,7 +89,45 @@ TRADITIONS APPLIED: parashara, jaimini
 |---|---|---|
 | **Findings cache** (`findingsCache.ts`) | whole specialist calls | Key: dossier hash + analyst + subject + prompt version, plus the period for timing layers only. Promise and nakshatra are natal, so changing the period during clarification or asking again re-runs only dasha and transit. In-process LRU, 500 entries, 6-hour TTL (`READING_FINDINGS_CACHE_TTL_MS`). |
 | **Prompt layout** (implicit caching) | the repeated prefix of every call | System (persona + method, identical for everyone), then the user's base chart (identical across that user's questions), then the subject part, then the question. Gemini discounts a repeated prefix automatically on the paid tier. |
-| **Explicit prompt cache** (`promptCache.ts`) | the ~3k-token system + base-chart prefix | Created lazily on the prefix's 2nd use (`READING_EXPLICIT_CACHE_MIN_USES`), in the background, 1-hour TTL (`READING_EXPLICIT_CACHE_TTL_SECONDS`). Later calls send `cachedContent` plus only the subject part and question. A rejected cache is forgotten and the call retried uncached. **Off** until `READING_EXPLICIT_CACHE=1`. |
+| **Explicit prompt cache** (`promptCache.ts`) | the ~3k-token system + base-chart prefix | Created lazily on the prefix's 2nd use (`READING_EXPLICIT_CACHE_MIN_USES`), in the background, 30-minute sliding TTL (`READING_EXPLICIT_CACHE_TTL_SECONDS`). Later calls send `cachedContent` plus only the subject part and question. A rejected cache is forgotten and the call retried uncached. Lifecycle below. **Off** until `READING_EXPLICIT_CACHE=1`. |
+
+### Explicit cache lifecycle (R-7; doc 20 §8, doc 21 §1 Q4)
+
+Goal: never pay for an idle cache. Code: `src/reading/llm/promptCache.ts`, `cacheRegistry.ts`, `cacheSweep.ts`.
+
+- **Registry** `llm_cache_entries` (migration M8): one row per Gemini cache — name, provider, user, kundli, prefix hash,
+  model, created / last used / expires, deleted_at, delete_error. Before creating, an instance adopts a live row for the same
+  prefix (it also asks once on the first sighting of a prefix), so Lambda instances share one cache per chart prefix.
+- **Display name** `aiastra:<prefixHash>` on every cache we create; the sweeper only ever deletes orphans with that prefix.
+- **TTL 30 min, sliding.** A hit with less than half the TTL left PATCHes `cachedContents/{name}?updateMask=ttl` in the
+  background; uses are written to `last_used_at` at most once a minute per instance.
+- **Logout** (GraphQL `logout: Boolean!`) calls `deleteUserCaches(userId)` fire-and-forget: Gemini DELETE (404 counts as
+  deleted), rows marked. A failed delete keeps the row live with `delete_error`, and the sweeper retries it. The web client
+  must call the mutation on logout (it only clears local storage today). On Lambda the background delete can be frozen
+  with the instance; the TTL and the sweeper are the backstop.
+- **Sweeper** `sweepLlmCaches({ idleMs })` (default 30 min): deletes live rows idle longer than that, marks expired rows,
+  then lists Gemini's `cachedContents` and deletes `aiastra:*` caches with no live row that are older than 5 minutes.
+  Without a working registry it skips the reconcile (it cannot tell orphans from live caches).
+  - CLI: `npm run cache:sweep [-- --idle-minutes 30]`.
+  - Long-lived server (not Lambda): hourly unref'd timer, only when `READING_EXPLICIT_CACHE=1`.
+  - Lambda: EventBridge schedule → Lambda Web Adapter pass-through → `POST /events` in `server.ts`. Recognised only when
+    `source=aws.events`, `detail-type=Scheduled Event`, `detail.task=llm-cache-sweep` and, when
+    `LLM_CACHE_SWEEP_TOKEN` is set on the function, `detail.token` equals it. Other bodies get 204. One sweep per
+    instance per 5 minutes at most.
+- **Registry failures** (table missing before M8 is applied, DB down) are logged once; the registry is skipped for 5
+  minutes and the cache keeps working from memory. A chat call never waits on, or fails because of, the registry.
+
+**For the deploy session (not created yet):** apply M8 (`npx prisma migrate deploy`), set `LLM_CACHE_SWEEP_TOKEN` (any
+random string) on the API Lambda, check the image keeps the LWA default `AWS_LWA_PASS_THROUGH_PATH=/events`, then create:
+
+| Resource | Value |
+|---|---|
+| EventBridge rule | `aiastra-llm-cache-sweep`, schedule `rate(1 hour)`, state ENABLED, default bus |
+| Target | the API Lambda (alias the deploy uses), constant input (JSON): `{"source":"aws.events","detail-type":"Scheduled Event","detail":{"task":"llm-cache-sweep","token":"<LLM_CACHE_SWEEP_TOKEN>"}}` |
+| Permission | `aws lambda add-permission --statement-id eventbridge-llm-cache-sweep --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn <rule ARN>` on that function/alias |
+
+Constant input replaces the event EventBridge would send, so the body above is what reaches `POST /events`. An
+EventBridge Scheduler schedule with the same input works too. Nothing to create until `READING_EXPLICIT_CACHE=1` is set.
 
 **What turning the explicit cache on needs:** paid billing on the Gemini key's Google project, then `READING_EXPLICIT_CACHE=1`.
 - **The newer key:** its project needs prepay credits topped up in AI Studio, and it requires `gemini-3.8-flash`.

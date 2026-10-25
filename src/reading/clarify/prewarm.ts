@@ -41,7 +41,7 @@ export async function prewarmNatalLayers(prisma: PrismaClient, userId: string, s
           cached.push(analyst);
           return;
         }
-        const { finding } = await call({ analyst, subject, pack, intent: subjIntent, question: s.question, system, asOf: s.asOf });
+        const { finding } = await call({ analyst, subject, pack, intent: subjIntent, question: s.question, system, asOf: s.asOf, cacheOwner: { userId, kundliId: data.kundliId } });
         findingsCache.set(key, finding);
         ran.push(analyst);
       })

@@ -234,3 +234,25 @@ model DeclinedTopic {
 
   @@map("declined_topics")
 }
+
+/// Registry of explicit LLM prompt caches (docs/reading-engine/20 §8, R-7). One live row per cache: every instance looks
+/// here before creating one (one cache per chart prefix), logout deletes the user's rows' caches, and the sweeper deletes
+/// idle ones and reconciles against the provider's list. No foreign keys: rows are short-lived bookkeeping.
+model LlmCacheEntry {
+  name         String    @id
+  provider     String
+  user_id      String?   @map("user_id")
+  kundli_id    String?   @map("kundli_id")
+  prefix_hash  String    @map("prefix_hash")
+  model        String
+  created_at   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  last_used_at DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  expires_at   DateTime  @map("expires_at") @db.Timestamptz(6)
+  deleted_at   DateTime? @map("deleted_at") @db.Timestamptz(6)
+  delete_error String?   @map("delete_error")
+
+  @@index([prefix_hash, expires_at], map: "llm_cache_entries_prefix")
+  @@index([user_id], map: "llm_cache_entries_user")
+  @@index([last_used_at], map: "llm_cache_entries_last_used")
+  @@map("llm_cache_entries")
+}

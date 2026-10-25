@@ -23,6 +23,7 @@ import { isBucketId } from '../reading/buckets/taxonomy.js';
 import { roleCan } from '../auth/roles.js';
 import type { GraphQLContext } from './context.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
+import { deleteUserCaches } from '../reading/llm/promptCache.js';
 
 const ADMIN_ROLES = ['admin', 'superadmin', 'aiastra_admin'] as const;
 
@@ -258,6 +259,8 @@ const typeDefs = /* GraphQL */ `
     signup(input: SignUpInput!): SignUpResult!
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
     loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
+    """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
+    logout: Boolean!
     uploadKundli(fileBase64: String!): UploadKundliResult!
     createChat: ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
@@ -886,6 +889,11 @@ const resolvers = {
     ) {
       const clientIp = getClientIp(context.request);
       return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+    },
+    logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      // fire-and-forget: the response never waits for Gemini; the hourly sweeper catches anything left
+      if (context.userId) void deleteUserCaches(context.userId).catch(() => undefined);
+      return true;
     },
     async uploadKundli(
       _parent: unknown,

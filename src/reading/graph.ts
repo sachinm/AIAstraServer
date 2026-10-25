@@ -11,6 +11,7 @@ import { Annotation, END, Send, START, StateGraph } from '@langchain/langgraph';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
 import type { EvidencePack } from './packs/selector.js';
 import { reconcile, type ReconcileResult } from './nodes/reconcile.js';
+import type { CacheOwner } from './llm/promptCache.js';
 import { analystsFor, runSpecialist, type Finding, type SpecialistAnalyst } from './nodes/specialists.js';
 import type { Dossier } from './facts/types.js';
 import type { TransitChart } from './transits/types.js';
@@ -41,6 +42,8 @@ export interface GraphDeps {
   transits?: TransitChart | null;
   /** Key of the findings cache (same dossier + analyst + subject + period + prompts → same findings) */
   dossierHash?: string | null;
+  /** owner of the specialists' explicit prompt cache */
+  cacheOwner?: CacheOwner;
 }
 
 const State = Annotation.Root({
@@ -92,7 +95,7 @@ export function buildReadingGraph(deps: GraphDeps) {
         return { findings: [{ ...cached, status: 'cached' as const }], timings: { [`${name}:${input.subject}`]: ms } };
       }
       const call = () =>
-        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf });
+        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner });
       const withTimeout = <T>(p: Promise<T>): Promise<T> =>
         Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${name} exceeded ${readingSpecialistTimeoutMs()} ms`)), readingSpecialistTimeoutMs()))]);
       try {
