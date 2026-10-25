@@ -1,0 +1,18 @@
+{"count":16,"byCategory":{"deny":7,"decline":8,"role_gated":1}}
+10	deny	self_harm	
+20	deny	violence_harm	
+30	deny	curses_black_magic	
+40	deny	crime	
+50	deny	abuse_stalking	
+60	deny	extremism	
+70	deny	sexual_minors	
+100	decline	death_lifespan	
+110	decline	baby_sex	
+120	decline	third_party_surveillance	
+130	decline	gambling_markets	
+140	decline	public_events	
+150	decline	exact_amount	
+160	decline	remedies	
+170	decline	legal_advice	
+200	role_gated	health	astrologer,researcher,aiastra_admin
+{"loadedFromDb":16,"deathNovice":"death_lifespan","healthAstrologer":null,"healthNovice":"health"}

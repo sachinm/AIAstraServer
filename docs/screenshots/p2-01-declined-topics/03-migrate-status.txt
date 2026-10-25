@@ -1,0 +1,7 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "aiastradb", schema "public" at "dpg-d6sdjcp5pdvs73dpa8a0-a.virginia-postgres.render.com:5432"
+
+15 migrations found in prisma/migrations
+
+Database schema is up to date!
