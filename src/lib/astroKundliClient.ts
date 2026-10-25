@@ -650,25 +650,33 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
   }
 }
 
+/**
+ * Legacy export call (d1, d9, dashas …). When the kundli already has stored coordinates they are sent as lat/lon/tz,
+ * so the engine skips geocoding (its geocoder can fail on a city that resolved before). The spacing throttle always
+ * applies: the engine allows at most one export request per second per client.
+ */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,
-  type: KundliJsonField
+  type: KundliJsonField,
+  coords?: { lat: number | null; lon: number | null; tz: number | null } | null
 ): Promise<Prisma.JsonValue> {
+  if (coords && coords.lat != null && coords.lon != null && coords.tz != null) {
+    const extra = { lat: coords.lat, lon: coords.lon, tz: coords.tz };
+    return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+  }
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
 }
 
 /**
  * Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body.
- * When lat/lon/tz are supplied nothing is geocoded upstream, so the per-process spacing throttle (which exists for
- * Nominatim) is skipped and chat-path calls are not delayed behind queue work.
+ * The spacing throttle always applies: the engine rate-limits exports to one request per second per client,
+ * with or without coordinates.
  */
 export async function fetchEngineExport(
   params: AstroKundliRequestParams,
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
-  const hasCoords = extra.lat != null && extra.lon != null && extra.tz != null;
-  if (hasCoords) return fetchHoroscopeChartImpl(params, type, extra);
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 
@@ -784,11 +792,13 @@ async function fetchHoroscopeChartImpl(
     }
 
     if (!ok) {
-      const errMsg =
+      const base =
         json?.error ?? (typeof json === 'object' && json && 'message' in json
           ? String((json as { message?: string }).message)
           : `HTTP ${status}`);
-      throw new Error(errMsg);
+      // keep the engine's detail (e.g. which export types it accepts, or why a place did not resolve)
+      const detail = typeof json === 'object' && json && 'detail' in json ? String((json as { detail?: unknown }).detail).slice(0, 300) : '';
+      throw new Error(detail ? `${base}: ${detail}` : base);
     }
 
     return parseAstroKundliResponse(json);

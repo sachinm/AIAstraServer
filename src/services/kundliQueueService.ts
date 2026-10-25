@@ -229,7 +229,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
     for (let i = 0; i < missingFields.length; i += maxConcurrent) {
       const chunk = missingFields.slice(i, i + maxConcurrent);
       const results = await Promise.allSettled(
-        chunk.map((field) => fetchHoroscopeChart(params, field))
+        chunk.map((field) => fetchHoroscopeChart(params, field, { lat: row.lat, lon: row.lon, tz: row.tz }))
       );
       const durationMs = Date.now() - startAll;
       results.forEach((result, j) => {
