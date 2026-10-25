@@ -1,0 +1,16 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "aiastradb", schema "public" at "dpg-d6sdjcp5pdvs73dpa8a0-a.virginia-postgres.render.com:5432"
+
+15 migrations found in prisma/migrations
+
+Applying migration `20261025100000_reading_m5_declined_topics`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261025100000_reading_m5_declined_topics/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+exit 0

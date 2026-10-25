@@ -101,13 +101,7 @@ What the table can and cannot change:
 - **Fallback:** if the table is missing or the database is unreachable, the built-in list applies.
 - **Caching:** the table is cached for 5 minutes. On a cold start the first question uses the built-in list while the table loads in the background, so the gate never adds a wait.
 
-**Status:** migration M5 is written and seeded with all 16 topics. Applying it to the live database was blocked by the permission system as a production change, so it needs Sachin's approval or Sachin runs it:
-
-```bash
-npx prisma migrate deploy
-```
-
-Until then the built-in list is in force, so the behaviour is the same.
+**Status:** migration M5 was applied to the live database on 2026-10-25 with Sachin's approval and verified: 16 rows (7 deny, 8 decline, 1 role-gated). Evidence: `docs/screenshots/p2-01-declined-topics/`.
 
 ## 6. Where it sits in the flow
 
