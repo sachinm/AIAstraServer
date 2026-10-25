@@ -14,7 +14,9 @@ import { callGemini } from '../llm/gemini.js';
 import { modelFor } from '../llm/models.js';
 import { FORMATS, FRAMES, QUESTION_TYPES, SUBJECT_IDS, horizonRange, isSubjectId, type FormatId, type Horizon, type QuestionType, type SubjectId } from '../packs/frames.js';
 import { PROMPTS } from '../prompts/generated.js';
-import type { Intent, SafetyFlag, Usage } from '../types.js';
+import type { Intent, IntentClassification, SafetyFlag, Usage } from '../types.js';
+import { classifyRules, type ClassifierResult } from '../buckets/classifier.js';
+import { BUCKETS } from '../buckets/taxonomy.js';
 
 const PLANET_WORDS: Array<[string, RegExp]> = [
   ['Su', /\b(sun|surya|ravi)\b/i],
@@ -282,15 +284,35 @@ export async function runIntake(question: string, asOf: string, opts: { history?
   const t0 = Date.now();
   const mode = opts.mode ?? intakeMode();
   const rules = ruleIntake(question, asOf);
-  if (rules.intent.safety === 'self_harm') return { intent: rules.intent, usage: null, source: 'rules', ms: Date.now() - t0 };
-  if (mode === 'rules' || (mode === 'auto' && rules.confident)) return { intent: rules.intent, usage: null, source: 'rules', ms: Date.now() - t0 };
+  const cls = classifyRules(question, asOf);
+  const withCls = (intent: Intent): Intent => attachClassification(intent, cls, asOf);
+  if (rules.intent.safety === 'self_harm') return { intent: withCls(rules.intent), usage: null, source: 'rules', ms: Date.now() - t0 };
+  if (mode === 'rules' || (mode === 'auto' && rules.confident)) return { intent: withCls(rules.intent), usage: null, source: 'rules', ms: Date.now() - t0 };
   try {
     const { intent, usage } = await llmIntake(question, asOf, opts.history);
     // the rules are better at spotting a named planet than a small model is; union them
     const mentions = [...new Set([...intent.mentionsPlanets, ...rules.intent.mentionsPlanets])];
-    return { intent: { ...intent, mentionsPlanets: mentions }, usage, source: 'llm', ms: Date.now() - t0 };
+    return { intent: withCls({ ...intent, mentionsPlanets: mentions }), usage, source: 'llm', ms: Date.now() - t0 };
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'reading intake llm failed; using rules', error: (err as Error).message }));
-    return { intent: rules.intent, usage: null, source: 'rules_fallback', ms: Date.now() - t0 };
+    return { intent: withCls(rules.intent), usage: null, source: 'rules_fallback', ms: Date.now() - t0 };
   }
+}
+
+/**
+ * Attaches the bucket classification to an intent. When intake found no subject (it fell back to life direction) but
+ * the classifier found a bucket, the bucket's primary frame becomes the subject.
+ */
+export function attachClassification(intent: Intent, c: ClassifierResult, asOf: string): Intent {
+  const classification: IntentClassification = {
+    bucket: c.bucket, subBucket: c.subBucket, alsoBuckets: c.alsoBuckets, confidence: c.confidence, slots: c.slots, missing: c.missing,
+    template: c.template, policy: c.policy, unanswerable: c.unanswerable, questionKind: c.questionKind, source: c.source, ms: c.ms,
+  };
+  const fellBack = intent.subjects.length === 1 && intent.subjects[0]!.id === 'general_life_direction' && intent.confidence < 0.75;
+  if (fellBack && c.bucket !== 'unknown' && c.bucket !== 'explain_term' && c.confidence >= 0.7) {
+    const sub = c.subBucket ? BUCKETS[c.bucket].subBuckets.find((x) => x.id === c.subBucket) : undefined;
+    const frame = sub?.frame ?? BUCKETS[c.bucket].frames[0]!;
+    return { ...intent, subjects: [{ id: frame, weight: 1 }], clarifyText: clarifyTextFor([frame], intent.horizon, asOf), classification };
+  }
+  return { ...intent, classification };
 }
