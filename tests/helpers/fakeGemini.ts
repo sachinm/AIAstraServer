@@ -35,6 +35,24 @@ function userText(body: any): string[] {
   return (body?.contents?.[0]?.parts ?? []).map((p: any) => String(p.text ?? ''));
 }
 
+/** Canned markdown per requested format, so the UI renders realistic tables, lists and headings. Not astrology. */
+export function cannedAnswer(prompt: string): string {
+  const fmt = /Format `(\w+)`/.exec(prompt)?.[1] ?? "direct";
+  const head = "**Direct answer (demo text):** the chart shows a gradual improvement, with the strongest window starting in November 2026.\n\n";
+  switch (fmt) {
+    case "timeline":
+      return head + "| Window | Dasha (MD-AD-PD) | Transit trigger | Indication | Watch for |\n|---|---|---|---|---|\n| Nov 2026 - Jan 2027 | Saturn-Ketu-Mercury | Jupiter in Leo | moderate indication | steady offers |\n| Jun 2027 - Aug 2027 | Saturn-Venus-Sun | Saturn in Aries | weak / possible | delays |\n\n### How to read this\n\nThe promise is moderate, the dasha supports, and the transit trigger agrees in the first window.";
+    case "factor_table":
+      return head + "| Factor | Placement | Strength | Effect on the question |\n|---|---|---|---|\n| 10th lord | Mercury in the 9th | friend | support through fortune |\n| D-10 lagna | Scorpio | - | depth, research |\n\nThe factors lean towards a considered change later in the year.";
+    case "narrative":
+      return head + "### What is in your chart\n\nDemo narrative text.\n\n### Why now (dasha)\n\nSaturn-Ketu period.\n\n### The trigger (transits)\n\nKetu reaches natal Jupiter in June 2028.\n\n### What to expect\n\nPatience now, clarity later.";
+    case "watchlist":
+      return head + "1. **Early November** - Jupiter stays in Leo; look for steady news.\n2. **Late November** - Moon passes the 4th; avoid rushing signatures.\n3. **December 6** - Ketu enters Cancer; revisit the paperwork.";
+    default:
+      return head + "- 10th lord Mercury sits in the 9th house.\n- Saturn-Ketu-Sun is running now.\n- No outcome is promised; this is an indication only.\n\nOutlook: steady.";
+  }
+}
+
 function analystOf(parts: string[]): string | null {
   const m = /ANALYST: (\w+)/.exec(parts.join('\n'));
   return m ? m[1]! : null;
@@ -91,7 +109,7 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
       }
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      const text = opts.answer ?? 'Direct answer: the chart supports a gradual improvement.\n\n| Window | Dasha | Trigger |\n|---|---|---|\n| Nov 2026 - Mar 2027 | Saturn-Ketu-Sun | Jupiter in Leo |\n\nHow to read this: promise is moderate.';
+      const text = opts.answer ?? cannedAnswer(parts.join('\n'));
       const pieces = text.match(/.{1,24}/gs) ?? [text];
       for (let i = 0; i < pieces.length; i++) {
         const last = i === pieces.length - 1;

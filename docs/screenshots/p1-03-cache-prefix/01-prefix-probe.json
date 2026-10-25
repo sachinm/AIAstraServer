@@ -1,0 +1,25 @@
+{
+  "questions": [
+    "When will I get married?",
+    "Should I change jobs this year?",
+    "When am I going to buy a house?"
+  ],
+  "systemPromptIdentical": true,
+  "systemPromptChars": 5057,
+  "baseChartIdentical": true,
+  "baseChartChars": 6139,
+  "subjectPartsDiffer": true,
+  "subjectPartChars": [
+    10088,
+    7274,
+    8686
+  ],
+  "cacheablePrefixChars": 11196,
+  "cacheablePrefixApproxTokens": 3110,
+  "perRequestVariableApproxTokens": [
+    2992,
+    2175,
+    2600
+  ],
+  "note": "The fake server reports cachedContentTokenCount for a repeated prefix, as Gemini does for implicit caching; real hit rates are measured in the real eval."
+}

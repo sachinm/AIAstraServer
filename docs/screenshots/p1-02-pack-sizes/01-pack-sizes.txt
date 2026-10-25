@@ -1,0 +1,5 @@
+career_work 1y ~tokens 4062 {"base":1703,"frame":97,"detail":458,"varga":198,"arudha":62,"dasha":459,"transits":1068}
+property_home 3y ~tokens 4118 {"base":1703,"frame":93,"detail":393,"varga":199,"arudha":29,"dasha":192,"transits":1492}
+general_life_direction life ~tokens 4214 {"base":1703,"frame":95,"detail":410,"varga":400,"arudha":15,"dasha":218,"transits":1355}
+whole dossier ~tokens 16147 (what a cache of the full dossier would hold)
+dumped to docs/screenshots/p1-02-pack-sizes

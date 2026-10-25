@@ -1,0 +1,28 @@
+{"msg":"reading timing","runId":"99943593-97aa-46a1-9ac3-10a3226db9c3","flow":"single","intake":48,"dataWait":0,"pack":32,"synthStart":211,"synthesize":181,"total":392,"firstTokenFromStart":375,"ttftMs":164,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+{"msg":"reading timing","runId":"3396f85d-7249-48f3-b41b-4340db106a65","flow":"single","intake":8,"dataWait":0,"pack":2,"synthStart":27,"synthesize":27,"total":54,"firstTokenFromStart":54,"ttftMs":27,"cachedTokens":4162,"promptTokens":5946,"costUsd":0.00121,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":3726,"errors":0}
+{"msg":"reading timing","runId":"a24530c6-9683-4cbf-bc06-d362ed45b3b6","flow":"single","intake":1,"dataWait":0,"pack":2,"synthStart":11,"synthesize":20,"total":31,"firstTokenFromStart":30,"ttftMs":19,"cachedTokens":4497,"promptTokens":6425,"costUsd":0.001263,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4118,"errors":0}
+{
+  "questions": [
+    "When will I get married?",
+    "Should I change jobs this year?",
+    "When am I going to buy a house?"
+  ],
+  "systemPromptIdentical": true,
+  "systemPromptChars": 5057,
+  "baseChartIdentical": true,
+  "baseChartChars": 6139,
+  "subjectPartsDiffer": true,
+  "subjectPartChars": [
+    10088,
+    7274,
+    8686
+  ],
+  "cacheablePrefixChars": 11196,
+  "cacheablePrefixApproxTokens": 3110,
+  "perRequestVariableApproxTokens": [
+    2992,
+    2175,
+    2600
+  ],
+  "note": "The fake server reports cachedContentTokenCount for a repeated prefix, as Gemini does for implicit caching; real hit rates are measured in the real eval."
+}

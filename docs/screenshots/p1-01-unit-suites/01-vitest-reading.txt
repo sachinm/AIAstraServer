@@ -1,0 +1,120 @@
+
+ RUN  v2.1.9 C:/Users/Owner/Documents/work/AIAstra_Server
+
+stdout | tests/unit/reading/run.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+
+stdout | tests/unit/reading/grounding.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+
+stdout | tests/unit/reading/selector.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+
+ ✓ tests/unit/reading/grounding.test.ts (25 tests) 544ms
+ ✓ tests/unit/reading/selector.test.ts (24 tests) 646ms
+   ✓ frames > has a frame for every subject with at least one house and consistent ids 345ms
+stdout | tests/unit/reading/store.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+stdout | tests/unit/reading/intake.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+
+ ✓ tests/unit/reading/intake.test.ts (17 tests) 205ms
+stdout | tests/unit/reading/store.test.ts > loadReadingData (db source) > degrades to no transits (not an error) when the engine does not serve them yet
+{"msg":"reading transit chart unavailable","kundliIdPrefix":"k1","error":"engine does not serve type=transits yet"}
+
+ ✓ tests/unit/reading/store.test.ts (9 tests) 342ms
+stdout | tests/unit/reading/factsBuilder.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+
+stdout | tests/unit/reading/chatRouting.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 📡 observe env with Radar: https://dotenvx.com/radar
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > streams one answer after intake and pack, with events in order
+{"msg":"reading timing","runId":"0792a361-b8c5-42d0-9214-3fc712a14320","flow":"single","intake":171,"dataWait":0,"pack":35,"synthStart":436,"synthesize":572,"total":1008,"firstTokenFromStart":737,"ttftMs":301,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > sends the thinking config in the request body and never asks for thoughts
+{"msg":"reading timing","runId":"a6cdfaa4-fb9e-4c52-8bc1-7e21ca509648","flow":"single","intake":5,"dataWait":0,"pack":38,"synthStart":53,"synthesize":312,"total":365,"firstTokenFromStart":114,"ttftMs":61,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > logs the pack hash and sizes in chat_logs payloads, never the chart
+{"msg":"reading timing","runId":"cf4d305e-486a-4587-8f17-1925324364f2","flow":"single","intake":2,"dataWait":0,"pack":5,"synthStart":166,"synthesize":948,"total":1114,"firstTokenFromStart":206,"ttftMs":40,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > uses an identical cacheable prefix (system + base chart) for different questions and subjects
+{"msg":"reading timing","runId":"42f9ba2e-13b0-4b75-8f36-a3c4b4a3ecd0","flow":"single","intake":0,"dataWait":0,"pack":4,"synthStart":14,"synthesize":517,"total":531,"firstTokenFromStart":84,"ttftMs":70,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+ ✓ tests/unit/reading/factsBuilder.test.ts (7 tests) 226ms
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > uses an identical cacheable prefix (system + base chart) for different questions and subjects
+{"msg":"reading timing","runId":"0ede1e3e-65ed-4a2b-ac03-da483ec4e321","flow":"single","intake":2,"dataWait":0,"pack":2,"synthStart":131,"synthesize":270,"total":401,"firstTokenFromStart":139,"ttftMs":8,"cachedTokens":4162,"promptTokens":5946,"costUsd":0.00121,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":3726,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > puts the day-dependent text after the cacheable prefix and keeps the system prompt date-free
+{"msg":"reading timing","runId":"2946537a-14ee-48b5-b820-302531b6739c","flow":"single","intake":3,"dataWait":0,"pack":3,"synthStart":89,"synthesize":265,"total":354,"firstTokenFromStart":99,"ttftMs":10,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > records usage, cached share and cost in the run record
+{"msg":"reading timing","runId":"bc1fece8-713a-4662-a0f2-6605f8152c80","flow":"single","intake":0,"dataWait":0,"pack":1,"synthStart":10,"synthesize":117,"total":127,"firstTokenFromStart":18,"ttftMs":8,"cachedTokens":0,"promptTokens":6865,"costUsd":0.00261,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: single flow > records usage, cached share and cost in the run record
+{"msg":"reading timing","runId":"62cca346-7dc7-40ae-83c3-1443f1daed1a","flow":"single","intake":1,"dataWait":0,"pack":1,"synthStart":29,"synthesize":207,"total":236,"firstTokenFromStart":35,"ttftMs":6,"cachedTokens":4805,"promptTokens":6865,"costUsd":0.001312,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: graph flow > runs specialists in parallel, gates ungrounded claims, then streams the synthesis
+{"msg":"reading timing","runId":"df539843-57ec-40e1-83b7-1dc30ee2f269","flow":"graph","intake":2,"dataWait":0,"pack":4,"synthStart":1334,"graph":1533,"promise:career_work":827,"dasha:career_work":993,"transit:career_work":996,"reconcile":3,"synthesize":210,"total":1554,"firstTokenFromStart":1349,"ttftMs":15,"cachedTokens":7195,"promptTokens":17321,"costUsd":0.005454,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":3,"packTokens":3726,"errors":0}
+
+stdout | tests/unit/reading/current.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+ ✓ tests/unit/reading/current.test.ts (6 tests) 34ms
+stdout | tests/unit/reading/run.test.ts > runReading: graph flow > continues when one specialist fails and reports the missing layer
+{"msg":"reading timing","runId":"ff9d8a0c-0b84-44c4-a2da-28974c4ff4b1","flow":"graph","intake":1,"dataWait":0,"pack":3,"synthStart":1114,"graph":1095,"promise:career_work":159,"dasha:career_work":124,"transit:career_work":893,"reconcile":0,"synthesize":73,"total":1190,"firstTokenFromStart":1186,"ttftMs":72,"cachedTokens":3488,"promptTokens":11899,"costUsd":0.004278,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":2,"packTokens":3726,"errors":1}
+
+stdout | tests/unit/reading/run.test.ts > runReading: graph flow > falls back to one call over the pack when every specialist fails
+{"msg":"reading timing","runId":"9984a35c-f892-4688-ab16-bb4e3da79d8a","flow":"graph","intake":0,"dataWait":0,"pack":0,"synthStart":1070,"graph":1083,"promise:career_work":657,"dasha:career_work":878,"transit:career_work":517,"reconcile":0,"synthesize":19,"total":1092,"firstTokenFromStart":1089,"ttftMs":19,"cachedTokens":0,"promptTokens":2056,"costUsd":0.001167,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":3726,"errors":4}
+
+stdout | tests/unit/reading/run.test.ts > runReading: graph flow > uses the fast lane (no specialists) for a short yes/no question
+{"msg":"reading timing","runId":"a2f4e648-ffed-4150-bc73-49f91ab93fed","flow":"single","intake":1,"dataWait":0,"pack":1,"synthStart":39,"synthesize":94,"total":133,"firstTokenFromStart":57,"ttftMs":18,"cachedTokens":0,"promptTokens":5823,"costUsd":0.002297,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":3649,"errors":0}
+
+stdout | tests/unit/reading/run.test.ts > runReading: intake via model when unsure > calls the intake model for ambiguous questions in auto mode
+{"msg":"reading timing","runId":"55fa10b0-6117-4336-a332-bcec4b60af2e","flow":"single","intake":22,"dataWait":0,"pack":2,"synthStart":34,"synthesize":181,"total":215,"firstTokenFromStart":52,"ttftMs":18,"cachedTokens":0,"promptTokens":6906,"costUsd":0.003172,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4062,"errors":0}
+
+ ✓ tests/unit/reading/run.test.ts (13 tests) 8819ms
+   ✓ runReading: single flow > streams one answer after intake and pack, with events in order 1027ms
+   ✓ runReading: single flow > sends the thinking config in the request body and never asks for thoughts 370ms
+   ✓ runReading: single flow > logs the pack hash and sizes in chat_logs payloads, never the chart 1122ms
+   ✓ runReading: single flow > uses an identical cacheable prefix (system + base chart) for different questions and subjects 935ms
+   ✓ runReading: single flow > puts the day-dependent text after the cacheable prefix and keeps the system prompt date-free 356ms
+   ✓ runReading: single flow > records usage, cached share and cost in the run record 493ms
+   ✓ runReading: graph flow > runs specialists in parallel, gates ungrounded claims, then streams the synthesis 1572ms
+   ✓ runReading: graph flow > continues when one specialist fails and reports the missing layer 1197ms
+   ✓ runReading: graph flow > falls back to one call over the pack when every specialist fails 1096ms
+stdout | tests/unit/reading/schema.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+
+ ✓ tests/unit/reading/schema.test.ts (9 tests) 234ms
+stdout | tests/unit/reading/prompts.test.ts
+[dotenv@17.2.1] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+stdout | tests/unit/reading/chatRouting.test.ts > chat routing > keeps the legacy path when READING_ENGINE is off (kill switch)
+{"msg":"chatWithConfiguredProvider timing","provider":"gemini","totalMs":0}
+
+stdout | tests/unit/reading/chatRouting.test.ts > chat routing > falls back to the legacy path when the dossier is not available, and says so
+{"msg":"reading engine unavailable; using legacy chat path","reason":"dossier_missing"}
+{"msg":"chatWithConfiguredProvider timing","provider":"gemini","totalMs":84}
+
+stdout | tests/unit/reading/chatRouting.test.ts > chat routing > does not fall back when fallback is disabled
+{"msg":"chatWithConfiguredProvider timing","provider":"gemini","totalMs":5}
+
+ ✓ tests/unit/reading/prompts.test.ts (5 tests) 1111ms
+   ✓ embedded prompts > generated.ts is in sync with the markdown sources (run: npm run prompts:embed) 1102ms
+stdout | tests/unit/reading/chatRouting.test.ts > chat routing > answers through the reading engine when the dossier is available
+{"msg":"reading timing","runId":"0aa6f256-236e-4f08-8074-2db601cd44c7","flow":"single","intake":1,"dataWait":0,"pack":30,"synthStart":132,"synthesize":262,"total":394,"firstTokenFromStart":289,"ttftMs":157,"cachedTokens":0,"promptTokens":6865,"costUsd":0.000775,"finishReason":"STOP","stoppedForLoop":false,"droppedClaims":0,"packTokens":4508,"errors":0}
+{"msg":"chatWithConfiguredProvider timing","provider":"gemini","totalMs":395}
+
+stdout | tests/unit/reading/chatRouting.test.ts > chat routing > does not use the reading engine for the Groq provider
+{"msg":"chatWithConfiguredProvider timing","provider":"groq","totalMs":1}
+
+ ✓ tests/unit/reading/chatRouting.test.ts (5 tests) 650ms
+   ✓ chat routing > answers through the reading engine when the dossier is available 405ms
+
+ Test Files  10 passed (10)
+      Tests  120 passed (120)
+   Start at  23:09:31
+   Duration  31.43s (transform 9.62s, setup 1.35s, collect 43.46s, tests 12.81s, environment 12ms, prepare 12.83s)
+

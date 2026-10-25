@@ -15,6 +15,8 @@ This document is the plan. The companion files hold the detail:
 | [06-schema-api-infra.md](./06-schema-api-infra.md) | Prisma migrations, GraphQL/SSE contract, Python API changes, Lambda/EventBridge/Secrets changes |
 | [07-evaluation.md](./07-evaluation.md) | Golden question set (including Sachin's test questions), grounding checker, scoring rubric |
 | [08-rollout.md](./08-rollout.md) | Phases, branch strategy, what ships when, go/no-go gates |
+| [09-lambda-contract.md](./09-lambda-contract.md) | What the Lambda must return for `facts` and `transits` (brief for the later Python pass) |
+| [PHASE1-STATUS.md](./PHASE1-STATUS.md) | What Phase 1 shipped, what is blocked, measured numbers, decisions |
 
 ---
 

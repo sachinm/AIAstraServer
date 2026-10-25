@@ -114,21 +114,20 @@ describe('runReading: safety and availability', () => {
 
 describe('runReading: graph flow', () => {
   it('runs specialists in parallel, gates ungrounded claims, then streams the synthesis', async () => {
-    const slow = await startFakeGemini({ specialistDelayMs: 300, chunkDelayMs: 1 });
+    // Parallelism is asserted from the specialists' request start times (all within half a delay), not from wall-clock,
+    // so a busy machine does not make it flaky.
+    const delay = 600;
+    const slow = await startFakeGemini({ specialistDelayMs: delay, chunkDelayMs: 1 });
     process.env.GEMINI_API_URL = slow.url;
     try {
       const c = collect();
-      const t0 = Date.now();
       const r = await runReading(prisma, 'u1', 'Should I change jobs this year?', { asOf: G1_AS_OF, flow: 'graph', onEvent: c.onEvent, onDelta: c.onDelta });
-      const wall = Date.now() - t0;
       const specialists = slow.requests.filter((q) => !q.stream);
       const synth = slow.requests.filter((q) => q.stream);
       expect(specialists.length).toBeGreaterThanOrEqual(3);
       expect(synth).toHaveLength(1);
-      // 3 specialists of 300 ms each would take 900 ms+ if sequential
-      expect(wall).toBeLessThan(800);
       const starts = specialists.map((q) => q.at);
-      expect(Math.max(...starts) - Math.min(...starts)).toBeLessThan(150);
+      expect(Math.max(...starts) - Math.min(...starts)).toBeLessThan(delay / 2);
       expect(r.record.flow).toBe('graph');
       expect(r.record.droppedClaims).toBeGreaterThanOrEqual(3);
       const findings = r.record.findings as Array<{ claims: unknown[]; windows: unknown[] }>;

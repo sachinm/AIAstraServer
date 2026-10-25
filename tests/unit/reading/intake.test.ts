@@ -82,6 +82,14 @@ describe('rule intake: the 12 golden questions', () => {
   });
 });
 
+describe('understanding line wording', () => {
+  it('writes a date-range horizon the way a person would say it', () => {
+    const i = ruleIntake('Should I change jobs this year?', ASOF).intent;
+    expect(i.clarifyText).toContain('now until 31 Dec 2026');
+    expect(i.clarifyText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+});
+
 describe('rule intake: invariants', () => {
   it('weights sum to about 1 and ids are valid', () => {
     for (const q of ['When will I get married?', 'job and money', 'tell me something']) {

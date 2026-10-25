@@ -1,0 +1,13 @@
+FAIL Q1 contradicted=0 coverage=0.00 total=421ms firstToken=215ms prompt=6961
+PASS Q2 contradicted=0 coverage=0.63 total=215ms firstToken=37ms prompt=6425
+FAIL Q3 contradicted=1 coverage=0.80 total=118ms firstToken=15ms prompt=6161
+PASS Q4 contradicted=0 coverage=0.83 total=220ms firstToken=17ms prompt=5996
+PASS Q5 contradicted=0 coverage=1.00 total=149ms firstToken=19ms prompt=6942
+PASS Q6 contradicted=0 coverage=0.50 total=209ms firstToken=48ms prompt=6489
+PASS Q7 contradicted=0 coverage=0.83 total=130ms firstToken=26ms prompt=5946
+PASS Q8 contradicted=0 coverage=1.00 total=121ms firstToken=22ms prompt=6623
+PASS Q9 contradicted=0 coverage=0.75 total=256ms firstToken=20ms prompt=6865
+PASS Q10 contradicted=0 coverage=1.00 total=137ms firstToken=13ms prompt=5823
+FAIL Q11 contradicted=1 coverage=0.50 total=118ms firstToken=18ms prompt=5407
+FAIL Q12 contradicted=0 coverage=0.00 total=253ms firstToken=22ms prompt=6940
+report: docs\screenshots\p1-04-eval-harness\phase1\summary.md

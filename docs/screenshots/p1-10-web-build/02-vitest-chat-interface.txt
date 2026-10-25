@@ -1,0 +1,15 @@
+
+ RUN  v2.1.9 C:/Users/Owner/Documents/work/AIAstra_WEB
+
+ ✓ src/pages/chat-interface/readingProgress.test.ts (7 tests) 43ms
+ ✓ src/pages/chat-interface/useSpeechRecognition.test.ts (11 tests) 224ms
+ ✓ src/pages/chat-interface/ChatSection.test.tsx (10 tests) 2234ms
+   ✓ ChatSection syncing modal > shows "Syncing your chart…" when kundli_added is false 552ms
+   ✓ ChatSection syncing modal > dismisses syncing modal and shows chat when kundli_added=true and queue_status=completed 365ms
+   ✓ ChatSection speech-to-text and input area > shows textarea and Send button when chat is ready 515ms
+
+ Test Files  3 passed (3)
+      Tests  28 passed (28)
+   Start at  22:48:45
+   Duration  15.14s (transform 1.09s, setup 1.75s, collect 5.32s, tests 2.50s, environment 11.41s, prepare 2.18s)
+

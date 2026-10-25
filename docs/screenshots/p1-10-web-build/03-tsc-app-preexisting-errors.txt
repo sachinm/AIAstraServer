@@ -1,0 +1,23 @@
+NOTE: these errors exist on web develop (unused variables, a routes.tsx prop, test typings). None are in files changed by this branch; vite build does not typecheck.
+
+src/LandingPage.tsx(11,10): error TS6133: 'activeTab' is declared but its value is never read.
+src/LandingPage.tsx(11,21): error TS6133: 'setActiveTab' is declared but its value is never read.
+src/LandingPage.tsx(562,14): error TS2322: Type '{ children: string; jsx: true; global: true; }' is not assignable to type 'DetailedHTMLProps<StyleHTMLAttributes<HTMLStyleElement>, HTMLStyleElement>'.
+  Property 'jsx' does not exist on type 'DetailedHTMLProps<StyleHTMLAttributes<HTMLStyleElement>, HTMLStyleElement>'.
+src/lib/analytics.ts(11,63): error TS2339: Property 'gtag' does not exist on type 'Window & typeof globalThis'.
+src/lib/analytics.ts(13,10): error TS2339: Property 'gtag' does not exist on type 'Window & typeof globalThis'.
+src/pages/chat-interface/useSpeechRecognition.test.ts(23,7): error TS2322: Type '((e: SpeechRecognitionEvent) => void) | null' is not assignable to type '(e: SpeechRecognitionEvent) => void'.
+  Type 'null' is not assignable to type '(e: SpeechRecognitionEvent) => void'.
+src/pages/chat-interface/useSpeechRecognition.test.ts(47,12): error TS6133: 'i' is declared but its value is never read.
+src/pages/chat-interface/useSpeechRecognition.test.ts(72,71): error TS2339: Property 'SpeechRecognition' does not exist on type 'Window'.
+src/pages/chat-interface/useSpeechRecognition.test.ts(77,39): error TS2339: Property 'SpeechRecognition' does not exist on type 'Window'.
+src/pages/chat-interface/useSpeechRecognition.test.ts(83,48): error TS2339: Property 'SpeechRecognition' does not exist on type 'Window'.
+src/pages/chat-interface/useSpeechRecognition.test.ts(108,41): error TS2339: Property 'SpeechRecognition' does not exist on type 'Window'.
+src/pages/mantras/MantrasSection.tsx(14,56): error TS6133: 'user' is declared but its value is never read.
+src/pages/mantras/MantrasSection.tsx(172,9): error TS6133: 'horoscope' is declared but its value is never read.
+src/pages/remedies/RemediesSection.tsx(2,29): error TS6133: 'Droplets' is declared but its value is never read.
+src/pages/remedies/RemediesSection.tsx(2,39): error TS6133: 'Leaf' is declared but its value is never read.
+src/pages/remedies/RemediesSection.tsx(14,58): error TS6133: 'user' is declared but its value is never read.
+src/routes.tsx(95,56): error TS2322: Type '{ user: User; }' is not assignable to type 'IntrinsicAttributes'.
+  Property 'user' does not exist on type 'IntrinsicAttributes'.
+tsc exit 2

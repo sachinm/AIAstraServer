@@ -1,0 +1,169 @@
+{
+  "question": "When am I going to buy a house?",
+  "firstProgressEventMs": 200,
+  "firstTokenMs": 1347,
+  "tokenEvents": 22,
+  "totalMs": 1988,
+  "events": [
+    {
+      "at": 199,
+      "type": "start"
+    },
+    {
+      "at": 200,
+      "type": "stage",
+      "name": "intake",
+      "status": "start"
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "intake",
+      "status": "done",
+      "ms": 1
+    },
+    {
+      "at": 203,
+      "type": "intent",
+      "runId": "3b9a8263-5389-4b3a-8990-98af79e9e6bb",
+      "intent": {
+        "subjects": [
+          {
+            "id": "property_home",
+            "label": "property and home"
+          }
+        ],
+        "horizon": "3y",
+        "horizonLabel": "3y",
+        "questionType": "timing",
+        "format": "timeline",
+        "planets": [],
+        "confidence": 0.9,
+        "text": "You are asking about property and home over the next 3 years; I will read houses 4, 2, 11, D-4, your running dasha and the transits."
+      },
+      "source": "rules"
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "prepare",
+      "status": "start"
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "prepare",
+      "status": "done",
+      "ms": 2,
+      "detail": {
+        "approxTokens": 4118,
+        "transits": "ready"
+      }
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "promise",
+      "status": "start",
+      "subject": "property_home"
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "dasha",
+      "status": "start",
+      "subject": "property_home"
+    },
+    {
+      "at": 203,
+      "type": "stage",
+      "name": "transit",
+      "status": "start",
+      "subject": "property_home"
+    },
+    {
+      "at": 1320,
+      "type": "stage",
+      "name": "promise",
+      "status": "done",
+      "ms": 1122,
+      "subject": "property_home"
+    },
+    {
+      "at": 1323,
+      "type": "stage",
+      "name": "dasha",
+      "status": "done",
+      "ms": 1124,
+      "subject": "property_home"
+    },
+    {
+      "at": 1335,
+      "type": "stage",
+      "name": "transit",
+      "status": "done",
+      "ms": 1125,
+      "subject": "property_home"
+    },
+    {
+      "at": 1335,
+      "type": "stage",
+      "name": "reconcile",
+      "status": "start"
+    },
+    {
+      "at": 1335,
+      "type": "stage",
+      "name": "reconcile",
+      "status": "done",
+      "ms": 1
+    },
+    {
+      "at": 1335,
+      "type": "windows",
+      "windows": [
+        {
+          "from": "2026-11-01",
+          "to": "2027-03-01",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter"
+        },
+        {
+          "from": "2026-11-01",
+          "to": "2027-03-01",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter"
+        },
+        {
+          "from": "2026-11-01",
+          "to": "2027-03-01",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter + Saturn-Ketu-Sun supporter"
+        }
+      ]
+    },
+    {
+      "at": 1335,
+      "type": "stage",
+      "name": "synthesize",
+      "status": "start"
+    },
+    {
+      "at": 1986,
+      "type": "stage",
+      "name": "synthesize",
+      "status": "done",
+      "ms": 649
+    },
+    {
+      "at": 1986,
+      "type": "done",
+      "chatId": "demo-chat-1",
+      "runId": "3b9a8263-5389-4b3a-8990-98af79e9e6bb",
+      "grounding": {
+        "dropped": 6
+      },
+      "answerChars": 527
+    }
+  ]
+}

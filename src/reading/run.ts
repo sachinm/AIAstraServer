@@ -217,6 +217,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   const streamSingle = async (): Promise<void> => {
     const tSynth = Date.now();
+    timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
       { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
@@ -240,6 +241,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
       intent, question, asOf, system, packs, keyFacts, emit,
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
+        timings.synthStart = Date.now() - tStart;
         const r = await streamGemini(
           { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta
@@ -271,7 +273,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   }
 
   timings.total = Date.now() - tStart;
-  if (ttftMs !== null) timings.firstTokenFromStart = tStart ? Date.now() - tStart - ((timings.synthesize ?? 0) - ttftMs) : 0;
+  if (ttftMs !== null && timings.synthStart !== undefined) timings.firstTokenFromStart = timings.synthStart + ttftMs;
   const cachedTokens = usages.reduce((n, u) => n + u.cachedTokens, 0);
   const promptTokens = usages.reduce((n, u) => n + u.promptTokens, 0);
   const costUsd = totalCostUsd(usages);

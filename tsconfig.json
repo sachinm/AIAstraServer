@@ -15,6 +15,6 @@
     "noEmitOnError": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["server.ts", "kundli-rag.ts", "src/**/*.ts", "supa/**/*.ts", "tests/**/*.ts"],
+  "include": ["server.ts", "kundli-rag.ts", "src/**/*.ts", "supa/**/*.ts", "tests/**/*.ts", "evals/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -96,8 +96,16 @@ function defaultFormat(type: QuestionType, subjects: SubjectId[], horizon: Horiz
   }
 }
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-12-31" -> "31 Dec 2026" */
+export function humanDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[3])} ${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : iso;
+}
+
 export function labelForHorizon(h: Horizon, asOf: string): string {
-  if (typeof h === 'object') return `${h.from} to ${h.to}`;
+  if (typeof h === 'object') return h.from === asOf ? `now until ${humanDate(h.to)}` : `${humanDate(h.from)} to ${humanDate(h.to)}`;
   const names: Record<string, string> = { now: 'this month', '3m': 'the next 3 months', '6m': 'the next 6 months', '1y': 'the next year', '3y': 'the next 3 years', life: 'your life as a whole' };
   void asOf;
   return names[h] ?? h;
