@@ -1,0 +1,8 @@
+$ npm run build  (develop @ 326349b)
+
+> rag-with-langchain@1.0.0 build
+> tsc
+
+dist/server.js
+
+[exited with code 0]
