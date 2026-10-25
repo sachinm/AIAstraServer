@@ -20,6 +20,7 @@ import { getAstroKundliTransport, getNodeEnv, isAstroKundliConfigured, isDevOrLo
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
+import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -165,7 +166,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const { question, chatId } = req.body as { question?: string; chatId?: string | null };
+  const { question, chatId, clarify } = req.body as { question?: string; chatId?: string | null; clarify?: boolean };
   if (!question || typeof question !== 'string' || !question.trim()) {
     return res.status(400).json({ error: 'question is required' });
   }
@@ -217,6 +218,8 @@ app.post('/api/chat/ask-stream', async (req, res) => {
 
   try {
     const q = question.trim();
+    // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
+    if (clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
     writeSse({ type: 'start' });
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
       onDelta: (delta) => {
@@ -240,6 +243,8 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     res.end();
   }
 });
+
+registerClarifyRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {

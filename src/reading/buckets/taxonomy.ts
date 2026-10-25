@@ -360,7 +360,7 @@ export const CHIP_BUCKETS: BucketId[] = [
 export const HORIZON_CHIPS: Array<{ label: string; horizon: Horizon }> = [
   { label: 'Next 3 months', horizon: '3m' },
   { label: 'Next 6 months', horizon: '6m' },
-  { label: 'This year', horizon: '1y' },
+  { label: 'Next 12 months', horizon: '1y' },
   { label: 'Next 3 years', horizon: '3y' },
 ];
 

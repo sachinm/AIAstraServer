@@ -75,6 +75,8 @@ export async function persistAskTurn(
   chatResult: ChatTurnResult,
   clientDeliverySse: boolean
 ): Promise<{ chatId: string; messageId: string }> {
+  // deny topics never keep the text (src/reading/policy/declined.ts)
+  question = chatResult.storedQuestion ?? question;
   let chat: { id: string } | null = null;
   if (chatId?.trim()) {
     chat = await db.chat.findFirst({

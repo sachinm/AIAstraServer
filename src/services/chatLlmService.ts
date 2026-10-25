@@ -8,11 +8,14 @@ import { chatWithGemini } from './geminiChatService.js';
 import { isReadingEngineEnabled, readingBuildFactsEnabled, readingFallbackToLegacy } from '../reading/config.js';
 import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { ReadingUnavailableError, runReading, type ReadingRunRecord } from '../reading/run.js';
-import type { ReadingEmitter } from '../reading/types.js';
+import type { Intent, ReadingEmitter } from '../reading/types.js';
+import { declinedFor, storedQuestion } from '../reading/policy/declined.js';
 
 export type ChatTurnResult = ChatWithGroqResult & {
   /** Present when the reading engine answered; persisted as a reading_runs row. */
   reading?: ReadingRunRecord;
+  /** When set, stored instead of the question text (deny topics: "[withheld: <topic>]") */
+  storedQuestion?: string;
 };
 
 /** Shown when a kundli has no chart-facts dossier yet and the legacy fallback is off (the default). */
@@ -24,6 +27,8 @@ export type ChatWithLlmOptions = {
   onDelta?: (delta: string) => void;
   /** Reading-engine progress events (intent, stage, windows) for the SSE stream. */
   onEvent?: ReadingEmitter;
+  /** Confirmed intent from the clarifier (skips intake) */
+  intent?: Intent;
 };
 
 export async function chatWithConfiguredProvider(
@@ -34,12 +39,21 @@ export async function chatWithConfiguredProvider(
 ): Promise<ChatTurnResult> {
   const provider = getChatLlmProvider();
   const t0 = Date.now();
+  // topics the app does not discuss are stopped before any agent or model sees the text, on every provider
+  const declined = await declinedFor(prisma, userId, question);
+  if (declined) {
+    options?.onEvent?.({ type: 'info', reason: 'declined', category: declined.category, topic: declined.id });
+    options?.onDelta?.(declined.reply);
+    const stored = storedQuestion(question, declined);
+    return { answerText: declined.reply, requestPayload: { engine: 'policy', declined: declined.id, category: declined.category }, responsePayload: { engine: 'policy', declined: declined.id }, storedQuestion: stored };
+  }
   try {
     if (provider === 'gemini' && isReadingEngineEnabled()) {
       try {
         const r = await runReading(prisma, userId, question, {
           onDelta: options?.onDelta,
           onEvent: options?.onEvent,
+          intent: options?.intent,
           onFactsMissing: (kundliId) => {
             if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
           },

@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../graphql/context.js';
 import { hashPassword, comparePassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
+import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
 import { validateLoginInput, validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
@@ -284,6 +285,8 @@ export async function signup(
       email,
       gender: gender ?? null,
       signup_ip: clientIp?.trim() || null,
+      // general public registers as novice (src/auth/roles.ts)
+      role: DEFAULT_SIGNUP_ROLE,
     },
   });
 

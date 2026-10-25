@@ -215,3 +215,22 @@ model ReadingRun {
   @@index([chat_id], map: "reading_runs_chat")
   @@map("reading_runs")
 }
+
+/// Topics the app does not discuss (docs/reading-engine/18-declined-topics.md). category: deny | decline | role_gated.
+/// The code keeps a built-in floor (src/reading/policy/declined.ts); deny topics cannot be disabled from here.
+model DeclinedTopic {
+  id            String   @id
+  category      String
+  label         String
+  reply         String
+  phrases       Json     @default("[]")
+  words         Json     @default("[]")
+  allowed_roles String[] @default([]) @map("allowed_roles")
+  enabled       Boolean  @default(true)
+  sort_order    Int      @default(500) @map("sort_order")
+  notes         String?
+  updated_at    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updated_by    String?  @map("updated_by")
+
+  @@map("declined_topics")
+}

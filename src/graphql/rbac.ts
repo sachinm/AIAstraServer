@@ -10,6 +10,13 @@ export const ALL_AUTHENTICATED_ROLES = [
   'support',
   'admin',
   'superadmin',
+  // roles from src/auth/roles.ts (2026-10-25)
+  'novice',
+  'public',
+  'student',
+  'researcher',
+  'client_account_admin',
+  'aiastra_admin',
 ] as const;
 
 export type AllowedRole = (typeof ALL_AUTHENTICATED_ROLES)[number];
