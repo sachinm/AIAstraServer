@@ -11,6 +11,9 @@ import { horizonRange } from '../packs/frames.js';
 import { resolveEvidence, type EvidencePack } from '../packs/selector.js';
 import type { Intent } from '../types.js';
 import type { Finding } from './specialists.js';
+import type { Dossier } from '../facts/types.js';
+import type { TransitChart } from '../transits/types.js';
+import { applyDeciders, convergence, DECIDERS, fortuneTier, nowAndNext, renderBrief, type LayerId, type LayerScores, type SynthBrief, type Verdict } from './convergence.js';
 
 export interface Window {
   from: string;
@@ -35,6 +38,10 @@ export interface ReconcileResult {
   droppedWindows: number;
   totalClaims: number;
   brief: string;
+  /** five-layer convergence for the primary subject (file 11 §1) */
+  verdict: Verdict;
+  layers: LayerScores;
+  synthBrief: SynthBrief;
 }
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,7 +56,7 @@ function classOf(label: string): 'deliverer' | 'supporter' | 'neutral' | 'obstru
   return 'neutral';
 }
 
-export function reconcile(args: { findings: Finding[]; packs: Record<string, EvidencePack>; intent: Intent; asOf: string; keyFacts: string }): ReconcileResult {
+export function reconcile(args: { findings: Finding[]; packs: Record<string, EvidencePack>; intent: Intent; asOf: string; keyFacts: string; question?: string; dossier?: Dossier | null; transits?: TransitChart | null; failed?: string[] }): ReconcileResult {
   const hz = horizonRange(args.intent.horizon, args.asOf);
   let dropped = 0;
   let droppedWindows = 0;
@@ -143,5 +150,44 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
       caveats: f.caveats,
     })),
   };
-  return { findings, windows: merged, agreement, droppedClaims: dropped, droppedWindows, totalClaims: total, brief: JSON.stringify(briefObj) };
+  // five-layer convergence on the primary subject (file 11): deciders settle a split promise, missing required layers cap
+  const primary = args.intent.subjects[0]?.id;
+  const pf = findings.filter((f) => f.subject === primary);
+  const by = (a: Finding['analyst']) => pf.find((f) => f.analyst === a && f.status !== 'failed' && f.status !== 'skipped');
+  const dec = primary ? applyDeciders(by('promise'), primary) : { L1: undefined, used: [] as string[] };
+  const layers: LayerScores = {};
+  if (dec.L1 !== undefined) layers.L1 = dec.L1;
+  for (const [a, k] of [['dasha', 'L2'], ['transit', 'L3'], ['nakshatra', 'L4']] as const) {
+    const f = by(a);
+    if (f && typeof f.layerScore === 'number') layers[k] = f.layerScore;
+  }
+  const months = (hz.to.slice(0, 4) === hz.from.slice(0, 4) ? 0 : 12 * (Number(hz.to.slice(0, 4)) - Number(hz.from.slice(0, 4)))) + Number(hz.to.slice(5, 7)) - Number(hz.from.slice(5, 7));
+  const transitRequired = months <= 36;
+  const failed = new Set(args.failed ?? []);
+  const missingRequired: LayerId[] = [];
+  if (!by('promise') && (failed.has('promise') || pf.length)) missingRequired.push('L1');
+  if (!by('dasha') && (failed.has('dasha') || pf.length)) missingRequired.push('L2');
+  if (transitRequired && !by('transit') && (failed.has('transit') || pf.length)) missingRequired.push('L3');
+  const verdict = convergence(layers, { transitRequired, missingRequired });
+  const fortune = args.dossier ? fortuneTier(args.dossier, args.transits ?? null, args.asOf) : null;
+  const nn = args.dossier ? nowAndNext(args.dossier, args.asOf) : { now: null, next: null };
+  const traditions = [...new Set(findings.flatMap((f) => f.claims.map((c) => (c as { tradition?: string }).tradition ?? 'parashara')))];
+  const synthBrief: SynthBrief = {
+    template: args.intent.classification?.template ?? args.intent.format,
+    subjects: args.intent.subjects.map((x) => x.id),
+    horizon: args.intent.horizon,
+    question: args.question ?? '',
+    verdict,
+    layers,
+    deciders: primary && DECIDERS[primary] && dec.used.length ? { text: DECIDERS[primary]!.text, evidence: dec.used } : null,
+    now: nn.now,
+    next: nn.next && nn.next.from <= hz.to ? nn.next : null,
+    windows: merged.slice(0, 7).map((w) => ({ from: w.from, to: w.to, label: w.label, polarity: w.polarity, source: w.source })),
+    keyFacts: args.keyFacts.split('\n').filter(Boolean).slice(0, 12),
+    caveats: [...new Set(findings.flatMap((f) => f.caveats))].slice(0, 6),
+    fortune: fortune ? { tier: fortune.tier, until: fortune.until } : null,
+    traditions,
+  };
+  const brief = `${renderBrief(synthBrief)}\n\nFINDINGS (detail):\n${JSON.stringify(briefObj)}`;
+  return { findings, windows: merged, agreement, droppedClaims: dropped, droppedWindows, totalClaims: total, brief, verdict, layers, synthBrief };
 }

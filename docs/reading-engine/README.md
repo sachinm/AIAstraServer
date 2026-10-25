@@ -26,6 +26,7 @@ This document is the plan. The companion files hold the detail:
 | [16-kundli-sync-and-dossier-ops.md](./16-kundli-sync-and-dossier-ops.md) | Where chart data comes from (Radha only), the state of the live database, the 25th-kundli fix, how to rerun a stuck sync |
 | [17-clarify-agent.md](./17-clarify-agent.md) | The clarifier: what it asks and in what order, real dialogues, questions about another person, the optional Bedrock model, API contract |
 | [18-declined-topics.md](./18-declined-topics.md) | Topics the app does not discuss (deny / decline / role-gated), user roles, the `declined_topics` table |
+| [19-dag-convergence-and-caching.md](./19-dag-convergence-and-caching.md) | The multi-agent DAG as built: required and optional agents, layer scores, convergence, deciders, fortune tier, SynthBrief, templates T1-T10, findings cache and explicit prompt cache |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 

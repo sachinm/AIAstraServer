@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { clearReadingCaches } from '../../../src/reading/data/store.js';
+import { findingsCache } from '../../../src/reading/nodes/findingsCache.js';
 import { ReadingUnavailableError, runReading } from '../../../src/reading/run.js';
 import type { ReadingEvent } from '../../../src/reading/types.js';
 import { G1_AS_OF } from '../../helpers/readingFixtures.js';
@@ -26,6 +27,7 @@ afterAll(async () => {
 beforeEach(() => {
   fake.reset();
   clearReadingCaches();
+  findingsCache.clear();
 });
 
 const collect = () => {

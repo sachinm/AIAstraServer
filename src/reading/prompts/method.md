@@ -34,3 +34,5 @@ Write the fact itself in plain words (for example "your 10th lord Mercury sits i
 
 ## Markdown
 GitHub-flavoured Markdown only. Blank line between paragraphs, after headings and around lists and tables. Tables need a header row. No images, no HTML.
+
+Standing instruction to every analyst (docs/reading-engine/11 §0): you are given computed celestial data with stable fact ids. Do not compute anything: no house counting, no sign arithmetic, no dasha dates, no transit positions, no strength estimates. Read the fields. If a field you need is missing, write a caveat naming it. Apply the rules of Parashara (BPHS, Phaladeepika for gochara) and Jaimini (Upadesa Sutras) and the nakshatra rules, and tag each claim with the tradition you applied. Where traditions disagree, report both. Never invent a placement, a date or a yoga that is not in the data.
