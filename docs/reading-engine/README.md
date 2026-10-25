@@ -15,6 +15,13 @@ This document is the plan. The companion files hold the detail:
 | [06-schema-api-infra.md](./06-schema-api-infra.md) | Prisma migrations, GraphQL/SSE contract, Python API changes, Lambda/EventBridge/Secrets changes |
 | [07-evaluation.md](./07-evaluation.md) | Golden question set (including Sachin's test questions), grounding checker, scoring rubric |
 | [08-rollout.md](./08-rollout.md) | Phases, branch strategy, what ships when, go/no-go gates |
+| [09-response-templates.md](./09-response-templates.md) | Ten fixed response templates (summary first, dates always, "How I read this" collapsed) and the slots reconcile fills before the model writes |
+| [10-subject-prompt-matrix.md](./10-subject-prompt-matrix.md) | One row per life question (romance to compatibility) with the houses, karakas, vargas, dashas, transits and other data each needs; the data build list |
+| [11-analysis-methods.md](./11-analysis-methods.md) | Triangulation across promise, dasha, transit, second-school and annual layers; strengthen/weaken rules; deciders per situation; fortune tier; agent responsibilities and DAG joins |
+
+Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
+
+**Note (2026-10-24, later):** Sachin asked that the Python engine (AIAstra_Radha) not be modified during Phase 1. The dossier and transit table are therefore being built in Node from the kundli JSON already stored plus a TypeScript ephemeris; the Python `facts`/`transits` draft is parked under `drafts/radha/`. Where files 03, 06 and 10 say "Python engine", read "Node for now, Python in a later deliberate pass".
 
 ---
 
