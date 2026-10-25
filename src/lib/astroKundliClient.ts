@@ -249,16 +249,23 @@ function effectiveExportHoroscopeSpacingMs(): number {
   return Math.max(configured, ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS);
 }
 
+/** True when the call sends coordinates, so the engine skips geocoding and the Nominatim spacing is not needed. */
+export function hasCoordinates(extra: Record<string, unknown> | null | undefined): boolean {
+  return extra != null && extra.lat != null && extra.lon != null && extra.tz != null;
+}
+
 /**
  * Serialize export-horoscope POSTs and enforce a minimum **start-to-start** gap so upstream
  * geocoding (OSM Nominatim, ~1 request/s) is not exceeded even when many Kundli slices are
  * requested in parallel: each slice is one POST, so KUNDLI_JSON_FIELDS.length types need ≥ that many × the gap in wall time
  * per user unless the API skips geocode. This throttle is per Node process only.
+ *
+ * `spaced: false` (calls that send coordinates, S-6) keeps the serialization but skips the start-to-start wait.
  */
 let horoscopeExportTail: Promise<void> = Promise.resolve();
 let lastHoroscopeExportRequestStartAt = 0;
 
-async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T> {
+async function withHoroscopeExportThrottle<T>(run: () => Promise<T>, spaced = true): Promise<T> {
   const prev = horoscopeExportTail;
   let release!: () => void;
   horoscopeExportTail = new Promise<void>((r) => {
@@ -266,7 +273,7 @@ async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T>
   });
   await prev;
   try {
-    const spacingMs = effectiveExportHoroscopeSpacingMs();
+    const spacingMs = spaced ? effectiveExportHoroscopeSpacingMs() : 0;
     if (spacingMs > 0 && lastHoroscopeExportRequestStartAt > 0) {
       const earliestNextStart = lastHoroscopeExportRequestStartAt + spacingMs;
       const waitMs = Math.max(0, earliestNextStart - Date.now());
@@ -652,8 +659,8 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
 
 /**
  * Legacy export call (d1, d9, dashas …). When the kundli already has stored coordinates they are sent as lat/lon/tz,
- * so the engine skips geocoding (its geocoder can fail on a city that resolved before). The spacing throttle always
- * applies: the engine allows at most one export request per second per client.
+ * so the engine skips geocoding (its geocoder can fail on a city that resolved before). Calls with coordinates skip
+ * the 1.1 s start spacing (S-6); calls without coordinates keep it.
  */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,
@@ -662,38 +669,59 @@ export async function fetchHoroscopeChart(
 ): Promise<Prisma.JsonValue> {
   if (coords && coords.lat != null && coords.lon != null && coords.tz != null) {
     const extra = { lat: coords.lat, lon: coords.lon, tz: coords.tz };
-    return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+    return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra), false);
   }
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
 }
 
 /**
  * Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body.
- * The spacing throttle always applies: the engine rate-limits exports to one request per second per client,
- * with or without coordinates.
+ * Calls that send lat/lon/tz skip the start spacing (S-6); calls without coordinates keep it.
  */
 export async function fetchEngineExport(
   params: AstroKundliRequestParams,
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
-  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra), !hasCoordinates(extra));
+}
+
+/**
+ * Radha's `catalog` export (S-1): the list of chart data types the engine serves and their calc versions.
+ * It takes no birth data, so the request body carries only `type` (no dob/tob/place).
+ */
+export interface RadhaCatalogType {
+  type: string;
+  calc_version: string;
+  params?: Record<string, unknown>;
+}
+
+export interface RadhaCatalog {
+  engine_commit: string;
+  types: RadhaCatalogType[];
+}
+
+export async function fetchRadhaCatalog(): Promise<RadhaCatalog> {
+  const raw = await withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(null, 'catalog'));
+  const catalog = raw as unknown as Partial<RadhaCatalog>;
+  if (!catalog || !Array.isArray(catalog.types)) {
+    throw new Error('Radha catalog response has no types array');
+  }
+  return { engine_commit: String(catalog.engine_commit ?? ''), types: catalog.types as RadhaCatalogType[] };
 }
 
 async function fetchHoroscopeChartImpl(
-  params: AstroKundliRequestParams,
+  params: AstroKundliRequestParams | null,
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
   const transport = getAstroKundliTransport();
   const apiKey = getAstroKundliApiKey();
 
+  // `params` null means a call without birth data (the catalog export)
   const body = {
-    dob: params.dob,
-    tob: params.tob,
-    place: params.place,
+    ...(params ? { dob: params.dob, tob: params.tob, place: params.place, ayanamsa: params.ayanamsa ?? 'LAHIRI' } : {}),
     type,
-    ayanamsa: params.ayanamsa ?? 'LAHIRI',
     ...extra,
   };
 
