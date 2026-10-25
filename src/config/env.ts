@@ -164,8 +164,8 @@ export function getAstroKundliRequestSpacingMs(): number {
 }
 
 const DEFAULT_KUNDLI_QUEUE_BATCH_SIZE = 2;
-/** Default 3 (S-6): calls with coordinates skip the start spacing, so parallel slices no longer wait 1.1 s each. */
-const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 3;
+/** Default 1: one slice per chunk avoids stacking two export POSTs before the global throttle gap. */
+const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 1;
 
 /** Delay before starting each additional Kundli row in the same queue tick (staggers multi-row work). */
 const DEFAULT_KUNDLI_QUEUE_ROW_STAGGER_MS = 2_000;
@@ -187,7 +187,7 @@ export function getKundliQueueBatchSize(): number {
 /**
  * Max concurrent AstroKundli API requests per user (data points fetched in chunks).
  * Lower values reduce server load; peak concurrent calls = batch size × this value.
- * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer 1–16, default 3).
+ * Override with KUNDLI_QUEUE_MAX_FETCHES_PER_USER (integer 1–16, default 1).
  */
 export function getKundliQueueMaxFetchesPerUser(): number {
   const raw = process.env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER;

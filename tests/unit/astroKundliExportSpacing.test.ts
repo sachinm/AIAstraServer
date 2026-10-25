@@ -30,12 +30,12 @@ function stubExportFetch(response: unknown = { type: 'x', data: { ok: true } }) 
   return { starts, bodies };
 }
 
-describe('export spacing (S-6)', () => {
+describe('export spacing (one export start per spacing interval)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the 1.1 s start spacing for calls without coordinates', async () => {
+  it('keeps the start spacing for engine exports without coordinates', async () => {
     const { starts } = stubExportFetch();
     await fetchEngineExport(params, 'facts');
     await fetchEngineExport(params, 'facts');
@@ -43,20 +43,20 @@ describe('export spacing (S-6)', () => {
     expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS - 10);
   }, 10_000);
 
-  it('skips the start spacing for engine exports that send lat/lon/tz', async () => {
+  it('keeps the start spacing for engine exports that send lat/lon/tz', async () => {
     const { starts, bodies } = stubExportFetch();
     await fetchEngineExport(params, 'facts', coords);
     await fetchEngineExport(params, 'facts', coords);
     expect(starts).toHaveLength(2);
-    expect(starts[1]! - starts[0]!).toBeLessThan(ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS / 2);
+    expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS - 10);
     expect(bodies[0]).toMatchObject({ type: 'facts', ...coords });
   }, 10_000);
 
-  it('skips the start spacing for chart exports (fetchHoroscopeChart) that have stored coordinates', async () => {
+  it('keeps the start spacing for chart exports (fetchHoroscopeChart) that have stored coordinates', async () => {
     const { starts, bodies } = stubExportFetch();
     await fetchHoroscopeChart(params, 'd1', coords);
     await fetchHoroscopeChart(params, 'd9', coords);
-    expect(starts[1]! - starts[0]!).toBeLessThan(ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS / 2);
+    expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS - 10);
     expect(bodies[1]).toMatchObject({ type: 'd9', ...coords });
   }, 10_000);
 
