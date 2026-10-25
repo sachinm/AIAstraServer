@@ -116,3 +116,21 @@ describe('rule intake: invariants', () => {
     expect(out.ms).toBeLessThan(50);
   });
 });
+
+describe('intake carries the bucket classification', () => {
+  it('attaches bucket, slots, missing slots and template to every intent', async () => {
+    const r = await runIntake('When will I get married?', '2026-10-24', { mode: 'rules' });
+    expect(r.intent.classification).toMatchObject({ bucket: 'marriage', missing: ['horizon'], template: 'T2' });
+    const c = await runIntake('Should I change jobs this year?', '2026-10-24', { mode: 'rules' });
+    expect(c.intent.classification).toMatchObject({ bucket: 'career_job', subBucket: 'job_change', missing: [] });
+  });
+  it('flags policy questions for coaching', async () => {
+    const r = await runIntake('When will I die?', '2026-10-24', { mode: 'rules' });
+    expect(r.intent.classification?.unanswerable).toBe('death_timing');
+    expect(r.intent.classification?.template).toBe('T10');
+  });
+  it('uses the bucket frame when intake itself found no subject', async () => {
+    const r = await runIntake('Will there be layoffs affecting me?', '2026-10-24', { mode: 'rules' });
+    expect(r.intent.subjects[0]!.id).toBe('career_work');
+  });
+});

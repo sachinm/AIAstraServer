@@ -1,4 +1,8 @@
 import type { FormatId, Horizon, QuestionType, SubjectId } from './packs/frames.js';
+import type { ClassifierResult } from './buckets/classifier.js';
+
+/** The bucket-first classification attached to every intent (src/reading/buckets). */
+export type IntentClassification = Pick<ClassifierResult, 'bucket' | 'subBucket' | 'alsoBuckets' | 'confidence' | 'slots' | 'missing' | 'template' | 'policy' | 'unanswerable' | 'questionKind' | 'source' | 'ms'>;
 
 export type SafetyFlag = 'ok' | 'medical' | 'legal' | 'self_harm' | 'minor';
 
@@ -15,6 +19,8 @@ export interface Intent {
   clarifyText: string;
   followUps: string[];
   safety: SafetyFlag;
+  /** Bucket, slots found and missing, template and policy flags (set by intake) */
+  classification?: IntentClassification;
 }
 
 export interface Usage {
