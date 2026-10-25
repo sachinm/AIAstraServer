@@ -29,6 +29,8 @@ export type ChatWithLlmOptions = {
   onEvent?: ReadingEmitter;
   /** Confirmed intent from the clarifier (skips intake) */
   intent?: Intent;
+  /** The clarifier confirmed the person's child is 18 or older */
+  childAgeConfirmed?: boolean;
 };
 
 export async function chatWithConfiguredProvider(
@@ -40,7 +42,7 @@ export async function chatWithConfiguredProvider(
   const provider = getChatLlmProvider();
   const t0 = Date.now();
   // topics the app does not discuss are stopped before any agent or model sees the text, on every provider
-  const declined = await declinedFor(prisma, userId, question);
+  const declined = await declinedFor(prisma, userId, question, { childAgeConfirmed: options?.childAgeConfirmed === true });
   if (declined) {
     options?.onEvent?.({ type: 'info', reason: 'declined', category: declined.category, topic: declined.id });
     options?.onDelta?.(declined.reply);

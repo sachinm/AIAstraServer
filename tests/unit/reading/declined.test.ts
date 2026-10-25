@@ -36,8 +36,30 @@ describe('declined topics: ordinary questions pass', () => {
 
   it('the labelled bucket questions are not caught, except the ones about death, health and policy', () => {
     const caught = LABELLED.filter((l) => detectTopic(l.q)).map((l) => `${l.q} -> ${detectTopic(l.q)!.id}`);
-    const allowedToCatch = /die|cancer|health|surgery|recover|illness|lottery|gambling|crypto|stocks|healthy|sick/i;
+    const allowedToCatch = /die|cancer|health|surgery|recover|illness|lottery|gambling|crypto|stocks|healthy|sick|-> minors|-> child_age_unconfirmed/i;
     expect(caught.filter((c) => !allowedToCatch.test(c))).toEqual([]);
+  });
+});
+
+describe('children under 18', () => {
+  const declined = ['Will my 12 year old do well in school?', 'Is my teenager going through a bad phase?', 'Which stream should my daughter take after class 10?', 'How is my baby doing?', 'Will my son pass his board exams?'];
+  const answered = ['When will we have a child?', 'Will I conceive this year?', 'When will my 25 year old son settle down in his career?', 'Will my girl say yes to my proposal?', 'Will my daughter, aged 30, get married soon?'];
+  const needsAge = ['Will my daughter get married soon?', "Will my son's business grow?", 'Will my son get a job abroad?', 'Will my daughter get into a good university?', 'How is my son doing?', 'Will my son clear his exams?', 'How will my kids do in the coming years?', 'Will our children be happy?'];
+  for (const q of needsAge) {
+    it(`age must be confirmed: ${q}`, () => {
+      expect(detectTopic(q)?.id).toBe('child_age_unconfirmed');
+      expect(detectDeclined(q, { childAgeConfirmed: true })).toBeNull();
+    });
+  }
+  it('an adult cue does not override a stated minor age (bogus queries)', () => {
+    expect(detectTopic('Will my 13 year old daughter get married soon?')?.id).toBe('minors');
+    expect(detectDeclined('Will my 13 year old daughter get married soon?', { childAgeConfirmed: true })?.id).toBe('minors');
+    expect(detectTopic('My daughter is 13, when will she get a job?')?.id).toBe('minors');
+  });
+  for (const q of declined) it(`declined: ${q}`, () => expect(detectTopic(q)?.id).toBe('minors'));
+  for (const q of answered) it(`answered: ${q}`, () => expect(detectTopic(q)).toBeNull());
+  it('is declined for every role', () => {
+    for (const role of ROLE_IDS) expect(detectDeclined('Is my teenager doing well this year?', { role })?.id).toBe('minors');
   });
 });
 

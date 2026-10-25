@@ -81,8 +81,8 @@ describe('clarify state machine', () => {
     expect(s.slots.horizon?.value).toBe('3y');
     expect(s.pending?.criterion).toBe('sub_bucket');
   });
-  it('never re-asks a slot the question already filled', () => {
-    const s = start('Will my son clear his exams in the next 6 months?');
+  it('never re-asks a slot the question already filled (an adult child)', () => {
+    const s = start("Will my son's business grow in the next 6 months?");
     expect(s.slots.subject_person?.value).toBe('son');
     expect(s.status).toBe('READY');
     expect(s.exactQuery).toMatch(/about your son, read from your chart/);
@@ -90,7 +90,7 @@ describe('clarify state machine', () => {
   it('asks whose chart for family questions that do not say', () => {
     const s = start('How will the coming years be for the children in 2027?');
     if (s.status === 'ASKING' && s.pending?.criterion === 'subject_person') {
-      expect(s.pending.chips.map((c) => c.value)).toEqual(['me', 'partner', 'child', 'parent']);
+      expect(s.pending.chips.map((c) => c.label)).toContain('My adult child (18+)');
     }
     const q = start('Will there be a child in the family?');
     expect(['ASKING', 'READY', 'PROPOSED']).toContain(q.status);
@@ -231,6 +231,34 @@ describe('clarify service (memory store, fixture chart)', () => {
     expect(a.state.status).toBe('ABANDONED');
     const saved = await store.get('u1', b.runId);
     expect(JSON.stringify(saved)).not.toMatch(/hurt/);
+  });
+  it("a question about the person's own child asks the age first; under 18 ends with the minors decline", async () => {
+    const store = new MemoryClarifyStore();
+    const b = await beginClarify(prisma, store, 'u1', 'Will my daughter get married soon?', { asOf: AS_OF });
+    expect(b.event?.type).toBe('clarify');
+    if (b.event?.type !== 'clarify') return;
+    expect(b.event.criterion).toBe('child_age');
+    expect(b.event.question).toBe('Is your daughter 18 or older?');
+    expect(b.event.chips.map((c) => c.value)).toEqual(['adult', 'minor']);
+    const a = await answerClarify(prisma, store, 'u1', b.runId, 'minor', true);
+    if ('error' in a) throw new Error(a.error);
+    expect(a.declined?.id).toBe('minors');
+    expect(a.state.status).toBe('ABANDONED');
+  });
+  it('18 or older continues to the normal questions and the confirm carries the confirmation', async () => {
+    const store = new MemoryClarifyStore();
+    const b = await beginClarify(prisma, store, 'u1', 'Will my daughter get married soon?', { asOf: AS_OF });
+    const a = await answerClarify(prisma, store, 'u1', b.runId, 'she is 24', false);
+    if ('error' in a) throw new Error(a.error);
+    expect(a.state.childAge).toBe('adult');
+    expect(a.event?.type === 'clarify' || a.event?.type === 'propose').toBe(true);
+  });
+  it('an unclear age answer counts as not confirmed', async () => {
+    const store = new MemoryClarifyStore();
+    const b = await beginClarify(prisma, store, 'u1', 'How is my son doing?', { asOf: AS_OF });
+    const a = await answerClarify(prisma, store, 'u1', b.runId, 'not sure', false);
+    if ('error' in a) throw new Error(a.error);
+    expect(a.declined?.id).toBe('minors');
   });
   it('a question with everything in it needs no clarifying', async () => {
     const b = await beginClarify(prisma, new MemoryClarifyStore(), 'u1', 'Should I change jobs this year?', { asOf: AS_OF });

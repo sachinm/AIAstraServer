@@ -14,7 +14,7 @@ import type { Intent, Usage } from '../types.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
 import { phraseAsk, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
-import { declinedFor, type DeclinedTopic } from '../policy/declined.js';
+import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
 
 export const CARD_BUDGET_MS = 300;
 
@@ -63,11 +63,13 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   const mode = opts.mode ?? clarifyMode();
   // the gate runs before the classifier, the data load and any model
   const declined = await declinedFor(prisma, userId, question);
-  if (declined) return { runId: '', state: startClarify('', asOf, classifyRules('', asOf), { mode: 'never', threshold: 1 }), event: null, usage: [], ms: Date.now() - t0, declined };
+  // a question about the person's own child with no stated age: confirm 18+ first (file 18), unless clarifying is off
+  const needsChildAge = declined?.id === 'child_age_unconfirmed' && mode !== 'never';
+  if (declined && !needsChildAge) return { runId: '', state: startClarify('', asOf, classifyRules('', asOf), { mode: 'never', threshold: 1 }), event: null, usage: [], ms: Date.now() - t0, declined };
   const cls = classifyRules(question, asOf);
   const needsCard = mode !== 'never' && cls.missing.includes('horizon');
   const card = needsCard ? await headlineCard(prisma, userId, asOf) : (startPrefetch(prisma, userId, { asOf }), null);
-  const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card });
+  const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card, needsChildAge });
   const runId = await store.create(userId, state);
   const usage: Usage[] = [];
   const event = await eventFor(runId, state, usage);
@@ -102,6 +104,10 @@ export async function answerClarify(prisma: PrismaClient, store: ClarifyStore, u
   }
   void last;
   await store.save(userId, runId, next);
+  if (next.childAge === 'minor') {
+    const topics = await loadDeclinedTopics(null);
+    return { runId, state: next, event: null, usage, ms: Date.now() - t0, declined: topics.find((x) => x.id === 'minors') };
+  }
   const event = await eventFor(runId, next, usage);
   return { runId, state: next, event, usage, ms: Date.now() - t0 };
 }
