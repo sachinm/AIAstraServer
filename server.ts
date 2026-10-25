@@ -81,6 +81,15 @@ app.use(
   })
 );
 
+/**
+ * Liveness probe. Used by the Lambda Web Adapter readiness check (AWS_LWA_READINESS_CHECK_PATH)
+ * and by CloudFront smoke tests. Returns only once the server is listening, which is after the
+ * startup DB check in start(). No auth, no DB call, no secrets.
+ */
+app.get('/health', (_req, res) => {
+  res.status(200).json({ ok: true, env: getNodeEnv() });
+});
+
 const yoga = createYoga({
   schema,
   context: buildContext,

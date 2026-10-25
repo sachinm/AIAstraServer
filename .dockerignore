@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+logs
+*.log
+.git
+.github
+.cursor
+.vscode
+.idea
+.env
+.env.*
+!.env.example
+*.tfstate
+*.tfvars

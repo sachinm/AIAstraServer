@@ -1,0 +1,81 @@
+name: Deploy API Lambda (OIDC)
+
+# Manual only. Builds Dockerfile.lambda, pushes to ECR `aiastra-server-api`, and points the
+# `aiastra-server-api` function at the new image. Does not change env, memory, timeout,
+# Function URL, CloudFront, or IAM; those are owned by aiastra-aws-terraform.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag_prefix:
+        description: "Prefix for the image tag (tag = <prefix>-<short sha>)"
+        required: false
+        default: "api"
+      update_function:
+        description: "Point the Lambda at the new image after pushing"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-api-lambda
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "442728149528"
+  ECR_REPOSITORY: aiastra-server-api
+  LAMBDA_FUNCTION: aiastra-server-api
+  ROLE_ARN: arn:aws:iam::442728149528:role/aiastra-github-deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify account
+        run: |
+          set -euo pipefail
+          ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+          test "$ACCOUNT" = "$AWS_ACCOUNT_ID" || { echo "Wrong account: $ACCOUNT"; exit 1; }
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG_PREFIX: ${{ inputs.image_tag_prefix }}
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${TAG_PREFIX:-api}-${GITHUB_SHA::12}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          # --provenance=false: Lambda rejects OCI image indexes with attestation manifests.
+          docker build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+          echo "Pushed $IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update Lambda function code
+        if: ${{ inputs.update_function }}
+        run: |
+          set -euo pipefail
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION" \
+            --image-uri "$IMAGE_URI" \
+            --output json --query '{Version:Version,CodeSha256:CodeSha256}'
+          aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION"
+          echo "Lambda $LAMBDA_FUNCTION now runs $IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"

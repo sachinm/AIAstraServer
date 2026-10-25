@@ -142,9 +142,9 @@ GEMINI_CACHE_ENABLED=0                # flip to 1 after paid billing; lazy per-u
 
 `CHAT_KUNDLI_CONTEXT` is removed once `READING_ENGINE=1` is the default (Phase 4).
 
-### Lambda packaging gap (Phase 0 blocker)
+### Lambda packaging (Phase 0)
 
-The repo Dockerfile runs plain Express. Locate the RESPONSE_STREAM handler or web-adapter layer used to build image `thinking-off-20260916022820` (check the ECR image config and the bot box noted in `docs/grokbots/README.md`), commit it to the repo with a `Dockerfile.lambda`, and make the GitHub OIDC deploy workflow build it. Without this, Phase 2 cannot be deployed from source.
+Added on branch `feature/api-lambda-packaging` (2026-10-24): `Dockerfile.lambda` (Express behind the AWS Lambda Web Adapter in `response_stream` mode, `/health` readiness), a hardened `docker-entrypoint.mjs`, `.dockerignore`, and a manual OIDC workflow `.github/workflows/deploy-api-lambda.yml`. See [../lambda-deployment.md](../lambda-deployment.md). Remaining check before first use: compare with the live function config (read-only commands listed in that doc), since the live image `thinking-off-20260916022820` was built outside the repo.
 
 ## 4. Web changes (AIAstra_WEB, on the live branch)
 
