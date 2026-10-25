@@ -680,20 +680,42 @@ export async function fetchEngineExport(
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 
+/**
+ * Radha's `catalog` export (S-1): the list of chart data types the engine serves and their calc versions.
+ * It takes no birth data, so the request body carries only `type` (no dob/tob/place).
+ */
+export interface RadhaCatalogType {
+  type: string;
+  calc_version: string;
+  params?: Record<string, unknown>;
+}
+
+export interface RadhaCatalog {
+  engine_commit: string;
+  types: RadhaCatalogType[];
+}
+
+export async function fetchRadhaCatalog(): Promise<RadhaCatalog> {
+  const raw = await withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(null, 'catalog'));
+  const catalog = raw as unknown as Partial<RadhaCatalog>;
+  if (!catalog || !Array.isArray(catalog.types)) {
+    throw new Error('Radha catalog response has no types array');
+  }
+  return { engine_commit: String(catalog.engine_commit ?? ''), types: catalog.types as RadhaCatalogType[] };
+}
+
 async function fetchHoroscopeChartImpl(
-  params: AstroKundliRequestParams,
+  params: AstroKundliRequestParams | null,
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
   const transport = getAstroKundliTransport();
   const apiKey = getAstroKundliApiKey();
 
+  // `params` null means a call without birth data (the catalog export)
   const body = {
-    dob: params.dob,
-    tob: params.tob,
-    place: params.place,
+    ...(params ? { dob: params.dob, tob: params.tob, place: params.place, ayanamsa: params.ayanamsa ?? 'LAHIRI' } : {}),
     type,
-    ayanamsa: params.ayanamsa ?? 'LAHIRI',
     ...extra,
   };
 
