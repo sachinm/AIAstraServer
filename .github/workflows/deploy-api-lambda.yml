@@ -79,3 +79,16 @@ jobs:
             --output json --query '{Version:Version,CodeSha256:CodeSha256}'
           aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION"
           echo "Lambda $LAMBDA_FUNCTION now runs $IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"
+
+      # Snapshot every deploy as an immutable Lambda version (code + config + env) and keep a "previous" alias,
+      # so a bad deploy can be undone in seconds. Rollback: scripts/rollback-lambda.sh <version> (or the commands in the summary).
+      - name: Publish rollback version
+        if: ${{ inputs.update_function }}
+        run: |
+          set -euo pipefail
+          NEW=$(aws lambda publish-version --function-name "$LAMBDA_FUNCTION" --description "$IMAGE_URI" --query Version --output text)
+          PREV=$(aws lambda list-versions-by-function --function-name "$LAMBDA_FUNCTION" --query "Versions[?Version!='\$LATEST'].Version" --output text | tr '\t' '\n' | sort -n | tail -2 | head -1)
+          aws lambda update-alias --function-name "$LAMBDA_FUNCTION" --name previous --function-version "$PREV" 2>/dev/null \
+            || aws lambda create-alias --function-name "$LAMBDA_FUNCTION" --name previous --function-version "$PREV"
+          echo "Published version $NEW; alias 'previous' -> $PREV" >> "$GITHUB_STEP_SUMMARY"
+          echo "Rollback: aws lambda update-function-code --function-name $LAMBDA_FUNCTION --image-uri \$(aws lambda get-function --function-name $LAMBDA_FUNCTION:previous --query Code.ImageUri --output text)" >> "$GITHUB_STEP_SUMMARY"
