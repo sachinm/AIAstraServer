@@ -15,17 +15,21 @@ import type { Intent } from '../types.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
 import { selectTransits, type TransitSection } from './transitTable.js';
 
-export type PackSection = 'header' | 'd1' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits' | 'nakshatra' | 'relations';
-/** Stable-prefix order (per-user stable first, horizon-dependent last). */
-export const SECTION_ORDER: PackSection[] = ['header', 'd1', 'detail', 'varga', 'arudha', 'relations', 'nakshatra', 'dasha', 'transits'];
+/**
+ * `base` is subject-independent (birth, D-1 skeleton, relations, janma/lagna nakshatra): the same bytes for every
+ * question a user asks, so it is the cacheable prefix. Everything after it depends on subject and horizon.
+ */
+export type PackSection = 'base' | 'frame' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits';
+/** Stable-prefix order (per-user stable first, subject/horizon-dependent last). */
+export const SECTION_ORDER: PackSection[] = ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits'];
 
 export type Analyst = 'promise' | 'dasha' | 'transit' | 'nakshatra' | 'single';
 /** Which sections each analyst receives (03-chart-facts-dossier.md §3). `single` is the Phase 1 one-call path. */
 export const ANALYST_SECTIONS: Record<Analyst, PackSection[]> = {
-  promise: ['header', 'd1', 'detail', 'varga', 'arudha', 'relations'],
-  dasha: ['header', 'd1', 'detail', 'varga', 'relations', 'nakshatra', 'dasha'],
-  transit: ['header', 'd1', 'arudha', 'nakshatra', 'dasha', 'transits'],
-  nakshatra: ['header', 'd1', 'nakshatra', 'dasha', 'transits'],
+  promise: ['base', 'frame', 'detail', 'varga', 'arudha'],
+  dasha: ['base', 'frame', 'detail', 'varga', 'dasha'],
+  transit: ['base', 'frame', 'arudha', 'dasha', 'transits'],
+  nakshatra: ['base', 'frame', 'detail', 'dasha', 'transits'],
   single: SECTION_ORDER,
 };
 
@@ -154,44 +158,35 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   const charaCodes = frame.charaKarakas.map((k) => d.karakas.chara[k]).filter(Boolean) as string[];
   const karakaCodes = new Set<string>([...frame.karakas, ...charaCodes, ...(intent.mentionsPlanets ?? [])]);
 
-  // ---- header
+  // ---- frame (subject and horizon dependent)
   const cur = d.dasha.vimshottari.current;
-  const header = {
+  const frameSection = {
     as_of: asOf,
     subject: frame.label,
     horizon: { from: hz.from, to: hz.to },
-    birth: { date: d.birth.date, time: d.birth.time, place: d.birth.place },
-    lagna: d.bodies[LAGNA_CODE]!.sign_name,
-    moon: `${d.bodies.Mo!.sign_name} ${nakLabel(d.bodies.Mo!)} (house ${d.bodies.Mo!.house})`,
-    panchanga: pick(d.panchanga, ['tithi', 'nakshatra', 'yoga', 'karana', 'vara_name', 'lunar_month']),
-    frame: {
-      houses: frameHouses,
-      lords: [...lordCodes],
-      karakas: [...karakaCodes],
-      chara: Object.fromEntries(frame.charaKarakas.filter((k) => d.karakas.chara[k]).map((k) => [k, d.karakas.chara[k]])),
-      vargas: frame.vargas,
-      arudhas: frame.arudhas,
-    },
+    houses: frameHouses,
+    lords: [...lordCodes],
+    karakas: [...karakaCodes],
+    chara: Object.fromEntries(frame.charaKarakas.filter((k) => d.karakas.chara[k]).map((k) => [k, d.karakas.chara[k]])),
+    vargas: frame.vargas,
+    arudhas: frame.arudhas,
     running: { md: cur.md, ad: cur.ad, pd: cur.pd, md_end: cur.md_end, ad_end: cur.ad_end, pd_end: cur.pd_end },
     ...(frame.caveat ? { caveat: frame.caveat } : {}),
   };
-
   // ---- d1 skeleton: all 12 houses, all bodies
   const d1: Record<string, unknown> = { houses: {} as Record<string, unknown>, bodies: {} as Record<string, unknown> };
   for (let h = 1; h <= 12; h++) (d1.houses as Record<string, unknown>)[String(h)] = compactHouse(d.houses[String(h)]!);
   for (const code of [LAGNA_CODE, ...PLANET_CODES, 'Md', 'Gk']) {
     const b = d.bodies[code];
-    if (b) (d1.bodies as Record<string, unknown>)[code] = compactBody(code, b);
+    if (b) (d1.bodies as Record<string, unknown>)[code] = code === LAGNA_CODE || code === 'Md' || code === 'Gk' ? compactBody(code, b) : detailBody(b);
   }
 
   // ---- subject detail: frame houses, their lords, karakas
-  const detail: Record<string, unknown> = { houses: {}, lords: {}, karakas: {}, yogas: [] as unknown[] };
+  const detail: Record<string, unknown> = { houses: {}, yogas: [] as unknown[] };
   for (const h of frameHouses) {
     const hh = d.houses[String(h)];
     if (hh) (detail.houses as Record<string, unknown>)[String(h)] = detailHouse(hh);
   }
-  for (const c of lordCodes) if (d.bodies[c]) (detail.lords as Record<string, unknown>)[c] = detailBody(d.bodies[c]!);
-  for (const c of karakaCodes) if (d.bodies[c] && !lordCodes.has(c)) (detail.karakas as Record<string, unknown>)[c] = detailBody(d.bodies[c]!);
   const touched = new Set<string>([...lordCodes, ...karakaCodes]);
   detail.yogas = d.yogas
     .filter((y) => y.source !== 'pyjhora.yoga' && (y.houses.some((h) => frameHouses.includes(h)) || y.planets.some((p) => touched.has(p))))
@@ -230,21 +225,25 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     dusthana_lords: rel.dusthana_lords,
   };
 
-  // ---- nakshatra
+  // ---- nakshatra: janma/lagna/taras go in the cacheable base; per-planet star lords are subject-dependent (detail)
   const np = d.nakshatra_profile as Record<string, any>;
-  const nakNeeded = new Set<string>(['Mo', ...lordCodes, ...karakaCodes, ...[cur.md, cur.ad, cur.pd].filter(Boolean) as string[]]);
-  const star_lords: Record<string, unknown> = {};
-  for (const c of nakNeeded) if (np.star_lords?.[c]) star_lords[c] = np.star_lords[c];
-  const nakshatra = {
-    janma: np.janma,
-    lagna: np.lagna,
-    star_lords,
-    taras_from_janma: np.taras_from_janma,
-    gandanta: np.gandanta,
-    pushkara: np.pushkara,
-    tenth_cusp_nak: np.tenth_cusp_nak,
+  const base = {
+    birth: { date: d.birth.date, time: d.birth.time, place: d.birth.place },
+    lagna: d.bodies[LAGNA_CODE]!.sign_name,
+    moon: `${d.bodies.Mo!.sign_name} ${nakLabel(d.bodies.Mo!)} (house ${d.bodies.Mo!.house})`,
+    panchanga: pick(d.panchanga, ['tithi', 'nakshatra', 'yoga', 'karana', 'vara_name', 'lunar_month']),
+    houses: d1.houses,
+    bodies: d1.bodies,
+    relations,
+    nakshatra: {
+      janma: np.janma,
+      lagna: np.lagna,
+      taras_from_janma: np.taras_from_janma,
+      gandanta: np.gandanta,
+      pushkara: np.pushkara,
+      tenth_cusp_nak: np.tenth_cusp_nak,
+    },
   };
-
   // ---- dasha (horizon dependent)
   const inH = (p: DashaPeriod) => p.end >= hz.from && p.start <= hz.to;
   let periods = d.dasha.vimshottari.periods.filter(inH);
@@ -261,16 +260,12 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   for (const c of [cur.md, cur.ad, cur.pd]) if (c) lordsNeeded.add(c);
   const dashaLords: Record<string, unknown> = {};
   for (const c of lordsNeeded) {
-    const b = d.bodies[c];
-    if (!b) continue;
-    const rec: Record<string, unknown> = { ...detailBody(b) };
     const vpos: Record<string, unknown> = {};
     for (const key of frame.vargas) {
       const vp = d.vargas[key]?.planets[c];
       if (vp) vpos[key] = { h: vp.house, dig: vp.dignity };
     }
-    if (Object.keys(vpos).length) rec.varga = vpos;
-    dashaLords[c] = rec;
+    if (Object.keys(vpos).length) dashaLords[c] = { varga: vpos };
   }
   const dasha = {
     current: cur,
@@ -293,7 +288,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     missing.push('transits unavailable');
   }
 
-  const sections: EvidencePack['sections'] = { header, d1, detail, varga, arudha, relations, nakshatra, dasha, ...(transits ? { transits } : {}) };
+  const sections: EvidencePack['sections'] = { base, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
   const approxTokens = Math.ceil(JSON.stringify(sections).length / 3.6);
   return {
     subject: input.subject,
@@ -316,7 +311,7 @@ export function mergeSubjectPacks(packs: EvidencePack[]): EvidencePack {
   const first = packs[0]!;
   const merged: Record<string, unknown> = {};
   for (const sec of SECTION_ORDER) {
-    if (sec === 'header' || sec === 'd1' || sec === 'relations' || sec === 'nakshatra') {
+    if (sec === 'base') {
       merged[sec] = first.sections[sec];
       continue;
     }
@@ -324,7 +319,7 @@ export function mergeSubjectPacks(packs: EvidencePack[]): EvidencePack {
     for (const p of packs) bySubject[p.subject] = p.sections[sec];
     merged[sec] = bySubject;
   }
-  merged.header = { ...(first.sections.header as object), subjects: packs.map((p) => p.subject) };
+  merged.frame = Object.fromEntries(packs.map((p) => [p.subject, p.sections.frame]));
   return {
     subject: first.subject,
     sections: merged as EvidencePack['sections'],
@@ -344,6 +339,19 @@ export function renderPack(pack: EvidencePack, analyst: Analyst = 'single'): str
   const wanted = new Set(ANALYST_SECTIONS[analyst]);
   const ordered: Record<string, unknown> = {};
   for (const sec of SECTION_ORDER) if (wanted.has(sec) && pack.sections[sec] !== undefined) ordered[sec] = pack.sections[sec];
+  return JSON.stringify(ordered);
+}
+
+/** The cacheable prefix: identical bytes for every question a user asks until their dossier changes. */
+export function renderBase(pack: EvidencePack): string {
+  return JSON.stringify({ base: pack.sections.base });
+}
+
+/** Everything after the base for one analyst (subject and horizon dependent). */
+export function renderSubject(pack: EvidencePack, analyst: Analyst = 'single'): string {
+  const wanted = new Set(ANALYST_SECTIONS[analyst]);
+  const ordered: Record<string, unknown> = {};
+  for (const sec of SECTION_ORDER) if (sec !== 'base' && wanted.has(sec) && pack.sections[sec] !== undefined) ordered[sec] = pack.sections[sec];
   return JSON.stringify(ordered);
 }
 

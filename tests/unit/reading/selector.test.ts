@@ -6,7 +6,9 @@ import {
   hashPack,
   listEvidenceIds,
   mergeSubjectPacks,
+  renderBase,
   renderPack,
+  renderSubject,
   resolveEvidence,
 } from '../../../src/reading/packs/selector.js';
 import { selectTransits } from '../../../src/reading/packs/transitTable.js';
@@ -38,20 +40,20 @@ describe('buildEvidencePack: career_work on G1', () => {
     expect(pack.keyFrame.vargas).toEqual(['D10']);
     const s = pack.sections as any;
     expect(s.detail.houses['10'].lord).toBe('Me');
-    expect(s.header.frame.chara.AmK).toBe('Mo');
+    expect(s.frame.chara.AmK).toBe('Mo');
     expect(s.varga.D10.lagna_lord).toBeDefined();
     expect(s.varga.D10.d1_lords['10'].lord).toBe('Me');
     expect(typeof s.varga.D10.d1_lords['10'].varga_house).toBe('number');
   });
   it('always carries the whole D-1 skeleton', () => {
     const s = pack.sections as any;
-    expect(Object.keys(s.d1.houses)).toHaveLength(12);
-    expect(Object.keys(s.d1.bodies)).toEqual(expect.arrayContaining(['La', 'Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']));
+    expect(Object.keys(s.base.houses)).toHaveLength(12);
+    expect(Object.keys(s.base.bodies)).toEqual(expect.arrayContaining(['La', 'Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']));
   });
   it('puts current MD/AD/PD in the header and dated periods in the horizon', () => {
     const s = pack.sections as any;
-    expect(s.header.running.md).toBe('Sa');
-    expect(s.header.running.ad).toBe('Ke');
+    expect(s.frame.running.md).toBe('Sa');
+    expect(s.frame.running.ad).toBe('Ke');
     const keys = Object.keys(s.dasha.periods);
     expect(keys.length).toBeGreaterThan(3);
     for (const k of keys) expect(s.dasha.periods[k].to >= '2026-10-24' && s.dasha.periods[k].from <= '2027-10-24').toBe(true);
@@ -63,7 +65,7 @@ describe('buildEvidencePack: career_work on G1', () => {
   });
   it('keeps the per-user stable sections ahead of the horizon-dependent ones', () => {
     const text = renderPack(pack);
-    const order = ['"header"', '"d1"', '"detail"', '"varga"', '"dasha"', '"transits"'].map((k) => text.indexOf(k));
+    const order = ['"base"', '"frame"', '"detail"', '"varga"', '"dasha"', '"transits"'].map((k) => text.indexOf(k));
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
   it('stays within the single-subject token budget', () => {
@@ -73,9 +75,28 @@ describe('buildEvidencePack: career_work on G1', () => {
   it('shares the stable sections between two horizons', () => {
     const a = pack.sections as any;
     const b = mk('career_work', '6m').sections as any;
-    expect(JSON.stringify(a.d1)).toBe(JSON.stringify(b.d1));
+    expect(JSON.stringify(a.base)).toBe(JSON.stringify(b.base));
     expect(JSON.stringify(a.detail)).toBe(JSON.stringify(b.detail));
     expect(JSON.stringify(a.varga)).toBe(JSON.stringify(b.varga));
+  });
+});
+
+describe('cacheable base prefix', () => {
+  it('is byte-identical across subjects and horizons for the same chart', () => {
+    const a = renderBase(mk('career_work', '1y'));
+    expect(renderBase(mk('property_home', '3y'))).toBe(a);
+    expect(renderBase(mk('marriage_relationship', '6m', ['Ju']))).toBe(a);
+  });
+  it('is large enough to be worth caching with the system prompt (>= ~1.5k tokens) and excludes subject data', () => {
+    const a = renderBase(mk('career_work', '1y'));
+    expect(a.length / 3.6).toBeGreaterThan(1500);
+    expect(a).not.toContain('d1_lords');
+    expect(a).not.toContain('"horizon"');
+  });
+  it('renderSubject plus renderBase carry every section once', () => {
+    const p = mk('career_work', '1y');
+    expect(Object.keys(JSON.parse(renderBase(p)))).toEqual(['base']);
+    expect(Object.keys(JSON.parse(renderSubject(p)))).toEqual(['frame', 'detail', 'varga', 'arudha', 'dasha', 'transits']);
   });
 });
 
@@ -86,10 +107,10 @@ describe('subject-specific varga selection (D-1 bias fix)', () => {
     expect(Object.keys((mk('income_wealth').sections as any).varga)).toEqual(['D2']);
   });
   it('health carries the D-30 caveat', () => {
-    expect((mk('health_body').sections as any).header.caveat).toMatch(/D-30/);
+    expect((mk('health_body').sections as any).frame.caveat).toMatch(/D-30/);
   });
   it('lottery carries the gain-window caveat', () => {
-    expect((mk('speculation_lottery').sections as any).header.caveat).toMatch(/no outcome is promised/);
+    expect((mk('speculation_lottery').sections as any).frame.caveat).toMatch(/no outcome is promised/);
   });
 });
 
@@ -127,9 +148,9 @@ describe('mergeSubjectPacks', () => {
   it('keeps one d1 and nests subject sections', () => {
     const merged = mergeSubjectPacks([mk('career_work'), mk('income_wealth')]);
     const s = merged.sections as any;
-    expect(s.d1.houses).toBeDefined();
+    expect(s.base.houses).toBeDefined();
     expect(Object.keys(s.detail)).toEqual(['career_work', 'income_wealth']);
-    expect(s.header.subjects).toEqual(['career_work', 'income_wealth']);
+    expect(Object.keys(s.frame)).toEqual(['career_work', 'income_wealth']);
     expect(merged.keyFrame.houses).toEqual(expect.arrayContaining([10, 2, 11]));
   });
 });
