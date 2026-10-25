@@ -37,6 +37,17 @@ Do not work through a plan one item at a time when its items are independent.
   through the deploy session.
 - Migrations are written, never applied, without Sachin's explicit OK. Never run terraform.
 
+## Clean up when work is done
+
+- **Branches:** once a feature/fix/docs branch is merged into `develop`, delete it locally (`git branch -d`). Never
+  delete `develop`, `main`, release branches, unmerged branches, or remote branches without Sachin's OK.
+- **Worktrees:** once a worktree's branch is merged and it has no uncommitted changes, remove it
+  (`git worktree remove <path>`). If the folder is held open by a session, archive that session (with Sachin's OK) and
+  remove it then.
+- **Local servers:** any server or watcher you start (`npm run dev`, `node server`, `uvicorn`, Vite, test watchers) is
+  stopped as soon as the check that needed it is done. Before finishing, list what you started and confirm none is still
+  running. Never stop processes you did not start.
+
 ## Tracking files
 
 - `TEST.MD`: tests to perform. Executed tests save screenshots in `docs/screenshots/<folder>/` with sequence-numbered
