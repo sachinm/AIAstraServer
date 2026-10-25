@@ -27,6 +27,8 @@ export interface FakeGeminiOptions {
 export interface FakeGemini {
   url: string;
   requests: FakeRequest[];
+  /** bodies of explicit prompt-cache creations (POST /cachedContents) */
+  cacheCreates: unknown[];
   close: () => Promise<void>;
   reset: () => void;
 }
@@ -37,7 +39,9 @@ function userText(body: any): string[] {
 
 /** Canned markdown per requested format, so the UI renders realistic tables, lists and headings. Not astrology. */
 export function cannedAnswer(prompt: string): string {
-  const fmt = /Format `(\w+)`/.exec(prompt)?.[1] ?? "direct";
+  const TEMPLATE_FORMAT: Record<string, string> = { T1: "direct", T2: "timeline", T3: "narrative", T4: "narrative", T5: "factor_table", T6: "narrative", T7: "narrative", T8: "narrative", T9: "watchlist", T10: "direct" };
+  const tpl = /Template (T\d+) —/.exec(prompt)?.[1];
+  const fmt = (tpl && TEMPLATE_FORMAT[tpl]) || /Format `(\w+)`/.exec(prompt)?.[1] || "direct";
   const head = "**Direct answer (demo text):** the chart shows a gradual improvement, with the strongest window starting in November 2026.\n\n";
   switch (fmt) {
     case "timeline":
@@ -60,11 +64,19 @@ function analystOf(parts: string[]): string | null {
 
 export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<FakeGemini> {
   const requests: FakeRequest[] = [];
+  const cacheCreates: unknown[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', async () => {
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      // explicit prompt cache: create returns a name; requests that reference it report the cached tokens
+      if (/\/cachedContents/.test(req.url ?? '')) {
+        cacheCreates.push(body);
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ name: `cachedContents/fake-${cacheCreates.length}`, expireTime: new Date(Date.now() + 3600_000).toISOString() }));
+        return;
+      }
       const m = /\/models\/([^:]+):(generateContent|streamGenerateContent)/.exec(req.url ?? '');
       const model = m?.[1] ?? '';
       const stream = m?.[2] === 'streamGenerateContent';
@@ -72,7 +84,7 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
       const parts = userText(body);
       const promptTokens = Math.ceil(parts.join('').length / 3.2) + Math.ceil(String(body?.systemInstruction?.parts?.[0]?.text ?? '').length / 3.2);
       const seen = requests.slice(0, -1).some((r) => JSON.stringify(r.body?.systemInstruction) === JSON.stringify(body?.systemInstruction) && userText(r.body)[0] === parts[0]);
-      const usage = { promptTokenCount: promptTokens, cachedContentTokenCount: seen ? Math.floor(promptTokens * 0.7) : 0, candidatesTokenCount: 220, thoughtsTokenCount: 0 };
+      const usage = { promptTokenCount: promptTokens + (body?.cachedContent ? 3000 : 0), cachedContentTokenCount: body?.cachedContent ? 3000 : seen ? Math.floor(promptTokens * 0.7) : 0, candidatesTokenCount: 220, thoughtsTokenCount: 0 };
 
       if (!stream) {
         const analyst = analystOf(parts);
@@ -124,8 +136,10 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
   return {
     url: `http://127.0.0.1:${port}/v1beta/models`,
     requests,
+    cacheCreates,
     reset: () => {
       requests.length = 0;
+      cacheCreates.length = 0;
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

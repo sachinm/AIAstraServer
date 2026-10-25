@@ -105,7 +105,7 @@ describe('clarify HTTP endpoints', () => {
     expect(intent?.intent.text).toMatch(/^I will read:/);
     expect(out.some((e) => e.type === 'token')).toBe(true);
     expect(out.at(-1)).toMatchObject({ type: 'done', chatId: 'chat1', clarifyRunId: clarify.runId });
-  });
+  }, 20_000); // four HTTP round trips and a streamed reading
 
   it('a vague question gets the area question with guidance', async () => {
     const events = await sse('/api/chat/ask-stream', { question: 'Hello', clarify: true });
