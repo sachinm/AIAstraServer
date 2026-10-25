@@ -12,6 +12,12 @@
 #
 # Build:  docker build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t aiastra-server-api:local .
 
+# Lambda Web Adapter image, pulled from our ECR mirror instead of public.ecr.aws (GitHub-hosted
+# runners get rate-limited there). Mirror it once with: docker pull public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0
+# then tag and push to the mirror tag below.
+ARG LAMBDA_ADAPTER_IMAGE=442728149528.dkr.ecr.us-east-1.amazonaws.com/aiastra-server-api:lambda-adapter-1.1.0
+FROM ${LAMBDA_ADAPTER_IMAGE} AS lambda-adapter
+
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -26,7 +32,7 @@ WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Lambda Web Adapter: runs as a Lambda extension, proxies invokes to the local HTTP server.
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0 /lambda-adapter /opt/extensions/lambda-adapter
+COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
 
 ENV NODE_ENV=production \
     PORT=3000 \
