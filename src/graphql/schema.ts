@@ -18,6 +18,9 @@ import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
 import { requireRoles } from './rbac.js';
 import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
+import { askingGuide } from '../reading/coach/content.js';
+import { isBucketId } from '../reading/buckets/taxonomy.js';
+import { roleCan } from '../auth/roles.js';
 import type { GraphQLContext } from './context.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 
@@ -209,7 +212,20 @@ const typeDefs = /* GraphQL */ `
     is_active: Boolean
   }
 
+  "How to ask so astrology can answer (docs/reading-engine/17, 18)."
+  type AskingGuideCard {
+    bucket: String!
+    title: String!
+    canAnswer: String!
+    goodExample: String!
+    weakExample: String!
+    rewrite: String!
+    include: [String!]!
+  }
+
   type Query {
+    "Asking guide for one area (bucketId) or for every chip area. Health appears only for roles allowed to discuss it."
+    askingGuide(bucketId: String): [AskingGuideCard!]!
     me: User
     meDetails: UserDetails
     myBiodata: BiodataResult
@@ -280,6 +296,11 @@ function withAdmin<T>(
 
 const resolvers = {
   Query: {
+    askingGuide(_parent: unknown, { bucketId }: { bucketId?: string | null }, context: GraphQLContext) {
+      requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
+      const bucket = bucketId && isBucketId(bucketId) ? bucketId : null;
+      return askingGuide(bucket, { healthAllowed: roleCan(context.role, 'discuss_health') });
+    },
     async me(_parent: unknown, _args: unknown, context: GraphQLContext) {
       try {
         requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);

@@ -118,6 +118,26 @@ The rules decide **what** to ask: the order, the two-question cap, the defaults,
 | Safety | the reply must be a JSON object; questions over 22 words or mentioning death, remedies, lottery numbers or money amounts are discarded in favour of the rule question |
 | Blocked by | Bedrock quotas in account 442728149528 are 0 for every model; a support case is needed (gpt-oss-120b: L-25B50707 requests/min, L-9DC5F595 tokens/min, plus the daily token limit). The Lambda role also needs `bedrock:InvokeModel` on the chosen model. |
 
+## 6a. Coaching: how to ask so astrology can answer
+
+Code: `src/reading/coach/content.ts`. Every area has a card with four parts:
+- what the chart can answer;
+- a good example question;
+- a weak question with its rewrite;
+- what to include (which part, whose chart, the period).
+
+The cards reach the person in three places:
+
+| Where | When |
+|---|---|
+| `guidance` on the clarify event | the area question for a message with no life area ("Hello", "Will it happen?"): one line on how to ask, with area chips |
+| `guidance` on the SSE `intent` event | the same cases on the normal reading path |
+| GraphQL `askingGuide(bucketId)` | the "ask better" helper and the subject chips under the input; health appears only for roles allowed to discuss it |
+
+No example or rewrite falls into a declined topic. This is a test.
+
+The SSE `intent` event also carries the bucket, sub-question, template and missing slots. That lets the web draw the reading card frame before the first token arrives.
+
 ## 7. Two tracks: data is ready before the person confirms
 
 When the question arrives, the dossier and transit chart load in parallel (the same in-process cache the reading uses). The chart-aware first question waits at most 300 ms for that load. If the load takes longer, the plain question is asked, and the load keeps going in the background. By the time the person taps "Yes, read it", the data is warm, so confirmation costs no data wait.
