@@ -41,10 +41,13 @@ interface Timed<T> {
 const dossierCache = new Map<string, Timed<{ dossier: Dossier; hash: string; factsVersion: number }>>();
 const transitCache = new Map<string, Timed<{ chart: TransitChart; id: string | null }>>();
 const inflightTransit = new Map<string, Promise<{ chart: TransitChart; id: string | null } | null>>();
+/** user -> latest kundli (id + stored coordinates); saves one database round trip per question on a warm instance */
+const kundliByUser = new Map<string, Timed<{ id: string; lat: number | null; lon: number | null; tz: number | null }>>();
 
 export function clearReadingCaches(): void {
   dossierCache.clear();
   transitCache.clear();
+  kundliByUser.clear();
   inflightTransit.clear();
 }
 
@@ -92,43 +95,53 @@ export async function loadReadingData(prisma: PrismaClient, userId: string, opts
     };
   }
 
-  const kundli = await prisma.kundli.findFirst({
-    where: { user_id: userId },
-    orderBy: { created_at: 'desc' },
-    select: { id: true, lat: true, lon: true, tz: true },
-  });
-  if (!kundli) return null;
+  let kundli = fresh(kundliByUser.get(userId));
+  if (!kundli) {
+    kundli = await prisma.kundli.findFirst({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      select: { id: true, lat: true, lon: true, tz: true },
+    });
+    if (!kundli) return null;
+    kundliByUser.set(userId, { at: Date.now(), value: kundli });
+  }
+  const k = kundli;
 
   const t0 = Date.now();
   let cached = fresh(dossierCache.get(kundli.id));
   const dossierCacheState: 'hit' | 'miss' = cached ? 'hit' : 'miss';
+  // The stored transit chart is read in parallel with the dossier (no engine build here; that waits until the dossier exists).
+  const transitLookup = loadTransitChart(prisma, userId, k, opts.asOf, false);
   if (!cached) {
     const row = await prisma.kundliFacts.findUnique({
-      where: { kundli_id_facts_version: { kundli_id: kundli.id, facts_version: FACTS_VERSION } },
+      where: { kundli_id_facts_version: { kundli_id: k.id, facts_version: FACTS_VERSION } },
       select: { dossier: true, dossier_hash: true, facts_version: true },
     });
     if (!row) {
-      opts.onFactsMissing?.(kundli.id);
+      void transitLookup.catch(() => undefined);
+      opts.onFactsMissing?.(k.id);
       return null;
     }
     const v = validateFacts(row.dossier);
     if (!v.ok) {
       notes.push(`stored dossier invalid: ${v.error}`);
-      opts.onFactsMissing?.(kundli.id);
+      void transitLookup.catch(() => undefined);
+      opts.onFactsMissing?.(k.id);
       return null;
     }
     cached = { dossier: v.value!, hash: row.dossier_hash, factsVersion: row.facts_version };
-    dossierCache.set(kundli.id, { at: Date.now(), value: cached });
+    dossierCache.set(k.id, { at: Date.now(), value: cached });
   }
   const dossierMs = Date.now() - t0;
   const { dossier, stale } = refreshCurrent(cached.dossier, opts.asOf);
-  if (stale) opts.onStale?.(kundli.id);
+  if (stale) opts.onStale?.(k.id);
 
   const t1 = Date.now();
-  const tr = await loadTransitChart(prisma, userId, kundli, opts.asOf, opts.buildTransitsOnMiss !== false);
+  let tr = await transitLookup;
+  if (!tr && opts.buildTransitsOnMiss !== false) tr = await loadTransitChart(prisma, userId, k, opts.asOf, true);
   return {
     source: 'db',
-    kundliId: kundli.id,
+    kundliId: k.id,
     dossier,
     dossierHash: cached.hash,
     factsVersion: cached.factsVersion,

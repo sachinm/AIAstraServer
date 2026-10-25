@@ -1,0 +1,145 @@
+{
+ "model": "fake",
+ "flow": "single",
+ "asOf": "2026-10-25",
+ "runs": [
+  {
+   "kundli": "c584c0a3",
+   "question": "Should I change jobs this year?",
+   "engine": "reading",
+   "flow": "single",
+   "status": "done",
+   "dossier": "loaded",
+   "transits": "112 rows 2026-10-24..2028-10-24",
+   "dbLoadColdMs": 1652,
+   "dbLoadWarmMs": 0,
+   "firstEventMs": 2,
+   "firstTokenMs": 66,
+   "totalMs": 164,
+   "intent": {
+    "subjects": [
+     "career_work"
+    ],
+    "horizon": {
+     "from": "2026-10-25",
+     "to": "2026-12-31"
+    },
+    "format": "factor_table"
+   },
+   "packHashes": {
+    "merged": "4df0c460cdd43134",
+    "base": "c6a16a3555e1a9ff",
+    "career_work": "4df0c460cdd43134"
+   },
+   "timings": {
+    "intake": 8,
+    "dataWait": 0,
+    "pack": 7,
+    "synthStart": 19,
+    "synthesize": 143,
+    "total": 162,
+    "firstTokenFromStart": 64
+   },
+   "events": [
+    "stage:intake:start",
+    "stage:intake:done",
+    "intent",
+    "stage:prepare:start",
+    "stage:prepare:done",
+    "stage:synthesize:start",
+    "stage:synthesize:done"
+   ],
+   "answerStart": "**Direct answer (demo text):** the chart shows a gradual improvement, with the s"
+  },
+  {
+   "kundli": "75b0d618",
+   "question": "When will I buy a house?",
+   "engine": "reading",
+   "flow": "single",
+   "status": "done",
+   "dossier": "loaded",
+   "transits": "112 rows 2026-10-24..2028-10-24",
+   "dbLoadColdMs": 1422,
+   "dbLoadWarmMs": 0,
+   "firstEventMs": 1,
+   "firstTokenMs": 14,
+   "totalMs": 188,
+   "intent": {
+    "subjects": [
+     "property_home"
+    ],
+    "horizon": "3y",
+    "format": "timeline"
+   },
+   "packHashes": {
+    "merged": "1b0f2e1b4289f0b4",
+    "base": "0d61405d8aa8d536",
+    "property_home": "1b0f2e1b4289f0b4"
+   },
+   "timings": {
+    "intake": 3,
+    "dataWait": 0,
+    "pack": 3,
+    "synthStart": 8,
+    "synthesize": 180,
+    "total": 188,
+    "firstTokenFromStart": 14
+   },
+   "events": [
+    "stage:intake:start",
+    "stage:intake:done",
+    "intent",
+    "stage:prepare:start",
+    "stage:prepare:done",
+    "stage:synthesize:start",
+    "stage:synthesize:done"
+   ],
+   "answerStart": "**Direct answer (demo text):** the chart shows a gradual improvement, with the s"
+  },
+  {
+   "kundli": "ca166180",
+   "question": "Is Saturn affecting my marriage right now?",
+   "engine": "reading",
+   "flow": "single",
+   "status": "done",
+   "dossier": "loaded",
+   "transits": "112 rows 2026-10-24..2028-10-24",
+   "dbLoadColdMs": 1439,
+   "dbLoadWarmMs": 1,
+   "firstEventMs": 0,
+   "firstTokenMs": 9,
+   "totalMs": 182,
+   "intent": {
+    "subjects": [
+     "marriage_relationship"
+    ],
+    "horizon": "now",
+    "format": "factor_table"
+   },
+   "packHashes": {
+    "merged": "888b653c2043a1d5",
+    "base": "c6a16a3555e1a9ff",
+    "marriage_relationship": "888b653c2043a1d5"
+   },
+   "timings": {
+    "intake": 0,
+    "dataWait": 0,
+    "pack": 2,
+    "synthStart": 4,
+    "synthesize": 178,
+    "total": 182,
+    "firstTokenFromStart": 9
+   },
+   "events": [
+    "stage:intake:start",
+    "stage:intake:done",
+    "intent",
+    "stage:prepare:start",
+    "stage:prepare:done",
+    "stage:synthesize:start",
+    "stage:synthesize:done"
+   ],
+   "answerStart": "**Direct answer (demo text):** the chart shows a gradual improvement, with the s"
+  }
+ ]
+}

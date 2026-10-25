@@ -1,0 +1,150 @@
+{
+ "imported": 24,
+ "results": [
+  {
+   "id": "0d09f3b7",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "a883786a71054068"
+  },
+  {
+   "id": "1452d803",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "ea963a1fcf0a4c20"
+  },
+  {
+   "id": "1ae7437b",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "e002e9feee58ac34"
+  },
+  {
+   "id": "572988e1",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "2e58ac5876a625df"
+  },
+  {
+   "id": "62bb6b4c",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "b9df4213e03577a9"
+  },
+  {
+   "id": "6398096a",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "ee00e5be16386f99"
+  },
+  {
+   "id": "6514751c",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "9da524b893f749de"
+  },
+  {
+   "id": "6589af09",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "3edbd55b36ab16e7"
+  },
+  {
+   "id": "6cddf8c6",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "3a028b9bdb00f340"
+  },
+  {
+   "id": "75b0d618",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "a06a248f7140e92e"
+  },
+  {
+   "id": "8a701f8a",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "2ea9ecc11a76fb6d"
+  },
+  {
+   "id": "93bd8ac9",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "44796c21a1d26de0"
+  },
+  {
+   "id": "af8ca446",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "3a00a200ab0befe1"
+  },
+  {
+   "id": "b6c3e1a4",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "21dc927cfd928737"
+  },
+  {
+   "id": "be89e63f",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "6699a95d212fbcbd"
+  },
+  {
+   "id": "c584c0a3",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "fd32cf4bc913db85"
+  },
+  {
+   "id": "ca166180",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "51066fae7aa625fc"
+  },
+  {
+   "id": "ce1b0154",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "34db44889e4ae807"
+  },
+  {
+   "id": "d13bae8a",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "df6cc399dafcd7f5"
+  },
+  {
+   "id": "de3223e3",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "aa4f1931b433ca88"
+  },
+  {
+   "id": "eaebdc1f",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "483919dd0d6d338c"
+  },
+  {
+   "id": "f3b6fb54",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "32c1476c3242d1fb"
+  },
+  {
+   "id": "f3d117b0",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "4c2c2ec9614b91db"
+  },
+  {
+   "id": "f5022deb",
+   "status": "stored",
+   "transits": true,
+   "dossierHash": "74f3a02e6ef833bb"
+  }
+ ]
+}
+exit 0

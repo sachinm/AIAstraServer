@@ -6,7 +6,12 @@
 
 The pipeline for Phase 1 is built and tested end to end on this machine against the golden chart G1 fixtures and a local fake Gemini. The gates that need a real model, the database or the Lambda cannot be passed from here. They are listed under "Blocked", each with the command to run.
 
-With `READING_ENGINE=1` and no stored dossier, the server falls back to the legacy chat path on its own. Turning the flag on is therefore safe before the Lambda serves the new exports.
+**Update 2026-10-25 (Sachin: "we must use the new chat path no matter what").** The reading engine is now the chat path by default (`READING_ENGINE=0` is the kill switch). Legacy fallback is opt-in only (`READING_FALLBACK_LEGACY=1`). A kundli with no dossier gets a plain "your chart is still being prepared" answer on the new path, and its build is scheduled.
+
+- **24 of 25 existing kundlis have dossiers and transit charts** in the live database. They were computed by pyjhora locally through the parked drafts (`scripts/backfill-local-facts.ts` plus `drafts/radha/build_from_inputs.py`) and cross-checked against each kundli's stored D-1 (QA-LIST P1-14).
+- **The 25th kundli** never finished its original sync, so it has nothing to read from on either path.
+- **New kundlis** need the Lambda `facts` / `transits` exports (contract in 09-lambda-contract.md), or a rerun of the local backfill, before they can be read.
+- **Production** still runs the previous server image. The new path reaches users only after this code is pushed and the "Deploy API Lambda (OIDC)" workflow is run.
 
 ## What shipped
 
@@ -76,7 +81,7 @@ Sachin asked that the Python service not be touched for now, and that nothing as
 - Default flow is `single`. The graph is built and tested but off, since it needs 4 to 6 model calls per question and the free tier allows about 20 a day. Choose after measuring on a paid key.
 - Intake is rules first. `READING_INTAKE_MODE=auto|rules|llm`.
 - The persona comes from a file, not the database row, because that row changes daily and would break the cache prefix. `READING_USE_DB_PERSONA` re-enables it.
-- Fallback to legacy is on by default (`READING_FALLBACK_LEGACY`).
+- The reading engine is the default chat path; fallback to legacy is an emergency opt-in (`READING_FALLBACK_LEGACY=1`). Changed 2026-10-25 at Sachin's request; previously the fallback was on.
 - The facts build after sync follows `READING_ENGINE` unless `READING_FACTS_BUILD` is set.
 - The grounding checker is regex based and conservative: mixed natal and transit sentences and unknown vargas are reported as unverifiable, never as contradicted. Table cells under a "Transit" header count as transit statements.
 - Fixtures use Lahiri. Dasha boundaries can differ by about four days from JHora's true-Citra defaults.
