@@ -1,0 +1,1 @@
+* develop f1b57c4 [origin/feature/add_divisional_charts] Merge pull request #1 from sachinm/chore/lambda-oidc-deploy

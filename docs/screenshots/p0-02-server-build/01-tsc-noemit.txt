@@ -1,0 +1,2 @@
+$ npx tsc --noEmit  (develop @ 326349b)
+exit 0, no output (clean)
