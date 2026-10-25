@@ -28,7 +28,8 @@ This document is the plan. The companion files hold the detail:
 | [17-clarify-agent.md](./17-clarify-agent.md) | The clarifier: what it asks and in what order, real dialogues, questions about another person, the optional Bedrock model, API contract |
 | [18-declined-topics.md](./18-declined-topics.md) | Topics the app does not discuss (deny / decline / role-gated), user roles, the `declined_topics` table |
 | [19-dag-convergence-and-caching.md](./19-dag-convergence-and-caching.md) | The multi-agent DAG as built: required and optional agents, layer scores, convergence, deciders, fortune tier, SynthBrief, templates T1-T10, findings cache and explicit prompt cache |
-| [20-radha-data-provider.md](./20-radha-data-provider.md) | Plan for review: Radha as the only data provider, full inventory (23 vargas, 44 dashas, strengths, annual charts), vertical `kundli_data` table, fetch-on-demand, call volume, LLM cache cleanup |
+| [20-radha-data-provider.md](./20-radha-data-provider.md) | Reviewed (doc 21), edits applied: Radha as the only data provider, full inventory (23 vargas, 44 dashas, strengths, annual charts), vertical `kundli_data` table with per-type `calc_version`, `ensureChartData` with multi-type requests, call volume (18-item registration tier), LLM cache cleanup |
+| [21-radha-plan-review.md](./21-radha-plan-review.md) | Review of doc 20: answers to the five open questions, store design tightening, Radha change list checked against pyjhora, timeline data needs, dasha sub-period bugs, risk list, proposed edits to doc 20 |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 

@@ -1,7 +1,9 @@
 # 20 — Radha as the data provider: what to expose, how to store it, how to fetch it
 
-Status: **plan for review (Fable)**. Nothing in this doc is built yet. Written 2026-10-25 from Sachin's brief.
-Related: [09-lambda-contract.md](09-lambda-contract.md) (facts/transits contract), [14-life-timeline.md](14-life-timeline.md),
+Status: **reviewed (doc 21), edits applied**. Written 2026-10-25 from Sachin's brief; review in
+[21-radha-plan-review.md](21-radha-plan-review.md). R-1/R-2 (server store) and R-7 (cache cleanup) are being built; the Radha
+Python items are not started.
+Related: [21-radha-plan-review.md](21-radha-plan-review.md), [09-lambda-contract.md](09-lambda-contract.md) (facts/transits contract), [14-life-timeline.md](14-life-timeline.md),
 [16-kundli-sync-and-dossier-ops.md](16-kundli-sync-and-dossier-ops.md), [19-dag-convergence-and-caching.md](19-dag-convergence-and-caching.md).
 
 ## 1. The point
@@ -61,12 +63,16 @@ Each comes out through the same `_build_placements_json` with a generalised `TYP
 
 | Tier | Dashas | Why |
 |---|---|---|
-| Core | Vimsottari, Narayana, Yogini, Ashtottari, Chara, Kalachakra | What the reading method and most astrologers actually use |
-| Conditional | Dwadasottari, Shodasottari, Panchottari, Satabdika, Chaturaseeti Sama, Dwisaptati Sama, Shastihayani, Shattrimsa Sama | Classical "applicable only if …" dashas; `graha/applicability.py` tells which apply to a chart |
+| Core | Vimsottari, Narayana, Yogini, Chara, Kalachakra | Only Vimsottari + Narayana are read by the method (docs 02/11); the rest are for astrologer-grade answers and are on demand |
+| Conditional | **Ashtottari**, Dwadasottari, Shodasottari, Panchottari, Satabdika, Chaturaseeti Sama, Dwisaptati Sama, Shastihayani, Shattrimsa Sama | Classical "applicable only if …" dashas, fetched only when applicable. `graha/applicability.py: applicability_check` covers 7 of the 9 (ashtottari, chaturaaseeti_sama, dwadasottari, dwisatpathi, panchottari, satabdika, shashtisama); **Shodasottari and Shattrimsa Sama are a `TODO` in pyjhora**: implement the two checks in the Radha pass or leave them on-demand by explicit request only |
 | Specialist | Moola, Sudasa, Drig, Shoola, Sthira, Trikona, Kendradi, Lagnamsaka, Mandooka, Navamsa, Padhanadhamsa, Paryaaya, Brahma, Varnada, Yogardha, Tara Lagna, Chakra, Sandhya, Nirayana; Tara, Karaka, Naisargika, Buddhi Gathi, Kaala, Saptharishi Nakshatra, Tithi Ashtottari, Tithi Yogini, Yoga Vimsottari, Aayu | Fetch on demand (researcher/astrologer questions) |
 
-Every dasha is returned in the existing tree shape: `[{maha_dasha_lord, maha_start_date, bhuktis: [...]}]`,
-extended to a third level (antara/pratyantara) where pyjhora provides it.
+New natal item `dasha.applicable`: a cheap Radha type wrapping `applicability_check` that returns the list of conditional dashas that
+apply to this chart (one call, stored like any natal item). `ensureChartData` requests only those.
+
+Every dasha is returned in the existing tree shape: `[{maha_dasha_lord, maha_start_date, bhuktis: [...]}]`. **pyjhora returns two
+levels** (maha, bhukti); a third level (pratyantara) and `end_date`/`duration_years` per node are new work (generic level-3 walker per
+dasha family; Vimsottari first, it is all doc 11 reads). Sub-period bugs are catalogued in doc 21 §6 (R-6).
 
 **Strengths and other natal tables.**
 
@@ -76,8 +82,8 @@ extended to a third level (antara/pratyantara) where pyjhora provides it.
 | Bhava bala (house strength) | `strength.py: bhava_bala` |
 | Vimsopaka / vargeeya bala | `strength.py: pancha_vargeeya_bala`, `dwadhasa_vargeeya_bala` |
 | Harsha bala | `strength.py: harsha_bala` |
-| Ashtakavarga (BAV + SAV) | `chart/ashtakavarga.py` (builder exists in `export.py`, needs JSON) |
-| Yogas, Raja yogas | `chart/yoga.py`, `chart/raja_yoga.py` |
+| Ashtakavarga | `chart/ashtakavarga.py` (builder exists in `export.py`, needs JSON). JSON returns raw BAV, SAV **and** the sodhana-reduced tables (doc 11 L3 reads raw BAV bindus and SAV) |
+| Yogas, Raja yogas | `chart/yoga.py`, `chart/raja_yoga.py`. Payload = yoga ids + English names (not language-resource strings) |
 | Doshas | `chart/dosha.py` |
 | Arudhas (bhava + graha) | `chart/arudhas.py` |
 | Special points (sphutas) | `chart/sphuta.py` |
@@ -91,13 +97,22 @@ extended to a third level (antara/pratyantara) where pyjhora provides it.
 | Varsha pravesh / Tajaka annual chart | `transit/tajaka.py: annual_chart`, `varsha_pravesh` |
 | Tithi pravesha chart | `panchanga/vratha.py: tithi_pravesha` (used by `chart/charts.py`) |
 | Mudda dasha, Patyayini dasha (annual dashas) | `dhasa/annual/mudda.py`, `patyayini.py` |
+| Sahams (36) | `transit/saham.py` (doc 11 L5 reads them) |
+| Tajaka yogas | `transit/tajaka_yoga.py` |
 | Maasa pravesh (monthly, optional) | `transit/tajaka.py: maasa_pravesh` |
 
-### 3.3 Moving — changes daily (do not store per person)
+The annual `variant` is the **solar-return year**: the year the varsha pravesh falls in, not the calendar year the person asked in.
+Radha returns `valid_to` (the next varsha pravesh instant, `tajaka.annual_chart` for `years+1`) so the server computes no dates.
 
-Transit positions for a date, and the transit-over-natal overlay (09-lambda-contract `transits`). Positions are the same
-for everyone on a given day, so they belong in the global `transit_snapshots` table (already exists, M3), not per person.
-The overlay per person is cheap to recompute and is not stored beyond the request (or kept for a day at most).
+### 3.3 Moving — changes daily
+
+Two parts:
+
+- **Global ephemeris** (transit positions, ingress dates): the same for everyone on a given day, so it lives in the global
+  `transit_snapshots` table (M3), not per person.
+- **Per-person overlay** (houses from Lagna/Moon/AL, `over_natal`, double transits, sade sati): stored in `kundli_data` as
+  `transit.overlay` with `variant = year=<yyyy>`. Short-lived for chat horizons (up to 3 years, recompute is cheap); stored for the
+  36-year timeline (computed once, section 9).
 
 ## 4. Storage: a vertical kundli table
 
@@ -106,30 +121,55 @@ item needs a migration. Proposal: keep `kundlis` as the person's header row, add
 (kundli, data type, variant).
 
 ```
-chart_data_types            -- the keyword list (catalog), seeded and editable
-  id            text pk       -- 'd1', 'd60', 'dasha.vimsottari', 'strength.shadbala', 'annual.varsha', …
-  family        text          -- varga | dasha | strength | yoga | annual | panchanga | karaka
-  radha_type    text          -- the `type` sent to Radha
-  change_class  text          -- natal | annual | moving
-  tier          text          -- registration | on_demand
-  sort_order    int
+chart_data_types            -- the keyword list (catalog), seeded from Radha's `catalog` type
+  id            text pk       -- dotted ids, see below
+  family        text          -- varga | dasha | strength | yoga | annual | panchanga | karaka | transit
+  radha_type    text          -- the `type` sent to Radha (wire name; the id stays stable if Radha renames)
+  change_class  text          -- natal | annual
+  tier          text          -- first | registration | on_demand   (priority order, not a hard boundary)
+  variant_kind  text          -- natal | year
+  served        bool          -- Radha serves it today; unserved types are never requested
+  calc_version  text          -- per-type, bumped by hand in Radha when that type's numbers change
+  legacy_column text null     -- the old kundlis column this backfills from
+  sort_order    int           -- queue order within a tier
+  label         text
   enabled       bool
 
 kundli_data
-  id            uuid pk
-  kundli_id     fk → kundlis (cascade)
-  data_type     fk → chart_data_types.id
-  variant       text default ''   -- '' for natal; '2027' for an annual item; params hash if a type takes options
-  ayanamsa      text default 'LAHIRI'
-  engine_commit text              -- Radha build that produced it (rebuild when the engine changes)
-  payload       jsonb
-  payload_hash  text
-  status        text              -- ready | fetching | failed
-  error         text null
-  fetched_at    timestamptz
-  valid_to      timestamptz null  -- annual items: next birthday; natal: null
+  kundli_id         fk -> kundlis (cascade)
+  data_type         fk -> chart_data_types.id
+  variant           text default ''   -- '' for natal; 'year=2027' for an annual item
+  params            jsonb             -- explicit parameters used, defaults included (e.g. {"chart_method":1})
+  ayanamsa          text default 'LAHIRI'
+  calc_version      text              -- the type's calc_version when fetched; 'legacy' on backfilled rows
+  engine_commit     text              -- Radha build that produced it (forensics only)
+  payload           jsonb
+  payload_hash      text
+  status            text              -- ready | fetching | failed | unsupported
+  error             text null
+  fetch_started_at  timestamptz       -- start of the 90 s fetch lease
+  fetched_at        timestamptz
+  valid_to          timestamptz null  -- annual items: next varsha pravesh; natal: null
   unique (kundli_id, data_type, variant, ayanamsa)
 ```
+
+Migration **M7** is `20261025120000_reading_m7_kundli_data`.
+
+**Keys.** One dotted scheme everywhere: `panchanga.birth` (= today's `biodata`), `varga.d1` ... `varga.d144`,
+`dasha.<pyjhora module name>`, `karaka.chara`, `arudhas`, `ashtakavarga`, `strength.shadbala|bhava|vimsopaka|harsha`, `aspects`,
+`yogas`, `doshas`, `sphutas`, `annual.varsha|tithi_pravesha|mudda|patyayini|sahams`, `transit.overlay`. Seed the catalog from
+Radha's `catalog` type, never by hand.
+
+**Variant and params.** `variant` is `''` (natal) or `'year=2027'` (solar-return year). Options a type takes (`chart_method` for
+vargas, `chara_method`, `antardhasa_option`, dasha level depth) go in `params`, stored explicitly with their defaults so a later
+Radha default change cannot alias two computations under one key.
+
+**Staleness is per-type `calc_version`, not `engine_commit`.** Most Radha commits change nothing numerically; invalidating on
+`engine_commit` would re-fetch every user on every release. A row is stale when its `calc_version` differs from the catalog's, or
+(annual) when `valid_to` has passed. `engine_commit` is kept for forensics.
+
+**The row is the fetch lock.** To fetch, insert `status = fetching` with `fetch_started_at`; losing the unique-key race means
+wait and poll. A `fetching` row older than the 90 s lease is reclaimable. No in-process locks (separate Lambda instances).
 
 **Page size is not a problem.** Postgres pages are 8 KB, but `jsonb` values larger than ~2 KB are moved out of line
 (TOAST) and compressed automatically. A D60 table or a three-level dasha tree (tens of KB) is stored and read as one
@@ -138,7 +178,9 @@ person.
 
 **Migration path (nothing breaks).**
 1. Add the two tables (migration M7). Seed `chart_data_types`.
-2. Backfill: copy each existing `kundlis` column into `kundli_data` rows (pure SQL, no Radha calls).
+2. Backfill: copy each existing `kundlis` column into `kundli_data` rows (pure SQL, no Radha calls). Backfilled rows are tagged
+   `calc_version = 'legacy'`: today's `d1`/`d9` payloads are placement rows for the Charts page, not the per-planet records the dossier
+   needs, so the two shapes must not be mixed under one key. Legacy rows are re-fetched once R-3/R-4 land.
 3. Readers (`src/reading/data/store.ts`, dossier builder, GraphQL kundli resolvers, `kundliQueueService`) read
    `kundli_data` first and fall back to the old column while both exist.
 4. Writers write to `kundli_data` only once every reader has moved over.
@@ -146,16 +188,23 @@ person.
 
 ## 5. Fetch on demand: `ensureChartData`
 
-One server function is the only way anything reaches Radha:
+One server function, `ensureChartData` in `src/reading/chartData/store.ts`, is the only way anything reaches Radha:
 
 ```
-ensureChartData(kundliId, ['d60', 'dasha.yogini', 'annual.varsha@2027'])
-  → reads kundli_data rows
-  → for each missing / failed / stale (engine_commit or valid_to) item: one Radha call per item
-  → single-flight per (kundli, type, variant) so two agents never fetch the same thing twice
-  → bounded concurrency per Radha client (respects its throttle)
-  → stores each result as it arrives, returns all payloads
+ensureChartData(kundliId, ['varga.d60', 'dasha.yogini', 'annual.varsha@year=2027'])
+  -> reads kundli_data rows by key list (never SELECT * the person)
+  -> missing / failed / stale (calc_version or valid_to) items: coalesced into one multi-type Radha request per kundli + params
+  -> single-flight = the row lock (insert 'fetching', 90 s lease); losers wait and poll
+  -> bounded concurrency; unserved types (served = false) are never requested
+  -> stores each result as it arrives, returns all payloads
 ```
+
+One item per call stays the agent-facing contract (`getChartData(types[])`), but misses for one kundli are **coalesced into one
+multi-type Radha request**: `type` still accepts a string and also accepts a list; the response is
+`{results: {type: {data} | {error}}}`. Radha builds `Horoscope` once and runs each builder (every call otherwise rebuilds the full
+panchanga). Storage is unchanged: N rows.
+
+Without the M7 tables, `ensureChartData` degrades to the legacy `kundlis` columns plus uncached Radha calls.
 
 Agents (specialists in the reading graph, the timeline builder, the clarify planner) get a tool
 `getChartData(types[])` that calls `ensureChartData`. They never call Radha directly, so storage, retries and rate
@@ -165,43 +214,51 @@ limits live in one place. A missing item costs one Radha round trip the first ti
 
 | When | Items | Calls |
 |---|---|---|
-| Registration (tier `registration`) | biodata; 16 vargas; Vimsottari, Narayana, Yogini, Ashtottari, Chara, Kalachakra; chara karakas; shadbala, bhava bala, vimsopaka; ashtakavarga; yogas; arudhas; this year's varsha + tithi pravesh | ~32 |
-| On demand | everything else in §3 | 1 per item, first use only |
-| Birthday | next year's annual items | ~4 per person per year |
+| Registration | 18 items in this order (chat can open after the first six): 1-6 `panchanga.birth`, `varga.d1`, `varga.d9`, `dasha.vimsottari`, `arudhas`, `karaka.chara`; 7-11 `varga.d10`, `d2`, `d4`, `d7`, `ashtakavarga`; 12-18 `dasha.narayana`, `strength.shadbala`, `yogas`, `varga.d12`, `d30`, `d60`, `d3` | ~18 (fewer with multi-type) |
+| On demand | everything else in section 3: D16/D20/D24/D27/D40/D45, Yogini/Chara/Kalachakra, applicable conditional dashas, bhava bala, vimsopaka, sphutas, doshas, **this year's annual items** (the annual agent is phase 4, doc 11) | 1 per item, first use only |
+| Timeline opt-in | Vimsottari to PD level over 36 years, Narayana AD, `transit.overlay` for 18 years each way, 36 tithi pravesha + 36 Mudda (+ sahams) | 100-150 per person (section 9) |
+| Birthday | next year's annual items, for people who have them | ~4 per person per year |
 
-At today's one-call-per-second throttle that is 30+ seconds of registration work. It runs in the existing kundli queue
-(the person does not wait on it) and the reading engine already works with the first 10 items, so this is acceptable
-to start. Ways to make it faster, in the order I'd try them:
+Registration fetches only what the first readings read. Keep `tier` as "priority order": `first`, `registration`, `on_demand`, with
+`sort_order` deciding the queue.
 
-1. **Order the queue.** Fetch what the first reading needs first (biodata, D1, D9, Vimsottari, current varsha), the
-   rest after. The person can chat after the first five calls.
-2. **Raise the throttle for our own server.** The 1 s/client limit protects Radha from strangers; our API key could get
-   a higher limit.
-3. **Two Radha deployments, split by workload, not by data type.** Same image, two Lambda functions:
-   `aiastra-pyjhora-bulk` (registration, birthdays, backfills, timeline) and `aiastra-pyjhora-live` (on-demand fetches
-   during chat), with reserved concurrency on `live` so a registration burst never slows a person who is chatting.
-   This is deployment config, not code.
-4. A multi-type request (`types: [...]`, one `Horoscope` build, many tables back) would cut compute a lot, because every
-   call currently rebuilds the whole horoscope. Sachin's model is one item per call; this stays an option for the bulk
-   function only if (1)–(3) are not enough.
+The throttle is our own code at both ends, not Radha's real limit. Options, in the order to do them:
+
+1. **Order the queue** as above.
+2. **Fix the server side**: pass `lat/lon/tz` (stored on `kundlis` since M1) and drop the 1.1 s Nominatim spacing for those calls
+   (Nominatim is skipped when coordinates are sent); raise `KUNDLI_QUEUE_MAX_FETCHES_PER_USER` to 3-4; **whitelist the server in
+   Radha** (the 1 s/client check is an in-process dict that only fires for two calls on the same warm instance; keep it for anonymous
+   callers).
+3. **Multi-type request first** (section 5): the first Radha change. One `Horoscope` build serves all types; `biodata`/`d1` also call
+   `get_horoscope_information()`, which computes everything.
+4. **Two Radha deployments, split by workload**: `aiastra-pyjhora-bulk` (timeline backfills, birthdays) and
+   `aiastra-pyjhora-live` (chat-time fetches), reserved concurrency on `live`. This is the lever for timeline volume, not for
+   registration. Deployment config, not code.
 
 Splitting Radha into separate services per domain (one for dashas, one for vargas, one for tithi pravesh) is **not**
 recommended now: it is one Python codebase, every item needs the same `Horoscope` build, and splitting multiplies
-deploys without making anything faster. Start with one deployment for testing, add the bulk/live split (3) when
-registration volume needs it.
+deploys without making anything faster. Start with one deployment for testing, add the bulk/live split (4) when
+timeline volume needs it.
 
 ## 7. What changes in Radha (the Python pass)
 
-All in `src/jhora/export.py` and the `ExportType` list in `src/jhora/api.py`; no change to the library modules.
+Mostly `src/jhora/export.py` and the `ExportType` list in `src/jhora/api.py`; the dasha level-3 walker and two applicability checks
+touch library modules.
 
-1. Generalise vargas: `d1` … `d144` for all 23 factors (one mapping table).
-2. One JSON builder per dasha family, reusing the existing maha → bhukti tree shape; add the third level.
-3. JSON builders for each strength / yoga / arudha / sphuta / ashtakavarga item in §3.1.
-4. Annual items: `annual.varsha`, `annual.tithi_pravesh`, `annual.mudda`, `annual.patyayini` taking a `year` field.
-5. The `facts` and `transits` types from 09-lambda-contract.
-6. A `catalog` type that returns the list of types this build supports and its engine commit, so the server can
-   seed `chart_data_types` and detect when a rebuild is needed.
-7. Golden tests: for a fixed birth, each type's JSON matches a stored fixture (also our check against desktop output).
+1. Multi-type request: `type` accepts a list; `ExportType` becomes a list validated against the catalog rather than a hard-coded `Literal`.
+2. Generalise vargas: `d1` ... `d144` for all 23 factors. `_chart_key_prefix` only maps 2/4/7/9/10; use `main.py`'s
+   `dhasavarga_dict` (factor -> key). Record `chart_method` in `params`.
+3. One JSON builder per dasha family on a shared tree builder, with `end_date`/`duration_years`, ISO dates, and the third level;
+   plus `dasha.applicable`.
+4. JSON builders for each strength / yoga / arudha / sphuta / ashtakavarga item in section 3.1.
+5. Annual items `annual.varsha|tithi_pravesha|mudda|patyayini|sahams` taking a `year` field and returning `valid_to`.
+6. `transits` (09-lambda-contract). **`facts` is no longer a Radha type**: Radha returns sections (the per-item payloads), the
+   server stores them as rows, and `src/reading/data/factsBuilder.ts` assembles `facts.v1` from rows. The per-item payloads carry what
+   the facts schema needs (planet records with house, nakshatra, dignity, lords, relations).
+7. A `catalog` type: the types this build supports, per-type `calc_version`, accepted `params` per type, engine commit.
+8. API default `ayanamsa = "LAHIRI"` (today `TRUE_LAHIRI`, which shifts Vimsottari by days for callers that omit the field).
+   **Lahiri only** is stored; keep `ayanamsa` in the key so another ayanamsa later is a new row, not a migration.
+9. Golden tests: per type, JSON matches a stored fixture (G1 chart in `evals/fixtures/G1/`); reuse pyjhora's `tests/pvr_tests.py` values.
 
 ## 8. LLM cache lifecycle (stop paying for idle caches)
 
@@ -213,40 +270,52 @@ Plan:
 
 1. **Registry table** `llm_cache_entries (name, provider, user_id, kundli_id, prefix_hash, created_at, last_used_at,
    expires_at, deleted_at)`. Every instance looks here before creating one, so there is one cache per chart prefix.
-2. **Short TTL, extended on use.** Create with ~30 min, push the expiry forward when used (Gemini allows updating
-   `ttl`). If everything else fails, an unused cache dies by itself within 30 minutes.
+2. **30 min sliding TTL.** Create with 30 min, push the expiry to now + 30 min on every use (Gemini allows updating `ttl`). If
+   everything else fails, an unused cache dies by itself within 30 minutes. Break-even for keeping a 30k-token prefix is ~35-40 idle
+   minutes, so longer idle limits cost more than re-creating.
 3. **Delete on logout.** Logout (and session expiry) deletes that user's caches through the Gemini API and marks the rows.
-4. **Sweeper every 3 hours** (EventBridge schedule → small Lambda, or a job in the API Lambda): delete every cache with
-   `last_used_at` older than the idle limit, and reconcile against Gemini's list of caches so nothing is orphaned.
-5. Track cache spend per day (storage hours × size) next to token spend, so the saving is visible.
+4. **Hourly sweeper** (EventBridge schedule -> small Lambda, or a job in the API Lambda): delete every cache with
+   `last_used_at` older than the idle limit, and reconcile against Gemini's list of caches so nothing is orphaned (its real job is
+   orphans from instances that died before writing the registry row).
+5. Explicit cache applies to Gemini 3.x specialists only (Gemini 4 Argon does not support `cachedContents`), and only once the key
+   is on paid billing.
+6. Track cache spend per day (storage hours × size) next to token spend, so the saving is visible.
 
 ## 9. The 36-year timeline (needs the same data)
 
-The accuracy timeline (18 years back, 18 forward; [14-life-timeline.md](14-life-timeline.md)) needs: full three-level
-Vimsottari (and the core dashas) across 36 years, 36 annual charts, and transits sampled across those years. All of it
-goes through `ensureChartData` on the **bulk** Radha function, ahead of time, never during a chat turn. It is planned
-separately.
+The accuracy timeline (18 years back, 18 forward; [14-life-timeline.md](14-life-timeline.md)) needs, per person:
+
+- Vimsottari to **PD level across 36 years** (level 3 is new work) and Narayana antardasha;
+- the natal overlay for 18 years each way: `transit.overlay` rows, one per year, **per person per year** (the global ephemeris stays in
+  `transit_snapshots`);
+- for TL4: 36 tithi pravesha charts + 36 Mudda dashas (+ sahams if read).
+
+That is roughly **100-150 items per person**, versus 18 for registration, so this (not registration) is the case for the
+multi-type request and the bulk Radha function. Timeline rows are fetched only when the person opens or opts into the timeline, never
+at registration, and never during a chat turn. It is planned separately.
 
 ## 10. Phases
 
 | # | Work | Repo |
 |---|---|---|
-| R-1 | `chart_data_types` + `kundli_data` (M7), backfill from `kundlis` columns, dual read | Server |
+| R-1 | `chart_data_types` + `kundli_data` (M7), backfill from `kundlis` columns (`calc_version = 'legacy'`), dual read | Server |
 | R-2 | `ensureChartData` + `getChartData` tool; kundli queue writes rows | Server |
-| R-3 | Radha: all 23 vargas, `catalog` type, golden tests | Radha |
-| R-4 | Radha: core dashas, strengths, ashtakavarga, yogas, arudhas | Radha |
-| R-5 | Radha: annual items; birthday refresh job | Radha + Server |
-| R-6 | Catalogue and fix the dasha sub-period bugs | Radha |
-| R-7 | LLM cache registry, logout delete, 3-hour sweeper | Server |
-| R-8 | `facts` / `transits` types (09-lambda-contract); retire the 24 locally built dossiers | Radha + Server |
-| R-9 | Bulk/live Radha split when registration volume needs it | Infra |
+| R-3 | Radha: multi-type request, all 23 vargas, `catalog` type, `ayanamsa` default, golden tests | Radha |
+| R-6 | Catalogue and fix the dasha sub-period bugs; shared dasha tree builder (**before R-4**) | Radha |
+| R-4a | Radha: two-level dashas + end dates, `dasha.applicable`, strengths, ashtakavarga, yogas, arudhas | Radha |
+| R-4b | Radha: level-3 dashas, sphutas, doshas, specialist dashas | Radha |
+| R-5 | Radha: annual items incl. sahams; birthday refresh job | Radha + Server |
+| R-7 | LLM cache registry, 30 min sliding TTL, logout delete, hourly sweeper | Server |
+| R-8 | `transits` type; `facts` assembled server-side from rows; retire the 24 locally built dossiers | Radha + Server |
+| R-9 | Bulk/live Radha split when timeline volume needs it | Infra |
 
 R-1, R-2 and R-7 do not depend on Radha changes and can start first.
 
-## 11. Questions for review
+## 11. Decisions (from the review, doc 21 section 1)
 
-1. Is the registration tier in §6 the right set, or should it be smaller (and the rest on demand)?
-2. Which conditional dashas matter for our reading method, or do we fetch them only when `applicability.py` says they apply?
-3. Ayanamsa: Lahiri only, or also store others (the `ayanamsa` column allows it)?
-4. Cache idle limit: 30 minutes, or longer for people who chat on and off?
-5. Do we raise the Radha throttle for our server's API key, or go straight to the bulk/live split?
+1. **Registration tier**: the 18 ordered items in section 6; everything else on demand.
+2. **Conditional dashas**: fetched only when `dasha.applicable` says they apply; Ashtottari is conditional, not Core.
+3. **Ayanamsa**: Lahiri only; keep the column; fix the API default.
+4. **LLM cache**: 30 min sliding TTL, delete on logout, hourly sweeper.
+5. **Throttle**: fix the compute shape first (server spacing, concurrency, whitelist, multi-type request); bulk/live split later for
+   timeline volume.
