@@ -105,7 +105,7 @@ describe('chatWithGemini', () => {
     expect((call[1] as { method?: string })?.method).toBe('POST');
     expect((call[1] as { dispatcher?: unknown }).dispatcher).toBeDefined();
     const body = JSON.parse((call[1] as { body: string }).body);
-    expect(body.generationConfig?.maxOutputTokens).toBe(2048);
+    expect(body.generationConfig?.maxOutputTokens).toBe(8192);
     expect(body.generationConfig?.temperature).toBe(0.5);
     expect(body.generationConfig?.topP).toBe(0.9);
     const sysText = body.systemInstruction?.parts?.[0]?.text as string;
