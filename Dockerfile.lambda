@@ -1,0 +1,49 @@
+# AI Astra API - Lambda container image for `aiastra-server-api`.
+#
+# Runs the same Express app as the plain Dockerfile, fronted by the AWS Lambda Web Adapter
+# extension so a Lambda Function URL with InvokeMode=RESPONSE_STREAM can stream SSE chat
+# (/api/chat/ask-stream) token by token.
+#
+# Contract with the live function (see docs/lambda-deployment.md):
+#   - Function URL: AuthType AWS_IAM, InvokeMode RESPONSE_STREAM, behind CloudFront OAC.
+#   - Function env sets NODE_ENV (lowercase `staging` today), DATABASE_URL, DIRECT_URL, JWT_SECRET,
+#     CORS_ORIGINS, CHAT_LLM_PROVIDER, GEMINI_*, GROQ_API_KEY, ASTROKUNDLI_* . Function env overrides
+#     the ENV defaults below.
+#
+# Build:  docker build --platform linux/amd64 --provenance=false -f Dockerfile.lambda -t aiastra-server-api:local .
+
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci
+COPY . .
+RUN npx prisma generate && npm run build
+
+FROM node:22-bookworm-slim AS runner
+WORKDIR /app
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Lambda Web Adapter: runs as a Lambda extension, proxies invokes to the local HTTP server.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0 /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    AWS_LWA_PORT=3000 \
+    AWS_LWA_INVOKE_MODE=response_stream \
+    AWS_LWA_READINESS_CHECK_PATH=/health \
+    AWS_LWA_READINESS_CHECK_PROTOCOL=http \
+    AWS_LWA_ASYNC_INIT=true \
+    KUNDLI_QUEUE_LOG_FILE=/tmp/kundli-queue.log \
+    KUNDLI_QUEUE_LOG_CONSOLE=1
+
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN npm ci --omit=dev && npx prisma generate && npm cache clean --force
+COPY --from=build /app/dist ./dist
+COPY docker-entrypoint.mjs ./docker-entrypoint.mjs
+
+# Lambda root filesystem is read-only; only /tmp is writable. Nothing below writes outside /tmp.
+EXPOSE 3000
+CMD ["node", "docker-entrypoint.mjs"]

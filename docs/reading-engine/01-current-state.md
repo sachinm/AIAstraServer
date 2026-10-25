@@ -21,7 +21,7 @@ Action for Phase 0: give each repo a `develop` branch cut from its live feature 
 - Database: Render Postgres (pooler `:6432`, `connection_limit=1` from Lambda; `DIRECT_URL` on `:5432`). Not in AWS.
 - DynamoDB `aiastra-gemini-cache` (`userId` → cache pointer) exists; cache is **off** (`GEMINI_CACHE_ENABLED=0`) because the Gemini free tier has zero cachedContents storage. Paid billing is the blocker.
 - Secrets Manager: `aiastra/database-url`, `aiastra/jwt-secret`, `aiastra/chat-llm`, `aiastra/server-env`, `aiastra/web-env`, `aiastra/pyjhora-env`.
-- Gap: the server repo Dockerfile builds a plain Express container (`docker-entrypoint.mjs` → `node dist/server.js`). The RESPONSE_STREAM Lambda packaging (web adapter or handler) is not in the repo. It must be found and committed in Phase 0, otherwise the graph work cannot be deployed reproducibly.
+- Gap (closed in source on 2026-10-24): the server repo only had a plain Express Dockerfile. `Dockerfile.lambda` with the Lambda Web Adapter now packages the API for the RESPONSE_STREAM Function URL; see [../lambda-deployment.md](../lambda-deployment.md). It still has to be checked against the live function before the first deploy.
 
 ## 3. The chat turn today
 
