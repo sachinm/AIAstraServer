@@ -4,7 +4,12 @@ import { getJwtSecret } from '../graphql/context.js';
 import { generateAccountPassword, hashPassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
-import { sendLoginCode, verifyLoginCode } from '../auth/emailCode.js';
+import {
+  sendLoginCode,
+  verifyLoginCode,
+  createSignupIdentity,
+  sendSignupCode,
+} from '../auth/emailCode.js';
 import { validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
@@ -158,6 +163,15 @@ export async function signup(
     return { success: false, message: 'Username already exists' };
   }
 
+  // AUTH_PROVIDER=cognito: create the Cognito user first (it emails the confirmation code); local: no-op.
+  const identity = await createSignupIdentity(email, username);
+  if (!identity.ok) {
+    if (identity.reason === 'exists') {
+      return { success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE };
+    }
+    return { success: false, message: 'Unable to create your account right now. Please try again.' };
+  }
+
   const hashedPassword = await hashPassword(generateAccountPassword());
 
   const dateOfBirthEnc = encrypt(date_of_birth);
@@ -179,8 +193,8 @@ export async function signup(
     },
   });
 
-  // Email verification code; Cognito replaces this later (see src/auth/emailCode.ts).
-  await sendLoginCode(email);
+  // Email verification code (local provider only; Cognito already sent it, see src/auth/emailCode.ts).
+  await sendSignupCode(email);
 
   await enqueueKundliSync(prisma, created.id).catch((err) => {
     console.error('enqueueKundliSync after signup failed:', (err as Error).message);
