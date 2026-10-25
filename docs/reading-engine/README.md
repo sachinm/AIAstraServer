@@ -22,6 +22,8 @@ This document is the plan. The companion files hold the detail:
 | [14-life-timeline.md](./14-life-timeline.md) | Private Life Timeline: the past 18 years read back for calibration feedback, the next 5–18 years as dated event windows with calibrated likelihood; event classes, pipeline, data model, policies, phases |
 | [09-lambda-contract.md](./09-lambda-contract.md) | What the Lambda must return for `facts` and `transits` (brief for the later Python pass) |
 | [PHASE1-STATUS.md](./PHASE1-STATUS.md) | What Phase 1 shipped, what is blocked, measured numbers, decisions |
+| [15-bucket-classifier.md](./15-bucket-classifier.md) | How a question gets its bucket, cue scores, confidence, slots, template and policy flags (rules, no model), with worked examples |
+| [16-kundli-sync-and-dossier-ops.md](./16-kundli-sync-and-dossier-ops.md) | Where chart data comes from (Radha only), the state of the live database, the 25th-kundli fix, how to rerun a stuck sync |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 
