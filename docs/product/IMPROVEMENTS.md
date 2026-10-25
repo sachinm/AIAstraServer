@@ -21,7 +21,7 @@ Two viable models in this market: **subscription** (what AI-first apps do) and *
 |---|---|---|
 | Free | ₹0 / $0 | 3 fast-lane questions per day, one full reading per week, own chart only, "How I read this" visible, ads-free |
 | Plus | ₹299/mo or ₹1,999/yr · $4.99/mo | Unlimited fast lane, 30 full readings/mo, month-ahead reading every month, 2 extra people (family/partner), saved readings, PDF export |
-| Pro | ₹699/mo · $11.99/mo | Unlimited full readings, compatibility and family readings, year-ahead (Tithi Pravesha) reading, priority models (argon synth on every reading), transit alerts, early features |
+| Pro | ₹699/mo · $11.99/mo | Unlimited full readings, compatibility and family readings, year-ahead (Tithi Pravesha) reading, **Life Timeline** (file 14: the past 18 years with accuracy feedback, the next 5–18 years), priority models (argon synth on every reading), transit alerts, early features |
 | Family | ₹999/mo | Pro for up to 5 people |
 
 Mechanics: per-user daily budget already planned (`READING_DAILY_BUDGET_USD`) becomes plan-aware; `subscriptions` table (provider, plan, status, period_end, trial_end); entitlements resolved server-side per request; soft paywall at the point of value (after the Answer card, blur the body with "Unlock the full reading"); 7-day trial of Plus on sign-up.
