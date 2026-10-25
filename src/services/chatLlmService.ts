@@ -5,12 +5,21 @@ import type { PrismaClient } from '@prisma/client';
 import { getChatLlmProvider } from '../config/env.js';
 import { chatWithGroq, type ChatWithGroqResult } from './groqChatService.js';
 import { chatWithGemini } from './geminiChatService.js';
+import { isReadingEngineEnabled, readingBuildFactsEnabled, readingFallbackToLegacy } from '../reading/config.js';
+import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
+import { ReadingUnavailableError, runReading, type ReadingRunRecord } from '../reading/run.js';
+import type { ReadingEmitter } from '../reading/types.js';
 
-export type ChatTurnResult = ChatWithGroqResult;
+export type ChatTurnResult = ChatWithGroqResult & {
+  /** Present when the reading engine answered; persisted as a reading_runs row. */
+  reading?: ReadingRunRecord;
+};
 
 export type ChatWithLlmOptions = {
   /** Fired for each streamed token delta (Gemini SSE + Groq stream). */
   onDelta?: (delta: string) => void;
+  /** Reading-engine progress events (intent, stage, windows) for the SSE stream. */
+  onEvent?: ReadingEmitter;
 };
 
 export async function chatWithConfiguredProvider(
@@ -22,6 +31,28 @@ export async function chatWithConfiguredProvider(
   const provider = getChatLlmProvider();
   const t0 = Date.now();
   try {
+    if (provider === 'gemini' && isReadingEngineEnabled()) {
+      try {
+        const r = await runReading(prisma, userId, question, {
+          onDelta: options?.onDelta,
+          onEvent: options?.onEvent,
+          onFactsMissing: (kundliId) => {
+            if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
+          },
+          onStale: (kundliId) => {
+            if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId, { force: true });
+          },
+        });
+        return { answerText: r.answerText, requestPayload: r.requestPayload, responsePayload: r.responsePayload, reading: r.record };
+      } catch (err) {
+        if (err instanceof ReadingUnavailableError && readingFallbackToLegacy()) {
+          console.log(JSON.stringify({ msg: 'reading engine unavailable; using legacy chat path', reason: err.reason }));
+          options?.onEvent?.({ type: 'info', reason: err.reason });
+        } else {
+          throw err;
+        }
+      }
+    }
     if (provider === 'gemini') {
       return await chatWithGemini(prisma, userId, question, options);
     }

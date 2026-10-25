@@ -1,0 +1,6 @@
+table kundli_facts: 10 columns generated, 10 in migration
+table transit_snapshots: 8 columns generated, 8 in migration
+table reading_runs: 27 columns generated, 27 in migration
+kundlis new columns: schema has lat,lon,tz,place_resolved,facts_status | migration adds lat,lon,tz,place_resolved,facts_status
+indexes: schema 6, migration 6
+RESULT: schema.prisma and migrations M1-M4 agree

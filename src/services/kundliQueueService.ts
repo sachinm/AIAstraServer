@@ -14,6 +14,8 @@ import {
   getKundliQueueRowStaggerMs,
 } from '../config/env.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
+import { readingBuildFactsEnabled } from '../reading/config.js';
+import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
@@ -216,6 +218,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
       void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
         console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
       });
+      if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
       return;
     }
 
@@ -301,6 +304,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
       void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
         console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
       });
+      if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
     } else {
       queueLog({
         event: 'kundli_partial_sync',

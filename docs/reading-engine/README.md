@@ -20,10 +20,14 @@ This document is the plan. The companion files hold the detail:
 | [11-analysis-methods.md](./11-analysis-methods.md) | Triangulation across promise, dasha, transit, second-school and annual layers; strengthen/weaken rules; deciders per situation; fortune tier; agent responsibilities and DAG joins |
 | [13-two-track-clarify-and-provenance.md](./13-two-track-clarify-and-provenance.md) | The clarifier agent narrows criteria (timeframe, who, background) in sub-second turns while the reading agents already run on cached charts and narrow as slots resolve; the trace that records and shows how the answer was reached |
 | [14-life-timeline.md](./14-life-timeline.md) | Private Life Timeline: the past 18 years read back for calibration feedback, the next 5–18 years as dated event windows with calibrated likelihood; event classes, pipeline, data model, policies, phases |
+| [09-lambda-contract.md](./09-lambda-contract.md) | What the Lambda must return for `facts` and `transits` (brief for the later Python pass) |
+| [PHASE1-STATUS.md](./PHASE1-STATUS.md) | What Phase 1 shipped, what is blocked, measured numbers, decisions |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 
 **Note (2026-10-24, later):** Sachin asked that the Python engine (AIAstra_Radha) not be modified during Phase 1. The dossier and transit table are therefore being built in Node from the kundli JSON already stored plus a TypeScript ephemeris; the Python `facts`/`transits` draft is parked under `drafts/radha/`. Where files 03, 06 and 10 say "Python engine", read "Node for now, Python in a later deliberate pass".
+
+**Update (2026-10-24, Phase 1 close):** Sachin then decided that Node computes nothing astrological. The pyjhora Lambda will serve the dossier and the per-kundli transit chart (contract in [09-lambda-contract.md](./09-lambda-contract.md)); the Node compute experiment is parked in `drafts/node-compute-parked/`. See [PHASE1-STATUS.md](./PHASE1-STATUS.md).
 
 ---
 

@@ -1,0 +1,42 @@
+[
+ {
+  "karaka_code": "AK",
+  "planet": "Saturn",
+  "meaning": "Self"
+ },
+ {
+  "karaka_code": "AmK",
+  "planet": "Moon",
+  "meaning": "Minister (advisor)"
+ },
+ {
+  "karaka_code": "BK",
+  "planet": "Jupiter",
+  "meaning": "Brother (associate)"
+ },
+ {
+  "karaka_code": "MK",
+  "planet": "Mars",
+  "meaning": "Mother (nourisher)"
+ },
+ {
+  "karaka_code": "PiK",
+  "planet": "Sun",
+  "meaning": "Father (authority)"
+ },
+ {
+  "karaka_code": "PK",
+  "planet": "Venus",
+  "meaning": "Son (follower)"
+ },
+ {
+  "karaka_code": "GK",
+  "planet": "Raagu",
+  "meaning": "Cousin (rival)"
+ },
+ {
+  "karaka_code": "DK",
+  "planet": "Mercury",
+  "meaning": "Spouse (partner)"
+ }
+]

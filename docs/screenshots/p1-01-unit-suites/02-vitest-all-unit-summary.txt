@@ -1,0 +1,11 @@
+      Tests  9 failed | 242 passed (251)
+ FAIL  tests/unit/astroKundliClient.test.ts > astroKundliClient > checkAstroKundliEndpoint > returns ok: false when connection is refused
+ FAIL  tests/unit/astroKundliClient.test.ts > astroKundliClient > checkAstroKundliEndpoint > returns ok: false when request times out
+ FAIL  tests/unit/astroKundliClient.test.ts > astroKundliClient > checkAstroKundliEndpoint > returns ok: true when GET base URL returns 200
+ FAIL  tests/unit/astroKundliClient.test.ts > astroKundliClient > checkAstroKundliEndpoint > returns ok: true when GET base URL returns 404 (server up, no route)
+ FAIL  tests/unit/env.chatProvider.test.ts > chat LLM env helpers > getGeminiMaxOutputTokens defaults to 2048 when unset
+ FAIL  tests/unit/env.test.ts > config/env > getAstroKundliBaseUrl > returns ASTROKUNDLI_BASE_URL_LOCAL when NODE_ENV is development
+ FAIL  tests/unit/env.test.ts > config/env > getAstroKundliBaseUrl > throws when ASTROKUNDLI_BASE_URL_LOCAL is missing in development
+ FAIL  tests/unit/env.test.ts > config/env > isAstroKundliConfigured > returns true when base URL is set for current env
+ FAIL  tests/unit/geminiChatService.test.ts > chatWithGemini > calls Gemini streamGenerateContent (SSE) and concatenates deltas + payloads
+ Test Files  4 failed | 25 passed (29)

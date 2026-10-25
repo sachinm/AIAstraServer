@@ -1,0 +1,172 @@
+{
+  "question": "Should I change jobs this year?",
+  "firstProgressEventMs": 206,
+  "firstTokenMs": 1362,
+  "tokenEvents": 16,
+  "totalMs": 1827,
+  "events": [
+    {
+      "at": 206,
+      "type": "start"
+    },
+    {
+      "at": 206,
+      "type": "stage",
+      "name": "intake",
+      "status": "start"
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "intake",
+      "status": "done",
+      "ms": 0
+    },
+    {
+      "at": 225,
+      "type": "intent",
+      "runId": "75ccbcbe-4389-4937-9b39-764aec0af333",
+      "intent": {
+        "subjects": [
+          {
+            "id": "career_work",
+            "label": "career and work"
+          }
+        ],
+        "horizon": {
+          "from": "2026-10-24",
+          "to": "2026-12-31"
+        },
+        "horizonLabel": "2026-10-24 to 2026-12-31",
+        "questionType": "compare",
+        "format": "factor_table",
+        "planets": [],
+        "confidence": 0.9,
+        "text": "You are asking about career and work over 2026-10-24 to 2026-12-31; I will read houses 10, 6, 1, D-10, your running dasha and the transits."
+      },
+      "source": "rules"
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "prepare",
+      "status": "start"
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "prepare",
+      "status": "done",
+      "ms": 3,
+      "detail": {
+        "approxTokens": 3726,
+        "transits": "ready"
+      }
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "promise",
+      "status": "start",
+      "subject": "career_work"
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "dasha",
+      "status": "start",
+      "subject": "career_work"
+    },
+    {
+      "at": 225,
+      "type": "stage",
+      "name": "transit",
+      "status": "start",
+      "subject": "career_work"
+    },
+    {
+      "at": 1342,
+      "type": "stage",
+      "name": "promise",
+      "status": "done",
+      "ms": 1135,
+      "subject": "career_work"
+    },
+    {
+      "at": 1346,
+      "type": "stage",
+      "name": "dasha",
+      "status": "done",
+      "ms": 1133,
+      "subject": "career_work"
+    },
+    {
+      "at": 1355,
+      "type": "stage",
+      "name": "transit",
+      "status": "done",
+      "ms": 1131,
+      "subject": "career_work"
+    },
+    {
+      "at": 1355,
+      "type": "stage",
+      "name": "reconcile",
+      "status": "start"
+    },
+    {
+      "at": 1355,
+      "type": "stage",
+      "name": "reconcile",
+      "status": "done",
+      "ms": 1
+    },
+    {
+      "at": 1355,
+      "type": "windows",
+      "windows": [
+        {
+          "from": "2026-11-01",
+          "to": "2026-12-31",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter"
+        },
+        {
+          "from": "2026-11-01",
+          "to": "2026-12-31",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter"
+        },
+        {
+          "from": "2026-11-01",
+          "to": "2026-12-31",
+          "polarity": "favourable",
+          "label": "Saturn-Ketu-Sun supporter + Saturn-Ketu-Sun supporter"
+        }
+      ]
+    },
+    {
+      "at": 1355,
+      "type": "stage",
+      "name": "synthesize",
+      "status": "start"
+    },
+    {
+      "at": 1825,
+      "type": "stage",
+      "name": "synthesize",
+      "status": "done",
+      "ms": 462
+    },
+    {
+      "at": 1825,
+      "type": "done",
+      "chatId": "demo-chat-1",
+      "runId": "75ccbcbe-4389-4937-9b39-764aec0af333",
+      "grounding": {
+        "dropped": 3
+      },
+      "answerChars": 382
+    }
+  ]
+}

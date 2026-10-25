@@ -222,9 +222,16 @@ app.post('/api/chat/ask-stream', async (req, res) => {
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
       },
+      // reading engine: intent / stage / windows events let the UI show progress before the first token
+      onEvent: (event) => writeSse(event),
     });
     const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
-    writeSse({ type: 'done', chatId: finalChatId, answer: chatResult.answerText });
+    writeSse({
+      type: 'done',
+      chatId: finalChatId,
+      answer: chatResult.answerText,
+      ...(chatResult.reading ? { runId: chatResult.reading.runId, grounding: { dropped: chatResult.reading.droppedClaims } } : {}),
+    });
   } catch (e) {
     logChatProviderError('ask-stream', e);
     writeSse({ type: 'error', message: publicMessageFromChatProviderError(e) });

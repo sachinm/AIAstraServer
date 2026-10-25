@@ -1,0 +1,835 @@
+{
+  "meta": {
+    "engine": "phase1",
+    "flow": "single",
+    "fake": true,
+    "asOf": "2026-10-24",
+    "model": "default"
+  },
+  "baseline": {
+    "leanTokens": 6605,
+    "fullTokens": 19184,
+    "methodTokens": 1405,
+    "note": "chars/3.6 estimate; legacy system prompt (DB pvr_oracle) excluded except the markdown appendix, so the true legacy figure is higher"
+  },
+  "totals": {
+    "questions": 12,
+    "passed": 8,
+    "checked": 29,
+    "verified": 26,
+    "contradicted": 2,
+    "unverifiable": 1,
+    "medianTotalMs": 149,
+    "medianFirstTokenMs": 20,
+    "medianPromptTokens": 6425,
+    "medianPackTokens": 4062,
+    "meanCost": 0.00043891666666666667,
+    "cachedShare": 0.6308730967118493
+  },
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "I am having a lot of problems with my work and with money. I am not happy. When does this improve?",
+      "intent": {
+        "subjects": [
+          "career_work"
+        ],
+        "horizon": "1y",
+        "format": "timeline",
+        "source": "llm"
+      },
+      "flow": "single",
+      "answerWords": 39,
+      "grounding": {
+        "checked": 4,
+        "verified": 4,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0,
+        "missingPackIds": [
+          "detail.career_work.houses.10",
+          "detail.income_wealth.houses.2",
+          "varga.career_work.D10",
+          "varga.income_wealth.D2",
+          "dasha.career_work.current",
+          "transits.career_work.double_transit"
+        ],
+        "missingMentions": [
+          "D-10",
+          "D-2 or hora",
+          "Saturn or Jupiter transit"
+        ]
+      },
+      "windows": {
+        "found": 2,
+        "insideHorizon": 2,
+        "outside": []
+      },
+      "format": {
+        "expected": "timeline",
+        "chosen": "timeline",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 421,
+        "ttftMs": 212,
+        "firstTokenFromStartMs": 215,
+        "synthMs": 240,
+        "intakeMs": 123
+      },
+      "tokens": {
+        "prompt": 6961,
+        "cached": 0,
+        "output": 440,
+        "thought": 0,
+        "packApprox": 4062
+      },
+      "costUsd": 0.000872,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": false
+    },
+    {
+      "id": "Q2",
+      "question": "When am I going to buy a house?",
+      "intent": {
+        "subjects": [
+          "property_home"
+        ],
+        "horizon": "3y",
+        "format": "timeline",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 39,
+      "grounding": {
+        "checked": 4,
+        "verified": 4,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0.63,
+        "missingPackIds": [],
+        "missingMentions": [
+          "D-4 varga cited",
+          "Mars",
+          "4th house/lord"
+        ]
+      },
+      "windows": {
+        "found": 2,
+        "insideHorizon": 2,
+        "outside": []
+      },
+      "format": {
+        "expected": "timeline",
+        "chosen": "timeline",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 215,
+        "ttftMs": 37,
+        "firstTokenFromStartMs": 37,
+        "synthMs": 196,
+        "intakeMs": 5
+      },
+      "tokens": {
+        "prompt": 6425,
+        "cached": 4497,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 4118
+      },
+      "costUsd": 0.000393,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q3",
+      "question": "When am I going to win the lottery?",
+      "intent": {
+        "subjects": [
+          "speculation_lottery"
+        ],
+        "horizon": "1y",
+        "format": "direct",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 44,
+      "grounding": {
+        "checked": 3,
+        "verified": 2,
+        "contradicted": 1,
+        "unverifiable": 0,
+        "contradictions": [
+          {
+            "claim": "Sa-Ke-Su",
+            "expected": "Sa-Ke-Ve",
+            "sentence": "- Saturn-Ketu-Sun is running now."
+          }
+        ]
+      },
+      "coverage": {
+        "score": 0.8,
+        "missingPackIds": [],
+        "missingMentions": [
+          "5th/11th/2nd houses"
+        ]
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "direct",
+        "chosen": "direct",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": true
+      },
+      "latency": {
+        "totalMs": 118,
+        "ttftMs": 14,
+        "firstTokenFromStartMs": 15,
+        "synthMs": 108,
+        "intakeMs": 0
+      },
+      "tokens": {
+        "prompt": 6161,
+        "cached": 4312,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 3957
+      },
+      "costUsd": 0.000381,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": false
+    },
+    {
+      "id": "Q4",
+      "question": "When will I make a million dollars? In the next 3 or 6 months is a big jump coming?",
+      "intent": {
+        "subjects": [
+          "income_wealth"
+        ],
+        "horizon": "6m",
+        "format": "timeline",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 39,
+      "grounding": {
+        "checked": 4,
+        "verified": 4,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0.83,
+        "missingPackIds": [],
+        "missingMentions": [
+          "2nd/11th/9th houses"
+        ]
+      },
+      "windows": {
+        "found": 2,
+        "insideHorizon": 1,
+        "outside": [
+          "Jun 2027 - Aug 2027"
+        ]
+      },
+      "format": {
+        "expected": "timeline",
+        "chosen": "timeline",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 220,
+        "ttftMs": 17,
+        "firstTokenFromStartMs": 17,
+        "synthMs": 208,
+        "intakeMs": 0
+      },
+      "tokens": {
+        "prompt": 5996,
+        "cached": 4197,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 3722
+      },
+      "costUsd": 0.000373,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q5",
+      "question": "Ketu is transiting over my Jupiter. What does that even mean for me?",
+      "intent": {
+        "subjects": [
+          "general_life_direction"
+        ],
+        "horizon": "1y",
+        "format": "narrative",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 52,
+      "grounding": {
+        "checked": 1,
+        "verified": 1,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 1,
+        "missingPackIds": [],
+        "missingMentions": []
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "narrative",
+        "chosen": "narrative",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 149,
+        "ttftMs": 19,
+        "firstTokenFromStartMs": 19,
+        "synthMs": 136,
+        "intakeMs": 1
+      },
+      "tokens": {
+        "prompt": 6942,
+        "cached": 4859,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 4619
+      },
+      "costUsd": 0.000418,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q6",
+      "question": "Tell me about my nakshatras — look at it from all the different ways.",
+      "intent": {
+        "subjects": [
+          "general_life_direction"
+        ],
+        "horizon": "life",
+        "format": "narrative",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 52,
+      "grounding": {
+        "checked": 1,
+        "verified": 1,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0.5,
+        "missingPackIds": [],
+        "missingMentions": [
+          "Swati",
+          "Hasta",
+          "tara",
+          "star lord"
+        ]
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "narrative",
+        "chosen": "narrative",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 209,
+        "ttftMs": 48,
+        "firstTokenFromStartMs": 48,
+        "synthMs": 187,
+        "intakeMs": 8
+      },
+      "tokens": {
+        "prompt": 6489,
+        "cached": 4542,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 4214
+      },
+      "costUsd": 0.000396,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q7",
+      "question": "Should I change jobs this year?",
+      "intent": {
+        "subjects": [
+          "career_work"
+        ],
+        "horizon": {
+          "from": "2026-10-24",
+          "to": "2026-12-31"
+        },
+        "format": "factor_table",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 29,
+      "grounding": {
+        "checked": 0,
+        "verified": 0,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0.83,
+        "missingPackIds": [],
+        "missingMentions": [
+          "dasha"
+        ]
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "factor_table",
+        "chosen": "factor_table",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 130,
+        "ttftMs": 26,
+        "firstTokenFromStartMs": 26,
+        "synthMs": 109,
+        "intakeMs": 1
+      },
+      "tokens": {
+        "prompt": 5946,
+        "cached": 4162,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 3726
+      },
+      "costUsd": 0.00037,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q8",
+      "question": "What does my D-10 say about the kind of work I am suited for?",
+      "intent": {
+        "subjects": [
+          "career_work"
+        ],
+        "horizon": "life",
+        "format": "factor_table",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 29,
+      "grounding": {
+        "checked": 0,
+        "verified": 0,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 1,
+        "missingPackIds": [],
+        "missingMentions": []
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "factor_table",
+        "chosen": "factor_table",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 121,
+        "ttftMs": 22,
+        "firstTokenFromStartMs": 22,
+        "synthMs": 109,
+        "intakeMs": 1
+      },
+      "tokens": {
+        "prompt": 6623,
+        "cached": 4636,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 4320
+      },
+      "costUsd": 0.000403,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q9",
+      "question": "When will I get married?",
+      "intent": {
+        "subjects": [
+          "marriage_relationship"
+        ],
+        "horizon": "3y",
+        "format": "timeline",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 39,
+      "grounding": {
+        "checked": 4,
+        "verified": 4,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0.75,
+        "missingPackIds": [],
+        "missingMentions": [
+          "D-9 / navamsa cited",
+          "7th"
+        ]
+      },
+      "windows": {
+        "found": 2,
+        "insideHorizon": 2,
+        "outside": []
+      },
+      "format": {
+        "expected": "timeline",
+        "chosen": "timeline",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 256,
+        "ttftMs": 19,
+        "firstTokenFromStartMs": 20,
+        "synthMs": 243,
+        "intakeMs": 1
+      },
+      "tokens": {
+        "prompt": 6865,
+        "cached": 4805,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 4508
+      },
+      "costUsd": 0.000414,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q10",
+      "question": "Is this month a good time to sign a property deal?",
+      "intent": {
+        "subjects": [
+          "property_home"
+        ],
+        "horizon": "now",
+        "format": "watchlist",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 51,
+      "grounding": {
+        "checked": 1,
+        "verified": 0,
+        "contradicted": 0,
+        "unverifiable": 1,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 1,
+        "missingPackIds": [],
+        "missingMentions": []
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "watchlist",
+        "chosen": "watchlist",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 137,
+        "ttftMs": 13,
+        "firstTokenFromStartMs": 13,
+        "synthMs": 127,
+        "intakeMs": 1
+      },
+      "tokens": {
+        "prompt": 5823,
+        "cached": 4076,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 3649
+      },
+      "costUsd": 0.000365,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": true
+    },
+    {
+      "id": "Q11",
+      "question": "What is Sade Sati and am I in it?",
+      "intent": {
+        "subjects": [
+          "explain_term"
+        ],
+        "horizon": "now",
+        "format": "direct",
+        "source": "rules"
+      },
+      "flow": "single",
+      "answerWords": 44,
+      "grounding": {
+        "checked": 3,
+        "verified": 2,
+        "contradicted": 1,
+        "unverifiable": 0,
+        "contradictions": [
+          {
+            "claim": "Sa-Ke-Su",
+            "expected": "Sa-Ke-Ve",
+            "sentence": "- Saturn-Ketu-Sun is running now."
+          }
+        ]
+      },
+      "coverage": {
+        "score": 0.5,
+        "missingPackIds": [],
+        "missingMentions": [
+          "Sade Sati defined (7.5 years / Saturn over Moon)",
+          "honest no (not in it)"
+        ]
+      },
+      "windows": {
+        "found": 0,
+        "insideHorizon": 0,
+        "outside": []
+      },
+      "format": {
+        "expected": "direct",
+        "chosen": "direct",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 118,
+        "ttftMs": 18,
+        "firstTokenFromStartMs": 18,
+        "synthMs": 104,
+        "intakeMs": 0
+      },
+      "tokens": {
+        "prompt": 5407,
+        "cached": 3784,
+        "output": 220,
+        "thought": 0,
+        "packApprox": 3295
+      },
+      "costUsd": 0.000345,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": false
+    },
+    {
+      "id": "Q12",
+      "question": "My work, my money, my marriage — what is coming in the next year?",
+      "intent": {
+        "subjects": [
+          "career_work"
+        ],
+        "horizon": "1y",
+        "format": "timeline",
+        "source": "llm"
+      },
+      "flow": "single",
+      "answerWords": 39,
+      "grounding": {
+        "checked": 4,
+        "verified": 4,
+        "contradicted": 0,
+        "unverifiable": 0,
+        "contradictions": []
+      },
+      "coverage": {
+        "score": 0,
+        "missingPackIds": [
+          "detail.career_work.houses.10",
+          "detail.income_wealth.houses.2",
+          "detail.marriage_relationship.houses.7",
+          "varga.career_work.D10",
+          "varga.marriage_relationship.D9",
+          "transits.marriage_relationship.double_transit"
+        ],
+        "missingMentions": [
+          "work",
+          "money",
+          "marriage"
+        ]
+      },
+      "windows": {
+        "found": 2,
+        "insideHorizon": 2,
+        "outside": []
+      },
+      "format": {
+        "expected": "timeline",
+        "chosen": "timeline",
+        "ok": true,
+        "problems": []
+      },
+      "scope": {
+        "remedies": false,
+        "amounts": false,
+        "forbidden": [],
+        "caveatOk": null
+      },
+      "latency": {
+        "totalMs": 253,
+        "ttftMs": 22,
+        "firstTokenFromStartMs": 22,
+        "synthMs": 234,
+        "intakeMs": 8
+      },
+      "tokens": {
+        "prompt": 6940,
+        "cached": 4441,
+        "output": 440,
+        "thought": 0,
+        "packApprox": 4062
+      },
+      "costUsd": 0.000537,
+      "droppedClaims": 0,
+      "errors": 0,
+      "finishReason": "STOP",
+      "pass": false
+    }
+  ]
+}

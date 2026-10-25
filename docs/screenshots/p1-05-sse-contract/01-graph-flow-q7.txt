@@ -1,0 +1,19 @@
++  206 ms  start
++  206 ms  stage intake start
++  225 ms  stage intake done (took 0 ms)
++  225 ms  intent: You are asking about career and work over 2026-10-24 to 2026-12-31; I will read houses 10, 6, 1, D-10, your running dasha and the transits.
++  225 ms  stage prepare start
++  225 ms  stage prepare done (took 3 ms)
++  225 ms  stage promise start [career_work]
++  225 ms  stage dasha start [career_work]
++  225 ms  stage transit start [career_work]
++ 1342 ms  stage promise done (took 1135 ms) [career_work]
++ 1346 ms  stage dasha done (took 1133 ms) [career_work]
++ 1355 ms  stage transit done (took 1131 ms) [career_work]
++ 1355 ms  stage reconcile start
++ 1355 ms  stage reconcile done (took 1 ms)
++ 1355 ms  windows
++ 1355 ms  stage synthesize start
++ 1825 ms  stage synthesize done (took 462 ms)
++ 1825 ms  done
+first progress event at 206 ms, first answer token at 1362 ms, 16 token events, total 1827 ms

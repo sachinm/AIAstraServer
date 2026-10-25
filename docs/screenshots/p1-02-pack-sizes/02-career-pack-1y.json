@@ -1,0 +1,1501 @@
+{
+ "base": {
+  "birth": {
+   "date": "2002-04-27",
+   "time": "17:05:00",
+   "place": "South Grafton, India"
+  },
+  "lagna": "Virgo",
+  "moon": "Libra Swati-4 (house 2)",
+  "panchanga": {
+   "tithi": "Krishna Pratipat",
+   "nakshatra": "Swati",
+   "yoga": "Siddhi",
+   "karana": "Balava",
+   "vara_name": "Saturday",
+   "lunar_month": "Chaitra"
+  },
+  "houses": {
+   "1": {
+    "sign": "Virgo",
+    "lord": "Me",
+    "lord_h": 9,
+    "occ": [],
+    "cls": [
+     "kendra",
+     "trikona"
+    ],
+    "sav": 27
+   },
+   "2": {
+    "sign": "Libra",
+    "lord": "Ve",
+    "lord_h": 9,
+    "occ": [
+     "Mo"
+    ],
+    "cls": [
+     "maraka",
+     "panapara"
+    ],
+    "sav": 28
+   },
+   "3": {
+    "sign": "Scorpio",
+    "lord": "Ma",
+    "lord_h": 9,
+    "occ": [
+     "Ke"
+    ],
+    "cls": [
+     "upachaya",
+     "apoklima"
+    ],
+    "sav": 27
+   },
+   "4": {
+    "sign": "Sagittarius",
+    "lord": "Ju",
+    "lord_h": 10,
+    "occ": [],
+    "cls": [
+     "kendra"
+    ],
+    "sav": 28
+   },
+   "5": {
+    "sign": "Capricorn",
+    "lord": "Sa",
+    "lord_h": 9,
+    "occ": [],
+    "cls": [
+     "trikona",
+     "panapara"
+    ],
+    "sav": 29
+   },
+   "6": {
+    "sign": "Aquarius",
+    "lord": "Sa",
+    "lord_h": 9,
+    "occ": [],
+    "cls": [
+     "upachaya",
+     "dusthana",
+     "apoklima"
+    ],
+    "sav": 35
+   },
+   "7": {
+    "sign": "Pisces",
+    "lord": "Ju",
+    "lord_h": 10,
+    "occ": [],
+    "cls": [
+     "kendra",
+     "maraka"
+    ],
+    "sav": 38
+   },
+   "8": {
+    "sign": "Aries",
+    "lord": "Ma",
+    "lord_h": 9,
+    "occ": [
+     "Su"
+    ],
+    "cls": [
+     "dusthana",
+     "panapara"
+    ],
+    "sav": 23
+   },
+   "9": {
+    "sign": "Taurus",
+    "lord": "Ve",
+    "lord_h": 9,
+    "occ": [
+     "Ma",
+     "Me",
+     "Ve",
+     "Sa",
+     "Ra"
+    ],
+    "cls": [
+     "trikona",
+     "apoklima"
+    ],
+    "sav": 22
+   },
+   "10": {
+    "sign": "Gemini",
+    "lord": "Me",
+    "lord_h": 9,
+    "occ": [
+     "Ju"
+    ],
+    "cls": [
+     "kendra",
+     "upachaya"
+    ],
+    "sav": 25
+   },
+   "11": {
+    "sign": "Cancer",
+    "lord": "Mo",
+    "lord_h": 2,
+    "occ": [],
+    "cls": [
+     "upachaya",
+     "panapara"
+    ],
+    "sav": 30
+   },
+   "12": {
+    "sign": "Leo",
+    "lord": "Su",
+    "lord_h": 8,
+    "occ": [],
+    "cls": [
+     "dusthana",
+     "apoklima"
+    ],
+    "sav": 25
+   }
+  },
+  "bodies": {
+   "La": {
+    "sign": "Virgo",
+    "h": 1,
+    "deg": 20.2,
+    "nak": "Hasta-4"
+   },
+   "Su": {
+    "sign": "Aries",
+    "h": 8,
+    "deg": 13.2,
+    "nak": "Ashwini-4",
+    "dig": "exalted",
+    "owns": [
+     12
+    ],
+    "nature": "malefic/neutral",
+    "aspects_houses": [
+     2
+    ],
+    "aspected_by": {
+     "graha": [
+      "Mo"
+     ],
+     "rasi": [
+      "Ke"
+     ]
+    },
+    "star_lord": "Ke (house 3)",
+    "sign_lord": "Ma (house 9)",
+    "shadbala": {
+     "rupas": 8.82,
+     "ratio": 1.76,
+     "rank": 2
+    },
+    "ishta_kashta": [
+     0,
+     7.9
+    ],
+    "bav_at_sign": 4,
+    "tara": "Pratyari",
+    "navamsa_sign": 3
+   },
+   "Mo": {
+    "sign": "Libra",
+    "h": 2,
+    "deg": 18.1,
+    "nak": "Swati-4",
+    "dig": "neutral",
+    "flags": [
+     "pushkara_navamsa"
+    ],
+    "owns": [
+     11
+    ],
+    "nature": "malefic/malefic",
+    "aspects_houses": [
+     8
+    ],
+    "aspected_by": {
+     "graha": [
+      "Su",
+      "Ju"
+     ],
+     "rasi": [
+      "Ma",
+      "Me",
+      "Ve",
+      "Sa",
+      "Ra"
+     ]
+    },
+    "star_lord": "Ra (house 9)",
+    "sign_lord": "Ve (house 9)",
+    "shadbala": {
+     "rupas": 4.38,
+     "ratio": 0.73,
+     "rank": 7
+    },
+    "ishta_kashta": [
+     0,
+     57.5
+    ],
+    "bav_at_sign": 4,
+    "tara": "Janma",
+    "navamsa_sign": 11
+   },
+   "Ma": {
+    "sign": "Taurus",
+    "h": 9,
+    "deg": 15.5,
+    "nak": "Rohini-2",
+    "dig": "neutral",
+    "flags": [
+     "pushkara_navamsa",
+     "vargottama"
+    ],
+    "owns": [
+     3,
+     8
+    ],
+    "nature": "malefic/malefic",
+    "conj": [
+     "Me",
+     "Ve",
+     "Sa",
+     "Ra"
+    ],
+    "aspects_houses": [
+     3,
+     4,
+     12
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ke"
+     ],
+     "rasi": [
+      "Mo"
+     ]
+    },
+    "star_lord": "Mo (house 2)",
+    "sign_lord": "Ve (house 9)",
+    "shadbala": {
+     "rupas": 5.21,
+     "ratio": 1.04,
+     "rank": 5
+    },
+    "ishta_kashta": [
+     17.6,
+     41.1
+    ],
+    "bav_at_sign": 3,
+    "tara": "Mitra",
+    "navamsa_sign": 1
+   },
+   "Me": {
+    "sign": "Taurus",
+    "h": 9,
+    "deg": 2.3,
+    "nak": "Krittika-2",
+    "dig": "friend",
+    "owns": [
+     1,
+     10
+    ],
+    "nature": "malefic/benefic",
+    "conj": [
+     "Ma",
+     "Ve",
+     "Sa",
+     "Ra"
+    ],
+    "aspects_houses": [
+     3
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ke"
+     ],
+     "rasi": [
+      "Mo"
+     ]
+    },
+    "star_lord": "Su (house 8)",
+    "sign_lord": "Ve (house 9)",
+    "shadbala": {
+     "rupas": 6.5,
+     "ratio": 0.93,
+     "rank": 4
+    },
+    "ishta_kashta": [
+     21.2,
+     37.3
+    ],
+    "bav_at_sign": 6,
+    "tara": "Vadha",
+    "navamsa_sign": 9
+   },
+   "Ju": {
+    "sign": "Gemini",
+    "h": 10,
+    "deg": 16.5,
+    "nak": "Ardra-3",
+    "dig": "enemy",
+    "owns": [
+     4,
+     7
+    ],
+    "nature": "benefic/neutral",
+    "aspects_houses": [
+     2,
+     4,
+     6
+    ],
+    "star_lord": "Ra (house 9)",
+    "sign_lord": "Me (house 9)",
+    "shadbala": {
+     "rupas": 10.02,
+     "ratio": 1.54,
+     "rank": 1
+    },
+    "ishta_kashta": [
+     34.9,
+     15.2
+    ],
+    "bav_at_sign": 7,
+    "tara": "Janma",
+    "navamsa_sign": 10
+   },
+   "Ve": {
+    "sign": "Taurus",
+    "h": 9,
+    "deg": 8.2,
+    "nak": "Krittika-4",
+    "dig": "own",
+    "flags": [
+     "pushkara_navamsa"
+    ],
+    "owns": [
+     2,
+     9
+    ],
+    "nature": "benefic/benefic",
+    "conj": [
+     "Ma",
+     "Me",
+     "Sa",
+     "Ra"
+    ],
+    "aspects_houses": [
+     3
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ke"
+     ],
+     "rasi": [
+      "Mo"
+     ]
+    },
+    "star_lord": "Su (house 8)",
+    "sign_lord": "Ve (house 9)",
+    "shadbala": {
+     "rupas": 6.91,
+     "ratio": 1.26,
+     "rank": 3
+    },
+    "ishta_kashta": [
+     28.8,
+     24
+    ],
+    "bav_at_sign": 3,
+    "tara": "Vadha",
+    "navamsa_sign": 11
+   },
+   "Sa": {
+    "sign": "Taurus",
+    "h": 9,
+    "deg": 19.2,
+    "nak": "Rohini-3",
+    "dig": "friend",
+    "owns": [
+     5,
+     6
+    ],
+    "nature": "malefic/neutral",
+    "conj": [
+     "Ma",
+     "Me",
+     "Ve",
+     "Ra"
+    ],
+    "aspects_houses": [
+     3,
+     6,
+     11
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ke"
+     ],
+     "rasi": [
+      "Mo"
+     ]
+    },
+    "star_lord": "Mo (house 2)",
+    "sign_lord": "Ve (house 9)",
+    "shadbala": {
+     "rupas": 5.14,
+     "ratio": 1.03,
+     "rank": 6
+    },
+    "ishta_kashta": [
+     11.3,
+     48.5
+    ],
+    "bav_at_sign": 2,
+    "tara": "Mitra",
+    "navamsa_sign": 2
+   },
+   "Ra": {
+    "sign": "Taurus",
+    "h": 9,
+    "deg": 26.3,
+    "nak": "Mrigashira-1",
+    "dig": "exalted",
+    "retro": true,
+    "nature": "malefic/malefic",
+    "conj": [
+     "Ma",
+     "Me",
+     "Ve",
+     "Sa"
+    ],
+    "aspects_houses": [
+     3
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ke"
+     ],
+     "rasi": [
+      "Mo"
+     ]
+    },
+    "star_lord": "Ma (house 9)",
+    "sign_lord": "Ve (house 9)",
+    "tara": "Ati-mitra",
+    "navamsa_sign": 4
+   },
+   "Ke": {
+    "sign": "Scorpio",
+    "h": 3,
+    "deg": 26.3,
+    "nak": "Jyeshtha-3",
+    "dig": "exalted",
+    "retro": true,
+    "nature": "malefic/malefic",
+    "aspects_houses": [
+     9
+    ],
+    "aspected_by": {
+     "graha": [
+      "Ma",
+      "Me",
+      "Ve",
+      "Sa",
+      "Ra"
+     ],
+     "rasi": [
+      "Su"
+     ]
+    },
+    "star_lord": "Me (house 9)",
+    "sign_lord": "Ma (house 9)",
+    "tara": "Kshema",
+    "navamsa_sign": 10
+   },
+   "Md": {
+    "sign": "Aries",
+    "h": 8,
+    "deg": 27.7,
+    "nak": "Krittika-1"
+   },
+   "Gk": {
+    "sign": "Aries",
+    "h": 8,
+    "deg": 12.7,
+    "nak": "Ashwini-4"
+   }
+  },
+  "relations": {
+   "lagna_lord": "Me",
+   "exchanges": [],
+   "yogakaraka": null,
+   "marakas": [
+    "Mo",
+    "Ju",
+    "Ve"
+   ],
+   "functional": {
+    "benefic": [
+     "Me",
+     "Ve"
+    ],
+    "malefic": [
+     "Mo",
+     "Ma",
+     "Ra",
+     "Ke"
+    ],
+    "neutral": [
+     "Su",
+     "Ju",
+     "Sa"
+    ]
+   },
+   "kendra_trikona_lords": [
+    "Me",
+    "Ju",
+    "Ve",
+    "Sa"
+   ],
+   "dusthana_lords": [
+    "Su",
+    "Ma",
+    "Sa"
+   ]
+  },
+  "nakshatra": {
+   "janma": {
+    "deity": "Vayu",
+    "gana": "Deva",
+    "idx": 14,
+    "lord": "Ra",
+    "lord_house": 9,
+    "name": "Swati",
+    "pada": 4,
+    "symbol": "Coral/young plant swaying in wind"
+   },
+   "lagna": {
+    "idx": 12,
+    "lord": "Mo",
+    "lord_house": 2,
+    "name": "Hasta",
+    "pada": 4
+   },
+   "taras_from_janma": {
+    "Anuradha": "Vipat",
+    "Ardra": "Janma",
+    "Ashlesha": "Kshema",
+    "Ashwini": "Pratyari",
+    "Bharani": "Sadhaka",
+    "Chitra": "Ati-mitra",
+    "Dhanishta": "Ati-mitra",
+    "Hasta": "Mitra",
+    "Jyeshtha": "Kshema",
+    "Krittika": "Vadha",
+    "Magha": "Pratyari",
+    "Mrigashira": "Ati-mitra",
+    "Mula": "Pratyari",
+    "Punarvasu": "Sampat",
+    "Purva Ashadha": "Sadhaka",
+    "Purva Bhadrapada": "Sampat",
+    "Purva Phalguni": "Sadhaka",
+    "Pushya": "Vipat",
+    "Revati": "Kshema",
+    "Rohini": "Mitra",
+    "Shatabhisha": "Janma",
+    "Shravana": "Mitra",
+    "Swati": "Janma",
+    "Uttara Ashadha": "Vadha",
+    "Uttara Bhadrapada": "Vipat",
+    "Uttara Phalguni": "Vadha",
+    "Vishakha": "Sampat"
+   },
+   "gandanta": {
+    "lagna": false,
+    "moon": false
+   },
+   "pushkara": {
+    "bhaga": [],
+    "navamsa": [
+     "Mo",
+     "Ma",
+     "Ve"
+    ]
+   },
+   "tenth_cusp_nak": {
+    "lord": "Ju",
+    "name": "Punarvasu",
+    "pada": 1
+   }
+  }
+ },
+ "frame": {
+  "as_of": "2026-10-24",
+  "subject": "career and work",
+  "horizon": {
+   "from": "2026-10-24",
+   "to": "2027-10-24"
+  },
+  "houses": [
+   10,
+   6,
+   1
+  ],
+  "lords": [
+   "Me",
+   "Sa",
+   "Ra"
+  ],
+  "karakas": [
+   "Su",
+   "Sa",
+   "Me",
+   "Ju",
+   "Mo"
+  ],
+  "chara": {
+   "AmK": "Mo"
+  },
+  "vargas": [
+   "D10"
+  ],
+  "arudhas": [
+   "A10",
+   "AL"
+  ],
+  "running": {
+   "md": "Sa",
+   "ad": "Ke",
+   "pd": "Ve",
+   "md_end": "2039-11-16",
+   "ad_end": "2027-09-07",
+   "pd_end": "2026-10-28"
+  }
+ },
+ "detail": {
+  "houses": {
+   "1": {
+    "sign": "Virgo",
+    "lord": "Me",
+    "lord_house": 9,
+    "lord_dignity": "friend",
+    "occ": [],
+    "aspected_by": {
+     "graha": [],
+     "rasi": [
+      "Ju"
+     ]
+    },
+    "argala": {
+     "obstructed_by": [
+      "Ju",
+      "Ma",
+      "Me",
+      "Ve",
+      "Sa",
+      "Ra",
+      "Ke"
+     ],
+     "primary": [
+      "Mo"
+     ],
+     "secondary": []
+    },
+    "cls": [
+     "kendra",
+     "trikona"
+    ],
+    "sav": 27,
+    "cusp_nak": "Hasta (Mo)"
+   },
+   "6": {
+    "sign": "Aquarius",
+    "lord": "Sa",
+    "lord_house": 9,
+    "lord_dignity": "friend",
+    "occ": [],
+    "aspected_by": {
+     "graha": [
+      "Ju",
+      "Sa"
+     ],
+     "rasi": [
+      "Su",
+      "Mo"
+     ]
+    },
+    "co_lord": "Ra (house 9)",
+    "argala": {
+     "obstructed_by": [
+      "Ke",
+      "Mo",
+      "Su"
+     ],
+     "primary": [
+      "Ma",
+      "Me",
+      "Ve",
+      "Sa",
+      "Ra"
+     ],
+     "secondary": [
+      "Ju"
+     ]
+    },
+    "cls": [
+     "upachaya",
+     "dusthana",
+     "apoklima"
+    ],
+    "sav": 35,
+    "cusp_nak": "Purva Bhadrapada (Ju)"
+   },
+   "10": {
+    "sign": "Gemini",
+    "lord": "Me",
+    "lord_house": 9,
+    "lord_dignity": "friend",
+    "occ": [
+     "Ju"
+    ],
+    "aspected_by": {
+     "graha": [],
+     "rasi": []
+    },
+    "argala": {
+     "obstructed_by": [
+      "Ma",
+      "Me",
+      "Ve",
+      "Sa",
+      "Ra"
+     ],
+     "primary": [
+      "Su"
+     ],
+     "secondary": [
+      "Mo"
+     ]
+    },
+    "cls": [
+     "kendra",
+     "upachaya"
+    ],
+    "sav": 25,
+    "cusp_nak": "Punarvasu (Ju)"
+   }
+  },
+  "yogas": [
+   {
+    "name": "Kemadruma",
+    "planets": [
+     "Mo"
+    ],
+    "houses": [
+     2
+    ],
+    "class": "affliction",
+    "note": "cancelled: Jupiter aspects the Moon"
+   },
+   {
+    "name": "Dharma-Karmadhipati",
+    "planets": [
+     "Ve",
+     "Me"
+    ],
+    "houses": [
+     9,
+     10
+    ],
+    "class": "raja"
+   },
+   {
+    "name": "Raja Yoga (lords of 10 and 5)",
+    "planets": [
+     "Me",
+     "Sa"
+    ],
+    "houses": [
+     5,
+     9,
+     10
+    ],
+    "class": "raja"
+   },
+   {
+    "name": "Raja Yoga (lords of 10 and 9)",
+    "planets": [
+     "Me",
+     "Ve"
+    ],
+    "houses": [
+     9,
+     10
+    ],
+    "class": "raja"
+   },
+   {
+    "name": "Dhana Yoga (lords of 2 and 1)",
+    "planets": [
+     "Ve",
+     "Me"
+    ],
+    "houses": [
+     1,
+     2,
+     9
+    ],
+    "class": "dhana"
+   },
+   {
+    "name": "Dhana Yoga (lords of 2 and 5)",
+    "planets": [
+     "Ve",
+     "Sa"
+    ],
+    "houses": [
+     2,
+     5,
+     9
+    ],
+    "class": "dhana"
+   },
+   {
+    "name": "Viparita Raja Yoga (lord of 12 in 8)",
+    "planets": [
+     "Su"
+    ],
+    "houses": [
+     8,
+     12
+    ],
+    "class": "viparita"
+   }
+  ],
+  "sav_frame": {
+   "1": 27,
+   "6": 35,
+   "10": 25
+  }
+ },
+ "varga": {
+  "D10": {
+   "lagna": "Scorpio",
+   "lagna_lord": "Ma",
+   "lagna_lord_h": 8,
+   "planets": {
+    "Su": {
+     "h": 10,
+     "dig": "moolatrikona"
+    },
+    "Mo": {
+     "h": 6,
+     "dig": "neutral"
+    },
+    "Ma": {
+     "h": 8,
+     "dig": "enemy"
+    },
+    "Me": {
+     "h": 3,
+     "dig": "neutral"
+    },
+    "Ju": {
+     "h": 1,
+     "dig": "friend"
+    },
+    "Ve": {
+     "h": 5,
+     "dig": "exalted"
+    },
+    "Sa": {
+     "h": 9,
+     "dig": "enemy"
+    },
+    "Ra": {
+     "h": 11,
+     "dig": "friend"
+    },
+    "Ke": {
+     "h": 5,
+     "dig": "friend"
+    }
+   },
+   "houses": {
+    "1": {
+     "sign": 7,
+     "lord": "Ma",
+     "occ": [
+      "Ju"
+     ]
+    },
+    "6": {
+     "sign": 0,
+     "lord": "Ma",
+     "occ": [
+      "Mo"
+     ]
+    },
+    "10": {
+     "sign": 4,
+     "lord": "Su",
+     "occ": [
+      "Su"
+     ]
+    }
+   },
+   "d1_lords": {
+    "1": {
+     "lord": "Me",
+     "varga_house": 3,
+     "varga_dignity": "neutral"
+    },
+    "6": {
+     "lord": "Sa",
+     "varga_house": 9,
+     "varga_dignity": "enemy"
+    },
+    "10": {
+     "lord": "Me",
+     "varga_house": 3,
+     "varga_dignity": "neutral"
+    }
+   },
+   "kendra_occ": {
+    "1": [
+     "Ju"
+    ],
+    "4": [],
+    "7": [],
+    "10": [
+     "Su"
+    ]
+   }
+  }
+ },
+ "arudha": {
+  "AL": {
+   "sign": "Capricorn",
+   "h": 5,
+   "occ": [],
+   "lord": "Sa"
+  },
+  "A10": {
+   "sign": "Aries",
+   "h": 8,
+   "occ": [
+    "Su"
+   ],
+   "lord": "Ma"
+  },
+  "GL": {
+   "sign": "Leo",
+   "h": 12,
+   "nak": "Purva Phalguni",
+   "occ": []
+  },
+  "HL": {
+   "sign": "Pisces",
+   "h": 7,
+   "nak": "Revati",
+   "occ": []
+  }
+ },
+ "dasha": {
+  "current": {
+   "ad": "Ke",
+   "ad_end": "2027-09-07",
+   "ad_start": "2026-07-29",
+   "md": "Sa",
+   "md_end": "2039-11-16",
+   "md_start": "2020-11-15",
+   "pd": "Ve",
+   "pd_end": "2026-10-28",
+   "pd_start": "2026-08-22"
+  },
+  "periods": {
+   "Sa-Ke-Ve_2026-08-22": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Ve",
+    "from": "2026-08-22",
+    "to": "2026-10-28"
+   },
+   "Sa-Ke-Su_2026-10-28": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Su",
+    "from": "2026-10-28",
+    "to": "2026-11-17"
+   },
+   "Sa-Ke-Mo_2026-11-17": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Mo",
+    "from": "2026-11-17",
+    "to": "2026-12-21"
+   },
+   "Sa-Ke-Ma_2026-12-21": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Ma",
+    "from": "2026-12-21",
+    "to": "2027-01-14"
+   },
+   "Sa-Ke-Ra_2027-01-14": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Ra",
+    "from": "2027-01-14",
+    "to": "2027-03-16"
+   },
+   "Sa-Ke-Ju_2027-03-16": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Ju",
+    "from": "2027-03-16",
+    "to": "2027-05-09"
+   },
+   "Sa-Ke-Sa_2027-05-09": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Sa",
+    "from": "2027-05-09",
+    "to": "2027-07-12"
+   },
+   "Sa-Ke-Me_2027-07-12": {
+    "md": "Sa",
+    "ad": "Ke",
+    "pd": "Me",
+    "from": "2027-07-12",
+    "to": "2027-09-07"
+   },
+   "Sa-Ve-Ve_2027-09-07": {
+    "md": "Sa",
+    "ad": "Ve",
+    "pd": "Ve",
+    "from": "2027-09-07",
+    "to": "2028-03-18"
+   }
+  },
+  "lords": {
+   "Sa": {
+    "varga": {
+     "D10": {
+      "h": 9,
+      "dig": "enemy"
+     }
+    }
+   },
+   "Ke": {
+    "varga": {
+     "D10": {
+      "h": 5,
+      "dig": "friend"
+     }
+    }
+   },
+   "Ve": {
+    "varga": {
+     "D10": {
+      "h": 5,
+      "dig": "exalted"
+     }
+    }
+   },
+   "Su": {
+    "varga": {
+     "D10": {
+      "h": 10,
+      "dig": "moolatrikona"
+     }
+    }
+   },
+   "Mo": {
+    "varga": {
+     "D10": {
+      "h": 6,
+      "dig": "neutral"
+     }
+    }
+   },
+   "Ma": {
+    "varga": {
+     "D10": {
+      "h": 8,
+      "dig": "enemy"
+     }
+    }
+   },
+   "Ra": {
+    "varga": {
+     "D10": {
+      "h": 11,
+      "dig": "friend"
+     }
+    }
+   },
+   "Ju": {
+    "varga": {
+     "D10": {
+      "h": 1,
+      "dig": "friend"
+     }
+    }
+   },
+   "Me": {
+    "varga": {
+     "D10": {
+      "h": 3,
+      "dig": "neutral"
+     }
+    }
+   }
+  },
+  "narayana_current": {
+   "ad_sign": 6,
+   "ad_sign_name": "Libra",
+   "end": "2026-10-27",
+   "md_end": "2032-04-27",
+   "md_lord": "Ju",
+   "md_sign": 8,
+   "md_sign_name": "Sagittarius",
+   "md_start": "2026-04-27",
+   "start": "2026-04-27"
+  }
+ },
+ "transits": {
+  "as_of": "2026-10-24",
+  "now": {
+   "Ju": {
+    "sign": "Cancer",
+    "house_from_lagna": 11,
+    "house_from_moon": 10,
+    "over_natal": []
+   },
+   "Sa": {
+    "sign": "Pisces",
+    "house_from_lagna": 7,
+    "house_from_moon": 6,
+    "over_natal": []
+   },
+   "Ra": {
+    "sign": "Aquarius",
+    "house_from_lagna": 6,
+    "house_from_moon": 5,
+    "over_natal": []
+   },
+   "Ke": {
+    "sign": "Leo",
+    "house_from_lagna": 12,
+    "house_from_moon": 11,
+    "over_natal": []
+   }
+  },
+  "rows": {
+   "Ju_2026-10-24": {
+    "planet": "Ju",
+    "from": "2026-10-24",
+    "to": "2026-10-30",
+    "sign": "Cancer",
+    "retro_on_entry": false,
+    "house_from_lagna": 11,
+    "house_from_moon": 10,
+    "house_from_al": 7,
+    "over_natal": [],
+    "influences_houses": [
+     3,
+     5,
+     7,
+     11
+    ],
+    "sav": 30,
+    "bav": 4,
+    "nak_segments": [
+     {
+      "from": "2026-10-24",
+      "to": "2026-10-30",
+      "nak": "Ashlesha",
+      "over_natal_nak": []
+     }
+    ]
+   },
+   "Sa_2026-10-24": {
+    "planet": "Sa",
+    "from": "2026-10-24",
+    "to": "2027-06-02",
+    "sign": "Pisces",
+    "retro_on_entry": true,
+    "house_from_lagna": 7,
+    "house_from_moon": 6,
+    "house_from_al": 3,
+    "over_natal": [],
+    "influences_houses": [
+     1,
+     4,
+     7,
+     9
+    ],
+    "sav": 38,
+    "bav": 5,
+    "nak_segments": [
+     {
+      "from": "2026-10-24",
+      "to": "2027-02-07",
+      "nak": "Uttara Bhadrapada",
+      "over_natal_nak": []
+     }
+    ]
+   },
+   "Ra_2026-10-24": {
+    "planet": "Ra",
+    "from": "2026-10-24",
+    "to": "2026-12-04",
+    "sign": "Aquarius",
+    "retro_on_entry": true,
+    "house_from_lagna": 6,
+    "house_from_moon": 5,
+    "house_from_al": 2,
+    "over_natal": [],
+    "influences_houses": [
+     6,
+     12
+    ],
+    "sav": 35,
+    "nak_segments": [
+     {
+      "from": "2026-10-24",
+      "to": "2026-12-04",
+      "nak": "Dhanishta",
+      "over_natal_nak": []
+     }
+    ]
+   },
+   "Ke_2026-10-24": {
+    "planet": "Ke",
+    "from": "2026-10-24",
+    "to": "2026-12-04",
+    "sign": "Leo",
+    "retro_on_entry": true,
+    "house_from_lagna": 12,
+    "house_from_moon": 11,
+    "house_from_al": 8,
+    "over_natal": [],
+    "influences_houses": [
+     6,
+     12
+    ],
+    "sav": 25,
+    "nak_segments": [
+     {
+      "from": "2026-10-24",
+      "to": "2026-12-04",
+      "nak": "Magha",
+      "over_natal_nak": []
+     }
+    ]
+   },
+   "Ju_2026-10-31": {
+    "planet": "Ju",
+    "from": "2026-10-31",
+    "to": "2027-01-24",
+    "sign": "Leo",
+    "retro_on_entry": false,
+    "house_from_lagna": 12,
+    "house_from_moon": 11,
+    "house_from_al": 8,
+    "over_natal": [],
+    "influences_houses": [
+     4,
+     6,
+     8,
+     12
+    ],
+    "sav": 25,
+    "bav": 4
+   },
+   "Ju_2027-01-25": {
+    "planet": "Ju",
+    "from": "2027-01-25",
+    "to": "2027-06-25",
+    "sign": "Cancer",
+    "retro_on_entry": true,
+    "house_from_lagna": 11,
+    "house_from_moon": 10,
+    "house_from_al": 7,
+    "over_natal": [],
+    "influences_houses": [
+     3,
+     5,
+     7,
+     11
+    ],
+    "sav": 30,
+    "bav": 4
+   },
+   "Sa_2027-06-03": {
+    "planet": "Sa",
+    "from": "2027-06-03",
+    "to": "2027-10-19",
+    "sign": "Aries",
+    "retro_on_entry": false,
+    "house_from_lagna": 8,
+    "house_from_moon": 7,
+    "house_from_al": 4,
+    "over_natal": [
+     "Su"
+    ],
+    "influences_houses": [
+     2,
+     5,
+     8,
+     10
+    ],
+    "sav": 23,
+    "bav": 5,
+    "nak_segments": [
+     {
+      "from": "2027-06-03",
+      "to": "2027-10-19",
+      "nak": "Ashwini",
+      "over_natal_nak": [
+       "Su"
+      ]
+     }
+    ]
+   },
+   "Ju_2027-06-26": {
+    "planet": "Ju",
+    "from": "2027-06-26",
+    "to": "2027-10-24",
+    "sign": "Leo",
+    "retro_on_entry": false,
+    "house_from_lagna": 12,
+    "house_from_moon": 11,
+    "house_from_al": 8,
+    "over_natal": [],
+    "influences_houses": [
+     4,
+     6,
+     8,
+     12
+    ],
+    "sav": 25,
+    "bav": 4
+   },
+   "Sa_2027-10-20": {
+    "planet": "Sa",
+    "from": "2027-10-20",
+    "to": "2027-10-24",
+    "sign": "Pisces",
+    "retro_on_entry": true,
+    "house_from_lagna": 7,
+    "house_from_moon": 6,
+    "house_from_al": 3,
+    "over_natal": [],
+    "influences_houses": [
+     1,
+     4,
+     7,
+     9
+    ],
+    "sav": 38,
+    "bav": 5
+   }
+  },
+  "focus_hits": [
+   {
+    "key": "Sa_2027-06-03",
+    "planet": "Sa",
+    "over_natal": [
+     "Su"
+    ],
+    "from": "2027-06-03",
+    "to": "2027-10-19",
+    "in_horizon": true
+   },
+   {
+    "key": "Ju_2027-11-26",
+    "planet": "Ju",
+    "over_natal": [
+     "La"
+    ],
+    "from": "2027-11-26",
+    "to": "2028-02-27",
+    "in_horizon": false
+   },
+   {
+    "key": "Sa_2028-02-23",
+    "planet": "Sa",
+    "over_natal": [
+     "Su"
+    ],
+    "from": "2028-02-23",
+    "to": "2028-10-24",
+    "in_horizon": false
+   },
+   {
+    "key": "Ke_2028-06-24",
+    "planet": "Ke",
+    "over_natal": [
+     "Ju"
+    ],
+    "from": "2028-06-24",
+    "to": "2028-10-24",
+    "in_horizon": false
+   },
+   {
+    "key": "Ju_2028-07-24",
+    "planet": "Ju",
+    "over_natal": [
+     "La"
+    ],
+    "from": "2028-07-24",
+    "to": "2028-10-24",
+    "in_horizon": false
+   }
+  ],
+  "double_transit": [],
+  "sade_sati": {
+   "now": null,
+   "periods": []
+  },
+  "stations": [
+   {
+    "planet": "Sa",
+    "kind": "retro_end",
+    "date": "2026-12-11",
+    "sign": 11
+   },
+   {
+    "planet": "Ju",
+    "kind": "retro_start",
+    "date": "2026-12-13",
+    "sign": 4
+   },
+   {
+    "planet": "Ju",
+    "kind": "retro_end",
+    "date": "2027-04-13",
+    "sign": 3
+   },
+   {
+    "planet": "Sa",
+    "kind": "retro_start",
+    "date": "2027-08-09",
+    "sign": 0
+   }
+  ],
+  "dropped_rows": 2
+ }
+}

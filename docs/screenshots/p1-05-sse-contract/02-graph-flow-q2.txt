@@ -1,0 +1,19 @@
++  199 ms  start
++  200 ms  stage intake start
++  203 ms  stage intake done (took 1 ms)
++  203 ms  intent: You are asking about property and home over the next 3 years; I will read houses 4, 2, 11, D-4, your running dasha and the transits.
++  203 ms  stage prepare start
++  203 ms  stage prepare done (took 2 ms)
++  203 ms  stage promise start [property_home]
++  203 ms  stage dasha start [property_home]
++  203 ms  stage transit start [property_home]
++ 1320 ms  stage promise done (took 1122 ms) [property_home]
++ 1323 ms  stage dasha done (took 1124 ms) [property_home]
++ 1335 ms  stage transit done (took 1125 ms) [property_home]
++ 1335 ms  stage reconcile start
++ 1335 ms  stage reconcile done (took 1 ms)
++ 1335 ms  windows
++ 1335 ms  stage synthesize start
++ 1986 ms  stage synthesize done (took 649 ms)
++ 1986 ms  done
+first progress event at 200 ms, first answer token at 1347 ms, 22 token events, total 1988 ms

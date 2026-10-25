@@ -13,7 +13,12 @@
     "db:push": "prisma db push",
     "test": "vitest run",
     "test:unit": "vitest run --exclude='**/db-connection.test.*' --exclude='**/auth-flow.test.*'",
-    "seed:queue-users": "tsx scripts/seed-queue-users.ts"
+    "seed:queue-users": "tsx scripts/seed-queue-users.ts",
+    "prompts:embed": "node scripts/embed-prompts.mjs",
+    "prompts:check": "node scripts/embed-prompts.mjs --check",
+    "facts:backfill": "tsx scripts/build-facts-for-all.ts",
+    "transits:build": "tsx scripts/build-transit-charts.ts",
+    "eval:readings": "tsx evals/run.ts"
   },
   "keywords": [],
   "author": "",
@@ -61,6 +66,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^7.0.11",
+    "ajv": "^8.20.0",
     "prisma": "^6.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.0",

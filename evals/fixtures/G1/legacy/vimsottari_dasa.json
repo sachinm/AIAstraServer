@@ -1,0 +1,380 @@
+[
+ {
+  "maha_dasha_lord": "Raagu\u260a",
+  "maha_start_date": "1986-11-15 22:59:34",
+  "bhuktis": [
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "1986-11-15 22:59:34"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "1989-07-29 03:36:19"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "1991-12-22 18:22:18"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "1994-10-28 17:54:25"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "1997-05-17 03:35:48"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "1998-06-04 16:03:25"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2001-06-04 10:30:54"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2002-04-29 04:03:09"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2003-10-29 01:16:54"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Jupiter\u2643",
+  "maha_start_date": "2004-11-15 13:44:31",
+  "bhuktis": [
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2004-11-15 13:44:31"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2007-01-03 18:52:04"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2009-07-17 02:27:17"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2011-10-23 00:24:04"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2012-09-27 22:08:37"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2015-05-29 22:33:03"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2016-03-17 03:28:23"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2017-07-17 03:40:36"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2018-06-23 01:25:09"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Saturn\u2644",
+  "maha_start_date": "2020-11-15 16:11:09",
+  "bhuktis": [
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2020-11-15 16:11:09"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2023-11-19 11:41:43"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2026-07-29 15:15:23"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2027-09-07 11:04:33"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2030-11-07 02:33:34"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2031-10-20 02:24:16"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2033-05-20 10:08:47"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2034-06-29 05:57:56"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2037-05-05 05:30:03"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Mercury\u263f",
+  "maha_start_date": "2039-11-16 13:05:16",
+  "bhuktis": [
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2039-11-16 13:05:16"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2042-04-14 04:54:20"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2043-04-11 10:00:26"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2046-02-09 07:26:24"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2046-12-16 18:40:11"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2048-05-17 05:23:10"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2049-05-14 10:29:15"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2051-12-01 20:10:37"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2054-03-08 18:07:24"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Kethu\u260b",
+  "maha_start_date": "2056-11-15 21:41:04",
+  "bhuktis": [
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2056-11-15 21:41:04"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2057-04-14 01:11:48"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2058-06-14 04:22:30"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2058-10-20 00:31:42"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2059-05-21 02:07:03"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2059-10-17 05:37:47"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2060-11-03 18:05:25"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2061-10-10 15:49:58"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2062-11-19 11:39:07"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Venus\u2640",
+  "maha_start_date": "2063-11-16 16:45:13",
+  "bhuktis": [
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2063-11-16 16:45:13"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2067-03-18 05:15:45"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2068-03-17 11:24:55"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2069-11-16 05:40:12"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2071-01-16 08:50:53"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2074-01-16 03:18:23"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2076-09-16 03:42:49"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2079-11-16 19:11:50"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2082-09-16 16:37:48"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Sun\u2609",
+  "maha_start_date": "2083-11-16 19:48:30",
+  "bhuktis": [
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2083-11-16 19:48:30"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2084-03-05 09:39:14"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2084-09-04 00:43:49"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2085-01-09 20:53:02"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2085-12-04 14:25:17"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2086-09-22 19:20:37"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2087-09-04 19:11:19"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2088-07-11 06:25:06"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2088-11-16 02:34:19"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Moon\u263e",
+  "maha_start_date": "2089-11-16 08:43:29",
+  "bhuktis": [
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2089-11-16 08:43:29"
+   },
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2090-09-16 17:51:07"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2091-04-17 19:26:28"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2092-10-16 16:40:12"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2094-02-15 16:52:25"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2095-09-17 00:36:56"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2097-02-15 11:19:55"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2097-09-16 12:55:16"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2099-05-18 07:10:32"
+   }
+  ]
+ },
+ {
+  "maha_dasha_lord": "Mars\u2642",
+  "maha_start_date": "2099-11-16 22:15:07",
+  "bhuktis": [
+   {
+    "lord": "Mars\u2642",
+    "start_date": "2099-11-16 22:15:07"
+   },
+   {
+    "lord": "Raagu\u260a",
+    "start_date": "2100-04-15 01:45:52"
+   },
+   {
+    "lord": "Jupiter\u2643",
+    "start_date": "2101-05-03 14:13:29"
+   },
+   {
+    "lord": "Saturn\u2644",
+    "start_date": "2102-04-09 11:58:02"
+   },
+   {
+    "lord": "Mercury\u263f",
+    "start_date": "2103-05-19 07:47:12"
+   },
+   {
+    "lord": "Kethu\u260b",
+    "start_date": "2104-05-15 12:53:17"
+   },
+   {
+    "lord": "Venus\u2640",
+    "start_date": "2104-10-11 16:24:01"
+   },
+   {
+    "lord": "Sun\u2609",
+    "start_date": "2105-12-11 19:34:43"
+   },
+   {
+    "lord": "Moon\u263e",
+    "start_date": "2106-04-18 15:43:55"
+   }
+  ]
+ }
+]
