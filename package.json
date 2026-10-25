@@ -20,7 +20,8 @@
     "transits:build": "tsx scripts/build-transit-charts.ts",
     "eval:readings": "tsx evals/run.ts",
     "bench:reading": "tsx scripts/bench-reading.ts",
-    "cache:sweep": "tsx scripts/cache-sweep.ts"
+    "cache:sweep": "tsx scripts/cache-sweep.ts",
+    "chart-catalog:sync": "tsx scripts/sync-chart-catalog.ts"
   },
   "keywords": [],
   "author": "",

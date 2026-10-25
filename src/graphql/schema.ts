@@ -1,7 +1,6 @@
 import { createSchema } from 'graphql-yoga';
 import type { Prisma } from '@prisma/client';
 import {
-  login,
   signup,
   requestMagicLink,
   loginWithMagicLink,
@@ -16,6 +15,9 @@ import {
 } from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
+import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
+import { prismaChartDataRepo } from '../reading/chartData/store.js';
+import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
 import { requireRoles } from './rbac.js';
 import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
 import { askingGuide } from '../reading/coach/content.js';
@@ -91,6 +93,8 @@ const typeDefs = /* GraphQL */ `
   type SignUpResult {
     success: Boolean!
     message: String
+    """Stable machine code for a refused signup, e.g. EMAIL_EXISTS. Null otherwise."""
+    code: String
     token: String
     user: ID
     role: String
@@ -244,7 +248,8 @@ const typeDefs = /* GraphQL */ `
 
   input SignUpInput {
     username: String!
-    password: String!
+    """Ignored. Accounts get a server-generated password; sign-in is by emailed code."""
+    password: String
     email: String!
     date_of_birth: String!
     place_of_birth: String
@@ -255,7 +260,6 @@ const typeDefs = /* GraphQL */ `
   }
 
   type Mutation {
-    login(username: String!, password: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     signup(input: SignUpInput!): SignUpResult!
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
     loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
@@ -414,7 +418,7 @@ const resolvers = {
         const kundli = await db.kundli.findFirst({
           where: { user_id: userId },
           orderBy: { created_at: 'desc' },
-          select: { biodata: true },
+          select: { id: true, biodata: true },
         });
         if (!kundli) {
           return {
@@ -424,10 +428,11 @@ const resolvers = {
             error: 'No biodata found',
           };
         }
+        const { biodata: biodataValue } = await readChartColumns(prismaChartDataRepo(db), kundli.id, ['biodata'], { biodata: kundli.biodata });
         const biodataStr =
-          typeof kundli.biodata === 'string'
-            ? kundli.biodata
-            : JSON.stringify(kundli.biodata ?? {});
+          typeof biodataValue === 'string'
+            ? biodataValue
+            : JSON.stringify(biodataValue ?? {});
         return {
           success: true,
           username: user.username,
@@ -518,6 +523,7 @@ const resolvers = {
           where: { user_id: userId },
           orderBy: { created_at: 'desc' },
           select: {
+            id: true,
             biodata: true,
             d1: true,
             d2: true,
@@ -532,18 +538,24 @@ const resolvers = {
         if (!kundli) {
           return { ...empty, error: 'No kundli found' };
         }
+        const data = await readChartColumns(
+          prismaChartDataRepo(db),
+          kundli.id,
+          ['biodata', 'd1', 'd2', 'd4', 'd7', 'd9', 'd10', 'vimsottari_dasa', 'narayana_dasa'],
+          kundli
+        );
         return {
           success: true,
           error: null,
-          biodata: jsonToString(kundli.biodata),
-          d1: jsonToString(kundli.d1),
-          d2: jsonToString(kundli.d2),
-          d4: jsonToString(kundli.d4),
-          d7: jsonToString(kundli.d7),
-          d9: jsonToString(kundli.d9),
-          d10: jsonToString(kundli.d10),
-          vimsottari_dasa: jsonToString(kundli.vimsottari_dasa),
-          narayana_dasa: jsonToString(kundli.narayana_dasa),
+          biodata: jsonToString(data.biodata as Prisma.JsonValue),
+          d1: jsonToString(data.d1 as Prisma.JsonValue),
+          d2: jsonToString(data.d2 as Prisma.JsonValue),
+          d4: jsonToString(data.d4 as Prisma.JsonValue),
+          d7: jsonToString(data.d7 as Prisma.JsonValue),
+          d9: jsonToString(data.d9 as Prisma.JsonValue),
+          d10: jsonToString(data.d10 as Prisma.JsonValue),
+          vimsottari_dasa: jsonToString(data.vimsottari_dasa as Prisma.JsonValue),
+          narayana_dasa: jsonToString(data.narayana_dasa as Prisma.JsonValue),
         };
       } catch (err) {
         return {
@@ -788,19 +800,25 @@ const resolvers = {
             last_sync_error: null,
           };
         }
+        const data = await readChartColumns(
+          prismaChartDataRepo(db),
+          row.id,
+          ['biodata', 'd1', 'd2', 'd4', 'd7', 'd9', 'd10', 'charakaraka', 'vimsottari_dasa', 'narayana_dasa'],
+          row as unknown as Record<string, unknown>
+        );
         const kundliJson = {
           id: row.id,
           user_id: row.user_id,
-          biodata: row.biodata,
-          d1: row.d1,
-          d2: row.d2,
-          d4: row.d4,
-          d7: (row as { d7?: unknown }).d7,
-          d9: row.d9,
-          d10: row.d10,
-          charakaraka: row.charakaraka,
-          vimsottari_dasa: row.vimsottari_dasa,
-          narayana_dasa: row.narayana_dasa,
+          biodata: data.biodata,
+          d1: data.d1,
+          d2: data.d2,
+          d4: data.d4,
+          d7: data.d7,
+          d9: data.d9,
+          d10: data.d10,
+          charakaraka: data.charakaraka,
+          vimsottari_dasa: data.vimsottari_dasa,
+          narayana_dasa: data.narayana_dasa,
           created_at: row.created_at?.toISOString?.() ?? null,
           queue_status: row.queue_status,
           queue_started_at: row.queue_started_at?.toISOString?.() ?? null,
@@ -830,23 +848,6 @@ const resolvers = {
     },
   },
   Mutation: {
-    async login(
-      _parent: unknown,
-      {
-        username,
-        password,
-        turnstileToken,
-      }: {
-        username: string;
-        password: string;
-        recaptchaToken?: string | null;
-        turnstileToken?: string | null;
-      },
-      context: GraphQLContext
-    ) {
-      const clientIp = getClientIp(context.request);
-      return login(username, password, turnstileToken ?? null, clientIp);
-    },
     async signup(
       _parent: unknown,
       { input }: { input: Record<string, unknown> },
@@ -942,6 +943,7 @@ const resolvers = {
             queue_completed_at: new Date(),
           },
         });
+        await writeLegacyColumnsThrough(db, kundli.id, { biodata, d1, d2, d4, d7, d9, d10, charakaraka, vimsottari_dasa, narayana_dasa });
         await processKundliUpload(db, userId);
         await db.auth.update({
           where: { id: userId },

@@ -1,13 +1,11 @@
 /**
- * Auth flow tests: signup, login, and that sensitive fields are never returned.
+ * Auth flow tests: signup creates no-password accounts, and sensitive fields are never returned.
  * Requires DATABASE_URL and JWT_SECRET in env for DB tests. Uses real Prisma/DB.
  * "me resolver" test runs without DB (mocked context).
  */
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import {
-  login,
   signup,
-  LOGIN_FAILED_OBFUSCATED,
 } from '../src/services/authService.js';
 import { prisma } from '../src/lib/prisma.js';
 
@@ -34,15 +32,13 @@ describe('Auth flow', () => {
     }
   });
 
-  it('signup then login returns token and user', async () => {
+  it('signup creates the account without a password and does not sign in', async () => {
     if (!hasDb) return;
     const username = unique();
     const email = `${username}@test.local`;
-    const password = 'testpass123';
 
     const signupResult = await signup({
       username,
-      password,
       email,
       date_of_birth: '1990-01-15',
       place_of_birth: 'Test City',
@@ -50,42 +46,10 @@ describe('Auth flow', () => {
     });
 
     expect(signupResult.success).toBe(true);
-    if (signupResult.success) {
-      expect(signupResult.token).toBeDefined();
-      expect(signupResult.user).toBeDefined();
-      expect(signupResult.role).toBeDefined();
-      testUserId = signupResult.user;
-    }
-
-    const loginResult = await login(username, password);
-    expect(loginResult.success).toBe(true);
-    if (loginResult.success && signupResult.success) {
-      expect(loginResult.token).toBeDefined();
-      expect(loginResult.user).toBe(signupResult.user);
-    }
-  });
-
-  it('login with wrong password fails', async () => {
-    if (!hasDb) return;
-    const username = unique();
-    const email = `${username}@test.local`;
-    await signup({
-      username,
-      password: 'rightpass123',
-      email,
-      date_of_birth: '1990-01-01',
-    });
+    expect(signupResult).not.toHaveProperty('token');
     const row = await prisma.auth.findFirst({ where: { username } });
     if (row) testUserId = row.id;
-
-    const result = await login(username, 'wrongpassword');
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.message).toBe(LOGIN_FAILED_OBFUSCATED);
-    }
-    expect(
-      result.success ? result.token : undefined
-    ).toBeUndefined();
+    expect(row).not.toBeNull();
   });
 
   it('me resolver never returns password or PII fields', async () => {
@@ -120,5 +84,5 @@ describe('Auth flow', () => {
     expect(result).not.toHaveProperty('date_of_birth');
     expect(result).not.toHaveProperty('place_of_birth');
     expect(result).not.toHaveProperty('time_of_birth');
-  });
+  }, 60000); // first import of the schema module is slow on cold start
 });

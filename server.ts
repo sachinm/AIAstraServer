@@ -11,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(__dirname, '..', '.env') });
 import { fetchLatestKundliForUser, kundliRowToChunks } from './kundli-rag.js';
 import { prisma } from './src/lib/prisma.js';
+import { scheduleChartCatalogSyncOnStart } from './src/services/chartCatalogSync.js';
 import { runRagQuery } from './src/services/kundliService.js';
 import { schema } from './src/graphql/schema.js';
 import { buildContext, getJwtSecret } from './src/graphql/context.js';
@@ -328,6 +329,7 @@ async function start(): Promise<void> {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureSuperadmin();
     if (startHourlySweep()) console.log('LLM cache sweep: hourly');
+    scheduleChartCatalogSyncOnStart(prisma);
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {
       const kundliTransport = getAstroKundliTransport();
