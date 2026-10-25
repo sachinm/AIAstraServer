@@ -18,7 +18,8 @@
     "prompts:check": "node scripts/embed-prompts.mjs --check",
     "facts:backfill": "tsx scripts/build-facts-for-all.ts",
     "transits:build": "tsx scripts/build-transit-charts.ts",
-    "eval:readings": "tsx evals/run.ts"
+    "eval:readings": "tsx evals/run.ts",
+    "bench:reading": "tsx scripts/bench-reading.ts"
   },
   "keywords": [],
   "author": "",
