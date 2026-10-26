@@ -1,5 +1,5 @@
 /**
- * A place given as coordinates for a moving chart (transit or prashna at a place other than the birth place, doc 27).
+ * A place given as coordinates for a moving chart (transit or prashna at a place other than the birth place, doc 28).
  * Coordinates are rounded to two decimals (about 1 km) before they are sent to Radha or stored, for privacy. `tz` is the
  * place's UTC offset in hours, as Radha takes it. Plain clock arithmetic only; nothing here computes astrology.
  */
