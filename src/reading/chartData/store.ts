@@ -274,7 +274,9 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     }
     let result: FetchResult;
     try {
-      const payload = await fetcher(req!, w.type.radhaType, w.params);
+      // Radha reads fixed options (the varga of arudhas.dN / argala.dN) only from inside `params`; top-level fields are
+      // ignored there and the D1 answer would be stored under the varga key. The annual year stays top-level.
+      const payload = await fetcher(req!, w.type.radhaType, w.type.fixedParams ? { params: w.params } : w.params);
       result = { status: 'ready', payload, calcVersion: w.type.calcVersion };
     } catch (err) {
       result = { status: isUnsupportedError(err) ? 'unsupported' : 'failed', error: (err as Error).message?.slice(0, 500), calcVersion: w.type.calcVersion };
