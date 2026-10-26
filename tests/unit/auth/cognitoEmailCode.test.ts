@@ -445,11 +445,20 @@ describe('signup (cognito)', () => {
     expect(fake.order).toEqual(['db.create', 'cognito.SignUp']);
   });
 
-  it('returns EMAIL_EXISTS when the email exists in Cognito only, and leaves no row', async () => {
+  it('adopts a Cognito-only email (an orphan from a lost signup) instead of locking the person out', async () => {
     cognito.addConfirmedUser('asha@example.com');
     const result = await signup(birth, null, null);
-    expect(result).toEqual({ success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE });
-    expect(fake.rows).toHaveLength(0);
+    expect(result).toEqual({ success: true, message: SIGNUP_CODE_MESSAGE });
+    expect(fake.rows).toHaveLength(1);
+    // a sign-in code was started for the confirmed orphan, so the person has a code to enter
+    expect(cognito.count('InitiateAuth')).toBe(1);
+    const login = await loginWithMagicLink(
+      'asha@example.com',
+      cognito.codeFor('asha@example.com', 'otp'),
+      null,
+      null
+    );
+    expect(login.success).toBe(true);
   });
 
   describe('failure order', () => {

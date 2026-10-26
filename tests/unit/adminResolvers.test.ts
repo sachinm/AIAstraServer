@@ -3,10 +3,6 @@ import { resolvers } from '../../src/graphql/schema.js';
 import type { GraphQLContext } from '../../src/graphql/context.js';
 import type { PrismaClient } from '@prisma/client';
 
-vi.mock('../../src/lib/hash.js', () => ({
-  hashPassword: vi.fn().mockResolvedValue('hashed'),
-}));
-
 function createMockPrisma(overrides: {
   findMany?: (args: unknown) => Promise<unknown[]>;
   findUnique?: (args: unknown) => Promise<unknown>;
@@ -131,21 +127,4 @@ describe('admin resolvers', () => {
     });
   });
 
-  describe('adminResetPassword', () => {
-    it('returns error when role is not admin or superadmin', async () => {
-      const context = createContext({ userId: 'u1', role: 'astrology_student', prisma: createMockPrisma() });
-      const result = await resolvers.Mutation!.adminResetPassword!(null, { id: 'u2', newPassword: 'newpass123' }, context);
-      expect(result).toMatchObject({ success: false, error: 'Forbidden' });
-    });
-
-    it('returns success when role is superadmin and target is managed', async () => {
-      const prisma = createMockPrisma({
-        findUnique: async () => ({ role: 'astrologer' }),
-        update: async () => ({}),
-      });
-      const context = createContext({ userId: 'sa1', role: 'superadmin', prisma });
-      const result = await resolvers.Mutation!.adminResetPassword!(null, { id: 'u1', newPassword: 'newpass123' }, context);
-      expect(result).toMatchObject({ success: true, error: null });
-    });
-  });
 });

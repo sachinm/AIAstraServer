@@ -264,24 +264,30 @@ export async function verifyLoginCode(
     : legacyVerifyLoginCode(emailRaw, codeRaw);
 }
 
-export type SignupIdentityResult = { ok: true } | { ok: false; reason: 'exists' | 'failed' };
+export type SignupIdentityResult =
+  | { ok: true; reusedExisting: boolean }
+  | { ok: false; reason: 'failed' };
 
 /**
- * Signup step 1, before the auth row is written. local: nothing to do. cognito: create the Cognito user
- * (SignUp without a password; Cognito emails the confirmation code). 'exists' means the email is already
- * registered in Cognito.
+ * Signup step 1, after the auth row is written. local: nothing to do. cognito: create the Cognito user
+ * (SignUp without a password; Cognito emails the confirmation code).
+ *
+ * `reusedExisting` means Cognito already had this email even though we held no auth row for it (the caller has
+ * just checked). That is an orphan, typically from an earlier signup whose Cognito call succeeded but whose
+ * response was lost, so the row was rolled back. Refusing it would lock that person out for good, so signup
+ * proceeds with the Cognito user it finds and the caller emails a code through the normal request path.
  */
 export async function createSignupIdentity(
   emailRaw: string,
   name?: string | null
 ): Promise<SignupIdentityResult> {
-  if (getAuthProvider() !== 'cognito') return { ok: true };
+  if (getAuthProvider() !== 'cognito') return { ok: true, reusedExisting: false };
   try {
     const out = await getCognitoAuth().signUpWithEmail(emailRaw.trim(), {
       name,
       randomPassword: useRandomSignupPassword(),
     });
-    return out.status === 'exists' ? { ok: false, reason: 'exists' } : { ok: true };
+    return { ok: true, reusedExisting: out.status === 'exists' };
   } catch (err) {
     console.error('Cognito sign-up failed:', (err as Error).message);
     return { ok: false, reason: 'failed' };

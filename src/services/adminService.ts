@@ -1,5 +1,4 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { hashPassword } from '../lib/hash.js';
 
 const MANAGED_ROLES = ['astrology_student', 'astrologer'] as const;
 
@@ -109,34 +108,6 @@ export async function updateUser(
       ...(input.gender !== undefined && { gender: input.gender }),
       ...(input.is_active != null && { is_active: input.is_active }),
     },
-  });
-  return { success: true };
-}
-
-const MIN_PASSWORD_LENGTH = 6;
-
-/**
- * Reset user password. Rejects if target is not astrology_student or astrologer.
- */
-export async function resetPassword(
-  prisma: PrismaClient,
-  id: string,
-  newPassword: string
-): Promise<{ success: false; error: string } | { success: true }> {
-  if (newPassword.length < MIN_PASSWORD_LENGTH) {
-    return { success: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` };
-  }
-  const existing = await prisma.auth.findUnique({
-    where: { id },
-    select: { role: true },
-  });
-  if (!existing || !isManagedRole(existing.role)) {
-    return { success: false, error: 'User not found or cannot be updated' };
-  }
-  const hashed = await hashPassword(newPassword);
-  await prisma.auth.update({
-    where: { id },
-    data: { password: hashed },
   });
   return { success: true };
 }

@@ -10,7 +10,7 @@ Internal reference for developers working on the AdAstra astrology/kundli platfo
 |------|------|--------|
 | **Backend** | `backend/` | Node/Express, GraphQL (Yoga), Prisma, auth, kundli RAG, queue worker |
 | **Frontend** | `frontend/` | React (Vite) user portal: landing, sign-in/up, dashboard, chat, charts, mantras, remedies |
-| **Admin app** | `admin-app/` | React (Vite) admin panel: user list, user detail, reset password, kundli refresh |
+| **Admin app** | `admin-app/` | React (Vite) admin panel: user list, user detail, kundli refresh |
 
 All client apps talk to the backend via a **single GraphQL endpoint**; no direct Supabase or REST APIs are exposed to the browser (except optional REST `/query` and debug routes).
 
@@ -62,7 +62,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 **Queries:** `me`, `meDetails`, `myBiodata`, `myContent`, `ask`, `chats`, `activeChat`, `chatMessages`, `adminListUsers`, `adminGetUser`, `adminGetUserChats`, `adminGetUserKundli`.
 
-**Mutations:** `login`, `signup`, `uploadKundli`, `createChat`, `setChatInactive`, `addMessage`, `adminUpdateUser`, `adminResetPassword`, `adminRefreshUserKundli`.
+**Mutations:** `login`, `signup`, `uploadKundli`, `createChat`, `setChatInactive`, `addMessage`, `adminUpdateUser`, `adminRefreshUserKundli`.
 
 ### 3.3 Services (Business Logic)
 
@@ -71,7 +71,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 | **authService** | `src/services/authService.ts` | `validateLogin`, `login`, `signup`, `issueToken`; password hash (bcrypt), PII encrypt (DOB/POB/TOB); on login/signup calls `enqueueKundliSync`. |
 | **kundliService** | `src/services/kundliService.ts` | `loadSystemPrompt`, `runRagQuery` (RAG over kundli chunks → fake embeddings → cosine similarity → LLM), `processKundliUpload` (PDF parse, store kundli). Uses `kundli-rag.ts`, `llmClient`. |
 | **kundliQueueService** | `src/services/kundliQueueService.ts` | `enqueueKundliSync` (ensure user has a Kundli row with `queue_status: pending`); `processKundliSyncQueue` (batch process pending rows via AstroKundli API, update biodata/d1/d7/…). Uses `astroKundliClient`, `config/env`. |
-| **adminService** | `src/services/adminService.ts` | List/update users (filtered by `astrology_student` / `astrologer`), reset password, used by admin GraphQL resolvers. |
+| **adminService** | `src/services/adminService.ts` | List/update users (filtered by `astrology_student` / `astrologer`), used by admin GraphQL resolvers. |
 
 ### 3.4 Config and Lib
 
@@ -122,8 +122,8 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 | Page | File | Purpose |
 |------|------|--------|
 | **Landing** | `LandingPage.tsx` | Hero, CTAs to signin/signup; no backend calls. |
-| **Sign In** | `Auth/SignIn.tsx` | Username + password; calls `login()` from `Auth/api.ts`, then `handleSignIn(result.user)`. |
-| **Sign Up** | `Auth/SignUp.tsx` | Step 1: birth details; Step 2: email/password; calls `signup()` then `handleSignUp(userData)`. |
+| **Sign In** | `Auth/SignIn.tsx` | One screen, no password: email + "Send me a code", then the code field and "Verify" appear below; calls `requestMagicLinkEmail()` and `loginWithMagicLink()` from `Auth/api.ts`, then `handleSignIn(result.user)`. |
+| **Sign Up** | `Auth/SignUp.tsx` | Step 1: birth details; Step 2: email only (no password); calls `signup()`, then opens the sign-in screen with the code field showing and a line saying the verification email was sent. |
 | **Dashboard** | `pages/Dashboard.tsx` | Layout: TopNavigation + Outlet. |
 | **Chat** | `pages/chat-interface/ChatSection.tsx` | Polls `fetchUserDetails()` for `kundli_added`; sends messages via `sendChatMessage()` (UserData). Renders ChatSidebar (conversation list in local state; `chatAPI.ts` exists but is not wired for persistence). |
 | **Charts** | `pages/charts/ChartsSection.tsx` | Loads `fetchUserBiodata()` (UserData), shows biodata grid. |
@@ -144,7 +144,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 - **Purpose:** User management for roles `astrology_student` and `astrologer`.
 - **Auth:** Separate token storage: `adminToken`, `adminUserId`, `adminRole` in localStorage (`AdminAuthProvider`, `lib/graphql.ts`). Same backend GraphQL; admin resolvers require role `admin` or `superadmin` via `withAdmin`.
-- **Routes:** Login, Dashboard (user list), User detail (tabs, reset password, refresh kundli). Uses same backend `adminListUsers`, `adminGetUser`, `adminUpdateUser`, `adminResetPassword`, `adminRefreshUserKundli`.
+- **Routes:** Login, Dashboard (user list), User detail (tabs, refresh kundli). Uses same backend `adminListUsers`, `adminGetUser`, `adminUpdateUser`, `adminRefreshUserKundli`.
 
 ---
 
@@ -166,7 +166,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 ### 6.3 Auth Flows
 
-- **Login (frontend):** SignIn → `Auth/api.ts` `login(username, password)` → GraphQL `login` → on success `setAuth(result.token, result.user)` and `handleSignIn(result.user)`. AuthProvider may set `user` from `localStorage.getItem('astroUser')` or from callback; navigates to `/dashboard`.
+- **Login (frontend):** SignIn → `Auth/api.ts` `requestMagicLinkEmail(email)` → emailed code → `loginWithMagicLink(email, code)` → GraphQL `loginWithMagicLink` → on success `setAuth(result.token, result.user)` and `handleSignIn(result.user)`. AuthProvider may set `user` from `localStorage.getItem('astroUser')` or from callback; navigates to `/dashboard`.
 - **Sign up:** SignUp → `signup(apiData)` → GraphQL `signup` → on success `setAuth` and `handleSignUp(userData)`; AuthProvider sets user, `isAuthenticated`, saves `astroUser` and `isAuthenticated` in localStorage, navigates to `/dashboard`.
 - **Logout (frontend):** `handleLogout`: clear user state, `isAuthenticated = false`, `localStorage.removeItem('astroUser')`, navigate to `/`. **Note:** `clearAuth()` in `graphql.ts` (which removes `token` and `userId`) is **not** called on logout in the current code; the JWT remains in localStorage until something else clears it.
 - **Admin:** Admin app login stores token in `adminToken`; logout clears token and related keys via `setToken(null)`.

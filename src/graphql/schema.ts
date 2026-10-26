@@ -187,11 +187,6 @@ const typeDefs = /* GraphQL */ `
     error: String
   }
 
-  type ResetPasswordResult {
-    success: Boolean!
-    error: String
-  }
-
   type KundliResult {
     success: Boolean!
     kundli: String
@@ -270,7 +265,6 @@ const typeDefs = /* GraphQL */ `
     setChatInactive(chatId: ID!): ChatResult!
     addMessage(chatId: ID!, question: String!, aiAnswer: String!): MessageResult!
     adminUpdateUser(id: ID!, input: AdminUpdateUserInput!): UpdateUserResult!
-    adminResetPassword(id: ID!, newPassword: String!): ResetPasswordResult!
     adminRefreshUserKundli(userId: ID!): RefreshKundliResult!
   }
 `;
@@ -1102,26 +1096,6 @@ const resolvers = {
         return {
           success: false,
           error: (err as Error)?.message || 'Update failed',
-        };
-      }
-    },
-    async adminResetPassword(
-      _parent: unknown,
-      { id, newPassword }: { id: string; newPassword: string },
-      context: GraphQLContext
-    ) {
-      const result = withAdmin(context, () => null);
-      if (result && 'success' in result && !result.success) {
-        return { success: false, error: result.error };
-      }
-      const { prisma: db } = context;
-      try {
-        await adminService.resetPassword(db, id, newPassword);
-        return { success: true, error: null };
-      } catch (err) {
-        return {
-          success: false,
-          error: (err as Error)?.message || 'Reset failed',
         };
       }
     },
