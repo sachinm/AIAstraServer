@@ -69,6 +69,50 @@ function apiKey(): string {
 const BUDGETS: Record<Thinking, number> = { off: 0, low: 512, medium: 2048, high: 6144 };
 const isLegacyThinking = (model: string): boolean => /gemini-2\./.test(model);
 
+/** True when a call with this thinking setting still spends thought tokens (3.x maps `off` to `low`, so it always thinks). */
+export function modelThinks(model: string, thinking: Thinking): boolean {
+  return isLegacyThinking(model) ? BUDGETS[thinking] > 0 : true;
+}
+
+/** Gemini answered with an HTTP error (after the one 429/500/503 retry). `status` tells quota from a bad request. */
+export class GeminiHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'GeminiHttpError';
+  }
+}
+
+/** The per-call timeout fired, or the caller aborted the call. */
+export class GeminiTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GeminiTimeoutError';
+  }
+}
+
+/** A time-out or abort, whichever layer raised it (our timers, AbortController, undici). */
+export function isTimeoutError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string; cause?: unknown } | null;
+  if (!e || typeof e !== 'object') return false;
+  if (['GeminiTimeoutError', 'SpecialistTimeoutError', 'AbortError', 'TimeoutError'].includes(e.name ?? '')) return true;
+  if (/timed out|aborted|exceeded \d+ ?ms/i.test(e.message ?? '')) return true;
+  return e.cause ? isTimeoutError(e.cause) : false;
+}
+
+/** Only a cache the server refused (expired, deleted, wrong model) is worth one uncached retry; time-outs and quota errors are not. */
+export function isCacheRejection(err: unknown): boolean {
+  return err instanceof GeminiHttpError && [400, 403, 404].includes(err.status);
+}
+
+/** Error text safe for logs: no API key, bounded length. */
+export function safeErrorText(err: unknown, max = 200): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/key=[^&\s"]+/gi, 'key=REDACTED').replace(/AIza[0-9A-Za-z_-]{20,}/g, 'REDACTED').slice(0, max);
+}
+
 export function thinkingConfigFor(model: string, thinking: Thinking, includeThoughts = false): Record<string, unknown> {
   // 2.x with a zero budget has nothing to summarise; 3.x maps `off` to `low`, so it still thinks
   if (isLegacyThinking(model)) return { thinkingBudget: BUDGETS[thinking], includeThoughts: includeThoughts && thinking !== 'off' };
@@ -151,10 +195,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{ res: Awaited<ReturnType<typeof undiciFetch>>; abort: () => void; clear: () => void }> {
   const controller = new AbortController();
   const timeoutMs = o.timeoutMs ?? 60_000;
-  const timer = setTimeout(() => controller.abort(new Error(`Gemini call timed out after ${timeoutMs}ms`)), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new GeminiTimeoutError(`Gemini call timed out after ${timeoutMs}ms`)), timeoutMs);
   if (o.signal) {
-    if (o.signal.aborted) controller.abort();
-    else o.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    const fromCaller = () => controller.abort(new GeminiTimeoutError(`Gemini call aborted by the caller (${o.node})`));
+    if (o.signal.aborted) fromCaller();
+    else o.signal.addEventListener('abort', fromCaller, { once: true });
   }
   const clear = () => clearTimeout(timer);
   let res = await undiciFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), dispatcher: getAgent(), signal: controller.signal });
@@ -173,7 +218,7 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
     } catch {
       if (errText && errText.length < 600) msg = errText;
     }
-    throw new Error(msg);
+    throw new GeminiHttpError(msg, res.status);
   }
   return { res, abort: () => controller.abort(), clear };
 }
@@ -188,8 +233,9 @@ export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
   try {
     return await callGeminiOnce(o, cacheName);
   } catch (err) {
-    if (!cacheName) throw err;
-    // the cache was rejected (expired or deleted): forget it and answer uncached
+    // only a refused cache (expired or deleted) is retried uncached: after a time-out or a quota error the uncached call
+    // would start with no time left, and the shared cache would be forgotten for every other caller
+    if (!cacheName || !isCacheRejection(err)) throw err;
     invalidateCache(o.model, o.system, o.parts[0]!);
     return callGeminiOnce(o, null);
   }
@@ -224,7 +270,7 @@ export async function streamGemini(
   try {
     posted = await post(url, buildRequestBody(o, cacheName), o);
   } catch (err) {
-    if (!cacheName) throw err;
+    if (!cacheName || !isCacheRejection(err)) throw err;
     invalidateCache(o.model, o.system, o.parts[0]!);
     posted = await post(url, buildRequestBody(o, null), o);
   }

@@ -5,8 +5,14 @@
  * then the analyst-specific slice, then the analyst instructions and the question.
  */
 import { z } from 'zod';
-import { readingFindingsV2, readingSpecialistMaxTokens, readingSpecialistTimeoutMs } from '../config.js';
-import { callGemini } from '../llm/gemini.js';
+import {
+  readingFindingsV2,
+  readingSpecialistMaxTokens,
+  readingSpecialistThinkingMs,
+  readingSpecialistThinkingTokens,
+  readingSpecialistTimeoutMs,
+} from '../config.js';
+import { callGemini, GeminiHttpError, isTimeoutError, modelThinks, type Thinking } from '../llm/gemini.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
@@ -14,16 +20,140 @@ import { FRAMES, type SubjectId } from '../packs/frames.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
 
-/** The model answered but its JSON was rejected. Carries the usage, because those tokens were billed all the same. */
+/** Why a specialist produced no finding (sent on `stage` events and logged; docs/reading-engine/30). */
+export type SpecialistFailureReason = 'timeout' | 'parse' | 'schema' | 'model_error' | 'no_data';
+
+/**
+ * The model answered but its output was rejected: `parse` (not JSON, even after repair), `schema` (JSON of the wrong shape)
+ * or `model_error` (empty or blocked answer). Carries the usage, because those tokens were billed all the same.
+ */
 export class SpecialistOutputError extends Error {
+  readonly kind: 'parse' | 'schema' | 'model_error';
+  readonly finishReason: string | null;
   constructor(
     message: string,
-    readonly usage: Usage
+    readonly usage: Usage,
+    extra: { kind?: 'parse' | 'schema' | 'model_error'; finishReason?: string | null } = {}
   ) {
     super(message);
     this.name = 'SpecialistOutputError';
+    this.kind = extra.kind ?? 'parse';
+    this.finishReason = extra.finishReason ?? null;
   }
 }
+
+/** The graph's per-attempt time budget ran out. */
+export class SpecialistTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpecialistTimeoutError';
+  }
+}
+
+/** Maps any specialist error to one reason. */
+export function failureReason(err: unknown): SpecialistFailureReason {
+  if (err instanceof SpecialistOutputError) return err.kind;
+  if ((err as { name?: string } | null)?.name === 'SpecialistNoDataError') return 'no_data';
+  if (isTimeoutError(err)) return 'timeout';
+  return 'model_error';
+}
+
+/** The subject has no evidence pack: nothing to read, so no retry. */
+export class SpecialistNoDataError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpecialistNoDataError';
+  }
+}
+
+/** HTTP status of a model error, when there is one (429 quota, 400 bad request, 5xx). */
+export function failureHttpStatus(err: unknown): number | null {
+  return err instanceof GeminiHttpError ? err.status : null;
+}
+
+/** Specialists ask for no thinking; Gemini 3.x still thinks at `low` (gemini.ts thinkingConfigFor). */
+export const SPECIALIST_THINKING: Thinking = 'off';
+
+/**
+ * Time and token budget for one specialist attempt on this model. A model that thinks gets extra time and extra output
+ * tokens (thought tokens come out of maxOutputTokens), so thinking cannot push the JSON past the timeout or cut it off.
+ */
+export function specialistBudget(model: string = modelFor('specialist')): { timeoutMs: number; maxOutputTokens: number; thinks: boolean } {
+  const thinks = modelThinks(model, SPECIALIST_THINKING);
+  return {
+    thinks,
+    timeoutMs: readingSpecialistTimeoutMs() + (thinks ? readingSpecialistThinkingMs() : 0),
+    maxOutputTokens: readingSpecialistMaxTokens() + (thinks ? readingSpecialistThinkingTokens() : 0),
+  };
+}
+
+/**
+ * Closes a JSON text that was cut off (finishReason MAX_TOKENS): drops the last unfinished member or element and closes
+ * every open array and object. Returns undefined when no prefix can be made valid.
+ */
+export function repairTruncatedJson(text: string): unknown {
+  const cuts: Array<{ at: number; closers: string }> = [];
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  const closers = () => stack.slice().reverse().join('');
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') {
+      // closing a container just opened gives `"claims": []`, a useful empty value; inside an array it would add an
+      // empty item, so there the cut before the comma is used instead
+      const inArray = stack[stack.length - 1] === ']';
+      stack.push(c === '{' ? '}' : ']');
+      if (!inArray) cuts.push({ at: i + 1, closers: closers() });
+    } else if (c === '}' || c === ']') {
+      stack.pop();
+      cuts.push({ at: i + 1, closers: closers() });
+    } else if (c === ',') cuts.push({ at: i, closers: closers() });
+  }
+  // newest cut first: keep as much of the answer as parses
+  for (let k = cuts.length - 1, tries = 0; k >= 0 && tries < 400; k--, tries++) {
+    try {
+      return JSON.parse(text.slice(0, cuts[k]!.at) + cuts[k]!.closers);
+    } catch {
+      /* try an earlier cut */
+    }
+  }
+  return undefined;
+}
+
+/** Specialist output text → JSON value. Tolerates a ```json fence, text around the object and a cut-off end. */
+export function parseFindingText(text: string): { value: unknown; repaired: boolean } | null {
+  let t = text.trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)\s*(?:```)?$/i.exec(t);
+  if (fence) t = fence[1]!.trim();
+  const start = t.indexOf('{');
+  if (start > 0) t = t.slice(start);
+  try {
+    return { value: JSON.parse(t), repaired: false };
+  } catch {
+    // trailing prose after a complete object
+    const end = t.lastIndexOf('}');
+    if (end > 0) {
+      try {
+        return { value: JSON.parse(t.slice(0, end + 1)), repaired: false };
+      } catch {
+        /* fall through to repair */
+      }
+    }
+  }
+  const value = repairTruncatedJson(t);
+  return value === undefined ? null : { value, repaired: true };
+}
+
+/** The caveat a repaired (cut-off) finding carries, so the writer knows later claims may be missing. */
+export const TRUNCATED_CAVEAT = 'This layer was cut short by the output limit; later claims may be missing.';
 
 export type SpecialistAnalyst = Exclude<Analyst, 'single'>;
 export const SPECIALIST_ANALYSTS: SpecialistAnalyst[] = ['promise', 'dasha', 'transit', 'nakshatra'];
@@ -216,9 +346,12 @@ export async function runSpecialist(args: {
   asOf: string;
   /** owner of the explicit prompt cache (promptCache.ts) */
   cacheOwner?: CacheOwner;
-}): Promise<{ finding: Finding; usage: Usage }> {
+  /** aborts the model call (the graph's per-attempt time budget) */
+  signal?: AbortSignal;
+}): Promise<{ finding: Finding; usage: Usage; repaired?: boolean }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
+  const budget = specialistBudget(model);
   const v2 = readingFindingsV2();
   const tail = v2 ? tailV2({ ...args, analyst }) : [
     `TODAY: ${args.asOf}`,
@@ -237,21 +370,29 @@ export async function runSpecialist(args: {
     responseSchema: v2 ? FINDING_RESPONSE_SCHEMA_V2 : FINDING_RESPONSE_SCHEMA,
     cachePrefix: true,
     cacheOwner: args.cacheOwner,
-    thinking: 'off',
-    maxOutputTokens: readingSpecialistMaxTokens(),
+    thinking: SPECIALIST_THINKING,
+    maxOutputTokens: budget.maxOutputTokens,
     temperature: 0.2,
-    timeoutMs: readingSpecialistTimeoutMs(),
+    // the graph's timer (and `signal`) ends the attempt first; this is the backstop for callers without one
+    timeoutMs: budget.timeoutMs,
+    signal: args.signal,
   });
-  let parsed: z.infer<typeof findingZ>;
-  try {
-    parsed = findingZ.parse(JSON.parse(r.text));
-  } catch (err) {
-    throw new SpecialistOutputError(
-      `specialist ${analyst} returned unparsable JSON (${r.finishReason ?? 'no finish reason'}): ${(err as Error).message.slice(0, 120)}`,
-      r.usage
-    );
+  const finishReason = r.finishReason ?? 'no finish reason';
+  // messages name the cause only: model output can quote the chart, so it never goes into errors or logs
+  if (!r.text.trim()) throw new SpecialistOutputError(`specialist ${analyst} returned no text (${finishReason})`, r.usage, { kind: 'model_error', finishReason: r.finishReason });
+  const loose = parseFindingText(r.text);
+  if (!loose) throw new SpecialistOutputError(`specialist ${analyst} returned unparsable JSON (${finishReason})`, r.usage, { kind: 'parse', finishReason: r.finishReason });
+  const checked = findingZ.safeParse(loose.value);
+  if (!checked.success) {
+    const where = checked.error.issues.slice(0, 3).map((i) => `${i.path.join('.') || '(root)'}: ${i.code}`).join('; ');
+    throw new SpecialistOutputError(`specialist ${analyst} returned JSON of the wrong shape (${finishReason}): ${where}`, r.usage, { kind: 'schema', finishReason: r.finishReason });
   }
+  const parsed = checked.data;
+  // a cut-off answer is kept only when at least one whole claim survived the repair
+  if (loose.repaired && parsed.claims.length === 0) throw new SpecialistOutputError(`specialist ${analyst} returned cut-off JSON with no complete claim (${finishReason})`, r.usage, { kind: 'parse', finishReason: r.finishReason });
+  if (loose.repaired) parsed.caveats = [...parsed.caveats, TRUNCATED_CAVEAT];
   return {
+    ...(loose.repaired ? { repaired: true } : {}),
     finding: {
       analyst,
       subject: args.subject,
