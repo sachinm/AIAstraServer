@@ -15,7 +15,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
+import { buildCalendar, calendarBlock } from './calendar/calendar.js';
+import { readingCalendar, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
 import { buildReadingGraph, type NodeError } from './graph.js';
 import { streamGemini } from './llm/gemini.js';
@@ -249,6 +250,8 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
+  // dated edges inside the horizon, read from the pack (no computation); READING_CALENDAR=0 turns it off
+  const calendar = readingCalendar() ? calendarBlock(buildCalendar(merged, intent, asOf, { lunations: data.transits?.lunations })) : '';
   const thinking = readingSynthThinking();
   // thought summaries: streamed to the client as `thought` events and kept on the run record (reading_runs.thinking).
   // They are never written to the application logs.
@@ -277,7 +280,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), ...(calendar ? [calendar] : []), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta,
       onThought
     );
@@ -302,7 +305,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}${calendar ? `\n\n${calendar}` : ''}`,`${PROMPTS['synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );

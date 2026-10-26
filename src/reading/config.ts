@@ -95,6 +95,15 @@ export function readingFullBase(): boolean {
   return !(v === '0' || v === 'false' || v === 'off');
 }
 
+/**
+ * Give the writer the dated calendar (src/reading/calendar): dasha boundaries, ingresses, stations, double-transit and
+ * Sade Sati edges inside the horizon, read from the evidence pack. On by default; READING_CALENDAR=0 turns it off.
+ */
+export function readingCalendar(): boolean {
+  const v = process.env.READING_CALENDAR?.trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
 /** Use the DB `pvr_oracle` persona instead of the file persona. Off by default: a daily-changing system prompt breaks the prefix cache. */
 export function readingUseDbPersona(): boolean {
   return process.env.READING_USE_DB_PERSONA?.trim() === '1';
