@@ -26,6 +26,9 @@ model Auth {
   /// Bcrypt hash of the current magic-link code (plain code is only sent by email).
   magic_link_code_hash  String?                @map("magic_link_code_hash")
   magic_link_expires_at DateTime?              @map("magic_link_expires_at") @db.Timestamptz(6)
+  /// AUTH_PROVIDER=cognito: the InitiateAuth Session parked between requestMagicLink and loginWithMagicLink.
+  cognito_session            String?               @map("cognito_session")
+  cognito_session_expires_at DateTime?             @map("cognito_session_expires_at") @db.Timestamptz(6)
   chats                 Chat[]
   readingRuns           ReadingRun[]
   kundlis               Kundli[]

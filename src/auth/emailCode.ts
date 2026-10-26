@@ -113,10 +113,9 @@ export const legacyEmailCode = {
 /**
  * InitiateAuth returns a Session that must come back with the code, but request and verify are two separate
  * GraphQL calls (possibly on different Lambda instances) and the API has no place to hand it to the browser.
- * It is parked in the account's existing auth.magic_link_code_hash / magic_link_expires_at columns with this
- * prefix (no migration). A prefixed value can never match a bcrypt hash, so the local provider ignores it.
+ * It is parked in auth.cognito_session / cognito_session_expires_at (migration 20261025150000_auth_cognito_session,
+ * which must be applied before AUTH_PROVIDER=cognito). The local provider never reads or writes these columns.
  */
-const SESSION_PREFIX = 'cognito-otp:';
 /** Cognito enforces its own session validity (app client AuthSessionValidity, 3 to 15 minutes). */
 const SESSION_MAX_MS = 15 * 60 * 1000;
 /** Sign-in codes are digits; signup confirmation codes are digits too. Tolerate spaces and dashes. */
@@ -132,11 +131,16 @@ async function findAccountByEmail(email: string) {
     select: {
       id: true,
       email: true,
+      username: true,
       role: true,
-      magic_link_code_hash: true,
-      magic_link_expires_at: true,
+      cognito_session: true,
+      cognito_session_expires_at: true,
     },
   });
+}
+
+function useRandomSignupPassword(): boolean {
+  return process.env.COGNITO_SIGNUP_RANDOM_PASSWORD === '1';
 }
 
 async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
@@ -155,19 +159,27 @@ async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
         await prisma.auth.update({
           where: { id: user.id },
           data: {
-            magic_link_code_hash: `${SESSION_PREFIX}${started.session}`,
-            magic_link_expires_at: new Date(Date.now() + SESSION_MAX_MS),
+            cognito_session: started.session,
+            cognito_session_expires_at: new Date(Date.now() + SESSION_MAX_MS),
           },
         });
         return;
       case 'not_confirmed':
         // Signed up but never entered the confirmation code: send a fresh one. verify will ConfirmSignUp.
-        await clearStoredSession(user.id, user.magic_link_code_hash);
+        await clearStoredSession(user.id, user.cognito_session);
         await cognito.resendConfirmationCode(user.email);
         return;
-      case 'not_found':
-        console.warn('Cognito has no user for an existing account (run the user migration)');
-        return;
+      case 'not_found': {
+        // Account from before Cognito: create its Cognito user with the public SignUp (no admin rights). Cognito
+        // emails a confirmation code; the user's first code is checked with ConfirmSignUp (see verify), and the
+        // next request signs in with EMAIL_OTP like everyone else.
+        await clearStoredSession(user.id, user.cognito_session);
+        await cognito.signUpWithEmail(user.email, {
+          name: user.username,
+          randomPassword: useRandomSignupPassword(),
+        });
+        return; // 'exists' (a concurrent request created it) needs nothing more
+      }
       case 'unsupported':
         console.error(
           `Cognito did not start EMAIL_OTP (challenge: ${started.challengeName ?? 'none'}); check the user pool first factors`
@@ -180,10 +192,10 @@ async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
 }
 
 async function clearStoredSession(userId: string, current: string | null | undefined): Promise<void> {
-  if (!current?.startsWith(SESSION_PREFIX)) return;
+  if (!current) return;
   await prisma.auth.update({
     where: { id: userId },
-    data: { magic_link_code_hash: null, magic_link_expires_at: null },
+    data: { cognito_session: null, cognito_session_expires_at: null },
   });
 }
 
@@ -200,28 +212,22 @@ async function cognitoVerifyLoginCode(
 
   try {
     const cognito = getCognitoAuth();
-    const stored = user.magic_link_code_hash;
+    const stored = user.cognito_session;
     const hasSession =
-      Boolean(stored?.startsWith(SESSION_PREFIX)) &&
-      Boolean(user.magic_link_expires_at) &&
-      new Date() <= (user.magic_link_expires_at as Date);
+      Boolean(stored) &&
+      Boolean(user.cognito_session_expires_at) &&
+      new Date() <= (user.cognito_session_expires_at as Date);
 
     if (hasSession) {
       // Sign-in code. A wrong code keeps the session so the user can retry (Cognito limits attempts).
-      const answered = await cognito.answerEmailOtp(
-        user.email,
-        code,
-        (stored as string).slice(SESSION_PREFIX.length)
-      );
+      const answered = await cognito.answerEmailOtp(user.email, code, stored as string);
       if (answered.status !== 'ok') return null;
-      await prisma.auth.update({
-        where: { id: user.id },
-        data: { magic_link_code_hash: null, magic_link_expires_at: null },
-      });
+      await clearStoredSession(user.id, stored);
       return { id: user.id, role: user.role };
     }
 
-    // No sign-in session: this is the signup confirmation code. ConfirmSignUp fails for confirmed users.
+    // No sign-in session: this is the signup (or first-time, lazily created) confirmation code.
+    // ConfirmSignUp fails for confirmed users.
     const confirmed = await cognito.confirmSignUp(user.email, code);
     if (confirmed.status !== 'confirmed') return null;
     return { id: user.id, role: user.role };
@@ -273,7 +279,7 @@ export async function createSignupIdentity(
   try {
     const out = await getCognitoAuth().signUpWithEmail(emailRaw.trim(), {
       name,
-      randomPassword: process.env.COGNITO_SIGNUP_RANDOM_PASSWORD === '1',
+      randomPassword: useRandomSignupPassword(),
     });
     return out.status === 'exists' ? { ok: false, reason: 'exists' } : { ok: true };
   } catch (err) {

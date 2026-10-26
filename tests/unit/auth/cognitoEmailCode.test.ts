@@ -22,6 +22,8 @@ const fake = vi.hoisted(() => ({
   rows: [] as Array<Record<string, any>>,
   sent: [] as Array<{ to: string; code: string }>,
   nextId: 1,
+  failCreate: false,
+  order: [] as string[],
 }));
 
 function matches(row: Record<string, any>, where: Record<string, any>): boolean {
@@ -43,9 +45,16 @@ vi.mock('../../../src/lib/prisma.js', () => ({
         return row ? { ...row } : null;
       }),
       create: vi.fn(async ({ data }: { data: Record<string, any> }) => {
+        if (fake.failCreate) throw new Error('db down');
+        fake.order.push('db.create');
         const row = { id: `user-${fake.nextId++}`, role: 'novice', ...data };
         fake.rows.push(row);
         return { ...row };
+      }),
+      delete: vi.fn(async ({ where }: { where: { id: string } }) => {
+        fake.order.push('db.delete');
+        const i = fake.rows.findIndex((r) => r.id === where.id);
+        if (i >= 0) fake.rows.splice(i, 1);
       }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, any> }) => {
         const row = fake.rows.find((r) => r.id === where.id);
@@ -95,6 +104,9 @@ import {
   requestMagicLink,
   EMAIL_EXISTS_CODE,
   EMAIL_EXISTS_MESSAGE,
+  SIGNUP_RETRY_CODE,
+  SIGNUP_RETRY_MESSAGE,
+  SIGNUP_CODE_MESSAGE,
   MAGIC_LINK_REQUEST_MESSAGE,
   MAGIC_LINK_LOGIN_FAILED,
 } from '../../../src/services/authService.js';
@@ -129,6 +141,7 @@ class FakeCognito {
 
     if (command instanceof SignUpCommand) {
       this.calls.push({ type: 'SignUp', input });
+      fake.order.push('cognito.SignUp');
       if (this.failSignUpWith) throw this.failSignUpWith;
       if (u) throw exc(UsernameExistsException);
       this.users.set(key, { confirmed: false, confirmCode: String(100000 + ++this.n), otp: null, session: null });
@@ -191,6 +204,8 @@ beforeEach(() => {
   fake.rows.length = 0;
   fake.sent.length = 0;
   fake.nextId = 1;
+  fake.failCreate = false;
+  fake.order.length = 0;
   cognito = new FakeCognito();
   setCognitoAuthForTests(
     createCognitoAuth({ userPoolId: 'pool', clientId: 'client-1', region: 'us-east-1' }, cognito)
@@ -204,8 +219,13 @@ afterEach(() => {
 });
 
 function addAccount(email = 'asha@example.com', role = 'novice') {
-  fake.rows.push({ id: 'acct-1', email, role, magic_link_code_hash: null, magic_link_expires_at: null });
+  fake.rows.push({ id: 'acct-1', username: 'asha', email, role, cognito_session: null, cognito_session_expires_at: null });
   cognito.addConfirmedUser(email);
+}
+
+/** An account from before Cognito: a database row and no Cognito user. */
+function addLegacyAccount(email = 'asha@example.com') {
+  fake.rows.push({ id: 'acct-1', username: 'asha', email, role: 'novice', cognito_session: null, cognito_session_expires_at: null });
 }
 
 describe('cognito config', () => {
@@ -271,8 +291,10 @@ describe('sendLoginCode (cognito)', () => {
       AuthFlow: 'USER_AUTH',
       AuthParameters: { USERNAME: 'asha@example.com', PREFERRED_CHALLENGE: 'EMAIL_OTP' },
     });
-    expect(fake.rows[0].magic_link_code_hash).toBe('cognito-otp:session-1');
-    expect(fake.rows[0].magic_link_expires_at).toBeInstanceOf(Date);
+    expect(fake.rows[0].cognito_session).toBe('session-1');
+    expect(fake.rows[0].cognito_session_expires_at).toBeInstanceOf(Date);
+    // the local provider's own columns are never touched
+    expect(fake.rows[0].magic_link_code_hash).toBeUndefined();
   });
 
   it('does nothing for an unknown email and for malformed input', async () => {
@@ -282,18 +304,12 @@ describe('sendLoginCode (cognito)', () => {
   });
 
   it('sends a fresh confirmation code to a user who never confirmed sign-up', async () => {
-    fake.rows.push({
-      id: 'acct-1',
-      email: 'asha@example.com',
-      role: 'novice',
-      magic_link_code_hash: null,
-      magic_link_expires_at: null,
-    });
+    addLegacyAccount();
     await cognito.send(new SignUpCommand({ ClientId: 'client-1', Username: 'asha@example.com' }));
     cognito.calls.length = 0;
     await sendLoginCode('asha@example.com');
     expect(cognito.count('ResendConfirmationCode')).toBe(1);
-    expect(fake.rows[0].magic_link_code_hash).toBeNull();
+    expect(fake.rows[0].cognito_session).toBeNull();
   });
 
   it('swallows Cognito failures (throttling) without throwing', async () => {
@@ -320,7 +336,7 @@ describe('verifyLoginCode (cognito)', () => {
       Session: 'session-1',
       ChallengeResponses: { USERNAME: 'Asha@Example.com', EMAIL_OTP_CODE: code },
     });
-    expect(fake.rows[0].magic_link_code_hash).toBeNull();
+    expect(fake.rows[0].cognito_session).toBeNull();
   });
 
   it('is single use: replaying the same code fails', async () => {
@@ -354,7 +370,7 @@ describe('verifyLoginCode (cognito)', () => {
     addAccount();
     await sendLoginCode('asha@example.com');
     const code = cognito.codeFor('asha@example.com', 'otp');
-    fake.rows[0].magic_link_expires_at = new Date(Date.now() - 1000);
+    fake.rows[0].cognito_session_expires_at = new Date(Date.now() - 1000);
     expect(await verifyLoginCode('asha@example.com', code)).toBeNull();
     expect(cognito.count('RespondToAuthChallenge')).toBe(0);
   });
@@ -424,21 +440,57 @@ describe('signup (cognito)', () => {
     expect(fake.rows).toHaveLength(1);
   });
 
-  it('returns EMAIL_EXISTS when the email exists in Cognito only, and writes no row', async () => {
+  it('creates the database row first, then the Cognito user', async () => {
+    await signup(birth, null, null);
+    expect(fake.order).toEqual(['db.create', 'cognito.SignUp']);
+  });
+
+  it('returns EMAIL_EXISTS when the email exists in Cognito only, and leaves no row', async () => {
     cognito.addConfirmedUser('asha@example.com');
     const result = await signup(birth, null, null);
     expect(result).toEqual({ success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE });
     expect(fake.rows).toHaveLength(0);
   });
 
-  it('returns a plain failure and writes no row when Cognito rejects the sign-up', async () => {
-    cognito.failSignUpWith = exc(TooManyRequestsException);
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const result = await signup(birth, null, null);
-    expect(result.success).toBe(false);
-    expect((result as any).code).toBeUndefined();
-    expect(fake.rows).toHaveLength(0);
-    err.mockRestore();
+  describe('failure order', () => {
+    it('Cognito fails after the row is written: the row is deleted, the error is retryable, and a retry works', async () => {
+      cognito.failSignUpWith = exc(TooManyRequestsException);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const result = await signup(birth, null, null);
+      expect(result).toEqual({ success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE });
+      expect(fake.order).toEqual(['db.create', 'cognito.SignUp', 'db.delete']);
+      expect(fake.rows).toHaveLength(0);
+      expect(cognito.users.size).toBe(0); // no Cognito user left behind
+
+      // Cognito recovers: the same email signs up, and is not reported as taken.
+      cognito.failSignUpWith = null;
+      const retry = await signup(birth, null, null);
+      expect(retry.success).toBe(true);
+      expect(fake.rows).toHaveLength(1);
+      expect(cognito.users.size).toBe(1);
+      err.mockRestore();
+    });
+
+    it('the database fails first: Cognito is never called and nothing is left behind', async () => {
+      fake.failCreate = true;
+      await expect(signup(birth, null, null)).rejects.toThrow('db down');
+      expect(cognito.calls).toHaveLength(0);
+      expect(cognito.users.size).toBe(0);
+      expect(fake.rows).toHaveLength(0);
+
+      fake.failCreate = false;
+      expect((await signup(birth, null, null)).success).toBe(true);
+    });
+
+    it('still reports a retryable error if the cleanup delete itself fails', async () => {
+      cognito.failSignUpWith = exc(TooManyRequestsException);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { prisma } = await import('../../../src/lib/prisma.js');
+      (prisma.auth.delete as any).mockRejectedValueOnce(new Error('delete failed'));
+      const result = await signup(birth, null, null);
+      expect(result).toMatchObject({ success: false, code: SIGNUP_RETRY_CODE });
+      err.mockRestore();
+    });
   });
 
   it('confirming the emailed code signs the new user in (ConfirmSignUp)', async () => {
@@ -480,6 +532,116 @@ describe('stable responses (cognito)', () => {
     );
     expect(login).toMatchObject({ success: true, user: 'acct-1', role: 'novice' });
     expect((login as any).token).toBeTruthy();
+  });
+});
+
+describe('never-confirmed signup', () => {
+  it('gets a fresh confirmation code on the next request, and that code signs them in', async () => {
+    await signup(birth, null, null);
+    const first = cognito.codeFor('asha@example.com', 'confirm');
+
+    const again = await requestMagicLink('asha@example.com', null, null);
+    expect(again).toEqual({ success: true, message: MAGIC_LINK_REQUEST_MESSAGE });
+    expect(cognito.count('ResendConfirmationCode')).toBe(1);
+    expect(cognito.count('SignUp')).toBe(1);
+    const second = cognito.codeFor('asha@example.com', 'confirm');
+    expect(second).not.toBe(first);
+
+    const login = await loginWithMagicLink('asha@example.com', second, null, null);
+    expect(login.success).toBe(true);
+  });
+});
+
+describe('lazy creation of accounts that predate Cognito', () => {
+  it('creates the Cognito user with the public SignUp (no password) when InitiateAuth says it does not exist', async () => {
+    addLegacyAccount();
+    await sendLoginCode('asha@example.com');
+    expect(cognito.calls.map((c) => c.type)).toEqual(['InitiateAuth', 'SignUp']);
+    const input = cognito.calls[1].input;
+    expect(input.Username).toBe('asha@example.com');
+    expect(input.Password).toBeUndefined();
+    expect(input.UserAttributes).toEqual([
+      { Name: 'email', Value: 'asha@example.com' },
+      { Name: 'name', Value: 'asha' },
+    ]);
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('uses the random-password fallback when COGNITO_SIGNUP_RANDOM_PASSWORD=1', async () => {
+    vi.stubEnv('COGNITO_SIGNUP_RANDOM_PASSWORD', '1');
+    addLegacyAccount();
+    await sendLoginCode('asha@example.com');
+    expect(String(cognito.calls[1].input.Password).length).toBeGreaterThanOrEqual(24);
+  });
+
+  it('answers identically for a legacy account, a pool account and an unknown email', async () => {
+    addLegacyAccount('old@example.com');
+    addAccount('pool@example.com');
+    fake.rows[1].id = 'acct-2';
+    const a = await requestMagicLink('old@example.com', null, null);
+    const b = await requestMagicLink('pool@example.com', null, null);
+    const c = await requestMagicLink('nobody@example.com', null, null);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+  });
+
+  it('first code confirms the new Cognito user and signs in; the next request uses EMAIL_OTP', async () => {
+    addLegacyAccount();
+    await requestMagicLink('asha@example.com', null, null);
+    const confirmCode = cognito.codeFor('asha@example.com', 'confirm');
+    expect(confirmCode).toHaveLength(6);
+    const first = await loginWithMagicLink('asha@example.com', confirmCode, null, null);
+    expect(first).toMatchObject({ success: true, user: 'acct-1' });
+    expect(cognito.count('ConfirmSignUp')).toBe(1);
+
+    await requestMagicLink('asha@example.com', null, null);
+    expect(cognito.count('SignUp')).toBe(1); // created once only
+    const otp = cognito.codeFor('asha@example.com', 'otp');
+    expect(otp).toHaveLength(8);
+    const second = await loginWithMagicLink('asha@example.com', otp, null, null);
+    expect(second).toMatchObject({ success: true, user: 'acct-1' });
+  });
+
+  it('asking twice before confirming resends the code instead of signing up twice', async () => {
+    addLegacyAccount();
+    await sendLoginCode('asha@example.com');
+    await sendLoginCode('asha@example.com');
+    expect(cognito.count('SignUp')).toBe(1);
+    expect(cognito.count('ResendConfirmationCode')).toBe(1);
+  });
+
+  it('a Cognito failure during lazy creation is logged, not thrown, and the response is unchanged', async () => {
+    addLegacyAccount();
+    cognito.failSignUpWith = exc(TooManyRequestsException);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const res = await requestMagicLink('asha@example.com', null, null);
+    expect(res).toEqual({ success: true, message: MAGIC_LINK_REQUEST_MESSAGE });
+    err.mockRestore();
+  });
+});
+
+describe('code formats and provider-neutral copy', () => {
+  it('cognito accepts 8-digit sign-in codes with spaces, and 6-digit confirmation codes', async () => {
+    addAccount();
+    await sendLoginCode('asha@example.com');
+    const otp = cognito.codeFor('asha@example.com', 'otp');
+    const spaced = otp.slice(0, 4) + ' ' + otp.slice(4);
+    expect(await verifyLoginCode('asha@example.com', spaced)).not.toBeNull();
+  });
+
+  it('local still takes only the 8-character server code', async () => {
+    vi.stubEnv('AUTH_PROVIDER', 'local');
+    addAccount();
+    await sendLoginCode('asha@example.com');
+    expect(await verifyLoginCode('asha@example.com', '123456')).toBeNull();
+  });
+
+  it('server messages name no code length, expiry number or provider', () => {
+    for (const m of [MAGIC_LINK_REQUEST_MESSAGE, SIGNUP_CODE_MESSAGE]) {
+      expect(m).not.toMatch(/8-character|8 character|\d+ minutes|cognito/i);
+      expect(m).toContain('Enter the code we emailed you');
+      expect(m).toContain('It expires in a few minutes.');
+    }
   });
 });
 
