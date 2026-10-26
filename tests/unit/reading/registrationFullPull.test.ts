@@ -142,7 +142,8 @@ function fakeRadha(opts: { year?: number; validToMs?: number; onCall?: (radhaTyp
   let peak = 0;
   const state = { year: opts.year ?? 2026, validToMs: opts.validToMs ?? Date.now() + 200 * 24 * HOUR };
   const fetcher = vi.fn(async (_req: KundliRequest, radhaType: string, extra: Record<string, unknown>) => {
-    const name = `${radhaType}${extra.varga ? `:${String(extra.varga)}` : ''}`;
+    const varga = (extra.params as { varga?: unknown } | undefined)?.varga;
+    const name = `${radhaType}${varga ? `:${String(varga)}` : ''}`;
     calls.push(name);
     extras[name] = extra;
     opts.onCall?.(radhaType);

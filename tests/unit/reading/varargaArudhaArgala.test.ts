@@ -99,10 +99,13 @@ describe('fetching a per-chart type', () => {
     const calls: Array<{ type: string; extra: Record<string, unknown> }> = [];
     const fetcher = async (_req: unknown, type: string, extra: Record<string, unknown>) => {
       calls.push({ type, extra });
-      return { chart: `D${extra.varga}`, data_type: type, calc_version: '1', data: { ok: true, varga: extra.varga } };
+      // the varga travels inside `params`, the only place Radha reads it
+      const varga = (extra.params as { varga?: number } | undefined)?.varga;
+      return { chart: `D${varga}`, data_type: type, calc_version: '1', data: { ok: true, varga } };
     };
     const out = await ensureChartData({ repo, fetcher: fetcher as never }, 'k1', ['argala.d9', 'argala.d24', 'arudhas.d20']);
-    expect(calls.map((c) => `${c.type}:${String(c.extra.varga)}`).sort()).toEqual(['argala:24', 'argala:9', 'arudhas:20']);
+    expect(calls.map((c) => `${c.type}:${String((c.extra.params as { varga?: number }).varga)}`).sort()).toEqual(['argala:24', 'argala:9', 'arudhas:20']);
+    for (const c of calls) expect(c.extra.varga).toBeUndefined();
     expect(Object.keys(out).sort()).toEqual(['argala.d24', 'argala.d9', 'arudhas.d20']);
     for (const item of Object.values(out)) expect(item.status).toBe('ready');
     // one stored row per chart; the varga is kept with the row
