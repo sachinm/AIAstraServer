@@ -1,1 +1,1 @@
-Format `narrative`: begin with the direct answer in 2-4 sentences, then these sections with `###` headings: What is in your chart, Why now (dasha), The trigger (transits), The nakshatra view, What to expect. Skip a section only if the pack has nothing for it. At most 700 words.
+Format `narrative`: begin with the direct answer in 2-4 sentences, then these sections with `###` headings: What is in your chart, Why now (dasha), The trigger (transits), The nakshatra view, What to expect. Skip a section only if the pack has nothing for it. At most 1400 words.

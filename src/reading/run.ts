@@ -116,9 +116,34 @@ function keyFactsCard(pack: EvidencePack, intent: Intent): string {
     `Running: ${frame.running?.md ?? '?'}-${frame.running?.ad ?? '?'}-${frame.running?.pd ?? '?'} (MD to ${frame.running?.md_end ?? '?'}, AD to ${frame.running?.ad_end ?? '?'}, PD to ${frame.running?.pd_end ?? '?'})`,
     `Horizon: ${horizonLabel(intent)}`,
   ];
+  const fmtAspects = (a: any): string => {
+    const g: string[] = Array.isArray(a?.graha) ? a.graha : [];
+    const r: string[] = Array.isArray(a?.rasi) ? a.rasi : [];
+    return g.length || r.length ? `${g.length + r.length} aspects (graha: ${g.join('/') || 'none'}; rasi: ${r.join('/') || 'none'})` : 'no aspects';
+  };
+  const planetLines = new Set<string>();
   for (const h of pack.keyFrame.houses.slice(0, 6)) {
     const hh = base.houses?.[String(h)];
-    if (hh) lines.push(`House ${h}: ${hh.sign}, lord ${hh.lord} in house ${hh.lord_h}, occupants ${(hh.occ ?? []).join('/') || 'none'}`);
+    if (!hh) continue;
+    lines.push(`House ${h}: ${hh.sign}, lord ${hh.lord} in house ${hh.lord_h}, occupants ${(hh.occ ?? []).join('/') || 'none'}; aspected by ${fmtAspects(hh.aspected_by)}`);
+    for (const code of [hh.lord, ...(hh.occ ?? [])]) if (typeof code === 'string') planetLines.add(code);
+  }
+  // Depth for the writer (docs/reading-engine/24): for each frame lord and occupant, its strength, its dispositor,
+  // its benefic/malefic nature and the aspects on it, so culprits and contributors can be named from facts.
+  for (const code of planetLines) {
+    const b = base.bodies?.[code];
+    if (!b) continue;
+    const parts = [`${code}: ${b.sign ?? '?'} house ${b.h ?? '?'}`];
+    if (b.dig) parts.push(`dignity ${b.dig}`);
+    if (b.nature) parts.push(`nature ${b.nature}`);
+    if (b.sign_lord) parts.push(`dispositor ${b.sign_lord}`);
+    if (b.star_lord) parts.push(`star lord ${b.star_lord}`);
+    if (b.shadbala) parts.push(`shadbala ${b.shadbala.rupas} rupas (ratio ${b.shadbala.ratio}, rank ${b.shadbala.rank})`);
+    if (b.conj?.length) parts.push(`conjunct ${b.conj.join('/')}`);
+    if (b.retro) parts.push('retrograde');
+    if (b.combust) parts.push('combust');
+    parts.push(`aspected by ${fmtAspects(b.aspected_by)}`);
+    lines.push(parts.join(', '));
   }
   return lines.join('\n');
 }
