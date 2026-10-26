@@ -99,6 +99,57 @@ describe('fetchTransit', () => {
   });
 });
 
+describe('fetchTransit: several vargas and no person (R14, doc 27 R-27b)', () => {
+  const placeFetcher = () => vi.fn(async (_type: string, _fields: Record<string, unknown>) => ({ charts: { d1: {}, d9: {} } }));
+
+  it('sends divisional_chart_factors (a list, deduplicated) instead of divisional_chart_factor', async () => {
+    const fetcher = fakeFetcher();
+    await fetchTransit('k1', { at: '2027-03-01 12:00:00', divisionalChartFactors: [1, 9, 10, 9] }, { repo: birthRepo(), fetcher });
+    expect(fetcher.mock.calls[0]![2]).toEqual({ lat: 28.6, lon: 77.2, tz: 5.5, at: '2027-03-01 12:00:00', divisional_chart_factors: [1, 9, 10] });
+  });
+
+  it("passes the 'd1-d10' shorthand through", async () => {
+    const fetcher = fakeFetcher();
+    await fetchTransit('k1', { at: '2027-03-01 12:00:00', divisionalChartFactors: 'd1-d10' }, { repo: birthRepo(), fetcher });
+    expect(fetcher.mock.calls[0]![2]).toMatchObject({ divisional_chart_factors: 'd1-d10' });
+    expect(fetcher.mock.calls[0]![2]).not.toHaveProperty('divisional_chart_factor');
+  });
+
+  it('with a place and no natal overlay: no kundli read, no birth data sent, coordinates rounded to two decimals', async () => {
+    const repo = birthRepo();
+    const fetcher = fakeFetcher();
+    const pf = placeFetcher();
+    const out = await fetchTransit(null, { at: '2031-04-15T06:30:00Z', divisionalChartFactors: 'd1-d10', place: { lat: 18.520431, lon: 73.856743, tz: 5.5 } }, { repo, fetcher, placeFetcher: pf });
+    expect(out).toEqual({ charts: { d1: {}, d9: {} } });
+    expect(repo.kundliRequest).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(pf).toHaveBeenCalledWith('transit', { lat: 18.52, lon: 73.86, tz: 5.5, at: '2031-04-15T06:30:00Z', divisional_chart_factors: 'd1-d10' });
+  });
+
+  it('with a place and withNatal: the kundli adds only natal_* fields', async () => {
+    const pf = placeFetcher();
+    await fetchTransit('k1', { at: '2027-03-01 12:00:00', place: { lat: 40.7128, lon: -74.006, tz: -5 }, withNatal: true }, { repo: birthRepo(), placeFetcher: pf });
+    expect(pf.mock.calls[0]![1]).toEqual({
+      lat: 40.71, lon: -74.01, tz: -5, at: '2027-03-01 12:00:00', divisional_chart_factor: 1,
+      natal_dob: '1990-01-01', natal_tob: '10:00:00', natal_place: 'Delhi, IN', natal_lat: 28.6, natal_lon: 77.2, natal_tz: 5.5,
+    });
+  });
+
+  it('rejects both factor options, bad lists, no kundli and no place, and withNatal without a kundli', async () => {
+    const fetcher = fakeFetcher();
+    const pf = placeFetcher();
+    const deps = { repo: birthRepo(), fetcher, placeFetcher: pf };
+    const at = '2027-03-01 12:00:00';
+    await expect(fetchTransit('k1', { at, divisionalChartFactor: 9, divisionalChartFactors: [9] }, deps)).rejects.toThrow(/not both/);
+    await expect(fetchTransit('k1', { at, divisionalChartFactors: [] }, deps)).rejects.toThrow(/non-empty/);
+    await expect(fetchTransit('k1', { at, divisionalChartFactors: [1, 13] }, deps)).rejects.toThrow(/must be among/);
+    await expect(fetchTransit(null, { at }, deps)).rejects.toThrow(/a kundli or a place/);
+    await expect(fetchTransit(null, { at, place: { lat: 1, lon: 2, tz: 0 }, withNatal: true }, deps)).rejects.toThrow(/withNatal needs a kundli/);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(pf).not.toHaveBeenCalled();
+  });
+});
+
 describe('transitAt', () => {
   it("accepts Radha's local and ISO forms", () => {
     expect(transitAt(' 2027-03-01 12:00:00 ')).toBe('2027-03-01 12:00:00');
@@ -116,6 +167,19 @@ describe('fetchTransit default fetcher', () => {
     const out = await fresh('k1', { at: '2027-03-01 12:00:00', divisionalChartFactor: 9 }, { repo: birthRepo() });
     expect(out).toEqual({ ok: true });
     expect(fetchEngineExport).toHaveBeenCalledWith(BIRTH.params, 'transit', { lat: 28.6, lon: 77.2, tz: 5.5, at: '2027-03-01 12:00:00', divisional_chart_factor: 9 });
+    vi.doUnmock('../../../src/lib/astroKundliClient.js');
+  });
+
+  it('a call at a place goes through the same client with no birth data', async () => {
+    vi.resetModules();
+    const fetchEngineExport = vi.fn();
+    const fetchEngineExportAtPlace = vi.fn(async () => ({ ok: 'place' }));
+    vi.doMock('../../../src/lib/astroKundliClient.js', () => ({ fetchEngineExport, fetchEngineExportAtPlace }));
+    const { fetchTransit: fresh } = await import('../../../src/reading/chartData/transit.js');
+    const out = await fresh(null, { at: '2027-03-01 12:00:00', place: { lat: 1.234, lon: 5.678, tz: 1 } });
+    expect(out).toEqual({ ok: 'place' });
+    expect(fetchEngineExportAtPlace).toHaveBeenCalledWith('transit', { lat: 1.23, lon: 5.68, tz: 1, at: '2027-03-01 12:00:00', divisional_chart_factor: 1 });
+    expect(fetchEngineExport).not.toHaveBeenCalled();
     vi.doUnmock('../../../src/lib/astroKundliClient.js');
   });
 });

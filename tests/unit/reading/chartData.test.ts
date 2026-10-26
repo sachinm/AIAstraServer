@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUILTIN_CHART_TYPES, CHART_TYPE_BY_ID, VARGA_FACTORS, mergeChartTypes, typesForTier } from '../../../src/reading/chartData/catalog.js';
+import { BUILTIN_CHART_TYPES, CHART_TYPE_BY_ID, VARGA_FACTORS, mergeChartTypes, typesForTier, yearVariant } from '../../../src/reading/chartData/catalog.js';
 import {
   clearChartDataCaches,
   ensureChartData,
@@ -84,7 +84,10 @@ describe('catalog', () => {
     expect(CHART_TYPE_BY_ID.get('transit')).toMatchObject({ radhaType: 'transit', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false });
     expect(CHART_TYPE_BY_ID.get('dasha.brahma')).toMatchObject({ served: false }); // Radha does not export it (pyjhora bug)
     expect(CHART_TYPE_BY_ID.get('transit_contacts')).toMatchObject({ radhaType: 'transit_contacts', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts']);
+    expect(CHART_TYPE_BY_ID.get('prashna')).toMatchObject({ radhaType: 'prashna', family: 'prashna', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
+    expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')?.fixedParams).toEqual({ system: 'tithi_ashtottari' });
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna']);
+    expect(chartDataTypeIds()).not.toContain('prashna');
     expect(chartDataTypeIds()).not.toContain('transit');
     expect(chartDataTypeIds()).not.toContain('transit_contacts');
     expect(chartDataTypeIds()).toContain('annual.tithi_pravesha_dasha@<year>');
@@ -109,22 +112,38 @@ describe('catalog', () => {
     expect(merged.find((t) => t.id === 'varga.d60')).toMatchObject({ served: true, calcVersion: '1', tier: 'first' });
     expect(merged.some((t) => t.id === 'dasha.aayu')).toBe(false);
   });
-  it('the M7 + M9 + M11 + M12 migrations seed every built-in type and M7 backfills every legacy column', () => {
+  it('the M7 + M9 + M11 + M12 + M14 migrations seed every built-in type and M7 backfills every legacy column', () => {
     const m7 = readFileSync(path.resolve('prisma/migrations/20261025120000_reading_m7_kundli_data/migration.sql'), 'utf8');
     const m9 = readFileSync(path.resolve('prisma/migrations/20261025160000_reading_m9_catalog_more_types/migration.sql'), 'utf8');
     const m11 = readFileSync(path.resolve('prisma/migrations/20261026110000_reading_m11_arudha_argala_per_varga/migration.sql'), 'utf8');
     const m12 = readFileSync(path.resolve('prisma/migrations/20261026120000_reading_m12_transit_contacts/migration.sql'), 'utf8');
+    const m14 = readFileSync(path.resolve('prisma/migrations/20261026170000_reading_m14_prashna/migration.sql'), 'utf8');
     const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
     const m12Ids = ['transit_contacts'];
+    const m14Ids = ['prashna'];
+    /** rows M14 relabels: seeded earlier with the old label, the new label set by an UPDATE in M14 */
+    const m14Relabel: Record<string, string> = { 'annual.tithi_pravesha_dasha': 'Tithi pravesha dasha' };
     const isM11 = (id: string) => /^(arudhas|argala)\.d\d+$/.test(id);
-    const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number]) =>
-      `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${t.label}')`;
+    const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number], label = t.label) =>
+      `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${label}')`;
     for (const t of BUILTIN_CHART_TYPES) {
-      const sql = m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
-      expect(sql).toContain(seedRow(t));
+      const sql = m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
+      expect(sql).toContain(seedRow(t, m14Relabel[t.id] ?? t.label));
+      if (m14Relabel[t.id]) {
+        expect(m14).toContain(`SET "label" = '${t.label}'`);
+        expect(m14).toContain(`WHERE "id" = '${t.id}'`);
+      }
     }
-    for (const id of [...m9Ids, ...m12Ids]) expect(m7).not.toContain(`('${id}', `);
+    for (const id of [...m9Ids, ...m12Ids, ...m14Ids]) expect(m7).not.toContain(`('${id}', `);
     for (const id of m12Ids) expect(m9 + m11).not.toContain(`('${id}', `);
+    for (const id of m14Ids) expect(m9 + m11 + m12).not.toContain(`('${id}', `);
+    expect(m14).toContain('ON CONFLICT ("id") DO NOTHING');
+    expect(m14).toMatch(/CREATE TABLE IF NOT EXISTS "prashna_casts"/);
+    expect(m14).toMatch(/CHECK \("place_source" IN \('current', 'birth'\)\)/);
+    expect(m14).toMatch(/CREATE INDEX IF NOT EXISTS "prashna_casts_user_asked" ON "prashna_casts" \("user_id", "asked_at"\)/);
+    // the Prisma model matches the table it describes
+    const schema = readFileSync(path.resolve('prisma/schema.prisma'), 'utf8');
+    expect(schema).toMatch(/model PrashnaCast \{[\s\S]*@@index\(\[user_id, asked_at\], map: "prashna_casts_user_asked"\)[\s\S]*@@map\("prashna_casts"\)/);
     expect(m7).not.toMatch(/\('(arudhas|argala)\.d\d+', /);
     expect(m11).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m12).toContain('ON CONFLICT ("id") DO NOTHING');
@@ -140,6 +159,18 @@ describe('keys and staleness', () => {
     expect(parseKey('annual.varsha', CHART_TYPE_BY_ID).error).toMatch(/needs a year/);
     expect(parseKey('varga.d1@2027', CHART_TYPE_BY_ID).error).toMatch(/no variant/);
     expect(parseKey('varga.d7000', CHART_TYPE_BY_ID).error).toMatch(/unknown/);
+  });
+  it('R14: the year dasha key carries its system (default tithi_ashtottari, overridable)', () => {
+    expect(parseKey('annual.tithi_pravesha_dasha@2027', CHART_TYPE_BY_ID)).toMatchObject({ variant: 'year=2027;system=tithi_ashtottari', params: { year: 2027, system: 'tithi_ashtottari' } });
+    expect(parseKey('annual.tithi_pravesha_dasha@2027;system=patyayini', CHART_TYPE_BY_ID)).toMatchObject({ variant: 'year=2027;system=patyayini', params: { year: 2027, system: 'patyayini' } });
+    expect(parseKey('annual.tithi_pravesha_dasha@2027;bad', CHART_TYPE_BY_ID).error).toMatch(/unknown option/);
+    expect(parseKey('annual.tithi_pravesha_dasha@;system=mudda', CHART_TYPE_BY_ID).error).toMatch(/needs a year/);
+    expect(yearVariant(2027)).toBe('year=2027');
+  });
+  it('R14: ensureChartData refuses prashna and points at castPrashna', async () => {
+    const out = await ensureChartData({ repo: memRepo(), fetcher: vi.fn() }, 'k1', ['prashna']);
+    expect(out['prashna']).toMatchObject({ status: 'failed' });
+    expect(out['prashna']!.error).toMatch(/castPrashna.*prashna\.ts/);
   });
   it('a calc_version change, an expired annual row, an old failure or an expired lease means refetch', () => {
     const t = { ...CHART_TYPE_BY_ID.get('varga.d1')!, calcVersion: '2' };

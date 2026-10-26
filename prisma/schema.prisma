@@ -31,6 +31,7 @@ model Auth {
   cognito_session_expires_at DateTime?             @map("cognito_session_expires_at") @db.Timestamptz(6)
   chats                 Chat[]
   readingRuns           ReadingRun[]
+  prashnaCasts          PrashnaCast[]
   kundlis               Kundli[]
   userGeneratedContent  UserGeneratedContent[]
 
@@ -324,4 +325,27 @@ model UserCurrentLocation {
   updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("user_current_location")
+}
+
+/// One cast prashna per question (reading engine M14, migration 20261026170000, docs/reading-engine/27 §4). Coordinates
+/// rounded to two decimals; null when only the birth place text was sent. place_source: current | birth.
+/// reading_run_id has no relation on purpose (the cast can precede its reading_runs row). Written by
+/// src/reading/chartData/prashna.ts with raw SQL, which tolerates the table missing.
+model PrashnaCast {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id        String   @map("user_id")
+  reading_run_id String?  @map("reading_run_id")
+  asked_at       DateTime @map("asked_at") @db.Timestamptz(6)
+  place_resolved String?  @map("place_resolved")
+  lat            Float?
+  lon            Float?
+  tz             Float?
+  place_source   String   @map("place_source")
+  calc_version   String?  @map("calc_version")
+  payload        Json
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user           Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, asked_at], map: "prashna_casts_user_asked")
+  @@map("prashna_casts")
 }

@@ -29,6 +29,12 @@ export interface Intent {
    * src/services/userLocation.ts); no astrological computation reads it.
    */
   currentLocation?: { place: string; tz: string | null };
+  /**
+   * Where the question is asked, when the client sent its location (`lat`, `lon`, `tz` on ask-stream / confirm-stream),
+   * rounded to two decimals; `tz` is the UTC offset in hours. The prashna is cast here (castPrashna in
+   * src/reading/chartData/prashna.ts); absent -> the birth place (docs/reading-engine/27 §7).
+   */
+  questionPlace?: { lat: number; lon: number; tz: number };
 }
 
 export interface Usage {

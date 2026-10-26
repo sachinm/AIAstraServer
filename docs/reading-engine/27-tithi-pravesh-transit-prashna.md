@@ -54,18 +54,16 @@ All of this is in Radha; Node computes nothing.
 - Request:
   - `at`: the question moment, defaulting to now at the place;
   - the place, as `lat/lon/tz` or `place`;
-  - `method`: one of `moment`, `kp_249`, `number_108`, `nadi`;
-  - `number`: required unless `method=moment`;
+  - (no `method` / `number`: decision 1 in §7, the prashna lagna is the rising sign at the moment);
   - `divisional_chart_factors`: defaults to `[1, 9]`;
   - optional natal fields, which add `natal_house` as transit does.
 - Response:
   - the moment (`at_jd`, `at_local`);
   - panchanga at the moment: tithi, paksha, nakshatra with pada, yoga, karana, weekday and hora lord;
   - the rising sign at the moment (udaya lagna);
-  - the **prashna lagna** for the method and number, from pyjhora's `get_prasna_lagna_*` functions, per varga;
+  - the **prashna lagna** (`prashna_lagna`): the rising sign at the moment, per varga (decision 1 in §7; the
+    number-based `get_prasna_lagna_*` methods are not used);
   - for each requested varga, the planet rows with houses counted from the prashna lagna.
-
-  The KP method also returns the number's star, sub and sub-sub lords from `const.prasna_kp_249_dict`.
 - `calc_version` "1", listed in `catalog` with its params.
 
 **Tests (pytest):**
@@ -73,30 +71,51 @@ All of this is in Radha; Node computes nothing.
   equals pyjhora's own function run on a `Horoscope` at the Tithi Pravesh instant.
 - **Transit:** D1–D10 for a past and a future moment with no person. Each chart equals the single-factor call, and the
   `d1-d10` shorthand works.
-- **Prashna:** each method returns the lagna pyjhora's utils give for the same number, and `moment` uses the
-  ascendant. `number` is range-checked (1–249, 1–108, and the nadi range from pyjhora). Panchanga fields are present.
+- **Prashna:** the prashna lagna equals the ascendant at the moment in each requested varga. Panchanga fields are
+  present.
 
 ## 4. Server work (schema and code), backwards from the Radha types
 
-**Catalog and migration M14** (`prisma/migrations/2026102617xxxx_reading_m14_prashna_types`):
-- `chart_data_types` rows for `prashna` (family `prashna`, change class `moving`, tier `on_demand`).
+**Status: built** on `feature/doc27-server` (2026-10-26), with the §7 decisions applied. QA rows `R14-01`..`R14-07`.
+The migration is written, not applied.
+
+**Catalog and migration M14** (`prisma/migrations/20261026170000_reading_m14_prashna`; timestamped after M13 so the
+folders stay in order):
+- `chart_data_types` row for `prashna` (family `prashna`, change class `moving`, tier `on_demand`, served false until
+  the catalog sync). `family` has no CHECK constraint, so the new value needs no constraint change.
 - An updated label for `annual.tithi_pravesha_dasha`, which is now stored per year **and** system, under the variant
-  `year=2027;system=tithi_ashtottari`.
+  `year=2027;system=tithi_ashtottari`. Older `year=<y>` rows are left alone; a `current` pointer naming one is
+  re-fetched.
 - A new table `prashna_casts`. A prashna belongs to a question, so it is stored with the question for
-  reproducibility, not per person. Columns: `id, user_id, reading_run_id (nullable), asked_at, place_resolved, lat,
-  lon, tz, method, number, calc_version, payload jsonb, created_at`. Index on `(user_id, asked_at)`.
+  reproducibility, not per person. Columns: `id, user_id (fk auth, cascade), reading_run_id (nullable, no fk: the cast
+  can precede its run row), asked_at, place_resolved, lat, lon, tz, place_source ('current' | 'birth'), calc_version,
+  payload jsonb, created_at`. Index on `(user_id, asked_at)`. No `method`/`number` (decision 1). lat/lon/tz are null
+  when only the birth place text could be sent.
 - Written, not applied, until Sachin approves.
 
 **Code:**
-- `catalog.ts`: add `prashna`, and the variant key for the annual dasha with `system`.
-- `transit.ts`: `fetchTransit` accepts `divisionalChartFactors`, and needs no kundli when no natal overlay is asked for.
-- New `src/reading/chartData/prashna.ts`: `castPrashna({ userId, at, place, method, number, runId })` makes one Radha
-  call (spacing respected), stores the row in `prashna_casts` and returns the payload.
-- Registration pull: also fetches `annual.tithi_pravesha_dasha` with `system=tithi_ashtottari` for the current year.
+- `catalog.ts`: `prashna`; `annual.tithi_pravesha_dasha` carries the fixed option `system=tithi_ashtottari`, so its key
+  is `annual.tithi_pravesha_dasha@2027` (default system) or `annual.tithi_pravesha_dasha@2027;system=mudda`. Radha gets
+  the system inside `params` and the year top-level. The year is never a required input: `ensureAnnualCurrent` sends
+  only `at` = today and stores under Radha's `year_used`.
+- `transit.ts`: `fetchTransit(kundliId | null, { at, divisionalChartFactors: [..] | 'd1-d10', place?, withNatal? })`.
+  With a `place` no kundli is read and no birth data is sent (natal fields only with `withNatal`).
+- `place.ts`: `parseClientPlace` (lat/lon range-checked, `tz` in hours or an IANA zone read at the moment, rounded to
+  two decimals) and `roundCoord`.
+- `prashna.ts`: `castPrashna({ userId, at?, place?, runId?, divisionalChartFactors?, withNatal? })` resolves the place,
+  makes one Radha call through the shared client (spacing respected), stores a `prashna_casts` row with raw SQL and
+  returns the payload. A missing table is logged once and the payload is still returned.
+- Registration pull: same code path; because the catalog entry carries `system`, the full pull fetches
+  `annual.tithi_pravesha_dasha` with `params.system = tithi_ashtottari` for the year that applies today.
+- Routes: `POST /api/chat/ask-stream` and `POST /api/chat/confirm-stream` accept optional `lat`, `lon`, `tz`, parsed
+  with `parseClientPlace` and kept on the intent as `questionPlace` (rounded) for the prashna specialist (step 3).
 
-**Where the question place comes from:** the web asks the browser for location once, and it is optional. If it is
-refused or unavailable, the birth place is used and the reading says so. The place sent is rounded to two decimals
-(about 1 km) for privacy.
+**Where the question place comes from:** neither the server nor the web had browser-geolocation or IP-location code.
+The only existing capture is `user_current_location` (M13): the city as typed plus the browser IANA timezone, with
+`lat/lon` always null (no geocoding), so it cannot place a chart. The client therefore sends `lat/lon/tz` on the ask /
+confirm routes when it has them (web step 4: an optional browser location prompt); otherwise the kundli's stored birth
+coordinates are used, and failing those the birth place text. Coordinates are rounded to two decimals (about 1 km)
+before they are sent or stored.
 
 ## 5. Reading engine use
 
@@ -118,9 +137,13 @@ refused or unavailable, the birth place is used and the reading says so. The pla
 4. Web: an optional location prompt on the chat page.
 5. Deploy through the deploy session: Radha, then the server, then M14 with approval, then the catalog sync.
 
-## 7. Open questions for Sachin
+## 7. Decisions (Sachin, 2026-10-26)
 
-1. Prashna number: should the user be asked to pick a number (1–249 KP or 1–108), or do we use only the moment's
-   ascendant?
-2. Is it OK to ask for browser location for prashna, or should we always use the birth place?
-3. Default system for the year dasha: Tithi Ashtottari (this plan) or Mudda?
+1. **Prashna number:** no user-picked number. The prashna lagna is the rising sign at the question moment only;
+   `method` and `number` are dropped from the Radha request (R-27c) and from `prashna_casts`.
+2. **Question place:** the person's current location, falling back to the birth place. No existing geolocation or
+   IP-location code was found (server or web), so the client sends `lat/lon/tz` on the ask / confirm routes and the
+   server falls back to the kundli's stored coordinates. Coordinates are rounded to two decimals before sending or
+   storing.
+3. **Year dasha:** Tithi Ashtottari is the default system. The Tithi Pravesh year is never a required input: Radha
+   derives it from today (its year rule), and Tithi Ashtottari follows the same rule.

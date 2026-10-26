@@ -681,6 +681,14 @@ export async function fetchEngineExport(
 }
 
 /**
+ * An export that needs no person (transit or prashna at a given place, doc 27): the body carries only `type` and the
+ * fields given (place as lat/lon/tz or `place`, `at`, optional `natal_*`), no dob/tob/place. Same throttle as every call.
+ */
+export async function fetchEngineExportAtPlace(type: string, fields: Record<string, unknown>): Promise<Prisma.JsonValue> {
+  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(null, type, { ayanamsa: 'LAHIRI', ...fields }));
+}
+
+/**
  * Radha's `catalog` export (S-1): the list of chart data types the engine serves and their calc versions.
  * It takes no birth data, so the request body carries only `type` (no dob/tob/place).
  */
