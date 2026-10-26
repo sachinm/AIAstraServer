@@ -26,6 +26,8 @@ const SYSTEM = [
 export async function phraseAsk(s: ClarifyState, ask: Ask): Promise<{ ask: Ask; usage: Usage | null }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { ask, usage: null };
+  // these two are already as short and plain as they can be; keep the exact wording
+  if (ask.criterion === 'sibling' || ask.criterion === 'location') return { ask, usage: null };
   try {
     const card = s.card?.md ? `Running period: ${s.card.md}-${s.card.ad} until ${s.card.adEnd}.` : '';
     const user = [
@@ -55,8 +57,12 @@ export async function phraseAsk(s: ClarifyState, ask: Ask): Promise<{ ask: Ask; 
 export async function resolveFreeText(s: ClarifyState, criterion: string, text: string): Promise<{ value: string | null; usage: Usage | null }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { value: null, usage: null };
+  // a place is stored as typed; nothing for a model to map
+  if (criterion === 'location') return { value: null, usage: null };
   const options =
-    criterion === 'horizon'
+    criterion === 'sibling'
+      ? 'elder | younger | all'
+      : criterion === 'horizon'
       ? `one of now | 3m | 6m | 1y | 3y | life, or range:YYYY-MM-DD:YYYY-MM-DD (today is ${s.asOf})`
       : criterion === 'bucket'
         ? BUCKET_IDS.filter((b) => b !== 'unknown').join(' | ')

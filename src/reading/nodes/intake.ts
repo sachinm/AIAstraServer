@@ -56,6 +56,45 @@ const SELF_HARM = /\b(suicide|suicidal|kill myself|end my life|want to die|self[
 export const SELF_HARM_RESPONSE =
   "I'm really sorry you're going through this. I can't answer this one from a chart. If you might act on these thoughts or are in immediate danger, please contact your local emergency number now. In the US you can call or text 988, and in India you can call Tele-MANAS at 14416 or 1-800-891-4416. If you can, tell someone you trust how you feel right now. When you feel ready, I'm glad to talk through your chart with you.";
 
+// ---- siblings: which one (3rd house = younger, 11th = elder; packs/frames.ts `siblings`) ----------------------
+
+export type SiblingNoun = 'brother' | 'sister' | 'sibling';
+export type SiblingRank = 'elder' | 'younger' | 'all';
+
+/** The focus point that tells the specialists which house to judge first. */
+export function siblingFocusPoint(rank: SiblingRank, noun: SiblingNoun): string {
+  if (rank === 'elder') return `elder ${noun}: judge the 11th house and its lord first`;
+  if (rank === 'younger') return `younger ${noun}: judge the 3rd house and its lord first`;
+  return `all ${noun === 'sibling' ? 'siblings' : `${noun}s`}: judge the 3rd house (younger) and the 11th house (elder) and their lords`;
+}
+
+const IN_LAW = /\b(brothers?|sisters?)[- ]in[- ]laws?\b/gi;
+const SIB_WORD = /\b(brothers?|sisters?|siblings?)\b/gi;
+const ELDER_SIB = /\b(elder|older|eldest|oldest|big|bigger)\s+(brothers?|sisters?|siblings?)\b/gi;
+const YOUNGER_SIB = /\b(younger|youngest|little|baby|small|kid)\s+(brothers?|sisters?|siblings?)\b/gi;
+const ONLY_SIB = /\b(only|one|twin)\s+(brother|sister|sibling)\b/i;
+
+const nounOf = (w: string): SiblingNoun => (/^brother/i.test(w) ? 'brother' : /^sister/i.test(w) ? 'sister' : 'sibling');
+
+/**
+ * What a question says about a brother or sister. `ranks` lists the ones named elder/younger (each with its noun);
+ * `ambiguous` is true when a sibling is named without saying which and not as "my only brother" (the clarifier asks).
+ * In-laws are not siblings here.
+ */
+export function siblingMention(question: string): { noun: SiblingNoun; ranks: Array<{ rank: 'elder' | 'younger'; noun: SiblingNoun }>; ambiguous: boolean } | null {
+  const q = question.replace(IN_LAW, ' ');
+  const words = [...q.matchAll(SIB_WORD)].map((m) => nounOf(m[1]!));
+  if (!words.length) return null;
+  const kinds = new Set(words);
+  const noun: SiblingNoun = kinds.size === 1 ? words[0]! : 'sibling';
+  const ranks: Array<{ rank: 'elder' | 'younger'; noun: SiblingNoun }> = [];
+  for (const m of q.matchAll(ELDER_SIB)) ranks.push({ rank: 'elder', noun: nounOf(m[2]!) });
+  for (const m of q.matchAll(YOUNGER_SIB)) ranks.push({ rank: 'younger', noun: nounOf(m[2]!) });
+  const seen = new Set<string>();
+  const unique = ranks.filter((r) => (seen.has(`${r.rank}:${r.noun}`) ? false : (seen.add(`${r.rank}:${r.noun}`), true)));
+  return { noun, ranks: unique, ambiguous: unique.length === 0 && !ONLY_SIB.test(q) };
+}
+
 function lastDayOfYear(asOf: string): string {
   return `${asOf.slice(0, 4)}-12-31`;
 }
@@ -176,6 +215,8 @@ export function ruleIntake(question: string, asOf: string): { intent: Intent; co
     const names = mentions.map((c) => PLANET_WORDS.find(([k]) => k === c)![1].source.match(/\(([a-z]+)/i)?.[1] ?? c);
     focusPoints.push(`${names[0]} transit relative to natal ${names.slice(1).join(', ')}`);
   }
+  // "my elder brother" / "my younger sister": the specialists judge that sibling's house first
+  for (const r of siblingMention(q)?.ranks ?? []) focusPoints.push(siblingFocusPoint(r.rank, r.noun));
 
   const intent: Intent = {
     subjects: subjects.map((s) => ({ id: s.id, weight: Math.round((s.score / total) * 100) / 100 })),
@@ -294,7 +335,10 @@ export async function runIntake(question: string, asOf: string, opts: { history?
     const { intent, usage } = await llmIntake(question, asOf, opts.history);
     // the rules are better at spotting a named planet than a small model is; union them
     const mentions = [...new Set([...intent.mentionsPlanets, ...rules.intent.mentionsPlanets])];
-    return { intent: withCls({ ...intent, mentionsPlanets: mentions }), usage, source: 'llm', ms: Date.now() - t0 };
+    // the elder/younger sibling focus is a rule fact too: keep it whatever the model wrote
+    const sibling = rules.intent.focusPoints.filter((p) => /^(elder|younger|all) \w+: judge the/.test(p));
+    const focusPoints = [...new Set([...intent.focusPoints, ...sibling])];
+    return { intent: withCls({ ...intent, mentionsPlanets: mentions, focusPoints }), usage, source: 'llm', ms: Date.now() - t0 };
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'reading intake llm failed; using rules', error: (err as Error).message }));
     return { intent: withCls(rules.intent), usage: null, source: 'rules_fallback', ms: Date.now() - t0 };

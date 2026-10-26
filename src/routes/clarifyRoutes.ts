@@ -2,7 +2,8 @@
  * HTTP surface of the clarify agent (docs/reading-engine/17-clarify-agent.md §8).
  *
  *   POST /api/chat/ask-stream     { question, chatId?, clarify: true }  → SSE clarify | propose | (normal reading)
- *   POST /api/chat/answer         { runId, value, viaChip }             → JSON clarify | propose | declined
+ *   POST /api/chat/answer         { runId, value, viaChip, tz? }        → JSON clarify | propose | declined
+ *                                 (tz: browser IANA timezone, used with the "Where are you living now?" answer)
  *   POST /api/chat/confirm-stream { runId, chatId?, edits? }            → SSE reading with the confirmed intent
  *
  * Clarifying happens only when the client says it can render the card (`clarify: true`), so older clients keep
@@ -18,11 +19,14 @@ import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.j
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
+import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 
 export interface ClarifyRouteDeps {
   prisma: PrismaClient;
   getUserId: (req: express.Request) => string | null;
   store?: ClarifyStore;
+  /** where the current location is kept (defaults to the `user_current_location` table) */
+  locationStore?: UserLocationStore;
 }
 
 /** Opens an SSE response with the same headers and keep-alive pings as ask-stream. */
@@ -67,7 +71,7 @@ export function clarifyAvailable(): boolean {
 export async function clarifyOnAsk(deps: ClarifyRouteDeps, userId: string, question: string, sse: { write: (o: unknown) => void }): Promise<boolean> {
   if (!clarifyAvailable()) return false;
   const store = deps.store ?? new PrismaClarifyStore(deps.prisma);
-  const r = await beginClarify(deps.prisma, store, userId, question);
+  const r = await beginClarify(deps.prisma, store, userId, question, deps.locationStore ? { locationStore: deps.locationStore } : {});
   // declined topics fall through: the chat path answers them with the fixed reply and stores them correctly
   if (r.declined || !r.event) return false;
   sse.write({ type: 'start' });
@@ -84,10 +88,11 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
   app.post('/api/chat/answer', async (req, res) => {
     const userId = deps.getUserId(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-    const { runId, value, viaChip } = req.body as { runId?: string; value?: string; viaChip?: boolean };
+    const { runId, value, viaChip, tz } = req.body as { runId?: string; value?: string; viaChip?: boolean; tz?: unknown };
     if (!runId || typeof value !== 'string' || !value.trim()) return res.status(400).json({ error: 'runId and value are required' });
     try {
-      const r = await answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true);
+      // tz: the browser's IANA timezone, sent with the "Where are you living now?" answer (validated before storing)
+      const r = await answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true, { tz: normalizeTimeZone(tz), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}) });
       if ('error' in r) return res.status(r.error === 'not_found' ? 404 : 409).json({ error: r.error });
       if (r.declined) return res.json({ type: 'declined', runId, category: r.declined.category, reply: r.declined.reply });
       return res.json(r.event ?? { type: 'ready', runId });
