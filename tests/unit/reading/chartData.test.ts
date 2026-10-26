@@ -107,17 +107,21 @@ describe('catalog', () => {
     expect(merged.find((t) => t.id === 'varga.d60')).toMatchObject({ served: true, calcVersion: '1', tier: 'first' });
     expect(merged.some((t) => t.id === 'dasha.aayu')).toBe(false);
   });
-  it('the M7 + M9 migrations seed every built-in type and M7 backfills every legacy column', () => {
+  it('the M7 + M9 + M11 migrations seed every built-in type and M7 backfills every legacy column', () => {
     const m7 = readFileSync(path.resolve('prisma/migrations/20261025120000_reading_m7_kundli_data/migration.sql'), 'utf8');
     const m9 = readFileSync(path.resolve('prisma/migrations/20261025160000_reading_m9_catalog_more_types/migration.sql'), 'utf8');
+    const m11 = readFileSync(path.resolve('prisma/migrations/20261026110000_reading_m11_arudha_argala_per_varga/migration.sql'), 'utf8');
     const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
+    const isM11 = (id: string) => /^(arudhas|argala)\.d\d+$/.test(id);
     const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number]) =>
       `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${t.label}')`;
     for (const t of BUILTIN_CHART_TYPES) {
-      const sql = m9Ids.includes(t.id) ? m9 : m7;
+      const sql = isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
       expect(sql).toContain(seedRow(t));
     }
     for (const id of m9Ids) expect(m7).not.toContain(`('${id}', `);
+    expect(m7).not.toMatch(/\('(arudhas|argala)\.d\d+', /);
+    expect(m11).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m9).toMatch(/CHECK \("change_class" IN \('natal', 'annual', 'moving'\)\)/);
     expect(m9).toContain('ON CONFLICT ("id") DO NOTHING');
     for (const t of BUILTIN_CHART_TYPES.filter((x) => x.legacyColumn)) expect(m7).toContain(`SELECT "id", '${t.id}', 'legacy', "${t.legacyColumn}"`);

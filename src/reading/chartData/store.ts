@@ -107,7 +107,8 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
     return { id, variant: `year=${year}`, params: { year }, type };
   }
   if (arg) return { id, variant: '', params: {}, type, error: `${id} takes no variant` };
-  return { id, variant: '', params: {}, type };
+  // e.g. 'argala.d9' -> { varga: 9 }, sent to Radha with every fetch of this entry
+  return { id, variant: '', params: type.fixedParams ? { ...type.fixedParams } : {}, type };
 }
 
 export function isMissingTable(err: unknown): boolean {
