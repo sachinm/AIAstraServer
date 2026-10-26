@@ -24,6 +24,8 @@ export interface FakeGeminiOptions {
   answer?: string;
   /** thought-summary chunks streamed before the answer, only when the request sets thinkingConfig.includeThoughts */
   thoughts?: string[];
+  /** answer to a ledger-interview call (responseSchema with `events`); default `{ events: [] }` */
+  ledgerEvents?: unknown;
 }
 
 export interface FakeGemini {
@@ -102,6 +104,8 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
             subjects: [{ id: 'career_work', weight: 1 }], horizon: '1y', questionType: 'timing', format: 'timeline', focusPoints: [], mentionsPlanets: [],
             confidence: 0.9, clarifyText: 'You are asking about career over the next year.', followUps: [], safety: 'ok',
           };
+        } else if (body?.generationConfig?.responseSchema?.properties?.events) {
+          payload = opts.ledgerEvents ?? { events: [] };
         } else {
           payload = {
             verdict: 'moderate',

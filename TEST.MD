@@ -12,7 +12,13 @@ quality tests are listed as blocked in `QA-LIST.MD` with the exact command to ru
 
 ## Pending
 
-(none: P1-01 to P1-12 are in QA-LIST.MD)
+Life-timeline ledger P0 (server `feature/timeline-p0-ledger`, web `feature/timeline-p0-ledger`). Blocked until migration
+`20261027100000_timeline_m14_ledger_and_builds` is applied (Sachin's OK) and `TIMELINE_ENABLED=1`; unit tests cover the logic meanwhile
+(`npx vitest run tests/unit/reading/timeline/ledger`).
 
 | Id | Test | Steps | Expected | Folder |
 |---|---|---|---|---|
+| TL-P0-01 | Ledger: 20 events | Sign in, open /timeline/ledger, add 20 events across markers with day, month and year precision and attributes (colour, make, direction, floor, field, country, outcome, with whom) | All 20 listed in date order and placed on the 18-year strip; edit and delete work; another user's row is never visible | `docs/screenshots/timeline-p0-ledger/` |
+| TL-P0-02 | Ledger interview | Type "In June 2014 I moved to Pune and bought a white Honda" (year 2014), confirm one proposal, skip the other | Two proposals; only the confirmed one is stored; no evaluation words anywhere | `docs/screenshots/timeline-p0-ledger/` |
+| TL-P0-03 | Interview declined | Type a declined-topic sentence | The fixed reply only, no proposals, no model call (server log) | `docs/screenshots/timeline-p0-ledger/` |
+| TL-P0-04 | Flag off | `TIMELINE_ENABLED` unset | `/api/timeline/ledger/meta` 404; the web hides the page and link | `docs/screenshots/timeline-p0-ledger/` |
