@@ -1,6 +1,7 @@
 /**
  * Server-side verification of Cloudflare Turnstile tokens (siteverify).
- * When TURNSTILE_SECRET_KEY is unset, {@link assertTurnstileIfConfigured} allows the request.
+ * When TURNSTILE_SECRET_KEY is unset, {@link assertTurnstileIfConfigured} allows the request outside
+ * production and refuses it in production.
  */
 
 import { getTurnstileSecret } from '../config/env.js';
@@ -52,7 +53,18 @@ export async function assertTurnstileIfConfigured(
   remoteIp?: string | null
 ): Promise<TurnstileGateResult> {
   const secret = getTurnstileSecret();
-  if (!secret) return { ok: true };
+  if (!secret) {
+    // Fail closed in production: a missing secret must not silently disable the human check.
+    // Local dev and tests stay open so they run without Cloudflare keys.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('TURNSTILE_SECRET_KEY is not set in production; refusing login/signup');
+      return {
+        ok: false,
+        message: 'Sign-in is temporarily unavailable. Please try again later.',
+      };
+    }
+    return { ok: true };
+  }
 
   if (!token || typeof token !== 'string' || token.length < 20) {
     return {
