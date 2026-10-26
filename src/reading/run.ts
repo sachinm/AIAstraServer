@@ -50,6 +50,8 @@ export interface RunReadingOptions {
   onStale?: (kundliId: string) => void;
   /** Confirmed intent from the clarifier: intake is skipped */
   intent?: Intent;
+  /** Where the question is asked (client location, rounded), kept on the intent for the prashna */
+  questionPlace?: { lat: number; lon: number; tz: number };
 }
 
 /** Longest thinking text stored per run. */
@@ -210,6 +212,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const intent = intake.intent;
   const loc = await locationPromise;
   if (!intent.currentLocation && loc?.status === 'found') intent.currentLocation = loc.location;
+  if (opts.questionPlace && !intent.questionPlace) intent.questionPlace = opts.questionPlace;
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });

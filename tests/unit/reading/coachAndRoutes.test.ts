@@ -107,6 +107,18 @@ describe('clarify HTTP endpoints', () => {
     expect(out.at(-1)).toMatchObject({ type: 'done', chatId: 'chat1', clarifyRunId: clarify.runId });
   }, 20_000); // four HTTP round trips and a streamed reading
 
+  it('R14: confirm-stream keeps the client location on the intent, rounded to two decimals (IANA tz read as hours)', async () => {
+    const events = await sse('/api/chat/ask-stream', { question: 'When will I get married?', clarify: true });
+    const runId = events.find((e) => e.type === 'clarify')!.runId;
+    await post('/api/chat/answer', { runId, value: '6m', viaChip: true });
+    const create = vi.mocked(prisma.readingRun.create);
+    create.mockClear();
+    const out = await sse('/api/chat/confirm-stream', { runId, lat: 18.520431, lon: 73.856743, tz: 'Asia/Kolkata' });
+    expect(out.at(-1)).toMatchObject({ type: 'done' });
+    const stored = create.mock.calls.map(([a]) => (a as { data: { intent?: { questionPlace?: unknown } } }).data.intent).find((i) => i?.questionPlace);
+    expect(stored?.questionPlace).toEqual({ lat: 18.52, lon: 73.86, tz: 5.5 });
+  }, 20_000);
+
   it('a vague question gets the area question with guidance', async () => {
     const events = await sse('/api/chat/ask-stream', { question: 'Hello', clarify: true });
     const clarify = events.find((e) => e.type === 'clarify')!;
