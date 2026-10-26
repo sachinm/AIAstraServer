@@ -122,8 +122,8 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 | Page | File | Purpose |
 |------|------|--------|
 | **Landing** | `LandingPage.tsx` | Hero, CTAs to signin/signup; no backend calls. |
-| **Sign In** | `Auth/SignIn.tsx` | Username + password; calls `login()` from `Auth/api.ts`, then `handleSignIn(result.user)`. |
-| **Sign Up** | `Auth/SignUp.tsx` | Step 1: birth details; Step 2: email/password; calls `signup()` then `handleSignUp(userData)`. |
+| **Sign In** | `Auth/SignIn.tsx` | One screen, no password: email + "Send me a code", then the code field and "Verify" appear below; calls `requestMagicLinkEmail()` and `loginWithMagicLink()` from `Auth/api.ts`, then `handleSignIn(result.user)`. |
+| **Sign Up** | `Auth/SignUp.tsx` | Step 1: birth details; Step 2: email only (no password); calls `signup()`, then opens the sign-in screen with the code field showing and a line saying the verification email was sent. |
 | **Dashboard** | `pages/Dashboard.tsx` | Layout: TopNavigation + Outlet. |
 | **Chat** | `pages/chat-interface/ChatSection.tsx` | Polls `fetchUserDetails()` for `kundli_added`; sends messages via `sendChatMessage()` (UserData). Renders ChatSidebar (conversation list in local state; `chatAPI.ts` exists but is not wired for persistence). |
 | **Charts** | `pages/charts/ChartsSection.tsx` | Loads `fetchUserBiodata()` (UserData), shows biodata grid. |
@@ -166,7 +166,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 ### 6.3 Auth Flows
 
-- **Login (frontend):** SignIn → `Auth/api.ts` `login(username, password)` → GraphQL `login` → on success `setAuth(result.token, result.user)` and `handleSignIn(result.user)`. AuthProvider may set `user` from `localStorage.getItem('astroUser')` or from callback; navigates to `/dashboard`.
+- **Login (frontend):** SignIn → `Auth/api.ts` `requestMagicLinkEmail(email)` → emailed code → `loginWithMagicLink(email, code)` → GraphQL `loginWithMagicLink` → on success `setAuth(result.token, result.user)` and `handleSignIn(result.user)`. AuthProvider may set `user` from `localStorage.getItem('astroUser')` or from callback; navigates to `/dashboard`.
 - **Sign up:** SignUp → `signup(apiData)` → GraphQL `signup` → on success `setAuth` and `handleSignUp(userData)`; AuthProvider sets user, `isAuthenticated`, saves `astroUser` and `isAuthenticated` in localStorage, navigates to `/dashboard`.
 - **Logout (frontend):** `handleLogout`: clear user state, `isAuthenticated = false`, `localStorage.removeItem('astroUser')`, navigate to `/`. **Note:** `clearAuth()` in `graphql.ts` (which removes `token` and `userId`) is **not** called on logout in the current code; the JWT remains in localStorage until something else clears it.
 - **Admin:** Admin app login stores token in `adminToken`; logout clears token and related keys via `setToken(null)`.
