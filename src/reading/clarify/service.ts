@@ -9,7 +9,8 @@ import type { PrismaClient } from '@prisma/client';
 import { classifyRules, classifierThreshold } from '../buckets/classifier.js';
 import { BUCKETS } from '../buckets/taxonomy.js';
 import { startPrefetch } from '../data/store.js';
-import { runIntake, clarifyTextFor } from '../nodes/intake.js';
+import { runIntake, clarifyTextFor, siblingFocusPoint } from '../nodes/intake.js';
+import { birthPlaceFor, PrismaUserLocationStore, type LocationLookup, type UserLocationStore } from '../../services/userLocation.js';
 import type { Intent, Usage } from '../types.js';
 import type { SubjectId } from '../packs/frames.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
@@ -60,8 +61,32 @@ async function eventFor(runId: string, s: ClarifyState, usage: Usage[]): Promise
   return null;
 }
 
+/**
+ * Users whose location answer could not be stored in this process (store failed after a working read). They are not
+ * asked again here, so a broken store never turns into the same question on every timing question.
+ */
+const locationUnsaved = new Set<string>();
+
+/** For tests. */
+export function clearLocationMemo(): void {
+  locationUnsaved.clear();
+}
+
+async function lookupLocation(store: UserLocationStore, userId: string): Promise<LocationLookup> {
+  try {
+    return await store.get(userId);
+  } catch {
+    return { status: 'unavailable' };
+  }
+}
+
+export interface ClarifyLocationOptions {
+  /** where the current location lives (defaults to the `user_current_location` table) */
+  locationStore?: UserLocationStore;
+}
+
 /** Question arrives: classify (rules), prewarm data, decide whether to ask. */
-export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, userId: string, question: string, opts: { asOf?: string; mode?: ClarifyMode } = {}): Promise<ClarifyStepResult> {
+export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, userId: string, question: string, opts: { asOf?: string; mode?: ClarifyMode } & ClarifyLocationOptions = {}): Promise<ClarifyStepResult> {
   const t0 = Date.now();
   const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
   const mode = opts.mode ?? clarifyMode();
@@ -72,8 +97,17 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   if (declined && !needsChildAge) return { runId: '', state: startClarify('', asOf, classifyRules('', asOf), { mode: 'never', threshold: 1 }), event: null, usage: [], ms: Date.now() - t0, declined };
   const cls = classifyRules(question, asOf);
   const needsCard = mode !== 'never' && cls.missing.includes('horizon');
-  const card = needsCard ? await headlineCard(prisma, userId, asOf) : (startPrefetch(prisma, userId, { asOf }), null);
-  const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card, needsChildAge });
+  // the stored current location is read alongside the card (own short budget; a missing table reads as unavailable)
+  const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
+  const [card, loc] = await Promise.all([
+    needsCard ? headlineCard(prisma, userId, asOf) : (startPrefetch(prisma, userId, { asOf }), Promise.resolve(null)),
+    mode !== 'never' ? lookupLocation(locStore, userId) : Promise.resolve<LocationLookup>({ status: 'unavailable' }),
+  ]);
+  // timing is stated in local terms: ask once where the person lives, only when the answer can be kept
+  const needsLocation = cls.questionKind === 'timing' && loc.status === 'none' && !locationUnsaved.has(userId);
+  const birthPlace = needsLocation ? await birthPlaceFor(prisma, userId) : null;
+  const location = loc.status === 'found' ? loc.location : null;
+  const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card, needsChildAge, location, needsLocation, birthPlace });
   const runId = await store.create(userId, state);
   const usage: Usage[] = [];
   const event = await eventFor(runId, state, usage);
@@ -81,7 +115,15 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
 }
 
 /** The user tapped a chip or typed an answer. */
-export async function answerClarify(prisma: PrismaClient, store: ClarifyStore, userId: string, runId: string, value: string, viaChip: boolean): Promise<ClarifyStepResult | { error: 'not_found' | 'not_asking' | 'abandoned' }> {
+export async function answerClarify(
+  prisma: PrismaClient,
+  store: ClarifyStore,
+  userId: string,
+  runId: string,
+  value: string,
+  viaChip: boolean,
+  opts: { tz?: string | null } & ClarifyLocationOptions = {},
+): Promise<ClarifyStepResult | { error: 'not_found' | 'not_asking' | 'abandoned' }> {
   const t0 = Date.now();
   const s = await store.get(userId, runId);
   if (!s) return { error: 'not_found' };
@@ -97,16 +139,23 @@ export async function answerClarify(prisma: PrismaClient, store: ClarifyStore, u
     }
   }
   const usage: Usage[] = [];
-  let next = absorbAnswer(s, value, { viaChip, threshold: classifierThreshold() });
+  const tz = opts.tz ?? null;
+  let next = absorbAnswer(s, value, { viaChip, threshold: classifierThreshold(), tz });
   // the rules could not read the free text: let the model map it to a closed value, then apply that as a chip
   const last = next.turns[next.turns.length - 1];
   const lastAnswered = next.turns.find((t) => t.answer && t.ask.criterion === s.pending!.criterion && t.answer.value === value.slice(0, 300));
   if (!viaChip && lastAnswered && lastAnswered.answer && !lastAnswered.answer.resolved) {
     const r = await resolveFreeText(s, s.pending.criterion, value);
     if (r.usage) usage.push(r.usage);
-    if (r.value) next = absorbAnswer(s, r.value, { viaChip: true, threshold: classifierThreshold() });
+    if (r.value) next = absorbAnswer(s, r.value, { viaChip: true, threshold: classifierThreshold(), tz });
   }
   void last;
+  // the person said where they live: keep it for every later reading (a failed write never breaks this one)
+  if (next.locationAnswered && !s.locationAnswered && next.location) {
+    const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
+    const saved = await locStore.save(userId, next.location).catch(() => false);
+    if (!saved) locationUnsaved.add(userId);
+  }
   await store.save(userId, runId, next);
   if (next.childAge === 'minor') {
     const topics = await loadDeclinedTopics(null);
@@ -143,10 +192,14 @@ export async function intentFromState(s: ClarifyState): Promise<Intent> {
   // the original order, so "love first" was read as career, wealth and love together.
   const subjects = [{ id: frame, weight: 1 }];
   const nextSubjects = [...new Set(base.subjects.map((x) => x.id))].filter((id) => id !== frame && id !== 'general_life_direction');
+  // the sibling the person chose narrows which house the specialists judge first (3rd younger, 11th elder)
+  const focusPoints = s.sibling ? [...new Set([...base.focusPoints, siblingFocusPoint(s.sibling.rank, s.sibling.noun)])] : base.focusPoints;
   return {
     ...base,
     subjects,
     ...(nextSubjects.length ? { nextSubjects } : {}),
+    focusPoints,
+    ...(s.location?.place ? { currentLocation: { place: s.location.place, tz: s.location.tz ?? null } } : {}),
     horizon,
     confidence: 1,
     clarifyText: s.exactQuery ?? clarifyTextFor(subjects.map((x) => x.id), horizon, s.asOf),

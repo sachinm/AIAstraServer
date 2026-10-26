@@ -15,12 +15,20 @@
 import { extractHorizon, extractPerson, extractSubBucket, extractOtherPerson, textOf, type ClassifierResult, type PersonRel, type Slots } from '../buckets/classifier.js';
 import { BUCKETS, HORIZON_CHIPS, isBucketId, type BucketId, type SlotId } from '../buckets/taxonomy.js';
 import { FRAMES, horizonRange, type Horizon } from '../packs/frames.js';
-import { humanDate } from '../nodes/intake.js';
+import { humanDate, siblingMention, type SiblingNoun, type SiblingRank } from '../nodes/intake.js';
+import { normalizePlace, normalizeTimeZone, type UserLocation } from '../../services/userLocation.js';
 
 export type ClarifyMode = 'always' | 'when_missing' | 'never';
 export type ClarifyStatus = 'ASKING' | 'PROPOSED' | 'CONFIRMED' | 'READY' | 'ABANDONED';
-/** child_age is a safety check (file 18, topic child_age_unconfirmed), asked first and not counted in the cap */
-export type Criterion = SlotId | 'bucket' | 'child_age';
+/**
+ * child_age is a safety check (file 18, topic child_age_unconfirmed), asked first and not counted in the cap.
+ * sibling: which brother or sister (3rd house = younger, 11th = elder); counted in the cap.
+ * location: where the person lives now, asked once per user for timing questions (a profile fact, not counted in the cap).
+ */
+export type Criterion = SlotId | 'bucket' | 'child_age' | 'sibling' | 'location';
+
+/** Criteria outside the two-question cap. */
+const UNCAPPED = new Set<Criterion>(['child_age', 'location']);
 
 export const MAX_QUESTIONS = 2;
 export const ABANDON_AFTER_MS = 10 * 60_000;
@@ -73,6 +81,18 @@ export interface ClarifyState {
   originalBucket: BucketId;
   /** age of the person's child the question is about: confirmed adult, minor (declined), or not asked */
   childAge: 'adult' | 'minor' | null;
+  /** the question names a brother or sister without saying which: the noun to ask about (optional: older stored states lack it) */
+  siblingNoun?: SiblingNoun | null;
+  /** the sibling chosen (or assumed) in this conversation */
+  sibling?: { rank: SiblingRank; noun: SiblingNoun } | null;
+  /** where the person lives now: the stored one, or the one answered in this conversation */
+  location?: UserLocation | null;
+  /** a timing question, no stored location and a working store: ask "Where are you living now?" once */
+  needsLocation?: boolean;
+  /** the location was answered in this conversation (the service stores it) */
+  locationAnswered?: boolean;
+  /** birth place from the profile, for the "Same as birth place" chip */
+  birthPlace?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -86,11 +106,18 @@ const PLANET_NAMES: Record<string, string> = { Su: 'Sun', Mo: 'Moon', Ma: 'Mars'
 const pname = (c?: string): string => (c ? PLANET_NAMES[c] ?? c : '');
 
 /** Criteria the state still lacks, in the order they are asked. */
-export function openCriteria(s: Pick<ClarifyState, 'bucket' | 'slots' | 'alsoBuckets'>, confidence: number, threshold: number): Criterion[] {
+export function openCriteria(
+  s: Pick<ClarifyState, 'bucket' | 'slots' | 'alsoBuckets'> & Partial<Pick<ClarifyState, 'siblingNoun' | 'sibling' | 'needsLocation' | 'location' | 'turns'>>,
+  confidence: number,
+  threshold: number,
+): Criterion[] {
   const out: Criterion[] = [];
   if (s.bucket === 'unknown' || confidence < threshold || s.alsoBuckets.length >= 2) out.push('bucket');
+  if (s.siblingNoun && !s.sibling) out.push('sibling');
   const required = BUCKETS[s.bucket].requiredSlots;
   for (const c of ['horizon', 'subject_person', 'sub_bucket', 'other_person'] as const) if (required.includes(c) && !s.slots[c]) out.push(c);
+  // asked at most once per conversation, last, and only when the answer can be stored
+  if (s.needsLocation && !s.location && !(s.turns ?? []).some((t) => t.ask.criterion === 'location')) out.push('location');
   return out;
 }
 
@@ -168,8 +195,46 @@ export function parseChildAge(value: string): 'adult' | 'minor' {
   return 'minor';
 }
 
+const plural = (n: SiblingNoun): string => (n === 'sibling' ? 'siblings' : `${n}s`);
+
+/** "Which brother do you mean?" with Elder / Younger chips (both nouns when the question says "sibling"). */
+export function siblingAsk(s: Pick<ClarifyState, 'siblingNoun'>): Ask {
+  const noun = s.siblingNoun ?? 'sibling';
+  const nouns: SiblingNoun[] = noun === 'sibling' ? ['brother', 'sister'] : [noun];
+  const chips: Chip[] = nouns.flatMap((n) => [
+    { label: `Elder ${n}`, value: `elder_${n}` },
+    { label: `Younger ${n}`, value: `younger_${n}` },
+  ]);
+  chips.push({ label: `All my ${plural(noun)}`, value: 'all' });
+  return { criterion: 'sibling', question: `Which ${noun} do you mean?`, chips, allowFreeText: true };
+}
+
+/** A chip value ("elder_brother", "all") or typed text ("the older one") -> rank and noun. */
+export function parseSibling(value: string, noun: SiblingNoun): { rank: SiblingRank; noun: SiblingNoun } | null {
+  const v = value.trim().toLowerCase().replace(/_/g, ' ');
+  const n: SiblingNoun = /\bbrothers?\b/.test(v) && !/\bsisters?\b/.test(v) ? 'brother' : /\bsisters?\b/.test(v) && !/\bbrothers?\b/.test(v) ? 'sister' : noun;
+  const elder = /\b(elder|older|eldest|oldest|big|bigger|senior)\b/.test(v);
+  const younger = /\b(younger|youngest|little|small|baby|junior)\b/.test(v);
+  if (/\b(all|both|every|each)\b/.test(v) || (elder && younger)) return { rank: 'all', noun };
+  if (elder) return { rank: 'elder', noun: n };
+  if (younger) return { rank: 'younger', noun: n };
+  return null;
+}
+
+export function locationAsk(s: Pick<ClarifyState, 'birthPlace'>): Ask {
+  const chips: Chip[] = s.birthPlace ? [{ label: 'Same as birth place', value: 'same_as_birth' }] : [];
+  return { criterion: 'location', question: 'Where are you living now?', chips, allowFreeText: true };
+}
+
+const NOT_A_PLACE = /^(no|nope|none|skip|pass|not sure|unsure|don'?t know|dunno|n\/?a|prefer not( to say)?|rather not say)$/i;
+const SAME_AS_BIRTH = /^(same( as)?( my)?( birth ?place| place of birth| where i was born)?|where i was born|same place|birth ?place)$/i;
+
 export function askFor(c: Criterion, s: ClarifyState): Ask {
   switch (c) {
+    case 'sibling':
+      return siblingAsk(s);
+    case 'location':
+      return locationAsk(s);
     case 'child_age':
       return childAgeAsk(s);
     case 'horizon':
@@ -196,6 +261,11 @@ export interface StartOptions {
   now?: number;
   /** the question is about the person's own child with no stated age: confirm 18+ before anything else */
   needsChildAge?: boolean;
+  /** the person's stored current location (carried into the intent) */
+  location?: UserLocation | null;
+  /** ask "Where are you living now?" (timing question, nothing stored, store working) */
+  needsLocation?: boolean;
+  birthPlace?: string | null;
 }
 
 /** CLASSIFIED -> READY | ASKING | PROPOSED. */
@@ -218,6 +288,14 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
     unanswerable: c.unanswerable,
     originalBucket: c.bucket,
     childAge: null,
+    siblingNoun: (() => {
+      const m = siblingMention(question);
+      return m?.ambiguous ? m.noun : null;
+    })(),
+    sibling: null,
+    location: opts.location ?? null,
+    needsLocation: !!opts.needsLocation && !opts.location,
+    birthPlace: opts.birthPlace ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -233,10 +311,20 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
 }
 
 function askNext(s: ClarifyState, open: Criterion[], now: number): ClarifyState {
-  const asked = s.turns.filter((t) => t.ask.criterion !== 'child_age').length;
-  if (asked >= MAX_QUESTIONS || open.length === 0) return propose(applyDefaults(s, open), now);
-  const ask = askFor(open[0]!, s);
-  return { ...s, status: 'ASKING', pending: ask, turns: [...s.turns, { ask, at: now }], updatedAt: now };
+  const asked = s.turns.filter((t) => !UNCAPPED.has(t.ask.criterion)).length;
+  const capped = open.filter((c) => !UNCAPPED.has(c));
+  // uncapped criteria (the location) are asked once each, after the question's own criteria
+  const uncapped = open.filter((c) => UNCAPPED.has(c) && !s.turns.some((t) => t.ask.criterion === c));
+  let base = s;
+  let next: Criterion | undefined;
+  if (capped.length && asked < MAX_QUESTIONS) next = capped[0];
+  else {
+    if (capped.length) base = applyDefaults(s, capped);
+    next = uncapped[0];
+  }
+  if (!next) return propose(applyDefaults(base, open), now);
+  const ask = askFor(next, base);
+  return { ...base, status: 'ASKING', pending: ask, turns: [...base.turns, { ask, at: now }], updatedAt: now };
 }
 
 /** Fill what is still open with the bucket's defaults and record each assumption (said back to the user). */
@@ -256,11 +344,16 @@ export function applyDefaults(s: ClarifyState, open: Criterion[]): ClarifyState 
     if (c === 'sub_bucket' && !slots.sub_bucket) assumed.sub_bucket = `all of ${BUCKETS[s.bucket].displayName.toLowerCase()}`;
     if (c === 'bucket') assumed.bucket = BUCKETS[s.bucket].displayName;
   }
-  return { ...s, slots, assumed };
+  let sibling = s.sibling ?? null;
+  if (open.includes('sibling') && !sibling && s.siblingNoun) {
+    sibling = { rank: 'all', noun: s.siblingNoun };
+    assumed.sibling = `all your ${plural(s.siblingNoun)}`;
+  }
+  return { ...s, slots, assumed, sibling };
 }
 
 /** Resolve a chip value or free text for the pending criterion. Unresolved free text counts as a turn. */
-export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: boolean; threshold: number; now?: number }): ClarifyState {
+export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: boolean; threshold: number; now?: number; tz?: string | null }): ClarifyState {
   const now = opts.now ?? Date.now();
   if (s.status !== 'ASKING' || !s.pending) return s;
   const c = s.pending.criterion;
@@ -276,12 +369,12 @@ export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: bo
     return askNext(confirmed, open, now);
   }
   const next: ClarifyState = { ...s, slots: { ...s.slots }, alsoBuckets: [...s.alsoBuckets] };
-  const resolved = resolveValue(next, c, value, opts.viaChip);
+  const resolved = resolveValue(next, c, value, opts.viaChip, opts.tz ?? null);
   const turns = next.turns.map((t, i) => (i === next.turns.length - 1 ? { ...t, answer: { value: value.slice(0, 300), viaChip: opts.viaChip, resolved } } : t));
   next.turns = turns;
   next.pending = null;
-  // free text may also have filled other slots ("next 6 months, about a promotion")
-  if (!opts.viaChip) absorbExtras(next, value);
+  // free text may also have filled other slots ("next 6 months, about a promotion"); a place name is only a place
+  if (!opts.viaChip && c !== 'location') absorbExtras(next, value);
   const confidence = c === 'bucket' && resolved ? 1 : 0.99;
   const open = openCriteria(next, confidence, opts.threshold).filter((x) => !(x === c && !resolved && x !== 'bucket') || true);
   // an unresolved answer does not get asked again; it is defaulted
@@ -290,8 +383,24 @@ export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: bo
   return askNext(next, remaining, now);
 }
 
-function resolveValue(s: ClarifyState, c: Criterion, value: string, viaChip: boolean): boolean {
+function resolveValue(s: ClarifyState, c: Criterion, value: string, viaChip: boolean, tz: string | null = null): boolean {
   const v = value.trim();
+  if (c === 'sibling') {
+    const r = parseSibling(v, s.siblingNoun ?? 'sibling');
+    if (!r) return false;
+    s.sibling = r;
+    return true;
+  }
+  if (c === 'location') {
+    // stored as typed; no geocoding. The timezone is the browser's (Intl), when it sent one.
+    if (NOT_A_PLACE.test(v)) return false;
+    const same = v === 'same_as_birth' || SAME_AS_BIRTH.test(v);
+    const place = same ? s.birthPlace ?? null : normalizePlace(v);
+    if (!place) return false;
+    s.location = { place, tz: normalizeTimeZone(tz) };
+    s.locationAnswered = true;
+    return true;
+  }
   if (c === 'horizon') {
     const h = parseHorizonValue(v, s.asOf) ?? (viaChip ? null : extractHorizon(textOf(v), s.asOf)?.value ?? null);
     if (!h) return false;
@@ -376,13 +485,15 @@ export function exactQueryFor(s: ClarifyState): string {
   const charts = [...new Set(frame.vargas)].filter((v) => v !== 'D1').map((v) => v.replace('D', 'D-'));
   const houses = frame.houses.slice(0, 3).map((n) => `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`).join(', ');
   const period = s.card?.md && s.card.ad ? `your ${pname(s.card.md)}–${pname(s.card.ad)} period` : 'your running dasha periods';
-  const who = s.slots.subject_person && s.slots.subject_person.value !== 'me' ? ` (about your ${s.slots.subject_person.value}, read from your chart)` : '';
+  const sib = s.sibling && s.sibling.rank !== 'all' ? `${s.sibling.rank} ${s.sibling.noun}` : null;
+  const who = sib ? ` (about your ${sib}, read from your chart)` : s.slots.subject_person && s.slots.subject_person.value !== 'me' ? ` (about your ${s.slots.subject_person.value}, read from your chart)` : '';
   // name the sub-question only when the user chose it in this conversation
   const chosenSub = s.turns.some((t) => t.ask.criterion === 'sub_bucket' && t.answer?.resolved) && s.subBucket ? b.subBuckets.find((x) => x.id === s.subBucket)?.label.toLowerCase() : undefined;
   const sub = chosenSub ? `, focusing on ${chosenSub}` : '';
   // a question with no life area of its own ("Hello") is restated as the area chosen; a multi-area one says what comes first
   const what = s.originalBucket === 'unknown' ? `your ${b.displayName.toLowerCase()}` : s.originalBucket !== s.bucket || s.alsoBuckets.length >= 2 ? `${b.displayName.toLowerCase()} first, from "${q}"` : `"${q}"`;
-  return `I will read: ${what}${sub}${who} over ${horizonLabel(h, s.asOf)}, using ${charts.length ? `the ${charts.join(' and ')} chart${charts.length > 1 ? 's' : ''}, ` : ''}your ${houses} houses, ${period} and the transits.`;
+  const local = s.locationAnswered && s.location ? ` Dates will be given for ${s.location.place}.` : '';
+  return `I will read: ${what}${sub}${who} over ${horizonLabel(h, s.asOf)}, using ${charts.length ? `the ${charts.join(' and ')} chart${charts.length > 1 ? 's' : ''}, ` : ''}your ${houses} houses, ${period} and the transits.${local}`;
 }
 
 export function propose(s: ClarifyState, now: number): ClarifyState {

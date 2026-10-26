@@ -182,8 +182,9 @@ export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Da
   return [...(await loadTypes(repo, now)).values()];
 }
 
-/** `moving` types (transit) depend on the moment asked for and are never stored per person. */
+/** `moving` types (transit, transit_contacts) depend on the moment or range asked for and are never stored per person. */
 export function movingTypeError(id: string): string {
+  if (id === 'transit_contacts') return `${id} is a moving type and is not stored per person; call fetchTransitContacts(kundliId, { from, to, orb, planets }) from src/reading/chartData/transitContacts.ts`;
   return `${id} is a moving type and is not stored per person; call fetchTransit(kundliId, { at, divisionalChartFactor, withNatal }) from src/reading/chartData/transit.ts`;
 }
 
@@ -273,7 +274,9 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     }
     let result: FetchResult;
     try {
-      const payload = await fetcher(req!, w.type.radhaType, w.params);
+      // Radha reads fixed options (the varga of arudhas.dN / argala.dN) only from inside `params`; top-level fields are
+      // ignored there and the D1 answer would be stored under the varga key. The annual year stays top-level.
+      const payload = await fetcher(req!, w.type.radhaType, w.type.fixedParams ? { params: w.params } : w.params);
       result = { status: 'ready', payload, calcVersion: w.type.calcVersion };
     } catch (err) {
       result = { status: isUnsupportedError(err) ? 'unsupported' : 'failed', error: (err as Error).message?.slice(0, 500), calcVersion: w.type.calcVersion };

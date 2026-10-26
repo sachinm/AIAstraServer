@@ -5,12 +5,12 @@
  * then the analyst-specific slice, then the analyst instructions and the question.
  */
 import { z } from 'zod';
-import { readingSpecialistMaxTokens, readingSpecialistTimeoutMs } from '../config.js';
+import { readingFindingsV2, readingSpecialistMaxTokens, readingSpecialistTimeoutMs } from '../config.js';
 import { callGemini } from '../llm/gemini.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
-import type { SubjectId } from '../packs/frames.js';
+import { FRAMES, type SubjectId } from '../packs/frames.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
 
@@ -45,7 +45,17 @@ export const windowZ = z.object({
   label: z.string().catch(''),
   polarity: z.enum(['favourable', 'testing', 'mixed']).catch('mixed'),
   evidence: z.array(z.string()).catch([]),
+  // v2 (doc 25 §2.2d): the period or transit lord, its class for this subject, and what the window gives
+  lord: z.string().catch(''),
+  cls: z.enum(['deliverer', 'supporter', 'neutral', 'obstructor']).catch('neutral'),
+  fruit: z.string().catch('').transform((t) => t.slice(0, 160)),
 });
+const PLANET = new Set(['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']);
+/** Planet codes only, at most 4, strongest first; anything else is dropped. */
+const planetList = z
+  .array(z.unknown())
+  .catch([])
+  .transform((xs) => [...new Set(xs.filter((x): x is string => typeof x === 'string' && PLANET.has(x)))].slice(0, 4));
 /** An array whose bad items are dropped one by one instead of failing the whole array. */
 const keepValid = <T extends z.ZodTypeAny>(item: T) =>
   z
@@ -63,6 +73,10 @@ export const findingZ = z.object({
   windows: keepValid(windowZ),
   caveats: z.array(z.string()).catch([]),
   keyFacts: z.array(z.string()).catch([]),
+  // v2 (doc 25 §2.1d); v1 answers leave them empty
+  form: z.string().catch('').transform((t) => t.slice(0, 200)),
+  culprits: planetList,
+  contributors: planetList,
 });
 
 export interface Finding {
@@ -77,6 +91,11 @@ export interface Finding {
   windows: Array<z.infer<typeof windowZ>>;
   caveats: string[];
   keyFacts: string[];
+  /** v2: the form the promised result takes (promise only) */
+  form?: string;
+  /** v2: planets that block / carry the result in this layer, strongest first */
+  culprits?: string[];
+  contributors?: string[];
 }
 
 export const FINDING_RESPONSE_SCHEMA = {
@@ -118,6 +137,61 @@ export const FINDING_RESPONSE_SCHEMA = {
   required: ['verdict', 'layerScore', 'claims', 'windows', 'caveats', 'keyFacts'],
 };
 
+const PLANET_ENUM = { type: 'STRING', enum: ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke'] };
+/** v2 response schema: the v1 fields plus culprits, contributors, form and per-window lord, class and fruit. */
+export const FINDING_RESPONSE_SCHEMA_V2 = {
+  ...FINDING_RESPONSE_SCHEMA,
+  properties: {
+    ...FINDING_RESPONSE_SCHEMA.properties,
+    claims: {
+      type: 'ARRAY',
+      items: {
+        ...FINDING_RESPONSE_SCHEMA.properties.claims.items,
+        properties: { ...FINDING_RESPONSE_SCHEMA.properties.claims.items.properties, weight: { type: 'INTEGER', minimum: 1, maximum: 3 } },
+      },
+    },
+    windows: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          ...FINDING_RESPONSE_SCHEMA.properties.windows.items.properties,
+          lord: { type: 'STRING' },
+          cls: { type: 'STRING', enum: ['deliverer', 'supporter', 'neutral', 'obstructor'] },
+          fruit: { type: 'STRING' },
+        },
+        required: ['from', 'to', 'label', 'polarity', 'evidence', 'fruit'],
+      },
+    },
+    layerScore: { type: 'INTEGER', minimum: -3, maximum: 3 },
+    form: { type: 'STRING' },
+    culprits: { type: 'ARRAY', items: PLANET_ENUM },
+    contributors: { type: 'ARRAY', items: PLANET_ENUM },
+  },
+  required: ['verdict', 'layerScore', 'claims', 'windows', 'caveats', 'keyFacts', 'culprits', 'contributors'],
+};
+
+/** The v2 tail (doc 25 §2 "Shared tail"): frame houses, lords and karakas up front, then the output rules. */
+function tailV2(a: { analyst: SpecialistAnalyst; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string }): string {
+  const hz = a.intent.horizon;
+  const kf = a.pack.keyFrame;
+  return [
+    `TODAY: ${a.asOf}`,
+    `ANALYST: ${a.analyst}`,
+    PROMPTS[`v2/${a.analyst}`] ?? PROMPTS[a.analyst],
+    `Subject: ${a.subject} (${FRAMES[a.subject]?.label ?? a.subject}). Frame houses: ${kf.houses.join(', ')}. Frame lords: ${kf.lords.join(', ')}. Karakas: ${kf.karakas.join(', ')}. Horizon: ${typeof hz === 'string' ? hz : `${hz.from} to ${hz.to}`}. Focus: ${a.intent.focusPoints.join('; ') || 'none'}.`,
+    'OUTPUT RULES',
+    '- 6 to 10 claims. Each claim is one sentence of at most 200 characters about this chart, begins with the planet or house it is about, and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord, base.bodies.Sa.star_lord, dasha.periods.Sa-Ke-Ve_2026-08-22.from).',
+    '- At most 12 windows; every window has fruit (one sentence of at most 140 characters).',
+    '- weight is 1, 2 or 3 (3 = decides the verdict on its own). polarity is supports, obstructs or neutral. tradition is parashara, jaimini, nakshatra or kp_starlord.',
+    '- layerScore is one integer from -3 (clearly denied or obstructed) to +3 (clearly promised or supported); 0 when balanced.',
+    '- Dates only as they appear in the pack (YYYY-MM-DD). Never compute a house, lord, aspect, dignity, date or strength; read the field. If a field you need is absent, add a caveat naming it and go on.',
+    '- culprits and contributors are planet codes (Su Mo Ma Me Ju Ve Sa Ra Ke) that appear in the pack, at most 4 each, strongest first. A planet appears in only one list. form is one sentence (promise reader only; others leave it empty).',
+    '- Keep the JSON complete: shorter claims are better than a cut-off answer.',
+    `QUESTION: ${a.question}`,
+  ].join('\n');
+}
+
 export function analystsFor(intent: Intent): SpecialistAnalyst[] {
   const out: SpecialistAnalyst[] = ['promise', 'dasha', 'transit'];
   const deepNak = intent.subjects.some((s) => s.id === 'general_life_direction') || /nakshatra/i.test(intent.focusPoints.join(' ')) || intent.questionType === 'why_meaning';
@@ -145,7 +219,8 @@ export async function runSpecialist(args: {
 }): Promise<{ finding: Finding; usage: Usage }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
-  const tail = [
+  const v2 = readingFindingsV2();
+  const tail = v2 ? tailV2({ ...args, analyst }) : [
     `TODAY: ${args.asOf}`,
     `ANALYST: ${analyst}`,
     PROMPTS[analyst],
@@ -159,7 +234,7 @@ export async function runSpecialist(args: {
     node: `specialist:${analyst}`,
     system: args.system,
     parts: [renderBase(pack), renderSubject(pack, analyst), tail],
-    responseSchema: FINDING_RESPONSE_SCHEMA,
+    responseSchema: v2 ? FINDING_RESPONSE_SCHEMA_V2 : FINDING_RESPONSE_SCHEMA,
     cachePrefix: true,
     cacheOwner: args.cacheOwner,
     thinking: 'off',
@@ -177,7 +252,18 @@ export async function runSpecialist(args: {
     );
   }
   return {
-    finding: { analyst, subject: args.subject, verdict: parsed.verdict, layerScore: parsed.layerScore, status: 'ok', claims: parsed.claims.slice(0, 8), windows: parsed.windows, caveats: parsed.caveats, keyFacts: parsed.keyFacts.slice(0, 6) },
+    finding: {
+      analyst,
+      subject: args.subject,
+      verdict: parsed.verdict,
+      layerScore: parsed.layerScore,
+      status: 'ok',
+      claims: parsed.claims.slice(0, v2 ? 10 : 8),
+      windows: v2 ? parsed.windows.slice(0, 12) : parsed.windows,
+      caveats: parsed.caveats,
+      keyFacts: parsed.keyFacts.slice(0, 6),
+      ...(v2 ? { form: parsed.form, culprits: parsed.culprits, contributors: parsed.contributors.filter((p) => !parsed.culprits.includes(p)) } : {}),
+    },
     usage: r.usage,
   };
 }

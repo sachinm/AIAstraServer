@@ -15,7 +15,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
+import { currentLocationLine, PrismaUserLocationStore } from '../services/userLocation.js';
+import { buildCalendar, calendarBlock } from './calendar/calendar.js';
+import { readingCalendar, readingFindingsV2, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
 import { buildReadingGraph, type NodeError } from './graph.js';
 import { streamGemini } from './llm/gemini.js';
@@ -155,6 +157,9 @@ function tailFor(intent: Intent, question: string, asOf: string): string {
   const parts = [`TODAY: ${asOf}`, `UNDERSTOOD AS: ${intent.clarifyText}`, shape];
   if (intent.safety === 'medical') parts.push('The question touches health: give the astrological indication only and say plainly that it is not medical advice.');
   if (intent.safety === 'legal') parts.push('The question touches legal matters: give the astrological indication only and say plainly that it is not legal advice.');
+  // where the person lives now: the writer may say dates are for this place; nothing astrological changes
+  const location = currentLocationLine(intent.currentLocation);
+  if (location) parts.push(location);
   parts.push(`QUESTION: ${question}`);
   return parts.join('\n\n');
 }
@@ -196,11 +201,15 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const dataPromise = opts.dataLoader
     ? opts.dataLoader(asOf).catch(() => null)
     : startPrefetch(prisma, userId, { asOf, onFactsMissing: opts.onFactsMissing, onStale: opts.onStale });
+  // where the person lives now (M13 table), read alongside intake; a missing table or a slow read just means none
+  const locationPromise = opts.dataLoader || opts.intent?.currentLocation ? Promise.resolve(null) : new PrismaUserLocationStore(prisma).get(userId).catch(() => null);
 
   // 2. intake
   emit({ type: 'stage', name: 'intake', status: 'start' });
   const intake = opts.intent ? { intent: opts.intent, usage: null, source: 'confirmed' as const, ms: 0 } : await runIntake(question, asOf, { history: opts.history });
   const intent = intake.intent;
+  const loc = await locationPromise;
+  if (!intent.currentLocation && loc?.status === 'found') intent.currentLocation = loc.location;
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
@@ -249,7 +258,12 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
-  const thinking = readingSynthThinking();
+  // dated edges inside the horizon, read from the pack (no computation); READING_CALENDAR=0 turns it off
+  const calendar = readingCalendar() ? calendarBlock(buildCalendar(merged, intent, asOf, { lunations: data.transits?.lunations })) : '';
+  const v2 = readingFindingsV2();
+  // v2 (doc 25 §2.5f): short templates (T1, T9, T10) need little thinking; an explicit READING_SYNTH_THINKING wins
+  const shortTemplate = ['T1', 'T9', 'T10'].includes(intent.classification?.template ?? '');
+  const thinking = v2 && shortTemplate && !process.env.READING_SYNTH_THINKING?.trim() ? 'low' : readingSynthThinking();
   // thought summaries: streamed to the client as `thought` events and kept on the run record (reading_runs.thinking).
   // They are never written to the application logs.
   const showThoughts = readingIncludeThoughts();
@@ -277,7 +291,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), ...(calendar ? [calendar] : []), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta,
       onThought
     );
@@ -302,7 +316,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );

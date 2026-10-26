@@ -95,6 +95,15 @@ export function readingFullBase(): boolean {
   return !(v === '0' || v === 'false' || v === 'off');
 }
 
+/**
+ * Give the writer the dated calendar (src/reading/calendar): dasha boundaries, ingresses, stations, double-transit and
+ * Sade Sati edges inside the horizon, read from the evidence pack. On by default; READING_CALENDAR=0 turns it off.
+ */
+export function readingCalendar(): boolean {
+  const v = process.env.READING_CALENDAR?.trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
 /** Use the DB `pvr_oracle` persona instead of the file persona. Off by default: a daily-changing system prompt breaks the prefix cache. */
 export function readingUseDbPersona(): boolean {
   return process.env.READING_USE_DB_PERSONA?.trim() === '1';
@@ -102,4 +111,13 @@ export function readingUseDbPersona(): boolean {
 
 export function readingFixtureDir(): string {
   return process.env.READING_FIXTURE_DIR?.trim() || 'evals/fixtures/G1';
+}
+
+/**
+ * Findings contract version (docs 25). v2: rewritten specialist and writer prompts (prompts/v2), culprits, contributors,
+ * form and per-window fruit in the findings, and the pack additions they read (star lords, dasha lord records, transit
+ * legend). READING_FINDINGS=v2 turns it on; anything else keeps v1.
+ */
+export function readingFindingsV2(): boolean {
+  return process.env.READING_FINDINGS?.trim().toLowerCase() === 'v2';
 }

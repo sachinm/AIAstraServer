@@ -82,6 +82,8 @@ export const DECIDERS: Partial<Record<SubjectId, { primary: RegExp[]; secondary:
   children: { primary: [/varga\.D7\./, /bodies\.Ju\./], secondary: [/PK/], text: 'the 5th lord in D-7 and Jupiter; then the PK' },
   education_learning: { primary: [/bodies\.(Me|Ju)\./, /houses\.5\.lord/], secondary: [/houses\.4\.lord/], text: 'Mercury and Jupiter with the 5th lord; then the 4th lord' },
   foreign_relocation: { primary: [/houses\.12\.lord/, /bodies\.Ra\./], secondary: [/houses\.(9|7)\.lord/], text: 'the 12th lord and Rahu; then the 9th and 7th lords' },
+  travel_journeys: { primary: [/houses\.(3|9|12)\.lord/, /bodies\.Ra\./], secondary: [/houses\.7\.lord/], text: 'the 3rd, 9th and 12th lords and Rahu; then the 7th lord' },
+  siblings: { primary: [/houses\.(3|11)\.lord/, /bodies\.Ma\./], secondary: [/varga\.D3\./, /BK/], text: 'the 3rd and 11th lords and Mars; then D-3 and the BK' },
   litigation_government: { primary: [/houses\.(6|7)\.lord/], secondary: [/houses\.11\./], text: 'the 6th lord against the 7th lord; then the 11th' },
   spirituality_moksha: { primary: [/bodies\.(Ke|Ju)\./], secondary: [/AK|karakamsa/i], text: 'Ketu and Jupiter; then the AK in D-9' },
   speculation_lottery: { primary: [/houses\.(5|11)\.lord/], secondary: [/sav/], text: 'the 5th and 11th lords; then their SAV' },
@@ -171,6 +173,8 @@ export interface BriefWindow {
   label: string;
   polarity: 'favourable' | 'testing' | 'mixed';
   source: string;
+  /** v2: what the window gives or withholds for the subject */
+  fruit?: string;
 }
 
 export interface SynthBrief {
@@ -189,6 +193,10 @@ export interface SynthBrief {
   fortune: { tier: FortuneTier; until: string | null } | null;
   /** traditions the specialists applied (Parashara, Jaimini, nakshatra …) */
   traditions: string[];
+  /** v2 (doc 25 §2.5d): the form the promise takes, and the planets that block or carry it with the layers that named them */
+  form?: string;
+  culprits?: Array<{ planet: string; layers: string[] }>;
+  contributors?: Array<{ planet: string; layers: string[] }>;
 }
 
 /** The running AD from the dossier (re-selected by date) and the next AD from the dated period list. */
@@ -219,8 +227,11 @@ export function renderBrief(b: SynthBrief): string {
     b.deciders ? `DECIDERS: ${b.deciders.text}` : '',
     b.now ? `NOW: ${b.now.md}-${b.now.ad}${b.now.pd ? `-${b.now.pd}` : ''} until ${b.now.until}` : '',
     b.next ? `NEXT: ${b.next.mdAd} from ${b.next.from} to ${b.next.to}` : '',
+    b.form ? `FORM: ${b.form}` : '',
+    b.culprits?.length ? `CULPRITS: ${b.culprits.map((c) => `${c.planet} (${c.layers.join(', ')})`).join(' · ')}` : '',
+    b.contributors?.length ? `CONTRIBUTORS: ${b.contributors.map((c) => `${c.planet} (${c.layers.join(', ')})`).join(' · ')}` : '',
     b.fortune ? `FORTUNE: ${b.fortune.tier}${b.fortune.until ? ` until ${b.fortune.until}` : ''}` : '',
-    `WINDOWS:\n${b.windows.map((w) => `- ${w.from} to ${w.to} | ${w.polarity} | ${w.label} | ${w.source}`).join('\n') || '- none in the horizon'}`,
+    `WINDOWS:\n${b.windows.map((w) => `- ${w.from} to ${w.to} | ${w.polarity} | ${w.label} | ${w.source}${w.fruit ? ` | ${w.fruit}` : ''}`).join('\n') || '- none in the horizon'}`,
     `KEY FACTS:\n${b.keyFacts.map((f) => `- ${f}`).join('\n') || '- none'}`,
     b.caveats.length ? `CAVEATS:\n${b.caveats.map((c) => `- ${c}`).join('\n')}` : '',
     b.traditions.length ? `TRADITIONS APPLIED: ${b.traditions.join(', ')}` : '',

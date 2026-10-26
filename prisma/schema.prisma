@@ -311,3 +311,17 @@ model LlmCacheEntry {
   @@index([last_used_at], map: "llm_cache_entries_last_used")
   @@map("llm_cache_entries")
 }
+
+/// Where the person lives now (reading engine M13, migration 20261026130000): the place as typed and the browser's IANA
+/// timezone, for stating timing in local terms. lat/lon stay null (no geocoding). No relation on purpose: the server
+/// reads it with raw SQL and treats a missing table as "no location" (src/services/userLocation.ts).
+model UserCurrentLocation {
+  user_id    String   @id @map("user_id")
+  place      String
+  tz         String?
+  lat        Float?
+  lon        Float?
+  updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("user_current_location")
+}

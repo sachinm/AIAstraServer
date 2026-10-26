@@ -203,6 +203,7 @@ streaming overhead, and the full staging path through CloudFront with a real use
 | `READING_SYNTH_THINKING` | how much hidden thinking the writer does (`off` / `low` / `medium` / `high`) |
 | `READING_INCLUDE_THOUGHTS=0` | stop streaming and storing thought summaries |
 | `READING_FULL_BASE=0` | go back to the small (1.7k-token) base |
+| `READING_FINDINGS=v2` | Fable's v2 prompts (`prompts/v2/`, doc 25): readers name culprits and contributors, the promise form and each window's fruit; the pack adds star lords, dasha-lord records and a transit legend; the brief adds FORM, CULPRITS, CONTRIBUTORS and fruit; T1/T9/T10 writers think at `low`. Off by default |
 | `READING_EXPLICIT_CACHE=1` | turn on the explicit prompt cache |
 | `CHAT_SSE_PING_MS` | keep-alive interval (5–60 s) |
 | `VITE_CHAT_CLARIFY=0` (web build) | the web client stops sending `clarify:true` |

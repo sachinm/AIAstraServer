@@ -232,6 +232,7 @@ export const BUCKETS: Record<BucketId, Bucket> = {
     subBuckets: [
       { id: 'children', label: 'Children and conception' },
       { id: 'parents_siblings', label: 'Parents and siblings', template: 'T6' },
+      { id: 'siblings', label: 'Brothers and sisters', frame: 'siblings' },
     ],
     requiredSlots: ['horizon', 'subject_person'],
     optionalSlots: ['sub_bucket'],
@@ -248,6 +249,7 @@ export const BUCKETS: Record<BucketId, Bucket> = {
     frames: ['foreign_relocation'],
     subBuckets: [
       { id: 'abroad', label: 'Travel or settling abroad' },
+      { id: 'journeys', label: 'Trips and journeys', frame: 'travel_journeys' },
       { id: 'legal', label: 'Court case or government matter', frame: 'litigation_government' },
     ],
     requiredSlots: ['horizon'],
