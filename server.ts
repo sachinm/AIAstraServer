@@ -22,6 +22,8 @@ import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
+import { intentForFocus } from './src/reading/clarify/service.js';
+import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
 import { isCacheSweepEvent, runScheduledSweep, startHourlySweep } from './src/reading/llm/cacheSweep.js';
 import {
   logChatProviderError,
@@ -175,10 +177,23 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const { question, chatId, clarify } = req.body as { question?: string; chatId?: string | null; clarify?: boolean };
+  const { question, chatId, clarify, focus, parts } = req.body as {
+    question?: string;
+    chatId?: string | null;
+    clarify?: boolean;
+    /** one part of a multi-part question, answered on its own (the client sends it after a `next` event) */
+    focus?: string;
+    /** the parts still to come after `focus` */
+    parts?: unknown;
+  };
   if (!question || typeof question !== 'string' || !question.trim()) {
     return res.status(400).json({ error: 'question is required' });
   }
+  const isSubject = (v: unknown): v is SubjectId => typeof v === 'string' && (SUBJECT_IDS as readonly string[]).includes(v);
+  if (focus !== undefined && !isSubject(focus)) {
+    return res.status(400).json({ error: 'focus is not a known subject' });
+  }
+  const focusParts: SubjectId[] = Array.isArray(parts) ? parts.filter(isSubject).slice(0, 8) : [];
 
   const pre = await validateAskForUser(prisma, userId);
   if (!pre.ok) {
@@ -227,17 +242,22 @@ app.post('/api/chat/ask-stream', async (req, res) => {
 
   try {
     const q = question.trim();
+    // A continuation part skips the clarifier: the person already chose the order, and each part gets its own reading.
+    const focusIntent = focus ? await intentForFocus(q, new Date().toISOString().slice(0, 10), focus as SubjectId, focusParts) : undefined;
     // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
-    if (clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
+    if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
     writeSse({ type: 'start' });
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
       },
-      // reading engine: intent / stage / windows events let the UI show progress before the first token
+      // reading engine: intent / stage / windows / thought / next events let the UI show progress and continue
       onEvent: (event) => writeSse(event),
+      ...(focusIntent ? { intent: focusIntent } : {}),
     });
-    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, q, chatResult, true);
+    // a continuation is stored with its part, so the chat history reads as the parts in order
+    const storedQ = focusIntent ? `[${FRAMES[focus as SubjectId].label}] ${q}` : q;
+    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, storedQ, chatResult, true);
     writeSse({
       type: 'done',
       chatId: finalChatId,
