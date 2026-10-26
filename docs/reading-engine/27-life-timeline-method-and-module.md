@@ -1,5 +1,10 @@
 # 27 — The life timeline: the full reading method, and the module that builds 18 years back and 18 years forward
 
+> **2026-10-26, after the P1 build:** the activation rules of §A.3, the scoring and bands of §A.4/§A.6, the calibration
+> step of §A.7 and the constants of §B.5 saturate on a real chart (every marker High in every month). They are replaced by
+> [doc 29](./29-life-timeline-v2-event-timing.md), which also moves the Radha range export (R-T1) ahead of P2. The rest of
+> this document stands.
+
 Status: method and build plan, 2026-10-26 (Fable). Design only; no code. For the agent that builds it: Part A is the
 astrology (what is read, in what order, and how an event's probability, timing and form are decided); Part B is the module
 (data, pipeline, scoring, calibration against the person's real past, resolution, rendering, phases). It sits on docs 02, 10,

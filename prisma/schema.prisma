@@ -349,3 +349,94 @@ model PrashnaCast {
   @@index([user_id, asked_at], map: "prashna_casts_user_asked")
   @@map("prashna_casts")
 }
+
+/// The life-timeline ledger (docs/reading-engine/27 §B.2, migration 20261027100000): real dated life events, facts only.
+/// category is dotted from the marker table (job.start, residence.move …); date_precision: day | month | year;
+/// source: user | import. No relations on purpose: read with raw SQL by src/reading/timeline/store.ts, which treats a
+/// missing table as "no ledger".
+model LifeEvent {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id        String   @map("user_id")
+  kundli_id      String   @map("kundli_id")
+  category       String
+  date           DateTime @db.Date
+  date_precision String   @default("day") @map("date_precision")
+  place          String?
+  attributes     Json     @default("{}")
+  source         String   @default("user")
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([kundli_id, date], map: "life_events_kundli_date")
+  @@index([user_id], map: "life_events_user")
+  @@map("life_events")
+}
+
+/// One life-timeline build per kundli (doc 27 §B.2). status: building | ready | failed; grain: month | week | day.
+model TimelineBuild {
+  id              String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id       String   @map("kundli_id")
+  dossier_hash    String?  @map("dossier_hash")
+  from            DateTime @db.Date
+  to              DateTime @db.Date
+  grain           String   @default("month")
+  system_versions Json     @default("{}") @map("system_versions")
+  weights         Json     @default("{}")
+  status          String   @default("building")
+  cost_usd        Float    @default(0) @map("cost_usd")
+  created_at      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([kundli_id, created_at], map: "timeline_builds_kundli_created")
+  @@map("timeline_builds")
+}
+
+/// The timeline grid (doc 27 §B.2): one row per non-quiet marker window; band high | moderate | possible, testing marks
+/// an adverse window. how/form/prompt_version stay null until P3.
+model TimelineWindow {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  build_id       String   @map("build_id")
+  marker         String
+  from           DateTime @db.Date
+  to             DateTime @db.Date
+  grain          String   @default("month")
+  band           String
+  testing        Boolean  @default(false)
+  support_score  Float    @default(0) @map("support_score")
+  test_score     Float    @default(0) @map("test_score")
+  systems        Json     @default("{}")
+  agent          String?
+  channel        String?
+  how            String?
+  form           Json?
+  prompt_version String?  @map("prompt_version")
+
+  @@index([build_id, marker, from], map: "timeline_windows_build_marker")
+  @@map("timeline_windows")
+}
+
+/// A ledger event matched against a build (doc 27 §A.7): result hit | near | miss.
+model TimelineMatch {
+  id        String  @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  build_id  String  @map("build_id")
+  event_id  String  @map("event_id")
+  window_id String? @map("window_id")
+  result    String
+  specifics Json    @default("{}")
+
+  @@index([build_id], map: "timeline_matches_build")
+  @@map("timeline_matches")
+}
+
+/// Per-kundli calibration of the timing systems (doc 27 §A.7): one current row per (kundli, system, marker).
+model TimelineCalibration {
+  kundli_id   String   @map("kundli_id")
+  system      String
+  marker      String
+  precision   Float?
+  recall      Float?
+  n           Int      @default(0)
+  weight      Float
+  computed_at DateTime @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  @@id([kundli_id, system, marker])
+  @@map("timeline_calibration")
+}

@@ -1,0 +1,18 @@
+{
+  "_note": "MADE UP FOR TESTING. These events are invented for the G1 golden chart so the life-timeline match and calibration code (docs/reading-engine/27 §A.7, phase P1) has a stable target. They describe no real person and say nothing about how good the method is.",
+  "kundli_id": "fixture-G1",
+  "events": [
+    { "id": "g1-e01", "category": "residence.move", "date": "2009-06-10", "date_precision": "day", "place": "Delhi", "attributes": { "direction": "south" } },
+    { "id": "g1-e02", "category": "family.sibling.birth", "date": "2011-08-14", "date_precision": "day", "attributes": { "with_whom": "younger sibling" } },
+    { "id": "g1-e03", "category": "travel.long", "date": "2013-01-01", "date_precision": "year", "attributes": {} },
+    { "id": "g1-e04", "category": "family.father.illness", "date": "2014-05-01", "date_precision": "month", "attributes": {} },
+    { "id": "g1-e05", "category": "education.secondary.complete", "date": "2018-03-01", "date_precision": "month", "attributes": {} },
+    { "id": "g1-e06", "category": "education.college.start", "date": "2018-07-23", "date_precision": "day", "attributes": { "field": "engineering" } },
+    { "id": "g1-e07", "category": "vehicle.purchase", "date": "2019-11-02", "date_precision": "day", "attributes": { "colour": "white", "make_class": "compact" } },
+    { "id": "g1-e08", "category": "health.illness", "date": "2021-05-01", "date_precision": "month", "attributes": {} },
+    { "id": "g1-e09", "category": "education.college.complete", "date": "2022-06-15", "date_precision": "day", "attributes": { "field": "engineering" } },
+    { "id": "g1-e10", "category": "job.start", "date": "2022-09-05", "date_precision": "day", "attributes": { "field": "computing", "country": "local" } },
+    { "id": "g1-e11", "category": "relationship.start", "date": "2024-02-01", "date_precision": "month", "attributes": {} },
+    { "id": "g1-e12", "category": "residence.move", "date": "2025-09-20", "date_precision": "day", "place": "abroad", "attributes": { "direction": "west", "country": "foreign" } }
+  ]
+}

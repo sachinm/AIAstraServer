@@ -21,7 +21,8 @@
     "eval:readings": "tsx evals/run.ts",
     "bench:reading": "tsx scripts/bench-reading.ts",
     "cache:sweep": "tsx scripts/cache-sweep.ts",
-    "chart-catalog:sync": "tsx scripts/sync-chart-catalog.ts"
+    "chart-catalog:sync": "tsx scripts/sync-chart-catalog.ts",
+    "timeline:past": "tsx scripts/timeline-past.ts"
   },
   "keywords": [],
   "author": "",

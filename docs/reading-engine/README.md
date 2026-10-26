@@ -33,7 +33,9 @@ This document is the plan. The companion files hold the detail:
 | [22-radha-build-plan.md](./22-radha-build-plan.md) | Radha build plan: wire contract (params, calc_version, catalog, multi-type), phase order R-3 → R-6 → R-4 → R-M → R-5 → R-8, payload shapes, server tasks S-1…S-6, tests and deploy |
 | [23-radha-full-dataset.md](./23-radha-full-dataset.md) | Radha full dataset: status, every wire name (charts, natal tables, dashas, annual, transit), the Tithi Pravesh year rule, and the server follow-ups |
 | [23-cheap-readers-one-synthesizer.md](./23-cheap-readers-one-synthesizer.md) | Cost per question (today vs cheap readers + one strong synth, with/without cache, real 2026-10-25 prices incl. Argon/Flash repricing), model-agnostic ruleset, `findings.v2` contract, gap analysis, phased plan with eval gates, orchestration pattern hypotheses, 22 code tasks |
+| [27-life-timeline-method-and-module.md](./27-life-timeline-method-and-module.md) | Life timeline: the reading method (foundation, ten markers, seven timing systems, convergence, specifics, ledger verification) and the module (tables, pipeline, phases P0–P5). Activation and band rules superseded by doc 29 |
 | [28-tithi-pravesh-transit-prashna.md](./28-tithi-pravesh-transit-prashna.md) | Plan: Tithi Ashtottari for the Tithi Pravesh year, transit D1–D10 for any moment and place, and prashna (horary) charts; Radha types, M14 schema, reading-engine use |
+| [29-life-timeline-v2-event-timing.md](./29-life-timeline-v2-event-timing.md) | Life timeline v2 (after the P1 build saturated on G1): why v1 cannot time events, the techniques practitioners time with and their prior weights, the promise × period × trigger rules, chart-relative ranked bands, threshold-free evaluation, revised phase order (R-T1 moves up) |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 
