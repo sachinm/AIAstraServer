@@ -64,3 +64,30 @@ describe('usage of a rejected specialist answer', () => {
     expect(err.name).toBe('SpecialistOutputError');
   });
 });
+
+describe('tolerant finding parse (doc 25)', () => {
+  it('a claim with weight 0 keeps the layer: the weight falls back to 2', async () => {
+    const { findingZ } = await import('../../../src/reading/nodes/specialists.js');
+    const f = findingZ.parse({ verdict: 'moderate', layerScore: 1, claims: [{ text: 'The 7th lord is strong.', weight: 0, evidence: ['base.houses.7.lord'] }] });
+    expect(f.claims).toHaveLength(1);
+    expect(f.claims[0]!.weight).toBe(2);
+  });
+  it('drops a malformed claim or window on its own and keeps the rest', async () => {
+    const { findingZ } = await import('../../../src/reading/nodes/specialists.js');
+    const f = findingZ.parse({
+      verdict: 'not-a-verdict',
+      layerScore: 9,
+      claims: [{ text: 'ok claim here' }, { text: 'x' }, 'garbage', { text: 'another good claim', polarity: 'weird', tradition: 'astro' }],
+      windows: [{ from: '2026-11-01', to: '2026-11-20' }, { from: '2026-12-01' }],
+    });
+    expect(f.verdict).toBe('mixed');
+    expect(f.layerScore).toBe(0);
+    expect(f.claims.map((c) => c.text)).toEqual(['ok claim here', 'another good claim']);
+    expect(f.claims[1]).toMatchObject({ polarity: 'neutral', tradition: 'parashara' });
+    expect(f.windows).toHaveLength(1);
+  });
+  it('the specialist timeout default is 18 s', async () => {
+    const { readingSpecialistTimeoutMs } = await import('../../../src/reading/config.js');
+    expect(readingSpecialistTimeoutMs()).toBe(18_000);
+  });
+});

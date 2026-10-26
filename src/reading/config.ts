@@ -46,9 +46,10 @@ export function readingEngineTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 8000;
 }
 
+/** Per-specialist timeout. 18 s (was 12 s): with a 4,096-token budget a full JSON answer can take longer than 12 s. */
 export function readingSpecialistTimeoutMs(): number {
   const n = Number(process.env.READING_SPECIALIST_TIMEOUT_MS);
-  return Number.isFinite(n) && n > 0 ? n : 12_000;
+  return Number.isFinite(n) && n > 0 ? n : 18_000;
 }
 
 /** Output budget for the final answer. Thinking tokens share it, so it must leave room for a deep answer after thinking. */
