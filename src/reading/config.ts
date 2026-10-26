@@ -103,3 +103,12 @@ export function readingUseDbPersona(): boolean {
 export function readingFixtureDir(): string {
   return process.env.READING_FIXTURE_DIR?.trim() || 'evals/fixtures/G1';
 }
+
+/**
+ * Findings contract version (docs 25). v2: rewritten specialist and writer prompts (prompts/v2), culprits, contributors,
+ * form and per-window fruit in the findings, and the pack additions they read (star lords, dasha lord records, transit
+ * legend). READING_FINDINGS=v2 turns it on; anything else keeps v1.
+ */
+export function readingFindingsV2(): boolean {
+  return process.env.READING_FINDINGS?.trim().toLowerCase() === 'v2';
+}

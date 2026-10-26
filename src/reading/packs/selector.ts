@@ -8,13 +8,15 @@
  * `transits.rows.Ke_2026-12-06.house_from_lagna`). `resolveEvidence` returns the value, so a claim can be checked.
  */
 import { createHash } from 'node:crypto';
-import { readingFullBase } from '../config.js';
+import { readingFindingsV2, readingFullBase } from '../config.js';
 import { LAGNA_CODE, PLANET_CODES, type PlanetCode, type VargaKey } from '../facts/constants.js';
 import type { Body, DashaPeriod, Dossier, House, Varga } from '../facts/types.js';
 import type { TransitChart } from '../transits/types.js';
 import type { Intent } from '../types.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
-import { selectTransits, type TransitSection } from './transitTable.js';
+import { selectTransits, type SelectedTransitRow, type TransitSection } from './transitTable.js';
+
+const TRANSIT_LEGEND = 'influences_houses = houses aspected from that sign; sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal_owns = houses the natal planet under the transit rules';
 
 /**
  * `base` is subject-independent (birth, D-1 skeleton, relations, janma/lagna nakshatra): the same bytes for every
@@ -177,6 +179,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   const frame: SubjectFrame = FRAMES[input.subject];
   const hz = horizonRange(intent.horizon, asOf);
   const missing: string[] = [];
+  const v2 = readingFindingsV2();
   const lagnaSign = d.bodies[LAGNA_CODE]!.sign;
   void lagnaSign;
 
@@ -214,6 +217,8 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     arudhas: frame.arudhas,
     running: { md: cur.md, ad: cur.ad, pd: cur.pd, md_end: cur.md_end, ad_end: cur.ad_end, pd_end: cur.pd_end },
     ...(frame.caveat ? { caveat: frame.caveat } : {}),
+    // v2 (doc 25 §2.1e): the second reference points the promise reader judges the primary house from
+    ...(v2 && frame.alsoFrom.length ? { also_from: frame.alsoFrom } : {}),
   };
   // ---- d1 skeleton: all 12 houses, all bodies
   const d1: Record<string, unknown> = { houses: {} as Record<string, unknown>, bodies: {} as Record<string, unknown> };
@@ -284,6 +289,9 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       gandanta: np.gandanta,
       pushkara: np.pushkara,
       tenth_cusp_nak: np.tenth_cusp_nak,
+      // v2 (doc 25 §2.4e): the per-planet star-lord chain and the AL nakshatras, both already in the dossier
+      ...(v2 && np.star_lords ? { star_lords: np.star_lords } : {}),
+      ...(v2 && np.arudha_lagna ? { arudha_lagna: np.arudha_lagna } : {}),
     },
   };
   // ---- dasha (horizon dependent)
@@ -307,7 +315,11 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       const vp = d.vargas[key]?.planets[c];
       if (vp) vpos[key] = { h: vp.house, dig: vp.dignity };
     }
-    if (Object.keys(vpos).length) dashaLords[c] = { varga: vpos };
+    const rec: Record<string, unknown> = Object.keys(vpos).length ? { varga: vpos } : {};
+    // v2 (doc 25 §2.2e): the period lord's own record next to the periods, so the reader does not cross-reference base
+    const b = v2 ? d.bodies[c] : undefined;
+    if (b) Object.assign(rec, { h: b.house, dig: b.dignity, owns: b.owns, ...(b.star_lord ? { star_lord: b.star_lord, star_lord_house: b.star_lord_house } : {}), ...(b.sign_lord ? { sign_lord: `${b.sign_lord} (house ${b.sign_lord_house})` } : {}) });
+    if (Object.keys(rec).length) dashaLords[c] = rec;
   }
   const dasha = {
     current: cur,
@@ -327,6 +339,14 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       mentionsPlanets: intent.mentionsPlanets,
       asOf,
     });
+    if (v2 && transits) {
+      // v2 (doc 25 §2.3e): what each natal planet a transit sits on rules, and one line on how to read the row fields
+      for (const row of Object.values(transits.rows)) {
+        const owns = Object.fromEntries(row.over_natal.map((c) => [c, d.bodies[c]?.owns ?? []]));
+        if (row.over_natal.length) (row as SelectedTransitRow & { over_natal_owns?: Record<string, number[]> }).over_natal_owns = owns;
+      }
+      (transits as TransitSection & { legend?: string }).legend = TRANSIT_LEGEND;
+    }
   } else {
     missing.push('transits unavailable');
   }

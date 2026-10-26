@@ -7,6 +7,7 @@
  *   favourable transit windows; adjacent identical windows are merged.
  * - Agreement per subject: converge | partial | diverge, from the promise verdict and the dasha and transit windows.
  */
+import { readingFindingsV2 } from '../config.js';
 import { horizonRange } from '../packs/frames.js';
 import { resolveEvidence, type EvidencePack } from '../packs/selector.js';
 import type { Intent } from '../types.js';
@@ -22,6 +23,8 @@ export interface Window {
   polarity: 'favourable' | 'testing' | 'mixed';
   source: 'dasha' | 'transit' | 'combined';
   evidence: string[];
+  /** v2: kept only when the window's evidence resolves */
+  fruit?: string;
 }
 export interface Agreement {
   subject: string;
@@ -48,7 +51,10 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const max = (a: string, b: string) => (a > b ? a : b);
 const min = (a: string, b: string) => (a < b ? a : b);
 
-function classOf(label: string): 'deliverer' | 'supporter' | 'neutral' | 'obstructor' {
+type DashaClass = 'deliverer' | 'supporter' | 'neutral' | 'obstructor';
+/** The v2 `cls` field when the reader set one; otherwise the class word in the label (v1). */
+function classOf(label: string, cls?: DashaClass): DashaClass {
+  if (cls && cls !== 'neutral') return cls;
   const l = label.toLowerCase();
   if (l.includes('deliver')) return 'deliverer';
   if (l.includes('support')) return 'supporter';
@@ -82,7 +88,7 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
         if (!ok) droppedWindows += 1;
         return ok;
       })
-      .map((w) => ({ ...w, from: max(w.from, hz.from), to: min(w.to, hz.to) }));
+      .map((w) => ({ ...w, from: max(w.from, hz.from), to: min(w.to, hz.to), fruit: w.evidence.length ? w.fruit : '' }));
     return { ...f, claims, windows };
   });
 
@@ -95,7 +101,7 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
     const dasha = fs.find((f) => f.analyst === 'dasha');
     const transit = fs.find((f) => f.analyst === 'transit');
     const promise = fs.find((f) => f.analyst === 'promise');
-    const dW = (dasha?.windows ?? []).map((w) => ({ ...w, cls: classOf(w.label) }));
+    const dW = (dasha?.windows ?? []).map((w) => ({ ...w, cls: classOf(w.label, w.cls) }));
     const tW = transit?.windows ?? [];
     const good = dW.filter((w) => w.cls === 'deliverer' || w.cls === 'supporter');
     const fav = tW.filter((w) => w.polarity === 'favourable');
@@ -107,8 +113,9 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
         if (from <= to) combined.push({ from, to, label: `${d.label} + ${t.label}`.slice(0, 160), polarity: 'favourable', source: 'combined', evidence: [...new Set([...d.evidence, ...t.evidence])] });
       }
     }
-    for (const w of dW) windows.push({ from: w.from, to: w.to, label: w.label, polarity: w.cls === 'obstructor' ? 'testing' : w.cls === 'neutral' ? 'mixed' : 'favourable', source: 'dasha', evidence: w.evidence });
-    for (const w of tW) windows.push({ from: w.from, to: w.to, label: w.label, polarity: w.polarity, source: 'transit', evidence: w.evidence });
+    const fr = (f?: string) => (f ? { fruit: f } : {});
+    for (const w of dW) windows.push({ from: w.from, to: w.to, label: w.label, polarity: w.cls === 'obstructor' ? 'testing' : w.cls === 'neutral' ? 'mixed' : 'favourable', source: 'dasha', evidence: w.evidence, ...fr(w.fruit) });
+    for (const w of tW) windows.push({ from: w.from, to: w.to, label: w.label, polarity: w.polarity, source: 'transit', evidence: w.evidence, ...fr(w.fruit) });
     windows.push(...combined);
 
     const bestDasha: Agreement['dasha'] = !dasha ? 'missing' : good.some((w) => w.cls === 'deliverer') ? 'deliverer' : good.length ? 'supporter' : dW.some((w) => w.cls === 'obstructor') ? 'obstructor' : 'neutral';
@@ -138,6 +145,7 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
 
   // brief for the synthesizer: strongest claims first, ids kept for the run log but shown short
   const order = (c: { weight: number }) => -c.weight;
+  const v2 = readingFindingsV2();
   const briefObj = {
     key_facts: args.keyFacts,
     agreement,
@@ -146,7 +154,7 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
       layer: f.analyst,
       subject: f.subject,
       verdict: f.verdict,
-      claims: [...f.claims].sort((a, b) => order(a) - order(b)).map((c) => ({ text: c.text, polarity: c.polarity, weight: c.weight })),
+      claims: [...f.claims].sort((a, b) => order(a) - order(b)).map((c) => (v2 ? { text: c.text, polarity: c.polarity, weight: c.weight, tradition: c.tradition } : { text: c.text, polarity: c.polarity, weight: c.weight })),
       caveats: f.caveats,
     })),
   };
@@ -182,12 +190,32 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
     deciders: primary && DECIDERS[primary] && dec.used.length ? { text: DECIDERS[primary]!.text, evidence: dec.used } : null,
     now: nn.now,
     next: nn.next && nn.next.from <= hz.to ? nn.next : null,
-    windows: merged.slice(0, 7).map((w) => ({ from: w.from, to: w.to, label: w.label, polarity: w.polarity, source: w.source })),
+    windows: merged.slice(0, 7).map((w) => ({ from: w.from, to: w.to, label: w.label, polarity: w.polarity, source: w.source, ...(v2 && w.fruit ? { fruit: w.fruit } : {}) })),
     keyFacts: args.keyFacts.split('\n').filter(Boolean).slice(0, 12),
     caveats: [...new Set(findings.flatMap((f) => f.caveats))].slice(0, 6),
     fortune: fortune ? { tier: fortune.tier, until: fortune.until } : null,
     traditions,
+    ...(v2 ? v2Extras(pf, args.packs[primary ?? '']) : {}),
   };
   const brief = `${renderBrief(synthBrief)}\n\nFINDINGS (detail):\n${JSON.stringify(briefObj)}`;
   return { findings, windows: merged, agreement, droppedClaims: dropped, droppedWindows, totalClaims: total, brief, verdict, layers, synthBrief };
+}
+
+/**
+ * v2 brief fields (doc 25 §2.5d, §4 grounding): culprits and contributors aggregated per planet with the layers that named
+ * them, dropped unless the planet is a body in the pack; the promise `form` only when the promise has a grounded varga claim.
+ */
+function v2Extras(fs: Finding[], pack: EvidencePack | undefined): Pick<SynthBrief, 'form' | 'culprits' | 'contributors'> {
+  const bodies = ((pack?.sections.base as { bodies?: Record<string, unknown> } | undefined)?.bodies ?? {}) as Record<string, unknown>;
+  const agg = (key: 'culprits' | 'contributors') => {
+    const m = new Map<string, string[]>();
+    for (const f of fs) for (const p of f[key] ?? []) if (p in bodies) m.set(p, [...(m.get(p) ?? []), f.analyst]);
+    return [...m.entries()].sort((a, b) => b[1].length - a[1].length).map(([planet, layers]) => ({ planet, layers }));
+  };
+  const culprits = agg('culprits');
+  const named = new Set(culprits.map((c) => c.planet));
+  const contributors = agg('contributors').filter((c) => !named.has(c.planet));
+  const promise = fs.find((f) => f.analyst === 'promise');
+  const grounded = !!promise?.claims.some((c) => c.evidence.some((e) => e.startsWith('varga.')));
+  return { ...(promise?.form && grounded ? { form: promise.form } : {}), culprits, contributors };
 }

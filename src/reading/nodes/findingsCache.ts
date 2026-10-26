@@ -6,6 +6,7 @@
  *
  * In process, bounded (LRU), with a TTL. A new dossier (new hash) or new prompts (new version) never hit old entries.
  */
+import { readingFindingsV2 } from '../config.js';
 import { horizonRange, type Horizon } from '../packs/frames.js';
 import { PROMPT_VERSION } from '../prompts/generated.js';
 import type { Finding, SpecialistAnalyst } from './specialists.js';
@@ -53,5 +54,5 @@ export const findingsCache = new Lru<Finding>();
 export function findingCacheKey(a: { dossierHash: string; analyst: SpecialistAnalyst; subject: string; horizon: Horizon; asOf: string }): string {
   const natal = a.analyst === 'promise' || a.analyst === 'nakshatra';
   const hz = horizonRange(a.horizon, a.asOf);
-  return [a.dossierHash, a.analyst, a.subject, natal ? 'natal' : `${hz.from}..${hz.to}`, PROMPT_VERSION].join('|');
+  return [a.dossierHash, a.analyst, a.subject, natal ? 'natal' : `${hz.from}..${hz.to}`, PROMPT_VERSION, readingFindingsV2() ? 'v2' : 'v1'].join('|');
 }
