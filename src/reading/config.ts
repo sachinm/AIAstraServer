@@ -71,6 +71,16 @@ export function readingIncludeThoughts(): boolean {
   return !(v === '0' || v === 'false' || v === 'off');
 }
 
+/**
+ * Put the rest of the stable chart data (every divisional chart the dossier holds, ashtavarga, the dasha tree, arudhas,
+ * special lagnas, yogas, doshas) into the cacheable `base` block. Gemini 3.x only caches a prefix of at least 4,096 tokens,
+ * and the bare base is about 3k. On by default; READING_FULL_BASE=0 returns to the small base.
+ */
+export function readingFullBase(): boolean {
+  const v = process.env.READING_FULL_BASE?.trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
 /** Use the DB `pvr_oracle` persona instead of the file persona. Off by default: a daily-changing system prompt breaks the prefix cache. */
 export function readingUseDbPersona(): boolean {
   return process.env.READING_USE_DB_PERSONA?.trim() === '1';
