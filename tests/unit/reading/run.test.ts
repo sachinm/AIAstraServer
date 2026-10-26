@@ -56,16 +56,17 @@ describe('runReading: single flow', () => {
   it('sends the thinking config in the request body and asks for thought summaries (READING_INCLUDE_THOUGHTS=0 turns it off)', async () => {
     await runReading(prisma, 'u1', 'When will I get married?', { asOf: G1_AS_OF, flow: 'single' });
     const gc = fake.requests[0]!.body.generationConfig;
-    expect(gc.thinkingConfig).toEqual({ thinkingBudget: 512, includeThoughts: true });
+    // default writer thinking is medium (2,048-token budget on 2.x) so there is reasoning to show and the answer has depth
+    expect(gc.thinkingConfig).toEqual({ thinkingBudget: 2048, includeThoughts: true });
     fake.reset();
     process.env.READING_INCLUDE_THOUGHTS = '0';
     try {
       await runReading(prisma, 'u1', 'When will I get married?', { asOf: G1_AS_OF, flow: 'single' });
-      expect(fake.requests[0]!.body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 512, includeThoughts: false });
+      expect(fake.requests[0]!.body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 2048, includeThoughts: false });
     } finally {
       delete process.env.READING_INCLUDE_THOUGHTS;
     }
-    expect(gc.maxOutputTokens).toBe(4096);
+    expect(gc.maxOutputTokens).toBe(12_288);
   });
 
   it('logs the pack hash and sizes in chat_logs payloads, never the chart', async () => {

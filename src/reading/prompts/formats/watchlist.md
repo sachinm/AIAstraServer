@@ -1,1 +1,1 @@
-Format `watchlist`: begin with the direct answer in 2-4 sentences. Then a numbered list of dated checkpoints in order, each with the date, what changes (dasha or transit) and what to look for. At most 300 words.
+Format `watchlist`: begin with the direct answer in 2-4 sentences. Then a numbered list of dated checkpoints in order, each with the date, what changes (dasha or transit) and what to look for. At most 600 words.

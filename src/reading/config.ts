@@ -46,20 +46,34 @@ export function readingEngineTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 8000;
 }
 
+/** Per-specialist timeout. 18 s (was 12 s): with a 4,096-token budget a full JSON answer can take longer than 12 s. */
 export function readingSpecialistTimeoutMs(): number {
   const n = Number(process.env.READING_SPECIALIST_TIMEOUT_MS);
-  return Number.isFinite(n) && n > 0 ? n : 12_000;
+  return Number.isFinite(n) && n > 0 ? n : 18_000;
 }
 
+/** Output budget for the final answer. Thinking tokens share it, so it must leave room for a deep answer after thinking. */
 export function readingSynthMaxTokens(): number {
   const n = Number(process.env.READING_SYNTH_MAX_OUTPUT_TOKENS);
+  return Number.isFinite(n) && n >= 512 ? Math.floor(n) : 12_288;
+}
+
+/**
+ * Output budget for each specialist's JSON findings. At 1,800 the cheap readers ran out mid-JSON (MAX_TOKENS) and the layer
+ * was lost, so the default is 4,096.
+ */
+export function readingSpecialistMaxTokens(): number {
+  const n = Number(process.env.READING_SPECIALIST_MAX_OUTPUT_TOKENS);
   return Number.isFinite(n) && n >= 512 ? Math.floor(n) : 4096;
 }
 
-/** Thinking effort for the final answer: off|low|medium|high. Default low (Phase A latency lesson: 512-token budget ≈ 21 s). */
+/**
+ * Thinking effort for the final answer: off|low|medium|high. Default medium: at low, Gemini 3.x often does no thinking at all
+ * (0 thought tokens), which leaves nothing to stream to the Thinking panel and gives shallow answers.
+ */
 export function readingSynthThinking(): 'off' | 'low' | 'medium' | 'high' {
   const v = process.env.READING_SYNTH_THINKING?.trim().toLowerCase();
-  return v === 'off' || v === 'medium' || v === 'high' ? v : 'low';
+  return v === 'off' || v === 'low' || v === 'high' ? v : 'medium';
 }
 
 /**

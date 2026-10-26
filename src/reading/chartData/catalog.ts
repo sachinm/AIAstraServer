@@ -29,12 +29,17 @@ export interface ChartDataType {
   calcVersion: string | null;
   /** The `kundlis` column holding this item before the vertical table (backfill + fallback read) */
   legacyColumn?: string;
+  /** Request parameters sent to Radha with every fetch of this type (e.g. `{ varga: 9 }` for `argala.d9`). Code-only, not in the table. */
+  fixedParams?: Record<string, unknown>;
   sortOrder: number;
   label: string;
 }
 
 /** pyjhora `const.division_chart_factors` */
 export const VARGA_FACTORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 20, 24, 27, 30, 40, 45, 60, 81, 108, 144] as const;
+
+/** Divisional charts Radha's `arudhas` and `argala` types are offered for (R-4c). D1 arudhas stay the plain `arudhas` entry. */
+export const ARUDHA_ARGALA_VARGAS = [1, 2, 3, 4, 7, 9, 10, 12, 20, 24, 30, 60] as const;
 
 const SERVED_VARGAS = new Set([1, 2, 4, 7, 9, 10]);
 const FIRST_VARGAS = new Set([1, 9]);
@@ -108,6 +113,14 @@ function build(): ChartDataType[] {
   natal({ id: 'dignities', family: 'strength', radhaType: 'dignities', tier: 'on_demand', sortOrder: 430, label: 'Planet dignities (combust, retrograde, planetary war)' });
   // Radha param bhava_madhya_method 1-5, default 1; the stored row is the default method.
   natal({ id: 'bhava', family: 'special', radhaType: 'bhava', tier: 'on_demand', sortOrder: 440, label: 'Bhavas (cusps, lords, occupants)' });
+  // One entry per divisional chart: the same Radha type with a fixed `varga` parameter (stored per entry, so the unique key
+  // (kundli, data_type, variant, ayanamsa) never collides). `on_demand`: 23 extra calls per sign-up are not worth it.
+  ARUDHA_ARGALA_VARGAS.forEach((f, i) => {
+    if (f !== 1) {
+      natal({ id: `arudhas.d${f}`, family: 'special', radhaType: 'arudhas', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 450 + i, label: `Arudha padas and special points (SL, HL, GK, MD) in D${f}` });
+    }
+    natal({ id: `argala.d${f}`, family: 'special', radhaType: 'argala', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 470 + i, label: `Argala in D${f}` });
+  });
 
   const annual = (id: string, label: string, sortOrder: number): void => {
     out.push({ id, family: 'annual', radhaType: id, changeClass: 'annual', tier: 'on_demand', variantKind: 'year', served: false, calcVersion: null, sortOrder, label });
@@ -166,6 +179,8 @@ export function mergeChartTypes(rows: readonly ChartTypeRow[]): ChartDataType[] 
       served: r.served,
       calcVersion: r.calc_version,
       ...(r.legacy_column ? { legacyColumn: r.legacy_column } : {}),
+      // request parameters live in code only; keep them when a table row overrides the built-in entry
+      ...(CHART_TYPE_BY_ID.get(r.id)?.fixedParams ? { fixedParams: CHART_TYPE_BY_ID.get(r.id)!.fixedParams } : {}),
       sortOrder: r.sort_order,
       label: r.label,
     });

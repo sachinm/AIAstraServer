@@ -7,6 +7,7 @@
  *   3. for each missing or stale item that Radha serves, claims the row (the row is the lock, so two agents or two
  *      Lambda instances never fetch the same item), calls Radha once for that item, and stores the result;
  *   4. waits for items another caller is fetching, up to the lease.
+ * ensureAnnualCurrent (below) does the same for annual items keyed by today instead of a year: Radha picks the year.
  * Nothing here computes astrology. When the M7 tables are missing (migration not applied) it degrades to legacy
  * columns + uncached Radha calls instead of failing.
  */
@@ -50,6 +51,8 @@ export interface FetchResult {
   error?: string;
   calcVersion: string | null;
   validTo?: Date | null;
+  /** Request parameters to record on the row (only when the row was not claimed with them first) */
+  params?: Record<string, unknown>;
 }
 
 export interface KundliRequest {
@@ -107,7 +110,8 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
     return { id, variant: `year=${year}`, params: { year }, type };
   }
   if (arg) return { id, variant: '', params: {}, type, error: `${id} takes no variant` };
-  return { id, variant: '', params: {}, type };
+  // e.g. 'argala.d9' -> { varga: 9 }, sent to Radha with every fetch of this entry
+  return { id, variant: '', params: type.fixedParams ? { ...type.fixedParams } : {}, type };
 }
 
 export function isMissingTable(err: unknown): boolean {
@@ -125,6 +129,9 @@ export function needsFetch(row: StoredRow | undefined, type: ChartDataType, now:
   switch (row.status) {
     case 'ready':
       if (type.calcVersion != null && row.calcVersion !== type.calcVersion) return true;
+      // A `year=<y>` row is one fixed year's chart: its valid_to says when that year stops being the current one (the
+      // `current` pointer row expires then), not when its numbers change, so it is never re-fetched for that reason.
+      if (row.variant.startsWith('year=')) return false;
       return Boolean(row.validTo && row.validTo.getTime() <= now);
     case 'fetching':
       return !row.fetchStartedAt || now - row.fetchStartedAt.getTime() > leaseMs;
@@ -299,6 +306,182 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
   return out;
 }
 
+/**
+ * Annual items for the year that applies today (docs/reading-engine/23 §3-4). The year is Radha's choice, not ours:
+ * Radha gets `at` = today (the birth place's calendar date when its UTC offset is stored, otherwise no `at`, which Radha
+ * reads as today in the place's timezone) and answers with `year_used` and `valid_to` (its year rule: before the
+ * birthday return -> the prior year). The payload is stored under `year=<year_used>`, the same row an explicit
+ * `annual.x@<year>` request reads.
+ *
+ * Which year is current is kept in a small pointer row per type, variant `current`: payload `{ year_used, variant,
+ * valid_to }`, `valid_to` and `calc_version` as the year row. It is also the fetch lock (claimed like any other row), so
+ * two callers never fetch the same type at once. It goes stale when `valid_to` passes (the next birthday return: S-4)
+ * or the type's `calc_version` changes, and the next call fetches again. Nothing here computes astrology.
+ */
+export const CURRENT_VARIANT = 'current';
+
+export interface AnnualPointer {
+  year_used: number;
+  variant: string;
+  valid_to: string | null;
+}
+
+export interface AnnualOptions extends EnsureOptions {
+  /** Override the `at` sent to Radha ('YYYY-MM-DD'); default: today at the birth place */
+  at?: string;
+}
+
+/** When Radha's answer carries no readable `valid_to`, look again after this long rather than never. */
+const ANNUAL_RECHECK_MS = 24 * 3_600_000;
+
+/** Today's calendar date at a fixed UTC offset (hours), 'YYYY-MM-DD'. Plain clock arithmetic, no astrology. */
+export function localDateAt(nowMs: number, tzHours: number): string {
+  return new Date(nowMs + tzHours * 3_600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Radha's place-local 'YYYY-MM-DD HH:MM:SS' as an instant, using the place's UTC offset (hours). With no stored offset
+ * the time is read as UTC (at most a few hours off; the next queue run then re-asks Radha, which applies its own rule).
+ */
+export function radhaLocalToDate(value: unknown, tzHours: number | null | undefined): Date | null {
+  const m = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim()) : null;
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const ms = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s ?? 0)) - (tzHours ?? 0) * 3_600_000;
+  return Number.isFinite(ms) ? new Date(ms) : null;
+}
+
+function pointerVariant(payload: unknown): string | null {
+  const v = (payload as Partial<AnnualPointer> | null)?.variant;
+  return typeof v === 'string' && /^year=\d{4}$/.test(v) ? v : null;
+}
+
+export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, typeIds: string[], opts: AnnualOptions = {}): Promise<Record<string, ChartItem>> {
+  const now = opts.now ?? Date.now;
+  const ayanamsa = opts.ayanamsa ?? 'LAHIRI';
+  const leaseMs = opts.leaseMs ?? 90_000;
+  const pollMs = opts.pollMs ?? 500;
+  const { repo } = deps;
+  const fetcher = deps.fetcher ?? defaultFetcher;
+  const types = await loadTypes(repo, now());
+
+  const out: Record<string, ChartItem> = {};
+  const fail = (id: string, error: string, status: ItemStatus = 'failed'): ChartItem => ({ key: id, id, variant: '', status, source: null, payload: null, error });
+  type Want = { id: string; type: ChartDataType };
+  const wanted: Want[] = [];
+  for (const id of [...new Set(typeIds)]) {
+    const type = types.get(id);
+    if (!type) out[id] = fail(id, `unknown chart data type: ${id}`);
+    else if (type.changeClass !== 'annual' || type.variantKind !== 'year') out[id] = fail(id, `${id} is not an annual (year-variant) type`);
+    else wanted.push({ id, type });
+  }
+  if (!wanted.length) return out;
+
+  const pointerKey = (id: string): RowKey => ({ dataType: id, variant: CURRENT_VARIANT });
+  let degraded = false;
+  let pointers: StoredRow[] = [];
+  try {
+    pointers = await repo.readRows(kundliId, wanted.map((w) => pointerKey(w.id)), ayanamsa);
+  } catch (err) {
+    if (!isMissingTable(err)) throw err;
+    degraded = true;
+  }
+
+  // pointer -> year row: returns the stored year row as an item (or null when it is not there / not ready)
+  const resolve = async <T extends { w: Want; variant: string }>(list: T[]): Promise<(T & { row?: StoredRow })[]> => {
+    if (!list.length) return [];
+    const rows = await repo.readRows(kundliId, list.map((x) => ({ dataType: x.w.id, variant: x.variant })), ayanamsa);
+    return list.map((x) => ({ ...x, row: rows.find((r) => r.dataType === x.w.id && r.variant === x.variant) }));
+  };
+
+  const toFetch: Want[] = [];
+  const waiting: Want[] = [];
+  const known: { w: Want; variant: string; fresh: boolean }[] = [];
+  for (const w of wanted) {
+    const p = pointers.find((r) => r.dataType === w.id);
+    const stale = needsFetch(p, w.type, now(), leaseMs);
+    const target = p?.status === 'ready' ? pointerVariant(p.payload) : null;
+    const mayFetch = w.type.served && !opts.noFetch;
+    if (p?.status === 'fetching' && !stale && !opts.noFetch) waiting.push(w);
+    else if (target && (!stale || !mayFetch)) known.push({ w, variant: target, fresh: !stale });
+    else if (mayFetch && (stale || (p?.status === 'ready' && !target))) toFetch.push(w); // stale, absent, or an unreadable pointer
+    else out[w.id] = !w.type.served && !p ? fail(w.id, 'Radha does not serve this type yet', 'unsupported') : { ...toItem(w.id, w.id, '', p), ...(p?.status === 'ready' ? { status: 'failed' as const, payload: null, error: 'bad current-year pointer' } : {}) };
+  }
+
+  for (const k of await resolve(known)) {
+    if (k.row?.status === 'ready') out[k.w.id] = { key: k.w.id, id: k.w.id, variant: k.variant, status: 'ready', source: 'db', payload: k.row.payload };
+    else if (k.fresh && k.w.type.served && !opts.noFetch) toFetch.push(k.w); // pointer names a year row that is gone: fetch again
+    else out[k.w.id] = toItem(k.w.id, k.w.id, k.variant, k.row);
+  }
+
+  const req = toFetch.length ? await repo.kundliRequest(kundliId) : null;
+  if (toFetch.length && !req) {
+    for (const w of toFetch) out[w.id] = fail(w.id, 'kundli or birth details not found');
+    toFetch.length = 0;
+  }
+
+  await pool(toFetch, opts.concurrency ?? concurrencyDefault(), async (w) => {
+    const at = opts.at ?? (req!.coords?.tz != null ? localDateAt(now(), req!.coords.tz) : undefined);
+    const extra: Record<string, unknown> = at ? { at } : {};
+    if (!degraded) {
+      let owned = false;
+      try {
+        owned = await repo.claim(kundliId, pointerKey(w.id), extra, ayanamsa, leaseMs);
+      } catch (err) {
+        if (!isMissingTable(err)) throw err;
+        degraded = true;
+        owned = true;
+      }
+      if (!owned) {
+        waiting.push(w);
+        return;
+      }
+    }
+    const calcVersion = w.type.calcVersion;
+    try {
+      const payload = await fetcher(req!, w.type.radhaType, extra);
+      const yearUsed = Number((payload as { year_used?: unknown } | null)?.year_used);
+      if (!Number.isInteger(yearUsed) || yearUsed < 1800 || yearUsed > 2300) throw new Error(`Radha ${w.type.radhaType} response has no year_used`);
+      const validToRaw = (payload as { valid_to?: unknown }).valid_to;
+      const validTo = radhaLocalToDate(validToRaw, req!.coords?.tz) ?? new Date(now() + ANNUAL_RECHECK_MS);
+      const variant = `year=${yearUsed}`;
+      if (!degraded) {
+        await repo.complete(kundliId, { dataType: w.id, variant }, ayanamsa, { status: 'ready', payload, calcVersion, validTo, params: { year: yearUsed, ...extra } });
+        const pointer: AnnualPointer = { year_used: yearUsed, variant, valid_to: typeof validToRaw === 'string' ? validToRaw : null };
+        await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status: 'ready', payload: pointer, calcVersion, validTo });
+      }
+      out[w.id] = { key: w.id, id: w.id, variant, status: 'ready', source: 'radha', payload };
+    } catch (err) {
+      const status = isUnsupportedError(err) ? 'unsupported' : 'failed';
+      const error = (err as Error).message?.slice(0, 500);
+      if (!degraded) await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status, error, calcVersion });
+      out[w.id] = fail(w.id, error ?? status, status);
+    }
+  });
+
+  // another caller holds the pointer: wait for it, up to the lease, then read the year row it names
+  if (waiting.length) {
+    const deadline = now() + leaseMs;
+    let pending = waiting;
+    const settled: { w: Want; variant: string }[] = [];
+    while (pending.length && now() < deadline) {
+      await new Promise((r) => setTimeout(r, pollMs));
+      const fresh = await repo.readRows(kundliId, pending.map((w) => pointerKey(w.id)), ayanamsa);
+      pending = pending.filter((w) => {
+        const row = fresh.find((r) => r.dataType === w.id);
+        if (!row || row.status === 'fetching') return true;
+        const target = row.status === 'ready' ? pointerVariant(row.payload) : null;
+        if (target) settled.push({ w, variant: target });
+        else out[w.id] = toItem(w.id, w.id, '', row);
+        return false;
+      });
+    }
+    for (const s of await resolve(settled)) out[s.w.id] = toItem(s.w.id, s.w.id, s.variant, s.row);
+    for (const w of pending) out[w.id] = { key: w.id, id: w.id, variant: '', status: 'missing', source: null, payload: null, error: 'still fetching' };
+  }
+  return out;
+}
+
 const defaultFetcher: RadhaFetcher = (req, radhaType, extra) =>
   fetchEngineExport(req.params, radhaType, { ...(req.coords ?? {}), ...extra });
 
@@ -352,6 +535,7 @@ export function prismaChartDataRepo(prisma: PrismaClient): ChartDataRepo {
       const ready = result.status === 'ready';
       const data = {
         status: result.status,
+        ...(result.params ? { params: result.params as Prisma.InputJsonValue } : {}),
         calc_version: result.calcVersion,
         error: ready ? null : (result.error ?? null),
         fetched_at: new Date(),
