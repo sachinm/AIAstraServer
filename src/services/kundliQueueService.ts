@@ -13,8 +13,9 @@ import { readingBuildFactsEnabled } from '../reading/config.js';
 import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
-import { fetchRegistrationSet } from '../reading/chartData/registration.js';
-import type { EnsureDeps } from '../reading/chartData/store.js';
+import { fetchRegistrationItems, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
+import type { ChartDataType } from '../reading/chartData/catalog.js';
+import type { ChartItem, EnsureDeps, EnsureOptions } from '../reading/chartData/store.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
 const QUEUE_STATUS_IN_PROGRESS = 'in_progress';
@@ -100,6 +101,76 @@ function logAstroKundliCall(
   };
   if (errMessage) payload.error_message = errMessage;
   queueLog(payload);
+}
+
+/** One `astrokundli_call` line per item that went to Radha (items read from a row or legacy column made no call). */
+function logRadhaCalls(userId: string, kundliId: string, types: readonly ChartDataType[], items: Record<string, ChartItem>, durationMs: number): void {
+  for (const t of types) {
+    const item = items[t.id];
+    if (!item || (item.status === 'ready' && item.source !== 'radha')) continue;
+    if (item.status === 'ready') logAstroKundliCall(userId, kundliId, t.id, 'passed', durationMs);
+    else {
+      const errMessage = item.error ?? item.status;
+      logAstroKundliCall(userId, kundliId, t.id, errMessage.includes('HTTP') ? 'failed' : 'error', durationMs, errMessage);
+    }
+  }
+}
+
+/**
+ * Kundlis whose post-gate pull is running in this process. A second login while it runs completes the gate (all rows
+ * ready, no Radha call) and leaves the rest to the run already going, so one user never has two pulls in one process.
+ * Across Lambda instances the kundli_data row lock keeps any item from being fetched twice.
+ */
+const restPullInFlight = new Set<string>();
+
+async function pullRest(
+  chartDeps: EnsureDeps,
+  userId: string,
+  kundliId: string,
+  plan: RegistrationPlan,
+  gateItems: Record<string, ChartItem>,
+  opts: EnsureOptions,
+  startAll: number,
+  gateMs: number
+): Promise<void> {
+  if (restPullInFlight.has(kundliId)) {
+    queueLog({ event: 'kundli_full_pull_already_running', user_id: userId, kundli_id: kundliId });
+    return;
+  }
+  restPullInFlight.add(kundliId);
+  let restItems: Record<string, ChartItem> = {};
+  let error: string | undefined;
+  try {
+    restItems = await fetchRegistrationItems(chartDeps, kundliId, plan.rest, opts);
+  } catch (err) {
+    error = (err as Error).message?.slice(0, 500) ?? String(err);
+    queueLogError({ event: 'kundli_full_pull_failed', user_id: userId, kundli_id: kundliId, error });
+  } finally {
+    restPullInFlight.delete(kundliId);
+  }
+  const wallMs = Date.now() - startAll;
+  logRadhaCalls(userId, kundliId, plan.rest, restItems, wallMs - gateMs);
+
+  // Per-user summary: how many items, how many went to Radha, and the wall time (about 1 s per Radha call).
+  const all = { ...gateItems, ...restItems };
+  const count = (pred: (i: ChartItem) => boolean) => plan.requested.filter((t) => all[t.id] && pred(all[t.id]!)).length;
+  queueLog({
+    event: 'kundli_full_pull',
+    user_id: userId,
+    kundli_id: kundliId,
+    total_items: plan.requested.length,
+    gate_items: plan.gate.length,
+    rest_items: plan.rest.length,
+    fetched_from_radha: count((i) => i.source === 'radha'),
+    ready: count((i) => i.status === 'ready'),
+    failed: count((i) => i.status === 'failed'),
+    unsupported: count((i) => i.status === 'unsupported'),
+    missing: plan.requested.length - count((i) => i.status === 'ready' || i.status === 'failed' || i.status === 'unsupported'),
+    skipped_unserved: plan.skipped.length,
+    gate_ms: gateMs,
+    wall_ms: wallMs,
+    ...(error ? { error } : {}),
+  });
 }
 
 /**
@@ -202,25 +273,21 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
   }
 
   try {
-    // S-5: the registration set (first + registration tiers, served types only, in sort_order) goes through
-    // ensureChartData, so each item is stored once in kundli_data and shared with the agents. Concurrency is the
-    // per-user cap (default 1); the Radha one-request-per-second spacing lives in the default fetcher and stays on.
+    // S-5 / doc 23 §4: the registration set is every served natal and annual type (never `moving`), first tier, then
+    // registration, then the rest, through ensureChartData / ensureAnnualCurrent so each item is stored once in
+    // kundli_data and shared with the agents. The gate (up to the last item the completion rule needs) runs first; chat
+    // opens after it and the rest follows in this same run. Concurrency is the per-user cap (default 1); the Radha
+    // one-request-per-second spacing lives in the default fetcher and stays on.
+    const chartDeps = deps.chart ?? chartDataDeps(prisma);
+    const fetchOpts = { concurrency: getKundliQueueMaxFetchesPerUser() };
     const startAll = Date.now();
-    const reg = await fetchRegistrationSet(deps.chart ?? chartDataDeps(prisma), kundliId, {
-      concurrency: getKundliQueueMaxFetchesPerUser(),
-    });
-    const durationMs = Date.now() - startAll;
-    for (const t of reg.requested) {
-      const item = reg.items[t.id];
-      if (!item || (item.status === 'ready' && item.source !== 'radha')) continue; // served from a row or the legacy column: no Radha call
-      if (item.status === 'ready') logAstroKundliCall(userId, kundliId, t.id, 'passed', durationMs);
-      else {
-        const errMessage = item.error ?? item.status;
-        logAstroKundliCall(userId, kundliId, t.id, errMessage.includes('HTTP') ? 'failed' : 'error', durationMs, errMessage);
-      }
-    }
+    const plan = await loadRegistrationPlan(chartDeps);
+    const gateItems = await fetchRegistrationItems(chartDeps, kundliId, plan.gate, fetchOpts);
+    const gateMs = Date.now() - startAll;
+    logRadhaCalls(userId, kundliId, plan.gate, gateItems, gateMs);
+    const reg = { ...plan, items: gateItems, firstTierReady: firstTierReady(plan.firstTier, gateItems) };
     if (reg.skipped.length > 0) {
-      queueLog({ event: 'kundli_registration_skipped_unserved', kundli_id: kundliId, types: reg.skipped.map((t) => t.id) });
+      queueLog({ event: 'kundli_registration_skipped_unserved', kundli_id: kundliId, count: reg.skipped.length, types: reg.skipped.map((t) => t.id) });
     }
 
     // Legacy columns: the old readers still read the ten kundlis columns, so fill the missing ones from what was just
@@ -283,6 +350,10 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
         console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
       });
       if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
+
+      // Chat is open; pull everything else Radha serves. A failure here is logged, never undoes the completion: rows
+      // that did not land stay missing/failed and the next run (next login) resumes from them.
+      await pullRest(chartDeps, userId, kundliId, plan, gateItems, fetchOpts, startAll, gateMs);
     } else {
       queueLog({
         event: 'kundli_partial_sync',

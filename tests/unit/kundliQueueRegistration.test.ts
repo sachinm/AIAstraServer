@@ -162,7 +162,9 @@ describe('registrationSet', () => {
     expect(requested.slice(0, 5).every((t) => t.tier === 'first')).toBe(true);
     expect(skipped.map((t) => t.id)).toEqual(expect.arrayContaining(['arudhas', 'varga.d60', 'ashtakavarga', 'yogas']));
     expect(skipped.every((t) => !t.served)).toBe(true);
-    expect([...requested, ...skipped].some((t) => t.variantKind === 'year')).toBe(false);
+    // doc 23 §4: annual types join once served (current year); moving types (transit) never do
+    expect(skipped.map((t) => t.id)).toEqual(expect.arrayContaining(['annual.varsha', 'annual.tithi_pravesha']));
+    expect([...requested, ...skipped].some((t) => t.changeClass === 'moving')).toBe(false);
   });
 
   it('follows the merged catalog: a newly served type joins in sort order, an unserved one drops out', async () => {
