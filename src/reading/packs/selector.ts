@@ -8,6 +8,7 @@
  * `transits.rows.Ke_2026-12-06.house_from_lagna`). `resolveEvidence` returns the value, so a claim can be checked.
  */
 import { createHash } from 'node:crypto';
+import { readingFullBase } from '../config.js';
 import { LAGNA_CODE, PLANET_CODES, type PlanetCode, type VargaKey } from '../facts/constants.js';
 import type { Body, DashaPeriod, Dossier, House, Varga } from '../facts/types.js';
 import type { TransitChart } from '../transits/types.js';
@@ -136,6 +137,39 @@ export interface BuildPackInput {
   intent: Pick<Intent, 'horizon' | 'mentionsPlanets' | 'focusPoints'>;
   subject: SubjectId;
   asOf: string;
+}
+
+/**
+ * The rest of the user's stable chart data, in compact form. Subject-independent, so it is part of the cacheable `base`
+ * (same bytes for every question) and lifts the prefix past Gemini's 4,096-token cache minimum.
+ */
+export function fullBaseExtras(d: Dossier): Record<string, unknown> {
+  const all_vargas: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(d.vargas ?? {}) as Array<[string, Varga | undefined]>) {
+    if (!v) continue;
+    const planets: Record<string, unknown> = {};
+    for (const [code, p] of Object.entries(v.planets ?? {})) planets[code] = { s: p.sign, h: p.house, dig: p.dignity, ...(p.vargottama ? { vg: true } : {}) };
+    all_vargas[key] = { lagna: v.lagna_sign_name ?? v.lagna_sign, lagna_lord: v.lagna_lord, planets };
+  }
+  const vim = d.dasha?.vimshottari;
+  const nar = d.dasha?.narayana;
+  const dasha_tree = {
+    vimshottari: {
+      mahadashas: (vim?.mahadashas ?? []).map((m) => `${m.md} ${m.start}..${m.end}`),
+      antardashas: (vim?.periods ?? []).filter((p) => p.level === 'ad').map((p) => `${p.md}-${p.ad} ${p.start}..${p.end}`),
+    },
+    narayana: (nar?.periods ?? []).map((p) => `${p.md_sign_name}(${p.md_lord})-${p.ad_sign_name} ${p.start}..${p.end}`),
+  };
+  return {
+    all_vargas,
+    ashtakavarga: d.ashtakavarga,
+    dasha_tree,
+    arudhas: d.arudhas,
+    special_lagnas: d.special_lagnas,
+    karakas: d.karakas,
+    yogas: (d.yogas ?? []).map((y) => ({ name: y.name, planets: y.planets, houses: y.houses, class: y.class })),
+    doshas: (d.doshas ?? []).map((x) => ({ name: x.name, present: x.present, ...(x.planets ? { planets: x.planets } : {}), ...(x.houses ? { houses: x.houses } : {}) })),
+  };
 }
 
 export function buildEvidencePack(input: BuildPackInput): EvidencePack {
@@ -297,7 +331,8 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     missing.push('transits unavailable');
   }
 
-  const sections: EvidencePack['sections'] = { base, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
+  const baseOut = readingFullBase() ? { ...base, ...fullBaseExtras(d) } : base;
+  const sections: EvidencePack['sections'] = { base: baseOut, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
   const approxTokens = Math.ceil(JSON.stringify(sections).length / 3.6);
   return {
     subject: input.subject,
