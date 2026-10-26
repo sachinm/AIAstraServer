@@ -13,7 +13,7 @@ vi.mock('../../../src/lib/queueLogger.js', () => ({ queueLog: vi.fn(), queueLogE
 
 import { processKundliSyncQueue } from '../../../src/services/kundliQueueService.js';
 import { queueLog } from '../../../src/lib/queueLogger.js';
-import { BUILTIN_CHART_TYPES, mergeChartTypes, type ChartDataType, type ChartTypeRow } from '../../../src/reading/chartData/catalog.js';
+import { BUILTIN_CHART_TYPES, CHART_TYPE_BY_ID, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from '../../../src/reading/chartData/catalog.js';
 import { fetchRegistrationItems, registrationPlan, registrationSet } from '../../../src/reading/chartData/registration.js';
 import {
   CURRENT_VARIANT,
@@ -176,6 +176,9 @@ afterEach(() => {
   }
 });
 
+/** The stored year variant of an annual type: `year=<y>`, plus `;system=<s>` for the Tithi Pravesh year dasha. */
+const yearKey = (id: string, year: number) => yearVariant(year, CHART_TYPE_BY_ID.get(id)?.fixedParams);
+
 const ANNUAL = ['annual.tithi_pravesha', 'annual.tithi_pravesha_dasha', 'annual.varsha', 'annual.mudda', 'annual.patyayini', 'annual.sahams'];
 
 describe('registration set (full pull)', () => {
@@ -195,8 +198,9 @@ describe('registration set (full pull)', () => {
     expect(plan.requested.map((t) => t.id)).not.toContain('transit_contacts');
     expect(plan.requested.map((t) => t.id)).toEqual(expect.arrayContaining(ANNUAL));
     expect(plan.skipped.map((t) => t.id)).toEqual(['dasha.brahma']);
-    // the whole catalog minus the moving types (transit, transit_contacts) and dasha.brahma
-    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 3);
+    expect(plan.requested.map((t) => t.id)).not.toContain('prashna');
+    // the whole catalog minus the moving types (transit, transit_contacts, prashna, transit_range) and dasha.brahma
+    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 5);
   });
 
   it('the gate ends at the last type the completion rule needs (first tier + legacy columns)', () => {
@@ -294,6 +298,50 @@ describe('ensureAnnualCurrent', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('R14: the Tithi Pravesh year dasha is asked with params.system=tithi_ashtottari and no year, stored per year and system', async () => {
+    const kundli = makeKundli();
+    const repo = memRepo(kundli, catalog);
+    const now = Date.UTC(2026, 9, 26, 6, 0, 0);
+    const radha = fakeRadha({ year: 2026 });
+    const out = await ensureAnnualCurrent({ repo, fetcher: radha.fetcher }, 'k1', ['annual.tithi_pravesha_dasha'], { now: () => now });
+
+    expect(radha.extras['annual.tithi_pravesha_dasha']).toEqual({ at: '2026-10-26', params: { system: 'tithi_ashtottari' } });
+    expect(out['annual.tithi_pravesha_dasha']).toMatchObject({ status: 'ready', source: 'radha', variant: 'year=2026;system=tithi_ashtottari' });
+    expect(repo.rows.get('annual.tithi_pravesha_dasha|year=2026;system=tithi_ashtottari')).toMatchObject({ status: 'ready', params: { year: 2026, at: '2026-10-26', system: 'tithi_ashtottari' } });
+    expect(repo.rows.get(`annual.tithi_pravesha_dasha|${CURRENT_VARIANT}`)?.payload).toMatchObject({ variant: 'year=2026;system=tithi_ashtottari' });
+
+    // the explicit key reads the same row; another system is its own row and its own call, with year top-level
+    const explicit = await ensureChartData({ repo, fetcher: radha.fetcher }, 'k1', ['annual.tithi_pravesha_dasha@2026', 'annual.tithi_pravesha_dasha@2026;system=mudda'], { now: () => now });
+    expect(explicit['annual.tithi_pravesha_dasha@2026']).toMatchObject({ status: 'ready', source: 'db', variant: 'year=2026;system=tithi_ashtottari' });
+    expect(explicit['annual.tithi_pravesha_dasha@2026;system=mudda']).toMatchObject({ status: 'ready', source: 'radha', variant: 'year=2026;system=mudda' });
+    expect(radha.fetcher.mock.calls.at(-1)![2]).toEqual({ year: 2026, params: { system: 'mudda' } });
+    // the other annual types are unchanged: no params, variant year=<y>
+    await ensureAnnualCurrent({ repo, fetcher: radha.fetcher }, 'k1', ['annual.mudda'], { now: () => now });
+    expect(radha.extras['annual.mudda']).toEqual({ at: '2026-10-26' });
+  });
+
+  it('R14: a pointer from before the system option (variant year=<y>) is re-fetched, not read', async () => {
+    const kundli = makeKundli();
+    const repo = memRepo(kundli, catalog);
+    const future = new Date(Date.now() + 100 * 24 * HOUR);
+    const old = { params: {}, calcVersion: '1', status: 'ready' as const, error: null, fetchStartedAt: null, fetchedAt: new Date(), validTo: future };
+    repo.rows.set('annual.tithi_pravesha_dasha|year=2026', { ...old, dataType: 'annual.tithi_pravesha_dasha', variant: 'year=2026', payload: { system: 'mudda' } });
+    repo.rows.set(`annual.tithi_pravesha_dasha|${CURRENT_VARIANT}`, { ...old, dataType: 'annual.tithi_pravesha_dasha', variant: CURRENT_VARIANT, payload: { year_used: 2026, variant: 'year=2026', valid_to: null } });
+    const radha = fakeRadha({ year: 2026 });
+    const out = await ensureAnnualCurrent({ repo, fetcher: radha.fetcher }, 'k1', ['annual.tithi_pravesha_dasha']);
+    expect(radha.calls).toEqual(['annual.tithi_pravesha_dasha']);
+    expect(out['annual.tithi_pravesha_dasha']).toMatchObject({ source: 'radha', variant: 'year=2026;system=tithi_ashtottari' });
+  });
+
+  it('R14: key options other than the catalog ones are refused', async () => {
+    const kundli = makeKundli();
+    const fetcher = vi.fn();
+    const out = await ensureChartData({ repo: memRepo(kundli, catalog), fetcher }, 'k1', ['annual.tithi_pravesha_dasha@2026;year=1', 'annual.varsha@2026;system=mudda']);
+    expect(out['annual.tithi_pravesha_dasha@2026;year=1']!.error).toMatch(/unknown option/);
+    expect(out['annual.varsha@2026;system=mudda']!.error).toMatch(/unknown option/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('reads Radha local times with the place offset', () => {
     expect(radhaLocalToDate('2027-03-01 10:00:00', 5.5)!.toISOString()).toBe('2027-03-01T04:30:00.000Z');
     expect(radhaLocalToDate('2027-03-01 10:00:00', null)!.toISOString()).toBe('2027-03-01T10:00:00.000Z');
@@ -319,7 +367,7 @@ describe('processKundliSyncQueue: full pull at registration', () => {
     expect(radha.calls).not.toContain('transit');
     expect(radha.peak()).toBe(1);
     for (const id of ANNUAL) {
-      expect(repo.rows.get(`${id}|year=2026`)?.status).toBe('ready');
+      expect(repo.rows.get(`${id}|${yearKey(id, 2026)}`)?.status).toBe('ready');
       expect(repo.rows.get(`${id}|${CURRENT_VARIANT}`)?.validTo).toBeInstanceOf(Date);
     }
     expect([...repo.rows.keys()].some((k) => k.startsWith('transit|'))).toBe(false);
@@ -372,7 +420,7 @@ describe('processKundliSyncQueue: full pull at registration', () => {
     await processKundliSyncQueue(prisma, { chart: { repo, fetcher: next.fetcher } });
     expect(next.calls).toEqual(['narayana_dasa', ...registrationPlan(mergeChartTypes(catalog.rows)).rest.filter((t) => t.changeClass === 'annual').map(wire)]);
     for (const id of ANNUAL) {
-      expect(repo.rows.get(`${id}|year=2027`)?.status).toBe('ready');
+      expect(repo.rows.get(`${id}|${yearKey(id, 2027)}`)?.status).toBe('ready');
       expect(repo.rows.get(`${id}|${CURRENT_VARIANT}`)?.payload).toMatchObject({ year_used: 2027 });
     }
     expect(repo.rows.get('dasha.narayana|')?.calcVersion).toBe('3');

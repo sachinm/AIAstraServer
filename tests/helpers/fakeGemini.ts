@@ -24,6 +24,12 @@ export interface FakeGeminiOptions {
   answer?: string;
   /** thought-summary chunks streamed before the answer, only when the request sets thinkingConfig.includeThoughts */
   thoughts?: string[];
+  /** answer to a ledger-interview call (responseSchema with `events`); default `{ events: [] }` */
+  ledgerEvents?: unknown;
+  /** raw specialist answer (text and finish reason) instead of the canned JSON, e.g. cut-off JSON or a blocked answer */
+  specialistRaw?: (analyst: string) => { text: string; finishReason?: string } | null;
+  /** HTTP status for analysts in `failAnalysts` (default 500) */
+  failStatus?: number;
 }
 
 export interface FakeGemini {
@@ -92,8 +98,14 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
         const analyst = analystOf(parts);
         await new Promise((r) => setTimeout(r, opts.specialistDelayMs ?? 0));
         if (analyst && opts.failAnalysts?.includes(analyst)) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.writeHead(opts.failStatus ?? 500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: { message: `fake failure for ${analyst}` } }));
+          return;
+        }
+        const raw = analyst && opts.specialistRaw ? opts.specialistRaw(analyst) : null;
+        if (raw) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: raw.text }] }, finishReason: raw.finishReason ?? 'STOP' }], usageMetadata: usage }));
           return;
         }
         let payload: unknown;
@@ -102,6 +114,8 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
             subjects: [{ id: 'career_work', weight: 1 }], horizon: '1y', questionType: 'timing', format: 'timeline', focusPoints: [], mentionsPlanets: [],
             confidence: 0.9, clarifyText: 'You are asking about career over the next year.', followUps: [], safety: 'ok',
           };
+        } else if (body?.generationConfig?.responseSchema?.properties?.events) {
+          payload = opts.ledgerEvents ?? { events: [] };
         } else {
           payload = {
             verdict: 'moderate',
@@ -149,6 +163,11 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
       requests.length = 0;
       cacheCreates.length = 0;
     },
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        // keep-alive sockets (and ones left by aborted calls) would hold close() for the client's 30 s keep-alive
+        server.closeAllConnections();
+      }),
   };
 }

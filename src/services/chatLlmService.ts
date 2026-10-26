@@ -31,6 +31,8 @@ export type ChatWithLlmOptions = {
   intent?: Intent;
   /** The clarifier confirmed the person's child is 18 or older */
   childAgeConfirmed?: boolean;
+  /** Where the question is asked (client location, rounded; parseClientPlace), for the prashna */
+  questionPlace?: { lat: number; lon: number; tz: number } | null;
 };
 
 export async function chatWithConfiguredProvider(
@@ -56,6 +58,7 @@ export async function chatWithConfiguredProvider(
           onDelta: options?.onDelta,
           onEvent: options?.onEvent,
           intent: options?.intent,
+          ...(options?.questionPlace ? { questionPlace: options.questionPlace } : {}),
           onFactsMissing: (kundliId) => {
             if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
           },

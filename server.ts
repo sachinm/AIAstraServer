@@ -22,9 +22,11 @@ import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
+import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
+import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
-import { isCacheSweepEvent, runScheduledSweep, startHourlySweep } from './src/reading/llm/cacheSweep.js';
+import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -247,7 +249,10 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
     if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
     writeSse({ type: 'start' });
+    // where the question is asked (optional browser location `lat/lon/tz`, rounded); absent -> the birth place
+    const questionPlace = parseClientPlace(req.body);
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
+      ...(questionPlace ? { questionPlace } : {}),
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
       },
@@ -274,6 +279,8 @@ app.post('/api/chat/ask-stream', async (req, res) => {
 });
 
 registerClarifyRoutes(app, { prisma, getUserId: getUserIdFromRequest });
+// life-timeline ledger (docs/reading-engine/27 P0): not mounted unless TIMELINE_ENABLED=1
+registerTimelineRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
@@ -348,7 +355,7 @@ async function start(): Promise<void> {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureSuperadmin();
-    if (startHourlySweep()) console.log('LLM cache sweep: hourly');
+    if (startPeriodicSweep()) console.log('LLM cache sweep: hourly');
     scheduleChartCatalogSyncOnStart(prisma);
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {

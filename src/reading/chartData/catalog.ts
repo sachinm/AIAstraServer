@@ -13,7 +13,7 @@
  *   in kundli_data, so ensureChartData refuses it: call `fetchTransit` in ./transit.ts instead).
  */
 
-export type ChartFamily = 'panchanga' | 'varga' | 'dasha' | 'karaka' | 'strength' | 'yoga' | 'special' | 'annual' | 'transit';
+export type ChartFamily = 'panchanga' | 'varga' | 'dasha' | 'karaka' | 'strength' | 'yoga' | 'special' | 'annual' | 'transit' | 'prashna';
 export type ChangeClass = 'natal' | 'annual' | 'moving';
 export type FetchTier = 'first' | 'registration' | 'on_demand';
 export type VariantKind = 'natal' | 'year';
@@ -33,6 +33,19 @@ export interface ChartDataType {
   fixedParams?: Record<string, unknown>;
   sortOrder: number;
   label: string;
+}
+
+/** Systems Radha's `annual.tithi_pravesha_dasha` takes in `params.system` (doc 28 R-27a); the first is its default. */
+export const TITHI_PRAVESHA_DASHA_SYSTEMS = ['tithi_ashtottari', 'mudda', 'patyayini'] as const;
+export const TITHI_PRAVESHA_DASHA_DEFAULT_SYSTEM = TITHI_PRAVESHA_DASHA_SYSTEMS[0];
+
+/**
+ * The stored variant of a year item: `year=<y>`, plus `;<k>=<v>` for each fixed request option in the catalog's order
+ * (e.g. `year=2027;system=tithi_ashtottari`), so one year is stored once per option.
+ */
+export function yearVariant(year: number, fixedParams?: Record<string, unknown>): string {
+  const extra = Object.entries(fixedParams ?? {}).map(([k, v]) => `;${k}=${String(v)}`);
+  return `year=${year}${extra.join('')}`;
 }
 
 /** pyjhora `const.division_chart_factors` */
@@ -122,12 +135,14 @@ function build(): ChartDataType[] {
     natal({ id: `argala.d${f}`, family: 'special', radhaType: 'argala', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 470 + i, label: `Argala in D${f}` });
   });
 
-  const annual = (id: string, label: string, sortOrder: number): void => {
-    out.push({ id, family: 'annual', radhaType: id, changeClass: 'annual', tier: 'on_demand', variantKind: 'year', served: false, calcVersion: null, sortOrder, label });
+  const annual = (id: string, label: string, sortOrder: number, fixedParams?: Record<string, unknown>): void => {
+    out.push({ id, family: 'annual', radhaType: id, changeClass: 'annual', tier: 'on_demand', variantKind: 'year', served: false, calcVersion: null, ...(fixedParams ? { fixedParams } : {}), sortOrder, label });
   };
   annual('annual.varsha', 'Varsha pravesh (Tajaka annual chart)', 500);
   annual('annual.tithi_pravesha', 'Tithi pravesha chart', 510);
-  annual('annual.tithi_pravesha_dasha', 'Tithi pravesha dasha', 515);
+  // doc 28 R-27a: Radha's `params.system` (tithi_ashtottari | mudda | patyayini). Stored per year AND system, variant
+  // `year=<y>;system=<s>`; the registration pull asks for the default, Tithi Ashtottari, for the year that applies today.
+  annual('annual.tithi_pravesha_dasha', 'Tithi pravesha year dasha (per year and system; default Tithi Ashtottari)', 515, { system: TITHI_PRAVESHA_DASHA_DEFAULT_SYSTEM });
   annual('annual.mudda', 'Mudda dasha', 520);
   annual('annual.patyayini', 'Patyayini dasha', 530);
   annual('annual.sahams', 'Sahams', 540);
@@ -137,6 +152,12 @@ function build(): ChartDataType[] {
   // Moving: depends on the date range asked for (`from`/`to`, plus `orb`, `planets`); fetched by fetchTransitContacts
   // (./transitContacts.ts), never stored per person.
   out.push({ id: 'transit_contacts', family: 'transit', radhaType: 'transit_contacts', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 610, label: 'Natal-degree contacts of slow transits (entry, exact, exit, station in orb)' });
+  // Moving: the chart at the moment and place a question is asked (doc 28 R-27c); cast by castPrashna (./prashna.ts) and
+  // stored per question in `prashna_casts`, never in kundli_data.
+  out.push({ id: 'prashna', family: 'prashna', radhaType: 'prashna', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 620, label: 'Prashna chart at the question moment (panchanga, prashna lagna, vargas)' });
+  // Moving: the dated sky over a long span (sign stays, stations, lunations, eclipses, Sade Sati phases) for the life
+  // timeline; fetched by fetchTransitRange (./transitRange.ts), never stored per person.
+  out.push({ id: 'transit_range', family: 'transit', radhaType: 'transit_range', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 630, label: 'Dated sky over up to 40 years (sign stays, stations, lunations, eclipses, Sade Sati)' });
   return out;
 }
 

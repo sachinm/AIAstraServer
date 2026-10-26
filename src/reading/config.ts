@@ -52,6 +52,24 @@ export function readingSpecialistTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 18_000;
 }
 
+/**
+ * Extra time a specialist gets when its model thinks (Gemini 3.x: `thinking: 'off'` is sent as `thinkingLevel: low`, so the
+ * model still thinks before it writes the JSON). Added on top of READING_SPECIALIST_TIMEOUT_MS. Default 12 s; 0 turns it off.
+ */
+export function readingSpecialistThinkingMs(): number {
+  const n = Number(process.env.READING_SPECIALIST_THINKING_MS);
+  return process.env.READING_SPECIALIST_THINKING_MS?.trim() && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 12_000;
+}
+
+/**
+ * Extra output tokens a specialist gets when its model thinks: thought tokens are taken from maxOutputTokens, so without
+ * this the JSON is cut off (finishReason MAX_TOKENS) once thinking has used part of the 4,096. Default 4,096; 0 turns it off.
+ */
+export function readingSpecialistThinkingTokens(): number {
+  const n = Number(process.env.READING_SPECIALIST_THINKING_TOKENS);
+  return process.env.READING_SPECIALIST_THINKING_TOKENS?.trim() && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 4096;
+}
+
 /** Output budget for the final answer. Thinking tokens share it, so it must leave room for a deep answer after thinking. */
 export function readingSynthMaxTokens(): number {
   const n = Number(process.env.READING_SYNTH_MAX_OUTPUT_TOKENS);

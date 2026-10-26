@@ -4,7 +4,9 @@
  *   POST /api/chat/ask-stream     { question, chatId?, clarify: true }  → SSE clarify | propose | (normal reading)
  *   POST /api/chat/answer         { runId, value, viaChip, tz? }        → JSON clarify | propose | declined
  *                                 (tz: browser IANA timezone, used with the "Where are you living now?" answer)
- *   POST /api/chat/confirm-stream { runId, chatId?, edits? }            → SSE reading with the confirmed intent
+ *   POST /api/chat/confirm-stream { runId, chatId?, edits?, lat?, lon?, tz? } → SSE reading with the confirmed intent
+ *                                 (lat/lon/tz: optional browser location where the question is asked, for the prashna;
+ *                                 tz in hours or IANA; rounded to two decimals; absent -> the birth place)
  *
  * Clarifying happens only when the client says it can render the card (`clarify: true`), so older clients keep
  * today's behaviour. Every entry passes the declined-topics gate first (src/reading/policy/declined.ts).
@@ -20,6 +22,7 @@ import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
+import { parseClientPlace } from '../reading/chartData/place.js';
 
 export interface ClarifyRouteDeps {
   prisma: PrismaClient;
@@ -111,6 +114,9 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!pre.ok) return res.status(400).json({ error: pre.error });
     const c = await confirmAndBuildIntent(store(), userId, runId, edits ?? {});
     if ('error' in c) return res.status(c.error === 'not_found' ? 404 : 409).json({ error: c.error });
+    // where the question is asked (optional browser location, rounded to two decimals); absent -> the birth place
+    const questionPlace = parseClientPlace(req.body);
+    if (c.intent && questionPlace) c.intent.questionPlace = questionPlace;
     const sse = openSse(req, res);
     try {
       sse.write({ type: 'start' });

@@ -75,7 +75,7 @@ safe setting until those defaults are threaded through.
 
 ### Q4 — LLM cache idle limit: 30 minutes sliding is right; sweeper every hour, not three
 
-**Recommendation.** Create with 30 min TTL, extend to now+30 min on every use, delete on logout, **sweep hourly**. Only
+**Recommendation.** Create with 30 min TTL, extend to now+30 min on every use, delete on logout, **sweep every 45 minutes (changed from hourly by Sachin, 2026-10-26)**. Only
 specialists on Gemini 3.x get an explicit cache (doc 05: Gemini 4 Argon does not support `cachedContents`), and only once the
 key is on paid billing.
 
@@ -265,7 +265,7 @@ Still to check in R-6 against JHora's printout: the `(+1)` day roll-over in `to_
 11. §7: add `dasha.applicable`, `annual.sahams`, the `calc_version`-bearing `catalog`, the `ExportType` → catalog-validated
     list, and the API default `ayanamsa = "LAHIRI"`; note that `_chart_key_prefix` must use `main.py`'s factor→key dict.
 12. §7.5 / §10 R-8: `facts` becomes a server-side assembly from rows; only `transits` remains a Radha type.
-13. §8: sweeper hourly; explicit cache applies to Gemini 3.x specialists only (not Argon).
+13. §8: sweeper every 45 minutes; explicit cache applies to Gemini 3.x specialists only (not Argon).
 14. §9: list the timeline's actual item counts (§5 here) and that overlay rows are per person per year.
 15. §10: order **R-6 before R-4** (or make R-4 depend on a shared tree builder fixed in R-6); split R-4 into R-4a (two-level
     dashas + end dates, strengths, ashtakavarga, yogas, arudhas) and R-4b (level 3, sphutas, doshas, specialist dashas).

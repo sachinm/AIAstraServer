@@ -3,7 +3,7 @@
  * in parallel with `Send`, then reconcile (no LLM), then the streamed synthesizer. LangGraph provides state, the parallel
  * fan-out and per-node hooks; model calls go through our own REST wrapper.
  *
- *   START → fanOut ──Send──▶ analyst × N (parallel, 12 s budget each) ──▶ reconcile ──▶ synthesize ──▶ END
+ *   START → fanOut ──Send──▶ analyst × N (parallel, time budget each: specialistBudget) ──▶ reconcile ──▶ synthesize ──▶ END
  *
  * A failed analyst never fails the run: its error is recorded and the brief says the layer is missing.
  */
@@ -12,16 +12,30 @@ import type { Intent, ReadingEmitter, Usage } from './types.js';
 import type { EvidencePack } from './packs/selector.js';
 import { reconcile, type ReconcileResult } from './nodes/reconcile.js';
 import type { CacheOwner } from './llm/promptCache.js';
-import { analystsFor, runSpecialist, type Finding, type SpecialistAnalyst } from './nodes/specialists.js';
+import {
+  analystsFor,
+  failureHttpStatus,
+  failureReason,
+  runSpecialist,
+  specialistBudget,
+  SpecialistNoDataError,
+  SpecialistTimeoutError,
+  type Finding,
+  type SpecialistAnalyst,
+  type SpecialistFailureReason,
+} from './nodes/specialists.js';
 import type { Dossier } from './facts/types.js';
 import type { TransitChart } from './transits/types.js';
 import { horizonRange } from './packs/frames.js';
-import { readingSpecialistTimeoutMs } from './config.js';
+import { modelFor } from './llm/models.js';
+import { safeErrorText } from './llm/gemini.js';
 import { findingsCache, findingCacheKey } from './nodes/findingsCache.js';
 
 export interface NodeError {
   node: string;
   message: string;
+  /** specialists only: why the layer is missing */
+  reason?: SpecialistFailureReason;
 }
 
 export interface GraphDeps {
@@ -44,6 +58,8 @@ export interface GraphDeps {
   dossierHash?: string | null;
   /** owner of the specialists' explicit prompt cache */
   cacheOwner?: CacheOwner;
+  /** the reading run id, for the failure logs */
+  runId?: string;
 }
 
 const State = Annotation.Root({
@@ -94,10 +110,29 @@ export function buildReadingGraph(deps: GraphDeps) {
         deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, cached: true });
         return { findings: [{ ...cached, status: 'cached' as const }], timings: { [`${name}:${input.subject}`]: ms } };
       }
-      const call = () =>
-        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner });
-      const withTimeout = <T>(p: Promise<T>): Promise<T> =>
-        Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${name} exceeded ${readingSpecialistTimeoutMs()} ms`)), readingSpecialistTimeoutMs()))]);
+      // a failed required agent on the first subject caps the verdict (reconcile reads `failed`)
+      const capped = required && input.subject === deps.intent.subjects[0]?.id;
+      const model = modelFor('specialist');
+      const budget = specialistBudget(model);
+      const call = (signal: AbortSignal) =>
+        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal });
+      // one attempt inside the time budget; on time-out the model call is aborted, not left running
+      const attempt = async () => {
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<never>((_, rej) => {
+          timer = setTimeout(() => {
+            const e = new SpecialistTimeoutError(`${name} exceeded ${budget.timeoutMs} ms`);
+            controller.abort(e);
+            rej(e);
+          }, budget.timeoutMs);
+        });
+        try {
+          return await Promise.race([call(controller.signal), timeout]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
       // a rejected answer was still billed: keep the usage of every failed attempt so the run's cost is complete
       const spent: Usage[] = [];
       const seen = new Set<unknown>();
@@ -107,28 +142,56 @@ export function buildReadingGraph(deps: GraphDeps) {
         const u = (err as { usage?: Usage } | null)?.usage;
         if (u) spent.push(u);
       };
+      // structured, no prompt or model text: what failed, why, on which model, how long and how many tokens
+      const logFailure = (err: unknown, n: number, startedAt: number, final: boolean): SpecialistFailureReason => {
+        const reason = failureReason(err);
+        const u = (err as { usage?: Usage } | null)?.usage;
+        console.warn(JSON.stringify({
+          msg: 'reading specialist failed', runId: deps.runId ?? null, analyst: name, subject: input.subject, attempt: n, final, required, capped: final && capped,
+          reason, model, latencyMs: Date.now() - startedAt, timeoutMs: budget.timeoutMs, maxOutputTokens: budget.maxOutputTokens, thinks: budget.thinks,
+          finishReason: (err as { finishReason?: string | null } | null)?.finishReason ?? null, httpStatus: failureHttpStatus(err),
+          promptTokens: u?.promptTokens ?? null, cachedTokens: u?.cachedTokens ?? null, outputTokens: u?.outputTokens ?? null, thoughtTokens: u?.thoughtTokens ?? null,
+          error: safeErrorText(err),
+        }));
+        return reason;
+      };
+      let retried = false;
       try {
-        if (!pack) throw new Error(`no pack for subject ${input.subject}`);
+        if (!pack) throw new SpecialistNoDataError(`no pack for subject ${input.subject}`);
         let out;
+        const t1 = Date.now();
         try {
-          out = await withTimeout(call());
+          out = await attempt();
         } catch (err) {
           keepUsage(err);
+          const reason = logFailure(err, 1, t1, !required);
           if (!required) throw err; // optional agents never hold the join
-          out = await withTimeout(call()); // required agents retry once
+          // required agents retry once; the client shows the retry
+          retried = true;
+          deps.emit({ type: 'stage', name, status: 'retrying', ms: Date.now() - t0, subject: input.subject, reason, attempt: 2 });
+          const t2 = Date.now();
+          try {
+            out = await attempt();
+          } catch (err2) {
+            keepUsage(err2);
+            logFailure(err2, 2, t2, true);
+            throw err2;
+          }
         }
         const ms = Date.now() - t0;
-        if (key) findingsCache.set(key, out.finding);
-        deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject });
+        // a cut-off (repaired) finding is used for this reading but not cached for the next one
+        if (key && !out.repaired) findingsCache.set(key, out.finding);
+        deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, ...(retried ? { retried: true } : {}) });
         return { findings: [out.finding], usage: [...spent, out.usage], timings: { [`${name}:${input.subject}`]: ms } };
       } catch (err) {
         keepUsage(err);
         const ms = Date.now() - t0;
-        const isPrimary = input.subject === deps.intent.subjects[0]?.id;
-        deps.emit({ type: 'stage', name, status: required ? 'failed' : 'skipped', ms, subject: input.subject });
+        const reason = failureReason(err);
+        if (reason === 'no_data') logFailure(err, 1, t0, true);
+        deps.emit({ type: 'stage', name, status: required ? 'failed' : 'skipped', ms, subject: input.subject, reason, retried, capped });
         return {
-          errors: [{ node: `${name}:${input.subject}`, message: (err as Error).message.slice(0, 300) }],
-          ...(required && isPrimary ? { failed: [name] } : {}),
+          errors: [{ node: `${name}:${input.subject}`, message: safeErrorText(err, 300), reason }],
+          ...(capped ? { failed: [name] } : {}),
           usage: spent,
           timings: { [`${name}:${input.subject}`]: ms },
         };

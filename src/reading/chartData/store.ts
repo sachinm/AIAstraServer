@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { authToAstroKundliParams, fetchEngineExport, type AstroKundliRequestParams } from '../../lib/astroKundliClient.js';
-import { BUILTIN_CHART_TYPES, mergeChartTypes, type ChartDataType, type ChartTypeRow } from './catalog.js';
+import { BUILTIN_CHART_TYPES, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from './catalog.js';
 
 export type ItemStatus = 'ready' | 'missing' | 'failed' | 'unsupported';
 export type ItemSource = 'db' | 'legacy' | 'radha' | null;
@@ -105,13 +105,31 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
   const type = types.get(id);
   if (!type) return { id, variant: '', params: {}, error: `unknown chart data type: ${id}` };
   if (type.variantKind === 'year') {
-    const year = Number(arg);
-    if (!arg || !Number.isInteger(year) || year < 1800 || year > 2300) return { id, variant: '', params: {}, type, error: `${id} needs a year: ${id}@<year>` };
-    return { id, variant: `year=${year}`, params: { year }, type };
+    // '2027' or, for a type with fixed options, '2027;system=mudda' (only options the catalog lists may be overridden)
+    const [yearText, ...opts] = (arg ?? '').split(';');
+    const year = Number(yearText);
+    if (!arg || !yearText || !Number.isInteger(year) || year < 1800 || year > 2300) return { id, variant: '', params: {}, type, error: `${id} needs a year: ${id}@<year>` };
+    const fixed: Record<string, unknown> = type.fixedParams ? { ...type.fixedParams } : {};
+    for (const o of opts) {
+      const m = /^([a-z_]+)=([a-z0-9_]+)$/.exec(o);
+      if (!m || !(m[1]! in fixed)) return { id, variant: '', params: {}, type, error: `${id}: unknown option ${JSON.stringify(o)}` };
+      fixed[m[1]!] = m[2];
+    }
+    return { id, variant: yearVariant(year, type.fixedParams ? fixed : undefined), params: { year, ...fixed }, type };
   }
   if (arg) return { id, variant: '', params: {}, type, error: `${id} takes no variant` };
   // e.g. 'argala.d9' -> { varga: 9 }, sent to Radha with every fetch of this entry
   return { id, variant: '', params: type.fixedParams ? { ...type.fixedParams } : {}, type };
+}
+
+/**
+ * What is sent to Radha for a parsed key. Radha reads fixed options (the varga of arudhas.dN / argala.dN, the system of
+ * the year dasha) only from inside `params`; top-level fields are ignored there. The annual `year` stays top-level.
+ */
+export function radhaRequestFields(type: ChartDataType, params: Record<string, unknown>): Record<string, unknown> {
+  if (!type.fixedParams) return params;
+  const inner = Object.fromEntries(Object.keys(type.fixedParams).map((k) => [k, params[k]]));
+  return type.variantKind === 'year' ? { year: params.year, params: inner } : { params: inner };
 }
 
 export function isMissingTable(err: unknown): boolean {
@@ -182,8 +200,10 @@ export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Da
   return [...(await loadTypes(repo, now)).values()];
 }
 
-/** `moving` types (transit, transit_contacts) depend on the moment or range asked for and are never stored per person. */
+/** `moving` types (transit, transit_contacts, prashna, transit_range) depend on the moment or range asked for and are never stored per person. */
 export function movingTypeError(id: string): string {
+  if (id === 'prashna') return `${id} is a moving type and is not stored per person; call castPrashna({ userId, at, place, runId }) from src/reading/chartData/prashna.ts`;
+  if (id === 'transit_range') return `${id} is a moving type and is not stored per person; call fetchTransitRange(kundliId, { from, to, planets }) from src/reading/chartData/transitRange.ts`;
   if (id === 'transit_contacts') return `${id} is a moving type and is not stored per person; call fetchTransitContacts(kundliId, { from, to, orb, planets }) from src/reading/chartData/transitContacts.ts`;
   return `${id} is a moving type and is not stored per person; call fetchTransit(kundliId, { at, divisionalChartFactor, withNatal }) from src/reading/chartData/transit.ts`;
 }
@@ -274,9 +294,8 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     }
     let result: FetchResult;
     try {
-      // Radha reads fixed options (the varga of arudhas.dN / argala.dN) only from inside `params`; top-level fields are
-      // ignored there and the D1 answer would be stored under the varga key. The annual year stays top-level.
-      const payload = await fetcher(req!, w.type.radhaType, w.type.fixedParams ? { params: w.params } : w.params);
+      // fixed options go inside `params`, or the D1 / default-system answer would be stored under the option's key
+      const payload = await fetcher(req!, w.type.radhaType, radhaRequestFields(w.type, w.params));
       result = { status: 'ready', payload, calcVersion: w.type.calcVersion };
     } catch (err) {
       result = { status: isUnsupportedError(err) ? 'unsupported' : 'failed', error: (err as Error).message?.slice(0, 500), calcVersion: w.type.calcVersion };
@@ -354,9 +373,16 @@ export function radhaLocalToDate(value: unknown, tzHours: number | null | undefi
   return Number.isFinite(ms) ? new Date(ms) : null;
 }
 
-function pointerVariant(payload: unknown): string | null {
+/**
+ * The year row a `current` pointer names, or null when it is unreadable or names a row of another shape (e.g. a pointer
+ * written before the type gained a fixed option: `year=2027` for a type now stored as `year=2027;system=...`).
+ */
+function pointerVariant(payload: unknown, type: ChartDataType): string | null {
   const v = (payload as Partial<AnnualPointer> | null)?.variant;
-  return typeof v === 'string' && /^year=\d{4}$/.test(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  const m = /^year=(\d{4})((?:;[a-z_]+=[a-z0-9_]+)*)$/.exec(v);
+  if (!m) return null;
+  return v === yearVariant(Number(m[1]), type.fixedParams) ? v : null;
 }
 
 export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, typeIds: string[], opts: AnnualOptions = {}): Promise<Record<string, ChartItem>> {
@@ -403,7 +429,7 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
   for (const w of wanted) {
     const p = pointers.find((r) => r.dataType === w.id);
     const stale = needsFetch(p, w.type, now(), leaseMs);
-    const target = p?.status === 'ready' ? pointerVariant(p.payload) : null;
+    const target = p?.status === 'ready' ? pointerVariant(p.payload, w.type) : null;
     const mayFetch = w.type.served && !opts.noFetch;
     if (p?.status === 'fetching' && !stale && !opts.noFetch) waiting.push(w);
     else if (target && (!stale || !mayFetch)) known.push({ w, variant: target, fresh: !stale });
@@ -425,7 +451,8 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
 
   await pool(toFetch, opts.concurrency ?? concurrencyDefault(), async (w) => {
     const at = opts.at ?? (req!.coords?.tz != null ? localDateAt(now(), req!.coords.tz) : undefined);
-    const extra: Record<string, unknown> = at ? { at } : {};
+    // fixed options (the year dasha's `system`) go inside `params`, as Radha reads them; no year is sent (Radha picks it)
+    const extra: Record<string, unknown> = { ...(at ? { at } : {}), ...(w.type.fixedParams ? { params: { ...w.type.fixedParams } } : {}) };
     if (!degraded) {
       let owned = false;
       try {
@@ -447,9 +474,10 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
       if (!Number.isInteger(yearUsed) || yearUsed < 1800 || yearUsed > 2300) throw new Error(`Radha ${w.type.radhaType} response has no year_used`);
       const validToRaw = (payload as { valid_to?: unknown }).valid_to;
       const validTo = radhaLocalToDate(validToRaw, req!.coords?.tz) ?? new Date(now() + ANNUAL_RECHECK_MS);
-      const variant = `year=${yearUsed}`;
+      const variant = yearVariant(yearUsed, w.type.fixedParams);
       if (!degraded) {
-        await repo.complete(kundliId, { dataType: w.id, variant }, ayanamsa, { status: 'ready', payload, calcVersion, validTo, params: { year: yearUsed, ...extra } });
+        const { params: inner, ...top } = extra as { params?: Record<string, unknown> };
+        await repo.complete(kundliId, { dataType: w.id, variant }, ayanamsa, { status: 'ready', payload, calcVersion, validTo, params: { year: yearUsed, ...top, ...(inner ?? {}) } });
         const pointer: AnnualPointer = { year_used: yearUsed, variant, valid_to: typeof validToRaw === 'string' ? validToRaw : null };
         await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status: 'ready', payload: pointer, calcVersion, validTo });
       }
@@ -473,7 +501,7 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
       pending = pending.filter((w) => {
         const row = fresh.find((r) => r.dataType === w.id);
         if (!row || row.status === 'fetching') return true;
-        const target = row.status === 'ready' ? pointerVariant(row.payload) : null;
+        const target = row.status === 'ready' ? pointerVariant(row.payload, w.type) : null;
         if (target) settled.push({ w, variant: target });
         else out[w.id] = toItem(w.id, w.id, '', row);
         return false;
