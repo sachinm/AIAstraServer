@@ -98,26 +98,38 @@ export function buildReadingGraph(deps: GraphDeps) {
         specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner });
       const withTimeout = <T>(p: Promise<T>): Promise<T> =>
         Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${name} exceeded ${readingSpecialistTimeoutMs()} ms`)), readingSpecialistTimeoutMs()))]);
+      // a rejected answer was still billed: keep the usage of every failed attempt so the run's cost is complete
+      const spent: Usage[] = [];
+      const seen = new Set<unknown>();
+      const keepUsage = (err: unknown): void => {
+        if (seen.has(err)) return;
+        seen.add(err);
+        const u = (err as { usage?: Usage } | null)?.usage;
+        if (u) spent.push(u);
+      };
       try {
         if (!pack) throw new Error(`no pack for subject ${input.subject}`);
         let out;
         try {
           out = await withTimeout(call());
         } catch (err) {
+          keepUsage(err);
           if (!required) throw err; // optional agents never hold the join
           out = await withTimeout(call()); // required agents retry once
         }
         const ms = Date.now() - t0;
         if (key) findingsCache.set(key, out.finding);
         deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject });
-        return { findings: [out.finding], usage: [out.usage], timings: { [`${name}:${input.subject}`]: ms } };
+        return { findings: [out.finding], usage: [...spent, out.usage], timings: { [`${name}:${input.subject}`]: ms } };
       } catch (err) {
+        keepUsage(err);
         const ms = Date.now() - t0;
         const isPrimary = input.subject === deps.intent.subjects[0]?.id;
         deps.emit({ type: 'stage', name, status: required ? 'failed' : 'skipped', ms, subject: input.subject });
         return {
           errors: [{ node: `${name}:${input.subject}`, message: (err as Error).message.slice(0, 300) }],
           ...(required && isPrimary ? { failed: [name] } : {}),
+          usage: spent,
           timings: { [`${name}:${input.subject}`]: ms },
         };
       }

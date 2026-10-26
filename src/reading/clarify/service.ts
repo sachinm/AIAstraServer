@@ -137,10 +137,15 @@ export async function intentFromState(s: ClarifyState): Promise<Intent> {
   const subFrame = s.subBucket ? b.subBuckets.find((x) => x.id === s.subBucket)?.frame : undefined;
   const frame = subFrame ?? b.frames[0]!;
   const horizon = s.slots.horizon?.value ?? base.horizon;
-  const subjects = base.subjects.some((x) => x.id === frame) ? base.subjects : [{ id: frame, weight: 1 }, ...base.subjects.filter((x) => x.id !== 'general_life_direction')].slice(0, 3);
+  // The person chose one focus: read only that subject now, and keep the other parts of the question for afterwards
+  // (answered one after another, each with its own budget). Before, a question naming the focus kept every subject in
+  // the original order, so "love first" was read as career, wealth and love together.
+  const subjects = [{ id: frame, weight: 1 }];
+  const nextSubjects = [...new Set(base.subjects.map((x) => x.id))].filter((id) => id !== frame && id !== 'general_life_direction');
   return {
     ...base,
     subjects,
+    ...(nextSubjects.length ? { nextSubjects } : {}),
     horizon,
     confidence: 1,
     clarifyText: s.exactQuery ?? clarifyTextFor(subjects.map((x) => x.id), horizon, s.asOf),

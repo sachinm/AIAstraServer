@@ -21,6 +21,8 @@ export interface Intent {
   safety: SafetyFlag;
   /** Bucket, slots found and missing, template and policy flags (set by intake) */
   classification?: IntentClassification;
+  /** Other parts of the question, answered one after another once this one is done (focused readings only) */
+  nextSubjects?: SubjectId[];
 }
 
 export interface Usage {

@@ -5,7 +5,7 @@
  * then the analyst-specific slice, then the analyst instructions and the question.
  */
 import { z } from 'zod';
-import { readingSpecialistTimeoutMs } from '../config.js';
+import { readingSpecialistMaxTokens, readingSpecialistTimeoutMs } from '../config.js';
 import { callGemini } from '../llm/gemini.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
@@ -13,6 +13,17 @@ import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../p
 import type { SubjectId } from '../packs/frames.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
+
+/** The model answered but its JSON was rejected. Carries the usage, because those tokens were billed all the same. */
+export class SpecialistOutputError extends Error {
+  constructor(
+    message: string,
+    readonly usage: Usage
+  ) {
+    super(message);
+    this.name = 'SpecialistOutputError';
+  }
+}
 
 export type SpecialistAnalyst = Exclude<Analyst, 'single'>;
 export const SPECIALIST_ANALYSTS: SpecialistAnalyst[] = ['promise', 'dasha', 'transit', 'nakshatra'];
@@ -140,7 +151,7 @@ export async function runSpecialist(args: {
     cachePrefix: true,
     cacheOwner: args.cacheOwner,
     thinking: 'off',
-    maxOutputTokens: 1800,
+    maxOutputTokens: readingSpecialistMaxTokens(),
     temperature: 0.2,
     timeoutMs: readingSpecialistTimeoutMs(),
   });
@@ -148,7 +159,10 @@ export async function runSpecialist(args: {
   try {
     parsed = findingZ.parse(JSON.parse(r.text));
   } catch (err) {
-    throw new Error(`specialist ${analyst} returned unparsable JSON (${r.finishReason ?? 'no finish reason'}): ${(err as Error).message.slice(0, 120)}`);
+    throw new SpecialistOutputError(
+      `specialist ${analyst} returned unparsable JSON (${r.finishReason ?? 'no finish reason'}): ${(err as Error).message.slice(0, 120)}`,
+      r.usage
+    );
   }
   return {
     finding: { analyst, subject: args.subject, verdict: parsed.verdict, layerScore: parsed.layerScore, status: 'ok', claims: parsed.claims.slice(0, 8), windows: parsed.windows, caveats: parsed.caveats, keyFacts: parsed.keyFacts.slice(0, 6) },
