@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
+import { readingFindingsV2, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
 import { buildReadingGraph, type NodeError } from './graph.js';
 import { streamGemini } from './llm/gemini.js';
@@ -249,7 +249,10 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
-  const thinking = readingSynthThinking();
+  const v2 = readingFindingsV2();
+  // v2 (doc 25 §2.5f): short templates (T1, T9, T10) need little thinking; an explicit READING_SYNTH_THINKING wins
+  const shortTemplate = ['T1', 'T9', 'T10'].includes(intent.classification?.template ?? '');
+  const thinking = v2 && shortTemplate && !process.env.READING_SYNTH_THINKING?.trim() ? 'low' : readingSynthThinking();
   // thought summaries: streamed to the client as `thought` events and kept on the run record (reading_runs.thinking).
   // They are never written to the application logs.
   const showThoughts = readingIncludeThoughts();
@@ -302,7 +305,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );

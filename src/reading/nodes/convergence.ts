@@ -173,6 +173,8 @@ export interface BriefWindow {
   label: string;
   polarity: 'favourable' | 'testing' | 'mixed';
   source: string;
+  /** v2: what the window gives or withholds for the subject */
+  fruit?: string;
 }
 
 export interface SynthBrief {
@@ -191,6 +193,10 @@ export interface SynthBrief {
   fortune: { tier: FortuneTier; until: string | null } | null;
   /** traditions the specialists applied (Parashara, Jaimini, nakshatra …) */
   traditions: string[];
+  /** v2 (doc 25 §2.5d): the form the promise takes, and the planets that block or carry it with the layers that named them */
+  form?: string;
+  culprits?: Array<{ planet: string; layers: string[] }>;
+  contributors?: Array<{ planet: string; layers: string[] }>;
 }
 
 /** The running AD from the dossier (re-selected by date) and the next AD from the dated period list. */
@@ -221,8 +227,11 @@ export function renderBrief(b: SynthBrief): string {
     b.deciders ? `DECIDERS: ${b.deciders.text}` : '',
     b.now ? `NOW: ${b.now.md}-${b.now.ad}${b.now.pd ? `-${b.now.pd}` : ''} until ${b.now.until}` : '',
     b.next ? `NEXT: ${b.next.mdAd} from ${b.next.from} to ${b.next.to}` : '',
+    b.form ? `FORM: ${b.form}` : '',
+    b.culprits?.length ? `CULPRITS: ${b.culprits.map((c) => `${c.planet} (${c.layers.join(', ')})`).join(' · ')}` : '',
+    b.contributors?.length ? `CONTRIBUTORS: ${b.contributors.map((c) => `${c.planet} (${c.layers.join(', ')})`).join(' · ')}` : '',
     b.fortune ? `FORTUNE: ${b.fortune.tier}${b.fortune.until ? ` until ${b.fortune.until}` : ''}` : '',
-    `WINDOWS:\n${b.windows.map((w) => `- ${w.from} to ${w.to} | ${w.polarity} | ${w.label} | ${w.source}`).join('\n') || '- none in the horizon'}`,
+    `WINDOWS:\n${b.windows.map((w) => `- ${w.from} to ${w.to} | ${w.polarity} | ${w.label} | ${w.source}${w.fruit ? ` | ${w.fruit}` : ''}`).join('\n') || '- none in the horizon'}`,
     `KEY FACTS:\n${b.keyFacts.map((f) => `- ${f}`).join('\n') || '- none'}`,
     b.caveats.length ? `CAVEATS:\n${b.caveats.map((c) => `- ${c}`).join('\n')}` : '',
     b.traditions.length ? `TRADITIONS APPLIED: ${b.traditions.join(', ')}` : '',
