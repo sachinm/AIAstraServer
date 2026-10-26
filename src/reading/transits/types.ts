@@ -3,6 +3,7 @@
  * already placed against the natal chart. Node selects rows from it; it never derives houses or overlays.
  * Stand-in generator for fixtures: docs/reading-engine/drafts/radha/transit_chart.py.
  */
+import type { TransitContactsPayload } from '../chartData/transitContacts.js';
 import type { PlanetCode } from '../facts/constants.js';
 
 export interface TransitNakSegment {
@@ -55,4 +56,9 @@ export interface TransitChart {
   sade_sati: { now: SadeSatiPeriod | null; periods: SadeSatiPeriod[] };
   stations: Array<{ planet: string; kind: string; date: string; sign: number; nak: string }>;
   lunations: Array<{ kind: string; date: string; sign: number; sign_name: string; nak: string }>;
+  /**
+   * Natal-degree contacts (Radha `transit_contacts`), attached by the reading data loader (src/reading/data/store.ts),
+   * never part of the stored snapshot. Absent: not requested (type not served yet, fixture). null: the fetch failed.
+   */
+  contacts?: TransitContactsPayload | null;
 }

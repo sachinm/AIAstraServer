@@ -13,6 +13,7 @@ import { LAGNA_CODE, PLANET_CODES, type PlanetCode, type VargaKey } from '../fac
 import type { Body, DashaPeriod, Dossier, House, Varga } from '../facts/types.js';
 import type { TransitChart } from '../transits/types.js';
 import type { Intent } from '../types.js';
+import { withContacts } from './contacts.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
 import { selectTransits, type TransitSection } from './transitTable.js';
 
@@ -330,6 +331,8 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   } else {
     missing.push('transits unavailable');
   }
+  // natal-degree contacts (Radha `transit_contacts`) at transits.contacts, clipped to the horizon: packs/contacts.ts
+  transits = withContacts(transits, input.transits, hz, missing);
 
   const baseOut = readingFullBase() ? { ...base, ...fullBaseExtras(d) } : base;
   const sections: EvidencePack['sections'] = { base: baseOut, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
