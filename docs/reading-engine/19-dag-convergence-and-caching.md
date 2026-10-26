@@ -109,7 +109,7 @@ Goal: never pay for an idle cache. Code: `src/reading/llm/promptCache.ts`, `cach
   then lists Gemini's `cachedContents` and deletes `aiastra:*` caches with no live row that are older than 5 minutes.
   Without a working registry it skips the reconcile (it cannot tell orphans from live caches).
   - CLI: `npm run cache:sweep [-- --idle-minutes 30]`.
-  - Long-lived server (not Lambda): hourly unref'd timer, only when `READING_EXPLICIT_CACHE=1`.
+  - Long-lived server (not Lambda): 45-minute unref'd timer, only when `READING_EXPLICIT_CACHE=1`.
   - Lambda: EventBridge schedule → Lambda Web Adapter pass-through → `POST /events` in `server.ts`. Recognised only when
     `source=aws.events`, `detail-type=Scheduled Event`, `detail.task=llm-cache-sweep` and, when
     `LLM_CACHE_SWEEP_TOKEN` is set on the function, `detail.token` equals it. Other bodies get 204. One sweep per
@@ -122,7 +122,7 @@ random string) on the API Lambda, check the image keeps the LWA default `AWS_LWA
 
 | Resource | Value |
 |---|---|
-| EventBridge rule | `aiastra-llm-cache-sweep`, schedule `rate(1 hour)`, state ENABLED, default bus |
+| EventBridge rule | `aiastra-llm-cache-sweep`, schedule `rate(45 minutes)`, state ENABLED, default bus |
 | Target | the API Lambda (alias the deploy uses), constant input (JSON): `{"source":"aws.events","detail-type":"Scheduled Event","detail":{"task":"llm-cache-sweep","token":"<LLM_CACHE_SWEEP_TOKEN>"}}` |
 | Permission | `aws lambda add-permission --statement-id eventbridge-llm-cache-sweep --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn <rule ARN>` on that function/alias |
 

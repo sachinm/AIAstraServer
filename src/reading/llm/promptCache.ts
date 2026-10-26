@@ -14,7 +14,7 @@
  * sliding: a hit with less than half the TTL left extends it in the background. Every cache is named
  * `aiastra:<prefixHash>` and recorded in the registry (cacheRegistry.ts); before creating, an instance adopts a live
  * registry row for the same prefix, so Lambda instances share one cache. `deleteUserCaches` runs on logout and
- * `sweepLlmCaches` hourly. Registry failures are logged once and the cache keeps working in memory only.
+ * `sweepLlmCaches` every 45 minutes. Registry failures are logged once and the cache keeps working in memory only.
  */
 import { createHash } from 'node:crypto';
 import { getGeminiModelsBaseUrl } from '../../config/env.js';
