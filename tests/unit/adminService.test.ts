@@ -2,10 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import * as adminService from '../../src/services/adminService.js';
 import type { PrismaClient } from '@prisma/client';
 
-vi.mock('../../src/lib/hash.js', () => ({
-  hashPassword: vi.fn().mockResolvedValue('hashed'),
-}));
-
 function createMockPrisma(overrides: {
   findMany?: (args: unknown) => Promise<unknown[]>;
   findUnique?: (args: unknown) => Promise<unknown>;
@@ -228,44 +224,4 @@ describe('adminService', () => {
     });
   });
 
-  describe('resetPassword', () => {
-    it('resets when target is astrologer', async () => {
-      const prisma = createMockPrisma({
-        findUnique: async () => ({ role: 'astrologer' }),
-        update: async () => ({}),
-      });
-      const result = await adminService.resetPassword(prisma, 'u1', 'newpass123');
-      expect(result).toEqual({ success: true });
-      expect(prisma.auth.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'u1' },
-          data: { password: 'hashed' },
-        })
-      );
-    });
-
-    it('rejects when password too short', async () => {
-      const prisma = createMockPrisma({
-        findUnique: async () => ({ role: 'astrology_student' }),
-      });
-      const result = await adminService.resetPassword(prisma, 'u1', 'short');
-      expect(result).toEqual({ success: false, error: 'Password must be at least 6 characters' });
-      expect(prisma.auth.update).not.toHaveBeenCalled();
-    });
-
-    it('rejects when target is admin', async () => {
-      const prisma = createMockPrisma({
-        findUnique: async () => ({ role: 'admin' }),
-      });
-      const result = await adminService.resetPassword(prisma, 'admin1', 'validpass');
-      expect(result).toEqual({ success: false, error: 'User not found or cannot be updated' });
-      expect(prisma.auth.update).not.toHaveBeenCalled();
-    });
-
-    it('rejects when user not found', async () => {
-      const prisma = createMockPrisma({ findUnique: async () => null });
-      const result = await adminService.resetPassword(prisma, 'none', 'validpass');
-      expect(result).toEqual({ success: false, error: 'User not found or cannot be updated' });
-    });
-  });
 });

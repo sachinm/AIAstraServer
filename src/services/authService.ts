@@ -189,21 +189,24 @@ export async function signup(
   });
 
   // AUTH_PROVIDER=cognito: the row exists first (we own it), then the Cognito user is created and emails the
-  // confirmation code. If Cognito refuses, the row is deleted so nothing is left behind on either side and a
+  // confirmation code. If Cognito fails, the row is deleted so nothing is left behind on either side and a
   // retry does not report "email taken". local: createSignupIdentity is a no-op.
   const identity = await createSignupIdentity(email, username);
   if (!identity.ok) {
     await prisma.auth.delete({ where: { id: created.id } }).catch((err) => {
       console.error('signup rollback (delete auth row) failed:', (err as Error).message);
     });
-    if (identity.reason === 'exists') {
-      return { success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE };
-    }
     return { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
   }
 
-  // Email verification code (local provider only; Cognito already sent it, see src/auth/emailCode.ts).
-  await sendSignupCode(email);
+  if (identity.reusedExisting) {
+    // Cognito already had this email (an orphan from an earlier half-finished signup). Nothing was emailed by
+    // SignUp, so ask for the code the normal way: a confirmation code if it never confirmed, else a sign-in code.
+    await sendLoginCode(email);
+  } else {
+    // Email verification code (local provider only; Cognito already sent it, see src/auth/emailCode.ts).
+    await sendSignupCode(email);
+  }
 
   await enqueueKundliSync(prisma, created.id).catch((err) => {
     console.error('enqueueKundliSync after signup failed:', (err as Error).message);

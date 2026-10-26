@@ -10,7 +10,7 @@ Internal reference for developers working on the AdAstra astrology/kundli platfo
 |------|------|--------|
 | **Backend** | `backend/` | Node/Express, GraphQL (Yoga), Prisma, auth, kundli RAG, queue worker |
 | **Frontend** | `frontend/` | React (Vite) user portal: landing, sign-in/up, dashboard, chat, charts, mantras, remedies |
-| **Admin app** | `admin-app/` | React (Vite) admin panel: user list, user detail, reset password, kundli refresh |
+| **Admin app** | `admin-app/` | React (Vite) admin panel: user list, user detail, kundli refresh |
 
 All client apps talk to the backend via a **single GraphQL endpoint**; no direct Supabase or REST APIs are exposed to the browser (except optional REST `/query` and debug routes).
 
@@ -62,7 +62,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 **Queries:** `me`, `meDetails`, `myBiodata`, `myContent`, `ask`, `chats`, `activeChat`, `chatMessages`, `adminListUsers`, `adminGetUser`, `adminGetUserChats`, `adminGetUserKundli`.
 
-**Mutations:** `login`, `signup`, `uploadKundli`, `createChat`, `setChatInactive`, `addMessage`, `adminUpdateUser`, `adminResetPassword`, `adminRefreshUserKundli`.
+**Mutations:** `login`, `signup`, `uploadKundli`, `createChat`, `setChatInactive`, `addMessage`, `adminUpdateUser`, `adminRefreshUserKundli`.
 
 ### 3.3 Services (Business Logic)
 
@@ -71,7 +71,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 | **authService** | `src/services/authService.ts` | `validateLogin`, `login`, `signup`, `issueToken`; password hash (bcrypt), PII encrypt (DOB/POB/TOB); on login/signup calls `enqueueKundliSync`. |
 | **kundliService** | `src/services/kundliService.ts` | `loadSystemPrompt`, `runRagQuery` (RAG over kundli chunks → fake embeddings → cosine similarity → LLM), `processKundliUpload` (PDF parse, store kundli). Uses `kundli-rag.ts`, `llmClient`. |
 | **kundliQueueService** | `src/services/kundliQueueService.ts` | `enqueueKundliSync` (ensure user has a Kundli row with `queue_status: pending`); `processKundliSyncQueue` (batch process pending rows via AstroKundli API, update biodata/d1/d7/…). Uses `astroKundliClient`, `config/env`. |
-| **adminService** | `src/services/adminService.ts` | List/update users (filtered by `astrology_student` / `astrologer`), reset password, used by admin GraphQL resolvers. |
+| **adminService** | `src/services/adminService.ts` | List/update users (filtered by `astrology_student` / `astrologer`), used by admin GraphQL resolvers. |
 
 ### 3.4 Config and Lib
 
@@ -144,7 +144,7 @@ Each user has varied DOB, TOB, and place of birth (Mumbai, Delhi, Chennai, etc.)
 
 - **Purpose:** User management for roles `astrology_student` and `astrologer`.
 - **Auth:** Separate token storage: `adminToken`, `adminUserId`, `adminRole` in localStorage (`AdminAuthProvider`, `lib/graphql.ts`). Same backend GraphQL; admin resolvers require role `admin` or `superadmin` via `withAdmin`.
-- **Routes:** Login, Dashboard (user list), User detail (tabs, reset password, refresh kundli). Uses same backend `adminListUsers`, `adminGetUser`, `adminUpdateUser`, `adminResetPassword`, `adminRefreshUserKundli`.
+- **Routes:** Login, Dashboard (user list), User detail (tabs, refresh kundli). Uses same backend `adminListUsers`, `adminGetUser`, `adminUpdateUser`, `adminRefreshUserKundli`.
 
 ---
 
