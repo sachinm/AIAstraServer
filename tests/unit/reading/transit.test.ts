@@ -99,7 +99,7 @@ describe('fetchTransit', () => {
   });
 });
 
-describe('fetchTransit: several vargas and no person (R14, doc 27 R-27b)', () => {
+describe('fetchTransit: several vargas and no person (R14, doc 28 R-27b)', () => {
   const placeFetcher = () => vi.fn(async (_type: string, _fields: Record<string, unknown>) => ({ charts: { d1: {}, d9: {} } }));
 
   it('sends divisional_chart_factors (a list, deduplicated) instead of divisional_chart_factor', async () => {

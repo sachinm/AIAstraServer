@@ -1,4 +1,4 @@
-# 27 — Tithi Pravesh year dasha, transit for any moment, and prashna
+# 28 — Tithi Pravesh year dasha, transit for any moment, and prashna
 
 Status: plan, 2026-10-26. Builds on [20](20-radha-data-provider.md), [22](22-radha-build-plan.md) and
 [23](23-radha-full-dataset.md). Written end goal first, then the ingredients, then the work backwards from there.

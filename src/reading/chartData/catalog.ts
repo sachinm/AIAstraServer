@@ -35,7 +35,7 @@ export interface ChartDataType {
   label: string;
 }
 
-/** Systems Radha's `annual.tithi_pravesha_dasha` takes in `params.system` (doc 27 R-27a); the first is its default. */
+/** Systems Radha's `annual.tithi_pravesha_dasha` takes in `params.system` (doc 28 R-27a); the first is its default. */
 export const TITHI_PRAVESHA_DASHA_SYSTEMS = ['tithi_ashtottari', 'mudda', 'patyayini'] as const;
 export const TITHI_PRAVESHA_DASHA_DEFAULT_SYSTEM = TITHI_PRAVESHA_DASHA_SYSTEMS[0];
 
@@ -140,7 +140,7 @@ function build(): ChartDataType[] {
   };
   annual('annual.varsha', 'Varsha pravesh (Tajaka annual chart)', 500);
   annual('annual.tithi_pravesha', 'Tithi pravesha chart', 510);
-  // doc 27 R-27a: Radha's `params.system` (tithi_ashtottari | mudda | patyayini). Stored per year AND system, variant
+  // doc 28 R-27a: Radha's `params.system` (tithi_ashtottari | mudda | patyayini). Stored per year AND system, variant
   // `year=<y>;system=<s>`; the registration pull asks for the default, Tithi Ashtottari, for the year that applies today.
   annual('annual.tithi_pravesha_dasha', 'Tithi pravesha year dasha (per year and system; default Tithi Ashtottari)', 515, { system: TITHI_PRAVESHA_DASHA_DEFAULT_SYSTEM });
   annual('annual.mudda', 'Mudda dasha', 520);
@@ -152,7 +152,7 @@ function build(): ChartDataType[] {
   // Moving: depends on the date range asked for (`from`/`to`, plus `orb`, `planets`); fetched by fetchTransitContacts
   // (./transitContacts.ts), never stored per person.
   out.push({ id: 'transit_contacts', family: 'transit', radhaType: 'transit_contacts', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 610, label: 'Natal-degree contacts of slow transits (entry, exact, exit, station in orb)' });
-  // Moving: the chart at the moment and place a question is asked (doc 27 R-27c); cast by castPrashna (./prashna.ts) and
+  // Moving: the chart at the moment and place a question is asked (doc 28 R-27c); cast by castPrashna (./prashna.ts) and
   // stored per question in `prashna_casts`, never in kundli_data.
   out.push({ id: 'prashna', family: 'prashna', radhaType: 'prashna', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 620, label: 'Prashna chart at the question moment (panchanga, prashna lagna, vargas)' });
   return out;
