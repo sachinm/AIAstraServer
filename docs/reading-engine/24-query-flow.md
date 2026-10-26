@@ -111,10 +111,17 @@ chart. The dossier holds:
 | Nakshatra profile and relations | janma and lagna nakshatra, taras, gandanta, pushkara; natural and functional benefics and malefics, exchanges, kendra/trikona and dusthana lords |
 | Transits (separate Radha export) | transit rows by planet and period, double-transit windows, Sade Sati periods |
 
-The catalog lists **84 chart data types**, but only **10** are stored per user today (birth panchanga, D1, D2, D4, D7, D9, D10,
-Vimshottari, Narayana, Chara karakas). Radha already exports more (natal tables, every pyjhora dasha, annual charts); the
-reading engine does not use them yet. Arudhas and Argala for every divisional chart, with Sri Lagna, Hora Lagna, Gulika and
-Maandi inside each, are being built in Radha and are not deployed.
+The catalog lists **114 chart data types** (91 after M9, plus 23 per-chart arudha and argala entries from M11). Radha serves 90 of
+the first 91 (every divisional chart, every dasha except `dasha.brahma`, the natal tables, annual types and transit; catalog sync
+of 2026-10-26). Only **10** are stored per user so far (birth panchanga, D1, D2, D4, D7, D9, D10, Vimshottari, Narayana, Chara
+karakas); the others are fetched when a sign-up or a question asks for them, and the reading engine's prompt still reads the dossier.
+
+**Arudhas and Argala per divisional chart (R-4c, Radha `641a924`):** the Radha types `arudhas` and `argala` take a `varga` parameter.
+The server catalog has one entry per chart, `argala.dN` for D1, D2, D3, D4, D7, D9, D10, D12, D20, D24, D30, D60 and `arudhas.dN`
+for the same charts except D1 (plain `arudhas` stays D1), each with the `varga` fixed in code (`fixedParams`). They are `on_demand`.
+Each `arudhas` answer also carries Sri Lagna (SL), Hora Lagna (HL), Gulika (GK) and Maandi (MD) placed in that chart, and each
+`argala` answer lists, per house, the planets in the 2nd/4th/5th/11th and the paired 12th/10th/9th/3rd with their benefic or
+malefic nature. Radha allows one call per second per client without an API key.
 
 ## What is sent to the model, and what is cached
 
