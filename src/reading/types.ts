@@ -23,6 +23,12 @@ export interface Intent {
   classification?: IntentClassification;
   /** Other parts of the question, answered one after another once this one is done (focused readings only) */
   nextSubjects?: SubjectId[];
+  /**
+   * Where the person lives now (as typed, plus the browser's IANA timezone), from `user_current_location`. Only for
+   * stating timing in local terms in the tail (`CURRENT LOCATION: <place> (<tz>)`, see currentLocationLine in
+   * src/services/userLocation.ts); no astrological computation reads it.
+   */
+  currentLocation?: { place: string; tz: string | null };
 }
 
 export interface Usage {
