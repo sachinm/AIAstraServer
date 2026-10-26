@@ -1,0 +1,164 @@
+[
+  {
+    "maha_dasha_lord": "Capricorn",
+    "maha_start_date": "1988-06-15",
+    "bhuktis": [
+      {
+        "lord": "Taurus",
+        "start_date": "1988-06-15"
+      },
+      {
+        "lord": "Aquarius",
+        "start_date": "1989-01-14"
+      },
+      {
+        "lord": "Pisces",
+        "start_date": "1989-08-15"
+      },
+      {
+        "lord": "Aries",
+        "start_date": "1990-03-16"
+      },
+      {
+        "lord": "Taurus",
+        "start_date": "1990-10-15"
+      },
+      {
+        "lord": "Gemini",
+        "start_date": "1991-05-16"
+      },
+      {
+        "lord": "Cancer",
+        "start_date": "1991-12-15"
+      },
+      {
+        "lord": "Leo",
+        "start_date": "1992-07-15"
+      },
+      {
+        "lord": "Virgo",
+        "start_date": "1993-02-13"
+      },
+      {
+        "lord": "Libra",
+        "start_date": "1993-09-14"
+      },
+      {
+        "lord": "Scorpio",
+        "start_date": "1994-04-15"
+      },
+      {
+        "lord": "Sagittarius",
+        "start_date": "1994-11-14"
+      }
+    ]
+  },
+  {
+    "maha_dasha_lord": "Aquarius",
+    "maha_start_date": "1995-06-15",
+    "bhuktis": [
+      {
+        "lord": "Gemini",
+        "start_date": "1995-06-15"
+      },
+      {
+        "lord": "Pisces",
+        "start_date": "1995-09-14"
+      },
+      {
+        "lord": "Aries",
+        "start_date": "1995-12-14"
+      },
+      {
+        "lord": "Taurus",
+        "start_date": "1996-03-14"
+      },
+      {
+        "lord": "Gemini",
+        "start_date": "1996-06-13"
+      },
+      {
+        "lord": "Cancer",
+        "start_date": "1996-09-12"
+      },
+      {
+        "lord": "Leo",
+        "start_date": "1996-12-12"
+      },
+      {
+        "lord": "Virgo",
+        "start_date": "1997-03-13"
+      },
+      {
+        "lord": "Libra",
+        "start_date": "1997-06-12"
+      },
+      {
+        "lord": "Scorpio",
+        "start_date": "1997-09-11"
+      },
+      {
+        "lord": "Sagittarius",
+        "start_date": "1997-12-11"
+      },
+      {
+        "lord": "Capricorn",
+        "start_date": "1998-03-12"
+      }
+    ]
+  },
+  {
+    "maha_dasha_lord": "Pisces",
+    "maha_start_date": "1998-06-15",
+    "bhuktis": [
+      {
+        "lord": "Cancer",
+        "start_date": "1998-06-15"
+      },
+      {
+        "lord": "Aries",
+        "start_date": "1999-03-16"
+      },
+      {
+        "lord": "Taurus",
+        "start_date": "1999-12-15"
+      },
+      {
+        "lord": "Gemini",
+        "start_date": "2000-09-14"
+      },
+      {
+        "lord": "Cancer",
+        "start_date": "2001-06-15"
+      },
+      {
+        "lord": "Leo",
+        "start_date": "2002-03-16"
+      },
+      {
+        "lord": "Virgo",
+        "start_date": "2002-12-15"
+      },
+      {
+        "lord": "Libra",
+        "start_date": "2003-09-15"
+      },
+      {
+        "lord": "Scorpio",
+        "start_date": "2004-06-15"
+      },
+      {
+        "lord": "Sagittarius",
+        "start_date": "2005-03-16"
+      },
+      {
+        "lord": "Capricorn",
+        "start_date": "2005-12-15"
+      },
+      {
+        "lord": "Aquarius",
+        "start_date": "2006-09-15"
+      }
+    ]
+  }
+]

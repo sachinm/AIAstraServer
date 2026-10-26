@@ -77,3 +77,26 @@ CloudFront → Lambda aiastra-server-api
 - **Email deliverability**: OTP emails landing in spam kills sign-up; DKIM + SPF + DMARC on the sending domain, short plain subject, no marketing content.
 - **Lock-in of identity**: keep `email` as the stable key in Postgres and `cognito_sub` as a mapping, so a future IdP change is a re-map, not a migration.
 - **Feature-plan drift**: Essentials is required for `EMAIL_OTP`; the Terraform `user_pool_tier` pins it so a console edit cannot silently downgrade.
+
+## Server adapter: switching and rollback
+
+The server side of C1 is in place behind one switch; `src/auth/emailCode.ts` is the only file that knows which provider is active, so `authService` and the GraphQL schema are unchanged (`requestMagicLink`, `loginWithMagicLink`, `signup` keep their responses and the `EMAIL_EXISTS` code). The server still issues its own session JWT after a successful check.
+
+| Env var | Meaning |
+|---|---|
+| `AUTH_PROVIDER` | `local` (default, legacy 8-character server code) or `cognito` |
+| `COGNITO_CLIENT_ID` | required with `cognito`; the app client (public, no secret) |
+| `COGNITO_USER_POOL_ID` | read for the token verifier; the adapter calls address the pool through the client id |
+| `COGNITO_REGION` | default `us-east-1` |
+| `COGNITO_SIGNUP_RANDOM_PASSWORD` | `1` only if the pool is not passwordless-enabled (SignUp then sends a random password nobody sees) |
+
+**Switch on:** set `AUTH_PROVIDER=cognito` (plus the ids above) in the Lambda environment, then redeploy through the deploy session. **Rollback:** set `AUTH_PROVIDER=local` (or remove it); no data change is needed, accounts keep their stored random password hash and the local code path is untouched.
+
+Behaviour with `cognito`:
+
+- `signup`: refuses a duplicate email in Postgres, writes the `auth` row (random password hash as today), **then** calls Cognito `SignUp` with the email (and `name` = username) and **no password**; Cognito emails the confirmation code. If Cognito fails, the new row is deleted so nothing is left on either side and the retryable code `SIGNUP_RETRY` is returned; a retry does not say "email taken". A Cognito `UsernameExistsException` for an email with no `auth` row is an orphan (an earlier signup whose Cognito call succeeded but whose response was lost): the row is kept and the person is sent a code the normal way (a fresh confirmation code if it never confirmed, else a sign-in code), so they are not locked out. `EMAIL_EXISTS` is returned only when the email is already in Postgres.
+- `requestMagicLink`: if an `auth` row exists, `InitiateAuth` with `AuthFlow=USER_AUTH`, `PREFERRED_CHALLENGE=EMAIL_OTP`; Cognito emails the code. The returned `Session` is parked in `auth.cognito_session` / `cognito_session_expires_at` (migration `20261025150000_auth_cognito_session`, **apply it before switching to `cognito`**; the local provider keeps using `magic_link_*`), because request and verify are separate calls. A user who never confirmed sign-up gets a fresh confirmation code instead (`ResendConfirmationCode`). An account that predates Cognito (InitiateAuth reports the user does not exist) gets its Cognito user created lazily with the public `SignUp`, which emails a confirmation code; no admin rights or migration script are needed. Unknown emails do nothing. All cases return the same message.
+- `loginWithMagicLink`: with a parked session, `RespondToAuthChallenge` (`EMAIL_OTP_CODE`); without one, the code is treated as the signup confirmation code (`ConfirmSignUp`). Success returns the matching `auth` row (case-insensitive email, nothing is created) and the server issues its JWT. Wrong, expired or unknown gives the usual failure message.
+- Cognito tokens are returned by the client wrapper but not used yet; the API still trusts only the server JWT until the verifier lands (C1 later step).
+
+**Pool assumptions the code makes** (build the Terraform to match): Essentials or Plus feature plan; `EMAIL_OTP` in the allowed first factors (with `PASSWORD` if wanted); an app client with **no secret** and `ALLOW_USER_AUTH` in its explicit auth flows; passwordless sign-up enabled (else use `COGNITO_SIGNUP_RANDOM_PASSWORD=1`); username attribute `email`, self-registration on, `name` writable (required or optional); email sending configured (SES in production; the default sender is capped at about 50 per day); MFA off or optional; no Lambda trigger that auto-confirms users, or the signup code step is skipped. Cognito signup codes are 6 digits and sign-in codes are 8 digits, and the sign-in session lasts 3 minutes by default (app client `AuthSessionValidity`, up to 15). Lazy creation of old accounts relies on InitiateAuth returning `UserNotFoundException` for an unknown user, so set the app client's `PreventUserExistenceErrors` to `LEGACY` (with `ENABLED` Cognito hides the difference and returns a decoy challenge, so old accounts would never be created). The server messages no longer name a code length or expiry; accepted codes are digits or letters and digits, 4 to 10 long with `cognito` and the 8-character server code with `local`.

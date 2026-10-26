@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 /**
  * Unit tests for buildUserMessageWithKundli: lean (default) vs full Kundli context.
  */
@@ -112,5 +114,23 @@ describe('buildUserMessageWithKundli', () => {
     expect(content).toContain('This is the Narayana Dasa of the person:');
     expect(content).toContain('periods');
     expect(content).toContain('Sun');
+  });
+
+  it('S-2: either dasha shape reaches the model as the same compact form (no Julian days, ends present)', () => {
+    process.env.CHAT_KUNDLI_CONTEXT = 'full';
+    const read = (name: string) => JSON.parse(readFileSync(path.resolve('tests/fixtures/dasha', name), 'utf8'));
+    const body = (value: unknown, key: 'vimsottari_dasa' | 'narayana_dasa') => {
+      const content = findContentForField(buildUserMessageWithKundli({ ...emptyKundli, [key]: value }, ''), key)!;
+      return JSON.parse(content.slice(content.indexOf(':\n') + 2)) as { system: string; periods: Array<{ lord: string; start: string; end: string | null; children?: unknown[] }> };
+    };
+    const legacy = body(read('vimsottari.legacy.json'), 'vimsottari_dasa');
+    const v2 = body(read('vimsottari.v2.json'), 'vimsottari_dasa');
+    expect(legacy.system).toBe('vimsottari');
+    expect(v2.system).toBe('vimsottari');
+    expect(legacy.periods.map((p) => [p.lord, p.start])).toEqual(v2.periods.map((p) => [p.lord, p.start]));
+    expect(v2.periods[0]!.end).toBe('1994-03-02');
+    expect(legacy.periods[0]!.end).toBe(legacy.periods[1]!.start);
+    expect(JSON.stringify(v2)).not.toContain('start_jd');
+    expect(body(read('narayana.v2.json'), 'narayana_dasa').system).toBe('narayana');
   });
 });

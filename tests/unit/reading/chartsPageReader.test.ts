@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHARTS_PAGE_COLUMNS, hasLegacyShape, readChartColumns } from '../../../src/reading/chartData/chartsPageReader.js';
 import type { ChartDataRepo, StoredRow } from '../../../src/reading/chartData/store.js';
@@ -41,12 +43,30 @@ describe('readChartColumns', () => {
     for (const c of ['d1', 'd2', 'd4', 'd7'] as const) expect(out[c]).toEqual({ from: 'legacy', c });
   });
 
-  it('uses a backwards-compatible varga row after its calc_version moves on, but not a re-shaped dasha row', async () => {
-    const rows = [row('varga.d9', { calcVersion: '1' }), row('dasha.vimsottari', { calcVersion: '2' }), row('dasha.narayana', { calcVersion: 'legacy' })];
-    const out = await readChartColumns(repoWith(rows), 'k1', ['d9', 'vimsottari_dasa', 'narayana_dasa'], legacy);
+  it('uses a backwards-compatible varga row after its calc_version moves on', async () => {
+    const rows = [row('varga.d9', { calcVersion: '1' }), row('dasha.narayana', { calcVersion: 'legacy' })];
+    const out = await readChartColumns(repoWith(rows), 'k1', ['d9', 'narayana_dasa'], legacy);
     expect(out.d9).toEqual({ from: 'row', dataType: 'varga.d9' });
-    expect(out.vimsottari_dasa).toEqual({ from: 'legacy', c: 'vimsottari_dasa' });
     expect(out.narayana_dasa).toEqual({ from: 'row', dataType: 'dasha.narayana' });
+  });
+
+  it('S-2: a new-shape dasha row (calc_version 2) is read and handed to the page in the legacy array shape', async () => {
+    const v2 = JSON.parse(readFileSync(path.resolve('tests/fixtures/dasha/vimsottari.v2.json'), 'utf8'));
+    const out = await readChartColumns(repoWith([row('dasha.vimsottari', { calcVersion: '2', payload: v2 })]), 'k1', ['vimsottari_dasa'], legacy);
+    const page = out.vimsottari_dasa as Array<{ maha_dasha_lord: string; maha_start_date: string; bhuktis: Array<{ lord: string; start_date: string }> }>;
+    expect(Array.isArray(page)).toBe(true);
+    expect(page[0]).toMatchObject({ maha_dasha_lord: 'Moon', maha_start_date: '1984-03-02' });
+    expect(page[0]!.bhuktis).toHaveLength(9);
+  });
+
+  it('S-2: a new-shape value in the legacy column is converted too, with and without the vertical table', async () => {
+    const v2 = JSON.parse(readFileSync(path.resolve('tests/fixtures/dasha/narayana.v2.json'), 'utf8'));
+    const expected = JSON.parse(readFileSync(path.resolve('tests/fixtures/dasha/narayana.legacy.json'), 'utf8'));
+    expect((await readChartColumns(repoWith([]), 'k1', ['narayana_dasa'], { narayana_dasa: v2 })).narayana_dasa).toEqual(expected);
+    process.env.KUNDLI_DATA_READ = '0';
+    expect((await readChartColumns(repoWith([]), 'k1', ['narayana_dasa'], { narayana_dasa: v2 })).narayana_dasa).toEqual(expected);
+    // a legacy-shaped column is left as it is
+    expect((await readChartColumns(repoWith([]), 'k1', ['narayana_dasa'], { narayana_dasa: expected })).narayana_dasa).toEqual(expected);
   });
 
   it('returns null when neither the row nor the legacy column has data', async () => {

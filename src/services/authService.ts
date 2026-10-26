@@ -4,7 +4,12 @@ import { getJwtSecret } from '../graphql/context.js';
 import { generateAccountPassword, hashPassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
-import { sendLoginCode, verifyLoginCode } from '../auth/emailCode.js';
+import {
+  sendLoginCode,
+  verifyLoginCode,
+  createSignupIdentity,
+  sendSignupCode,
+} from '../auth/emailCode.js';
 import { validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
@@ -16,13 +21,13 @@ const DEFAULT_EXPIRY = '7d';
 
 /** Same response whether or not the email exists. */
 export const MAGIC_LINK_REQUEST_MESSAGE =
-  "If that email is registered, you'll receive a message with an 8-character code. The code expires in 5 minutes.";
+  "If that email is registered, we've sent it a code. Enter the code we emailed you. It expires in a few minutes.";
 
 export const MAGIC_LINK_LOGIN_FAILED =
   'Unable to sign in. Check your code and try again.';
 
 export const SIGNUP_CODE_MESSAGE =
-  'Account created. Enter the 8-character code we emailed you to finish signing in.';
+  'Account created. Enter the code we emailed you. It expires in a few minutes.';
 
 export type LoginResult =
   | { success: true; token: string; user: string; role: string }
@@ -30,13 +35,17 @@ export type LoginResult =
 
 /** Stable code for a signup refused because the email is already registered. */
 export const EMAIL_EXISTS_CODE = 'EMAIL_EXISTS';
+/** Stable code for a signup that failed on our side and left nothing behind: the client may simply retry. */
+export const SIGNUP_RETRY_CODE = 'SIGNUP_RETRY';
+export const SIGNUP_RETRY_MESSAGE =
+  'We could not create your account just now. Please try again in a moment.';
 export const EMAIL_EXISTS_MESSAGE =
   'This email is already registered. Please sign in instead.';
 
 /** Signup does not sign the user in: they confirm the emailed code first (loginWithMagicLink). */
 export type SignUpResult =
   | { success: true; message: string }
-  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE };
+  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE };
 
 /**
  * Issue a JWT for the given user (opaque: only sub and role).
@@ -70,7 +79,7 @@ export async function requestMagicLink(
 }
 
 /**
- * Complete email-code login with the 8-character code from email.
+ * Complete email-code login with the code from email.
  */
 export async function loginWithMagicLink(
   emailRaw: string,
@@ -116,7 +125,7 @@ export async function loginWithMagicLink(
 /**
  * Signup: create the account from email and profile fields only. A random password is generated,
  * hashed and stored (never returned, never used for login). A login code is emailed so the new user
- * confirms the address by entering it. Any `password` in the input is ignored.
+ * confirms the address by entering it (Cognito sends it when AUTH_PROVIDER=cognito). Any `password` in the input is ignored.
  */
 export async function signup(
   input: unknown,
@@ -179,8 +188,25 @@ export async function signup(
     },
   });
 
-  // Email verification code; Cognito replaces this later (see src/auth/emailCode.ts).
-  await sendLoginCode(email);
+  // AUTH_PROVIDER=cognito: the row exists first (we own it), then the Cognito user is created and emails the
+  // confirmation code. If Cognito fails, the row is deleted so nothing is left behind on either side and a
+  // retry does not report "email taken". local: createSignupIdentity is a no-op.
+  const identity = await createSignupIdentity(email, username);
+  if (!identity.ok) {
+    await prisma.auth.delete({ where: { id: created.id } }).catch((err) => {
+      console.error('signup rollback (delete auth row) failed:', (err as Error).message);
+    });
+    return { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
+  }
+
+  if (identity.reusedExisting) {
+    // Cognito already had this email (an orphan from an earlier half-finished signup). Nothing was emailed by
+    // SignUp, so ask for the code the normal way: a confirmation code if it never confirmed, else a sign-in code.
+    await sendLoginCode(email);
+  } else {
+    // Email verification code (local provider only; Cognito already sent it, see src/auth/emailCode.ts).
+    await sendSignupCode(email);
+  }
 
   await enqueueKundliSync(prisma, created.id).catch((err) => {
     console.error('enqueueKundliSync after signup failed:', (err as Error).message);

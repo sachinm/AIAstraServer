@@ -17,7 +17,23 @@ describe('assertTurnstileIfConfigured', () => {
     }
   });
 
-  it('allows request when TURNSTILE_SECRET_KEY is unset', async () => {
+  it.each(['production', 'staging'])(
+    'refuses request in %s when TURNSTILE_SECRET_KEY is unset (fail closed)',
+    async (env) => {
+      delete process.env.TURNSTILE_SECRET_KEY;
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = env;
+      try {
+        const r = await assertTurnstileIfConfigured('a'.repeat(25));
+        expect(r.ok).toBe(false);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    }
+  );
+
+  it('allows request when TURNSTILE_SECRET_KEY is unset outside staging and production', async () => {
     delete process.env.TURNSTILE_SECRET_KEY;
     const r = await assertTurnstileIfConfigured(undefined);
     expect(r).toEqual({ ok: true });

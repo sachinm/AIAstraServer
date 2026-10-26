@@ -8,6 +8,7 @@ import Groq from 'groq-sdk';
 import type { PrismaClient } from '@prisma/client';
 import { loadSystemPrompt } from './kundliService.js';
 import { fetchLatestKundliForUser } from '../../kundli-rag.js';
+import { DASHA_SYSTEM_BY_COLUMN, dashaForPrompt } from '../reading/chartData/dashaShape.js';
 
 const GROQ_CHAT_SYSTEM_PROMPT_NAME = 'pvr_oracle';
 const GROQ_MODEL = 'openai/gpt-oss-120b';
@@ -113,7 +114,9 @@ export function buildUserMessageWithKundli(
 
   const kundliUserContents: string[] = [];
   for (const key of fields) {
-    const value = (kundli as Record<string, unknown>)[key];
+    const raw = (kundli as Record<string, unknown>)[key];
+    // dasha columns hold the legacy array or the R-6 node shape (S-2); the model sees one compact form either way
+    const value = key in DASHA_SYSTEM_BY_COLUMN && raw != null ? dashaForPrompt(raw, { system: DASHA_SYSTEM_BY_COLUMN[key] }) : raw;
     const hasValue = value !== null && value !== undefined;
     kundliUserContents.push(formatFieldContent(key, value, hasValue));
   }

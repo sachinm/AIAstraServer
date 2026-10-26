@@ -1,0 +1,343 @@
+{
+  "system": "vimsottari",
+  "levels": 2,
+  "balance_at_birth": {
+    "lord": "Moon",
+    "years": 6.42
+  },
+  "periods": [
+    {
+      "lord": "Moon",
+      "level": 1,
+      "start": "1984-03-02",
+      "end": "1994-03-02",
+      "start_jd": 2445761.5,
+      "end_jd": 2449413.5,
+      "duration_years": 10,
+      "before_birth": true,
+      "children": [
+        {
+          "lord": "Moon",
+          "level": 2,
+          "start": "1984-03-02",
+          "end": "1984-12-31",
+          "start_jd": 2445761.5,
+          "end_jd": 2446065.5,
+          "duration_years": 0.8333,
+          "before_birth": true,
+          "children": []
+        },
+        {
+          "lord": "Mars",
+          "level": 2,
+          "start": "1984-12-31",
+          "end": "1985-08-01",
+          "start_jd": 2446065.5,
+          "end_jd": 2446278.5,
+          "duration_years": 0.5833,
+          "before_birth": true,
+          "children": []
+        },
+        {
+          "lord": "Rahu",
+          "level": 2,
+          "start": "1985-08-01",
+          "end": "1987-01-31",
+          "start_jd": 2446278.5,
+          "end_jd": 2446826.5,
+          "duration_years": 1.5,
+          "before_birth": true,
+          "children": []
+        },
+        {
+          "lord": "Jupiter",
+          "level": 2,
+          "start": "1987-01-31",
+          "end": "1988-06-01",
+          "start_jd": 2446826.5,
+          "end_jd": 2447313.5,
+          "duration_years": 1.3333,
+          "before_birth": true,
+          "children": []
+        },
+        {
+          "lord": "Saturn",
+          "level": 2,
+          "start": "1988-06-01",
+          "end": "1989-12-31",
+          "start_jd": 2447313.5,
+          "end_jd": 2447891.5,
+          "duration_years": 1.5833,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Mercury",
+          "level": 2,
+          "start": "1989-12-31",
+          "end": "1991-06-01",
+          "start_jd": 2447891.5,
+          "end_jd": 2448408.5,
+          "duration_years": 1.4167,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Ketu",
+          "level": 2,
+          "start": "1991-06-01",
+          "end": "1991-12-31",
+          "start_jd": 2448408.5,
+          "end_jd": 2448621.5,
+          "duration_years": 0.5833,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Venus",
+          "level": 2,
+          "start": "1991-12-31",
+          "end": "1993-08-31",
+          "start_jd": 2448621.5,
+          "end_jd": 2449230.5,
+          "duration_years": 1.6667,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Sun",
+          "level": 2,
+          "start": "1993-08-31",
+          "end": "1994-03-02",
+          "start_jd": 2449230.5,
+          "end_jd": 2449413.5,
+          "duration_years": 0.5,
+          "before_birth": false,
+          "children": []
+        }
+      ]
+    },
+    {
+      "lord": "Mars",
+      "level": 1,
+      "start": "1994-03-02",
+      "end": "2001-03-02",
+      "start_jd": 2449413.5,
+      "end_jd": 2451970.5,
+      "duration_years": 7,
+      "before_birth": false,
+      "children": [
+        {
+          "lord": "Mars",
+          "level": 2,
+          "start": "1994-03-02",
+          "end": "1994-07-29",
+          "start_jd": 2449413.5,
+          "end_jd": 2449562.5,
+          "duration_years": 0.4083,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Rahu",
+          "level": 2,
+          "start": "1994-07-29",
+          "end": "1995-08-17",
+          "start_jd": 2449562.5,
+          "end_jd": 2449946.5,
+          "duration_years": 1.05,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Jupiter",
+          "level": 2,
+          "start": "1995-08-17",
+          "end": "1996-07-23",
+          "start_jd": 2449946.5,
+          "end_jd": 2450287.5,
+          "duration_years": 0.9333,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Saturn",
+          "level": 2,
+          "start": "1996-07-23",
+          "end": "1997-09-01",
+          "start_jd": 2450287.5,
+          "end_jd": 2450692.5,
+          "duration_years": 1.1083,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Mercury",
+          "level": 2,
+          "start": "1997-09-01",
+          "end": "1998-08-29",
+          "start_jd": 2450692.5,
+          "end_jd": 2451054.5,
+          "duration_years": 0.9917,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Ketu",
+          "level": 2,
+          "start": "1998-08-29",
+          "end": "1999-01-25",
+          "start_jd": 2451054.5,
+          "end_jd": 2451203.5,
+          "duration_years": 0.4083,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Venus",
+          "level": 2,
+          "start": "1999-01-25",
+          "end": "2000-03-26",
+          "start_jd": 2451203.5,
+          "end_jd": 2451629.5,
+          "duration_years": 1.1667,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Sun",
+          "level": 2,
+          "start": "2000-03-26",
+          "end": "2000-08-01",
+          "start_jd": 2451629.5,
+          "end_jd": 2451757.5,
+          "duration_years": 0.35,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Moon",
+          "level": 2,
+          "start": "2000-08-01",
+          "end": "2001-03-02",
+          "start_jd": 2451757.5,
+          "end_jd": 2451970.5,
+          "duration_years": 0.5833,
+          "before_birth": false,
+          "children": []
+        }
+      ]
+    },
+    {
+      "lord": "Rahu",
+      "level": 1,
+      "start": "2001-03-02",
+      "end": "2019-03-02",
+      "start_jd": 2451970.5,
+      "end_jd": 2458544.5,
+      "duration_years": 18,
+      "before_birth": false,
+      "children": [
+        {
+          "lord": "Rahu",
+          "level": 2,
+          "start": "2001-03-02",
+          "end": "2003-11-13",
+          "start_jd": 2451970.5,
+          "end_jd": 2452956.5,
+          "duration_years": 2.7,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Jupiter",
+          "level": 2,
+          "start": "2003-11-13",
+          "end": "2006-04-08",
+          "start_jd": 2452956.5,
+          "end_jd": 2453833.5,
+          "duration_years": 2.4,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Saturn",
+          "level": 2,
+          "start": "2006-04-08",
+          "end": "2009-02-12",
+          "start_jd": 2453833.5,
+          "end_jd": 2454874.5,
+          "duration_years": 2.85,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Mercury",
+          "level": 2,
+          "start": "2009-02-12",
+          "end": "2011-09-01",
+          "start_jd": 2454874.5,
+          "end_jd": 2455805.5,
+          "duration_years": 2.55,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Ketu",
+          "level": 2,
+          "start": "2011-09-01",
+          "end": "2012-09-19",
+          "start_jd": 2455805.5,
+          "end_jd": 2456189.5,
+          "duration_years": 1.05,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Venus",
+          "level": 2,
+          "start": "2012-09-19",
+          "end": "2015-09-20",
+          "start_jd": 2456189.5,
+          "end_jd": 2457285.5,
+          "duration_years": 3,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Sun",
+          "level": 2,
+          "start": "2015-09-20",
+          "end": "2016-08-14",
+          "start_jd": 2457285.5,
+          "end_jd": 2457614.5,
+          "duration_years": 0.9,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Moon",
+          "level": 2,
+          "start": "2016-08-14",
+          "end": "2018-02-13",
+          "start_jd": 2457614.5,
+          "end_jd": 2458162.5,
+          "duration_years": 1.5,
+          "before_birth": false,
+          "children": []
+        },
+        {
+          "lord": "Mars",
+          "level": 2,
+          "start": "2018-02-13",
+          "end": "2019-03-02",
+          "start_jd": 2458162.5,
+          "end_jd": 2458544.5,
+          "duration_years": 1.05,
+          "before_birth": false,
+          "children": []
+        }
+      ]
+    }
+  ]
+}

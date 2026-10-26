@@ -1,9 +1,13 @@
 /**
  * Server-side verification of Cloudflare Turnstile tokens (siteverify).
- * When TURNSTILE_SECRET_KEY is unset, {@link assertTurnstileIfConfigured} allows the request.
+ * When TURNSTILE_SECRET_KEY is unset, {@link assertTurnstileIfConfigured} allows the request outside
+ * staging and production and refuses it there.
  */
 
 import { getTurnstileSecret } from '../config/env.js';
+
+/** Environments that must never run without the Turnstile secret (Lambda staging and production). */
+const DEPLOYED_NODE_ENVS = new Set(['production', 'staging']);
 
 type SiteVerifyResponse = {
   success?: boolean;
@@ -52,7 +56,18 @@ export async function assertTurnstileIfConfigured(
   remoteIp?: string | null
 ): Promise<TurnstileGateResult> {
   const secret = getTurnstileSecret();
-  if (!secret) return { ok: true };
+  if (!secret) {
+    // Fail closed on deployed environments: a missing secret must not silently disable the human check.
+    // Local dev and tests stay open so they run without Cloudflare keys.
+    if (DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? '')) {
+      console.error('TURNSTILE_SECRET_KEY is not set on a deployed environment; refusing login/signup');
+      return {
+        ok: false,
+        message: 'Sign-in is temporarily unavailable. Please try again later.',
+      };
+    }
+    return { ok: true };
+  }
 
   if (!token || typeof token !== 'string' || token.length < 20) {
     return {
