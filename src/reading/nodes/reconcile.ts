@@ -165,7 +165,8 @@ export function reconcile(args: { findings: Finding[]; packs: Record<string, Evi
   const dec = primary ? applyDeciders(by('promise'), primary) : { L1: undefined, used: [] as string[] };
   const layers: LayerScores = {};
   if (dec.L1 !== undefined) layers.L1 = dec.L1;
-  for (const [a, k] of [['dasha', 'L2'], ['transit', 'L3'], ['nakshatra', 'L4']] as const) {
+  // L5 annual and L6 prashna are confirmation layers (doc 28 §5): weight 1, see convergence.ts
+  for (const [a, k] of [['dasha', 'L2'], ['transit', 'L3'], ['nakshatra', 'L4'], ['annual', 'L5'], ['prashna', 'L6']] as const) {
     const f = by(a);
     if (f && typeof f.layerScore === 'number') layers[k] = f.layerScore;
   }

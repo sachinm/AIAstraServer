@@ -7,19 +7,26 @@
  *   L2 timing (dasha)    from the dasha specialist            weight 2   required
  *   L3 trigger (transit) from the transit specialist          weight 2   required when the horizon is 3 years or less
  *   L4 second school     from the nakshatra specialist        weight 1   optional
- *   L5 annual chart      not exported yet                     weight 1   optional
+ *   L5 annual chart      from the annual (Tithi Pravesh) one  weight 1   optional, horizons within about 12 months
+ *   L6 prashna           from the prashna specialist          weight 1   optional, prashna-eligible questions only
+ *
+ * L5 and L6 are confirmation layers (doc 19, doc 28 §5): they count in the score but not in the core tiers. The prashna
+ * vote may then move the tier one step, and only with a natal layer (L1-L4) on its side; alone it can pull the verdict
+ * to "mixed" at most, never past it (prashnaNudge).
  */
 import type { SubjectId } from '../packs/frames.js';
 import type { Dossier } from '../facts/types.js';
 import type { TransitChart } from '../transits/types.js';
 import type { Finding, SpecialistAnalyst } from './specialists.js';
 
-export type LayerId = 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
+export type LayerId = 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6';
 export type VerdictLevel = 'strong' | 'moderate' | 'weak' | 'not_indicated' | 'mixed';
 export type AgreementLabel = 'converge' | 'partial' | 'diverge';
 
-export const LAYER_OF: Record<SpecialistAnalyst, LayerId> = { promise: 'L1', dasha: 'L2', transit: 'L3', nakshatra: 'L4' };
-export const LAYER_WEIGHT: Record<LayerId, number> = { L1: 3, L2: 2, L3: 2, L4: 1, L5: 1 };
+export const LAYER_OF: Record<SpecialistAnalyst, LayerId> = { promise: 'L1', dasha: 'L2', transit: 'L3', nakshatra: 'L4', annual: 'L5', prashna: 'L6' };
+export const LAYER_WEIGHT: Record<LayerId, number> = { L1: 3, L2: 2, L3: 2, L4: 1, L5: 1, L6: 1 };
+/** Layers read from the natal chart (the prashna needs one of them on its side to move the verdict). */
+export const NATAL_LAYERS: readonly LayerId[] = ['L1', 'L2', 'L3', 'L4'];
 
 export interface LayerScores {
   L1?: number;
@@ -27,6 +34,7 @@ export interface LayerScores {
   L3?: number;
   L4?: number;
   L5?: number;
+  L6?: number;
 }
 
 export interface Verdict {
@@ -60,14 +68,42 @@ export function convergence(layers: LayerScores, opts: { transitRequired: boolea
     else if (L1 !== undefined && L1 >= 1 && L2 !== undefined && L3 !== undefined && Math.sign(L2) !== Math.sign(L3) && L2 !== 0 && L3 !== 0) level = 'mixed';
     else level = 'not_indicated';
   }
+  const nudge = prashnaNudge(level, layers);
+  if (nudge.note) {
+    level = nudge.level;
+    caps.push(nudge.note);
+  }
   // a required layer that failed caps the verdict at weak (file 11 §6)
   if (opts.missingRequired.length) {
     caps.push(`missing ${opts.missingRequired.join(', ')}`);
     if (level === 'strong' || level === 'moderate') level = 'weak';
   }
-  const signs = present.filter((k) => k !== 'L5').map((k) => Math.sign(layers[k] as number)).filter((s) => s !== 0);
+  const signs = present.filter((k) => k !== 'L5' && k !== 'L6').map((k) => Math.sign(layers[k] as number)).filter((s) => s !== 0);
   const agreement: AgreementLabel = signs.length <= 1 || signs.every((s) => s === signs[0]) ? 'converge' : signs.filter((s) => s === signs[0]).length >= signs.length / 2 ? 'partial' : 'diverge';
   return { level, agreement, score, caps };
+}
+
+/**
+ * The prashna vote (L6, doc 28 §5): one vote that raises or lowers confidence but never decides alone.
+ * - |L6| < 1, or the chart denies the result (L1 ≤ −2): no change.
+ * - With a natal layer of the same sign (|L| ≥ 1 in L1-L4): one step up (not indicated → weak → moderate → strong,
+ *   mixed → moderate) or down (strong → moderate → weak → not indicated, mixed → weak).
+ * - Alone: it moves the verdict toward "mixed" and stops there. A yes from the prashna against a chart that does not
+ *   indicate the result gives "mixed"; a no against a positive chart takes one step down but not below "mixed".
+ */
+export function prashnaNudge(level: VerdictLevel, layers: LayerScores): { level: VerdictLevel; note: string | null } {
+  const p = layers.L6;
+  if (typeof p !== 'number' || Math.abs(p) < 1) return { level, note: null };
+  if (typeof layers.L1 === 'number' && layers.L1 <= -2) return { level, note: null };
+  const sign = Math.sign(p);
+  const agreed = NATAL_LAYERS.some((k) => typeof layers[k] === 'number' && Math.abs(layers[k] as number) >= 1 && Math.sign(layers[k] as number) === sign);
+  const UP: Record<VerdictLevel, VerdictLevel> = { not_indicated: 'weak', weak: 'moderate', mixed: 'moderate', moderate: 'strong', strong: 'strong' };
+  const DOWN: Record<VerdictLevel, VerdictLevel> = { strong: 'moderate', moderate: 'weak', mixed: 'weak', weak: 'not_indicated', not_indicated: 'not_indicated' };
+  const ALONE_UP: Record<VerdictLevel, VerdictLevel> = { not_indicated: 'mixed', weak: 'weak', mixed: 'mixed', moderate: 'moderate', strong: 'strong' };
+  const ALONE_DOWN: Record<VerdictLevel, VerdictLevel> = { strong: 'moderate', moderate: 'mixed', mixed: 'mixed', weak: 'weak', not_indicated: 'not_indicated' };
+  const next = sign > 0 ? (agreed ? UP : ALONE_UP)[level] : (agreed ? DOWN : ALONE_DOWN)[level];
+  if (next === level) return { level, note: null };
+  return { level: next, note: `prashna ${sign > 0 ? 'raised' : 'lowered'} ${level} to ${next}${agreed ? ' with a natal layer' : ' without a natal layer (never past mixed)'}` };
 }
 
 // ---- deciders (file 11 §3) ---------------------------------------------------------------------------------

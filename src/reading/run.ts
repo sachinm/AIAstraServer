@@ -30,6 +30,7 @@ import { buildEvidencePack, hashPack, hashText, mergeSubjectPacks, renderBase, r
 import { PROMPTS, PROMPT_VERSION } from './prompts/generated.js';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
 import { guidanceFor } from './coach/content.js';
+import { prismaLayerLoaders, type LayerLoaders } from './layers/loaders.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -52,6 +53,8 @@ export interface RunReadingOptions {
   intent?: Intent;
   /** Where the question is asked (client location, rounded), kept on the intent for the prashna */
   questionPlace?: { lat: number; lon: number; tz: number };
+  /** Data for the doc 28 layers (annual, prashna, transit at an asked date); default Radha through Prisma, none with a dataLoader */
+  layers?: LayerLoaders;
 }
 
 /** Longest thinking text stored per run. */
@@ -315,6 +318,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
       dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId,
+      layers: opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId })),
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;

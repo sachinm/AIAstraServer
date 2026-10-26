@@ -8,7 +8,7 @@ describe('embedded prompts', () => {
   });
 
   it('contains every prompt the engine loads', () => {
-    for (const k of ['persona', 'method', 'intake', 'promise', 'dasha', 'transit', 'nakshatra', 'synth', 'formats/direct', 'formats/timeline', 'formats/factor_table', 'formats/narrative', 'formats/watchlist']) {
+    for (const k of ['persona', 'method', 'intake', 'promise', 'dasha', 'transit', 'nakshatra', 'synth', 'annual', 'prashna', 'formats/direct', 'formats/timeline', 'formats/factor_table', 'formats/narrative', 'formats/watchlist']) {
       expect(PROMPTS[k], k).toBeTruthy();
     }
     expect(PROMPT_VERSION).toMatch(/^[0-9a-f]{12}$/);

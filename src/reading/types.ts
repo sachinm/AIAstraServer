@@ -35,6 +35,11 @@ export interface Intent {
    * src/reading/chartData/prashna.ts); absent -> the birth place (docs/reading-engine/27 §7).
    */
   questionPlace?: { lat: number; lon: number; tz: number };
+  /**
+   * Set from a confirmed clarify state (doc 28 §5): whether the question is `prashna_eligible` (yes/no, "should I",
+   * "will X happen", "now"; never a declined or role-gated topic), and the confirmation moment the prashna is cast for.
+   */
+  prashna?: { eligible: boolean; askedAt: string; source: 'rules' | 'model' };
 }
 
 export interface Usage {
