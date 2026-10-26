@@ -53,10 +53,18 @@ describe('runReading: single flow', () => {
     expect(r.record.intent.subjects[0]!.id).toBe('marriage_relationship');
   });
 
-  it('sends the thinking config in the request body and never asks for thoughts', async () => {
+  it('sends the thinking config in the request body and asks for thought summaries (READING_INCLUDE_THOUGHTS=0 turns it off)', async () => {
     await runReading(prisma, 'u1', 'When will I get married?', { asOf: G1_AS_OF, flow: 'single' });
     const gc = fake.requests[0]!.body.generationConfig;
-    expect(gc.thinkingConfig).toEqual({ thinkingBudget: 512, includeThoughts: false });
+    expect(gc.thinkingConfig).toEqual({ thinkingBudget: 512, includeThoughts: true });
+    fake.reset();
+    process.env.READING_INCLUDE_THOUGHTS = '0';
+    try {
+      await runReading(prisma, 'u1', 'When will I get married?', { asOf: G1_AS_OF, flow: 'single' });
+      expect(fake.requests[0]!.body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 512, includeThoughts: false });
+    } finally {
+      delete process.env.READING_INCLUDE_THOUGHTS;
+    }
     expect(gc.maxOutputTokens).toBe(4096);
   });
 
