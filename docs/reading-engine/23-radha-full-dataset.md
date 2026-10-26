@@ -51,8 +51,14 @@ occupants), `yogas`, `doshas`, `arudhas`, `sphutas`, `charakaraka`.
 
 ## 4. Server work that follows
 
-1. Add the new types (`relations`, `benefic_malefic`, `dignities`, `avasthas`, `bhava`, `annual.tithi_pravesha_dasha`,
-   `transit`, `dasha.applicable`) to `src/reading/chartData/catalog.ts` and a seed migration for `chart_data_types`.
+1. **Done (2026-10-25, branch `feature/catalog-new-radha-types`).** `relations`, `benefic_malefic`, `dignities`, `bhava`,
+   `dasha.applicable`, `annual.tithi_pravesha_dasha` and `transit` are in `src/reading/chartData/catalog.ts`, all
+   `on_demand` and unserved until the catalog sync. Seed migration `20261025160000_reading_m9_catalog_more_types`
+   (written, not applied) widens the `change_class` check to `natal | annual | moving` and inserts the seven rows.
+   `transit` is change class `moving`: never stored in `kundli_data`; `ensureChartData` refuses it and callers use
+   `fetchTransit(kundliId, { at, divisionalChartFactor, withNatal })` in `src/reading/chartData/transit.ts` (one throttled
+   Radha call, payload returned unstored). `bhava` is stored with Radha's default `bhava_madhya_method` (1). Not added:
+   `avasthas` (Radha does not serve it). `dasha.brahma` stays listed and unserved (pyjhora bug, Radha does not export it).
 2. Decide which belong in the registration set (doc 21 Q1); everything else is fetched on first use.
 3. Run the catalog sync after each Radha deploy.
 4. Multi-type coalescing in `ensureChartData` (S-3) once Radha serves the multi-type request.

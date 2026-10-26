@@ -175,6 +175,11 @@ export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Da
   return [...(await loadTypes(repo, now)).values()];
 }
 
+/** `moving` types (transit) depend on the moment asked for and are never stored per person. */
+export function movingTypeError(id: string): string {
+  return `${id} is a moving type and is not stored per person; call fetchTransit(kundliId, { at, divisionalChartFactor, withNatal }) from src/reading/chartData/transit.ts`;
+}
+
 export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: string[], opts: EnsureOptions = {}): Promise<Record<string, ChartItem>> {
   const now = opts.now ?? Date.now;
   const ayanamsa = opts.ayanamsa ?? 'LAHIRI';
@@ -189,6 +194,7 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
   for (const key of [...new Set(keys)]) {
     const p = parseKey(key, types);
     if (p.error || !p.type) out[key] = { key, id: p.id, variant: p.variant, status: 'failed', source: null, payload: null, error: p.error };
+    else if (p.type.changeClass === 'moving') out[key] = { key, id: p.id, variant: p.variant, status: 'failed', source: null, payload: null, error: movingTypeError(p.id) };
     else wanted.push({ key, id: p.id, variant: p.variant, params: p.params, type: p.type });
   }
   if (!wanted.length) return out;
