@@ -26,7 +26,7 @@ import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
-import { isCacheSweepEvent, runScheduledSweep, startHourlySweep } from './src/reading/llm/cacheSweep.js';
+import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -355,7 +355,7 @@ async function start(): Promise<void> {
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureSuperadmin();
-    if (startHourlySweep()) console.log('LLM cache sweep: hourly');
+    if (startPeriodicSweep()) console.log('LLM cache sweep: hourly');
     scheduleChartCatalogSyncOnStart(prisma);
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
     if (isAstroKundliConfigured()) {

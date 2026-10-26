@@ -886,7 +886,7 @@ const resolvers = {
       return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
     },
     logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
-      // fire-and-forget: the response never waits for Gemini; the hourly sweeper catches anything left
+      // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
       if (context.userId) void deleteUserCaches(context.userId).catch(() => undefined);
       return true;
     },

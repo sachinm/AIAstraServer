@@ -2,7 +2,7 @@
  * Entry points for the LLM cache sweeper (promptCache.ts `sweepLlmCaches`; docs/reading-engine/19 §cache, R-7):
  * - Lambda: an EventBridge scheduled event reaches Express through the Lambda Web Adapter pass-through path
  *   (POST /events, AWS_LWA_PASS_THROUGH_PATH). `isCacheSweepEvent` recognises it; `runScheduledSweep` runs it.
- * - Long-lived server (not Lambda): `startHourlySweep` runs it every hour on an unref'd timer.
+ * - Long-lived server (not Lambda): `startPeriodicSweep` runs it every 45 minutes on an unref'd timer.
  * - CLI: `npm run cache:sweep` (scripts/cache-sweep.ts).
  */
 import { explicitCacheEnabled, sweepLlmCaches, type SweepResult } from './promptCache.js';
@@ -35,10 +35,13 @@ export async function runScheduledSweep(): Promise<SweepResult | { skipped: stri
   }
 }
 
-/** Hourly sweep for a long-lived server. No-op on Lambda (EventBridge drives it there) and when the cache is off. */
-export function startHourlySweep(): ReturnType<typeof setInterval> | null {
+/** Sweep cadence (EventBridge on Lambda uses rate(45 minutes)). */
+export const SWEEP_INTERVAL_MS = 45 * 60_000;
+
+/** Sweep every 45 minutes for a long-lived server. No-op on Lambda (EventBridge drives it there) and when the cache is off. */
+export function startPeriodicSweep(): ReturnType<typeof setInterval> | null {
   if (process.env.AWS_LAMBDA_FUNCTION_NAME || !explicitCacheEnabled()) return null;
-  const t = setInterval(() => void runScheduledSweep(), 60 * 60_000);
+  const t = setInterval(() => void runScheduledSweep(), SWEEP_INTERVAL_MS);
   t.unref();
   return t;
 }

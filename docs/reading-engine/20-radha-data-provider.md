@@ -274,7 +274,7 @@ Plan:
    everything else fails, an unused cache dies by itself within 30 minutes. Break-even for keeping a 30k-token prefix is ~35-40 idle
    minutes, so longer idle limits cost more than re-creating.
 3. **Delete on logout.** Logout (and session expiry) deletes that user's caches through the Gemini API and marks the rows.
-4. **Hourly sweeper** (EventBridge schedule -> small Lambda, or a job in the API Lambda): delete every cache with
+4. **Sweeper every 45 minutes** (EventBridge schedule -> small Lambda, or a job in the API Lambda): delete every cache with
    `last_used_at` older than the idle limit, and reconcile against Gemini's list of caches so nothing is orphaned (its real job is
    orphans from instances that died before writing the registry row).
 5. Explicit cache applies to Gemini 3.x specialists only (Gemini 4 Argon does not support `cachedContents`), and only once the key
@@ -305,7 +305,7 @@ at registration, and never during a chat turn. It is planned separately.
 | R-4a | Radha: two-level dashas + end dates, `dasha.applicable`, strengths, ashtakavarga, yogas, arudhas | Radha |
 | R-4b | Radha: level-3 dashas, sphutas, doshas, specialist dashas | Radha |
 | R-5 | Radha: annual items incl. sahams; birthday refresh job | Radha + Server |
-| R-7 | LLM cache registry, 30 min sliding TTL, logout delete, hourly sweeper | Server |
+| R-7 | LLM cache registry, 30 min sliding TTL, logout delete, 45-minute sweeper | Server |
 | R-8 | `transits` type; `facts` assembled server-side from rows; retire the 24 locally built dossiers | Radha + Server |
 | R-9 | Bulk/live Radha split when timeline volume needs it | Infra |
 
@@ -316,6 +316,6 @@ R-1, R-2 and R-7 do not depend on Radha changes and can start first.
 1. **Registration tier**: the 18 ordered items in section 6; everything else on demand.
 2. **Conditional dashas**: fetched only when `dasha.applicable` says they apply; Ashtottari is conditional, not Core.
 3. **Ayanamsa**: Lahiri only; keep the column; fix the API default.
-4. **LLM cache**: 30 min sliding TTL, delete on logout, hourly sweeper.
+4. **LLM cache**: 30 min sliding TTL, delete on logout, 45-minute sweeper.
 5. **Throttle**: fix the compute shape first (server spacing, concurrency, whitelist, multi-type request); bulk/live split later for
    timeline volume.
