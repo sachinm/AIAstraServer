@@ -314,7 +314,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const tGraph = Date.now();
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
-      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner,
+      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId,
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;

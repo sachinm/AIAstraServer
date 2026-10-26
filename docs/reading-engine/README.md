@@ -36,6 +36,7 @@ This document is the plan. The companion files hold the detail:
 | [27-life-timeline-method-and-module.md](./27-life-timeline-method-and-module.md) | Life timeline: the reading method (foundation, ten markers, seven timing systems, convergence, specifics, ledger verification) and the module (tables, pipeline, phases P0–P5). Activation and band rules superseded by doc 29 |
 | [28-tithi-pravesh-transit-prashna.md](./28-tithi-pravesh-transit-prashna.md) | Plan: Tithi Ashtottari for the Tithi Pravesh year, transit D1–D10 for any moment and place, and prashna (horary) charts; Radha types, M14 schema, reading-engine use |
 | [29-life-timeline-v2-event-timing.md](./29-life-timeline-v2-event-timing.md) | Life timeline v2 (after the P1 build saturated on G1): why v1 cannot time events, the techniques practitioners time with and their prior weights, the promise × period × trigger rules, chart-relative ranked bands, threshold-free evaluation, revised phase order (R-T1 moves up) |
+| [30-specialist-failures.md](./30-specialist-failures.md) | Why required specialists fail (time-out on thinking 3.x models, cut-off JSON, quota, cache path), the fixes (model-derived budgets, abort on time-out, JSON repair, cache fallback only on refusal), `reason`/`retried`/`capped` on stage events, the failure log and the CloudWatch query |
 
 Product-side reviews from the same date (auth and registration, Cognito, chat UI, roadmap) are in [`../product/`](../product/README.md).
 
