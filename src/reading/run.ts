@@ -15,6 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { currentLocationLine, PrismaUserLocationStore } from '../services/userLocation.js';
 import { buildCalendar, calendarBlock } from './calendar/calendar.js';
 import { readingCalendar, readingFindingsV2, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
@@ -156,6 +157,9 @@ function tailFor(intent: Intent, question: string, asOf: string): string {
   const parts = [`TODAY: ${asOf}`, `UNDERSTOOD AS: ${intent.clarifyText}`, shape];
   if (intent.safety === 'medical') parts.push('The question touches health: give the astrological indication only and say plainly that it is not medical advice.');
   if (intent.safety === 'legal') parts.push('The question touches legal matters: give the astrological indication only and say plainly that it is not legal advice.');
+  // where the person lives now: the writer may say dates are for this place; nothing astrological changes
+  const location = currentLocationLine(intent.currentLocation);
+  if (location) parts.push(location);
   parts.push(`QUESTION: ${question}`);
   return parts.join('\n\n');
 }
@@ -197,11 +201,15 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const dataPromise = opts.dataLoader
     ? opts.dataLoader(asOf).catch(() => null)
     : startPrefetch(prisma, userId, { asOf, onFactsMissing: opts.onFactsMissing, onStale: opts.onStale });
+  // where the person lives now (M13 table), read alongside intake; a missing table or a slow read just means none
+  const locationPromise = opts.dataLoader || opts.intent?.currentLocation ? Promise.resolve(null) : new PrismaUserLocationStore(prisma).get(userId).catch(() => null);
 
   // 2. intake
   emit({ type: 'stage', name: 'intake', status: 'start' });
   const intake = opts.intent ? { intent: opts.intent, usage: null, source: 'confirmed' as const, ms: 0 } : await runIntake(question, asOf, { history: opts.history });
   const intent = intake.intent;
+  const loc = await locationPromise;
+  if (!intent.currentLocation && loc?.status === 'found') intent.currentLocation = loc.location;
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
