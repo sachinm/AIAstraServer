@@ -170,6 +170,11 @@ async function loadTypes(repo: ChartDataRepo, now: number): Promise<Map<string, 
   return types;
 }
 
+/** The merged catalog (built-in list under the `chart_data_types` rows), cached for 5 minutes like ensureChartData's own read. */
+export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Date.now()): Promise<ChartDataType[]> {
+  return [...(await loadTypes(repo, now)).values()];
+}
+
 export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: string[], opts: EnsureOptions = {}): Promise<Record<string, ChartItem>> {
   const now = opts.now ?? Date.now;
   const ayanamsa = opts.ayanamsa ?? 'LAHIRI';

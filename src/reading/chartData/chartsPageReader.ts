@@ -9,12 +9,14 @@
  *   - `calc_version` is `legacy` (backfilled or written through from the columns) or null; or
  *   - the type is a varga, panchanga or karaka item, which Radha keeps backwards compatible on the wire
  *     (doc 22 §1 / §3: the new vargas return the same placement rows as today's d2..d10).
- * Dashas change shape in R-6 (doc 22 §4: `calc_version` "2", node shape with `levels`/`periods`), so a non-legacy dasha
- * row is skipped and the legacy column answers until the page learns the new shape (server task S-2).
+ * Dashas change shape in R-6 (doc 22 §4: `calc_version` "2", node shape with `levels`/`periods`). Since S-2 a dasha row
+ * or column in either shape is accepted and handed to the page in the legacy array shape (`toLegacyDasha`), which is all
+ * the web Charts card parses today. When the page learns the new shape, this is the one place to change.
  */
 import type { ChartDataRepo, StoredRow } from './store.js';
 import { isMissingTable } from './store.js';
 import { BUILTIN_CHART_TYPES, type ChartDataType } from './catalog.js';
+import { DASHA_SYSTEM_BY_COLUMN, toLegacyDasha } from './dashaShape.js';
 
 export const CHARTS_PAGE_COLUMNS = ['biodata', 'd1', 'd2', 'd4', 'd7', 'd9', 'd10', 'charakaraka', 'vimsottari_dasa', 'narayana_dasa'] as const;
 export type ChartsPageColumn = (typeof CHARTS_PAGE_COLUMNS)[number];
@@ -45,22 +47,30 @@ export async function readChartColumns(
   opts: ReadChartColumnsOptions = {}
 ): Promise<Record<ChartsPageColumn, unknown>> {
   const out = Object.fromEntries(columns.map((c) => [c, legacy[c] ?? null])) as Record<ChartsPageColumn, unknown>;
-  if (process.env.KUNDLI_DATA_READ === '0') return out;
+  // a dasha column may hold either shape; the page gets the legacy array
+  const forPage = (): Record<ChartsPageColumn, unknown> => {
+    for (const c of columns) {
+      if (c in DASHA_SYSTEM_BY_COLUMN && out[c] != null) out[c] = toLegacyDasha(out[c], { system: DASHA_SYSTEM_BY_COLUMN[c] });
+    }
+    return out;
+  };
+  if (process.env.KUNDLI_DATA_READ === '0') return forPage();
 
   const wanted = columns.map((c) => ({ column: c, type: TYPE_BY_COLUMN.get(c) })).filter((w): w is { column: ChartsPageColumn; type: ChartDataType } => Boolean(w.type));
-  if (!wanted.length) return out;
+  if (!wanted.length) return forPage();
 
   let rows: StoredRow[];
   try {
     rows = await repo.readRows(kundliId, wanted.map((w) => ({ dataType: w.type.id, variant: '' })), opts.ayanamsa ?? 'LAHIRI');
   } catch (err) {
     if (!isMissingTable(err)) (opts.log ?? console).warn(JSON.stringify({ msg: 'kundli_data read failed; using legacy columns', kundli_id: kundliId, error: (err as Error)?.message?.slice(0, 200) }));
-    return out;
+    return forPage();
   }
 
   for (const { column, type } of wanted) {
     const row = rows.find((r) => r.dataType === type.id && r.variant === '');
-    if (row && row.status === 'ready' && row.payload != null && hasLegacyShape(row, type)) out[column] = row.payload;
+    // dasha rows of any calc_version are readable since S-2 (converted below); other families keep the shape rule
+    if (row && row.status === 'ready' && row.payload != null && (type.family === 'dasha' || hasLegacyShape(row, type))) out[column] = row.payload;
   }
-  return out;
+  return forPage();
 }
