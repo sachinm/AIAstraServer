@@ -13,6 +13,7 @@ import {
   type RowKey,
   type StoredRow,
 } from '../../../src/reading/chartData/store.js';
+import { chartDataTypeIds } from '../../../src/reading/chartData/tool.js';
 
 /** In-memory repository with the same claim semantics as the SQL (row is the lock). */
 function memRepo(opts: { legacy?: Record<string, unknown>; missingTables?: boolean; request?: KundliRequest | null } = {}) {
@@ -68,12 +69,23 @@ function memRepo(opts: { legacy?: Record<string, unknown>; missingTables?: boole
 beforeEach(() => clearChartDataCaches());
 
 describe('catalog', () => {
-  it('lists every varga factor, 44 dashas and the annual items with unique ids', () => {
+  it('lists every varga factor, 44 dashas plus dasha.applicable and the annual items with unique ids', () => {
     const ids = BUILTIN_CHART_TYPES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const f of VARGA_FACTORS) expect(CHART_TYPE_BY_ID.get(`varga.d${f}`)).toBeTruthy();
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha')).toHaveLength(44);
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha')).toHaveLength(45);
     expect(CHART_TYPE_BY_ID.get('annual.varsha')?.variantKind).toBe('year');
+  });
+  it('lists the R-4a/R-4b/R-5 types and transit with their wire names, unserved until the catalog sync', () => {
+    for (const id of ['relations', 'benefic_malefic', 'dignities', 'bhava', 'dasha.applicable']) {
+      expect(CHART_TYPE_BY_ID.get(id)).toMatchObject({ radhaType: id, changeClass: 'natal', variantKind: 'natal', tier: 'on_demand', served: false, calcVersion: null });
+    }
+    expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')).toMatchObject({ radhaType: 'annual.tithi_pravesha_dasha', changeClass: 'annual', variantKind: 'year', tier: 'on_demand', served: false });
+    expect(CHART_TYPE_BY_ID.get('transit')).toMatchObject({ radhaType: 'transit', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false });
+    expect(CHART_TYPE_BY_ID.get('dasha.brahma')).toMatchObject({ served: false }); // Radha does not export it (pyjhora bug)
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit']);
+    expect(chartDataTypeIds()).not.toContain('transit');
+    expect(chartDataTypeIds()).toContain('annual.tithi_pravesha_dasha@<year>');
   });
   it('serves exactly the ten types Radha exports today, each with its legacy column', () => {
     const served = BUILTIN_CHART_TYPES.filter((t) => t.served);
@@ -95,10 +107,20 @@ describe('catalog', () => {
     expect(merged.find((t) => t.id === 'varga.d60')).toMatchObject({ served: true, calcVersion: '1', tier: 'first' });
     expect(merged.some((t) => t.id === 'dasha.aayu')).toBe(false);
   });
-  it('the M7 migration seeds every built-in type and backfills every legacy column', () => {
-    const sql = readFileSync(path.resolve('prisma/migrations/20261025120000_reading_m7_kundli_data/migration.sql'), 'utf8');
-    for (const t of BUILTIN_CHART_TYPES) expect(sql).toContain(`('${t.id}', '${t.family}', '${t.radhaType}'`);
-    for (const t of BUILTIN_CHART_TYPES.filter((x) => x.legacyColumn)) expect(sql).toContain(`SELECT "id", '${t.id}', 'legacy', "${t.legacyColumn}"`);
+  it('the M7 + M9 migrations seed every built-in type and M7 backfills every legacy column', () => {
+    const m7 = readFileSync(path.resolve('prisma/migrations/20261025120000_reading_m7_kundli_data/migration.sql'), 'utf8');
+    const m9 = readFileSync(path.resolve('prisma/migrations/20261025160000_reading_m9_catalog_more_types/migration.sql'), 'utf8');
+    const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
+    const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number]) =>
+      `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${t.label}')`;
+    for (const t of BUILTIN_CHART_TYPES) {
+      const sql = m9Ids.includes(t.id) ? m9 : m7;
+      expect(sql).toContain(seedRow(t));
+    }
+    for (const id of m9Ids) expect(m7).not.toContain(`('${id}', `);
+    expect(m9).toMatch(/CHECK \("change_class" IN \('natal', 'annual', 'moving'\)\)/);
+    expect(m9).toContain('ON CONFLICT ("id") DO NOTHING');
+    for (const t of BUILTIN_CHART_TYPES.filter((x) => x.legacyColumn)) expect(m7).toContain(`SELECT "id", '${t.id}', 'legacy', "${t.legacyColumn}"`);
   });
 });
 
@@ -152,6 +174,33 @@ describe('ensureChartData', () => {
     expect(out['annual.varsha@2027']).toMatchObject({ status: 'unsupported' });
     expect(out['nope']).toMatchObject({ status: 'failed' });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('refuses moving types (transit) even when served: no row read, no claim, no Radha call', async () => {
+    const repo = memRepo();
+    repo.loadTypes = async () => [
+      { id: 'transit', family: 'transit', radha_type: 'transit', change_class: 'moving', tier: 'on_demand', variant_kind: 'natal', served: true, calc_version: '1', legacy_column: null, sort_order: 600, label: 'Transit', enabled: true },
+    ];
+    const readRows = vi.spyOn(repo, 'readRows');
+    const claim = vi.spyOn(repo, 'claim');
+    const fetcher = vi.fn(async () => ({ chart: 'd9' }));
+    const out = await ensureChartData({ repo, fetcher }, 'k1', ['transit', 'varga.d9']);
+    expect(out['transit']).toMatchObject({ status: 'failed', source: null, payload: null });
+    expect(out['transit'].error).toMatch(/moving type.*fetchTransit\(kundliId, \{ at, divisionalChartFactor, withNatal \}\).*transit\.ts/);
+    expect(out['varga.d9']).toMatchObject({ status: 'ready', source: 'radha' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).not.toHaveBeenCalledWith(expect.anything(), 'transit', expect.anything());
+    expect(readRows.mock.calls.flatMap((c) => c[1].map((k) => k.dataType))).not.toContain('transit');
+    expect(claim.mock.calls.map((c) => c[1].dataType)).not.toContain('transit');
+    expect(repo.rows.has('transit|')).toBe(false);
+  });
+
+  it('a transit-only request returns before touching the store', async () => {
+    const repo = memRepo();
+    const readRows = vi.spyOn(repo, 'readRows');
+    const out = await ensureChartData({ repo, fetcher: vi.fn() }, 'k1', ['transit']);
+    expect(out['transit'].status).toBe('failed');
+    expect(readRows).not.toHaveBeenCalled();
   });
 
   it('marks Radha "Invalid export type" as unsupported and other errors as failed', async () => {

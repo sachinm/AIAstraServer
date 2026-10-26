@@ -9,10 +9,12 @@
  *   Today's ten types are `legacy` (their payload shapes predate the facts dossier); R-3/R-4 bump them.
  * - `tier`: fetch priority. `first` (chat can open), `registration` (rest of signup), `on_demand` (first use).
  * - `variantKind`: `natal` (one row), `year` (one row per solar-return year).
+ * - `changeClass`: `natal` (fixed at birth), `annual` (per year), `moving` (depends on the moment asked for; never stored
+ *   in kundli_data, so ensureChartData refuses it: call `fetchTransit` in ./transit.ts instead).
  */
 
-export type ChartFamily = 'panchanga' | 'varga' | 'dasha' | 'karaka' | 'strength' | 'yoga' | 'special' | 'annual';
-export type ChangeClass = 'natal' | 'annual';
+export type ChartFamily = 'panchanga' | 'varga' | 'dasha' | 'karaka' | 'strength' | 'yoga' | 'special' | 'annual' | 'transit';
+export type ChangeClass = 'natal' | 'annual' | 'moving';
 export type FetchTier = 'first' | 'registration' | 'on_demand';
 export type VariantKind = 'natal' | 'year';
 
@@ -88,6 +90,8 @@ function build(): ChartDataType[] {
       label: `${name.replace(/_/g, ' ')} dasha`,
     });
   });
+  // dasha.brahma stays listed but unserved: Radha does not export it (pyjhora bug).
+  natal({ id: 'dasha.applicable', family: 'dasha', radhaType: 'dasha.applicable', tier: 'on_demand', sortOrder: 250, label: 'Which conditional dashas apply' });
   natal({ id: 'karaka.chara', family: 'karaka', radhaType: 'charakaraka', tier: 'first', served: true, legacyColumn: 'charakaraka', sortOrder: 300, label: 'Chara karakas' });
   natal({ id: 'arudhas', family: 'special', radhaType: 'arudhas', tier: 'first', sortOrder: 310, label: 'Arudha padas (bhava and graha)' });
   natal({ id: 'ashtakavarga', family: 'strength', radhaType: 'ashtakavarga', tier: 'registration', sortOrder: 320, label: 'Ashtakavarga (BAV and SAV)' });
@@ -99,15 +103,24 @@ function build(): ChartDataType[] {
   natal({ id: 'aspects', family: 'strength', radhaType: 'aspects', tier: 'on_demand', sortOrder: 380, label: 'Planet aspect table' });
   natal({ id: 'doshas', family: 'yoga', radhaType: 'doshas', tier: 'on_demand', sortOrder: 390, label: 'Doshas' });
   natal({ id: 'sphutas', family: 'special', radhaType: 'sphutas', tier: 'on_demand', sortOrder: 400, label: 'Sphutas (special points)' });
+  natal({ id: 'relations', family: 'strength', radhaType: 'relations', tier: 'on_demand', sortOrder: 410, label: 'Planet relations (natural, temporary, compound)' });
+  natal({ id: 'benefic_malefic', family: 'strength', radhaType: 'benefic_malefic', tier: 'on_demand', sortOrder: 420, label: 'Benefics and malefics (natural and functional, maraka lords)' });
+  natal({ id: 'dignities', family: 'strength', radhaType: 'dignities', tier: 'on_demand', sortOrder: 430, label: 'Planet dignities (combust, retrograde, planetary war)' });
+  // Radha param bhava_madhya_method 1-5, default 1; the stored row is the default method.
+  natal({ id: 'bhava', family: 'special', radhaType: 'bhava', tier: 'on_demand', sortOrder: 440, label: 'Bhavas (cusps, lords, occupants)' });
 
   const annual = (id: string, label: string, sortOrder: number): void => {
     out.push({ id, family: 'annual', radhaType: id, changeClass: 'annual', tier: 'on_demand', variantKind: 'year', served: false, calcVersion: null, sortOrder, label });
   };
   annual('annual.varsha', 'Varsha pravesh (Tajaka annual chart)', 500);
   annual('annual.tithi_pravesha', 'Tithi pravesha chart', 510);
+  annual('annual.tithi_pravesha_dasha', 'Tithi pravesha dasha', 515);
   annual('annual.mudda', 'Mudda dasha', 520);
   annual('annual.patyayini', 'Patyayini dasha', 530);
   annual('annual.sahams', 'Sahams', 540);
+
+  // Moving: depends on the moment asked for (`at`), so it is never stored per person (no kundli_data row).
+  out.push({ id: 'transit', family: 'transit', radhaType: 'transit', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 600, label: 'Transit chart at a moment (any divisional chart)' });
   return out;
 }
 

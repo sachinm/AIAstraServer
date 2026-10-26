@@ -29,9 +29,9 @@ export const getChartDataTool = {
   },
 } as const;
 
-/** Known ids, for prompts that list what can be asked for. */
+/** Known ids, for prompts that list what can be asked for. Moving types (transit) are not stored, so not listed here. */
 export function chartDataTypeIds(): string[] {
-  return BUILTIN_CHART_TYPES.map((t) => (t.variantKind === 'year' ? `${t.id}@<year>` : t.id));
+  return BUILTIN_CHART_TYPES.filter((t) => t.changeClass !== 'moving').map((t) => (t.variantKind === 'year' ? `${t.id}@<year>` : t.id));
 }
 
 export interface ToolResult {

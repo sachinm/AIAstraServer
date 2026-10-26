@@ -62,6 +62,25 @@ export function readingSynthThinking(): 'off' | 'low' | 'medium' | 'high' {
   return v === 'off' || v === 'medium' || v === 'high' ? v : 'low';
 }
 
+/**
+ * Stream Gemini's thought summaries to the client while the answer is being prepared (event `thought`). On by default;
+ * READING_INCLUDE_THOUGHTS=0 turns it off. Thought tokens are billed whether or not they are shown, so this adds no model cost.
+ */
+export function readingIncludeThoughts(): boolean {
+  const v = process.env.READING_INCLUDE_THOUGHTS?.trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
+/**
+ * Put the rest of the stable chart data (every divisional chart the dossier holds, ashtavarga, the dasha tree, arudhas,
+ * special lagnas, yogas, doshas) into the cacheable `base` block. Gemini 3.x only caches a prefix of at least 4,096 tokens,
+ * and the bare base is about 3k. On by default; READING_FULL_BASE=0 returns to the small base.
+ */
+export function readingFullBase(): boolean {
+  const v = process.env.READING_FULL_BASE?.trim().toLowerCase();
+  return !(v === '0' || v === 'false' || v === 'off');
+}
+
 /** Use the DB `pvr_oracle` persona instead of the file persona. Off by default: a daily-changing system prompt breaks the prefix cache. */
 export function readingUseDbPersona(): boolean {
   return process.env.READING_USE_DB_PERSONA?.trim() === '1';
