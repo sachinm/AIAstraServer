@@ -42,6 +42,8 @@ const SUBJECT_CUES: Array<[SubjectId, RegExp, number]> = [
   ['education_learning', /\b(study|studies|exam|exams|education|degree|college|school|university|learn\w*)\b/i, 1],
   ['spirituality_moksha', /\b(spiritual\w*|moksha|meditat\w*|guru|pilgrimage|enlighten\w*)\b/i, 1],
   ['foreign_relocation', /\b(abroad|foreign|visa|migrate|migration|relocat\w*|emigrate|overseas|move to)\b/i, 1],
+  ['travel_journeys', /\b(travel\w*|trips?|journeys?|vacations?|holidays?|tour|flights?)\b/i, 1],
+  ['siblings', /\b(brothers?|sisters?|siblings?)\b/i, 1],
   ['litigation_government', /\b(court|lawsuit|legal|litigation|government|tax|taxes|dispute)\b/i, 1],
   ['speculation_lottery', /\b(lottery|gambl\w*|jackpot|sweepstake|windfall|trading|stocks?|crypto)\b/i, 2],
   ['general_life_direction', /\b(nakshatras?|my chart|year ahead|life direction|purpose|personality|all the different ways|overall)\b/i, 1],
