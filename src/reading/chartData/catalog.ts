@@ -155,6 +155,9 @@ function build(): ChartDataType[] {
   // Moving: the chart at the moment and place a question is asked (doc 28 R-27c); cast by castPrashna (./prashna.ts) and
   // stored per question in `prashna_casts`, never in kundli_data.
   out.push({ id: 'prashna', family: 'prashna', radhaType: 'prashna', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 620, label: 'Prashna chart at the question moment (panchanga, prashna lagna, vargas)' });
+  // Moving: the dated sky over a long span (sign stays, stations, lunations, eclipses, Sade Sati phases) for the life
+  // timeline; fetched by fetchTransitRange (./transitRange.ts), never stored per person.
+  out.push({ id: 'transit_range', family: 'transit', radhaType: 'transit_range', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 630, label: 'Dated sky over up to 40 years (sign stays, stations, lunations, eclipses, Sade Sati)' });
   return out;
 }
 

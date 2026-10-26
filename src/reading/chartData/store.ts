@@ -200,9 +200,10 @@ export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Da
   return [...(await loadTypes(repo, now)).values()];
 }
 
-/** `moving` types (transit, transit_contacts) depend on the moment or range asked for and are never stored per person. */
+/** `moving` types (transit, transit_contacts, prashna, transit_range) depend on the moment or range asked for and are never stored per person. */
 export function movingTypeError(id: string): string {
   if (id === 'prashna') return `${id} is a moving type and is not stored per person; call castPrashna({ userId, at, place, runId }) from src/reading/chartData/prashna.ts`;
+  if (id === 'transit_range') return `${id} is a moving type and is not stored per person; call fetchTransitRange(kundliId, { from, to, planets }) from src/reading/chartData/transitRange.ts`;
   if (id === 'transit_contacts') return `${id} is a moving type and is not stored per person; call fetchTransitContacts(kundliId, { from, to, orb, planets }) from src/reading/chartData/transitContacts.ts`;
   return `${id} is a moving type and is not stored per person; call fetchTransit(kundliId, { at, divisionalChartFactor, withNatal }) from src/reading/chartData/transit.ts`;
 }
