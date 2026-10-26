@@ -11,6 +11,7 @@ import { BUCKETS } from '../buckets/taxonomy.js';
 import { startPrefetch } from '../data/store.js';
 import { runIntake, clarifyTextFor } from '../nodes/intake.js';
 import type { Intent, Usage } from '../types.js';
+import type { SubjectId } from '../packs/frames.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
 import { phraseAsk, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
@@ -150,5 +151,23 @@ export async function intentFromState(s: ClarifyState): Promise<Intent> {
     confidence: 1,
     clarifyText: s.exactQuery ?? clarifyTextFor(subjects.map((x) => x.id), horizon, s.asOf),
     classification: base.classification ? { ...base.classification, bucket: s.bucket, subBucket: s.subBucket, slots: s.slots, missing: [], source: 'rules' } : undefined,
+  };
+}
+
+/**
+ * One part of a multi-part question, read on its own with a fresh budget: the rules intake of the original question,
+ * narrowed to `focus`, with the parts still to come in `nextSubjects`. The bucket classification of the whole question
+ * is dropped so the answer format follows this part, not the first one.
+ */
+export async function intentForFocus(question: string, asOf: string, focus: SubjectId, parts: readonly SubjectId[]): Promise<Intent> {
+  const base = (await runIntake(question, asOf, { mode: 'rules' })).intent;
+  const nextSubjects = [...new Set(parts)].filter((id) => id !== focus && id !== 'general_life_direction');
+  return {
+    ...base,
+    subjects: [{ id: focus, weight: 1 }],
+    ...(nextSubjects.length ? { nextSubjects } : {}),
+    confidence: 1,
+    clarifyText: clarifyTextFor([focus], base.horizon, asOf),
+    classification: undefined,
   };
 }

@@ -332,6 +332,10 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     }
   }
 
+  // The other parts of a multi-part question: the client reads them one after another, each as its own reading.
+  const nextParts = (intent.nextSubjects ?? []).filter((id) => FRAMES[id]);
+  if (nextParts.length) emit({ type: 'next', parts: nextParts.map((id) => ({ id, label: FRAMES[id].label })) });
+
   timings.total = Date.now() - tStart;
   if (ttftMs !== null && timings.synthStart !== undefined) timings.firstTokenFromStart = timings.synthStart + ttftMs;
   const cachedTokens = usages.reduce((n, u) => n + u.cachedTokens, 0);

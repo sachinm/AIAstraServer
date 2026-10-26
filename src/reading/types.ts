@@ -36,7 +36,7 @@ export interface Usage {
 }
 
 export interface ReadingEvent {
-  type: 'intent' | 'stage' | 'token' | 'windows' | 'info' | 'thought';
+  type: 'intent' | 'stage' | 'token' | 'windows' | 'info' | 'thought' | 'next';
   [k: string]: unknown;
 }
 export type ReadingEmitter = (event: ReadingEvent) => void;
