@@ -134,6 +134,9 @@ function build(): ChartDataType[] {
 
   // Moving: depends on the moment asked for (`at`), so it is never stored per person (no kundli_data row).
   out.push({ id: 'transit', family: 'transit', radhaType: 'transit', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 600, label: 'Transit chart at a moment (any divisional chart)' });
+  // Moving: depends on the date range asked for (`from`/`to`, plus `orb`, `planets`); fetched by fetchTransitContacts
+  // (./transitContacts.ts), never stored per person.
+  out.push({ id: 'transit_contacts', family: 'transit', radhaType: 'transit_contacts', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 610, label: 'Natal-degree contacts of slow transits (entry, exact, exit, station in orb)' });
   return out;
 }
 

@@ -10,6 +10,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { authToAstroKundliParams } from '../../lib/astroKundliClient.js';
+import { isUnsupportedError, loadMergedChartTypes, prismaChartDataRepo } from '../chartData/store.js';
+import { CONTACT_PLANETS, fetchTransitContacts, TRANSIT_CONTACTS_TYPE, type TransitContactsPayload } from '../chartData/transitContacts.js';
 import { readingCacheTtlMs, readingEngineTimeoutMs, readingFactsSource, readingFixtureDir } from '../config.js';
 import { refreshCurrent } from '../facts/current.js';
 import type { Dossier } from '../facts/types.js';
@@ -41,6 +43,10 @@ interface Timed<T> {
 const dossierCache = new Map<string, Timed<{ dossier: Dossier; hash: string; factsVersion: number }>>();
 const transitCache = new Map<string, Timed<{ chart: TransitChart; id: string | null }>>();
 const inflightTransit = new Map<string, Promise<{ chart: TransitChart; id: string | null } | null>>();
+const contactsCache = new Map<string, Timed<TransitContactsPayload>>();
+const inflightContacts = new Map<string, Promise<ContactsLookup>>();
+/** Contacts are fetched once per kundli and day for the longest standard horizon (3y); each pack clips to its own. */
+const CONTACTS_MONTHS = 36;
 /** user -> latest kundli (id + stored coordinates); saves one database round trip per question on a warm instance */
 const kundliByUser = new Map<string, Timed<{ id: string; lat: number | null; lon: number | null; tz: number | null }>>();
 
@@ -49,6 +55,8 @@ export function clearReadingCaches(): void {
   transitCache.clear();
   kundliByUser.clear();
   inflightTransit.clear();
+  contactsCache.clear();
+  inflightContacts.clear();
 }
 
 const fresh = <T>(t: Timed<T> | undefined): T | null => (t && Date.now() - t.at < readingCacheTtlMs() ? t.value : null);
@@ -135,10 +143,16 @@ export async function loadReadingData(prisma: PrismaClient, userId: string, opts
   const dossierMs = Date.now() - t0;
   const { dossier, stale } = refreshCurrent(cached.dossier, opts.asOf);
   if (stale) opts.onStale?.(k.id);
+  // natal-degree contacts run beside the transit chart; this promise never rejects
+  const contactsLookup = loadTransitContacts(prisma, k.id, opts.asOf);
 
   const t1 = Date.now();
   let tr = await transitLookup;
   if (!tr && opts.buildTransitsOnMiss !== false) tr = await loadTransitChart(prisma, userId, k, opts.asOf, true);
+  const contacts = await contactsLookup;
+  if (contacts.note) notes.push(contacts.note);
+  // a copy: the cached chart stays as stored. null = fetch failed (the pack adds the caveat); skipped = not served yet
+  if (tr && !contacts.skipped) tr = { ...tr, chart: { ...tr.chart, contacts: contacts.payload } };
   return {
     source: 'db',
     kundliId: k.id,
@@ -228,6 +242,54 @@ async function buildTransitChart(
     const quiet = err instanceof EngineUnsupportedError;
     console[quiet ? 'info' : 'warn'](JSON.stringify({ msg: 'reading transit chart unavailable', kundliIdPrefix: kundli.id.slice(0, 8), error: (err as Error).message.slice(0, 300) }));
     return null;
+  }
+}
+
+interface ContactsLookup {
+  payload: TransitContactsPayload | null;
+  /** true when Radha does not serve the type yet: nothing was asked, so there is nothing to report */
+  skipped: boolean;
+  note?: string;
+}
+
+/**
+ * Radha's `transit_contacts` for today .. today + 3y (moving type: fetched, never stored per person; cached in-process
+ * like the transit chart). Only asked when the merged catalog says Radha serves it. Never throws: a failure or a timeout
+ * returns payload null and a note, and the reading goes on without contacts.
+ */
+export async function loadTransitContacts(prisma: PrismaClient, kundliId: string, asOf: string): Promise<ContactsLookup> {
+  const key = `${kundliId}:${asOf}`;
+  const hit = fresh(contactsCache.get(key));
+  if (hit) return { payload: hit, skipped: false };
+  let pending = inflightContacts.get(key);
+  if (!pending) {
+    pending = fetchContactsOnce(prisma, kundliId, asOf).finally(() => inflightContacts.delete(key));
+    inflightContacts.set(key, pending);
+  }
+  return pending;
+}
+
+async function fetchContactsOnce(prisma: PrismaClient, kundliId: string, asOf: string): Promise<ContactsLookup> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const repo = prismaChartDataRepo(prisma);
+    const served = (await loadMergedChartTypes(repo)).some((t) => t.id === TRANSIT_CONTACTS_TYPE && t.served);
+    if (!served) return { payload: null, skipped: true };
+    const timeout = readingEngineTimeoutMs();
+    const payload = await Promise.race([
+      fetchTransitContacts(kundliId, { from: asOf, to: addMonths(asOf, CONTACTS_MONTHS), planets: [...CONTACT_PLANETS] }, { repo }),
+      new Promise<never>((_, rej) => {
+        timer = setTimeout(() => rej(new Error(`transit contacts exceeded ${timeout}ms`)), timeout);
+      }),
+    ]);
+    contactsCache.set(`${kundliId}:${asOf}`, { at: Date.now(), value: payload });
+    return { payload, skipped: false };
+  } catch (err) {
+    const error = (err as Error)?.message?.slice(0, 300) ?? String(err);
+    console[isUnsupportedError(err) ? 'info' : 'warn'](JSON.stringify({ msg: 'reading transit contacts unavailable', kundliIdPrefix: kundliId.slice(0, 8), error }));
+    return { payload: null, skipped: false, note: `transit contacts unavailable: ${error.slice(0, 120)}` };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

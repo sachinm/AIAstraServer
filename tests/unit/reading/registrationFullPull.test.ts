@@ -191,10 +191,11 @@ describe('registration set (full pull)', () => {
     }
     expect(plan.requested.some((t) => t.changeClass === 'moving')).toBe(false);
     expect(plan.requested.map((t) => t.id)).not.toContain('transit');
+    expect(plan.requested.map((t) => t.id)).not.toContain('transit_contacts');
     expect(plan.requested.map((t) => t.id)).toEqual(expect.arrayContaining(ANNUAL));
     expect(plan.skipped.map((t) => t.id)).toEqual(['dasha.brahma']);
-    // the whole catalog minus transit and dasha.brahma
-    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 2);
+    // the whole catalog minus the moving types (transit, transit_contacts) and dasha.brahma
+    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 3);
   });
 
   it('the gate ends at the last type the completion rule needs (first tier + legacy columns)', () => {
