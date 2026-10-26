@@ -82,6 +82,8 @@ export const DECIDERS: Partial<Record<SubjectId, { primary: RegExp[]; secondary:
   children: { primary: [/varga\.D7\./, /bodies\.Ju\./], secondary: [/PK/], text: 'the 5th lord in D-7 and Jupiter; then the PK' },
   education_learning: { primary: [/bodies\.(Me|Ju)\./, /houses\.5\.lord/], secondary: [/houses\.4\.lord/], text: 'Mercury and Jupiter with the 5th lord; then the 4th lord' },
   foreign_relocation: { primary: [/houses\.12\.lord/, /bodies\.Ra\./], secondary: [/houses\.(9|7)\.lord/], text: 'the 12th lord and Rahu; then the 9th and 7th lords' },
+  travel_journeys: { primary: [/houses\.(3|9|12)\.lord/, /bodies\.Ra\./], secondary: [/houses\.7\.lord/], text: 'the 3rd, 9th and 12th lords and Rahu; then the 7th lord' },
+  siblings: { primary: [/houses\.(3|11)\.lord/, /bodies\.Ma\./], secondary: [/varga\.D3\./, /BK/], text: 'the 3rd and 11th lords and Mars; then D-3 and the BK' },
   litigation_government: { primary: [/houses\.(6|7)\.lord/], secondary: [/houses\.11\./], text: 'the 6th lord against the 7th lord; then the 11th' },
   spirituality_moksha: { primary: [/bodies\.(Ke|Ju)\./], secondary: [/AK|karakamsa/i], text: 'Ketu and Jupiter; then the AK in D-9' },
   speculation_lottery: { primary: [/houses\.(5|11)\.lord/], secondary: [/sav/], text: 'the 5th and 11th lords; then their SAV' },

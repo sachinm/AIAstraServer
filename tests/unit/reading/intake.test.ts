@@ -134,3 +134,12 @@ describe('intake carries the bucket classification', () => {
     expect(r.intent.subjects[0]!.id).toBe('career_work');
   });
 });
+
+describe('travel and sibling subjects', () => {
+  it('detects travel and brothers as their own subjects', () => {
+    const { intent } = ruleIntake('Will my brother do well, and is a trip abroad good for me?', '2026-10-26');
+    const ids = intent.subjects.map((s) => s.id);
+    expect(ids).toContain('siblings');
+    expect(ids).toContain('travel_journeys');
+  });
+});
