@@ -1,10 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import {
-  KUNDLI_JSON_FIELDS,
-  type KundliJsonField,
-  fetchHoroscopeChart,
-  authToAstroKundliParams,
-} from '../lib/astroKundliClient.js';
+import { KUNDLI_JSON_FIELDS, authToAstroKundliParams } from '../lib/astroKundliClient.js';
 import {
   getNodeEnv,
   getAstroKundliEndpointLabel,
@@ -17,7 +12,9 @@ import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
-import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
+import { chartDataDeps } from '../reading/chartData/tool.js';
+import { fetchRegistrationSet } from '../reading/chartData/registration.js';
+import type { EnsureDeps } from '../reading/chartData/store.js';
 
 const QUEUE_STATUS_PENDING = 'pending';
 const QUEUE_STATUS_IN_PROGRESS = 'in_progress';
@@ -83,7 +80,7 @@ export function isJsonFieldFilled(value: unknown): boolean {
 function logAstroKundliCall(
   userId: string,
   kundliId: string,
-  field: KundliJsonField,
+  field: string,
   outcome: Outcome,
   durationMs: number,
   errMessage?: string
@@ -112,7 +109,7 @@ function logAstroKundliCall(
  * Rows with queue_status 'pending' are eligible. After a row is moved to 'in_progress',
  * any processing failure resets it to 'pending' so the worker can retry.
  */
-export async function processKundliSyncQueue(prisma: PrismaClient): Promise<void> {
+export async function processKundliSyncQueue(prisma: PrismaClient, deps: KundliQueueDeps = {}): Promise<void> {
   const batchSize = getKundliQueueBatchSize();
   const rows = await prisma.kundli.findMany({
     where: {
@@ -132,15 +129,20 @@ export async function processKundliSyncQueue(prisma: PrismaClient): Promise<void
         if (staggerMs > 0 && index > 0) {
           await sleep(index * staggerMs);
         }
-        await processOneKundliRow(prisma, row);
+        await processOneKundliRow(prisma, row, deps);
       })()
     )
   );
 }
 
+/** Test seam: chart-data repo and Radha fetcher. Production uses Prisma and the throttled Radha client. */
+export interface KundliQueueDeps {
+  chart?: EnsureDeps;
+}
+
 type KundliRowWithUser = Prisma.KundliGetPayload<{ include: { user: true } }>;
 
-async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser): Promise<void> {
+async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser, deps: KundliQueueDeps): Promise<void> {
   const userId = row.user_id;
   const kundliId = row.id;
 
@@ -164,9 +166,9 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
   }
 
   const auth = row.user;
-  let params: ReturnType<typeof authToAstroKundliParams>;
   try {
-    params = authToAstroKundliParams({
+    // birth details must parse before we call Radha (ensureChartData builds its own request from the same fields)
+    authToAstroKundliParams({
       date_of_birth: auth.date_of_birth,
       place_of_birth: auth.place_of_birth,
       time_of_birth: auth.time_of_birth,
@@ -200,57 +202,39 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
   }
 
   try {
-    const missingFields = KUNDLI_JSON_FIELDS.filter(
-      (field) => !isJsonFieldFilled((freshKundli as Record<string, unknown>)[field])
-    ) as KundliJsonField[];
-
-    if (missingFields.length === 0) {
-      await prisma.auth.update({
-        where: { id: userId },
-        data: { kundli_added: true },
-      });
-      await prisma.kundli.update({
-        where: { id: kundliId },
-        data: {
-          queue_status: QUEUE_STATUS_COMPLETED,
-          queue_completed_at: new Date(),
-        },
-      });
-      void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
-        console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
-      });
-      if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
-      return;
-    }
-
-    // Fetch missing data points in chunks to cap concurrent API calls (avoid overwhelming server).
-    const maxConcurrent = getKundliQueueMaxFetchesPerUser();
+    // S-5: the registration set (first + registration tiers, served types only, in sort_order) goes through
+    // ensureChartData, so each item is stored once in kundli_data and shared with the agents. Concurrency is the
+    // per-user cap (default 1); the Radha one-request-per-second spacing lives in the default fetcher and stays on.
     const startAll = Date.now();
-    const updates: Partial<Record<KundliJsonField, unknown>> = {};
-    for (let i = 0; i < missingFields.length; i += maxConcurrent) {
-      const chunk = missingFields.slice(i, i + maxConcurrent);
-      const results = await Promise.allSettled(
-        chunk.map((field) => fetchHoroscopeChart(params, field, { lat: row.lat, lon: row.lon, tz: row.tz }))
-      );
-      const durationMs = Date.now() - startAll;
-      results.forEach((result, j) => {
-        const field = chunk[j];
-        if (result.status === 'fulfilled') {
-          updates[field] = result.value;
-          logAstroKundliCall(userId, kundliId, field, 'passed', durationMs);
-        } else {
-          const errMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          const outcome = errMessage.includes('HTTP') ? 'failed' : 'error';
-          logAstroKundliCall(userId, kundliId, field, outcome, durationMs, errMessage);
-        }
-      });
-    }
+    const reg = await fetchRegistrationSet(deps.chart ?? chartDataDeps(prisma), kundliId, {
+      concurrency: getKundliQueueMaxFetchesPerUser(),
+    });
     const durationMs = Date.now() - startAll;
+    for (const t of reg.requested) {
+      const item = reg.items[t.id];
+      if (!item || (item.status === 'ready' && item.source !== 'radha')) continue; // served from a row or the legacy column: no Radha call
+      if (item.status === 'ready') logAstroKundliCall(userId, kundliId, t.id, 'passed', durationMs);
+      else {
+        const errMessage = item.error ?? item.status;
+        logAstroKundliCall(userId, kundliId, t.id, errMessage.includes('HTTP') ? 'failed' : 'error', durationMs, errMessage);
+      }
+    }
+    if (reg.skipped.length > 0) {
+      queueLog({ event: 'kundli_registration_skipped_unserved', kundli_id: kundliId, types: reg.skipped.map((t) => t.id) });
+    }
 
-    // Persist all fetched fields in one update (parallel-friendly, single DB round-trip).
-    const dataUpdate = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
-    ) as Record<string, object>;
+    // Legacy columns: the old readers still read the ten kundlis columns, so fill the missing ones from what was just
+    // fetched or read (a filled column is never overwritten). The matching kundli_data rows were already stored by
+    // ensureChartData with the catalog's calc_version, so this does not write through again (that would stamp the
+    // built-in 'legacy' calc_version on a new-shape dasha payload and make it look stale on the next login).
+    const legacyType = new Map(reg.requested.filter((t) => t.legacyColumn).map((t) => [t.legacyColumn!, t]));
+    const dataUpdate: Record<string, object> = {};
+    for (const field of KUNDLI_JSON_FIELDS) {
+      if (isJsonFieldFilled((freshKundli as Record<string, unknown>)[field])) continue;
+      const t = legacyType.get(field);
+      const item = t ? reg.items[t.id] : undefined;
+      if (item?.status === 'ready' && isJsonFieldFilled(item.payload)) dataUpdate[field] = item.payload as object;
+    }
     if (Object.keys(dataUpdate).length > 0) {
       try {
         await prisma.kundli.update({
@@ -260,14 +244,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
       } catch (updateErr) {
         const persistMsg = (updateErr as Error).message;
         for (const field of Object.keys(dataUpdate)) {
-          logAstroKundliCall(
-            userId,
-            kundliId,
-            field as KundliJsonField,
-            'error',
-            durationMs,
-            persistMsg
-          );
+          logAstroKundliCall(userId, kundliId, field, 'error', Date.now() - startAll, persistMsg);
         }
         await prisma.kundli.update({
           where: { id: kundliId },
@@ -279,20 +256,18 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
         });
         return;
       }
-      // vertical store (docs/reading-engine/20): same items as kundli_data rows, best effort
-      await writeLegacyColumnsThrough(prisma, kundliId, dataUpdate);
     }
 
     const updatedRow = await prisma.kundli.findUnique({
       where: { id: kundliId },
       select: KUNDLI_JSON_COLUMNS_SELECT,
     });
-    const allFieldsFilled = updatedRow && KUNDLI_JSON_FIELDS.every(
+    const allFieldsFilled = Boolean(updatedRow) && KUNDLI_JSON_FIELDS.every(
       (field) => isJsonFieldFilled((updatedRow as Record<string, unknown>)[field])
     );
 
-    // Only mark completed when all KUNDLI_JSON_FIELDS slices are filled from AstroKundli.
-    if (allFieldsFilled) {
+    // Completed when every legacy column is filled (existing rule) and every served first-tier type is ready.
+    if (allFieldsFilled && reg.firstTierReady) {
       await prisma.auth.update({
         where: { id: userId },
         data: { kundli_added: true },
@@ -313,6 +288,8 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser)
         event: 'kundli_partial_sync',
         user_id: userId,
         kundli_id: kundliId,
+        legacy_columns_filled: allFieldsFilled,
+        first_tier_ready: reg.firstTierReady,
         message: 'Not all data points filled; queue_status reset to pending for retry.',
       });
       await prisma.kundli.update({

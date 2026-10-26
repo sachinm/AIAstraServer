@@ -1,5 +1,6 @@
 // Uses Prisma only; no Supabase. Pass prisma as first argument.
 import type { PrismaClient } from '@prisma/client';
+import { dashaForPrompt } from './src/reading/chartData/dashaShape.js';
 
 export interface KundliRow {
   id: string;
@@ -70,8 +71,9 @@ export function kundliRowToChunks(row: KundliRow): string[] {
   tryPush('Chart D9', row.d9);
   tryPush('Chart D10', row.d10);
   tryPush('Chara Karaka', row.charakaraka);
-  tryPush('Vimsottari Dasa', row.vimsottari_dasa);
-  tryPush('Narayana Dasa', row?.narayana_dasa ?? null);
+  // either dasha shape (legacy array or R-6 node shape) reads the same to the model
+  tryPush('Vimsottari Dasa', row.vimsottari_dasa == null ? null : dashaForPrompt(row.vimsottari_dasa, { system: 'vimsottari' }));
+  tryPush('Narayana Dasa', row?.narayana_dasa == null ? null : dashaForPrompt(row.narayana_dasa, { system: 'narayana' }));
 
   chunks.unshift(
     `Kundli Meta:

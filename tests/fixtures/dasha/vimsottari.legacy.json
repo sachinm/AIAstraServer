@@ -1,0 +1,128 @@
+[
+  {
+    "maha_dasha_lord": "Moon",
+    "maha_start_date": "1984-03-02 06:30:00 AM",
+    "bhuktis": [
+      {
+        "lord": "Moon",
+        "start_date": "1984-03-02 06:30:00 AM"
+      },
+      {
+        "lord": "Mars",
+        "start_date": "1984-12-31 06:30:00 AM"
+      },
+      {
+        "lord": "Rahu",
+        "start_date": "1985-08-01 06:30:00 AM"
+      },
+      {
+        "lord": "Jupiter",
+        "start_date": "1987-01-31 06:30:00 AM"
+      },
+      {
+        "lord": "Saturn",
+        "start_date": "1988-06-01 06:30:00 AM"
+      },
+      {
+        "lord": "Mercury",
+        "start_date": "1989-12-31 06:30:00 AM"
+      },
+      {
+        "lord": "Ketu",
+        "start_date": "1991-06-01 06:30:00 AM"
+      },
+      {
+        "lord": "Venus",
+        "start_date": "1991-12-31 06:30:00 AM"
+      },
+      {
+        "lord": "Sun",
+        "start_date": "1993-08-31 06:30:00 AM"
+      }
+    ]
+  },
+  {
+    "maha_dasha_lord": "Mars",
+    "maha_start_date": "1994-03-02 06:30:00 AM",
+    "bhuktis": [
+      {
+        "lord": "Mars",
+        "start_date": "1994-03-02 06:30:00 AM"
+      },
+      {
+        "lord": "Rahu",
+        "start_date": "1994-07-29 06:30:00 AM"
+      },
+      {
+        "lord": "Jupiter",
+        "start_date": "1995-08-17 01:20:00 AM (+1)"
+      },
+      {
+        "lord": "Saturn",
+        "start_date": "1996-07-23 06:30:00 AM"
+      },
+      {
+        "lord": "Mercury",
+        "start_date": "1997-09-01 06:30:00 AM"
+      },
+      {
+        "lord": "Ketu",
+        "start_date": "1998-08-29 06:30:00 AM"
+      },
+      {
+        "lord": "Venus",
+        "start_date": "1999-01-25 06:30:00 AM"
+      },
+      {
+        "lord": "Sun",
+        "start_date": "2000-03-26 06:30:00 AM"
+      },
+      {
+        "lord": "Moon",
+        "start_date": "2000-08-01 06:30:00 AM"
+      }
+    ]
+  },
+  {
+    "maha_dasha_lord": "Rahu",
+    "maha_start_date": "2001-03-02 06:30:00 AM",
+    "bhuktis": [
+      {
+        "lord": "Rahu",
+        "start_date": "2001-03-02 06:30:00 AM"
+      },
+      {
+        "lord": "Jupiter",
+        "start_date": "2003-11-13 06:30:00 AM"
+      },
+      {
+        "lord": "Saturn",
+        "start_date": "2006-04-08 06:30:00 AM"
+      },
+      {
+        "lord": "Mercury",
+        "start_date": "2009-02-12 06:30:00 AM"
+      },
+      {
+        "lord": "Ketu",
+        "start_date": "2011-09-01 06:30:00 AM"
+      },
+      {
+        "lord": "Venus",
+        "start_date": "2012-09-19 06:30:00 AM"
+      },
+      {
+        "lord": "Sun",
+        "start_date": "2015-09-20 06:30:00 AM"
+      },
+      {
+        "lord": "Moon",
+        "start_date": "2016-08-14 06:30:00 AM"
+      },
+      {
+        "lord": "Mars",
+        "start_date": "2018-02-13 06:30:00 AM"
+      }
+    ]
+  }
+]
