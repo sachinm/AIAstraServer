@@ -1,74 +1,52 @@
 /**
- * S4 Narayana (docs/reading-engine/27 §A.3): the running *sign* is activated as a house from the lagna, plus the houses
- * of its lord and the planets in it; arudhas and special lagnas in that sign are activated at strength 2. Read from the
- * running sign's house from the AL as well: the 7th from the AL activates relationships, the 2nd/11th money.
+ * S4 Narayana as D4 (docs/reading-engine/29 §3.2): Jaimini's own timing, by the running sign.
  *
- * Rules on read fields: the sign's house is `houses.<h>.sign`, its lord `houses.<h>.lord`, its planets
- * `houses.<h>.occupants`, arudhas `arudhas.<k>.sign`. Strength: 2 for the sign's house when it is the marker's primary
- * house (`rules.secondaryHouseStrength` for its other frame houses), an arudha in it, the AL relation or a karaka in it; 1 through the sign lord's houses or an occupant's houses. A sign that is a dusthana from
- * the lagna makes the activation adverse. The MD sign runs one lower when an AD sign runs under it.
+ * - 3: the sign holds the marker's arudha or special lagna (`arudhas.<k>.sign`, `special_lagnas.<k>.sign`): the period of
+ *   the sign holding UL / A10 / A4 brings that matter up.
+ * - 2: the sign is the marker's primary house (`houses.<h1>.sign`) or the sign its primary lord sits in.
+ * - 1: the sign's lord signifies the marker at 2 or more (signification.ts).
+ * - adverse 1: the sign's lord signifies the marker adversely at 2 or more.
+ *
+ * Read from AL as well (doc 27 §A.3): the 7th sign from the AL running activates love and marriage at 2, the 2nd/11th
+ * money at 2. The MD sign counts only where no AD sign runs.
  */
-import type { PlanetCode } from '../../facts/constants.js';
-import { TIMELINE_DEFAULTS, type ActivationRules } from '../config.js';
-import { DUSTHANAS, houseFrom, houseOfSign, pointOf, type Foundation } from '../foundation.js';
+import { houseFrom, houseOfSign, pointOf, type Foundation } from '../foundation.js';
 import type { DashaStack } from '../dashas.js';
 import { MARKERS, MARKER_IDS } from '../markers.js';
+import { sigOf, type Signification } from '../signification.js';
 import type { Activation } from '../types.js';
 
-const PLANETS = new Set(['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']);
-
-export function activateNarayana(f: Foundation, stack: DashaStack, rules: ActivationRules = TIMELINE_DEFAULTS.rules): Activation[] {
+export function activateNarayana(f: Foundation, s: Signification, stack: DashaStack): Activation[] {
   const rows = stack.rows.filter((r) => r.system === 'narayana' && r.sign != null);
   const hasAd = rows.some((r) => r.level === 2);
   const al = f.arudhas.AL;
   const out: Activation[] = [];
   for (const r of rows) {
-    if (r.level === 1 && hasAd && !rules.mdCounts) continue;
+    if (r.level === 1 && hasAd) continue;
     const h = houseOfSign(f, r.sign!);
     if (h == null) continue;
-    const card = f.houses[h]!;
-    const lord = card.lord;
-    const lp = f.planets[lord];
-    const occupants = card.occupants.filter((o) => PLANETS.has(o)) as PlanetCode[];
-    const drop = r.level === 1 && hasAd ? 1 : 0;
-    const adverse = (DUSTHANAS as readonly number[]).includes(h);
+    const lord = f.houses[h]!.lord;
     const fromAl = al ? houseFrom(al.house, h) : null;
-
     for (const id of MARKER_IDS) {
       const m = MARKERS[id];
+      const h1 = m.houses[0]!;
       let strength = 0;
-      const ev: string[] = [];
-      const bump = (s: number, ...paths: string[]): void => {
-        strength = Math.max(strength, s);
-        ev.push(...paths);
+      let ev: string[] = [];
+      const take = (v: number, ...paths: string[]): void => {
+        if (v > strength) [strength, ev] = [v, paths];
       };
-      if (m.houses.includes(h)) bump(h === m.houses[0] ? 2 : rules.secondaryHouseStrength, `houses.${h}.sign`);
-      if (lp && (lp.owns.some((x) => m.houses.includes(x)) || m.houses.includes(lp.house))) bump(1, `houses.${h}.lord`, `bodies.${lord}.house`);
-      for (const o of occupants) {
-        const op = f.planets[o];
-        if (m.karakas.includes(o) || m.charaKarakas.some((k) => f.chara[k] === o)) bump(2, `houses.${h}.occupants`, m.karakas.includes(o) ? `karakas.natural.${o}` : 'karakas.chara');
-        else if (op?.owns.some((x) => m.houses.includes(x))) bump(1, `houses.${h}.occupants`, `bodies.${o}.house`);
-      }
       for (const key of [...m.arudhas, ...m.specialLagnas]) {
         const pt = pointOf(f, key);
-        if (pt && pt.point.sign === r.sign) bump(2, `${pt.path}.sign`);
+        if (pt && pt.point.sign === r.sign) take(3, `${pt.path}.sign`);
       }
-      if (fromAl === 7 && id === 'love_marriage') bump(2, 'arudhas.AL.house', `houses.${h}.sign`);
-      if ((fromAl === 2 || fromAl === 11) && id === 'money') bump(2, 'arudhas.AL.house', `houses.${h}.sign`);
-      const s = strength - drop;
-      if (s <= 0) continue;
-      out.push({
-        system: 'S4',
-        marker: id,
-        planet: lord,
-        sign: r.sign!,
-        strength: s,
-        polarity: adverse ? -1 : 1,
-        from: r.from,
-        to: r.to,
-        level: r.level === 1 ? 'md' : 'ad',
-        evidence: [r.evidence, ...new Set(ev)],
-      });
+      if (h === h1) take(2, `houses.${h1}.sign`);
+      const h1Lord = f.houses[h1]?.lord;
+      if (h1Lord && f.planets[h1Lord]?.sign === r.sign) take(2, `houses.${h1}.lord`, `bodies.${h1Lord}.sign`);
+      if ((fromAl === 7 && id === 'love_marriage') || ((fromAl === 2 || fromAl === 11) && id === 'money')) take(2, 'arudhas.AL.house', `houses.${h}.sign`);
+      if (sigOf(s.sig, lord, id) >= 2) take(1, `houses.${h}.lord`, ...(s.sig[lord]?.[id]?.evidence ?? []));
+      const base = { system: 'S4' as const, marker: id, planet: lord, sign: r.sign!, from: r.from, to: r.to, level: r.level === 1 ? 'md' : 'ad' };
+      if (strength > 0) out.push({ ...base, strength, polarity: 1, evidence: [r.evidence, ...ev] });
+      if (sigOf(s.adv, lord, id) >= 2) out.push({ ...base, strength: 1, polarity: -1, evidence: [r.evidence, `houses.${h}.lord`, ...(s.adv[lord]?.[id]?.evidence ?? [])] });
     }
   }
   return out;

@@ -207,3 +207,26 @@ every High month carries a trigger, and the made-up ledger's lift lands wherever
    as S4b at the same prior is cheap once the arudha rule exists. Recommended for P1b if Sachin agrees.
 4. Band densities (8 / 20 / 35 %) are a product choice as much as a method one: fewer High windows read as more
    confident. They can be tuned per marker later (marriage is rarer than a job change).
+
+## 9. P1b built — results on G1 (2026-10-26, machinery check only)
+
+Built on `feature/timeline-p1` as specified in §6, with two deviations: the signification table lives in its own
+`signification.ts`, and the cap's tie-break adds **scarcity** (a planet's place goes to the marker with the fewest other
+strong significators). Without it G1's Jupiter, lord of the 4th and 7th, is primary for five markers and education is
+left with no significator at all. The 36-year ranking is the past 18 years only until P4 builds the future grid.
+
+| | v1 (doc 27) | v2 (this doc) |
+|---|---|---|
+| Markers a planet signifies | 9–11 of 11 | ≤ 3 (every marker has ≥ 1 at strength 2+) |
+| High months per marker | 211–217 of 217 | 8–17 (≈ 4–8 %); money 28 because its support and test sides are banded separately |
+| Moderate + High per marker | ~100 % | 17–38 % |
+| High months with a period **and** a trigger | not required | all (test enforces it) |
+| Blind-cast hit rate vs random at the same density | 12/12 vs 100 % | 5/12 vs 54 % |
+| Combined lift@8 % / @20 % / mean percentile | 1.00 / 1.00 / – | 1.29 / 0.79 / 0.61 |
+
+Per technique on the invented ledger (lift@20 %, mean percentile): Narayana 1.27 / 0.69, contacts 0.95 / 0.58,
+Yogini 0.70 / 0.54, Tithi Ashtottari 0.37 / 0.53, Vimshottari 0.17 / 0.51, the interim double transit 0 / 0.49 (it fires
+in 1 % of months: `transit_contacts` rarely puts Jupiter and Saturn on key natal points at once, which is the R-T1 gap).
+**These numbers say nothing about accuracy**: the ledger is made up. What they show is that the grid is now selective,
+so a real ledger can move the weights, and that a technique can now score below random (Vimshottari here), which v1 could
+never show. Next: P0 ledgers for Sachin's chart and the panel charts, then the chart-swap check, then R-T1.

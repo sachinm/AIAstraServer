@@ -1,124 +1,159 @@
 import { describe, expect, it } from 'vitest';
+import { activateDoubleTransit } from '../../../../src/reading/timeline/activate/doubleTransit.js';
 import { grahaActivations } from '../../../../src/reading/timeline/activate/graha.js';
 import { activateJaimini } from '../../../../src/reading/timeline/activate/jaimini.js';
 import { activateNarayana } from '../../../../src/reading/timeline/activate/narayana.js';
 import { activateTithiAshtottari } from '../../../../src/reading/timeline/activate/tithiAshtottari.js';
-import { activateTransitContacts, mergeContacts } from '../../../../src/reading/timeline/activate/transits.js';
+import { activateTransitContacts, contactPolarity, mergeContacts, type SourcedContact } from '../../../../src/reading/timeline/activate/transits.js';
 import { activateVimshottari } from '../../../../src/reading/timeline/activate/vimshottari.js';
 import { activateYogini } from '../../../../src/reading/timeline/activate/yogini.js';
-import type { TransitContactsPayload } from '../../../../src/reading/chartData/transitContacts.js';
+import type { RadhaContact, TransitContactsPayload } from '../../../../src/reading/chartData/transitContacts.js';
 import { buildDashaStack, type DashaStack } from '../../../../src/reading/timeline/dashas.js';
 import { buildFoundation } from '../../../../src/reading/timeline/foundation.js';
+import { MARKER_IDS } from '../../../../src/reading/timeline/markers.js';
+import { buildSignification, sigOf } from '../../../../src/reading/timeline/signification.js';
 import { loadG1TimelineInputs } from '../../../helpers/readingFixtures.js';
 
 const inputs = loadG1TimelineInputs();
 const f = buildFoundation(inputs.dossier);
+const s = buildSignification(f, 3);
 const stack = buildDashaStack(inputs.dossier, inputs.items, { from: '2008-10-01', to: '2026-11-01' });
-const rules = { secondaryHouseStrength: 1, mdCounts: true };
-const ctx = { level: 2 as const, parentLord: null, hasFinerLevel: false, secondaryHouseStrength: 1 };
 
-describe('graha period-lord rule (S1-S3, doc 27 §A.3)', () => {
-  it('Saturn (lord of 5 and 6, in 9) activates children through the primary 5th at strength 2', () => {
-    const hit = grahaActivations(f, 'Sa', ctx).find((h) => h.marker === 'children')!;
-    expect(hit).toMatchObject({ strength: 2, polarity: 1 });
-    expect(hit.evidence).toContain('houses.5.lord');
+describe('signification table (doc 29 §3.1) on G1', () => {
+  it('caps every planet at three markers on each side', () => {
+    for (const row of [...Object.values(s.sig), ...Object.values(s.adv)]) expect(Object.keys(row ?? {}).length).toBeLessThanOrEqual(3);
   });
 
-  it('secondary frame houses follow the rule knob (doc literal 2, tighter 1)', () => {
-    // Moon sits in the 2nd: a secondary house of children (5, 9, 2); it is not a children karaka
-    const literal = grahaActivations(f, 'Mo', { ...ctx, secondaryHouseStrength: 2 }).find((h) => h.marker === 'children')!;
-    const tight = grahaActivations(f, 'Mo', ctx).find((h) => h.marker === 'children')!;
-    expect(literal.strength).toBe(2);
-    expect(tight.strength).toBe(1);
+  it('leaves no marker without a significator (scarcity tie-break)', () => {
+    for (const m of MARKER_IDS) expect(Object.values(s.sig).some((row) => (row?.[m]?.value ?? 0) >= 2)).toBe(true);
   });
 
-  it('a lord in a dusthana makes the activation adverse (Sun in 8)', () => {
-    const hits = grahaActivations(f, 'Su', ctx);
-    expect(hits.length).toBeGreaterThan(0);
-    expect(hits.filter((h) => h.marker !== 'money').every((h) => h.polarity === -1)).toBe(true);
+  it('reads the primary-house lord at 3 with its path (Saturn lords the 5th: children)', () => {
+    expect(s.sig.Sa!.children).toMatchObject({ value: 3, primary: true, evidence: ['houses.5.lord'] });
+    expect(s.sig.Ju!.education).toMatchObject({ value: 3, primary: true });
   });
 
-  it('money takes owning/occupying 6/8/12 as an adverse activation', () => {
-    expect(grahaActivations(f, 'Sa', ctx).some((h) => h.marker === 'money' && h.polarity === -1 && h.evidence.includes('houses.6.lord'))).toBe(true);
+  it('moves lordship to the adverse table for a planet in a dusthana (Sun in 8 lords the 12th)', () => {
+    expect(s.adv.Su!.love_marriage!.value).toBe(1);
+    expect(s.adv.Su!.love_marriage!.evidence).toContain('bodies.Su.house');
+    expect(sigOf(s.sig, 'Su', 'love_marriage')).toBe(0);
   });
 
-  it('AD in 6/8/12 from the MD lord and an MD under an AD count one lower', () => {
-    const plain = grahaActivations(f, 'Sa', ctx).find((h) => h.marker === 'children')!.strength;
-    // Saturn in 9 is 12th from Jupiter in 10
-    const underJu = grahaActivations(f, 'Sa', { ...ctx, parentLord: 'Ju' }).find((h) => h.marker === 'children')!;
-    expect(underJu.strength).toBe(plain - 1);
-    const md = grahaActivations(f, 'Sa', { ...ctx, level: 1, hasFinerLevel: true }).find((h) => h.marker === 'children')!;
-    expect(md.strength).toBe(plain - 1);
+  it('money: lording 6/8/12 signifies loss', () => {
+    expect(s.adv.Sa!.money).toMatchObject({ value: 2, evidence: ['houses.6.lord'] });
+  });
+
+  it('a larger cap lets planets signify more', () => {
+    const wide = buildSignification(f, 11);
+    expect(Object.keys(wide.sig.Ju!).length).toBeGreaterThan(3);
   });
 });
 
-describe('dasha systems on G1', () => {
-  it('S1, S2, S3 cite the period row first, then dossier fields', () => {
-    for (const acts of [activateVimshottari(f, stack, rules), activateYogini(f, stack, rules), activateTithiAshtottari(f, stack, rules)]) {
-      expect(acts.length).toBeGreaterThan(50);
-      for (const a of acts) {
-        expect(a.evidence[0]).toMatch(/^dasha\./);
-        expect(a.evidence.length).toBeGreaterThan(1);
-        expect(a.strength).toBeGreaterThan(0);
-      }
+describe('graha period-lord rule (S1-S3, doc 29 §3.2)', () => {
+  it('a lord activates only the markers it signifies', () => {
+    const hits = grahaActivations(f, s, 'Sa', { parentLord: null });
+    expect(hits.filter((h) => h.polarity === 1).map((h) => h.marker).sort()).toEqual(Object.keys(s.sig.Sa!).sort());
+    expect(hits.find((h) => h.marker === 'money')).toMatchObject({ polarity: -1, strength: 2 });
+  });
+
+  it('6/8/12 from the parent lord lowers the support by one (Saturn in 9 is 12th from Jupiter in 10)', () => {
+    const plain = grahaActivations(f, s, 'Sa', { parentLord: null }).find((h) => h.marker === 'children')!.strength;
+    const under = grahaActivations(f, s, 'Sa', { parentLord: 'Ju' }).find((h) => h.marker === 'children')!;
+    expect(under.strength).toBe(plain - 1);
+    expect(under.evidence).toContain('bodies.Ju.house');
+  });
+
+  it('S1 runs MD/AD/PD; the confirmers S2/S3 run at AD only; every activation cites its period row', () => {
+    const s1 = activateVimshottari(f, s, stack);
+    expect(new Set(s1.map((a) => a.level))).toEqual(new Set(['md', 'ad', 'pd']));
+    for (const acts of [activateYogini(f, s, stack), activateTithiAshtottari(f, s, stack)]) {
+      expect(acts.length).toBeGreaterThan(10);
+      expect(new Set(acts.map((a) => a.level))).toEqual(new Set(['ad']));
     }
-  });
-
-  it('S2: an Ulka (Saturn) period makes the markers Saturn rules adverse', () => {
-    const sa = activateYogini(f, stack, rules).filter((a) => a.planet === 'Sa' && a.marker === 'children');
-    expect(sa.length).toBeGreaterThan(0);
-    expect(sa.every((a) => a.polarity === -1)).toBe(true);
-  });
-
-  it('mdCounts=false leaves MD lords out', () => {
-    const levels = new Set(activateVimshottari(f, stack, { ...rules, mdCounts: false }).map((a) => a.level));
-    expect(levels.has('md')).toBe(false);
-  });
-
-  it('S4 Narayana: Pisces (7th from a Virgo lagna) activates love and marriage at strength 2', () => {
-    const one: DashaStack = { rows: [{ system: 'narayana', level: 2, lord: null, sign: 11, parentLord: null, parentSign: null, from: '2010-01-01', to: '2011-01-01', evidence: 'dasha.narayana.periods[0].children[0]' }], sources: {}, missing: [] };
-    const acts = activateNarayana(f, one, rules);
-    const love = acts.find((a) => a.marker === 'love_marriage')!;
-    expect(love).toMatchObject({ strength: 2, polarity: 1, planet: 'Ju', sign: 11 });
-    expect(love.evidence).toContain('houses.7.sign');
-    // HL sits in Pisces: business and money get the special lagna at 2
-    expect(acts.find((a) => a.marker === 'money')!.evidence).toContain('special_lagnas.HL.sign');
-  });
-
-  it('S7 Jaimini cites the arudha and the argala or aspect it read', () => {
-    const acts = activateJaimini(f, stack, rules);
-    expect(acts.length).toBeGreaterThan(0);
-    for (const a of acts) {
-      expect(a.level).toBe('modifier');
-      expect(a.evidence.some((e) => /^(arudhas|special_lagnas)\./.test(e))).toBe(true);
-      expect(a.evidence.some((e) => /argala|aspects_to|\.house$/.test(e))).toBe(true);
-    }
+    for (const a of s1) expect(a.evidence[0]).toMatch(/^dasha\./);
   });
 });
 
-describe('S6 transit contacts', () => {
-  const contact = (over: Partial<TransitContactsPayload['contacts'][number]>): TransitContactsPayload['contacts'][number] => ({ transit: 'Sa', natal: 'La', natal_house: 1, orb_deg: 0, from: '2010-11-07', to: '2011-09-10', exact: ['2010-11-27'], station_in_orb: false, stations: [], ...over });
+describe('S4 Narayana as D4', () => {
+  const one = (sign: number): DashaStack => ({ rows: [{ system: 'narayana', level: 2, lord: null, sign, parentLord: null, parentSign: null, from: '2010-01-01', to: '2011-01-01', evidence: 'dasha.narayana.periods[0].children[0]' }], sources: {}, missing: [] });
+
+  it('the sign holding the arudha scores 3 (Sagittarius holds UL: love and marriage)', () => {
+    const love = activateNarayana(f, s, one(8)).find((a) => a.marker === 'love_marriage' && a.polarity === 1)!;
+    expect(love).toMatchObject({ strength: 3, sign: 8 });
+    expect(love.evidence).toContain('arudhas.UL.sign');
+  });
+
+  it('the primary house scores 2 (Pisces is the 7th from a Virgo lagna)', () => {
+    const love = activateNarayana(f, s, one(11)).find((a) => a.marker === 'love_marriage' && a.polarity === 1)!;
+    expect(love.strength).toBeGreaterThanOrEqual(2);
+  });
+
+  it('runs MD signs only where no AD sign runs', () => {
+    expect(activateNarayana(f, s, stack).every((a) => a.level === 'ad')).toBe(true);
+  });
+});
+
+describe('S6 contacts (T_c) and S6D double transit', () => {
+  const contact = (over: Partial<RadhaContact>): RadhaContact => ({ transit: 'Sa', natal: 'La', natal_house: 1, orb_deg: 0, from: '2010-11-07', to: '2011-01-20', exact: ['2010-11-27'], station_in_orb: false, stations: [], ...over });
+  const payload = (contacts: RadhaContact[]): TransitContactsPayload => ({ from: '2008-10-01', to: '2018-08-10', orb: 2, planets: ['Ju', 'Sa'], contacts });
 
   it('joins a contact that crosses a range boundary', () => {
-    const a: TransitContactsPayload = { from: '2008-10-01', to: '2018-08-10', orb: 2, planets: ['Sa'], contacts: [contact({ from: '2018-07-01', to: '2018-08-10', exact: ['2018-07-20'], ends_after_range: true })] };
+    const a: TransitContactsPayload = { ...payload([contact({ from: '2018-07-01', to: '2018-08-10', exact: ['2018-07-20'], ends_after_range: true })]) };
     const b: TransitContactsPayload = { from: '2018-08-11', to: '2026-10-31', orb: 2, planets: ['Sa'], contacts: [contact({ from: '2018-08-11', to: '2018-09-30', exact: ['2018-09-02'], starts_before_range: true })] };
     const merged = mergeContacts([b, a]);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.contact).toMatchObject({ from: '2018-07-01', to: '2018-09-30', exact: ['2018-07-20', '2018-09-02'] });
-    expect(merged[0]!.evidence).toHaveLength(2);
   });
 
-  it('Saturn over the lagna tests health, stronger in the exact month', () => {
-    const acts = activateTransitContacts(f, mergeContacts([{ from: '2008-10-01', to: '2018-08-10', orb: 2, planets: ['Sa'], contacts: [contact({})] }]));
-    const health = acts.filter((a) => a.marker === 'health');
-    expect(health.every((a) => a.polarity === -1 && a.level === 'contact')).toBe(true);
-    expect(Math.max(...health.map((a) => a.strength))).toBe(1.5);
-    expect(health[0]!.evidence[0]).toBe('transit_contacts[2008-10-01..2018-08-10].contacts[0]');
+  it('a contact on the lagna triggers every marker, monthly: 2 in the exact month, 1.5 in orb', () => {
+    const acts = activateTransitContacts(f, s, mergeContacts([payload([contact({})])])).filter((a) => a.marker === 'career');
+    expect(acts.map((a) => [a.from.slice(0, 7), a.strength])).toEqual([
+      ['2010-11', 2],
+      ['2010-12', 1.5],
+      ['2011-01', 1.5],
+    ]);
+    expect(acts[0]!.evidence[0]).toBe('transit_contacts[2008-10-01..2018-08-10].contacts[0]');
   });
 
-  it('the G1 contacts fixture activates markers with cited evidence', () => {
-    const acts = activateTransitContacts(f, mergeContacts(inputs.contacts));
+  it('a contact on a planet that does not signify the marker does not trigger it', () => {
+    const acts = activateTransitContacts(f, s, mergeContacts([payload([contact({ natal: 'Ke', natal_house: 3 })])]));
+    expect(new Set(acts.map((a) => a.marker))).toEqual(new Set(Object.keys(s.sig.Ke!).filter((m) => sigOf(s.sig, 'Ke', m as never) >= 2)));
+  });
+
+  it('Jupiter supports, Saturn supports what it signifies and tests the rest, Rahu supports residence', () => {
+    expect(contactPolarity(s, 'Ju', 'money')).toBe(1);
+    expect(contactPolarity(s, 'Sa', 'children')).toBe(1);
+    expect(contactPolarity(s, 'Sa', 'career')).toBe(-1);
+    expect(contactPolarity(s, 'Ra', 'residence')).toBe(1);
+    expect(contactPolarity(s, 'Ke', 'residence')).toBe(-1);
+  });
+
+  it('double transit: Jupiter and Saturn on key points of the marker in the same month', () => {
+    // Saturn's significations include children; its lord-of-the-5th is Saturn itself: Ju on Sa + Sa on La (lagna is no key) -> 2 or 3
+    const sc = (c: RadhaContact, i: number): SourcedContact => ({ contact: c, evidence: [`transit_contacts[x].contacts[${i}]`] });
+    const pair = [sc(contact({ transit: 'Ju', natal: 'Sa', natal_house: 9 }), 0), sc(contact({ transit: 'Sa', natal: 'Sa', natal_house: 9 }), 1)];
+    const children = activateDoubleTransit(f, s, pair).filter((a) => a.marker === 'children');
+    expect(children.length).toBeGreaterThan(0);
+    expect(children[0]).toMatchObject({ system: 'S6D', strength: 3, polarity: 1, level: 'double' });
+    expect(children[0]!.evidence).toEqual(['transit_contacts[x].contacts[0]', 'transit_contacts[x].contacts[1]']);
+    expect(activateDoubleTransit(f, s, [pair[0]!])).toEqual([]);
+  });
+
+  it('the G1 contacts fixture produces cited monthly triggers', () => {
+    const acts = activateTransitContacts(f, s, mergeContacts(inputs.contacts));
     expect(acts.length).toBeGreaterThan(20);
-    expect(acts.every((a) => a.item && a.evidence[0]!.startsWith('transit_contacts['))).toBe(true);
+    expect(acts.every((a) => a.evidence[0]!.startsWith('transit_contacts['))).toBe(true);
+  });
+});
+
+describe('S7 Jaimini modifier', () => {
+  it('fires only for lords that signify the marker, at 0.5, citing the arudha', () => {
+    const acts = activateJaimini(f, s, stack);
+    expect(acts.length).toBeGreaterThan(0);
+    for (const a of acts) {
+      expect(sigOf(s.sig, a.planet, a.marker)).toBeGreaterThanOrEqual(2);
+      expect(a.strength).toBe(0.5);
+      expect(a.evidence.some((e) => /^(arudhas|special_lagnas)\./.test(e))).toBe(true);
+    }
   });
 });

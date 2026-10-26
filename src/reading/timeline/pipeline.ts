@@ -1,7 +1,7 @@
 /**
- * The past-timeline build, phase P1 of docs/reading-engine/27 (§B.7): foundation -> dasha stack -> activation (S1, S2,
- * S3, S4, S6 from transit_contacts, S7) -> convergence over the past 18 years at the monthly grain -> ledger match ->
- * calibration. Deterministic and model-free: the blind cast never reads the ledger, and the same inputs give the same
+ * The past-timeline build, phase P1 of docs/reading-engine/27 (§B.7) with the v2 scoring of doc 29: foundation ->
+ * signification table -> dasha stack -> activation (S1, S2, S3, S4, S6 and S6D from transit_contacts, S7) -> gated,
+ * ranked convergence over the past 18 years at the monthly grain -> ledger match -> calibration. Deterministic and model-free: the blind cast never reads the ledger, and the same inputs give the same
  * grid. Gated behind TIMELINE_ENABLED (default off).
  */
 import { calibrate, type Calibration } from './calibrate.js';
@@ -13,6 +13,8 @@ import { pastRange, type TimelineInputs } from './inputs.js';
 import type { LifeEvent } from './ledger.js';
 import { matchLedger, type EventMatch, type MatchSummary } from './match.js';
 import { addDaysIso, pastMonths } from './months.js';
+import { buildSignification, type Signification } from './signification.js';
+import { activateDoubleTransit } from './activate/doubleTransit.js';
 import { activateJaimini } from './activate/jaimini.js';
 import { activateNarayana } from './activate/narayana.js';
 import { activateTithiAshtottari } from './activate/tithiAshtottari.js';
@@ -37,6 +39,7 @@ export interface PastBuild {
   s3Applicable: boolean;
   s3ApplicableEvidence: string | null;
   foundation: Foundation;
+  signification: Signification;
   stack: DashaStack;
   activations: Activation[];
   grid: TimelineGrid;
@@ -59,25 +62,29 @@ export function buildPastTimeline(inputs: TimelineInputs, opts: PastBuildOptions
   const foundation = buildFoundation(inputs.dossier);
   const stack = buildDashaStack(inputs.dossier, inputs.items, { from: range.from, to: addDaysIso(range.to, 1) });
   const s3ApplicableEvidence = ashtottariApplies(inputs.items['dasha.applicable']);
-  const notes = [...inputs.notes, ...stack.missing.map((s) => `dasha.${s} not available: its system is left out`)];
+  const notes: string[] = [...inputs.notes, ...stack.missing.map((s) => `dasha.${s} not available: its system is left out`)];
 
+  const signification = buildSignification(foundation, config.sigCap);
+  const sig = signification;
   const activations: Activation[] = [];
   const on = (s: SystemId): boolean => systems.includes(s);
-  const rules = config.rules;
-  if (on('S1')) activations.push(...activateVimshottari(foundation, stack, rules));
-  if (on('S2')) activations.push(...activateYogini(foundation, stack, rules));
-  if (on('S3')) activations.push(...activateTithiAshtottari(foundation, stack, rules));
-  if (on('S4')) activations.push(...activateNarayana(foundation, stack, rules));
-  if (on('S6')) {
-    if (!inputs.contacts.length) notes.push('no transit_contacts: S6 is left out');
-    activations.push(...activateTransitContacts(foundation, mergeContacts(inputs.contacts)));
+  if (on('S1')) activations.push(...activateVimshottari(foundation, sig, stack));
+  if (on('S2')) activations.push(...activateYogini(foundation, sig, stack));
+  if (on('S3')) activations.push(...activateTithiAshtottari(foundation, sig, stack));
+  if (on('S4')) activations.push(...activateNarayana(foundation, sig, stack));
+  const contacts = mergeContacts(inputs.contacts);
+  if ((on('S6') || on('S6D')) && !inputs.contacts.length) notes.push('no transit_contacts: S6 and S6D are left out');
+  if (on('S6')) activations.push(...activateTransitContacts(foundation, sig, contacts));
+  if (on('S6D')) {
+    activations.push(...activateDoubleTransit(foundation, sig, contacts));
+    notes.push('S6D double transit is approximated from transit_contacts (both Jupiter and Saturn within 2 degrees of key natal points) until Radha serves transit_range (R-T1)');
   }
-  if (on('S7')) activations.push(...activateJaimini(foundation, { ...stack, rows: stack.rows.filter((r) => (r.system === 'vimsottari' && on('S1')) || (r.system === 'yogini' && on('S2')) || (r.system === 'tithi_ashtottari' && on('S3')) || (r.system === 'narayana' && on('S4'))) }, rules));
+  if (on('S7')) activations.push(...activateJaimini(foundation, sig, { ...stack, rows: stack.rows.filter((r) => (r.system === 'vimsottari' && on('S1')) || (r.system === 'yogini' && on('S2')) || (r.system === 'tithi_ashtottari' && on('S3')) || (r.system === 'narayana' && on('S4'))) }));
 
   const weights = opts.weights ?? config.weights;
   const s3Applicable = s3ApplicableEvidence != null;
   const grid = converge(activations, pastMonths(inputs.asOf, config.years), { config, weights, s3Applicable, foundation, stack });
-  return { kundliId: inputs.kundliId, asOf: inputs.asOf, range, systems, config, weights, s3Applicable, s3ApplicableEvidence, foundation, stack, activations, grid, notes };
+  return { kundliId: inputs.kundliId, asOf: inputs.asOf, range, systems, config, weights, s3Applicable, s3ApplicableEvidence, foundation, signification, stack, activations, grid, notes };
 }
 
 export interface PastVerification {

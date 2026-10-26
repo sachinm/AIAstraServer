@@ -68,22 +68,26 @@ async function main(): Promise<void> {
   const ms = Date.now() - t0;
   const b = v.build;
 
-  console.log(`\nLife timeline P1 — past grid (blind cast), ${b.kundliId}, as of ${b.asOf}`);
+  console.log(`\nLife timeline P1b (doc 29 scoring) — past grid (blind cast), ${b.kundliId}, as of ${b.asOf}`);
   console.log(`Range ${b.range.from} .. ${b.range.to}: ${b.grid.months.length} months, monthly grain. Built in ${ms} ms, no model calls.`);
   console.log(`Systems: ${b.systems.map((s) => `${s} ${SYSTEM_LABELS[s]}`).join(', ')}`);
   console.log(`Dasha sources: ${Object.entries(b.stack.sources).map(([k, s]) => `${k}=${s}`).join(', ')}${b.stack.missing.length ? `; missing ${b.stack.missing.join(', ')}` : ''}`);
   console.log(`S3 weight: ${b.s3Applicable ? `full (${b.s3ApplicableEvidence})` : 'half (dasha.applicable does not list Ashtottari)'}; activations: ${b.activations.length}; transit contacts: ${inputs.contacts.reduce((s, p) => s + p.contacts.length, 0)}`);
   for (const n of b.notes) console.log(`  note: ${n}`);
 
-  console.log('\nGrid by marker (months; testing = adverse windows)');
-  console.log(`  ${'marker'.padEnd(18)} ${'high'.padStart(5)} ${'mod'.padStart(5)} ${'poss'.padStart(5)} ${'test'.padStart(5)} ${'quiet'.padStart(6)} ${'windows'.padStart(8)}`);
+  const N = b.grid.months.length;
+  console.log('\nGrid by marker (months and share; bands ranked per marker: High <= 8 %, Moderate <= 20 %, Possible <= 35 %)');
+  console.log(`  ${'marker'.padEnd(18)} ${'high'.padStart(9)} ${'mod'.padStart(9)} ${'poss'.padStart(9)} ${'testing'.padStart(8)} ${'D>0'.padStart(5)} ${'T>0'.padStart(5)} ${'edge'.padStart(5)} ${'windows'.padStart(8)}`);
   for (const m of MARKER_IDS) {
     const cells = b.grid.cells[m];
-    const count = (f: (c: (typeof cells)[number]) => boolean): string => String(cells.filter(f).length).padStart(5);
+    const n = (f: (c: (typeof cells)[number]) => boolean): number => cells.filter(f).length;
+    const both = (k: number): string => `${k} ${pct(k / N).trim()}`.padStart(9);
     const windows = b.grid.windows.filter((w) => w.marker === m && w.band !== 'possible').length;
-    console.log(`  ${m.padEnd(18)} ${count((c) => c.band === 'high')} ${count((c) => c.band === 'moderate')} ${count((c) => c.band === 'possible')} ${count((c) => c.testing)} ${String(cells.filter((c) => c.band === 'quiet').length).padStart(6)} ${String(windows).padStart(8)}`);
+    console.log(`  ${m.padEnd(18)} ${both(n((c) => c.band === 'high'))} ${both(n((c) => c.band === 'moderate'))} ${both(n((c) => c.band === 'possible'))} ${String(n((c) => c.testing)).padStart(8)} ${pct(n((c) => c.support.D > 0 || c.test.D > 0) / N).padStart(5)} ${pct(n((c) => c.support.T > 0 || c.test.T > 0) / N).padStart(5)} ${pct(n((c) => c.support.E > 1) / N).padStart(5)} ${String(windows).padStart(8)}`);
   }
-  console.log(`  quiet strips (every marker quiet): ${b.grid.quiet.length}${b.grid.quiet.length ? ` — e.g. ${b.grid.quiet[0]!.fromMonth}..${b.grid.quiet[0]!.toMonth} ${b.grid.quiet[0]!.lords}` : ''}`);
+  console.log(`  quiet strips (no marker Moderate or above): ${b.grid.quiet.length}${b.grid.quiet.length ? ` — e.g. ${b.grid.quiet[0]!.fromMonth}..${b.grid.quiet[0]!.toMonth} ${b.grid.quiet[0]!.lords}` : ''}`);
+  const sigLines = Object.entries(b.signification.sig).map(([p, row]) => `${p}: ${Object.entries(row ?? {}).map(([mk, e]) => `${mk} ${e!.value}`).join(', ') || '-'}`);
+  console.log(`\nSignification (cap ${b.signification.cap} markers per planet)\n  ${sigLines.join('\n  ')}`);
 
   console.log(`\nLedger: ${events.length} events from ${ledgerNote}`);
   for (const m of v.matches) {
@@ -92,28 +96,33 @@ async function main(): Promise<void> {
     console.log(`  ${m.event.date} ${m.event.date_precision.padEnd(5)} ${m.event.category.padEnd(30)} ${String(m.marker ?? '-').padEnd(18)} ${m.result.padEnd(12)} d=${m.distance ?? '-'} rnd=${pct(m.baseline)} ${where}`);
   }
   const s = v.summary;
-  console.log(`\nBlind-cast hit rate: ${s.hits}/${s.scored} = ${pct(s.hitRate)} (near ${s.near}, miss ${s.misses}); random monthly baseline at the same density: ${pct(s.baselineHitRate)}`);
+  console.log(`\nBlind-cast hit rate (Moderate or High, ±1 month): ${s.hits}/${s.scored} = ${pct(s.hitRate)} (near ${s.near}, miss ${s.misses}); random months at the same density: ${pct(s.baselineHitRate)}`);
 
-  const header = `  ${'system'.padEnd(22)} ${'n'.padStart(3)} ${'win'.padStart(4)} ${'prec'.padStart(5)} ${'recall'.padStart(6)} ${'random'.padStart(6)} ${'lift'.padStart(5)} ${'cover'.padStart(5)} ${'weight'.padStart(13)}`;
+  const dens = b.config.calibration.densities;
+  const at = (r: CalibrationRow, d: number) => r.byDensity.find((x) => Math.abs(x.density - d) < 1e-9);
+  const header = `  ${'technique'.padEnd(22)} ${'n'.padStart(3)} ${'pctile'.padStart(6)} ${dens.map((d) => `lift@${Math.round(d * 100)}%`.padStart(9)).join(' ')} ${'hits@20'.padStart(8)} ${'cover'.padStart(5)} ${'weight'.padStart(14)}`;
   const line = (r: CalibrationRow): string => {
-    const name = r.system === 'ALL' ? 'ALL (moderate+high)' : `${r.system} ${SYSTEM_LABELS[r.system]}`;
-    const def = r.system === 'ALL' ? null : b.config.weights.systems[r.system];
-    const weight = def == null ? '' : `${num(def, 2)} -> ${num(r.weight, 2)}${r.dropped ? ' drop' : ''}`;
-    return `  ${name.padEnd(22)} ${String(r.n).padStart(3)} ${String(r.windows).padStart(4)} ${pct(r.precision).padStart(5)} ${pct(r.recall).padStart(6)} ${pct(r.baselineRecall).padStart(6)} ${num(r.lift).padStart(5)} ${pct(r.coverage).padStart(5)} ${weight.padStart(13)}`;
+    const name = r.system === 'ALL' ? 'ALL (combined score)' : `${r.system} ${SYSTEM_LABELS[r.system]}`;
+    const prior = r.system === 'ALL' ? null : b.config.weights.systems[r.system];
+    const weight = prior == null ? '' : `${num(prior, 2)} -> ${num(r.weight, 2)}${r.dropped ? ' drop' : ''}`;
+    return `  ${name.padEnd(22)} ${String(r.n).padStart(3)} ${num(r.meanPercentile).padStart(6)} ${r.byDensity.map((d) => num(d.lift).padStart(9)).join(' ')} ${`${at(r, 0.2)?.hits ?? 0}/${r.n}`.padStart(8)} ${pct(r.coverage).padStart(5)} ${weight.padStart(14)}`;
   };
-  console.log('\nCalibration (pooled over markers with ledger events; ±1 month; weight = default x clamp(0.5 + precision, 0.5, 1.5))');
+  console.log('\nCalibration (pooled over markers with ledger events; ±1 month)');
+  console.log("  pctile: mean percentile of the event months in the technique's own ranking of the months (0.50 = random)");
+  console.log('  lift@d: events hit by its top d of months / hits expected from as many random months (1.00 = random)');
+  console.log('  weight: prior x clamp(0.5 + lift@20/2, 0.5, 1.5), shrunk toward the prior by n/(n+5)');
   console.log(header);
   for (const r of v.calibration.rows.filter((r) => r.marker === '*')) console.log(line(r));
 
   const withEvents = MARKER_IDS.filter((m) => v.calibration.rows.some((r) => r.marker === m && r.n > 0));
-  console.log('\nRecall per system and marker (hits/events; random baseline in brackets)');
-  console.log(`  ${'system'.padEnd(22)} ${withEvents.map((m) => m.slice(0, 14).padStart(16)).join('')}`);
+  console.log('\nMean percentile of event months per technique and marker (events in brackets; 0.50 = random)');
+  console.log(`  ${'technique'.padEnd(22)} ${withEvents.map((m) => m.slice(0, 14).padStart(15)).join('')}`);
   for (const sys of [...b.systems, 'ALL' as const]) {
     const cells = withEvents.map((m) => {
       const r = v.calibration.rows.find((x) => x.system === sys && x.marker === m)!;
-      return `${r.hits}/${r.n} (${pct(r.baselineRecall).trim()})`.padStart(16);
+      return `${num(r.meanPercentile)} (${r.n})`.padStart(15);
     });
-    console.log(`  ${(sys === 'ALL' ? 'ALL (moderate+high)' : `${sys} ${SYSTEM_LABELS[sys]}`).padEnd(22)} ${cells.join('')}`);
+    console.log(`  ${(sys === 'ALL' ? 'ALL (combined score)' : `${sys} ${SYSTEM_LABELS[sys]}`).padEnd(22)} ${cells.join('')}`);
   }
   console.log(`\nMarkers: ${MARKER_IDS.map((m) => `${m} = ${MARKERS[m].label}`).join('; ')}`);
 

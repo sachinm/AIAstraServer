@@ -15,18 +15,32 @@ describe('past timeline pipeline (doc 27 §B.7 P1) on G1', () => {
   const v = verifyPast(loadG1TimelineInputs(), loadG1Ledger(), { env: ON });
   const b = v.build;
 
-  it('builds 217 months back from the as-of date with every P1 system', () => {
+  it('builds 217 months back from the as-of date with every technique', () => {
     expect(b.range).toEqual({ from: '2008-10-01', to: '2026-10-31' });
     expect(b.grid.months).toHaveLength(217);
-    expect(new Set(b.activations.map((a) => a.system))).toEqual(new Set(['S1', 'S2', 'S3', 'S4', 'S6', 'S7']));
+    for (const s of ['S1', 'S2', 'S3', 'S4', 'S6', 'S7']) expect(b.activations.some((a) => a.system === s)).toBe(true);
     expect(b.s3Applicable).toBe(true);
-    expect(b.notes).toEqual([]);
+    expect(b.notes.some((n) => n.includes('S6D double transit is approximated'))).toBe(true);
   });
 
   it('every activation cites its evidence', () => {
     for (const a of b.activations) {
       expect(a.evidence.length).toBeGreaterThan(0);
       expect(a.evidence[0]).toMatch(/^(dasha\.|transit_contacts\[)/);
+    }
+  });
+
+  it('is selective: per marker at most 8 % High and 20 % Moderate; every High month has a period and a trigger', () => {
+    const N = b.grid.months.length;
+    for (const cells of Object.values(b.grid.cells)) {
+      // support and test are banded separately, so up to two cuts' worth may show
+      expect(cells.filter((c) => c.band === 'high').length).toBeLessThanOrEqual(2 * Math.round(0.08 * N));
+      expect(cells.filter((c) => c.band === 'high' || c.band === 'moderate').length).toBeLessThanOrEqual(2 * Math.round(0.2 * N));
+      for (const c of cells.filter((x) => x.band === 'high')) {
+        const g = c.testing ? c.test : c.support;
+        expect(g.D).toBeGreaterThan(0);
+        expect(g.T).toBeGreaterThan(0);
+      }
     }
   });
 
