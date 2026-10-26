@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { readingFlow, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
+import { readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
 import { buildReadingGraph, type NodeError } from './graph.js';
 import { streamGemini } from './llm/gemini.js';
@@ -220,6 +220,9 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
   const thinking = readingSynthThinking();
+  // thought summaries are streamed only when a client is listening for events; they are never stored or logged
+  const showThoughts = Boolean(opts.onEvent) && readingIncludeThoughts();
+  const onThought = showThoughts ? (delta: string) => emit({ type: 'thought', delta }) : undefined;
   const maxOutputTokens = readingSynthMaxTokens();
   const cacheOwner = { userId, kundliId: data.kundliId };
 
@@ -237,8 +240,9 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
-      opts.onDelta
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      opts.onDelta,
+      onThought
     );
     usages.push(r.usage);
     answer = r.text;
@@ -261,8 +265,9 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
-          opts.onDelta
+          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`, `${PROMPTS['synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          opts.onDelta,
+          onThought
         );
         void rec;
         return { text: r.text, usage: r.usage, ttftMs: r.ttftMs, finishReason: r.finishReason, stoppedForLoop: r.stoppedForLoop };
