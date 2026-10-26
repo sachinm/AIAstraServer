@@ -14,7 +14,7 @@ import { birthPlaceFor, PrismaUserLocationStore, type LocationLookup, type UserL
 import type { Intent, Usage } from '../types.js';
 import type { SubjectId } from '../packs/frames.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
-import { phraseAsk, resolveFreeText } from './planner.js';
+import { judgePrashna, phraseAsk, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
 import { guidanceFor } from '../coach/content.js';
 import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
@@ -171,7 +171,12 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
   if (!s) return { error: 'not_found' };
   if (s.status === 'ABANDONED') return { error: 'abandoned' };
   if (s.status !== 'PROPOSED' && s.status !== 'READY' && s.status !== 'CONFIRMED') return { error: 'not_ready' };
-  const next = s.status === 'CONFIRMED' ? s : confirmClarify(s, edits);
+  let next = s.status === 'CONFIRMED' ? s : confirmClarify(s, edits);
+  // prashna eligibility: the rules decided at confirmation; an unsure rule may ask the optional model once
+  if (next.status === 'CONFIRMED' && s.status !== 'CONFIRMED' && next.prashna?.rule === 'unsure') {
+    const { result } = await judgePrashna(next, next.prashna);
+    next = { ...next, prashna: result };
+  }
   await store.save(userId, runId, next);
   if (next.status !== 'CONFIRMED') return { state: next, intent: null, event: await eventFor(runId, next, []) };
   return { state: next, intent: await intentFromState(next), event: null };
@@ -203,6 +208,8 @@ export async function intentFromState(s: ClarifyState): Promise<Intent> {
     horizon,
     confidence: 1,
     clarifyText: s.exactQuery ?? clarifyTextFor(subjects.map((x) => x.id), horizon, s.asOf),
+    // doc 28 §5: the prashna is cast for the moment the person confirmed the question
+    ...(s.status === 'CONFIRMED' && s.prashna ? { prashna: { eligible: s.prashna.eligible, askedAt: new Date(s.confirmedAt ?? s.updatedAt).toISOString(), source: s.prashna.source } } : {}),
     classification: base.classification ? { ...base.classification, bucket: s.bucket, subBucket: s.subBucket, slots: s.slots, missing: [], source: 'rules' } : undefined,
   };
 }

@@ -6,6 +6,13 @@
  *   START → fanOut ──Send──▶ analyst × N (parallel, time budget each: specialistBudget) ──▶ reconcile ──▶ synthesize ──▶ END
  *
  * A failed analyst never fails the run: its error is recorded and the brief says the layer is missing.
+ *
+ * Doc 28 §5 layers, each read from data fetched for this question (deps.layers) and added to the first subject's pack:
+ * - `annual` (optional, horizon within about 12 months): the Tithi Pravesh chart and Tithi Ashtottari year dasha;
+ * - `prashna` (optional, prashna-eligible confirmed questions only): the chart cast at the confirmation moment;
+ * - the transit specialist of a date-specific question also reads D-1, D-9 and D-10 at the asked date (`transit_at`).
+ * Optional layers are time-boxed and never retried; no data means `skipped` with reason `no_data`. Their findings are
+ * not cached (they depend on data outside the dossier hash).
  */
 import { Annotation, END, Send, START, StateGraph } from '@langchain/langgraph';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
@@ -30,6 +37,10 @@ import { horizonRange } from './packs/frames.js';
 import { modelFor } from './llm/models.js';
 import { safeErrorText } from './llm/gemini.js';
 import { findingsCache, findingCacheKey } from './nodes/findingsCache.js';
+import { annualApplies, OPTIONAL_LAYERS, prashnaApplies, transitAskedAt } from './nodes/specialists.js';
+import type { LayerLoaders } from './layers/loaders.js';
+import { annualSection, prashnaSection, transitAtSection } from './layers/sections.js';
+import type { PackSection } from './packs/selector.js';
 
 export interface NodeError {
   node: string;
@@ -58,8 +69,10 @@ export interface GraphDeps {
   dossierHash?: string | null;
   /** owner of the specialists' explicit prompt cache */
   cacheOwner?: CacheOwner;
-  /** the reading run id, for the failure logs */
+  /** the reading run id, for the failure logs (and the prashna cast row) */
   runId?: string;
+  /** Data for the doc 28 layers; a layer without a loader is not offered */
+  layers?: LayerLoaders;
 }
 
 const State = Annotation.Root({
@@ -78,8 +91,49 @@ const State = Annotation.Root({
 
 type WorkerInput = { analyst: SpecialistAnalyst; subject: string };
 
+/** Rejects with a timeout error once `ms` pass; the loader keeps running but its result is ignored. */
+async function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([p, new Promise<never>((_, rej) => (timer = setTimeout(() => rej(new SpecialistTimeoutError(`${what} data exceeded ${ms} ms`)), ms)))]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The optional doc 28 layers this run offers (data loader present and the question qualifies). */
+export function optionalLayersFor(deps: Pick<GraphDeps, 'intent' | 'asOf' | 'question' | 'layers'>): Array<(typeof OPTIONAL_LAYERS)[number]> {
+  const out: Array<(typeof OPTIONAL_LAYERS)[number]> = [];
+  if (deps.layers?.annual && annualApplies(deps.intent, deps.asOf)) out.push('annual');
+  if (deps.layers?.prashna && prashnaApplies(deps.intent, deps.question)) out.push('prashna');
+  return out;
+}
+
 export function buildReadingGraph(deps: GraphDeps) {
   const specialist = deps.specialistImpl ?? runSpecialist;
+  // sections added to a subject's pack during this run (the grounding gate in reconcile must see them)
+  const added: Record<string, Partial<Record<PackSection, unknown>>> = {};
+  const first = deps.intent.subjects[0]?.id;
+  const askedAt = transitAskedAt(deps.intent, deps.asOf);
+  const once = <T>(f: () => Promise<T>): (() => Promise<T>) => {
+    let p: Promise<T> | undefined;
+    return () => (p ??= f());
+  };
+  const hzRange = horizonRange(deps.intent.horizon, deps.asOf);
+  const loadAnnual = once(async () => {
+    const raw = await deps.layers!.annual!();
+    return raw ? annualSection({ ...raw, asOf: deps.asOf, horizon: hzRange, dossier: deps.dossier }) : null;
+  });
+  const loadPrashna = once(async () => {
+    const raw = await deps.layers!.prashna!({ at: deps.intent.prashna!.askedAt, place: deps.intent.questionPlace ?? null, runId: deps.runId ?? null });
+    const frameHouses = first ? deps.packs[first]?.keyFrame.houses ?? [] : [];
+    return raw ? prashnaSection({ payload: raw.payload, frameHouses, placeSource: raw.placeSource, dossier: deps.dossier }) : null;
+  });
+  // one Radha call per run, shared by the transit specialists of every subject
+  const loadTransitAt = once(async () => {
+    const raw = askedAt && deps.layers?.transitAt ? await deps.layers.transitAt(askedAt).catch(() => null) : null;
+    return raw ? transitAtSection({ payload: raw, at: askedAt! }) : null;
+  });
   const fanOut = (): Send[] => {
     const sends: Send[] = [];
     const analysts = analystsFor(deps.intent);
@@ -90,7 +144,10 @@ export function buildReadingGraph(deps: GraphDeps) {
         sends.push(new Send('analyst', { analyst: a, subject: s.id } satisfies WorkerInput));
       }
     }
-    return sends.slice(0, 10);
+    const out = sends.slice(0, 10);
+    // the year chart and the question chart are person-centric: one each per run, on the first subject
+    if (first) for (const a of optionalLayersFor(deps)) out.push(new Send('analyst', { analyst: a, subject: first } satisfies WorkerInput));
+    return out;
   };
 
   const graph = new StateGraph(State)
@@ -103,7 +160,10 @@ export function buildReadingGraph(deps: GraphDeps) {
       const hz = horizonRange(deps.intent.horizon, deps.asOf);
       const longHorizon = Number(hz.to.slice(0, 4)) - Number(hz.from.slice(0, 4)) > 3;
       const required = name === 'promise' || name === 'dasha' || (name === 'transit' && !longHorizon);
-      const key = deps.dossierHash ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf }) : null;
+      const optionalLayer = name === 'annual' || name === 'prashna';
+      // findings that read data outside the dossier are not cached: the annual and prashna layers, and a dated transit
+      const datedTransit = name === 'transit' && !!askedAt && !!deps.layers?.transitAt;
+      const key = deps.dossierHash && !optionalLayer && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf }) : null;
       const cached = key ? findingsCache.get(key) : undefined;
       if (cached) {
         const ms = Date.now() - t0;
@@ -114,8 +174,9 @@ export function buildReadingGraph(deps: GraphDeps) {
       const capped = required && input.subject === deps.intent.subjects[0]?.id;
       const model = modelFor('specialist');
       const budget = specialistBudget(model);
+      let usePack = pack;
       const call = (signal: AbortSignal) =>
-        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: pack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal });
+        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: usePack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal });
       // one attempt inside the time budget; on time-out the model call is aborted, not left running
       const attempt = async () => {
         const controller = new AbortController();
@@ -158,6 +219,19 @@ export function buildReadingGraph(deps: GraphDeps) {
       let retried = false;
       try {
         if (!pack) throw new SpecialistNoDataError(`no pack for subject ${input.subject}`);
+        // doc 28 layers: read this question's data first, inside the same time budget; nothing to read = no_data
+        const attach = (sec: PackSection, value: unknown) => {
+          usePack = { ...usePack!, sections: { ...usePack!.sections, [sec]: value } };
+          (added[input.subject] ??= {})[sec] = value;
+        };
+        if (optionalLayer) {
+          const section = await within(name === 'annual' ? loadAnnual() : loadPrashna(), budget.timeoutMs, name);
+          if (!section) throw new SpecialistNoDataError(`no ${name} data`);
+          attach(name, section);
+        } else if (datedTransit) {
+          const section = await within(loadTransitAt(), budget.timeoutMs, 'transit_at').catch(() => null);
+          if (section) attach('transit_at', section);
+        }
         let out;
         const t1 = Date.now();
         try {
@@ -181,7 +255,7 @@ export function buildReadingGraph(deps: GraphDeps) {
         const ms = Date.now() - t0;
         // a cut-off (repaired) finding is used for this reading but not cached for the next one
         if (key && !out.repaired) findingsCache.set(key, out.finding);
-        deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, ...(retried ? { retried: true } : {}) });
+        deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, ...(retried ? { retried: true } : {}), ...(optionalLayer ? { retried: false, capped: false } : {}) });
         return { findings: [out.finding], usage: [...spent, out.usage], timings: { [`${name}:${input.subject}`]: ms } };
       } catch (err) {
         keepUsage(err);
@@ -200,7 +274,8 @@ export function buildReadingGraph(deps: GraphDeps) {
     .addNode('reconcile', async (s: typeof State.State) => {
       const t0 = Date.now();
       deps.emit({ type: 'stage', name: 'reconcile', status: 'start' });
-      const rec = reconcile({ findings: s.findings, packs: deps.packs, intent: deps.intent, asOf: deps.asOf, keyFacts: deps.keyFacts, question: deps.question, dossier: deps.dossier, transits: deps.transits, failed: s.failed });
+      const packs = Object.fromEntries(Object.entries(deps.packs).map(([k, p]) => [k, added[k] ? { ...p, sections: { ...p.sections, ...added[k] } } : p]));
+      const rec = reconcile({ findings: s.findings, packs, intent: deps.intent, asOf: deps.asOf, keyFacts: deps.keyFacts, question: deps.question, dossier: deps.dossier, transits: deps.transits, failed: s.failed });
       const ms = Date.now() - t0;
       deps.emit({ type: 'stage', name: 'reconcile', status: 'done', ms });
       if (rec.windows.length) deps.emit({ type: 'windows', windows: rec.windows.slice(0, 10).map((w) => ({ from: w.from, to: w.to, polarity: w.polarity, label: w.label })) });

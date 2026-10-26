@@ -23,18 +23,27 @@ const TRANSIT_LEGEND = 'influences_houses = houses aspected from that sign; sav/
  * `base` is subject-independent (birth, D-1 skeleton, relations, janma/lagna nakshatra): the same bytes for every
  * question a user asks, so it is the cacheable prefix. Everything after it depends on subject and horizon.
  */
-export type PackSection = 'base' | 'frame' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits';
-/** Stable-prefix order (per-user stable first, subject/horizon-dependent last). */
-export const SECTION_ORDER: PackSection[] = ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits'];
+export type PackSection = 'base' | 'frame' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits' | 'transit_at' | 'annual' | 'prashna';
+/**
+ * Stable-prefix order (per-user stable first, subject/horizon-dependent last). The last three are added by the graph
+ * when their data exists (doc 28 §5): `transit_at` (the sky at an asked date), `annual` (Tithi Pravesh year chart and
+ * its dasha) and `prashna` (the chart of the question moment). buildEvidencePack never writes them.
+ */
+export const SECTION_ORDER: PackSection[] = ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits', 'transit_at', 'annual', 'prashna'];
 
-export type Analyst = 'promise' | 'dasha' | 'transit' | 'nakshatra' | 'single';
+/** Sections only the graph adds, from data fetched for the question (never from the dossier). */
+export const GRAPH_SECTIONS: ReadonlySet<PackSection> = new Set<PackSection>(['transit_at', 'annual', 'prashna']);
+
+export type Analyst = 'promise' | 'dasha' | 'transit' | 'nakshatra' | 'annual' | 'prashna' | 'single';
 /** Which sections each analyst receives (03-chart-facts-dossier.md §3). `single` is the Phase 1 one-call path. */
 export const ANALYST_SECTIONS: Record<Analyst, PackSection[]> = {
   promise: ['base', 'frame', 'detail', 'varga', 'arudha'],
   dasha: ['base', 'frame', 'detail', 'varga', 'dasha'],
-  transit: ['base', 'frame', 'arudha', 'dasha', 'transits'],
+  transit: ['base', 'frame', 'arudha', 'dasha', 'transits', 'transit_at'],
   nakshatra: ['base', 'frame', 'detail', 'dasha', 'transits'],
-  single: SECTION_ORDER,
+  annual: ['base', 'frame', 'annual'],
+  prashna: ['base', 'frame', 'prashna'],
+  single: ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits'],
 };
 
 export interface EvidencePack {
@@ -382,6 +391,8 @@ export function mergeSubjectPacks(packs: EvidencePack[]): EvidencePack {
       merged[sec] = first.sections[sec];
       continue;
     }
+    // the graph-only sections (transit_at, annual, prashna) are never in a pack built here; keep the merged bytes unchanged
+    if (GRAPH_SECTIONS.has(sec) && packs.every((p) => p.sections[sec] === undefined)) continue;
     const bySubject: Record<string, unknown> = {};
     for (const p of packs) bySubject[p.subject] = p.sections[sec];
     merged[sec] = bySubject;

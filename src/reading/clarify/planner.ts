@@ -10,7 +10,7 @@
 import type { Usage } from '../types.js';
 import { BUCKETS, BUCKET_IDS } from '../buckets/taxonomy.js';
 import { callBedrockJson, clarifyModelConfig } from '../llm/bedrock.js';
-import { parseHorizonValue, type Ask, type ClarifyState } from './machine.js';
+import { parseHorizonValue, type Ask, type ClarifyState, type PrashnaEligibility } from './machine.js';
 import { detectTopic } from '../policy/declined.js';
 
 export const CLARIFY_MODEL_TIMEOUT_MS = 900;
@@ -79,5 +79,30 @@ export async function resolveFreeText(s: ClarifyState, criterion: string, text: 
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'clarify resolve model failed; rules only', error: (err as Error).message.slice(0, 200) }));
     return { value: null, usage: null };
+  }
+}
+
+/**
+ * Prashna eligibility when the rules are unsure (doc 28 §5): is the confirmed question a yes/no, "should I", "will it
+ * happen" or "right now" decision? The model only answers true or false; any error, timeout or other output keeps the
+ * rules' "not eligible". Never called for a question the rules ruled out (declined, role-gated, policy, timing).
+ */
+export async function judgePrashna(s: ClarifyState, rules: PrashnaEligibility): Promise<{ result: PrashnaEligibility; usage: Usage | null }> {
+  if (rules.rule !== 'unsure') return { result: rules, usage: null };
+  const cfg = clarifyModelConfig();
+  if (cfg.provider === 'off') return { result: rules, usage: null };
+  try {
+    const user = [
+      `Question: "${s.question.slice(0, 300)}"`,
+      'Is this a yes-or-no question, a "should I" decision, a "will this happen" question, or a question about acting right now?',
+      'Return {"eligible": true} or {"eligible": false}.',
+    ].join(' ');
+    const { json, usage } = await callBedrockJson({ model: cfg.model, node: 'clarify.prashna', system: SYSTEM, user, maxTokens: 100, timeoutMs: CLARIFY_MODEL_TIMEOUT_MS, reasoningEffort: 'low' });
+    const v = (json as { eligible?: unknown }).eligible;
+    if (typeof v !== 'boolean') return { result: rules, usage };
+    return { result: { eligible: v, rule: v ? 'eligible' : 'not_eligible', source: 'model', why: rules.why }, usage };
+  } catch (err) {
+    console.warn(JSON.stringify({ msg: 'clarify prashna model failed; rules only', error: (err as Error).message.slice(0, 200) }));
+    return { result: rules, usage: null };
   }
 }

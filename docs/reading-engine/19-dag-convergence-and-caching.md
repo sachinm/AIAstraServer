@@ -23,6 +23,8 @@ intake (rules, classifier) ─► packs ─► fanOut ──Send──► promis
 | dasha | yes | same |
 | transit | yes when the period is 3 years or less, otherwise optional | same when required; skipped when optional |
 | nakshatra | optional | no retry; skipped after its time budget; never holds the join |
+| annual (L5) | optional, horizon within about 12 months (doc 28 §5) | same as nakshatra; no data = skipped, reason `no_data` |
+| prashna (L6) | optional, prashna-eligible confirmed questions (doc 28 §5) | same; one vote that cannot move the verdict past *mixed* without a natal layer |
 
 Every agent has a hard time budget (`READING_SPECIALIST_TIMEOUT_MS`, default 12 s). Stage events tell the UI `start`, `done` (with `cached: true` on a cache hit), `failed` or `skipped`.
 
@@ -138,5 +140,5 @@ EventBridge Scheduler schedule with the same input works too. Nothing to create 
 ## 6. Not done yet
 
 - **Two-track stage 1 during clarification:** dispatching promise and nakshatra while the clarifier waits (file 13 §3). The findings cache already makes the confirm path reuse them on the same instance. Pre-dispatching from the clarify service is the next step.
-- **L5 (annual chart):** needs a Radha `annual` export.
+- **L5 (annual chart) and L6 (prashna):** built as optional nodes (doc 28 §5); live once Radha R-27a/c are deployed and the catalog sync marks the types served.
 - **Real-model measurements:** latency, cost and cache hit rate need a funded Gemini key.

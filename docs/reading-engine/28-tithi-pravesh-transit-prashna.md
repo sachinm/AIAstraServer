@@ -119,6 +119,41 @@ before they are sent or stored.
 
 ## 5. Reading engine use
 
+**Status: built** on `feature/annual-prashna-specialists` (2026-10-26), step 3 of §6. QA rows `R28-01`..`R28-08`.
+Code: `src/reading/graph.ts`, `src/reading/layers/{loaders,sections}.ts`, `src/reading/nodes/{specialists,convergence,reconcile}.ts`,
+`src/reading/clarify/{machine,planner,service}.ts`, prompts `annual.md`, `prashna.md` and the `transit_at` paragraph in
+`transit.md` / `v2/transit.md`. Tests: `tests/unit/reading/annualPrashna.test.ts`. Nothing on AWS or the database was
+touched; live use waits on R-27a/b/c, the catalog sync (`served` for `annual.*`, `transit`, `prashna`) and M14.
+
+As built:
+- **Annual (L5, weight 1).** Optional node, one per run on the first subject, when the horizon ends within about 12
+  months (`annualApplies`: 12 months plus one of slack). It reads `annual.tithi_pravesha` and
+  `annual.tithi_pravesha_dasha` (system `tithi_ashtottari`) through `ensureAnnualCurrent`; the pack gains an `annual`
+  section (year chart bodies with Radha's houses, occupants, the running year period and the periods in the horizon).
+  Same findings shape, `layer: 'annual'`. Unserved or missing data: stage `skipped`, reason `no_data`. L5 counts in the
+  score only (doc 19); it does not move the tier.
+- **Prashna (L6, weight 1).** `prashnaRule` in the clarify machine marks a confirmed question eligible (yes/no,
+  "should I", "will X happen", "is now a good time"); timing, meaning, definition, speculation and health questions are
+  not, and any declined topic (deny, decline or role-gated, whatever the role) never is. Descriptive questions that only
+  say "now" are `unsure` and go to the optional model planner (`judgePrashna`), else stay not eligible. The intent
+  carries `prashna: { eligible, askedAt }` with the confirmation moment. The graph casts once with `castPrashna` at that
+  moment at `intent.questionPlace`, else the birth place, and the `prashna` node reads the prashna lagna and its lord,
+  the Moon, the house of the matter (occupants; sign and lord only when an occupant shows the sign, nothing derived)
+  and the panchanga. The gate is re-checked in the graph on the question text.
+- **The prashna never decides alone** (`prashnaNudge` in convergence): with a natal layer (L1–L4) of the same sign it
+  moves the tier one step; alone it moves toward *mixed* and stops there (not indicated → mixed; strong → moderate →
+  mixed); L1 ≤ −2 still wins; the missing-layer cap applies after it. The VERDICT line names the nudge.
+- **Transit at the asked date.** When the horizon is an explicit window starting after today, the transit specialist
+  also reads `fetchTransit` with `divisionalChartFactors: [1, 9, 10]` and the natal houses at noon of the window's first
+  day (`transit_at` section); without data it runs on the horizon rows as before.
+- **Stage events:** optional nodes send `retried: false`, `capped: false` on `done` and `skipped` (with `reason`).
+  Annual, prashna and dated-transit findings are not written to the findings cache (their data is not in the dossier
+  hash).
+- **Design calls:** prashna eligibility is set on the clarify confirm path only (a READY question read straight from
+  ask-stream gets no prashna); a prashna-eligible question skips the single-call fast lane so the graph can cast it;
+  the sign → lord pairs used for the lagna lord come from the person's own dossier
+  (Radha's pairing), not a Node table.
+
 - **This-year questions** (timing within 12 months): the annual specialist reads the Tithi Pravesh chart and its
   Tithi Ashtottari period as a confirmation layer (weight 1 in convergence, doc 19).
 - **"Right now" and yes-or-no questions:** the clarify agent marks the question `prashna_eligible`. The graph casts the

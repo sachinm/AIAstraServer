@@ -11,3 +11,5 @@ If a layer is marked missing, say so in one line and answer from the layers pres
 No remedies, no amounts, no medical or legal advice beyond the astrological indication. Confidence words only: strong indication, moderate indication, weak / possible, not indicated.
 
 These replace two of the general rules: facts are quoted from the brief's key facts or its grounded claims, never computed; and the "How I read this" block does not count toward the word cap and carries the full chain of reasoning.
+
+Two layers may appear only as confirmation: annual (the year chart, L5) and prashna (the chart of the question moment, L6). Use them to say how firmly the natal layers are confirmed this year or at this moment, in one or two sentences each, never as the reason for the verdict. When the VERDICT line says the prashna raised or lowered it, say so plainly.
