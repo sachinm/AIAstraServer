@@ -28,29 +28,41 @@ export class SpecialistOutputError extends Error {
 export type SpecialistAnalyst = Exclude<Analyst, 'single'>;
 export const SPECIALIST_ANALYSTS: SpecialistAnalyst[] = ['promise', 'dasha', 'transit', 'nakshatra'];
 
+// Tolerant by design (doc 25): a cheap model's one bad field must not cost the whole layer. Out-of-range or unknown
+// values fall back to a safe default with `.catch`, and a malformed claim or window is dropped on its own (`keepValid`).
 export const claimZ = z.object({
   text: z.string().min(3),
-  evidence: z.array(z.string()).default([]),
-  polarity: z.enum(['supports', 'obstructs', 'neutral']).default('neutral'),
-  weight: z.number().int().min(1).max(3).default(2),
+  evidence: z.array(z.string()).catch([]),
+  polarity: z.enum(['supports', 'obstructs', 'neutral']).catch('neutral'),
+  // was the only min(1) in the schema: one claim with weight 0 failed the transit layer on staging
+  weight: z.number().int().min(1).max(3).catch(2),
   /** which school's rule the claim applies (docs/reading-engine/10 §4) */
-  tradition: z.enum(['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord']).default('parashara'),
+  tradition: z.enum(['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord']).catch('parashara'),
 });
 export const windowZ = z.object({
   from: z.string(),
   to: z.string(),
-  label: z.string().default(''),
-  polarity: z.enum(['favourable', 'testing', 'mixed']).default('mixed'),
-  evidence: z.array(z.string()).default([]),
+  label: z.string().catch(''),
+  polarity: z.enum(['favourable', 'testing', 'mixed']).catch('mixed'),
+  evidence: z.array(z.string()).catch([]),
 });
+/** An array whose bad items are dropped one by one instead of failing the whole array. */
+const keepValid = <T extends z.ZodTypeAny>(item: T) =>
+  z
+    .array(z.unknown())
+    .catch([])
+    .transform((items) => items.flatMap((x) => {
+      const r = item.safeParse(x);
+      return r.success ? [r.data as z.infer<T>] : [];
+    }));
 export const findingZ = z.object({
-  verdict: z.enum(['strong', 'moderate', 'weak', 'denied', 'mixed']).default('mixed'),
+  verdict: z.enum(['strong', 'moderate', 'weak', 'denied', 'mixed']).catch('mixed'),
   /** this analyst's layer as a signed strength −3…+3 (file 11 §1) */
-  layerScore: z.number().int().min(-3).max(3).default(0),
-  claims: z.array(claimZ).default([]),
-  windows: z.array(windowZ).default([]),
-  caveats: z.array(z.string()).default([]),
-  keyFacts: z.array(z.string()).default([]),
+  layerScore: z.number().int().min(-3).max(3).catch(0),
+  claims: keepValid(claimZ),
+  windows: keepValid(windowZ),
+  caveats: z.array(z.string()).catch([]),
+  keyFacts: z.array(z.string()).catch([]),
 });
 
 export interface Finding {
@@ -138,7 +150,7 @@ export async function runSpecialist(args: {
     `ANALYST: ${analyst}`,
     PROMPTS[analyst],
     `Subject: ${args.subject}. Horizon: ${typeof intent.horizon === 'string' ? intent.horizon : `${intent.horizon.from} to ${intent.horizon.to}`}. Focus: ${intent.focusPoints.join('; ') || 'none'}.`,
-    'Return at most 8 claims. Each claim is one sentence about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Dates must come from the pack.',
+    'Return at most 8 claims and at most 12 windows. Each claim is one sentence of at most 200 characters about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Each claim weight is 1, 2 or 3. Dates must come from the pack. Keep the JSON complete: shorter claims are better than a cut-off answer.',
     'Tag every claim with the tradition whose rule you applied (parashara, jaimini, nakshatra, kp_starlord). Give layerScore: your layer as one signed strength from -3 (clearly denied or obstructed) to +3 (clearly promised or supported), 0 when balanced.',
     `QUESTION: ${args.question}`,
   ].join('\n');
