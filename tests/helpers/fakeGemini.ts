@@ -22,6 +22,8 @@ export interface FakeGeminiOptions {
   chunkDelayMs?: number;
   /** extra text appended to the streamed answer */
   answer?: string;
+  /** thought-summary chunks streamed before the answer, only when the request sets thinkingConfig.includeThoughts */
+  thoughts?: string[];
 }
 
 export interface FakeGemini {
@@ -122,6 +124,12 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
 
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const text = opts.answer ?? cannedAnswer(parts.join('\n'));
+      if (opts.thoughts?.length && body?.generationConfig?.thinkingConfig?.includeThoughts === true) {
+        for (const t of opts.thoughts) {
+          res.write(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t, thought: true }] } }] })}\n\n`);
+          if (opts.chunkDelayMs) await new Promise((r) => setTimeout(r, opts.chunkDelayMs));
+        }
+      }
       const pieces = text.match(/.{1,24}/gs) ?? [text];
       for (let i = 0; i < pieces.length; i++) {
         const last = i === pieces.length - 1;

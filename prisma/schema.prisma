@@ -249,6 +249,8 @@ model ReadingRun {
   windows             Json?
   agreement           Json?
   answer              String?
+  /// Gemini thought summaries for the answer call (migration 20261026100000), kept to study the reasoning.
+  thinking            String?
   models              Json?
   usage               Json?
   cost_usd            Decimal?  @map("cost_usd") @db.Decimal(10, 6)

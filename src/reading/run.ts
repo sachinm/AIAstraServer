@@ -50,6 +50,9 @@ export interface RunReadingOptions {
   intent?: Intent;
 }
 
+/** Longest thinking text stored per run. */
+export const MAX_STORED_THINKING_CHARS = 60_000;
+
 export interface ReadingRunRecord {
   runId: string;
   flow: 'single' | 'graph' | 'safety';
@@ -65,6 +68,8 @@ export interface ReadingRunRecord {
   windows: unknown;
   agreement: unknown;
   answer: string;
+  /** Gemini's thought summaries for the answer call, kept next to the answer to study the reasoning. Null when none. */
+  thinking: string | null;
   models: Record<string, string>;
   usage: Usage[];
   costUsd: number;
@@ -188,7 +193,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     opts.onDelta?.(SELF_HARM_RESPONSE);
     const record: ReadingRunRecord = {
       ...baseRecord, flow: 'safety', status: 'done', factsVersion: null, dossierHash: null, transitSnapshotId: null, packHashes: {}, findings: null, windows: null,
-      agreement: null, answer: SELF_HARM_RESPONSE, models: {}, usage: usages, costUsd: 0, timingsMs: { ...timings, total: Date.now() - tStart }, cache: {}, droppedClaims: 0, errors,
+      agreement: null, answer: SELF_HARM_RESPONSE, thinking: null, models: {}, usage: usages, costUsd: 0, timingsMs: { ...timings, total: Date.now() - tStart }, cache: {}, droppedClaims: 0, errors,
     };
     return { answerText: SELF_HARM_RESPONSE, requestPayload: { provider: 'gemini', engine: 'reading', flow: 'safety', safety: 'self_harm', run_id: runId }, responsePayload: { provider: 'gemini', streamed: true, content: SELF_HARM_RESPONSE, safety: 'self_harm' }, record };
   }
@@ -220,9 +225,16 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
   const thinking = readingSynthThinking();
-  // thought summaries are streamed only when a client is listening for events; they are never stored or logged
-  const showThoughts = Boolean(opts.onEvent) && readingIncludeThoughts();
-  const onThought = showThoughts ? (delta: string) => emit({ type: 'thought', delta }) : undefined;
+  // thought summaries: streamed to the client as `thought` events and kept on the run record (reading_runs.thinking).
+  // They are never written to the application logs.
+  const showThoughts = readingIncludeThoughts();
+  let thinkingText = '';
+  const onThought = showThoughts
+    ? (delta: string) => {
+        if (thinkingText.length < MAX_STORED_THINKING_CHARS) thinkingText = (thinkingText + delta).slice(0, MAX_STORED_THINKING_CHARS);
+        emit({ type: 'thought', delta });
+      }
+    : undefined;
   const maxOutputTokens = readingSynthMaxTokens();
   const cacheOwner = { userId, kundliId: data.kundliId };
 
@@ -307,7 +319,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
 
   const record: ReadingRunRecord = {
     ...baseRecord, flow, status: 'done', factsVersion: data.factsVersion, dossierHash: data.dossierHash, transitSnapshotId: data.transitSnapshotId, packHashes, findings, windows, agreement,
-    answer, models, usage: usages, costUsd, timingsMs: timings,
+    answer, thinking: thinkingText || null, models, usage: usages, costUsd, timingsMs: timings,
     cache: { promptTokens, cachedTokens, cachedShare: promptTokens ? Math.round((cachedTokens / promptTokens) * 100) / 100 : 0, dossier: data.timings.dossierCache, transits: data.timings.transitsCache, priceTable: PRICE_TABLE_VERSION },
     droppedClaims, errors, promptVersion: PROMPT_VERSION,
   };

@@ -26,6 +26,7 @@ async function persistReadingRun(db: PrismaClient, userId: string, chatId: strin
         windows: (r.windows ?? undefined) as Prisma.InputJsonValue | undefined,
         agreement: (r.agreement ?? undefined) as Prisma.InputJsonValue | undefined,
         answer: r.answer,
+        thinking: r.thinking,
         models: r.models as unknown as Prisma.InputJsonValue,
         usage: r.usage as unknown as Prisma.InputJsonValue,
         cost_usd: r.costUsd,
