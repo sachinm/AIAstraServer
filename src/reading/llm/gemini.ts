@@ -1,7 +1,8 @@
 /**
  * Thin Gemini REST wrapper for the reading engine (undici, no LangChain provider package).
  *
- * - Always sends `thinkingConfig` in the request body (lesson in docs/grokbots/SKILLS.md) and never asks for thoughts.
+ * - Always sends `thinkingConfig` in the request body (lesson in docs/grokbots/SKILLS.md). Thought summaries are requested
+ *   only when the caller sets `includeThoughts` (the streamed answer call); they go to `onThought`, never into the answer text.
  * - Maps one `thinking` setting to `thinkingBudget` (2.x models) or `thinkingLevel` (3.x and later).
  * - Captures usage (prompt, cached, output, thought tokens), time to first token and total time per call.
  * - One retry with jitter on 429/500/503; a per-call timeout through AbortController.
@@ -25,6 +26,8 @@ export interface GeminiCallOptions {
   /** Gemini responseSchema (OpenAPI subset, uppercase types); forces JSON output */
   responseSchema?: Record<string, unknown>;
   thinking?: Thinking;
+  /** Ask Gemini for thought summaries (streamed calls only). They are shown to the user, not stored or logged. */
+  includeThoughts?: boolean;
   maxOutputTokens?: number;
   temperature?: number;
   topP?: number;
@@ -66,9 +69,10 @@ function apiKey(): string {
 const BUDGETS: Record<Thinking, number> = { off: 0, low: 512, medium: 2048, high: 6144 };
 const isLegacyThinking = (model: string): boolean => /gemini-2\./.test(model);
 
-export function thinkingConfigFor(model: string, thinking: Thinking): Record<string, unknown> {
-  if (isLegacyThinking(model)) return { thinkingBudget: BUDGETS[thinking], includeThoughts: false };
-  return { thinkingLevel: thinking === 'off' ? 'low' : thinking, includeThoughts: false };
+export function thinkingConfigFor(model: string, thinking: Thinking, includeThoughts = false): Record<string, unknown> {
+  // 2.x with a zero budget has nothing to summarise; 3.x maps `off` to `low`, so it still thinks
+  if (isLegacyThinking(model)) return { thinkingBudget: BUDGETS[thinking], includeThoughts: includeThoughts && thinking !== 'off' };
+  return { thinkingLevel: thinking === 'off' ? 'low' : thinking, includeThoughts };
 }
 
 export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null = null): Record<string, unknown> {
@@ -76,7 +80,7 @@ export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null 
     temperature: o.temperature ?? 0.4,
     topP: o.topP ?? 0.9,
     maxOutputTokens: o.maxOutputTokens ?? 4096,
-    thinkingConfig: thinkingConfigFor(o.model, o.thinking ?? 'low'),
+    thinkingConfig: thinkingConfigFor(o.model, o.thinking ?? 'low', o.includeThoughts === true),
   };
   if (o.responseSchema) {
     generationConfig.responseMimeType = 'application/json';
@@ -104,6 +108,13 @@ function chunkText(c: GeminiChunk): string {
   const parts = c.candidates?.[0]?.content?.parts;
   if (!parts?.length) return '';
   return parts.filter((p) => !p.thought).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
+}
+
+/** Thought-summary text in this chunk (parts flagged `thought`). Never part of the answer. */
+export function chunkThought(c: GeminiChunk): string {
+  const parts = c.candidates?.[0]?.content?.parts;
+  if (!parts?.length) return '';
+  return parts.filter((p) => p.thought).map((p) => (typeof p.text === 'string' ? p.text : '')).join('');
 }
 
 function toUsage(o: GeminiCallOptions, last: GeminiChunk | null, ms: number): Usage {
@@ -201,7 +212,11 @@ async function callGeminiOnce(o: GeminiCallOptions, cacheName: string | null): P
 }
 
 /** Streaming call (synthesizer / single-call path). Deltas go to `onDelta` as they arrive. */
-export async function streamGemini(o: GeminiCallOptions, onDelta?: (delta: string) => void): Promise<GeminiResult> {
+export async function streamGemini(
+  o: GeminiCallOptions,
+  onDelta?: (delta: string) => void,
+  onThought?: (delta: string) => void
+): Promise<GeminiResult> {
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey())}`;
   const cacheName = cacheFor(o);
@@ -243,6 +258,9 @@ export async function streamGemini(o: GeminiCallOptions, onDelta?: (delta: strin
       finishReason = `BLOCKED_${c.promptFeedback.blockReason}`;
       return;
     }
+    // thought summaries arrive before the answer; they never count as the first answer token
+    const thought = onThought ? chunkThought(c) : '';
+    if (thought) onThought?.(thought);
     const delta = chunkText(c);
     if (delta) {
       if (ttftMs === null) ttftMs = Date.now() - t0;
