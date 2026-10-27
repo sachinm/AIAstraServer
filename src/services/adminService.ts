@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { normalizeGender } from '../lib/profileValidators.js';
 
 const MANAGED_ROLES = ['astrology_student', 'astrologer'] as const;
 
@@ -105,7 +106,7 @@ export async function updateUser(
       ...(input.date_of_birth != null && { date_of_birth: input.date_of_birth }),
       ...(input.place_of_birth !== undefined && { place_of_birth: input.place_of_birth }),
       ...(input.time_of_birth !== undefined && { time_of_birth: input.time_of_birth }),
-      ...(input.gender !== undefined && { gender: input.gender }),
+      ...(input.gender !== undefined && { gender: normalizeGender(input.gender) }),
       ...(input.is_active != null && { is_active: input.is_active }),
     },
   });

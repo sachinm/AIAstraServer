@@ -4,7 +4,10 @@ import {
   signup,
   requestMagicLink,
   loginWithMagicLink,
+  startSignup,
+  verifySignupCode,
 } from '../services/authService.js';
+import { completeProfile, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
@@ -14,11 +17,13 @@ import {
   publicMessageFromChatProviderError,
 } from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
-import { enqueueKundliSync } from '../services/kundliQueueService.js';
+import { enqueueKundliSync, kundliStatusFromQueue } from '../services/kundliQueueService.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
 import { requireRoles } from './rbac.js';
+import { isTimelineEnabled } from '../reading/timeline/config.js';
+import { listLedger, resolveKundli } from '../reading/timeline/ledgerStore.js';
 import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
 import { askingGuide } from '../reading/coach/content.js';
 import { isBucketId } from '../reading/buckets/taxonomy.js';
@@ -35,6 +40,12 @@ const typeDefs = /* GraphQL */ `
     username: String
     email: String
     role: String
+    name: String
+    "False until page 2 of registration is saved. The web routes such a user to page 2."
+    profile_complete: Boolean!
+    email_verified: Boolean!
+    "pending | building | ready, from the kundli queue."
+    kundli_status: String!
   }
 
   type UserDetails {
@@ -98,6 +109,49 @@ const typeDefs = /* GraphQL */ `
     token: String
     user: ID
     role: String
+  }
+
+  type SignupStartResult {
+    success: Boolean!
+    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure."
+    code: String
+    message: String!
+  }
+
+  type CompleteProfileResult {
+    success: Boolean!
+    message: String!
+    "The user's own referral code."
+    referral_code: String
+  }
+
+  type UpdateProfileResult {
+    success: Boolean!
+    message: String!
+    "True when a birth field changed and the chart is being rebuilt."
+    rebuild: Boolean!
+  }
+
+  "Read-only life timeline for the profile page. enabled=false while TIMELINE_ENABLED is off. events and build are JSON strings."
+  type TimelineView {
+    enabled: Boolean!
+    kundli_id: ID
+    events: String
+    build: String
+  }
+
+  type ReferralStat {
+    user_id: ID!
+    email: String
+    name: String
+    referral_code: String
+    referred_count: Int!
+  }
+
+  type ReferralStatsResult {
+    success: Boolean!
+    error: String
+    rows: [ReferralStat!]
   }
 
   type UploadKundliResult {
@@ -239,6 +293,39 @@ const typeDefs = /* GraphQL */ `
     adminGetUser(id: ID!): UserDetailResult
     adminGetUserChats(userId: ID!): ChatsResult
     adminGetUserKundli(userId: ID!): KundliResult
+    "Admin only: referred-user count per referrer, top 50."
+    referralStats: ReferralStatsResult!
+    "Read-only ledger events and the latest timeline build with its windows, behind TIMELINE_ENABLED."
+    myTimeline: TimelineView!
+  }
+
+  "Every field optional; only given fields change. A birth field change rebuilds the chart."
+  input UpdateProfileInput {
+    name: String
+    gender: String
+    date_of_birth: String
+    time_of_birth: String
+    country_code: String
+    city: String
+  }
+
+  input StartSignupInput {
+    name: String!
+    email: String!
+    turnstileToken: String
+  }
+
+  input CompleteProfileInput {
+    "YYYY-MM-DD, 1900 up to today"
+    date_of_birth: String!
+    "HH:MM, 24-hour"
+    time_of_birth: String!
+    "ISO 3166-1 alpha-2"
+    country_code: String!
+    city: String!
+    "male | female | prefer_not_to_say"
+    gender: String!
+    referral_code: String
   }
 
   input SignUpInput {
@@ -255,7 +342,12 @@ const typeDefs = /* GraphQL */ `
   }
 
   type Mutation {
+    "DEPRECATED: use startSignup, verifySignupCode and completeProfile. Kept so old web builds keep working. No longer accepts age."
     signup(input: SignUpInput!): SignUpResult!
+    startSignup(input: StartSignupInput!): SignupStartResult!
+    verifySignupCode(email: String!, code: String!): LoginResult!
+    completeProfile(input: CompleteProfileInput!): CompleteProfileResult!
+    updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
     loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
@@ -312,14 +404,31 @@ const resolvers = {
       if (!userId) return null;
       const user = await db.auth.findUnique({
         where: { id: userId },
-        select: { id: true, username: true, email: true, role: true },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          name: true,
+          profile_complete: true,
+          email_verified_at: true,
+        },
       });
       if (!user) return null;
+      const latestKundli = await db.kundli.findFirst({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        select: { queue_status: true },
+      });
       return {
         id: user.id,
         username: user.username,
         email: user.email,
         role: user.role ?? 'user',
+        name: user.name ?? null,
+        profile_complete: user.profile_complete !== false,
+        email_verified: Boolean(user.email_verified_at),
+        kundli_status: kundliStatusFromQueue(latestKundli?.queue_status),
       };
     },
     async ask(
@@ -764,6 +873,44 @@ const resolvers = {
         };
       }
     },
+    async myTimeline(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      const off = { enabled: false, kundli_id: null, events: null, build: null };
+      try {
+        requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
+      } catch {
+        return off;
+      }
+      if (!context.userId || !isTimelineEnabled()) return off;
+      const { userId, prisma: db } = context;
+      const kundliId = await resolveKundli(db, userId, null);
+      if (!kundliId) return { ...off, enabled: true };
+      const ledger = await listLedger(db, userId, kundliId);
+      const build = await db.timelineBuild.findFirst({
+        where: { kundli_id: kundliId, status: 'ready' },
+        orderBy: { created_at: 'desc' },
+      });
+      const windows = build
+        ? await db.timelineWindow.findMany({ where: { build_id: build.id }, orderBy: { from: 'asc' } })
+        : [];
+      return {
+        enabled: true,
+        kundli_id: kundliId,
+        events: JSON.stringify(ledger.status === 'ok' ? ledger.value : []),
+        build: build ? JSON.stringify({ ...build, windows }) : null,
+      };
+    },
+    async referralStats(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      const denied = withAdmin(context, () => null);
+      if (denied && 'success' in denied && !denied.success) {
+        return { success: false, error: denied.error, rows: null };
+      }
+      try {
+        const rows = await referralStats(context.prisma);
+        return { success: true, error: null, rows };
+      } catch (err) {
+        return { success: false, error: (err as Error)?.message || 'Server error', rows: null };
+      }
+    },
     async adminGetUserKundli(
       _parent: unknown,
       { userId }: { userId: string },
@@ -852,6 +999,46 @@ const resolvers = {
       const { recaptchaToken: _r, turnstileToken: _t, ...rest } = input;
       const clientIp = getClientIp(context.request);
       return signup(rest, turnstileToken, clientIp);
+    },
+    async startSignup(
+      _parent: unknown,
+      { input }: { input: { name: string; email: string; turnstileToken?: string | null } },
+      context: GraphQLContext
+    ) {
+      const { turnstileToken, ...rest } = input;
+      return startSignup(rest, turnstileToken ?? null, getClientIp(context.request));
+    },
+    async verifySignupCode(
+      _parent: unknown,
+      { email, code }: { email: string; code: string }
+    ) {
+      return verifySignupCode(email, code);
+    },
+    async completeProfile(
+      _parent: unknown,
+      { input }: { input: Record<string, unknown> },
+      context: GraphQLContext
+    ) {
+      try {
+        requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
+      } catch {
+        return { success: false, message: 'Not authenticated', referral_code: null };
+      }
+      if (!context.userId) return { success: false, message: 'Not authenticated', referral_code: null };
+      return completeProfile(context.prisma, context.userId, input);
+    },
+    async updateProfile(
+      _parent: unknown,
+      { input }: { input: Record<string, string | null | undefined> },
+      context: GraphQLContext
+    ) {
+      try {
+        requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
+      } catch {
+        return { success: false, message: 'Not authenticated', rebuild: false };
+      }
+      if (!context.userId) return { success: false, message: 'Not authenticated', rebuild: false };
+      return updateProfile(context.prisma, context.userId, input);
     },
     async requestMagicLink(
       _parent: unknown,

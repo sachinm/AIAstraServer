@@ -35,6 +35,15 @@ const KUNDLI_JSON_COLUMNS_SELECT = {
   narayana_dasa: true,
 } as const;
 
+export type KundliStatus = 'pending' | 'building' | 'ready';
+
+/** The web-facing progress word for a kundli queue_status (null = no kundli row yet = pending). */
+export function kundliStatusFromQueue(queueStatus: string | null | undefined): KundliStatus {
+  if (queueStatus === QUEUE_STATUS_COMPLETED) return 'ready';
+  if (queueStatus === QUEUE_STATUS_IN_PROGRESS) return 'building';
+  return 'pending';
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -29,6 +29,21 @@ model Auth {
   /// AUTH_PROVIDER=cognito: the InitiateAuth Session parked between requestMagicLink and loginWithMagicLink.
   cognito_session            String?               @map("cognito_session")
   cognito_session_expires_at DateTime?             @map("cognito_session_expires_at") @db.Timestamptz(6)
+  /// Registration v2 (migration 20261027140000_registration_v2). Full name from page 1 of signup.
+  name                  String?
+  /// ISO 3166-1 alpha-2, upper case (page 2).
+  country_code          String?                @map("country_code")
+  /// Free-text birth city (page 2).
+  city                  String?
+  /// Set when the emailed code is accepted. Null = pending signup.
+  email_verified_at     DateTime?              @map("email_verified_at") @db.Timestamptz(6)
+  /// False for a signup that verified its email but has not saved page 2. Existing users default true.
+  profile_complete      Boolean                @default(true) @map("profile_complete")
+  /// The user's own shareable code, 8 characters from [A-Z2-9].
+  referral_code         String?                @unique @map("referral_code")
+  referred_by_user_id   String?                @map("referred_by_user_id")
+  referred_by           Auth?                  @relation("Referrals", fields: [referred_by_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  referrals             Auth[]                 @relation("Referrals")
   chats                 Chat[]
   readingRuns           ReadingRun[]
   prashnaCasts          PrashnaCast[]

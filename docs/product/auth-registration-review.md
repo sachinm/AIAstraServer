@@ -25,6 +25,32 @@ Reviewed 2026-10-24 against the live web branch (`develop`, from `feature/turnst
 
 ## 3. Target registration form
 
+### 3.0 Decided flow (2026-10-27, supersedes the one-page layout below where they differ)
+
+Two pages. No age anywhere (not in inputs, validators, schema or storage). The server contract (GraphQL):
+
+```graphql
+startSignup(input: StartSignupInput!): SignupStartResult!        # { name, email, turnstileToken } -> { success, code, message }
+verifySignupCode(email: String!, code: String!): LoginResult!    # verifies the email AND signs in (session token)
+completeProfile(input: CompleteProfileInput!): CompleteProfileResult!   # authenticated; -> { success, message, referral_code }
+updateProfile(input: UpdateProfileInput!): UpdateProfileResult!         # Profile page; partial; birth change rebuilds the chart
+```
+
+**Page 1 (name and email).** "Next" calls `startSignup`; the code is emailed (Cognito when `AUTH_PROVIDER=cognito`, else the local emailed code). The code is entered on the same page (with Resend = `startSignup` again). A correct code calls `verifySignupCode`, sets `email_verified_at` and returns the normal session token. A verified email answers `EMAIL_EXISTS` ("This email is already registered. Please sign in instead."); an unverified pending account is reused and gets a fresh code; unknown and pending emails get the same answer.
+
+**Page 2 (only after verification).** Date of birth (ISO, 1900..today), time of birth (`HH:MM`, 24-hour), country (ISO 3166-1 alpha-2), city (free text, 1-100 chars), gender (`male` | `female` | `prefer_not_to_say`), optional referral code. `completeProfile` stores DOB/TOB/POB encrypted, sets `place_of_birth` as `City,CC` (the form `normalizePlaceForAstroKundli` parses; commas inside the city become spaces), stores `country_code` and `city`, sets `profile_complete = true`, mints the user's own referral code and enqueues the full kundli sync. Calling it again after completion changes nothing and returns the same referral code.
+
+**Resume.** `me { profile_complete email_verified kundli_status }`. Someone who verified but left before page 2 signs in as usual (the sign-in code also proves the email) and the web routes them to page 2 while `profile_complete` is false. No kundli sync is queued until the profile is complete.
+
+**Progress.** `me.kundli_status` is `pending` | `building` | `ready` from the kundli queue; the web shows "about 30 minutes".
+
+**Referrals.** A valid code of another user sets `referred_by_user_id`; unknown or malformed codes are ignored with the same answer (valid codes are never revealed); a user cannot refer themselves. Admin query `referralStats` returns referred-user counts per referrer (top 50).
+
+**Profile page.** `updateProfile` changes name, gender and the birth fields (same validation as page 2, partial). A change to date, time, country or city deletes the user's `kundli_data` and facts, clears the legacy kundli columns and coordinates, deletes the Gemini prompt caches, sets `kundli_added = false` and queues a fresh full sync (`me.kundli_status` returns to `pending`); name or gender alone rebuilds nothing. `myTimeline` returns the ledger events and the latest ready timeline build read-only, and `enabled: false` while `TIMELINE_ENABLED` is off. Existing timeline builds of the old chart are not deleted by `updateProfile`; the next timeline build replaces them.
+
+The old one-shot `signup` mutation stays, marked DEPRECATED, and no longer accepts `age`. Migration `20261027140000_registration_v2` (written, not applied) adds `name, country_code, city, email_verified_at, profile_complete, referral_code, referred_by_user_id` to `auth` and a `gender` check.
+
+
 One page, three sections, one primary button. Autosave to `sessionStorage` so a Turnstile failure or refresh does not lose the entries.
 
 ### Section A — You
