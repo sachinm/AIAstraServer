@@ -12,11 +12,12 @@
  * two questions, then proceed with the bucket's defaults and say what was assumed. Questions are chart-aware when a
  * headline card (running dasha period) is available. English only for now.
  */
-import { extractHorizon, extractPerson, extractSubBucket, extractOtherPerson, textOf, type ClassifierResult, type PersonRel, type Slots } from '../buckets/classifier.js';
+import { extractHorizon, extractPerson, extractSubBucket, extractOtherPerson, normalize, questionKindOf, textOf, type ClassifierResult, type PersonRel, type Slots } from '../buckets/classifier.js';
 import { BUCKETS, HORIZON_CHIPS, isBucketId, type BucketId, type SlotId } from '../buckets/taxonomy.js';
 import { FRAMES, horizonRange, type Horizon } from '../packs/frames.js';
 import { humanDate, siblingMention, type SiblingNoun, type SiblingRank } from '../nodes/intake.js';
 import { normalizePlace, normalizeTimeZone, type UserLocation } from '../../services/userLocation.js';
+import { detectTopic } from '../policy/declined.js';
 
 export type ClarifyMode = 'always' | 'when_missing' | 'never';
 export type ClarifyStatus = 'ASKING' | 'PROPOSED' | 'CONFIRMED' | 'READY' | 'ABANDONED';
@@ -93,6 +94,10 @@ export interface ClarifyState {
   locationAnswered?: boolean;
   /** birth place from the profile, for the "Same as birth place" chip */
   birthPlace?: string | null;
+  /** set on confirmation (doc 28 §5): may a prashna be cast for this question, and who decided */
+  prashna?: PrashnaEligibility | null;
+  /** when the person confirmed the question (ms): the prashna is cast for this moment */
+  confirmedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -250,6 +255,59 @@ export function askFor(c: Criterion, s: ClarifyState): Ask {
     default:
       return { criterion: c, question: 'Anything specific you want me to look at?', chips: [], allowFreeText: true };
   }
+}
+
+// ---- prashna eligibility (doc 28 §5) -----------------------------------------------------------------------
+
+/** `unsure` goes to the optional model planner (planner.ts judgePrashna); without one it counts as not eligible. */
+export type PrashnaRule = 'eligible' | 'not_eligible' | 'unsure';
+
+export interface PrashnaEligibility {
+  /** the question is marked `prashna_eligible` */
+  eligible: boolean;
+  rule: PrashnaRule;
+  source: 'rules' | 'model';
+  /** short machine reason, for the run log */
+  why: string;
+}
+
+const SPECULATION = / (lottery|lotto|jackpot|bet|bets|betting|gamble|gambling|casino|speculation|speculative|crypto|stocks?|shares) /;
+
+const PRASHNA_PATTERNS: Array<[RegExp, string]> = [
+  [/ should (i|we) /, 'should_i'],
+  [/ (will|would|can|could|shall) (i|we|my|he|she|they|it|this|that|the|our) /, 'will_x'],
+  [/ (is|are) (it|now|this|today) (a |the )?(good |right |bad |wise |auspicious |favourable |favorable |safe )?(time|moment|idea|day) /, 'is_it'],
+  [/ (is|are) (now|today) /, 'now'],
+  [/ (going|likely) to (happen|work|succeed|come) /, 'will_x'],
+  [/ (do|does|did) (i|he|she|they|we) (get|have|stand|win|clear|pass) /, 'yes_no'],
+];
+
+/**
+ * Rules first: a confirmed question is prashna-eligible when it is a yes/no, "should I", "will X happen" or "now"
+ * question about a life area, and it is not a declined, role-gated or policy (unanswerable) question. Timing ("when"),
+ * meaning ("why") and definition questions are not. Descriptive questions that only mention "now" are `unsure`.
+ * Every declined topic, whatever the person's role, makes the question ineligible: no prashna is cast for it.
+ */
+export function prashnaRule(s: Pick<ClarifyState, 'question' | 'bucket' | 'unanswerable' | 'childAge'> & Partial<Pick<ClarifyState, 'subBucket'>>): PrashnaEligibility {
+  const no = (why: string): PrashnaEligibility => ({ eligible: false, rule: 'not_eligible', source: 'rules', why });
+  const q = s.question ?? '';
+  const topic = detectTopic(q, undefined, s.childAge === 'adult' ? ['child_age_unconfirmed'] : []);
+  if (topic) return no(`declined:${topic.id}`);
+  if (s.unanswerable) return no(`policy:${s.unanswerable}`);
+  if (s.bucket === 'unknown' || s.bucket === 'explain_term') return no('no_life_area');
+  // a horary yes on a win would predict the win (method: gain windows only); health stays with the role-gated rules
+  if (s.subBucket === 'windfall' || SPECULATION.test(` ${normalize(q)} `)) return no('speculation');
+  if (s.bucket === 'health_windows') return no('health');
+  const kind = questionKindOf(textOf(q));
+  if (kind === 'timing' || kind === 'why_meaning' || kind === 'explain_term') return no(`kind:${kind}`);
+  const p = ` ${normalize(q)} `;
+  if (kind === 'yes_no') return { eligible: true, rule: 'eligible', source: 'rules', why: 'kind:yes_no' };
+  // "what will my career look like" asks for a description, not a yes or no
+  const wh = /^ (what|how|which|where|who|whom|whose) /.test(p);
+  if (!wh) for (const [re, why] of PRASHNA_PATTERNS) if (re.test(p)) return { eligible: true, rule: 'eligible', source: 'rules', why };
+  if (/ (now|right now|at this moment|this moment|today) /.test(p)) return { eligible: false, rule: 'unsure', source: 'rules', why: 'mentions_now' };
+  if (kind === 'compare') return { eligible: false, rule: 'unsure', source: 'rules', why: 'kind:compare' };
+  return no(`kind:${kind}`);
 }
 
 // ---- transitions -------------------------------------------------------------------------------------------
@@ -514,7 +572,7 @@ export function confirmClarify(s: ClarifyState, edits: { horizon?: string; bucke
     if (edits.horizon) resolveValue(next, 'horizon', edits.horizon, true);
     return propose(next, now);
   }
-  return { ...s, status: 'CONFIRMED', updatedAt: now };
+  return { ...s, status: 'CONFIRMED', prashna: prashnaRule(s), confirmedAt: now, updatedAt: now };
 }
 
 export function expireIfStale(s: ClarifyState, now = Date.now()): ClarifyState {

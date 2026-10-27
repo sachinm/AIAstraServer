@@ -16,7 +16,8 @@ import { callGemini, GeminiHttpError, isTimeoutError, modelThinks, type Thinking
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
-import { FRAMES, type SubjectId } from '../packs/frames.js';
+import { FRAMES, horizonRange, type SubjectId } from '../packs/frames.js';
+import { detectTopic } from '../policy/declined.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
 
@@ -157,6 +158,8 @@ export const TRUNCATED_CAVEAT = 'This layer was cut short by the output limit; l
 
 export type SpecialistAnalyst = Exclude<Analyst, 'single'>;
 export const SPECIALIST_ANALYSTS: SpecialistAnalyst[] = ['promise', 'dasha', 'transit', 'nakshatra'];
+/** The optional layers of doc 28 §5: one per run, on the first subject, time-boxed and never retried. */
+export const OPTIONAL_LAYERS = ['annual', 'prashna'] as const satisfies readonly SpecialistAnalyst[];
 
 // Tolerant by design (doc 25): a cheap model's one bad field must not cost the whole layer. Out-of-range or unknown
 // values fall back to a safe default with `.catch`, and a malformed claim or window is dropped on its own (`keepValid`).
@@ -167,7 +170,7 @@ export const claimZ = z.object({
   // was the only min(1) in the schema: one claim with weight 0 failed the transit layer on staging
   weight: z.number().int().min(1).max(3).catch(2),
   /** which school's rule the claim applies (docs/reading-engine/10 §4) */
-  tradition: z.enum(['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord']).catch('parashara'),
+  tradition: z.enum(['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord', 'prashna']).catch('parashara'),
 });
 export const windowZ = z.object({
   from: z.string(),
@@ -242,7 +245,7 @@ export const FINDING_RESPONSE_SCHEMA = {
           evidence: { type: 'ARRAY', items: { type: 'STRING' } },
           polarity: { type: 'STRING', enum: ['supports', 'obstructs', 'neutral'] },
           weight: { type: 'INTEGER' },
-          tradition: { type: 'STRING', enum: ['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord'] },
+          tradition: { type: 'STRING', enum: ['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord', 'prashna'] },
         },
         required: ['text', 'evidence', 'polarity', 'weight', 'tradition'],
       },
@@ -311,15 +314,51 @@ function tailV2(a: { analyst: SpecialistAnalyst; subject: SubjectId; pack: Evide
     PROMPTS[`v2/${a.analyst}`] ?? PROMPTS[a.analyst],
     `Subject: ${a.subject} (${FRAMES[a.subject]?.label ?? a.subject}). Frame houses: ${kf.houses.join(', ')}. Frame lords: ${kf.lords.join(', ')}. Karakas: ${kf.karakas.join(', ')}. Horizon: ${typeof hz === 'string' ? hz : `${hz.from} to ${hz.to}`}. Focus: ${a.intent.focusPoints.join('; ') || 'none'}.`,
     'OUTPUT RULES',
-    '- 6 to 10 claims. Each claim is one sentence of at most 200 characters about this chart, begins with the planet or house it is about, and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord, base.bodies.Sa.star_lord, dasha.periods.Sa-Ke-Ve_2026-08-22.from).',
+    `- ${a.analyst === 'annual' || a.analyst === 'prashna' ? '3 to 6' : '6 to 10'} claims. Each claim is one sentence of at most 200 characters about this chart, begins with the planet or house it is about, and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord, base.bodies.Sa.star_lord, dasha.periods.Sa-Ke-Ve_2026-08-22.from).`,
     '- At most 12 windows; every window has fruit (one sentence of at most 140 characters).',
-    '- weight is 1, 2 or 3 (3 = decides the verdict on its own). polarity is supports, obstructs or neutral. tradition is parashara, jaimini, nakshatra or kp_starlord.',
+    `- weight is 1, 2 or 3 (3 = decides the verdict on its own). polarity is supports, obstructs or neutral. tradition is ${a.analyst === 'prashna' ? 'prashna' : 'parashara, jaimini, nakshatra or kp_starlord'}.`,
     '- layerScore is one integer from -3 (clearly denied or obstructed) to +3 (clearly promised or supported); 0 when balanced.',
     '- Dates only as they appear in the pack (YYYY-MM-DD). Never compute a house, lord, aspect, dignity, date or strength; read the field. If a field you need is absent, add a caveat naming it and go on.',
     '- culprits and contributors are planet codes (Su Mo Ma Me Ju Ve Sa Ra Ke) that appear in the pack, at most 4 each, strongest first. A planet appears in only one list. form is one sentence (promise reader only; others leave it empty).',
     '- Keep the JSON complete: shorter claims are better than a cut-off answer.',
     `QUESTION: ${a.question}`,
   ].join('\n');
+}
+
+/** Months ahead the annual (Tithi Pravesh) layer reads: "this year" questions, with a month of slack (doc 28 §5). */
+export const ANNUAL_HORIZON_MONTHS = 12;
+
+const addMonthsIso = (asOf: string, n: number): string => {
+  const d = new Date(`${asOf}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/** The annual layer runs when the whole horizon ends within about 12 months of today. */
+export function annualApplies(intent: Intent, asOf: string): boolean {
+  if (intent.horizon === 'life') return false;
+  const hz = horizonRange(intent.horizon, asOf);
+  return hz.to <= addMonthsIso(asOf, ANNUAL_HORIZON_MONTHS + 1);
+}
+
+/**
+ * The asked date of a date-specific question: the start of an explicit window that begins after today, as Radha's
+ * place-local moment (noon). Null for the closed horizons ("now", "1y" …) and windows starting today, which the
+ * horizon transit rows already cover.
+ */
+export function transitAskedAt(intent: Intent, asOf: string): string | null {
+  const h = intent.horizon;
+  if (typeof h !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(h.from) || h.from <= asOf) return null;
+  return `${h.from} 12:00:00`;
+}
+
+/**
+ * The prashna layer runs only for a question the clarifier confirmed as prashna-eligible, and never for a declined or
+ * role-gated topic (checked again here on the question text, whatever the person's role).
+ */
+export function prashnaApplies(intent: Intent, question: string): boolean {
+  if (!intent.prashna?.eligible || !intent.prashna.askedAt) return false;
+  return detectTopic(question, undefined, ['child_age_unconfirmed']) === null && intent.safety === 'ok';
 }
 
 export function analystsFor(intent: Intent): SpecialistAnalyst[] {
@@ -332,6 +371,8 @@ export function analystsFor(intent: Intent): SpecialistAnalyst[] {
 /** Fast lane: one subject, short horizon, simple question type → skip the specialists, go straight to the answer. */
 export function isFastLane(intent: Intent): boolean {
   if (process.env.READING_FAST_LANE?.trim() === '0') return false;
+  // a prashna-eligible confirmed question is read by the graph, so the prashna vote is cast (doc 28 §5)
+  if (intent.prashna?.eligible) return false;
   const short = intent.horizon === 'now' || intent.horizon === '3m' || intent.horizon === '6m';
   return intent.subjects.length === 1 && short && (intent.questionType === 'yes_no' || intent.questionType === 'explain_term');
 }
@@ -358,7 +399,7 @@ export async function runSpecialist(args: {
     `ANALYST: ${analyst}`,
     PROMPTS[analyst],
     `Subject: ${args.subject}. Horizon: ${typeof intent.horizon === 'string' ? intent.horizon : `${intent.horizon.from} to ${intent.horizon.to}`}. Focus: ${intent.focusPoints.join('; ') || 'none'}.`,
-    'Return at most 8 claims and at most 12 windows. Each claim is one sentence of at most 200 characters about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Each claim weight is 1, 2 or 3. Dates must come from the pack. Keep the JSON complete: shorter claims are better than a cut-off answer.',
+    `Return at most ${analyst === 'annual' || analyst === 'prashna' ? 6 : 8} claims and at most 12 windows. Each claim is one sentence of at most 200 characters about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Each claim weight is 1, 2 or 3. Dates must come from the pack. Keep the JSON complete: shorter claims are better than a cut-off answer.`,
     'Tag every claim with the tradition whose rule you applied (parashara, jaimini, nakshatra, kp_starlord). Give layerScore: your layer as one signed strength from -3 (clearly denied or obstructed) to +3 (clearly promised or supported), 0 when balanced.',
     `QUESTION: ${args.question}`,
   ].join('\n');
