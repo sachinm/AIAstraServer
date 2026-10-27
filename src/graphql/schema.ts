@@ -15,6 +15,7 @@ import {
 } from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync } from '../services/kundliQueueService.js';
+import { scheduleKundliSync } from '../services/kundliSyncWorker.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
@@ -1110,7 +1111,8 @@ const resolvers = {
       }
       const { prisma: db } = context;
       try {
-        await enqueueKundliSync(db, userId);
+        const kundliId = await enqueueKundliSync(db, userId);
+        await scheduleKundliSync(kundliId, { prisma: db });
         return { success: true, error: null };
       } catch (err) {
         return { success: false, error: (err as Error)?.message ?? 'Server error' };

@@ -211,6 +211,27 @@ export function getKundliQueueRowStaggerMs(): number {
   return DEFAULT_KUNDLI_QUEUE_ROW_STAGGER_MS;
 }
 
+/**
+ * Elapsed-time budget for one background chart-pull invocation (docs/reading-engine/31 §4). No new Radha chunk starts
+ * after it; the worker re-invokes itself for the rest. Keep it at least ~2.5 minutes below the Lambda timeout (one
+ * chunk can take one Radha timeout). KUNDLI_SYNC_MAX_MS (60000–3600000), default 12 minutes.
+ */
+export function getKundliSyncMaxMs(): number {
+  const n = Number(process.env.KUNDLI_SYNC_MAX_MS);
+  return Number.isFinite(n) && n >= 60_000 && n <= 3_600_000 ? Math.round(n) : 12 * 60_000;
+}
+
+/** Kundlis one `kundli-sync-sweep` event processes, oldest first, one after another. KUNDLI_SYNC_SWEEP_BATCH (1–50), default 5. */
+export function getKundliSyncSweepBatch(): number {
+  const n = Number(process.env.KUNDLI_SYNC_SWEEP_BATCH);
+  return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 5;
+}
+
+/** Shared secret carried in kundli-sync / kundli-sync-sweep events (KUNDLI_SYNC_EVENT_TOKEN). Unset = not checked. */
+export function getKundliSyncEventToken(): string | undefined {
+  return process.env.KUNDLI_SYNC_EVENT_TOKEN?.trim() || undefined;
+}
+
 /** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
 export type ChatLlmProvider = 'groq' | 'gemini';
 

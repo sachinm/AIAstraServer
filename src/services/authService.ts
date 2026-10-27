@@ -11,7 +11,8 @@ import {
   sendSignupCode,
 } from '../auth/emailCode.js';
 import { validateSignUpInput } from '../lib/validators.js';
-import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
+import { enqueueKundliSync } from './kundliQueueService.js';
+import { scheduleKundliSync } from './kundliSyncWorker.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { assertTurnstileIfConfigured } from './turnstileService.js';
 import type { z } from 'zod';
@@ -97,18 +98,15 @@ export async function loginWithMagicLink(
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
-  await enqueueKundliSync(prisma, user.id).catch((err) => {
+  const loginKundliId = await enqueueKundliSync(prisma, user.id).catch((err) => {
     console.error(
       'enqueueKundliSync after magic link login failed:',
       (err as Error).message
     );
+    return undefined;
   });
-  processKundliSyncQueue(prisma).catch((err) => {
-    console.error(
-      'processKundliSyncQueue after magic link login failed:',
-      (err as Error).message
-    );
-  });
+  // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
+  await scheduleKundliSync(loginKundliId, { prisma });
   ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
     console.error('ensureGeminiCacheForUser after magic link login failed:', (err as Error).message);
   });
@@ -208,12 +206,12 @@ export async function signup(
     await sendSignupCode(email);
   }
 
-  await enqueueKundliSync(prisma, created.id).catch((err) => {
+  const signupKundliId = await enqueueKundliSync(prisma, created.id).catch((err) => {
     console.error('enqueueKundliSync after signup failed:', (err as Error).message);
+    return undefined;
   });
-  processKundliSyncQueue(prisma).catch((err) => {
-    console.error('processKundliSyncQueue after signup failed:', (err as Error).message);
-  });
+  // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
+  await scheduleKundliSync(signupKundliId, { prisma });
   ensureGeminiCacheForUser(prisma, created.id).catch((err) => {
     console.error('ensureGeminiCacheForUser after signup failed:', (err as Error).message);
   });

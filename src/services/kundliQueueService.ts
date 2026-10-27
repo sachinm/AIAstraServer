@@ -13,7 +13,7 @@ import { readingBuildFactsEnabled } from '../reading/config.js';
 import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
-import { fetchRegistrationItems, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
+import { fetchRegistrationItemsUntil, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
 import type { ChartDataType } from '../reading/chartData/catalog.js';
 import type { ChartItem, EnsureDeps, EnsureOptions } from '../reading/chartData/store.js';
 
@@ -44,7 +44,7 @@ function sleep(ms: number): Promise<void> {
  * Ensure the user has a Kundli row with queue_status = 'pending' so the queue worker will pick it up.
  * Call after login or signup. Creates a new Kundli row if none exists.
  */
-export async function enqueueKundliSync(prisma: PrismaClient, userId: string): Promise<void> {
+export async function enqueueKundliSync(prisma: PrismaClient, userId: string): Promise<string | undefined> {
   const latest = await prisma.kundli.findFirst({
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
@@ -54,14 +54,15 @@ export async function enqueueKundliSync(prisma: PrismaClient, userId: string): P
       where: { id: latest.id },
       data: { queue_status: QUEUE_STATUS_PENDING },
     });
-    return;
+    return latest.id;
   }
-  await prisma.kundli.create({
+  const created = await prisma.kundli.create({
     data: {
       user_id: userId,
       queue_status: QUEUE_STATUS_PENDING,
     },
   });
+  return (created as { id?: string } | undefined)?.id;
 }
 
 type Outcome = 'passed' | 'failed' | 'error';
@@ -131,17 +132,19 @@ async function pullRest(
   gateItems: Record<string, ChartItem>,
   opts: EnsureOptions,
   startAll: number,
-  gateMs: number
-): Promise<void> {
+  gateMs: number,
+  deadline: number
+): Promise<{ more: boolean }> {
   if (restPullInFlight.has(kundliId)) {
     queueLog({ event: 'kundli_full_pull_already_running', user_id: userId, kundli_id: kundliId });
-    return;
+    return { more: false };
   }
   restPullInFlight.add(kundliId);
   let restItems: Record<string, ChartItem> = {};
+  let remaining: ChartDataType[] = [];
   let error: string | undefined;
   try {
-    restItems = await fetchRegistrationItems(chartDeps, kundliId, plan.rest, opts);
+    ({ items: restItems, remaining } = await fetchRegistrationItemsUntil(chartDeps, kundliId, plan.rest, deadline, opts));
   } catch (err) {
     error = (err as Error).message?.slice(0, 500) ?? String(err);
     queueLogError({ event: 'kundli_full_pull_failed', user_id: userId, kundli_id: kundliId, error });
@@ -167,10 +170,12 @@ async function pullRest(
     unsupported: count((i) => i.status === 'unsupported'),
     missing: plan.requested.length - count((i) => i.status === 'ready' || i.status === 'failed' || i.status === 'unsupported'),
     skipped_unserved: plan.skipped.length,
+    not_started_budget: remaining.length,
     gate_ms: gateMs,
     wall_ms: wallMs,
     ...(error ? { error } : {}),
   });
+  return { more: remaining.length > 0 };
 }
 
 /**
@@ -211,18 +216,38 @@ export interface KundliQueueDeps {
   chart?: EnsureDeps;
 }
 
-type KundliRowWithUser = Prisma.KundliGetPayload<{ include: { user: true } }>;
+export type KundliRowWithUser = Prisma.KundliGetPayload<{ include: { user: true } }>;
 
-async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser, deps: KundliQueueDeps): Promise<void> {
+/** Options for one row run from the background worker (docs/reading-engine/31). The login/signup path passes none. */
+export interface RowRunOptions {
+  /** No new Radha chunk starts at or after this time (ms epoch). Default: no deadline. */
+  deadline?: number;
+  /** The worker's lease timestamp: written as queue_started_at so the lease can be released by compare-and-set. */
+  leaseAt?: Date;
+}
+
+export interface RowRunResult {
+  /** The gate (everything chat needs) is ready and the row was marked completed */
+  gateComplete: boolean;
+  /** The deadline stopped the run with items not started: the caller should continue in a new invocation */
+  more: boolean;
+}
+
+/** Runs one kundli row: gate, completion, then the rest. Exported for the background worker (kundliSyncWorker.ts). */
+export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser, deps: KundliQueueDeps, run: RowRunOptions = {}): Promise<RowRunResult> {
   const userId = row.user_id;
   const kundliId = row.id;
+  const deadline = run.deadline ?? Number.POSITIVE_INFINITY;
+  // a resumed or swept worker run of an already completed row does not repeat the completion side effects
+  const wasCompleted = run.leaseAt !== undefined && row.queue_status === QUEUE_STATUS_COMPLETED;
+  const none: RowRunResult = { gateComplete: false, more: false };
 
   try {
     await prisma.kundli.update({
       where: { id: kundliId },
       data: {
         queue_status: QUEUE_STATUS_IN_PROGRESS,
-        queue_started_at: new Date(),
+        queue_started_at: run.leaseAt ?? new Date(),
         last_sync_error: null,
       },
     });
@@ -233,7 +258,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
       user_id: userId,
       error: (err as Error).message,
     });
-    return;
+    return none;
   }
 
   const auth = row.user;
@@ -255,7 +280,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
       },
     });
     logAstroKundliCall(userId, kundliId, 'biodata', 'error', 0, msg);
-    return;
+    return none;
   }
 
   const freshKundli = await prisma.kundli.findUnique({
@@ -269,7 +294,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
       user_id: userId,
       error: 'Kundli row not found after status update',
     });
-    return;
+    return none;
   }
 
   try {
@@ -282,7 +307,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
     const fetchOpts = { concurrency: getKundliQueueMaxFetchesPerUser() };
     const startAll = Date.now();
     const plan = await loadRegistrationPlan(chartDeps);
-    const gateItems = await fetchRegistrationItems(chartDeps, kundliId, plan.gate, fetchOpts);
+    const { items: gateItems, remaining: gateRemaining } = await fetchRegistrationItemsUntil(chartDeps, kundliId, plan.gate, deadline, fetchOpts);
     const gateMs = Date.now() - startAll;
     logRadhaCalls(userId, kundliId, plan.gate, gateItems, gateMs);
     const reg = { ...plan, items: gateItems, firstTierReady: firstTierReady(plan.firstTier, gateItems) };
@@ -321,7 +346,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
             last_sync_error: `Kundli persist failed: ${persistMsg}`,
           },
         });
-        return;
+        return none;
       }
     }
 
@@ -346,14 +371,17 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
           queue_completed_at: new Date(),
         },
       });
-      void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
-        console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
-      });
-      if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
+      if (!wasCompleted) {
+        void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
+          console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
+        });
+        if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
+      }
 
       // Chat is open; pull everything else Radha serves. A failure here is logged, never undoes the completion: rows
-      // that did not land stay missing/failed and the next run (next login) resumes from them.
-      await pullRest(chartDeps, userId, kundliId, plan, gateItems, fetchOpts, startAll, gateMs);
+      // that did not land stay missing/failed and the next run (worker re-invoke, sweep or login) resumes from them.
+      const rest = await pullRest(chartDeps, userId, kundliId, plan, gateItems, fetchOpts, startAll, gateMs, deadline);
+      return { gateComplete: true, more: rest.more };
     } else {
       queueLog({
         event: 'kundli_partial_sync',
@@ -361,6 +389,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
         kundli_id: kundliId,
         legacy_columns_filled: allFieldsFilled,
         first_tier_ready: reg.firstTierReady,
+        gate_not_started_budget: gateRemaining.length,
         message: 'Not all data points filled; queue_status reset to pending for retry.',
       });
       await prisma.kundli.update({
@@ -371,6 +400,7 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
           last_sync_error: 'Partial sync; missing data points will be retried on next run.',
         },
       });
+      return { gateComplete: false, more: gateRemaining.length > 0 };
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -397,5 +427,6 @@ async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser,
         error: (revertErr as Error).message,
       });
     }
+    return none;
   }
 }

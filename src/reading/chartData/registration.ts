@@ -82,6 +82,35 @@ export async function fetchRegistrationItems(deps: EnsureDeps, kundliId: string,
   return items;
 }
 
+export interface BudgetedFetch {
+  items: Record<string, ChartItem>;
+  /** Types not started because the deadline passed (empty when the list finished) */
+  remaining: ChartDataType[];
+}
+
+/**
+ * fetchRegistrationItems with a deadline (docs/reading-engine/31 §4): the list goes in small chunks (`chunk` types, at
+ * least the concurrency) and no new chunk starts once `now() >= deadline`. A chunk already started always finishes, so
+ * the caller's margin must cover one chunk of Radha calls. Items already ready are read, not fetched, so a later run
+ * given `remaining` (or the whole list again) resumes from the first missing item.
+ */
+export async function fetchRegistrationItemsUntil(
+  deps: EnsureDeps,
+  kundliId: string,
+  types: readonly ChartDataType[],
+  deadline: number,
+  opts: EnsureOptions & { chunk?: number } = {}
+): Promise<BudgetedFetch> {
+  const now = opts.now ?? Date.now;
+  const chunk = Math.max(1, Math.floor(opts.chunk ?? opts.concurrency ?? 1));
+  const items: Record<string, ChartItem> = {};
+  for (let i = 0; i < types.length; i += chunk) {
+    if (now() >= deadline) return { items, remaining: types.slice(i) };
+    Object.assign(items, await fetchRegistrationItems(deps, kundliId, types.slice(i, i + chunk), opts));
+  }
+  return { items, remaining: [] };
+}
+
 export interface RegistrationFetch extends RegistrationPlan {
   items: Record<string, ChartItem>;
   /** True when every served first-tier type is `ready` */
