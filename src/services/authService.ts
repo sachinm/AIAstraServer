@@ -15,7 +15,7 @@ import { enqueueKundliSync } from './kundliQueueService.js';
 import { scheduleKundliSync } from './kundliSyncWorker.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { assertTurnstileIfConfigured } from './turnstileService.js';
-import type { z } from 'zod';
+import { z } from 'zod';
 import type { signUpSchema } from '../lib/validators.js';
 
 const DEFAULT_EXPIRY = '7d';
@@ -98,18 +98,37 @@ export async function loginWithMagicLink(
     return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
   }
 
-  const loginKundliId = await enqueueKundliSync(prisma, user.id).catch((err) => {
-    console.error(
-      'enqueueKundliSync after magic link login failed:',
-      (err as Error).message
-    );
-    return undefined;
+  return completeLogin(user);
+}
+
+/**
+ * Shared tail of every successful code check: a correct emailed code proves the address (email_verified_at),
+ * a finished profile gets its kundli sync and cache, and the session token is issued. A signup that has not
+ * saved page 2 has no birth data yet, so nothing is enqueued for it.
+ */
+async function completeLogin(user: { id: string; role: string | null }): Promise<LoginResult> {
+  const row = await prisma.auth.findFirst({
+    where: { id: user.id },
+    select: { profile_complete: true, email_verified_at: true },
   });
-  // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
-  await scheduleKundliSync(loginKundliId, { prisma });
-  ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
-    console.error('ensureGeminiCacheForUser after magic link login failed:', (err as Error).message);
-  });
+  if (row && !row.email_verified_at) {
+    await prisma.auth
+      .update({ where: { id: user.id }, data: { email_verified_at: new Date() } })
+      .catch((err) => console.error('mark email verified failed:', (err as Error).message));
+  }
+  const profileComplete = row?.profile_complete !== false;
+
+  if (profileComplete) {
+    const loginKundliId = await enqueueKundliSync(prisma, user.id).catch((err) => {
+      console.error('enqueueKundliSync after login failed:', (err as Error).message);
+      return undefined;
+    });
+    // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
+    await scheduleKundliSync(loginKundliId, { prisma });
+    ensureGeminiCacheForUser(prisma, user.id).catch((err) => {
+      console.error('ensureGeminiCacheForUser after login failed:', (err as Error).message);
+    });
+  }
 
   const token = issueToken(user.id, user.role ?? 'user');
   return {
@@ -120,8 +139,86 @@ export async function loginWithMagicLink(
   };
 }
 
+export type SignupStartResult =
+  | { success: true; message: string }
+  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE };
+
+const startSignupSchema = z
+  .object({
+    name: z.string().trim().min(1).max(128),
+    email: z.string().trim().email().max(256),
+  })
+  .strict();
+
 /**
- * Signup: create the account from email and profile fields only. A random password is generated,
+ * Registration v2, page 1: name and email only. Creates (or reuses) a pending account and sends the
+ * verification code (Cognito when AUTH_PROVIDER=cognito, else the local emailed code). Unknown and pending
+ * emails get the same answer; only an already verified email is refused (EMAIL_EXISTS).
+ */
+export async function startSignup(
+  input: unknown,
+  turnstileToken?: string | null,
+  clientIp?: string | null
+): Promise<SignupStartResult> {
+  const gate = await assertTurnstileIfConfigured(turnstileToken, clientIp);
+  if (!gate.ok) return { success: false, message: gate.message };
+
+  const parsed = startSignupSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: 'Invalid input' };
+  const { name, email } = parsed.data;
+
+  const existing = await prisma.auth.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } },
+    select: { id: true, email: true, email_verified_at: true },
+  });
+  if (existing?.email_verified_at) {
+    return { success: false, code: EMAIL_EXISTS_CODE, message: EMAIL_EXISTS_MESSAGE };
+  }
+  if (existing) {
+    // Pending account (never verified): reuse it and send a fresh code through the normal request path.
+    await prisma.auth.update({ where: { id: existing.id }, data: { name, username: name } });
+    await sendLoginCode(existing.email);
+    return { success: true, message: SIGNUP_CODE_MESSAGE };
+  }
+
+  const created = await prisma.auth.create({
+    data: {
+      username: name,
+      name,
+      password: await hashPassword(generateAccountPassword()),
+      // birth details arrive on page 2 (completeProfile)
+      date_of_birth: '',
+      email,
+      profile_complete: false,
+      signup_ip: clientIp?.trim() || null,
+      role: DEFAULT_SIGNUP_ROLE,
+    },
+  });
+
+  const identity = await createSignupIdentity(email, name);
+  if (!identity.ok) {
+    await prisma.auth.delete({ where: { id: created.id } }).catch((err) => {
+      console.error('startSignup rollback (delete auth row) failed:', (err as Error).message);
+    });
+    return { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
+  }
+  if (identity.reusedExisting) await sendLoginCode(email);
+  else await sendSignupCode(email);
+  return { success: true, message: SIGNUP_CODE_MESSAGE };
+}
+
+/**
+ * Registration v2, page 1 (code step): a correct code verifies the email and signs the user in.
+ * A wrong or expired code gets the same generic failure as the login.
+ */
+export async function verifySignupCode(emailRaw: string, codeRaw: string): Promise<LoginResult> {
+  const user = await verifyLoginCode(emailRaw, codeRaw);
+  if (!user) return { success: false, message: MAGIC_LINK_LOGIN_FAILED };
+  return completeLogin(user);
+}
+
+/**
+ * DEPRECATED (use startSignup, verifySignupCode, completeProfile): one-shot signup. Create the account from email and profile fields only. A random password is generated,
  * hashed and stored (never returned, never used for login). A login code is emailed so the new user
  * confirms the address by entering it (Cognito sends it when AUTH_PROVIDER=cognito). Any `password` in the input is ignored.
  */
@@ -179,6 +276,7 @@ export async function signup(
       place_of_birth: placeOfBirthEnc ?? place_of_birth ?? null,
       time_of_birth: timeOfBirthEnc ?? time_of_birth ?? null,
       email,
+      name: username,
       gender: gender ?? null,
       signup_ip: clientIp?.trim() || null,
       // general public registers as novice (src/auth/roles.ts)
