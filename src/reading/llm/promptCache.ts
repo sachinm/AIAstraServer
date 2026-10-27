@@ -5,6 +5,8 @@
  * What is cached: the system instruction (persona + method, identical for everyone) plus the first user part, which
  * the engine keeps as the user's base chart (byte-identical across that user's questions). Later calls send
  * `cachedContent` and only the question-specific parts, so those ~3k prefix tokens are billed at the cached rate.
+ * With READING_CACHE_LAYOUT=full the first user part is instead the role library plus the user's whole evidence for the
+ * day (packs/fullPrefix.ts), shared by every reader and the writer on the same model; `ensurePromptCache` prewarms it.
  *
  * Policy: lazy. A prefix is cached on its READING_EXPLICIT_CACHE_MIN_USES-th use (default 2) inside the TTL, in the
  * background; the call that triggers creation runs uncached and never waits. Any cache error disables caching for that
@@ -233,9 +235,7 @@ async function extend(e: Entry, name: string, apiKey: string): Promise<void> {
  * The cachedContent name to use for this prefix, or null (call uncached). Never waits for creation, adoption or extension.
  * `base` is the first user part; `system` the system instruction; `owner` who the cache belongs to (logout deletes it).
  */
-export function cacheNameFor(model: string, system: string | undefined, base: string, apiKey: string, owner: CacheOwner = {}): string | null {
-  if (!explicitCacheEnabled() || !base) return null;
-  const key = prefixKey(model, system, base);
+function entryFor(key: string, owner: CacheOwner): Entry {
   let e = entries.get(key);
   if (!e) {
     if (entries.size >= MAX_ENTRIES) entries.delete(entries.keys().next().value as string);
@@ -244,11 +244,43 @@ export function cacheNameFor(model: string, system: string | undefined, base: st
   }
   if (owner.userId) e.owner.userId = owner.userId;
   if (owner.kundliId) e.owner.kundliId = owner.kundliId;
+  return e;
+}
+
+const isLive = (e: Entry, now = Date.now()): boolean => !!(e.name && e.expiresAt && e.expiresAt - 60_000 > now);
+
+/**
+ * Prewarm (full layout, doc 13 Track B): adopt or create the cache for this prefix now, without waiting for its second
+ * use. Resolves to the cache name, or null when caching is off, disabled after an error, or creation failed. Callers
+ * that must not wait (the answer path) do not await it; a call made meanwhile simply goes uncached.
+ */
+export async function ensurePromptCache(model: string, system: string | undefined, base: string, owner: CacheOwner = {}): Promise<string | null> {
+  const apiKey = geminiKey();
+  if (!explicitCacheEnabled() || !base || !apiKey) return null;
+  const key = prefixKey(model, system, base);
+  const e = entryFor(key, owner);
+  // at most two rounds: an adopt-only lookup already in flight, then our own create
+  for (let round = 0; round < 2; round++) {
+    if (isLive(e)) return e.name!;
+    if (e.disabledUntil && e.disabledUntil > Date.now()) return null;
+    if (!e.creating) {
+      e.looked = true;
+      e.creating = adoptOrCreate(key, e, model, system, base, apiKey, true);
+    }
+    await e.creating;
+  }
+  return isLive(e) ? e.name! : null;
+}
+
+export function cacheNameFor(model: string, system: string | undefined, base: string, apiKey: string, owner: CacheOwner = {}): string | null {
+  if (!explicitCacheEnabled() || !base) return null;
+  const key = prefixKey(model, system, base);
+  const e = entryFor(key, owner);
   const now = Date.now();
-  if (e.name && e.expiresAt && e.expiresAt - 60_000 > now) {
+  if (isLive(e, now)) {
     cacheStats.hits += 1;
-    const name = e.name;
-    if (!e.extending && e.expiresAt - now < (ttlSeconds() * 1000) / 2) {
+    const name = e.name!;
+    if (!e.extending && e.expiresAt! - now < (ttlSeconds() * 1000) / 2) {
       e.touchedAt = now;
       e.extending = extend(e, name, apiKey);
     } else if (!e.touchedAt || now - e.touchedAt > TOUCH_EVERY_MS) {

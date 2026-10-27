@@ -37,6 +37,18 @@ export interface GeminiCallOptions {
   cachePrefix?: boolean;
   /** Who the cached prefix belongs to (logout deletes that user's caches) */
   cacheOwner?: CacheOwner;
+  /**
+   * Full cache layout (packs/fullPrefix.ts): when a cache for (model, system, prefix) is live, the call sends `cachedContent`
+   * and only `suffix`; otherwise it goes out as `system` + `parts`, exactly as without this option. Takes precedence over
+   * `cachePrefix`.
+   */
+  fullCache?: { system: string; prefix: string; suffix: string[] };
+}
+
+/** A cache chosen for one call: `full` sends only the full-layout suffix, `base` drops system and parts[0]. */
+export interface ChosenCache {
+  name: string;
+  kind: 'base' | 'full';
 }
 
 export interface GeminiResult {
@@ -119,7 +131,7 @@ export function thinkingConfigFor(model: string, thinking: Thinking, includeThou
   return { thinkingLevel: thinking === 'off' ? 'low' : thinking, includeThoughts };
 }
 
-export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null = null): Record<string, unknown> {
+export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null = null, kind: ChosenCache['kind'] = 'base'): Record<string, unknown> {
   const generationConfig: Record<string, unknown> = {
     temperature: o.temperature ?? 0.4,
     topP: o.topP ?? 0.9,
@@ -130,8 +142,9 @@ export function buildRequestBody(o: GeminiCallOptions, cacheName: string | null 
     generationConfig.responseMimeType = 'application/json';
     generationConfig.responseSchema = o.responseSchema;
   }
-  // with an explicit cache the system instruction and the first part live in the cache; send only the rest
-  const parts = cacheName ? o.parts.slice(1) : o.parts;
+  // with an explicit cache the system instruction and the first part live in the cache; send only the rest. The full
+  // layout's cache holds system, role library and evidence; the call sends only its suffix.
+  const parts = cacheName ? (kind === 'full' && o.fullCache ? o.fullCache.suffix : o.parts.slice(1)) : o.parts;
   const body: Record<string, unknown> = {
     contents: [{ role: 'user', parts: parts.map((text) => ({ text })) }],
     generationConfig,
@@ -223,28 +236,38 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
   return { res, abort: () => controller.abort(), clear };
 }
 
-/** Non-streaming call (specialists, intake). Returns the full text. */
-function cacheFor(o: GeminiCallOptions): string | null {
-  return o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner) : null;
+function cacheFor(o: GeminiCallOptions): ChosenCache | null {
+  if (o.fullCache) {
+    const name = cacheNameFor(o.model, o.fullCache.system, o.fullCache.prefix, apiKey(), o.cacheOwner);
+    return name ? { name, kind: 'full' } : null;
+  }
+  const name = o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner) : null;
+  return name ? { name, kind: 'base' } : null;
 }
 
+function forget(o: GeminiCallOptions, c: ChosenCache): void {
+  if (c.kind === 'full' && o.fullCache) invalidateCache(o.model, o.fullCache.system, o.fullCache.prefix);
+  else invalidateCache(o.model, o.system, o.parts[0]!);
+}
+
+/** Non-streaming call (specialists, intake). Returns the full text. */
 export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
-  const cacheName = cacheFor(o);
+  const cache = cacheFor(o);
   try {
-    return await callGeminiOnce(o, cacheName);
+    return await callGeminiOnce(o, cache);
   } catch (err) {
     // only a refused cache (expired or deleted) is retried uncached: after a time-out or a quota error the uncached call
     // would start with no time left, and the shared cache would be forgotten for every other caller
-    if (!cacheName || !isCacheRejection(err)) throw err;
-    invalidateCache(o.model, o.system, o.parts[0]!);
+    if (!cache || !isCacheRejection(err)) throw err;
+    forget(o, cache);
     return callGeminiOnce(o, null);
   }
 }
 
-async function callGeminiOnce(o: GeminiCallOptions, cacheName: string | null): Promise<GeminiResult> {
+async function callGeminiOnce(o: GeminiCallOptions, cache: ChosenCache | null): Promise<GeminiResult> {
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:generateContent?key=${encodeURIComponent(apiKey())}`;
-  const { res, clear } = await post(url, buildRequestBody(o, cacheName), o);
+  const { res, clear } = await post(url, buildRequestBody(o, cache?.name ?? null, cache?.kind), o);
   try {
     const json = (await res.json()) as GeminiChunk;
     if (json.error?.message) throw new Error(json.error.message);
@@ -265,13 +288,13 @@ export async function streamGemini(
 ): Promise<GeminiResult> {
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey())}`;
-  const cacheName = cacheFor(o);
+  const cache = cacheFor(o);
   let posted: Awaited<ReturnType<typeof post>>;
   try {
-    posted = await post(url, buildRequestBody(o, cacheName), o);
+    posted = await post(url, buildRequestBody(o, cache?.name ?? null, cache?.kind), o);
   } catch (err) {
-    if (!cacheName || !isCacheRejection(err)) throw err;
-    invalidateCache(o.model, o.system, o.parts[0]!);
+    if (!cache || !isCacheRejection(err)) throw err;
+    forget(o, cache);
     posted = await post(url, buildRequestBody(o, null), o);
   }
   const { res, abort, clear } = posted;

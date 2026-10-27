@@ -5,6 +5,10 @@
  *   npm run bench:reading -- --runs 20       # more repetitions (default 10 per question per flow)
  *   npm run bench:reading -- --live          # real Gemini (GEMINI_API_KEY / GEMINI_API_URL from .env), 1 run each
  *   npm run bench:reading -- --json out.json # also write the raw numbers
+ *   npm run bench:reading -- --layout full   # explicit cache on, full prefix layout (memory registry, no database)
+ *
+ * `cachedShare.<flow>` is cached / prompt tokens per question; `uncached.<node>.<flow>` the tokens each call sent
+ * outside a cache. With the fake Gemini both are character estimates (chars / 3.2), not Gemini's tokenizer.
  *
  * Chart: golden fixture G1 (no database). Prints p50/p95 per stage for the single and graph flows and checks the
  * budgets. In stub mode model time is the fake's (~ms), so first-token and total numbers show orchestration cost only.
@@ -21,6 +25,7 @@ import { clearReadingCaches, loadReadingData } from '../src/reading/data/store.j
 import { findingsCache } from '../src/reading/nodes/findingsCache.js';
 import { GOLDEN } from '../evals/questions.js';
 import { startFakeGemini } from '../tests/helpers/fakeGemini.js';
+import { setCacheRegistry, settlePromptCache } from '../src/reading/llm/promptCache.js';
 import type { ReadingEvent } from '../src/reading/types.js';
 
 const AS_OF = '2026-10-24';
@@ -58,6 +63,13 @@ const BUDGETS: Budget[] = [
 async function main(): Promise<void> {
   process.env.READING_FACTS_SOURCE = 'fixture';
   delete process.env.READING_ENGINE;
+  const layout = arg('--layout', '');
+  if (layout === 'full' || layout === 'base') {
+    process.env.READING_EXPLICIT_CACHE = '1';
+    process.env.READING_CACHE_LAYOUT = layout;
+    // the bench never touches the database: caches live in this process only
+    setCacheRegistry(null);
+  }
   const fake = live ? null : await startFakeGemini({ chunkDelayMs: 0 });
   if (fake) {
     process.env.GEMINI_API_URL = fake.url;
@@ -105,6 +117,10 @@ async function main(): Promise<void> {
           if (flow === 'graph') add('graph.reconcile', tm.reconcile);
           add(`promptTokens.${flow}`, res.record.usage.reduce((s, u) => s + u.promptTokens, 0));
           add(`cachedTokens.${flow}`, res.record.usage.reduce((s, u) => s + u.cachedTokens, 0));
+          add(`cachedShare.${flow}`, Number(res.record.cache.cachedShare ?? 0));
+          for (const u of res.record.usage) add(`uncached.${u.node}.${flow}`, u.promptTokens - u.cachedTokens);
+          // let a cache started by this question finish, as the next question would find it on a warm instance
+          await settlePromptCache();
           add(`modelCalls.${flow}`, res.record.usage.length);
         }
       }
@@ -114,7 +130,7 @@ async function main(): Promise<void> {
   }
 
   const rows = Object.keys(samples).sort();
-  console.log(`\nReading bench: ${live ? 'LIVE model' : 'model stubbed (fake Gemini)'} · chart G1 · ${GOLDEN.length} questions × ${runs} runs\n`);
+  console.log(`\nReading bench: ${live ? 'LIVE model' : 'model stubbed (fake Gemini)'} · cache layout ${process.env.READING_EXPLICIT_CACHE === '1' ? process.env.READING_CACHE_LAYOUT ?? 'base' : 'off'} · chart G1 · ${GOLDEN.length} questions × ${runs} runs\n`);
   console.log('| Stage | n | p50 | p95 | budget (p95) | ok |');
   console.log('|---|---|---|---|---|---|');
   for (const k of rows) {

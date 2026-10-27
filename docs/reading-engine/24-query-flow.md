@@ -145,6 +145,142 @@ Caching, in two layers:
 
 Not yet confirmed live: whether `cachedTokens` rises on staging. Check the `reading timing` log line after enabling.
 
+### Full prefix layout (`READING_CACHE_LAYOUT=full`)
+
+The base layout above caches only system + base (about 5.6k tokens). Each reader still re-sends its subject pack (about
+0.8–2.3k tokens over the base), its role prompt and its output rules, and the graph writer re-sends its prompt and
+template. These differ per role, so no single cache can hold them. The full layout caches all of it once per user, model
+and day.
+
+To turn it on, set `READING_EXPLICIT_CACHE=1` **and** `READING_CACHE_LAYOUT=full`. The default, `base`, keeps the behaviour
+above. Code: `src/reading/packs/fullPrefix.ts`.
+
+**Cached prefix** (one per user × model × day). It is byte-stable: no clock, question or subject text.
+
+1. System: persona + method (unchanged).
+2. `ROLE LIBRARY`: the general rules, then one block per role (promise, dasha, transit, nakshatra, annual, prashna, writer,
+   single). Each block names the sections that role reads, for example "Reads: base, detail, varga, arudha". The
+   shared reader output rules, the writer prompt, the template rules, T1–T10 and the five formats follow.
+3. `EVIDENCE AS OF <date>` and the user's whole evidence, built as a full-scope pack (`buildEvidencePack({ fullScope })`):
+   - base (with the full base);
+   - detail for all 12 houses, and every yoga;
+   - every divisional chart, with all 12 houses;
+   - every arudha and special lagna;
+   - every Vimshottari antardasha of the life;
+   - the pratyantardashas and transits of the **36 months** from the date.
+
+   Sections and paths are the same as in a subject pack.
+
+**What each call sends.** A reader sends:
+
+- `ROLE: <id>`;
+- today's date;
+- the subject line and `FRAME`: frame houses, lords, karakas, horizon and running period;
+- `EXTRA EVIDENCE`, if any;
+- the question.
+
+`EXTRA EVIDENCE` is the part of the call's own pack that the cache lacks, found with a deep diff. It covers the transit
+at an asked date, the prashna chart, the year chart, and transit rows clipped to a shorter horizon.
+
+The writer sends `ROLE: writer`, the findings brief and the calendar. In place of the template text it sends a one-line
+`ANSWER SHAPE` reference. The single flow sends `ROLE: single`, the frame(s), extra evidence, the calendar and the tail.
+
+**Who shares a cache.** All readers and the writer share one cache when they run on the same model. A writer on a
+different model (`READING_MODEL_SYNTH`) gets its own cache, with byte-identical contents.
+
+**Prewarm.** At clarify start (doc 13 Track B), `prewarmNatalLayers` builds the prefix and creates one cache for each
+model the reading will use (`ensurePromptCache`). It waits at most 6 s, inside the existing 12 s cap. `runReading` also
+starts creation for its models, without awaiting it.
+
+Until its cache is live, a call goes out in the **base layout** (today's prompt, uncached). A miss therefore costs the
+same as today, and no answer ever waits for a cache to be created. Prewarm at sign-in is not wired, because it would pay
+storage for users who never ask a question.
+
+**Day rollover and cleanup.** The date is part of the cached text, so the cache key changes each day and the transit
+block stays correct. The previous day's cache ends like any other: TTL (30 min, sliding), the 45-minute sweeper, or
+logout (`deleteUserCaches`).
+
+**Grounding.** The gate checks ids against the cached evidence overlaid with the reader's own pack
+(`withFullEvidence`). Every id of the old subject pack resolves to the same value; this is tested for every subject and
+horizon. A claim that cites cached evidence outside the subject frame, such as the lord of a house outside the frame,
+now resolves too.
+
+**Measured with the fake Gemini** (chart G1, as of 2026-10-24). These are character estimates, not Gemini's tokenizer:
+the fake counts chars/3.2, the pack counts chars/3.6. Sources: `tests/unit/reading/fullPrefixCache.test.ts` and
+`npm run bench:reading -- --runs 2 --layout full` (12 golden questions × 2 runs).
+
+| | Tokens |
+|---|---|
+| Cached prefix (system + library + evidence), fake count | 25,937 |
+| Role library (chars/3.6) | ~4.9k |
+| Evidence by section (chars/3.6) | base 5.6k, varga 4.5k, dasha 3.0k, transits 1.8k, detail 1.2k, arudha 0.4k |
+| Uncached per call (bench p50 / p95): promise | 194 / 235 |
+| dasha | 234 / 254 |
+| transit | 410 / 620 |
+| nakshatra | 455 |
+| graph writer | 1,910 / 2,458 (of which findings brief ~1.15k, calendar ~0.65k) |
+| single-flow writer | 1,086 / 1,345 |
+| Largest reader suffix over every subject and horizon (chars/3.6) | promise 214, dasha 263, transit 1,072, nakshatra 1,073 (largest for `now`: Mars rows and one-month clipping) |
+| Cached share of prompt tokens, warm cache (bench p50) | graph 0.97, single 0.96 |
+
+The writer's findings brief is produced in the same run, so it can never be cached. Its length grows with the number of
+claims that real readers return.
+
+### Cost per question: full vs base layout (estimates; not measured on staging)
+
+Prices: `gemini-3.8-flash` from `llm/models.ts`, per 1M tokens: input $0.75, cached input $0.075, output $3.75.
+
+Storage is **assumed** at $1.00 per 1M tokens per hour, Google's list price for 2.5 Flash. The 3.x storage price is not in
+our price table. If Google's 3.x storage price differs, redo the tables with it.
+
+Token counts come from the bench above (fake count, golden questions). Output and thought tokens are the same in every
+layout and are left out. A graph question here is 3 readers plus the writer; with the nakshatra reader it is 4 plus the
+writer.
+
+| Input per graph question | Uncached | Cached | Input cost |
+|---|---|---|---|
+| No cache at all | ~34.5k | 0 | ~$0.026 |
+| Base layout (system + base cached, ~7.3k, readers only) | ~12.6k | ~21.9k | ~$0.011 |
+| Full layout, warm cache | ~2.9k | ~103.7k (4 × 25.9k) | ~$0.010 |
+
+| Input per single-flow question | Uncached | Cached | Input cost |
+|---|---|---|---|
+| No cache at all | ~12.4k | 0 | ~$0.0093 |
+| Base layout | ~5.1k | ~7.3k | ~$0.0044 |
+| Full layout, warm cache | ~1.1k | ~25.9k | ~$0.0028 |
+
+**Storage per cache.** Storage is billed from creation until expiry (last use + 30 min TTL).
+
+| Cache | Size | Cost per hour |
+|---|---|---|
+| Full layout | ~26k tokens | ~$0.026 |
+| Base layout | ~7.3k tokens | ~$0.007 |
+
+| Session: 3 graph questions in 15 min (cache held about 0.75 h) | Input | Storage | Total |
+|---|---|---|---|
+| No cache at all | $0.078 | 0 | **~$0.078** |
+| Base layout | $0.033 | $0.005 | **~$0.038** |
+| Full layout | $0.030 | $0.020 | **~$0.050** |
+
+What this means until staging measures it:
+
+- Each of the 4–5 calls reads the whole 26k prefix at the cached rate. That makes the full layout's input cost per
+  question close to the base layout's: about $0.001 less on a graph question and $0.0016 less on a single question.
+  Uncached input drops from ~12.6k to ~2.9k per graph question.
+- The full layout stores a cache about 3.5× bigger. It saves money against the base layout only above roughly 12 single
+  questions or 19 graph questions per cache-hour. For a typical short session it costs more, not less.
+- Against no explicit cache at all, both layouts cut input cost by about 55–60 %.
+- What the full layout does buy: one shared cache for every role, including the graph writer, which the base layout never
+  caches; very small uncached requests; and room for readers to cite any chart fact. Whether the smaller requests also cut
+  latency is not measured.
+- Levers if storage dominates:
+  - a shorter TTL for this layout (`READING_EXPLICIT_CACHE_TTL_SECONDS`, e.g. 600);
+  - a smaller evidence block: drop `base.all_vargas`, which the full `varga` section repeats (about 2k tokens);
+  - limit `varga` to the charts the frames use.
+- To measure on staging, turn both switches on, then compare `cachedShare`, `calls[]` and `costUsd` in the
+  `reading timing` log against the base layout over the same questions. Storage shows only on the AI Studio billing page;
+  our logs cannot see it.
+
 ## How long the answer is
 
 Each answer template has a word cap: T1 180, T10 220, T9 260, T3 300, T5 300, T4 320, T2 350, T6 350, T8 380, T7 420 words
@@ -164,7 +300,8 @@ These are token counts times our price table, not Google's invoice; confirm agai
 | Claude Fable 5.1 as the writer | about $0.14–0.17 (estimate, doc 23; **not Gemini**) |
 
 The full base adds about 4k input tokens to every call (roughly $0.003 on `gemini-3.8-flash` uncached) and about a tenth of that
-once cached. Thought tokens are billed whether or not they are shown.
+once cached. Thought tokens are billed whether or not they are shown. For the full prefix layout's cost per question and storage, see
+"Cost per question: full vs base layout" above.
 
 ## How long it takes
 
@@ -205,6 +342,7 @@ streaming overhead, and the full staging path through CloudFront with a real use
 | `READING_FULL_BASE=0` | go back to the small (1.7k-token) base |
 | `READING_FINDINGS=v2` | Fable's v2 prompts (`prompts/v2/`, doc 25): readers name culprits and contributors, the promise form and each window's fruit; the pack adds star lords, dasha-lord records and a transit legend; the brief adds FORM, CULPRITS, CONTRIBUTORS and fruit; T1/T9/T10 writers think at `low`. Off by default |
 | `READING_EXPLICIT_CACHE=1` | turn on the explicit prompt cache |
+| `READING_CACHE_LAYOUT=full` | with the explicit cache on, one cached prefix per user, model and day holds every role and the whole evidence, and calls send a short suffix. Default `base` |
 | `CHAT_SSE_PING_MS` | keep-alive interval (5–60 s) |
 | `VITE_CHAT_CLARIFY=0` (web build) | the web client stops sending `clarify:true` |
 
@@ -213,6 +351,7 @@ streaming overhead, and the full staging path through CloudFront with a real use
 - Route and stream: `server.ts` (`/api/chat/ask-stream`), `src/routes/clarifyRoutes.ts`
 - Entry and gate: `src/services/chatLlmService.ts`; run saving: `src/services/askChatTurn.ts`
 - Engine: `src/reading/run.ts`, `src/reading/graph.ts`, `src/reading/llm/gemini.ts`, `src/reading/llm/models.ts`, `src/reading/config.ts`
+- Prompt cache: `src/reading/llm/promptCache.ts` (create, adopt, prewarm, sweep), `src/reading/packs/fullPrefix.ts` (full layout)
 - Pack and base: `src/reading/packs/selector.ts` (`buildEvidencePack`, `fullBaseExtras`, `renderBase`)
 - Browser: `src/pages/UserData.ts` (stream parser), `src/pages/chat-interface/readingProgress.ts` (pills and thinking text),
   `ThinkingPanel.tsx`, `ChatMainArea.tsx`

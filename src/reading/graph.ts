@@ -41,6 +41,7 @@ import { annualApplies, OPTIONAL_LAYERS, prashnaApplies, transitAskedAt } from '
 import type { LayerLoaders } from './layers/loaders.js';
 import { annualSection, prashnaSection, transitAtSection } from './layers/sections.js';
 import type { PackSection } from './packs/selector.js';
+import { withFullEvidence, type FullContext } from './packs/fullPrefix.js';
 
 export interface NodeError {
   node: string;
@@ -73,6 +74,8 @@ export interface GraphDeps {
   runId?: string;
   /** Data for the doc 28 layers; a layer without a loader is not offered */
   layers?: LayerLoaders;
+  /** Full cache layout: the user's cached prefix (readers send only a suffix; grounding sees the cached evidence too) */
+  full?: FullContext;
 }
 
 const State = Annotation.Root({
@@ -176,7 +179,7 @@ export function buildReadingGraph(deps: GraphDeps) {
       const budget = specialistBudget(model);
       let usePack = pack;
       const call = (signal: AbortSignal) =>
-        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: usePack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal });
+        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: usePack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal, ...(deps.full ? { full: deps.full } : {}) });
       // one attempt inside the time budget; on time-out the model call is aborted, not left running
       const attempt = async () => {
         const controller = new AbortController();
@@ -274,7 +277,8 @@ export function buildReadingGraph(deps: GraphDeps) {
     .addNode('reconcile', async (s: typeof State.State) => {
       const t0 = Date.now();
       deps.emit({ type: 'stage', name: 'reconcile', status: 'start' });
-      const packs = Object.fromEntries(Object.entries(deps.packs).map(([k, p]) => [k, added[k] ? { ...p, sections: { ...p.sections, ...added[k] } } : p]));
+      // full layout: a reader saw the cached evidence overlaid with its own pack; its ids are checked against that overlay
+      const packs = Object.fromEntries(Object.entries(deps.packs).map(([k, p]) => [k, withFullEvidence(added[k] ? { ...p, sections: { ...p.sections, ...added[k] } } : p, deps.full)]));
       const rec = reconcile({ findings: s.findings, packs, intent: deps.intent, asOf: deps.asOf, keyFacts: deps.keyFacts, question: deps.question, dossier: deps.dossier, transits: deps.transits, failed: s.failed });
       const ms = Date.now() - t0;
       deps.emit({ type: 'stage', name: 'reconcile', status: 'done', ms });

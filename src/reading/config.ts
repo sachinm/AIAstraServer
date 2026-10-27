@@ -139,3 +139,14 @@ export function readingFixtureDir(): string {
 export function readingFindingsV2(): boolean {
   return process.env.READING_FINDINGS?.trim().toLowerCase() === 'v2';
 }
+
+/**
+ * Layout of the explicit prompt cache (docs/reading-engine/24 "What is sent to the model, and what is cached").
+ * `base` (default): system + the user's base chart are cached; each call re-sends its subject pack and role text.
+ * `full`: one prefix per user, model and day holds the system, every role's instructions, the answer templates and the
+ * user's whole evidence (all houses, vargas, the dasha tree and today's transit block); each call sends only its role id,
+ * frame, question and data that changes within the day. Only takes effect with READING_EXPLICIT_CACHE=1.
+ */
+export function readingCacheLayout(): 'base' | 'full' {
+  return process.env.READING_CACHE_LAYOUT?.trim().toLowerCase() === 'full' ? 'full' : 'base';
+}

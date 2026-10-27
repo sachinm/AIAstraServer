@@ -3,6 +3,8 @@
  * structured findings whose claims cite evidence ids (dot paths into the pack). Run in parallel by the graph.
  * Prompt layout keeps the cacheable prefix first: system (persona + method, identical for everyone), the user's base chart,
  * then the analyst-specific slice, then the analyst instructions and the question.
+ * With the full cache layout (`full`, packs/fullPrefix.ts) a live cache holds all of that for every role, and the call
+ * sends only `ROLE: <analyst>`, the frame, the question and any extra evidence; without a live cache it is sent as above.
  */
 import { z } from 'zod';
 import {
@@ -16,6 +18,7 @@ import { callGemini, GeminiHttpError, isTimeoutError, modelThinks, type Thinking
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
+import { readerSuffix, type FullContext } from '../packs/fullPrefix.js';
 import { FRAMES, horizonRange, type SubjectId } from '../packs/frames.js';
 import { detectTopic } from '../policy/declined.js';
 import { PROMPTS } from '../prompts/generated.js';
@@ -389,6 +392,8 @@ export async function runSpecialist(args: {
   cacheOwner?: CacheOwner;
   /** aborts the model call (the graph's per-attempt time budget) */
   signal?: AbortSignal;
+  /** full cache layout: the user's cached prefix for the day (packs/fullPrefix.ts) */
+  full?: FullContext;
 }): Promise<{ finding: Finding; usage: Usage; repaired?: boolean }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
@@ -409,7 +414,11 @@ export async function runSpecialist(args: {
     system: args.system,
     parts: [renderBase(pack), renderSubject(pack, analyst), tail],
     responseSchema: v2 ? FINDING_RESPONSE_SCHEMA_V2 : FINDING_RESPONSE_SCHEMA,
-    cachePrefix: true,
+    // full layout: one cache per user and day for every role; without it the base chart is the cached part
+    cachePrefix: !args.full,
+    ...(args.full
+      ? { fullCache: { system: args.full.system, prefix: args.full.prefix, suffix: [readerSuffix({ role: analyst, subject: args.subject, pack, intent, question: args.question, asOf: args.asOf, full: args.full })] } }
+      : {}),
     cacheOwner: args.cacheOwner,
     thinking: SPECIALIST_THINKING,
     maxOutputTokens: budget.maxOutputTokens,
