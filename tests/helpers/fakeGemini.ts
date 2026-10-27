@@ -66,13 +66,16 @@ export function cannedAnswer(prompt: string): string {
 }
 
 function analystOf(parts: string[]): string | null {
-  const m = /ANALYST: (\w+)/.exec(parts.join('\n'));
+  // base layout: `ANALYST: <id>` in the tail; full cache layout: the suffix starts with `ROLE: <id>`
+  const m = /(?:ANALYST|ROLE): (\w+)/.exec(parts.join('\n'));
   return m ? m[1]! : null;
 }
 
 export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<FakeGemini> {
   const requests: FakeRequest[] = [];
   const cacheCreates: unknown[] = [];
+  /** token count of each created cache (same chars / 3.2 estimate as prompts), reported as cachedContentTokenCount */
+  const cacheTokens = new Map<string, number>();
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
     req.on('data', (c) => chunks.push(c));
@@ -81,8 +84,11 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
       // explicit prompt cache: create returns a name; requests that reference it report the cached tokens
       if (/\/cachedContents/.test(req.url ?? '')) {
         cacheCreates.push(body);
+        const name = `cachedContents/fake-${cacheCreates.length}`;
+        const text = [body?.systemInstruction?.parts?.[0]?.text ?? '', ...(body?.contents ?? []).flatMap((c: any) => (c.parts ?? []).map((p: any) => String(p.text ?? '')))];
+        cacheTokens.set(name, text.reduce((n: number, t: string) => n + Math.ceil(t.length / 3.2), 0));
         res.setHeader('content-type', 'application/json');
-        res.end(JSON.stringify({ name: `cachedContents/fake-${cacheCreates.length}`, expireTime: new Date(Date.now() + 3600_000).toISOString() }));
+        res.end(JSON.stringify({ name, expireTime: new Date(Date.now() + 3600_000).toISOString() }));
         return;
       }
       const m = /\/models\/([^:]+):(generateContent|streamGenerateContent)/.exec(req.url ?? '');
@@ -92,7 +98,8 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
       const parts = userText(body);
       const promptTokens = Math.ceil(parts.join('').length / 3.2) + Math.ceil(String(body?.systemInstruction?.parts?.[0]?.text ?? '').length / 3.2);
       const seen = requests.slice(0, -1).some((r) => JSON.stringify(r.body?.systemInstruction) === JSON.stringify(body?.systemInstruction) && userText(r.body)[0] === parts[0]);
-      const usage = { promptTokenCount: promptTokens + (body?.cachedContent ? 3000 : 0), cachedContentTokenCount: body?.cachedContent ? 3000 : seen ? Math.floor(promptTokens * 0.7) : 0, candidatesTokenCount: 220, thoughtsTokenCount: 0 };
+      const cached = body?.cachedContent ? cacheTokens.get(body.cachedContent) ?? 3000 : 0;
+      const usage = { promptTokenCount: promptTokens + cached, cachedContentTokenCount: body?.cachedContent ? cached : seen ? Math.floor(promptTokens * 0.7) : 0, candidatesTokenCount: 220, thoughtsTokenCount: 0 };
 
       if (!stream) {
         const analyst = analystOf(parts);
@@ -162,6 +169,7 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
     reset: () => {
       requests.length = 0;
       cacheCreates.length = 0;
+      // cache sizes are server state: a cache made before the reset is still served (a newer create of the same name wins)
     },
     close: () =>
       new Promise<void>((resolve) => {

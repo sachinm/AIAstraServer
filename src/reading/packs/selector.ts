@@ -149,6 +149,12 @@ export interface BuildPackInput {
   intent: Pick<Intent, 'horizon' | 'mentionsPlanets' | 'focusPoints'>;
   subject: SubjectId;
   asOf: string;
+  /**
+   * Full scope (the `full` cache layout, packs/fullPrefix.ts): every house, varga, arudha, special lagna and yoga, all
+   * planets as karakas, and every Vimshottari antardasha of the life next to the horizon's periods. The sections keep the
+   * shapes of a subject pack, so any id a subject pack has also exists here.
+   */
+  fullScope?: boolean;
 }
 
 /**
@@ -186,7 +192,8 @@ export function fullBaseExtras(d: Dossier): Record<string, unknown> {
 
 export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   const { dossier: d, intent, asOf } = input;
-  const frame: SubjectFrame = FRAMES[input.subject];
+  const full = input.fullScope === true;
+  const frame: SubjectFrame = full ? fullScopeFrame(d) : FRAMES[input.subject];
   const hz = horizonRange(intent.horizon, asOf);
   const missing: string[] = [];
   const v2 = readingFindingsV2();
@@ -202,7 +209,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     if (!b) continue;
     mentionHouses.push(b.house, ...(b.owns ?? []));
   }
-  const frameHouses = [...new Set([...frame.houses, ...mentionHouses])].slice(0, 8);
+  const frameHouses = [...new Set([...frame.houses, ...mentionHouses])].slice(0, full ? 12 : 8);
   const lordCodes = new Set<string>();
   for (const h of frameHouses) {
     const hh = d.houses[String(h)];
@@ -248,7 +255,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   detail.yogas = d.yogas
     .filter((y) => y.source !== 'pyjhora.yoga' && (y.houses.some((h) => frameHouses.includes(h)) || y.planets.some((p) => touched.has(p))))
     .map((y) => ({ name: y.name, planets: y.planets, houses: y.houses, class: y.class, ...(y.note ? { note: y.note } : {}) }))
-    .slice(0, 8);
+    .slice(0, full ? undefined : 8);
   detail.sav_frame = Object.fromEntries(frameHouses.map((h) => [String(h), d.houses[String(h)]?.sav ?? null]));
 
   // ---- varga(s)
@@ -306,8 +313,10 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   };
   // ---- dasha (horizon dependent)
   const inH = (p: DashaPeriod) => p.end >= hz.from && p.start <= hz.to;
-  let periods = d.dasha.vimshottari.periods.filter(inH);
-  if (hz.months > 12) periods = aggregateToAd(periods.length ? periods : []);
+  // full scope: every antardasha of the life (the keys a long horizon's aggregated periods use) plus the horizon's periods
+  let periods = d.dasha.vimshottari.periods.filter((p) => inH(p) || (full && p.level === 'ad'));
+  // a full-scope pack keeps the pratyantardashas of its window next to the antardashas, so both key forms exist
+  if (hz.months > 12 && !full) periods = aggregateToAd(periods.length ? periods : []);
   const periodsOut: Record<string, unknown> = {};
   const lordsNeeded = new Set<string>();
   for (const p of periods) {
@@ -372,6 +381,22 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     keyFrame: { houses: frameHouses, lords: [...lordCodes], karakas: [...karakaCodes], vargas: frame.vargas },
     missing,
     stats: { approxTokens, transitRowsDropped: transits?.dropped_rows ?? 0 },
+  };
+}
+
+/** The frame of a full-scope pack: everything the dossier holds, so the pack is a superset of every subject's pack. */
+function fullScopeFrame(d: Dossier): SubjectFrame {
+  return {
+    id: 'general_life_direction',
+    label: 'whole chart',
+    definition: 'every house, divisional chart and period (full cache layout)',
+    houses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    alsoFrom: [],
+    karakas: [...PLANET_CODES],
+    charaKarakas: Object.keys(d.karakas?.chara ?? {}) as SubjectFrame['charaKarakas'],
+    vargas: Object.keys(d.vargas ?? {}) as VargaKey[],
+    arudhas: Object.keys(d.arudhas ?? {}),
+    specialLagnas: Object.keys(d.special_lagnas ?? {}),
   };
 }
 

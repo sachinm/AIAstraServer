@@ -47,7 +47,8 @@ describe('explicit prompt cache', () => {
     expect(last.cachedContent).toBe('cachedContents/fake-1');
     expect(last.systemInstruction).toBeUndefined();
     expect(last.contents[0].parts.map((p: { text: string }) => p.text)).toEqual(['subject part', 'question']);
-    expect(r.usage.cachedTokens).toBe(3000);
+    // the fake reports the created cache's own size (chars / 3.2 of system + base)
+    expect(r.usage.cachedTokens).toBe(Math.ceil('SYSTEM'.length / 3.2) + Math.ceil('BASE CHART '.repeat(400).length / 3.2));
     expect(cacheStats.hits).toBe(1);
   });
 

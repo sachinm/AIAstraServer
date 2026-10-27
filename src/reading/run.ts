@@ -11,7 +11,11 @@
  *  - the model prompt is [system: persona+method — identical for everyone] [user part 1: the user's base chart — identical for
  *    every question they ask] [user part 2: subject/horizon evidence + format + question], so Gemini's implicit prefix cache
  *    hits across questions and across users' system prompts; `cachedTokens` per call shows whether it did;
- *  - in-process caches for dossier, transit chart, DB persona, so a warm Lambda serves a question with zero lookups.
+ *  - in-process caches for dossier, transit chart, DB persona, so a warm Lambda serves a question with zero lookups;
+ *  - with READING_EXPLICIT_CACHE=1 and READING_CACHE_LAYOUT=full, one explicit cache per user, model and day holds the
+ *    system, every role's instructions and the user's whole evidence (packs/fullPrefix.ts); every reader and the writer
+ *    send only their role id, frame, question and per-question data. Creation is kicked off here (and at clarify start)
+ *    and never awaited; until it is live, calls go out in the base layout.
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -31,6 +35,8 @@ import { PROMPTS, PROMPT_VERSION } from './prompts/generated.js';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
 import { guidanceFor } from './coach/content.js';
 import { prismaLayerLoaders, type LayerLoaders } from './layers/loaders.js';
+import { answerShapeRef, fullCacheLayoutActive, fullContextFor, singleSuffix, writerSuffix, type FullContext } from './packs/fullPrefix.js';
+import { ensurePromptCache } from './llm/promptCache.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -155,10 +161,13 @@ function keyFactsCard(pack: EvidencePack, intent: Intent): string {
   return lines.join('\n');
 }
 
-function tailFor(intent: Intent, question: string, asOf: string): string {
+/** `shapeByRef`: the full cache layout holds every template, so the tail only names the one to use. */
+function tailFor(intent: Intent, question: string, asOf: string, shapeByRef = false): string {
   // the bucket classifier picks one of the ten templates (docs/reading-engine/09); the older format prompts remain the fallback
   const template = intent.classification?.template;
-  const shape = template && PROMPTS[`templates/${template}`] ? `${PROMPTS['templates/_rules']}\n\n${PROMPTS[`templates/${template}`]}` : PROMPTS[`formats/${intent.format}`]!;
+  const shape = shapeByRef
+    ? answerShapeRef(intent)
+    : template && PROMPTS[`templates/${template}`] ? `${PROMPTS['templates/_rules']}\n\n${PROMPTS[`templates/${template}`]}` : PROMPTS[`formats/${intent.format}`]!;
   const parts = [`TODAY: ${asOf}`, `UNDERSTOOD AS: ${intent.clarifyText}`, shape];
   if (intent.safety === 'medical') parts.push('The question touches health: give the astrological indication only and say plainly that it is not medical advice.');
   if (intent.safety === 'legal') parts.push('The question touches legal matters: give the astrological indication only and say plainly that it is not legal advice.');
@@ -282,6 +291,16 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     : undefined;
   const maxOutputTokens = readingSynthMaxTokens();
   const cacheOwner = { userId, kundliId: data.kundliId };
+  // full cache layout: build (or reuse) the day's prefix and start its caches now, without waiting; calls made before a
+  // cache is live go out in the base layout
+  const full: FullContext | undefined = fullCacheLayoutActive()
+    ? fullContextFor(data, asOf, system)
+    : undefined;
+  if (full) {
+    const models = new Set([synthModel, ...(flow === 'graph' ? [modelFor('specialist')] : [])]);
+    for (const m of models) void ensurePromptCache(m, full.system, full.prefix, cacheOwner).catch(() => null);
+  }
+  const shapeTail = full ? tailFor(intent, question, asOf, true) : tail;
 
   let answer = '';
   let finishReason: string | null = null;
@@ -296,8 +315,9 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const tSynth = Date.now();
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
+    const fullCache = full ? { system: full.system, prefix: full.prefix, suffix: [singleSuffix({ packs: subjects.map((s) => packs[s.id]!), full, calendar, tail: shapeTail })] } : undefined;
     const r = await streamGemini(
-      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), ...(calendar ? [calendar] : []), tail], cachePrefix: true, cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+      { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), ...(calendar ? [calendar] : []), tail], cachePrefix: !full, ...(fullCache ? { fullCache } : {}), cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta,
       onThought
     );
@@ -317,13 +337,16 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     const tGraph = Date.now();
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
-      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId,
+      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId, ...(full ? { full } : {}),
       layers: opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId })),
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
+        const findingsText = `SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`;
+        // full layout: the writer prompt and templates are in the cache; the call sends findings, calendar and tail only
+        const fullCache = full ? { system: full.system, prefix: full.prefix, suffix: [writerSuffix({ findings: findingsText, calendar, tail: shapeTail })] } : undefined;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          { model: synthModel, node: 'synthesize', system, parts: [`${findingsText}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], ...(fullCache ? { fullCache, cacheOwner } : {}), thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );
@@ -362,6 +385,9 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const cachedTokens = usages.reduce((n, u) => n + u.cachedTokens, 0);
   const promptTokens = usages.reduce((n, u) => n + u.promptTokens, 0);
   const costUsd = totalCostUsd(usages);
+  const cachedShare = promptTokens ? Math.round((cachedTokens / promptTokens) * 100) / 100 : 0;
+  // per model call: what was sent and how much of it came from a cache (no prompt text)
+  const calls = usages.map((u) => ({ node: u.node, model: u.model, promptTokens: u.promptTokens, cachedTokens: u.cachedTokens }));
 
   const models: Record<string, string> = { synth: synthModel };
   if (flow === 'graph') models.specialist = modelFor('specialist');
@@ -370,12 +396,15 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const record: ReadingRunRecord = {
     ...baseRecord, flow, status: 'done', factsVersion: data.factsVersion, dossierHash: data.dossierHash, transitSnapshotId: data.transitSnapshotId, packHashes, findings, windows, agreement,
     answer, thinking: thinkingText || null, models, usage: usages, costUsd, timingsMs: timings,
-    cache: { promptTokens, cachedTokens, cachedShare: promptTokens ? Math.round((cachedTokens / promptTokens) * 100) / 100 : 0, dossier: data.timings.dossierCache, transits: data.timings.transitsCache, priceTable: PRICE_TABLE_VERSION },
+    cache: {
+      promptTokens, cachedTokens, cachedShare, layout: full ? 'full' : 'base', ...(full ? { fullPrefixHash: full.hash, fullPrefixApproxTokens: full.approxTokens } : {}),
+      dossier: data.timings.dossierCache, transits: data.timings.transitsCache, priceTable: PRICE_TABLE_VERSION,
+    },
     droppedClaims, errors, promptVersion: PROMPT_VERSION,
   };
 
   // Log hashes and sizes, never the chart (kundli data is PII).
-  console.log(JSON.stringify({ msg: 'reading timing', runId, flow, intake: intake.source, ...timings, ttftMs, cachedTokens, promptTokens, costUsd, finishReason, stoppedForLoop, droppedClaims, packTokens: merged.stats.approxTokens, errors: errors.length }));
+  console.log(JSON.stringify({ msg: 'reading timing', runId, flow, intake: intake.source, ...timings, ttftMs, cachedTokens, promptTokens, cachedShare, cacheLayout: full ? 'full' : 'base', calls, costUsd, finishReason, stoppedForLoop, droppedClaims, packTokens: merged.stats.approxTokens, errors: errors.length }));
 
   const requestPayload: Record<string, unknown> = {
     provider: 'gemini',
