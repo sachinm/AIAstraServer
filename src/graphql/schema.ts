@@ -7,7 +7,7 @@ import {
   startSignup,
   verifySignupCode,
 } from '../services/authService.js';
-import { completeProfile, referralStats, updateProfile } from '../services/profileService.js';
+import { completeProfile, ownProfileFields, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
@@ -46,6 +46,16 @@ const typeDefs = /* GraphQL */ `
     email_verified: Boolean!
     "pending | building | ready, from the kundli queue."
     kundli_status: String!
+    "Own profile only (me). male | female | prefer_not_to_say"
+    gender: String
+    "Own profile only (me). YYYY-MM-DD; null when not set"
+    date_of_birth: String
+    "Own profile only (me). HH:MM 24-hour; null when not set"
+    time_of_birth: String
+    "Own profile only (me). ISO 3166-1 alpha-2"
+    country_code: String
+    "Own profile only (me)."
+    city: String
   }
 
   type UserDetails {
@@ -412,6 +422,11 @@ const resolvers = {
           name: true,
           profile_complete: true,
           email_verified_at: true,
+          gender: true,
+          date_of_birth: true,
+          time_of_birth: true,
+          country_code: true,
+          city: true,
         },
       });
       if (!user) return null;
@@ -429,6 +444,7 @@ const resolvers = {
         profile_complete: user.profile_complete !== false,
         email_verified: Boolean(user.email_verified_at),
         kundli_status: kundliStatusFromQueue(latestKundli?.queue_status),
+        ...ownProfileFields(user),
       };
     },
     async ask(

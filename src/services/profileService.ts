@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { decrypt, encrypt } from '../lib/encrypt.js';
 import { deleteUserCaches } from '../reading/llm/promptCache.js';
-import { buildPlaceOfBirth, validateCompleteProfile } from '../lib/profileValidators.js';
+import { buildPlaceOfBirth, normalizeGender, validateCompleteProfile } from '../lib/profileValidators.js';
 import { enqueueKundliSync, processKundliSyncQueue } from './kundliQueueService.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 
@@ -250,4 +250,41 @@ export async function updateProfile(
     console.error('processKundliSyncQueue after updateProfile failed:', (err as Error).message);
   });
   return { success: true, message: 'Profile updated. Your chart is being rebuilt.', rebuild: true };
+}
+
+export type OwnProfileFields = {
+  gender: 'male' | 'female' | 'prefer_not_to_say' | null;
+  date_of_birth: string | null;
+  time_of_birth: string | null;
+  country_code: string | null;
+  city: string | null;
+};
+
+/**
+ * The signed-in user's own birth fields for `me` (Profile page). Decrypts like the rest of the code; returns
+ * date_of_birth as YYYY-MM-DD and time_of_birth as HH:MM (24-hour), null when unset (pending signups store an
+ * empty DOB) or unreadable. Never used for other users.
+ */
+export function ownProfileFields(row: {
+  gender?: string | null;
+  date_of_birth?: string | null;
+  time_of_birth?: string | null;
+  country_code?: string | null;
+  city?: string | null;
+}): OwnProfileFields {
+  const dobRaw = decrypt(row.date_of_birth ?? null)?.trim() ?? '';
+  const dobMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(dobRaw);
+  const tobRaw = decrypt(row.time_of_birth ?? null)?.trim() ?? '';
+  const tobMatch = /^(\d{1,2}):(\d{2})/.exec(tobRaw);
+  let tob: string | null = null;
+  if (tobMatch && Number(tobMatch[1]) < 24 && Number(tobMatch[2]) < 60) {
+    tob = `${tobMatch[1].padStart(2, '0')}:${tobMatch[2]}`;
+  }
+  return {
+    gender: normalizeGender(row.gender),
+    date_of_birth: dobMatch ? `${dobMatch[1]}-${dobMatch[2]}-${dobMatch[3]}` : null,
+    time_of_birth: tob,
+    country_code: row.country_code?.trim() ? row.country_code.trim().toUpperCase() : null,
+    city: row.city?.trim() ? row.city.trim() : null,
+  };
 }

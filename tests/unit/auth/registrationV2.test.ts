@@ -115,6 +115,7 @@ vi.mock('../../../src/services/geminiCacheService.js', () => ({
 process.env.JWT_SECRET = 'unit-test-jwt-secret-at-least-32-characters';
 vi.mock('../../../src/lib/encrypt.js', () => ({
   encrypt: (plain: string | null) => (plain ? `enc:${plain}` : null),
+  decrypt: (c: string | null) => (c ? c.replace(/^enc:/, '') : null),
 }));
 
 import { schema } from '../../../src/graphql/schema.js';
@@ -197,6 +198,7 @@ const COMPLETE = `mutation($input: CompleteProfileInput!) { completeProfile(inpu
 const REQUEST = `mutation($email: String!) { requestMagicLink(email: $email) { success } }`;
 const LOGIN = `mutation($email: String!, $code: String!) { loginWithMagicLink(email: $email, code: $code) { success token } }`;
 const ME = `{ me { id email name profile_complete email_verified kundli_status } }`;
+const ME_PROFILE = `{ me { profile_complete gender date_of_birth time_of_birth country_code city } }`;
 const STATS = `{ referralStats { success error rows { user_id referred_count referral_code } } }`;
 
 const page2 = {
@@ -269,6 +271,13 @@ for (const prov of providers) {
 
       const me1 = (await gql(ME, {}, v.token)).data.me;
       expect(me1).toMatchObject({ profile_complete: false, email_verified: true, kundli_status: 'pending', name: 'Asha Rao' });
+      expect((await gql(ME_PROFILE, {}, v.token)).data.me).toMatchObject({
+        gender: null,
+        date_of_birth: null,
+        time_of_birth: null,
+        country_code: null,
+        city: null,
+      });
 
       const c = await complete(v.token);
       expect(c.success).toBe(true);
@@ -283,7 +292,15 @@ for (const prov of providers) {
         place_of_birth: 'enc:New Delhi,IN',
       });
       expect(db.enqueued).toEqual([db.rows[0].id]);
-      expect((await gql(ME, {}, v.token)).data.me.profile_complete).toBe(true);
+      const me2 = (await gql(ME_PROFILE, {}, v.token)).data.me;
+      expect(me2).toMatchObject({
+        profile_complete: true,
+        gender: 'female',
+        date_of_birth: '1990-01-15',
+        time_of_birth: '10:30',
+        country_code: 'IN',
+        city: 'New Delhi',
+      });
     });
 
     it('a wrong code gets the generic failure and no token', async () => {

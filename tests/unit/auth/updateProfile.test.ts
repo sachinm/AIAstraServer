@@ -20,7 +20,8 @@ vi.mock('../../../src/services/kundliQueueService.js', () => ({
 }));
 vi.mock('../../../src/services/geminiCacheService.js', () => ({ ensureGeminiCacheForUser: async () => undefined }));
 
-import { updateProfile } from '../../../src/services/profileService.js';
+import { ownProfileFields, updateProfile } from '../../../src/services/profileService.js';
+import { encrypt } from '../../../src/lib/encrypt.js';
 import { Prisma } from '@prisma/client';
 
 function makeDb(over: Record<string, unknown> = {}) {
@@ -132,5 +133,42 @@ describe('updateProfile', () => {
   it('refuses a user whose profile is not complete yet', async () => {
     const r = await updateProfile(makeDb({ profile_complete: false }), 'u1', { name: 'X' });
     expect(r).toMatchObject({ success: false, message: 'Complete your profile first.' });
+  });
+});
+
+describe('ownProfileFields (me)', () => {
+  it('returns the own fields formatted (plain stored values)', () => {
+    expect(
+      ownProfileFields({ gender: 'female', date_of_birth: '1990-01-15', time_of_birth: '9:05:00', country_code: 'in', city: ' Pune ' })
+    ).toEqual({ gender: 'female', date_of_birth: '1990-01-15', time_of_birth: '09:05', country_code: 'IN', city: 'Pune' });
+  });
+
+  it('decrypts encrypted values', () => {
+    vi.stubEnv('ENCRYPTION_KEY', 'a'.repeat(64));
+    try {
+      const dob = encrypt('2001-12-31')!;
+      const tob = encrypt('23:59:00')!;
+      expect(dob).not.toContain('2001');
+      const out = ownProfileFields({ gender: 'Male', date_of_birth: dob, time_of_birth: tob, country_code: 'US', city: 'Austin' });
+      expect(out).toMatchObject({ gender: 'male', date_of_birth: '2001-12-31', time_of_birth: '23:59' });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('is all null for a pending signup (empty DOB, nothing else set)', () => {
+    expect(ownProfileFields({ gender: null, date_of_birth: '', time_of_birth: null, country_code: null, city: null })).toEqual({
+      gender: null,
+      date_of_birth: null,
+      time_of_birth: null,
+      country_code: null,
+      city: null,
+    });
+  });
+
+  it('returns null rather than garbage for unreadable values', () => {
+    const out = ownProfileFields({ date_of_birth: 'enc:v1:not-decryptable', time_of_birth: '99:99' });
+    expect(out.date_of_birth).toBeNull();
+    expect(out.time_of_birth).toBeNull();
   });
 });
