@@ -54,8 +54,12 @@ vi.mock('../../../src/services/turnstileService.js', () => ({
 }));
 
 vi.mock('../../../src/services/kundliQueueService.js', () => ({
-  enqueueKundliSync: vi.fn(async () => undefined),
+  enqueueKundliSync: vi.fn(async () => 'kundli-new'),
   processKundliSyncQueue: vi.fn(async () => undefined),
+}));
+
+vi.mock('../../../src/services/kundliSyncWorker.js', () => ({
+  scheduleKundliSync: vi.fn(async () => 'invoked'),
 }));
 
 vi.mock('../../../src/services/geminiCacheService.js', () => ({
@@ -80,6 +84,7 @@ import {
   EMAIL_EXISTS_MESSAGE,
 } from '../../../src/services/authService.js';
 import { generateAccountPassword, comparePassword } from '../../../src/lib/hash.js';
+import { scheduleKundliSync } from '../../../src/services/kundliSyncWorker.js';
 import { validateSignUpInput } from '../../../src/lib/validators.js';
 
 const birth = {
@@ -116,6 +121,12 @@ describe('signup without a password', () => {
     const result = await signup(birth, null, null);
     expect(result).not.toHaveProperty('token');
     expect(result).not.toHaveProperty('user');
+  });
+
+  it('schedules the background chart pull for the enqueued kundli (docs/reading-engine/31)', async () => {
+    vi.mocked(scheduleKundliSync).mockClear();
+    await signup(birth, null, null);
+    expect(scheduleKundliSync).toHaveBeenCalledWith('kundli-new', expect.objectContaining({ prisma: expect.anything() }));
   });
 
   it('emails a verification code to the new address', async () => {

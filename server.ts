@@ -27,6 +27,7 @@ import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
 import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
+import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kundliSyncWorker.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -61,8 +62,12 @@ if (trustProxyEnabled) {
 app.use(express.json());
 
 // Lambda Web Adapter forwards non-HTTP events (EventBridge schedules) here as POST bodies (AWS_LWA_PASS_THROUGH_PATH).
-// Only the LLM cache sweep event is handled; anything else is acknowledged and ignored.
+// Handled: the LLM cache sweep, and the background chart pull (kundli-sync from this Lambda's own async invoke,
+// kundli-sync-sweep from EventBridge; docs/reading-engine/31). The response is sent only when the work is done, so the
+// invocation lives as long as the pull. Anything else is acknowledged and ignored.
 app.post('/events', async (req, res) => {
+  const kundliSync = parseKundliSyncEvent(req.body);
+  if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();
   res.json(await runScheduledSweep());
 });
