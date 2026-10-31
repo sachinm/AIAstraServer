@@ -188,3 +188,13 @@ export function ashtottariApplies(payload: unknown): string | null {
   const i = rows.findIndex((r) => (r.type === 'dasha.ashtottari' || r.type === 'dasha.tithi_ashtottari') && r.applies === true);
   return i >= 0 ? `${DASHA_APPLICABLE_TYPE}[${i}]` : null;
 }
+
+/**
+ * Parashara BPHS conditional dasha: Dwisaptati Sama Dasha (72-year cycle) applies when the Lagna lord is in the 7th house
+ * or the 7th lord is in the Lagna (`dasha.dwisatpathi` in Radha's `dasha.applicable`).
+ */
+export function dwisatpathiApplies(payload: unknown): string | null {
+  const rows = applicableRows(payload);
+  const i = rows.findIndex((r) => r.type === 'dasha.dwisatpathi' && r.applies === true);
+  return i >= 0 ? `${DASHA_APPLICABLE_TYPE}[${i}]` : null;
+}

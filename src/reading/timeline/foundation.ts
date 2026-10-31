@@ -1,12 +1,14 @@
 /**
  * Foundation pack (docs/reading-engine/27 §A.1, §B.4 stage 1): the kundli read once into the tables every timing system
- * cites. Built from the dossier only (Radha computed every value); this file re-keys fields and follows lordship links,
- * it derives no placement. Deterministic and keyed by the dossier hash, so the blind cast is reproducible.
+ * cites. Built from the dossier and Radha's `house_counts` table (Radha computed every value); this file re-keys fields
+ * and follows lordship links, it derives no placement and counts no house. Without the table a count is unavailable (null).
+ * Deterministic and keyed by the dossier hash, so the blind cast is reproducible.
  *
  * The house-lord chart (§A.1 item 4) goes two hops: house -> its lord -> the house the lord sits in -> that lord's sign
  * lord (dispositor) -> the dispositor's house. Each link carries the dossier path it was read from.
  */
 import { createHash } from 'node:crypto';
+import type { HouseCounts } from '../chartData/houseCounts.js';
 import type { Dossier } from '../facts/types.js';
 import { PLANET_CODES, type PlanetCode } from '../facts/constants.js';
 import type { KarakaCode } from '../packs/frames.js';
@@ -51,9 +53,10 @@ export interface HouseLordLink {
   lord: PlanetCode;
   lordHouse: number;
   lordDignity: string | null;
-  /** Where the lord sits counted from the house it rules (1 = in its own house) */
-  lordFromOwn: number;
-  lordIn6812FromOwn: boolean;
+  /** Where the lord sits counted from the house it rules (1 = in its own house), from `house_counts`; null without the table */
+  lordFromOwn: number | null;
+  /** null when `lordFromOwn` is unavailable: unknown, not "no" */
+  lordIn6812FromOwn: boolean | null;
   lordPlacement: 'own' | 'kendra' | 'trikona' | 'dusthana' | 'other';
   dispositor: PlanetCode | null;
   dispositorHouse: number | null;
@@ -67,6 +70,8 @@ export interface Point {
 
 export interface Foundation {
   hash: string;
+  /** Radha's table for every house placement and count this pack and the activators read; null when not available */
+  houseCounts: HouseCounts | null;
   lagnaSign: number;
   houses: Record<number, HouseCard>;
   planets: Partial<Record<PlanetCode, PlanetCard>>;
@@ -81,18 +86,13 @@ export interface Foundation {
   functional: { benefic: string[]; malefic: string[]; neutral: string[] };
 }
 
-/** Count from house `a` to house `b` (1 = same house) */
-export function houseFrom(a: number, b: number): number {
-  return ((((b - a) % 12) + 12) % 12) + 1;
-}
-
 const isPlanet = (c: unknown): c is PlanetCode => typeof c === 'string' && (PLANET_CODES as readonly string[]).includes(c);
 
 export function dossierHash(dossier: Dossier): string {
   return createHash('sha256').update(JSON.stringify(dossier)).digest('hex').slice(0, 16);
 }
 
-export function buildFoundation(dossier: Dossier): Foundation {
+export function buildFoundation(dossier: Dossier, houseCounts: HouseCounts | null): Foundation {
   const houses: Record<number, HouseCard> = {};
   for (let h = 1; h <= 12; h++) {
     const c = dossier.houses[String(h)];
@@ -139,7 +139,7 @@ export function buildFoundation(dossier: Dossier): Foundation {
   const houseLordChart: HouseLordLink[] = Object.values(houses).map((h) => {
     const lp = planets[h.lord];
     const lordHouse = lp?.house ?? dossier.houses[String(h.house)]!.lord_house;
-    const lordFromOwn = houseFrom(h.house, lordHouse);
+    const lordFromOwn = houseCounts?.house_from_house[h.house]?.[lordHouse] ?? null;
     const ownsHere = lp?.owns.includes(lordHouse) ?? false;
     const placement: HouseLordLink['lordPlacement'] = ownsHere
       ? 'own'
@@ -156,11 +156,11 @@ export function buildFoundation(dossier: Dossier): Foundation {
       lordHouse,
       lordDignity: lp?.dignity ?? dossier.houses[String(h.house)]!.lord_dignity ?? null,
       lordFromOwn,
-      lordIn6812FromOwn: [6, 8, 12].includes(lordFromOwn),
+      lordIn6812FromOwn: lordFromOwn == null ? null : (DUSTHANAS as readonly number[]).includes(lordFromOwn),
       lordPlacement: placement,
       dispositor: lp?.signLord ?? null,
       dispositorHouse: lp?.signLordHouse ?? null,
-      evidence: [`houses.${h.house}.lord`, `houses.${h.house}.lord_house`, `bodies.${h.lord}.sign_lord`, `bodies.${h.lord}.sign_lord_house`],
+      evidence: [`houses.${h.house}.lord`, `houses.${h.house}.lord_house`, `bodies.${h.lord}.sign_lord`, `bodies.${h.lord}.sign_lord_house`, ...(lordFromOwn != null ? [`house_counts.house_from_house.${h.house}.${lordHouse}`] : [])],
     };
   });
 
@@ -180,6 +180,7 @@ export function buildFoundation(dossier: Dossier): Foundation {
 
   return {
     hash: dossierHash(dossier),
+    houseCounts,
     lagnaSign: houses[1]?.sign ?? dossier.bodies.La?.sign ?? 0,
     houses,
     planets,
@@ -196,12 +197,6 @@ export function buildFoundation(dossier: Dossier): Foundation {
       neutral: [...(dossier.relations?.functional?.neutral ?? [])],
     },
   };
-}
-
-/** The house (from the lagna) holding a sign, read from `houses.*.sign` */
-export function houseOfSign(f: Foundation, sign: number): number | null {
-  for (const h of Object.values(f.houses)) if (h.sign === sign) return h.house;
-  return null;
 }
 
 /** An arudha (A1..A12, AL, UL) or special lagna (HL, GL …) by key, with the dossier path it came from */

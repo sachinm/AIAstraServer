@@ -73,11 +73,11 @@ describe('catalog', () => {
     const ids = BUILTIN_CHART_TYPES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const f of VARGA_FACTORS) expect(CHART_TYPE_BY_ID.get(`varga.d${f}`)).toBeTruthy();
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha')).toHaveLength(45);
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha' && !t.id.endsWith('.l3'))).toHaveLength(45);
     expect(CHART_TYPE_BY_ID.get('annual.varsha')?.variantKind).toBe('year');
   });
   it('lists the R-4a/R-4b/R-5 types and transit with their wire names, unserved until the catalog sync', () => {
-    for (const id of ['relations', 'benefic_malefic', 'dignities', 'bhava', 'dasha.applicable']) {
+    for (const id of ['relations', 'benefic_malefic', 'dignities', 'bhava', 'dasha.applicable', 'house_counts', 'reading_tables', 'avasthas']) {
       expect(CHART_TYPE_BY_ID.get(id)).toMatchObject({ radhaType: id, changeClass: 'natal', variantKind: 'natal', tier: 'on_demand', served: false, calcVersion: null });
     }
     expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')).toMatchObject({ radhaType: 'annual.tithi_pravesha_dasha', changeClass: 'annual', variantKind: 'year', tier: 'on_demand', served: false });
@@ -86,7 +86,7 @@ describe('catalog', () => {
     expect(CHART_TYPE_BY_ID.get('transit_contacts')).toMatchObject({ radhaType: 'transit_contacts', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('prashna')).toMatchObject({ radhaType: 'prashna', family: 'prashna', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')?.fixedParams).toEqual({ system: 'tithi_ashtottari' });
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range']);
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range', 'daily_grade', 'muhurta', 'transit_ashtakavarga']);
     expect(chartDataTypeIds()).not.toContain('prashna');
     expect(chartDataTypeIds()).not.toContain('transit');
     expect(chartDataTypeIds()).not.toContain('transit_contacts');
@@ -113,24 +113,31 @@ describe('catalog', () => {
     expect(merged.find((t) => t.id === 'varga.d60')).toMatchObject({ served: true, calcVersion: '1', tier: 'first' });
     expect(merged.some((t) => t.id === 'dasha.aayu')).toBe(false);
   });
-  it('the M7 + M9 + M11 + M12 + M14 + M15 migrations seed every built-in type and M7 backfills every legacy column', () => {
+  it('the M7 + M9 + M11 + M12 + M14 + M15 + M16 + M17 migrations seed every built-in type and M7 backfills every legacy column', () => {
     const m7 = readFileSync(path.resolve('prisma/migrations/20261025120000_reading_m7_kundli_data/migration.sql'), 'utf8');
     const m9 = readFileSync(path.resolve('prisma/migrations/20261025160000_reading_m9_catalog_more_types/migration.sql'), 'utf8');
     const m11 = readFileSync(path.resolve('prisma/migrations/20261026110000_reading_m11_arudha_argala_per_varga/migration.sql'), 'utf8');
     const m12 = readFileSync(path.resolve('prisma/migrations/20261026120000_reading_m12_transit_contacts/migration.sql'), 'utf8');
     const m14 = readFileSync(path.resolve('prisma/migrations/20261026170000_reading_m14_prashna/migration.sql'), 'utf8');
     const m15 = readFileSync(path.resolve('prisma/migrations/20261027110000_reading_m15_transit_range/migration.sql'), 'utf8');
+    const m16 = readFileSync(path.resolve('prisma/migrations/20261031120000_reading_m16_house_counts/migration.sql'), 'utf8');
+    const m17 = readFileSync(path.resolve('prisma/migrations/20261031110000_reading_m17_radha_reading_types/migration.sql'), 'utf8');
     const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
     const m12Ids = ['transit_contacts'];
     const m14Ids = ['prashna'];
     const m15Ids = ['transit_range'];
+    const m16Ids = ['house_counts'];
     /** rows M14 relabels: seeded earlier with the old label, the new label set by an UPDATE in M14 */
     const m14Relabel: Record<string, string> = { 'annual.tithi_pravesha_dasha': 'Tithi pravesha dasha' };
     const isM11 = (id: string) => /^(arudhas|argala)\.d\d+$/.test(id);
+    const isM17 = (id: string) =>
+      /^(dignities|aspects|relations|avasthas)\.d\d+$/.test(id) ||
+      /^dasha\..+\.l3$/.test(id) ||
+      ['daily_grade', 'muhurta', 'transit_ashtakavarga', 'reading_tables', 'avasthas'].includes(id);
     const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number], label = t.label) =>
       `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${label}')`;
     for (const t of BUILTIN_CHART_TYPES) {
-      const sql = m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
+      const sql = isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
       expect(sql).toContain(seedRow(t, m14Relabel[t.id] ?? t.label));
       if (m14Relabel[t.id]) {
         expect(m14).toContain(`SET "label" = '${t.label}'`);
@@ -149,6 +156,8 @@ describe('catalog', () => {
     expect(schema).toMatch(/model PrashnaCast \{[\s\S]*@@index\(\[user_id, asked_at\], map: "prashna_casts_user_asked"\)[\s\S]*@@map\("prashna_casts"\)/);
     expect(m7).not.toMatch(/\('(arudhas|argala)\.d\d+', /);
     expect(m11).toContain('ON CONFLICT ("id") DO NOTHING');
+    expect(m16).toContain('ON CONFLICT ("id") DO NOTHING');
+    expect(m17).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m12).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m9).toMatch(/CHECK \("change_class" IN \('natal', 'annual', 'moving'\)\)/);
     expect(m9).toContain('ON CONFLICT ("id") DO NOTHING');

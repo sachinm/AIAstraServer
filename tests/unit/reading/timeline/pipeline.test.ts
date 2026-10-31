@@ -1,11 +1,75 @@
+import { createHash } from 'node:crypto';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
-import { contactRanges, pastRange } from '../../../../src/reading/timeline/inputs.js';
+import { contactRanges, fixtureInputs, pastRange } from '../../../../src/reading/timeline/inputs.js';
 import { buildPastTimeline, TimelineDisabledError, verifyPast } from '../../../../src/reading/timeline/pipeline.js';
 import { readLedger, resetTimelineStoreWarning, saveVerifiedBuild } from '../../../../src/reading/timeline/store.js';
 import { G1_AS_OF, loadG1Ledger, loadG1TimelineInputs } from '../../../helpers/readingFixtures.js';
 
 const ON = { TIMELINE_ENABLED: '1' };
+
+/**
+ * sha256 of the G1 activations and grid without evidence paths (those now cite `house_counts`), as built by develop at
+ * 07238ed, before houses came from Radha's table, when Node still counted them itself. A deliberate scoring change
+ * moves this digest: re-pin it then, and only then.
+ */
+const G1_RESULT_BEFORE_HOUSE_COUNTS = 'c95542b27e777267862bc4b5d95d5a39b76928da1c91359cf9f1624d1bd83518';
+
+describe('houses from Radha (house_counts) on G1', () => {
+  it('leaves the timeline results unchanged with the table present', () => {
+    const b = buildPastTimeline(loadG1TimelineInputs(), { env: ON });
+    expect(b.foundation.houseCounts).not.toBeNull();
+    const body = JSON.stringify({ activations: b.activations, grid: b.grid }, (k, v) => (k === 'evidence' ? undefined : v));
+    expect(createHash('sha256').update(body).digest('hex')).toBe(G1_RESULT_BEFORE_HOUSE_COUNTS);
+  });
+
+  describe('with the table missing', () => {
+    // The G1 fixture folder without house_counts.json, as a kundli whose table Radha has not served
+    const dir = mkdtempSync(path.join(tmpdir(), 'g1-no-house-counts-'));
+    const g1 = path.resolve('evals/fixtures/G1');
+    cpSync(g1, dir, { recursive: true, filter: (src) => path.basename(src) !== 'house_counts.json' });
+    const bareInputs = fixtureInputs(dir, G1_AS_OF);
+    rmSync(dir, { recursive: true, force: true });
+    const bare = buildPastTimeline(bareInputs, { env: ON });
+    const full = buildPastTimeline(loadG1TimelineInputs(), { env: ON });
+
+    it('still builds, and the report says what is left out', () => {
+      expect(bareInputs.houseCounts).toBeNull();
+      expect(bareInputs.notes.some((n) => n.startsWith('house_counts not available'))).toBe(true);
+      expect(bare.notes.some((n) => n.startsWith('house_counts not available'))).toBe(true);
+      expect(bare.grid.months).toHaveLength(217);
+      expect(full.notes.some((n) => n.includes('house_counts'))).toBe(false);
+    });
+
+    it('S4 is left out, and S7 has no Narayana row', () => {
+      expect(bare.activations.some((a) => a.system === 'S4')).toBe(false);
+      expect(bare.activations.some((a) => a.system === 'S7')).toBe(true);
+      expect(bare.activations.filter((a) => a.system === 'S7').some((a) => a.evidence[0]!.startsWith('dasha.narayana'))).toBe(false);
+    });
+
+    it('S1 keeps the hits the drop would have lowered, and cites no count', () => {
+      const s1 = (b: typeof bare) => b.activations.filter((a) => a.system === 'S1');
+      expect(s1(bare).length).toBeGreaterThanOrEqual(s1(full).length);
+      expect(s1(bare).some((a) => a.evidence.some((e) => e.startsWith('house_counts.')))).toBe(false);
+      expect(s1(full).some((a) => a.evidence.some((e) => e.startsWith('house_counts.')))).toBe(true);
+    });
+
+    it('a malformed table counts as missing, with its own note', () => {
+      const inputs = fixtureInputs(g1, G1_AS_OF);
+      expect(inputs.houseCounts).not.toBeNull();
+      const tmp = mkdtempSync(path.join(tmpdir(), 'g1-bad-house-counts-'));
+      cpSync(g1, tmp, { recursive: true });
+      writeFileSync(path.join(tmp, 'catalog', 'house_counts.json'), JSON.stringify({ varga: 1, sign_to_house: {} }));
+      const bad = fixtureInputs(tmp, G1_AS_OF);
+      rmSync(tmp, { recursive: true, force: true });
+      expect(bad.houseCounts).toBeNull();
+      expect(bad.notes.some((n) => n.startsWith('house_counts malformed'))).toBe(true);
+    });
+  });
+});
 
 describe('past timeline pipeline (doc 27 §B.7 P1) on G1', () => {
   it('is gated behind TIMELINE_ENABLED', () => {

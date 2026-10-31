@@ -59,7 +59,7 @@ export function buildPastTimeline(inputs: TimelineInputs, opts: PastBuildOptions
   const config = timelineConfig(env);
   const systems = timelineSystems(env);
   const range = pastRange(inputs.asOf, config.years);
-  const foundation = buildFoundation(inputs.dossier);
+  const foundation = buildFoundation(inputs.dossier, inputs.houseCounts);
   const stack = buildDashaStack(inputs.dossier, inputs.items, { from: range.from, to: addDaysIso(range.to, 1) });
   const s3ApplicableEvidence = ashtottariApplies(inputs.items['dasha.applicable']);
   const notes: string[] = [...inputs.notes, ...stack.missing.map((s) => `dasha.${s} not available: its system is left out`)];

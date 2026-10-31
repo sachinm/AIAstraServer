@@ -15,7 +15,9 @@ import { buildSignification, sigOf } from '../../../../src/reading/timeline/sign
 import { loadG1TimelineInputs } from '../../../helpers/readingFixtures.js';
 
 const inputs = loadG1TimelineInputs();
-const f = buildFoundation(inputs.dossier);
+const f = buildFoundation(inputs.dossier, inputs.houseCounts);
+/** G1 with Radha's house table missing: nothing may be derived in its place */
+const bare = buildFoundation(inputs.dossier, null);
 const s = buildSignification(f, 3);
 const stack = buildDashaStack(inputs.dossier, inputs.items, { from: '2008-10-01', to: '2026-11-01' });
 
@@ -60,7 +62,21 @@ describe('graha period-lord rule (S1-S3, doc 29 §3.2)', () => {
     const plain = grahaActivations(f, s, 'Sa', { parentLord: null }).find((h) => h.marker === 'children')!.strength;
     const under = grahaActivations(f, s, 'Sa', { parentLord: 'Ju' }).find((h) => h.marker === 'children')!;
     expect(under.strength).toBe(plain - 1);
-    expect(under.evidence).toContain('bodies.Ju.house');
+    expect(under.evidence).toContain('house_counts.house_from_planet.Ju.Sa');
+  });
+
+  it('the drop follows the table, not arithmetic', () => {
+    const plain = grahaActivations(f, s, 'Sa', { parentLord: null }).find((h) => h.marker === 'children')!.strength;
+    const table = structuredClone(inputs.houseCounts!);
+    table.house_from_planet.Ju.Sa = 3;
+    const moved = { ...f, houseCounts: table };
+    expect(grahaActivations(moved, s, 'Sa', { parentLord: 'Ju' }).find((h) => h.marker === 'children')!.strength).toBe(plain);
+  });
+
+  it('without the table there is no drop, and the hit cites no count', () => {
+    const plain = grahaActivations(bare, s, 'Sa', { parentLord: null });
+    const under = grahaActivations(bare, s, 'Sa', { parentLord: 'Ju' });
+    expect(under).toEqual(plain);
   });
 
   it('S1 runs MD/AD/PD; the confirmers S2/S3 run at AD only; every activation cites its period row', () => {
@@ -86,6 +102,26 @@ describe('S4 Narayana as D4', () => {
   it('the primary house scores 2 (Pisces is the 7th from a Virgo lagna)', () => {
     const love = activateNarayana(f, s, one(11)).find((a) => a.marker === 'love_marriage' && a.polarity === 1)!;
     expect(love.strength).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the house of the sign and the count from the AL come from the table', () => {
+    const love = activateNarayana(f, s, one(11)).find((a) => a.marker === 'love_marriage' && a.polarity === 1)!;
+    expect(love.evidence.some((e) => e === 'house_counts.sign_to_house.11' || e === 'arudhas.UL.sign')).toBe(true);
+    // Move Pisces to the 8th in the table only: the 7th-house rule must stop firing for it, the 8th house's lord takes over
+    const table = structuredClone(inputs.houseCounts!);
+    table.sign_to_house[11] = 8;
+    const moved = activateNarayana({ ...f, houseCounts: table }, s, one(11));
+    expect(moved.every((a) => a.planet === f.houses[8]!.lord)).toBe(true);
+    // Say the table counts Cancer's house as the 7th from the AL: the AL rule fires on the table's count alone
+    const al = structuredClone(inputs.houseCounts!);
+    al.house_from_arudha_lagna[inputs.houseCounts!.sign_to_house[3]!] = 7;
+    const fromAl = activateNarayana({ ...f, houseCounts: al }, s, one(3)).find((a) => a.marker === 'love_marriage' && a.polarity === 1);
+    expect(fromAl?.strength).toBeGreaterThanOrEqual(2);
+  });
+
+  it('without the table every activation is skipped', () => {
+    for (const sign of [3, 8, 11]) expect(activateNarayana(bare, s, one(sign))).toEqual([]);
+    expect(activateNarayana(bare, s, stack)).toEqual([]);
   });
 
   it('runs MD signs only where no AD sign runs', () => {
@@ -155,5 +191,19 @@ describe('S7 Jaimini modifier', () => {
       expect(a.strength).toBe(0.5);
       expect(a.evidence.some((e) => /^(arudhas|special_lagnas)\./.test(e))).toBe(true);
     }
+  });
+
+  it('a Narayana row takes its lord from the table', () => {
+    const narayana = activateJaimini(f, s, { ...stack, rows: stack.rows.filter((r) => r.system === 'narayana') });
+    expect(narayana.length).toBeGreaterThan(0);
+    for (const a of narayana) expect(a.evidence.some((e) => e.startsWith('house_counts.sign_to_house.'))).toBe(true);
+  });
+
+  it('without the table only the Narayana rows are skipped', () => {
+    const graha = stack.rows.filter((r) => r.system !== 'narayana');
+    expect(activateJaimini(bare, s, { ...stack, rows: stack.rows.filter((r) => r.system === 'narayana') })).toEqual([]);
+    const without = activateJaimini(bare, s, stack);
+    expect(without.length).toBeGreaterThan(0);
+    expect(without).toEqual(activateJaimini(f, s, { ...stack, rows: graha }));
   });
 });

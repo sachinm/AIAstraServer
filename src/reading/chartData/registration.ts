@@ -11,7 +11,7 @@
  * - Items already `ready` (and not stale) are read, not fetched, so a later run resumes where an earlier one stopped.
  * Nothing here computes astrology.
  */
-import type { ChartDataType, FetchTier } from './catalog.js';
+import { PAST_READING_ANNUAL_TYPES, PAST_READING_NATAL_TYPES, type ChartDataType, type FetchTier } from './catalog.js';
 import { ensureAnnualCurrent, ensureChartData, loadMergedChartTypes, type ChartItem, type EnsureDeps, type EnsureOptions } from './store.js';
 
 const TIER_RANK: Record<FetchTier, number> = { first: 0, registration: 1, on_demand: 2 };
@@ -126,4 +126,26 @@ export async function fetchRegistrationSet(deps: EnsureDeps, kundliId: string, o
   const items = { ...(await fetchRegistrationItems(deps, kundliId, plan.gate, opts)) };
   Object.assign(items, await fetchRegistrationItems(deps, kundliId, plan.rest, opts));
   return { ...plan, items, firstTierReady: firstTierReady(plan.firstTier, items) };
+}
+
+/**
+ * Ensure all natal and multi-year annual data required for the 18-Year Comprehensive Past Life Reading
+ * (`PAST_READING_NATAL_TYPES` + `PAST_READING_ANNUAL_TYPES` across `[endYear - years, endYear]`) are fetched from
+ * Radha beforehand and stored in `kundli_data`.
+ */
+export async function ensurePastReadingData(
+  deps: EnsureDeps,
+  kundliId: string,
+  opts: EnsureOptions & { endYear?: number; years?: number } = {}
+): Promise<Record<string, ChartItem>> {
+  const endYear = opts.endYear ?? new Date().getUTCFullYear();
+  const years = opts.years ?? 18;
+  const startYear = endYear - years;
+  const keys: string[] = [...PAST_READING_NATAL_TYPES];
+  for (let yr = startYear; yr <= endYear; yr++) {
+    for (const annualId of PAST_READING_ANNUAL_TYPES) {
+      keys.push(`${annualId}@${yr}`);
+    }
+  }
+  return ensureChartData(deps, kundliId, keys, opts);
 }
