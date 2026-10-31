@@ -33,23 +33,57 @@ Do not work through a plan one item at a time when its items are independent.
 - Every feature/fix/docs branch is cut from `develop` and merged back into `develop` with `--no-ff`. `main` gets release
   merges only.
 - Before a merge: `npx tsc --noEmit` and the unit tests for the area (`npx vitest run tests/unit/<area>`).
-- Dev sessions stop at "committed and merged into local `develop`". Pushing, Lambda deploys and Amplify rebuilds go
-  through the deploy session.
+- Dev sessions stop at "committed and merged into local `develop`". Lambda deploys and Amplify rebuilds go through the
+  deploy session.
+- **Push `develop` after every merge** so that at most one merge is ever unpushed. Local-only history is one bad command
+  from gone (2026-10-31: 13 unpushed commits were lost with the checkout).
 - Migrations are written, never applied, without Sachin's explicit OK. Never run terraform.
+
+### Worktrees and deletes
+
+On 2026-10-31 a `git worktree add` with an empty path made git's cleanup delete the main checkout: `.git`, `.env`,
+`docs`, `evals`, `AGENTS.md` and everything sorting before `node_modules`. These rules exist so it cannot happen again.
+
+- **Never build a worktree or delete path from a variable, a substitution or a prompt result.** Write the path as a
+  literal absolute path, outside every checkout, and print it before the command. An empty or wrong path in
+  `git worktree add`, `git worktree remove`, `rm -rf`, `Remove-Item -Recurse`, `Directory.Delete` or `git clean` can
+  delete the main checkout.
+- **Before `git worktree add`:** the target must not exist, or be an empty directory, and must not be inside a checkout.
+  Run `git worktree add <literal-path> -b <branch> <base>` with every argument spelled out. Never run it with an empty
+  string, `$VAR`, `$(...)` or `${...}` in the path.
+- **After `git worktree add` or `git worktree remove`:** check that the main checkout still has `.git` and `docs` (for
+  example `ls -d <main>/.git <main>/docs`) before doing anything else. If either is missing, stop, run nothing that
+  writes, and tell Sachin.
+- **Never run `git clean`, `git reset --hard`, `rm -rf` or a recursive delete against the main checkout.** Cleanup is
+  only ever of a worktree you created, by its literal path, after its branch is merged.
+- **Prefer the app's own worktree isolation** (the session or agent `isolation: worktree` option) over hand-run
+  `git worktree` commands.
+- **`.env` is not in git.** Keep a copy of its values outside the checkout, in the password manager, and note where it is
+  in `docs/TODOS.md` without the values.
+
+## File every finding
+
+- Every error, bug, risk or finding you do not fix on the spot goes in `docs/TODOS.md` before your session ends, or in a
+  named doc under `docs/` linked from it. That includes side findings, failures you worked around, and things another
+  session told you.
+- Each item says what is wrong, where, how you know, who holds it, and what done means, with a priority P0 to P3.
+- Read `docs/TODOS.md` before working in an area. Delete an item when its fix ships, and say where the fix went in the
+  commit.
 
 ## Clean up when work is done
 
 - **Branches:** once a feature/fix/docs branch is merged into `develop`, delete it locally (`git branch -d`). Never
   delete `develop`, `main`, release branches, unmerged branches, or remote branches without Sachin's OK.
 - **Worktrees:** once a worktree's branch is merged and it has no uncommitted changes, remove it
-  (`git worktree remove <path>`). If the folder is held open by a session, archive that session (with Sachin's OK) and
-  remove it then.
+  (`git worktree remove <literal-path>`). If the folder is held open by a session, archive that session (with Sachin's
+  OK) and remove it then.
 - **Local servers:** any server or watcher you start (`npm run dev`, `node server`, `uvicorn`, Vite, test watchers) is
   stopped as soon as the check that needed it is done. Before finishing, list what you started and confirm none is still
   running. Never stop processes you did not start.
 
 ## Tracking files
 
+- `docs/TODOS.md`: every open finding (see "File every finding").
 - `TEST.MD`: tests to perform. Executed tests save screenshots in `docs/screenshots/<folder>/` with sequence-numbered
   names (`01-…png`).
 - `QA-LIST.MD`: tested items with their screenshots, for review.
@@ -58,7 +92,9 @@ Do not work through a plan one item at a time when its items are independent.
 
 ## Product rules agents must keep
 
-- Radha (pyjhora, `AIAstra_Radha`) is the only source of astrological data. Node computes nothing astrological.
+- Radha (pyjhora, `AIAstra_Radha`) is the only source of astrological data. Node computes nothing astrological, and
+  never derives a house: natal and transit houses come from Radha's own answers (`transit_range`, the per-kundli
+  overlays), never from a sign-index lookup.
 - English only for now.
 - Declined topics (`declined_topics` table, docs/reading-engine/18) are never facilitated or passed to any agent.
 - Never print secrets.

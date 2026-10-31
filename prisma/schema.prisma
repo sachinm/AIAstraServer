@@ -81,6 +81,7 @@ model Kundli {
   facts_status       String                 @default("pending") @map("facts_status")
   facts              KundliFacts[]
   transitCharts      TransitSnapshot[]
+  transitOverlays    KundliTransitOverlay[]
   chartData          KundliData[]
   user               Auth                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   content            UserGeneratedContent[]
@@ -245,6 +246,66 @@ model TransitSnapshot {
   @@index([from_date, to_date], map: "transit_snapshots_range")
   @@index([kundli_id, from_date, to_date], map: "transit_snapshots_kundli_range")
   @@map("transit_snapshots")
+}
+
+/// Transit ephemeris cache (migration 20261031100000, docs/reading-engine/35): the sky at an instant for a place,
+/// shared by every kundli. Payload has no natal fields.
+model TransitInstant {
+  id           String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  place_key    String   @map("place_key")
+  lat          Float
+  lon          Float
+  tz           Float
+  at_utc       DateTime @map("at_utc") @db.Timestamptz(6)
+  factors_key  String   @map("factors_key")
+  ayanamsa     String   @default("LAHIRI")
+  calc_version String?  @map("calc_version")
+  source_hash  String   @map("source_hash")
+  payload      Json
+  fetched_at   DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([place_key, at_utc, factors_key, ayanamsa], map: "transit_instants_key")
+  @@index([at_utc], map: "transit_instants_at")
+  @@map("transit_instants")
+}
+
+/// A transit_range over a span for a place, shared by every kundli. Payload has no natal block.
+model TransitRangeSky {
+  id           String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  place_key    String   @map("place_key")
+  lat          Float
+  lon          Float
+  tz           Float
+  from_date    DateTime @map("from_date") @db.Date
+  to_date      DateTime @map("to_date") @db.Date
+  planets_key  String   @map("planets_key")
+  flags_key    String   @map("flags_key")
+  ayanamsa     String   @default("LAHIRI")
+  calc_version String?  @map("calc_version")
+  source_hash  String   @map("source_hash")
+  payload      Json
+  fetched_at   DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([place_key, from_date, to_date, planets_key, flags_key, ayanamsa], map: "transit_range_skies_key")
+  @@map("transit_range_skies")
+}
+
+/// A kundli's own range / contacts answer from Radha, with Radha's house fields. Houses are never derived in Node.
+model KundliTransitOverlay {
+  id           String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id    String   @map("kundli_id")
+  kundli       Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  kind         String
+  params_key   String   @map("params_key")
+  from_date    DateTime @map("from_date") @db.Date
+  to_date      DateTime @map("to_date") @db.Date
+  calc_version String?  @map("calc_version")
+  source_hash  String   @map("source_hash")
+  payload      Json
+  fetched_at   DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([kundli_id, kind, params_key], map: "kundli_transit_overlays_key")
+  @@map("kundli_transit_overlays")
 }
 
 /// One row per reading (reading engine M4): intent, pack hashes, findings, timings, usage, cache.
