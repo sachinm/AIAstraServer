@@ -37,6 +37,29 @@ Do not work through a plan one item at a time when its items are independent.
   through the deploy session.
 - Migrations are written, never applied, without Sachin's explicit OK. Never run terraform.
 
+## Worktrees and deletes
+
+On 2026-10-31 a `git worktree add` run with an empty path made git's cleanup delete the contents of the main checkout
+(`.git`, `.env`, `docs`, `evals` and more), and unpushed commits were lost. These rules exist so it cannot happen again.
+
+- **Never build a worktree or delete path from a variable, a substitution or a prompt result.** Write the path as a
+  literal absolute path, outside every checkout, and print it before the command. An empty or wrong path in
+  `git worktree add`, `git worktree remove`, `rm -rf`, `Remove-Item -Recurse`, `Directory.Delete` or `git clean` can
+  delete the main checkout.
+- **Before `git worktree add`:** the target must not exist, or be an empty directory, and must not be inside a checkout.
+  Run `git worktree add <literal-path> -b <branch> <base>` with every argument spelled out, never with an empty string,
+  `$VAR`, `$(...)` or `${...}` in the path.
+- **After `git worktree add` or `git worktree remove`:** check that the main checkout still has `.git` and `docs`
+  (`ls -d <main>/.git <main>/docs`) before doing anything else. If either is missing, stop, run nothing that writes, and
+  tell Sachin.
+- **Never run `git clean`, `git reset --hard`, `rm -rf` or a recursive delete against the main checkout.** Cleanup is
+  only ever of a worktree you created, by its literal path, after its branch is merged.
+- **Prefer the app's own worktree isolation** (the session or agent `isolation: worktree` option) over hand-run
+  `git worktree` commands.
+- **`develop` is pushed after every merge** (through the deploy session, as below), so at most one merge is ever unpushed.
+- **`.env` is not in git.** Its values live in the Lambda and Render configuration; keep a copy outside the checkout and
+  note where it is in `docs/TODOS.md` without the values.
+
 ## Clean up when work is done
 
 - **Branches:** once a feature/fix/docs branch is merged into `develop`, delete it locally (`git branch -d`). Never
@@ -48,8 +71,16 @@ Do not work through a plan one item at a time when its items are independent.
   stopped as soon as the check that needed it is done. Before finishing, list what you started and confirm none is still
   running. Never stop processes you did not start.
 
+## File every finding
+
+Any error, bug, risk or issue you find and do not fix on the spot goes in `docs/TODOS.md` before your session ends, or in an
+appropriately named doc under `docs/` linked from there. This covers side findings outside your task, failures you worked
+around, and things another session told you. Say what is wrong, where, how you know, who holds it, and what done means.
+Read `docs/TODOS.md` before starting work in an area. Delete an item when its fix ships. A finding mentioned only in chat is lost.
+
 ## Tracking files
 
+- `docs/TODOS.md`: every open finding, by priority (see above).
 - `TEST.MD`: tests to perform. Executed tests save screenshots in `docs/screenshots/<folder>/` with sequence-numbered
   names (`01-…png`).
 - `QA-LIST.MD`: tested items with their screenshots, for review.
