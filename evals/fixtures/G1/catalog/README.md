@@ -12,6 +12,7 @@ with default params. Nothing was edited by hand.
 | `dasha.ashtottari.json` | `dasha.ashtottari` | levels 2 |
 | `dasha.narayana.json` | `dasha.narayana` | levels 2 (sign MD, sign AD) |
 | `dasha.applicable.json` | `dasha.applicable` | — |
+| `house_counts.json` | `house_counts` | default (varga 1, chart_method 1); AIAstra_Radha `feature/reading-p1`, uncommitted, generated locally 2026-10-31 |
 | `transit_contacts.2008-10-01_2018-08-10.json` | `transit_contacts` (moving) | from/to as named, orb 2, Sa Ju Ra Ke |
 | `transit_contacts.2018-08-11_2026-10-31.json` | `transit_contacts` (moving) | from/to as named, orb 2, Sa Ju Ra Ke |
 

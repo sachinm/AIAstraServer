@@ -6,7 +6,7 @@ import { monthsBetween } from '../../../../src/reading/timeline/months.js';
 import type { Activation, SystemId } from '../../../../src/reading/timeline/types.js';
 import { loadG1Dossier } from '../../../helpers/readingFixtures.js';
 
-const foundation = buildFoundation(loadG1Dossier());
+const foundation = buildFoundation(loadG1Dossier(), null);
 const opts: ConvergeOptions = { config: TIMELINE_DEFAULTS, weights: TIMELINE_DEFAULTS.weights, s3Applicable: true, foundation, stack: { rows: [], sources: {}, missing: [] } };
 
 const act = (system: SystemId, strength: number, over: Partial<Activation> = {}): Activation => ({

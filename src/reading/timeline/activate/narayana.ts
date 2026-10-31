@@ -3,14 +3,17 @@
  *
  * - 3: the sign holds the marker's arudha or special lagna (`arudhas.<k>.sign`, `special_lagnas.<k>.sign`): the period of
  *   the sign holding UL / A10 / A4 brings that matter up.
- * - 2: the sign is the marker's primary house (`houses.<h1>.sign`) or the sign its primary lord sits in.
+ * - 2: the sign is the marker's primary house (`house_counts.sign_to_house.<sign>`) or the sign its primary lord sits in.
  * - 1: the sign's lord signifies the marker at 2 or more (signification.ts).
  * - adverse 1: the sign's lord signifies the marker adversely at 2 or more.
  *
  * Read from AL as well (doc 27 §A.3): the 7th sign from the AL running activates love and marriage at 2, the 2nd/11th
  * money at 2. The MD sign counts only where no AD sign runs.
+ *
+ * The house of the running sign and its count from the AL are read from Radha's `house_counts` table; without the table
+ * the activation is skipped.
  */
-import { houseFrom, houseOfSign, pointOf, type Foundation } from '../foundation.js';
+import { pointOf, type Foundation } from '../foundation.js';
 import type { DashaStack } from '../dashas.js';
 import { MARKERS, MARKER_IDS } from '../markers.js';
 import { sigOf, type Signification } from '../signification.js';
@@ -19,14 +22,14 @@ import type { Activation } from '../types.js';
 export function activateNarayana(f: Foundation, s: Signification, stack: DashaStack): Activation[] {
   const rows = stack.rows.filter((r) => r.system === 'narayana' && r.sign != null);
   const hasAd = rows.some((r) => r.level === 2);
-  const al = f.arudhas.AL;
   const out: Activation[] = [];
   for (const r of rows) {
     if (r.level === 1 && hasAd) continue;
-    const h = houseOfSign(f, r.sign!);
-    if (h == null) continue;
-    const lord = f.houses[h]!.lord;
-    const fromAl = al ? houseFrom(al.house, h) : null;
+    const h = f.houseCounts?.sign_to_house[r.sign!];
+    const lord = h != null ? f.houses[h]?.lord : undefined;
+    if (h == null || !lord) continue;
+    const signPath = `house_counts.sign_to_house.${r.sign!}`;
+    const fromAl = f.houseCounts?.house_from_arudha_lagna[h] ?? null;
     for (const id of MARKER_IDS) {
       const m = MARKERS[id];
       const h1 = m.houses[0]!;
@@ -39,10 +42,10 @@ export function activateNarayana(f: Foundation, s: Signification, stack: DashaSt
         const pt = pointOf(f, key);
         if (pt && pt.point.sign === r.sign) take(3, `${pt.path}.sign`);
       }
-      if (h === h1) take(2, `houses.${h1}.sign`);
+      if (h === h1) take(2, signPath);
       const h1Lord = f.houses[h1]?.lord;
       if (h1Lord && f.planets[h1Lord]?.sign === r.sign) take(2, `houses.${h1}.lord`, `bodies.${h1Lord}.sign`);
-      if ((fromAl === 7 && id === 'love_marriage') || ((fromAl === 2 || fromAl === 11) && id === 'money')) take(2, 'arudhas.AL.house', `houses.${h}.sign`);
+      if ((fromAl === 7 && id === 'love_marriage') || ((fromAl === 2 || fromAl === 11) && id === 'money')) take(2, `house_counts.house_from_arudha_lagna.${h}`, signPath);
       if (sigOf(s.sig, lord, id) >= 2) take(1, `houses.${h}.lord`, ...(s.sig[lord]?.[id]?.evidence ?? []));
       const base = { system: 'S4' as const, marker: id, planet: lord, sign: r.sign!, from: r.from, to: r.to, level: r.level === 1 ? 'md' : 'ad' };
       if (strength > 0) out.push({ ...base, strength, polarity: 1, evidence: [r.evidence, ...ev] });

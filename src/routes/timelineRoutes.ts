@@ -1,6 +1,6 @@
 /**
- * HTTP surface of the life-timeline ledger (docs/reading-engine/27 §B.7 P0). Mounted only when TIMELINE_ENABLED=1;
- * otherwise these paths are plain 404s.
+ * HTTP surface of the life-timeline ledger & comprehensive past life reading (docs/reading-engine/27 §B.7 P0).
+ * Mounted only when TIMELINE_ENABLED=1; otherwise these paths are plain 404s.
  *
  *   GET    /api/timeline/ledger/meta            categories grouped by marker, attribute keys, precisions
  *   GET    /api/timeline/ledger?kundliId=       the person's events for a kundli (default: their latest)
@@ -8,9 +8,12 @@
  *   PATCH  /api/timeline/ledger/:id             any of those fields
  *   DELETE /api/timeline/ledger/:id
  *   POST   /api/timeline/ledger/interview       { kundliId?, text, year? } → proposals to confirm (nothing stored)
+ *   GET    /api/timeline/past-reading?kundliId= the person's 18-year comprehensive past life reading report
+ *   POST   /api/timeline/past-reading/generate  { kundliId?, asOf?, years?, fetchFromRadha? } → generate report
+ *   POST   /api/timeline/past-reading/rate      { kundliId?, predictionId, rating, actualRealityNote?, whyMissedOrWorkedNote? }
  *
- * A user only reads and writes their own rows (ledgerStore.ts). 503 `ledger_unavailable` while the migration is not
- * applied. The interview passes the declined-topics gate before and after the model call (interview.ts).
+ * A user only reads and writes their own rows (ledgerStore.ts / pastReadingFlow.ts). 503 `ledger_unavailable` while the
+ * migration is not applied. The interview and past reading pass the declined-topics gate (interview.ts / pastReadingFlow.ts).
  */
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
@@ -20,6 +23,12 @@ import { isTimelineEnabled, timelineConfig } from '../reading/timeline/config.js
 import { extractLedgerProposals, type InterviewDeps } from '../reading/timeline/interview.js';
 import { checkLedgerInput, ledgerMeta, mergeLedgerUpdate } from '../reading/timeline/ledgerCategories.js';
 import { createLedgerEvent, deleteLedgerEvent, getLedgerEvent, listLedger, resolveKundli, updateLedgerEvent, type LedgerResult } from '../reading/timeline/ledgerStore.js';
+import {
+  generatePastLifeReadingReport,
+  getPastLifeReading,
+  ratePastLifePrediction,
+  type PastReadingFlowOptions,
+} from '../reading/timeline/pastReadingFlow.js';
 
 export interface TimelineRouteDeps {
   prisma: PrismaClient;
@@ -28,6 +37,8 @@ export interface TimelineRouteDeps {
   interviewCall?: InterviewDeps['call'];
   /** tests: whether the interview model is configured (default: the Gemini chat provider with a key) */
   interviewAvailable?: () => boolean;
+  /** tests: optional specialist agent runner for past reading synthesis */
+  pastReadingAgentRunner?: PastReadingFlowOptions['agentRunner'];
   /** default: TIMELINE_ENABLED */
   enabled?: boolean;
 }
@@ -120,5 +131,50 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
     if (r.status === 'declined') return res.json({ proposals: [], declined: { reply: r.reply } });
     return res.json({ kundliId, proposals: r.proposals, dropped: r.dropped });
   });
+
+  app.get('/api/timeline/past-reading', async (req, res) => {
+    const userId = auth(req, res);
+    if (!userId) return;
+    const kundliId = await resolveKundli(prisma, userId, kundliParam(req.query.kundliId));
+    if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
+    const report = await getPastLifeReading(prisma, userId, kundliId);
+    if (!report) return res.status(404).json({ error: 'past_reading_not_found' });
+    return res.json({ report });
+  });
+
+  app.post('/api/timeline/past-reading/generate', async (req, res) => {
+    const userId = auth(req, res);
+    if (!userId) return;
+    const kundliId = await resolveKundli(prisma, userId, kundliParam(req.body?.kundliId));
+    if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
+    const asOf = typeof req.body?.asOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.asOf) ? req.body.asOf : undefined;
+    const years = typeof req.body?.years === 'number' && req.body.years >= 1 && req.body.years <= 40 ? Math.floor(req.body.years) : undefined;
+    const fetchFromRadha = Boolean(req.body?.fetchFromRadha);
+    const report = await generatePastLifeReadingReport(prisma, userId, kundliId, {
+      ...(asOf ? { asOf } : {}),
+      ...(years ? { years } : {}),
+      fetchFromRadha,
+      ...(deps.pastReadingAgentRunner ? { agentRunner: deps.pastReadingAgentRunner } : {}),
+    });
+    return res.json({ report });
+  });
+
+  app.post('/api/timeline/past-reading/rate', async (req, res) => {
+    const userId = auth(req, res);
+    if (!userId) return;
+    const kundliId = await resolveKundli(prisma, userId, kundliParam(req.body?.kundliId));
+    if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
+    const result = await ratePastLifePrediction(prisma, userId, kundliId, {
+      kundliId,
+      predictionId: req.body?.predictionId,
+      rating: req.body?.rating,
+      actualRealityNote: req.body?.actualRealityNote,
+      whyMissedOrWorkedNote: req.body?.whyMissedOrWorkedNote,
+    });
+    if (result.status === 'invalid') return res.status(400).json({ error: result.error, field: result.field });
+    if (result.status === 'not_found') return res.status(404).json({ error: 'prediction_not_found' });
+    return res.json({ report: result.report });
+  });
+
   return true;
 }

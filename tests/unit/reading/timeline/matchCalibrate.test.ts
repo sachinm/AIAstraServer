@@ -9,7 +9,7 @@ import { monthsBetween } from '../../../../src/reading/timeline/months.js';
 import type { Activation, SystemId } from '../../../../src/reading/timeline/types.js';
 import { loadG1Dossier, loadG1Ledger } from '../../../helpers/readingFixtures.js';
 
-const foundation = buildFoundation(loadG1Dossier());
+const foundation = buildFoundation(loadG1Dossier(), null);
 const opts: ConvergeOptions = { config: TIMELINE_DEFAULTS, weights: TIMELINE_DEFAULTS.weights, s3Applicable: false, foundation, stack: { rows: [], sources: {}, missing: [] } };
 const months = monthsBetween('2020-01-01', '2021-12-01'); // 24 months
 

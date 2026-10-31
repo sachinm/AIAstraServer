@@ -6,10 +6,11 @@
  *
  * Read fields: the point's house (`arudhas.<k>.house`, `special_lagnas.<k>.house`), the lord's house and rasi aspects
  * (`bodies.<P>.house`, `bodies.<P>.aspects_to.rasi`), and the argala on the house holding the point
- * (`houses.<h>.argala.primary|secondary|obstructed_by`).
+ * (`houses.<h>.argala.primary|secondary|obstructed_by`). A Narayana row's lord is the lord of the house of its sign, read
+ * from Radha's `house_counts.sign_to_house`; without the table that row is skipped.
  */
 import type { PlanetCode } from '../../facts/constants.js';
-import { houseOfSign, pointOf, type Foundation } from '../foundation.js';
+import { pointOf, type Foundation } from '../foundation.js';
 import type { DashaStack } from '../dashas.js';
 import { MARKERS, MARKER_IDS } from '../markers.js';
 import { sigOf, type Signification } from '../signification.js';
@@ -22,9 +23,9 @@ export function activateJaimini(f: Foundation, s: Signification, stack: DashaSta
     let lord: PlanetCode | null = r.lord;
     const ev = [r.evidence];
     if (r.system === 'narayana' && r.sign != null) {
-      const h = houseOfSign(f, r.sign);
-      lord = h != null ? f.houses[h]!.lord : null;
-      if (h != null) ev.push(`houses.${h}.lord`);
+      const h = f.houseCounts?.sign_to_house[r.sign];
+      lord = h != null ? (f.houses[h]?.lord ?? null) : null;
+      if (h != null) ev.push(`house_counts.sign_to_house.${r.sign}`, `houses.${h}.lord`);
     }
     const p = lord ? f.planets[lord] : undefined;
     if (!lord || !p) continue;

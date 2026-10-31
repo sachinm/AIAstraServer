@@ -3,11 +3,12 @@
  * A running lord activates only the markers it *signifies* (the capped table of signification.ts), at its signification
  * value 1-3; adversely for the markers in its `adv` row.
  *
- * Modifiers on the support side: -1 when the lord sits in 6/8/12 from its parent lord (AD from MD, PD from AD); +0.5 when
- * its star lord signifies the same marker at 2 or more (the KP rule as a tie-breaker, doc 29 §2 row 8).
+ * Modifiers on the support side: -1 when the lord sits in 6/8/12 from its parent lord (AD from MD, PD from AD), read from
+ * Radha's `house_counts.house_from_planet` (no table, no drop); +0.5 when its star lord signifies the same marker at 2 or
+ * more (the KP rule as a tie-breaker, doc 29 §2 row 8).
  */
 import type { PlanetCode } from '../../facts/constants.js';
-import { DUSTHANAS, houseFrom, type Foundation } from '../foundation.js';
+import { DUSTHANAS, type Foundation } from '../foundation.js';
 import { MARKER_IDS, type MarkerId } from '../markers.js';
 import { sigOf, type Signification } from '../signification.js';
 import type { Polarity } from '../types.js';
@@ -30,8 +31,7 @@ const isDusthana = (h: number): boolean => (DUSTHANAS as readonly number[]).incl
 export function grahaActivations(f: Foundation, s: Signification, lord: PlanetCode, ctx: GrahaContext): GrahaHit[] {
   const p = f.planets[lord];
   if (!p) return [];
-  const parent = ctx.parentLord ? f.planets[ctx.parentLord] : undefined;
-  const fromParent = parent ? houseFrom(parent.house, p.house) : null;
+  const fromParent = ctx.parentLord ? (f.houseCounts?.house_from_planet[ctx.parentLord]?.[lord] ?? null) : null;
   const drop = fromParent != null && isDusthana(fromParent) ? 1 : 0;
   const out: GrahaHit[] = [];
   for (const m of MARKER_IDS) {
@@ -44,7 +44,7 @@ export function grahaActivations(f: Foundation, s: Signification, lord: PlanetCo
           marker: m,
           strength,
           polarity: 1,
-          evidence: [...sup.evidence, ...(drop ? [`bodies.${ctx.parentLord}.house`, `bodies.${lord}.house`] : []), ...(kp ? [`bodies.${lord}.star_lord`] : [])],
+          evidence: [...sup.evidence, ...(drop ? [`house_counts.house_from_planet.${ctx.parentLord}.${lord}`] : []), ...(kp ? [`bodies.${lord}.star_lord`] : [])],
         });
       }
     }
