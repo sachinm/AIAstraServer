@@ -85,8 +85,8 @@ re-applied by it.
   the Lambda does not have; no Route 53 zone or domain exists in either account. Fix (needs a sending domain Sachin
   owns): verify the domain in SES us-east-1, request SES production access, add the SES identity policy for
   `cognito-idp.amazonaws.com`, then `update-user-pool --email-configuration EmailSendingAccount=DEVELOPER,
-  SourceArn=<identity arn>,From=...`. Access path that works today: `aws sts assume-role` into 442728149528 via
-  `OrganizationAccountAccessRole` from profile `amplifyv2`. Code side (shipped on `fix/signup-email-limit-message`):
+  SourceArn=<identity arn>,From=...`. Access: the `aiastra-ops` key is invalid. `OrganizationAccountAccessRole` via `amplifyv2`
+  worked on 2026-11-01, but it is an admin path Sachin has not approved for this: get their OK first. Code side (shipped on `fix/signup-email-limit-message`):
   the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: blocked (domain).
   Done: pool on SES, a fresh sign-up receives its code, the TODO about "Cognito auth not set up" updated.
 
@@ -158,6 +158,20 @@ re-applied by it.
   that matches neither invites chargebacks. Status: open (Sachin). Done: one name, used on the nav and the gateway statement descriptor.
 - **The timeline interview calls a model with no plan check.** `POST /api/timeline/ledger/interview` is open to every signed-in user when
   `TIMELINE_ENABLED` is on, and is not a counted question. Status: open. Done: capped or restricted to paid plans.
+- **`tests/auth-flow.test.ts` fails on `develop` code.** "me resolver never returns password or PII fields" throws at `db.kundli.findFirst` because
+  its Prisma mock has no `kundli`. The failing line is older than the billing work and the test file was not touched. Seen 2026-11-01 in the full
+  server run (1 failed, 1251 passed). Status: open. Done: the mock covers what `me` reads, and the test passes.
+- **Web and server must ship in order for plans.** The web now always sends `language` in `completeProfile`, so a server without that input rejects
+  registration. Order: migration `20261101140000_billing_plans`, server, web, then `PLAN_FREE_QUESTIONS`, `PLAN_PLUS_QUESTIONS` and `PLANS_ENABLED=1`. Merged to local `develop` 2026-11-01, not pushed. Status: open
+  (deploy session, Sachin's OK). Done: a new registration works on staging and the bar shows.
+- **Web has 17 existing type errors.** `tsc -p tsconfig.app.json` fails on `LandingPage`, `analytics`, `useSpeechRecognition.test`, `MantrasSection`, `RemediesSection` and
+  `routes.tsx`; the same 17 are on `develop` without the plans work (2026-11-01). `vite build` passes because it does not typecheck. Status: open. Done: `tsc` is clean.
+- **`question_usage` SQL has never run against Postgres.** The gate's unit tests use an in-memory store, and no database was used, because migrations
+  are not applied without Sachin's OK. Status: open (deploy session). Done: migration applied on staging, and a test account stops at its quota.
+- **Unlimited has no abuse guard.** Removed at Sachin's request on 2026-11-01. One account can spend without limit against $200 a month: at $0.07 a reading that passes $200 near 95 readings a day,
+  and graph and single flows have no per-question cost cap (item below). Status: open (Sachin). Done: a guard is set, or the risk is accepted.
+- **A missing plan limit lets questions through.** With `PLANS_ENABLED=1` and `PLAN_FREE_QUESTIONS` or `PLAN_PLUS_QUESTIONS` unset, the gate logs an error and allows every question, by design, so no
+  number lives in the code. Status: open (deploy session). Done: both are set on the Lambda before the flag, with an alarm on `[plans] reserve failed`.
 - **The web does not call `POST /api/chat/prewarm`.** It should fire it without waiting on a `propose` event, and label the reader
   pills (`R08` → "Vimshottari periods"). Without it, a clarified question whose horizon was answered re-runs timing readers,
   which is the difference between about 7 s and about 11 s (doc 39 §5). Status: open (web session).
@@ -316,7 +330,11 @@ Reported by that session; the items are its own open findings. Owners are named 
 
 - **Leftover local worktrees and branches.** `chore/pin-lambda-adapter-ecr` (commit 22e456c, merged into `release-candidate-staging`, not `develop`) and its worktree in the session scratchpad remain, along with the `release-candidate-staging` worktrees for the server and web repos. Their git links broke with the 2026-10-31 loss. Owner: the dev session that created them. Done: merged branches removed and worktrees removed, per the cleanup rule.
 
-- **Landing page makes unverified accuracy claims** (`AIAstra_WEB/src/LandingPage.tsx`: "Millimeter-accurate planetary
+- **Screenshot review findings (2026-11-01): `AIAstra_WEB/docs/screenshots/walkthrough/FINDINGS.md`.** An independent agent read every walkthrough image and found 32 issues; those not
+  marked fixed there are open. **P1, blocks a public paid launch:** F-03 three product names and "Cosmo" find-and-replace errors; F-04 unsupported landing claims (70% research, NASA accuracy,
+  scholar validation, health) against the chat disclaimer, which raises the item below from P3; F-05 no terms, privacy or refund pages and no consent at sign-up; F-06 placeholder-looking contact
+  details and dead footer links. The stub cannot exercise real servers or paid plans. Status: open. Done: each is fixed or dropped by Sachin, and marked in that file.
+- **Landing page makes unverified accuracy claims, under the name "Cosmo Vedic", on both live sites (production and release-candidate-staging, seen 2026-11-01)** (`AIAstra_WEB/src/LandingPage.tsx`: "Millimeter-accurate planetary
   positions using NASA data", "Validated by Vedic scholars from traditional lineages", "AI trained on classical
   Sanskrit texts"). The business plan's own rule is no accuracy claims before the advisor-validated benchmark. Found
   2026-11-01 while preparing `docs/a16z-speedrun-sr008-application.md`. Status: open. Done: the three lines replaced
