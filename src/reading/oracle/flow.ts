@@ -146,6 +146,8 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   const fanIds = [...prep.requests.keys()];
   const joinAt = started + (d.joinMs ?? joinDeadlineMs(prep.plan.tier, fanIds, model));
   const prewarmHits = fanIds.filter((id) => d.prewarmed?.entries.has(prep.requests.get(id)!.cacheKey)).length;
+  // every reader already answered, here or on another instance: the Oracle starts at once and keeps its full length
+  const allHeld = fanIds.length > 0 && fanIds.every((id) => d.prewarmed?.entries.has(prep.requests.get(id)!.cacheKey) || getReaderMemo(prep.requests.get(id)!.cacheKey));
 
   /** One attempt, stopped at its budget and at the join. */
   const attempt = async (req: ReaderRequest): Promise<ReaderResult> => {
@@ -256,13 +258,11 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         }
       }
       lastGrounded = grounded;
-      const prewarmed = fanIds.length > 0 && prewarmHits === fanIds.length;
-      const budget = oracleBudget(prep.plan.tier, prewarmed);
+      const budget = oracleBudget(prep.plan.tier, allHeld);
       const brevity = budget.wordTarget ? `LENGTH: at most ${budget.wordTarget} words, even if the answer shape allows more.` : '';
       const system = `${d.system}\n\n${PROMPTS['oracle/system']}`;
       const parts = [`BRIEF\n${brief.text}`, ...(d.calendar ? [d.calendar] : []), [brevity, d.tail].filter(Boolean).join('\n\n')];
       d.emit({ type: 'stage', name: 'oracle', status: 'start' });
-      const usage: Usage = { node: 'oracle', model: oracleModel, promptTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0, ms: 0 };
       let reservation;
       try {
         reservation = guard.reserve({ stage: 'oracle', node: 'oracle', model: oracleModel, promptTokens: approxTokens(system) + approxTokens(parts.join('\n')), maxOutputTokens: budget.maxOutputTokens });
@@ -285,11 +285,10 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         const ms = now() - t0;
         journal.record({ agent: 'oracle', agentKind: 'oracle', round: 1, model: oracleModel, promptName: 'oracle/system', promptSent: parts[parts.length - 1], dataKeys: ['brief'], digest: { words: scrub(r.text).split(/\s+/).length, finishReason: r.finishReason, layersCounted: brief.statements.length, droppedClaims: brief.droppedClaims, droppedQuotes: brief.droppedQuotes, briefChars: brief.text.length }, highlights: { answer: scrub(r.text) }, status: 'ok', source: 'live', usage: r.usage, ms });
         d.emit({ type: 'stage', name: 'oracle', status: 'done', ms });
-        return { answer: scrub(r.text), usage: [r.usage], finishReason: r.finishReason, ttftMs: r.ttftMs, stoppedForLoop: r.stoppedForLoop, brief, timings: { oracle: ms, brief: 0 } };
+        return { answer: scrub(r.text), usage: [r.usage], finishReason: r.finishReason, ttftMs: r.ttftMs, stoppedForLoop: r.stoppedForLoop, brief, timings: { oracle: ms, oracleStart: t0 - started } };
       } catch (err) {
         guard.settleUnknown(reservation);
-        usage.ms = now() - t0;
-        journal.record({ agent: 'oracle', agentKind: 'oracle', round: 1, model: oracleModel, promptName: 'oracle/system', status: 'failed', failureReason: isTimeoutError(err) ? 'timeout' : 'model_error', source: 'live', ms: usage.ms });
+        journal.record({ agent: 'oracle', agentKind: 'oracle', round: 1, model: oracleModel, promptName: 'oracle/system', status: 'failed', failureReason: isTimeoutError(err) ? 'timeout' : 'model_error', source: 'live', ms: now() - t0 });
         throw err;
       }
     })

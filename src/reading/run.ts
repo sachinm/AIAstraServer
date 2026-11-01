@@ -367,6 +367,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     ]);
     const first = subjects[0]!.id;
     const prewarmed = await loadPrewarmed(prisma, userId, intent.clarified?.runId);
+    const flowStart = Date.now() - tStart;
     try {
       const out = await runOracleFlow({
         rows: opts.chartRows ?? prismaChartRows(prisma),
@@ -404,7 +405,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
       oracleCost = out.guard.summary();
       oracleExtras = { tier: out.tier, readers: out.readers, validation: out.validation ? { answered: out.validation.answered, source: out.validation.source, missing: out.validation.missing.map((m) => m.part), flags: out.validation.flags } : null };
       Object.assign(timings, out.timings);
-      timings.synthStart = (out.timings.bundle ?? 0) + Math.max(0, ...Object.entries(out.timings).filter(([k]) => /^(R\d\d|P\d)$/.test(k)).map(([, v]) => v));
+      timings.synthStart = flowStart + (out.timings.oracleStart ?? 0);
       if (out.thoughts) thinkingText = out.thoughts.slice(0, MAX_STORED_THINKING_CHARS);
     } catch (err) {
       // the answer failed, and nothing will save the turn: what the agents did is still written

@@ -136,7 +136,7 @@ flowchart TD
 | 4 Dasha-first | "When", one subject | R2, R8, R10 | 3 |
 | 3 Core (default) | One subject | R1, R2, R3, R8, R10 | 5 |
 | 2 Deep | Decision or compare, person named, or "why" | Tier 3 + R4, R5, R7 (+R13 when a person is named) | 8–9 |
-| 1 Full | Two or more subjects, or life reading | R1–R11, R13 | 12 |
+| 1 Full | Life reading | R1–R11 (+R13 when a person is named) | 11–12 |
 | Plan B routes | Pressure, mood, luck, prediction cues | §4.1 Plan B table | 3–5 |
 
 R12 prashna adds one when eligible. R14 remedy adds one only with `READING_REMEDY_READER=1`, and is off by default
@@ -186,8 +186,9 @@ their findings can be reused across questions.
    no transit rows. These go away when Radha `facts` deploys.
 6. **Shared cached prefix.** Every reader for a user starts with the same bytes: reader rules + `CHART CORE`
    (`varga.d1`, `dignities`, `benefic_malefic`, `relations`, `ashtakavarga`, `strength.shadbala`, `karaka.chara`,
-   `arudhas`, `panchanga.birth`), about 23k characters or 6.4k tokens. That clears Gemini's 4,096-token cache minimum,
-   and the existing `cachePrefix` path serves it at 10 % of the input price.
+   `arudhas`, `panchanga.birth`). Measured on a real stored kundli: 17k characters, about 4.7k tokens, 5.2k with the
+   reader rules (§11). That clears Gemini's 4,096-token cache minimum, but not by much, and the existing `cachePrefix` path
+   serves it at 10 % of the input price.
 
 **Journal.** It holds every reader's prompt, digest, highlights, usage and status in memory.
 
@@ -245,7 +246,6 @@ focus (3 s), then an Oracle addendum of up to 250 tokens (6 s). One round, never
 | `POST /api/chat/ask-stream`, `/confirm-stream` | Unchanged request. `stage` events gain names `R01`…`R14`, `P1`–`P3`, `journal`, `oracle`, `validate`. `cached: true` when prewarmed |
 | New SSE `validation` | `{ type: 'validation', answered: boolean, source: 'rules' \| 'model', missing: string[] }`. Sent before `done`. Safe to ignore |
 | New SSE `addendum` | `{ type: 'addendum', status: 'start' \| 'done', part: string }`. Tokens arrive as normal `token` events |
-| `done` | Gains `cost: { usd, capped }` |
 | New `POST /api/chat/prewarm` | `{ runId }` → `200 { ran, cached, skipped }`, `401`, `404`. Idempotent. Holds its request for up to 6 s. Failure is harmless: the reading runs the readers itself |
 | `POST /api/chat/answer` | Unchanged |
 
@@ -296,9 +296,9 @@ derived from a speed table (`READER_SPEEDS`), so a model swap cannot silently ca
 | Retry | Only if the first attempt failed fast and at least 3.5 s of the join is left | | No timed-out retries: they would repeat the same slow work |
 | Reader join | Slowest required | **6 s** (Tier 1: 8 s) | The Oracle starts then, with what it has |
 | Brief | under 50 ms | | Doc 12 measured reconcile at 0.35 ms p95 |
-| **Oracle, T1/T9/T10** | up to 380 tokens, about 6 s | 15 s | Fits with readers inside 10 s |
-| **Oracle, other templates** | up to 900 tokens, about 9.7 s | 25 s | Inside 10 s only when prewarmed |
-| **Oracle, Tier 1** | up to 3,600 tokens, about 29 s | 60 s | Time gives way here |
+| **Oracle, T1/T9/T10** | about 370 tokens (up to 260 words), about 6 s | 25 s | Fits with readers inside 10 s |
+| **Oracle, other templates** | about 900 tokens, about 9.7 s; 280 words on a direct question | 25 s | Inside 10 s only when prewarmed |
+| **Oracle, Tier 1** | about 3,600 tokens, about 29 s | 60 s | Time gives way here |
 | Clarify context | About 100–200 extra input tokens: no measurable time | | Added to the brief; not a separate step |
 | Validator rules | under 5 ms | | |
 | Validator model | 200 tokens, about 2 s | 2 s | Delays `done`, not the answer |
@@ -495,4 +495,43 @@ the live bench spend (under $1), applying the migration, doc 33 §8's three open
 
 ## 11. As built
 
-Added when the phases land.
+Built 2026-11-01 on `claude/reading-dag-journal-oracle-40cd64`. `READING_FLOW=oracle` turns it on; nothing changes until
+then. **No live model call was made**: the bench and tests use the fake Gemini. Migration M18 is written, not applied.
+
+**Measured on a real stored kundli** (`npx tsx scripts/oracle-slice-sizes.ts`, read-only, sizes are chars ÷ 3.6, 2026-11-01):
+
+| Reader | Its tables | Whole prompt | Worst case at its output limit |
+|---|---|---|---|
+| R01 Backbone | 427 | 6,454 | $0.0033 |
+| R02 House and lord | 1,754 | 7,762 | $0.0036 |
+| R03 Varga | 4,465 | 10,407 | $0.0043 |
+| R04 Jaimini | 1,174 | 7,162 | $0.0034 |
+| R05 Strength | 1,531 | 7,348 | $0.0030 |
+| R06 Yoga and dosha | 366 | 6,306 | $0.0028 |
+| R08 Vimshottari | 64 | 6,039 | $0.0032 |
+| R09 Other dashas | 731 | 6,618 | $0.0038 |
+| R11 Annual | 2,067 | 8,020 | $0.0037 |
+| R13 Person | 2,051 | 8,093 | $0.0041 |
+| P1 / P2 / P3 | 1,306 / 68 / 690 | 7,350 / 6,059 / 6,690 | $0.0035 / $0.0027 / $0.0029 |
+
+R07 and R10 read transit rows from the evidence pack, which the script does not load; add about 1.8k tokens each (doc 24).
+All 35 stored types for every reader read in **791 ms from this laptop**, against 5.18 s for all natal rows. The real
+worst case for 11 readers is about $0.038, so the $0.05 fan-out cap holds even with no cache and every reader at its limit.
+
+**Where the build differs from the plan above:**
+
+| Plan said | Built | Why |
+|---|---|---|
+| Oracle token limits of 380 / 900 tokens | Word targets control the time; token limits are 1,800 (5,000 at Tier 1) | Thinking counts against the limit, so a tight limit would cut answers off. A cut-off answer is worse than 2 s |
+| Two or more subjects → Tier 1 | The first subject is read now; the rest go to `nextSubjects` and come back as their own readings | The client already reads parts in turn, each gets its own $0.30, and the first answer is faster |
+| `done` event carries cost | Not sent. Cost is on `reading_runs.cache.cost` and in the journal | The browser has no use for it |
+| R1's findings prepended to other readers | R1 runs beside them | Prepending would add a whole reader's time to the join |
+| Reader cache in the journal table | Prewarm uses the clarify row; other reuse is per instance | Reading the journal for this would break "written only after the Oracle" |
+
+**What it does not do yet:** `real_want` is inferred by rules and is not asked as a chip. Plan B routes by cue words, not
+taxonomy buckets. R14 stays off. Nothing fetches a missing type. Fast-lane questions take the one-call path, so they have no
+journal or validator. The web does not call `/api/chat/prewarm` yet, so timing readers are prewarmed only on the
+default horizon.
+
+**Readers lost some of doc 33's fields**, because the stored tables do not have them (filed in `docs/TODOS.md`): star lords,
+bhava chalit, and the 6/8/12 counts between dasha levels, which need a count Node may not do.

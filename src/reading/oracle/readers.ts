@@ -7,7 +7,6 @@ import { readingRemedyReader } from '../config.js';
 import type { Intent } from '../types.js';
 import { FRAMES, horizonRange, type SubjectId } from '../packs/frames.js';
 import type { SpecialistAnalyst } from '../nodes/specialists.js';
-import { isFastLane } from '../nodes/specialists.js';
 import { CORE_TYPES } from './chartBundle.js';
 import { aspectLists, annualTable, clipPeriods, frameHouses, presentOnly, sectionName, tidy } from './slices.js';
 import type { PlanBRoute } from './planB.js';
@@ -168,5 +167,3 @@ export function subjectVargas(subject: SubjectId): string[] {
 export function fetchPlan(ids: ReaderId[], c: Pick<SliceContext, 'vargas' | 'person'>): string[] {
   return [...new Set([...CORE_TYPES, ...ids.flatMap((id) => READERS[id].types(c))])];
 }
-
-export { isFastLane };

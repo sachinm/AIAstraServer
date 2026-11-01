@@ -32,6 +32,8 @@ export interface PrewarmReport {
 export async function prewarmOracleReaders(prisma: PrismaClient, userId: string, s: ClarifyState, runId: string, opts: { readerImpl?: typeof runReader; rows?: ChartRowSource } = {}): Promise<PrewarmReport> {
   const report: PrewarmReport = { ran: [], cached: [], skipped: [], spentUsd: 0 };
   if (readingFlow() !== 'oracle' || s.bucket === 'unknown' || s.bucket === 'explain_term' || !BUCKETS[s.bucket]) return report;
+  // a question about a child goes to no agent until the clarifier knows the child is an adult (doc 18)
+  if (s.pending?.criterion === 'child_age' || s.childAge === 'minor') return report;
   try {
     const data = await startPrefetch(prisma, userId, { asOf: s.asOf });
     if (!data?.dossier) return report;

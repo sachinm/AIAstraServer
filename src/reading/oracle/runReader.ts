@@ -206,7 +206,6 @@ export async function runReader(req: ReaderRequest, a: { model: string; guard: C
     if (err instanceof CostRefusedError) throw new ReaderFailure(err.message, 'budget', null);
     throw err;
   }
-  const t0 = Date.now();
   let r;
   try {
     r = await callGemini({
@@ -241,7 +240,6 @@ export async function runReader(req: ReaderRequest, a: { model: string; guard: C
   const finding = parsed.data;
   if (loose.repaired && finding.claims.length === 0) fail('parse', 'cut off with no whole claim');
   if (loose.repaired) finding.caveats = [...finding.caveats, TRUNCATED_CAVEAT];
-  void (Date.now() - t0);
   return { id: req.id, subject: req.subject, finding, usage: r.usage, repaired: loose.repaired };
 }
 
