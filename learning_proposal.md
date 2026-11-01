@@ -23,3 +23,12 @@ During this session, Sachin established foundational standards for how AI Astra 
   - [`docs/TECHNIQUE.md`](file:///C:/Users/Owner/Documents/work/AIAstra_Server/docs/TECHNIQUE.md) & [`docs/TECHNIQUE.docx`](file:///C:/Users/Owner/Documents/work/AIAstra_Server/docs/TECHNIQUE.docx)
   - [`docs/reading-engine/34-comprehensive-life-reading-from-radha-json.md`](file:///C:/Users/Owner/Documents/work/AIAstra_Server/docs/reading-engine/34-comprehensive-life-reading-from-radha-json.md) (§7)
 
+
+### 7. Rule 0 — Anti-Sycophancy Claim-Verification & Multi-Entity Disambiguation ("Never Go By What the User Enters")
+- **Why:** Users naturally compress or conflate multiple people/partners into shorthand when prompting (e.g., "an older person I work with" or "my brother"). If the engine blindly accepts the user's shorthand without auditing the chart first, the reading looks sycophantic and misses the real astrological differentiation.
+- **Mandate:** Always verify, challenge, and disambiguate user claims against the chart's multi-planet and multi-house geometry *before* treating any user statement as fact:
+  1. **Multiplicity Check:** Count the distinct planetary actors in the relevant houses (`7th house` `Ju + Sa + Su` + `7th lord Me in 8th` + `11th house Ke in Capricorn ruled by Sa`). State explicitly when the chart shows **multiple 50s–70s senior figures** rather than one.
+  2. **Composite Profession Check:** Never reduce `Saturn` to just "an old person." Read the nakshatra exchange and house links:
+     - **Figure 1 (`Saturn in 7th + Sun in Chitra [Mars] + Mars in Anuradha [Saturn] + 10th aspect on 4th House`):** A 70-year-old senior principal with strong **Mars + 4th-house** traits who owns/runs **construction, roofing, or real-estate companies** and brings industry contacts (`CarbonLite`).
+     - **Figure 2 (`7th/4th Lord Mercury in 8th House Libra + 6th-Lord Sun in 7th + D10 Gemini Lagna`):** A senior owner of a **software development shop / IT contracting agency** (`CF Webtools`) under whom the native works as a **freelance/contract developer** for small/mid-size businesses.
+     - **Figure 3 (`11th House Capricorn [Elder Brother] with Ketu in Shravana + 11th Lord Saturn Conjunct Jupiter [Jyotish] + 5th House Rahu [AI]`):** An **elder brother in his 50s** who is not just providing shelter, but actively commissioning/partnering with the native to build and calibrate an **AI + Vedic Astrology (`Jyotish`) application (`AI Astra`)**.

@@ -60,6 +60,14 @@ describe('pastReadingFlow multi-agentic 18-year retrospective engine', () => {
       expect(pred.rating).toBe('unrated');
     }
 
+    expect(report.claimVerificationAudit.disambiguatedEntities).toHaveLength(3);
+    expect(report.jupiterBehavioralPlaybook.tiers.sattvicOptimal).toContain('Sattvic');
+    expect(report.jupiterBehavioralPlaybook.windows2026To2029.length).toBeGreaterThanOrEqual(8);
+    expect(report.venusBehavioralPlaybook.whyRaVe2025To2026WasPoorestAndEclipsed).toContain('Mar 3, 2026');
+    expect(report.venusBehavioralPlaybook.fourFamilyChartsSavingGrace).toContain('Sister-in-Law');
+    expect(report.marsSaturnBehavioralPlaybook.roadmap1MonthTo15Years.length).toBeGreaterThanOrEqual(6);
+    expect(JSON.stringify(report)).not.toMatch(/\b(Radha|pyjhora|AIAstra_Radha|jhora)\b/i);
+
     const cached = await getPastLifeReading(prisma, 'u-sachin', 'k-sachin');
     expect(cached?.kundliId).toBe('k-sachin');
   });

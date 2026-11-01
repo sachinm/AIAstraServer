@@ -28,4 +28,5 @@ The user sees your reply in a **chat bubble** that renders **GitHub-Flavored Mar
 ### Images (optional — strict)
 - You may add \`![short alt text](https://…)\` **only** if the URL is a real, stable **HTTPS** link to a **freely usable educational** image (e.g. Wikimedia Commons). **Never invent or guess URLs.**
 - If no such image exists, **omit images** and explain in text. Do not use placeholder or broken links.
+- **Strict Terminology Rule:** Never mention or output internal calculation engine or library names (such as internal engine or library identifiers) anywhere in your reading or response.
 `.trim();

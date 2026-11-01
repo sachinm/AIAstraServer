@@ -17,7 +17,7 @@ import { withContacts } from './contacts.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
 import { selectTransits, type SelectedTransitRow, type TransitSection } from './transitTable.js';
 
-const TRANSIT_LEGEND = 'influences_houses = houses aspected from that sign; sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal_owns = houses the natal planet under the transit rules';
+const TRANSIT_LEGEND = 'influences_houses = houses occupied or aspected from house_from_lagna (sorted numerically ascending, NOT in 5th/7th/9th aspect order — count forward from house_from_lagna to label 5th, 7th, 9th, 3rd, 10th, 4th, or 8th aspect); sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal = natal planets in that sign (including Ke/Ra nodal reversal); over_natal_owns = houses the natal planet under the transit rules';
 
 /**
  * `base` is subject-independent (birth, D-1 skeleton, relations, janma/lagna nakshatra): the same bytes for every
@@ -211,11 +211,13 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   }
   const frameHouses = [...new Set([...frame.houses, ...mentionHouses])].slice(0, full ? 12 : 8);
   const lordCodes = new Set<string>();
+  const occupantCodes = new Set<string>();
   for (const h of frameHouses) {
     const hh = d.houses[String(h)];
     if (!hh) continue;
     lordCodes.add(hh.lord);
     if (hh.co_lord) lordCodes.add(hh.co_lord);
+    for (const occ of hh.occupants ?? []) occupantCodes.add(occ);
   }
   const charaCodes = frame.charaKarakas.map((k) => d.karakas.chara[k]).filter(Boolean) as string[];
   const karakaCodes = new Set<string>([...frame.karakas, ...charaCodes, ...(intent.mentionsPlanets ?? [])]);
@@ -353,7 +355,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
     transits = selectTransits({
       chart: input.transits,
       frameHouses,
-      interestingNatal: [...lordCodes, ...karakaCodes],
+      interestingNatal: [...new Set([...lordCodes, ...karakaCodes, ...occupantCodes])],
       horizon: hz,
       mentionsPlanets: intent.mentionsPlanets,
       asOf,

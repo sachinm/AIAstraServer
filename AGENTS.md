@@ -93,3 +93,5 @@ Read `docs/TODOS.md` before starting work in an area. Delete an item when its fi
 - English only for now.
 - Declined topics (`declined_topics` table, docs/reading-engine/18) are never facilitated or passed to any agent.
 - Never print secrets.
+- **Never output internal engine/library names (`Radha`, `pyjhora`, `AIAstra_Radha`, `jhora`) in any reading, report, or user-facing response.** All agents and LLM system prompts must enforce this rule (see `SOUL.md`).
+- Read and follow `SOUL.md` for all astrological reading synthesis, anti-sycophancy claim verification, and 4-tier (`Sattvic / Rajasic / Mediocre / Baseline`) behavioral playbooks.

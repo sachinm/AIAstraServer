@@ -183,4 +183,34 @@ describe('selectTransits', () => {
     expect(t.sade_sati.now).toBeNull();
     expect(t.sade_sati.periods).toEqual([]);
   });
+  it('includes natal occupants of frameHouses in interestingNatal so Nodal Reversal (Ra over Ke / Ke over Ra) is never dropped', () => {
+    const customDossier = structuredClone(dossier);
+    customDossier.houses['11']!.occupants = ['Ke'];
+    const customTransits = structuredClone(transits);
+    customTransits.rows.push({
+      planet: 'Ra',
+      from: '2026-12-05',
+      to: '2028-06-23',
+      sign: 9,
+      sign_name: 'Capricorn',
+      retro_on_entry: true,
+      house_from_lagna: 11,
+      house_from_moon: 3,
+      house_from_al: 2,
+      over_natal: ['Ke'],
+      influences_houses: [3, 5, 7, 11],
+      sav: 30,
+    });
+    const p = buildEvidencePack({
+      dossier: customDossier,
+      transits: customTransits,
+      subject: 'income_wealth',
+      asOf: G1_AS_OF,
+      intent: { horizon: '1y', mentionsPlanets: [], focusPoints: [] },
+    });
+    const tr = (p.sections as any).transits;
+    expect(tr).toBeDefined();
+    const hit = tr.focus_hits.find((fh: any) => fh.planet === 'Ra' && fh.over_natal.includes('Ke'));
+    expect(hit).toBeDefined();
+  });
 });

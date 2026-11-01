@@ -9,3 +9,4 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
   `rm -rf`, `Remove-Item -Recurse` or `git clean` with a variable, a substitution or an empty path, and check that the
   main checkout still has `.git` and `docs` afterwards. On 2026-10-31 a `git worktree add` with an empty path deleted
   the main checkout.
+- **Never say or output `Radha` or `pyjhora` anywhere in readings, reports, or user-facing responses.** Read and follow `SOUL.md` alongside `AGENTS.md`; this prohibition is also hardcoded in the system prompt sent to every agent.
