@@ -66,7 +66,8 @@ describe('clarify state machine', () => {
     expect(s.bucket).toBe('money_wealth');
     expect(s.pending?.criterion).toBe('horizon');
     s = typed(s, "after my sister's wedding");
-    expect(s.turns).toHaveLength(MAX_QUESTIONS);
+    expect(s.turns).toHaveLength(2);
+    expect(MAX_QUESTIONS).toBe(5);
     expect(s.status).toBe('PROPOSED');
     expect(s.slots.horizon?.value).toBe('6m');
     expect(assumptionText(s)).toBe('I assumed the next 6 months (24 Oct 2026 to 24 Apr 2027).');
