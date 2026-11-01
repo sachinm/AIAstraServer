@@ -40,6 +40,17 @@ export interface Intent {
    * "will X happen", "now"; never a declined or role-gated topic), and the confirmation moment the prashna is cast for.
    */
   prashna?: { eligible: boolean; askedAt: string; source: 'rules' | 'model' };
+  /** What the clarifier learned, passed on to the Oracle (docs/reading-engine/39 §4.1), and the clarify run that holds prewarmed findings. */
+  clarified?: ClarifiedContext;
+}
+
+export interface ClarifiedContext {
+  runId?: string;
+  turns: Array<{ criterion: string; question: string; answer: string }>;
+  assumed: Record<string, string>;
+  exactQuery: string | null;
+  /** what the person really wants to know (docs/reading-engine/33 §4.2), inferred by rules */
+  realWant?: { id: string; line: string; sensitive: string | null } | null;
 }
 
 export interface Usage {
@@ -53,7 +64,7 @@ export interface Usage {
 }
 
 export interface ReadingEvent {
-  type: 'intent' | 'stage' | 'token' | 'windows' | 'info' | 'thought' | 'next';
+  type: 'intent' | 'stage' | 'token' | 'windows' | 'info' | 'thought' | 'next' | 'validation' | 'addendum';
   [k: string]: unknown;
 }
 export type ReadingEmitter = (event: ReadingEvent) => void;

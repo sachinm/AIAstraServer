@@ -28,6 +28,8 @@ export interface FakeGeminiOptions {
   ledgerEvents?: unknown;
   /** raw specialist answer (text and finish reason) instead of the canned JSON, e.g. cut-off JSON or a blocked answer */
   specialistRaw?: (analyst: string) => { text: string; finishReason?: string } | null;
+  /** answers a non-streaming call by its parts, ahead of everything else (the oracle flow's readers and validator); null falls through */
+  respond?: (parts: string[], body: any) => { text: string; finishReason?: string } | null;
   /** HTTP status for analysts in `failAnalysts` (default 500) */
   failStatus?: number;
 }
@@ -109,7 +111,7 @@ export async function startFakeGemini(opts: FakeGeminiOptions = {}): Promise<Fak
           res.end(JSON.stringify({ error: { message: `fake failure for ${analyst}` } }));
           return;
         }
-        const raw = analyst && opts.specialistRaw ? opts.specialistRaw(analyst) : null;
+        const raw = opts.respond?.(parts, body) ?? (analyst && opts.specialistRaw ? opts.specialistRaw(analyst) : null);
         if (raw) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: raw.text }] }, finishReason: raw.finishReason ?? 'STOP' }], usageMetadata: usage }));

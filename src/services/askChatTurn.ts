@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ChatTurnResult } from './chatLlmService.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 import type { ReadingRunRecord } from '../reading/run.js';
+import { prismaJournalWriter } from '../reading/oracle/journal.js';
 import type { ChartStatus } from './chartStatusService.js';
 
 /** Observability row for one reading. A failure here must never fail the chat turn. */
@@ -130,5 +131,8 @@ export async function persistAskTurn(
     },
   });
   if (chatResult.reading) await persistReadingRun(db, userId, chat.id, message.id, chatResult.reading);
+  // the oracle flow's journal writes its agent responses only now, after the Oracle and validator; awaited, because a
+  // Lambda freezes once the response is sent. It never throws.
+  if (chatResult.reading?.journal) await chatResult.reading.journal.flush(prismaJournalWriter(db), { chatId: chat.id, messageId: message.id });
   return { chatId: chat.id, messageId: message.id };
 }
