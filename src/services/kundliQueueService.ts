@@ -62,11 +62,19 @@ export async function ensureUserGateReady(
     where: { id: userId },
     select: { id: true, kundli_added: true, profile_complete: true },
   });
-  const latest = await prisma.kundli.findFirst({
+  let latest = await prisma.kundli.findFirst({
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
     select: { id: true, queue_status: true, queue_started_at: true, ...KUNDLI_JSON_COLUMNS_SELECT },
   });
+  if (!latest && runSyncIfIncomplete && user?.profile_complete !== false) {
+    await enqueueKundliSync(prisma, userId).catch(() => undefined);
+    latest = await prisma.kundli.findFirst({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      select: { id: true, queue_status: true, queue_started_at: true, ...KUNDLI_JSON_COLUMNS_SELECT },
+    });
+  }
   if (!latest) return { kundli_added: Boolean(user?.kundli_added), queue_status: null };
   const allFilled = KUNDLI_JSON_FIELDS.every((f) => isJsonFieldFilled((latest as Record<string, unknown>)[f]));
   if (allFilled || latest.queue_status === QUEUE_STATUS_COMPLETED) {
@@ -118,10 +126,16 @@ export async function enqueueKundliSync(prisma: PrismaClient, userId: string): P
       await prisma.auth.update({ where: { id: userId }, data: { kundli_added: true } }).catch(() => undefined);
       return latest.id;
     }
-    await prisma.kundli.update({
-      where: { id: latest.id },
-      data: { queue_status: QUEUE_STATUS_PENDING },
-    });
+    const activelyRunning =
+      latest.queue_status === QUEUE_STATUS_IN_PROGRESS &&
+      latest.queue_started_at &&
+      Date.now() - latest.queue_started_at.getTime() <= 15_000;
+    if (!activelyRunning) {
+      await prisma.kundli.update({
+        where: { id: latest.id },
+        data: { queue_status: QUEUE_STATUS_PENDING },
+      });
+    }
     return latest.id;
   }
   const created = await prisma.kundli.create({
