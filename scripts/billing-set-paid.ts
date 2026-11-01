@@ -3,6 +3,8 @@
  *
  *   npm run billing:set-paid -- --email a@b.com --plan plus --interval month --until 2026-12-01
  *   npm run billing:set-paid -- --email a@b.com --clear
+ *   npm run billing:set-paid -- --email a@b.com --quota 40     (this account's monthly maximum; "none" is unlimited)
+ *   npm run billing:set-paid -- --email a@b.com --research on  (or off: the full charts in the chat's right sidebar)
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
@@ -23,7 +25,15 @@ async function main(): Promise<void> {
     const user = await db.auth.findFirst({ where: { email }, select: { id: true } });
     if (!user) throw new Error(`no user with email ${email}`);
     const store = new PrismaPlanStore(db);
-    if (process.argv.includes('--clear')) {
+    const quota = arg('quota');
+    const research = arg('research');
+    if (research !== undefined) {
+      if (research !== 'on' && research !== 'off') throw new Error('--research must be on or off');
+      await db.auth.update({ where: { id: user.id }, data: { research: research === 'on' } });
+    } else if (quota !== undefined) {
+      if (quota !== 'none' && !/^\d+$/.test(quota)) throw new Error('--quota must be a whole number or none');
+      await store.setQuota(user.id, quota === 'none' ? null : Number(quota));
+    } else if (process.argv.includes('--clear')) {
       await clearPaid(store, user.id);
     } else {
       const plan = arg('plan');

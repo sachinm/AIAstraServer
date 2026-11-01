@@ -3,7 +3,7 @@ import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import { paymentGatewayFor } from './gateway.js';
 import { pickRegion, viewerCountry } from './geo.js';
-import { PLANS, PLAN_CODES, currencyForRegion, effectivePlan, isInterval, isPlanCode } from './plans.js';
+import { PLANS, PLAN_CODES, currencyForRegion, effectivePlan, isInterval, isPlanCode, planQuota } from './plans.js';
 import { QuestionGate } from './questionGate.js';
 import { PrismaPlanStore, type PlanStore } from './store.js';
 
@@ -13,11 +13,12 @@ export interface BillingRouteDeps {
   /** tests */
   store?: PlanStore;
   enabled?: boolean;
+  env?: NodeJS.ProcessEnv;
 }
 
 export function registerBillingRoutes(app: express.Express, deps: BillingRouteDeps): void {
   const store = (): PlanStore => deps.store ?? new PrismaPlanStore(deps.prisma);
-  const gate = (): QuestionGate => new QuestionGate(store(), deps.enabled === undefined ? {} : { enabled: deps.enabled });
+  const gate = (): QuestionGate => new QuestionGate(store(), { ...(deps.enabled === undefined ? {} : { enabled: deps.enabled }), ...(deps.env ? { env: deps.env } : {}) });
 
   app.get('/api/billing/plans', async (req, res) => {
     const country = viewerCountry(req);
@@ -27,7 +28,14 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
     const region = pickRegion({ billingCountry: paying, requested: req.query.region, country });
     const currency = currencyForRegion(region);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({
+    let limits: Record<string, number | null>;
+    try {
+      limits = Object.fromEntries(PLAN_CODES.map((code) => [code, planQuota(code, deps.env)]));
+    } catch (err) {
+      console.error('[billing] plans not configured:', (err as Error).message);
+      return res.status(503).json({ error: 'plans_not_configured' });
+    }
+    return res.json({
       country,
       region,
       currency,
@@ -38,8 +46,8 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
         return {
           code,
           name: plan.name,
-          limit: plan.limit,
-          window: plan.window,
+          limit: limits[code],
+          window: 'month',
           prices: prices
             ? { month: { amount_minor: prices.month, currency }, year: { amount_minor: prices.year, currency } }
             : null,
@@ -59,7 +67,7 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
     const region = pickRegion({ requested, country });
     const currency = currencyForRegion(region);
     try {
-      await store().setDesired(userId, plan, plan === 'free' ? null : (interval as string), region, new Date());
+      await store().setDesired(userId, plan, plan === 'free' ? null : (interval as string), region, new Date(), planQuota('free', deps.env));
       const usage = await gate().getStatus(userId);
       const gateway = plan === 'free' ? null : paymentGatewayFor(currency);
       if (!gateway || plan === 'free' || !isInterval(interval)) return res.json({ status: 'pending_payment', checkout_url: null, plan: usage });

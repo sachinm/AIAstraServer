@@ -1,11 +1,11 @@
 # Plans, question limits, payments and locale
 
-Written 2026-11-01. Sachin asked for: a free plan everyone starts on with 5 questions, a progress bar that holds across
+Written 2026-11-01. Sachin asked for: a free plan everyone starts on, a progress bar that holds across
 conversations, a profile dropdown with an upgrade option, paid plans, USD and rupee prices by location, a language question at
 registration (English or Hindi), a US | India switch on the homepage, and access decoupled from charging: a paid flag plus a
 desired plan decide what a person can ask. The gateway is set up later.
 
-Priced at USD 50 and 500 for 20 questions a month, USD 200 and 2,000 for unlimited.
+Free has 20 questions a month. Plus is USD 50 a month or 500 a year for 100 questions a month. Unlimited is USD 200 or 2,000 with no limit. Limits come from env (`PLAN_FREE_QUESTIONS`, `PLAN_PLUS_QUESTIONS`), and each account stores its own `question_quota` and `questions_used_this_month`, which govern.
 
 ## 1. Start
 
@@ -26,9 +26,9 @@ Checked in the code on 2026-11-01.
 
 ## 2. End goal
 
-- A new account starts on Free with 5 questions in total. They never reset, and starting a new conversation does not change the count.
-- A bar under the top navigation reads "2 of 5 free questions used" on every signed-in page, and it moves when a question is asked.
-- On the sixth question the person sees an upgrade card, can still read all their old answers, and no model is called.
+- A new account starts on Free with 20 questions a month. Starting a new conversation does not change the count.
+- The top navigation shows "2 of 20 questions used" on every signed-in page, and it moves when a question is asked. Charts, Remedies and Mantras/Horoscope moved into the profile menu.
+- On the question past their quota the person sees an upgrade card, can still read all their old answers, and no model is called.
 - The avatar opens a menu: name, email, plan, questions left, Upgrade plan, Profile, Log out.
 - `/pricing` shows dollars or rupees by location. The homepage switch changes it.
 - Registration asks for English or Hindi, and the choice is saved.
@@ -39,7 +39,7 @@ Checked in the code on 2026-11-01.
 
 - Server: `src/billing/` (`plans.ts`, `store.ts`, `questionGate.ts`, `account.ts`, `gateway.ts`, `routes.ts`, `geo.ts`), the four question paths gated, GraphQL `me.plan`, `me.language` and `completeProfile.language`, `scripts/billing-set-paid.ts`, migration `20261101140000_billing_plans`.
 - Web: `ProfileMenu`, `UsageBar`, `PricingPage`, `RegionSwitch`, `UpgradeCard`, a language field in registration, `src/i18n/`, `src/lib/region.ts`.
-- Env: `PLANS_ENABLED`, `DEV_GEO_COUNTRY` (local only).
+- Env: `PLANS_ENABLED`, `PLAN_FREE_QUESTIONS`, `PLAN_PLUS_QUESTIONS`, `DEV_GEO_COUNTRY` (local only).
 - Tests for each of these.
 
 ## 4. How it works when done
@@ -59,8 +59,8 @@ effective plan = is_paid AND paid_plan set AND (paid_until empty OR paid_until >
 | `desired_plan`, `desired_interval` | What the person chose | `POST /api/billing/checkout` |
 | `is_paid` | The flag | Payment side only |
 | `paid_plan`, `paid_interval`, `paid_since`, `paid_until` | What the payment covers | Payment side only |
-| `free_used` | Free questions, lifetime | Gate |
-| `period_start`, `period_used` | Paid plan counter | Gate |
+| `question_quota` | This account's monthly maximum, null for unlimited. Stamped from env when the plan is set; `--quota` overrides one account | Plan change |
+| `questions_used_this_month`, `usage_month_start` | Usage in the current month | Gate |
 | `billing_country` | Country at the time of choosing | Checkout |
 
 `paid_plan` sits beside the flag on purpose. With only `is_paid` and `desired_plan`, a Plus subscriber who clicks Unlimited would get
@@ -71,9 +71,12 @@ calls them; a webhook will later.
 
 | Plan | Limit | Window |
 |---|---|---|
-| Free | 5 | Lifetime. A person who cancels keeps their old count. |
-| Plus | 20 | A month from `paid_since`, annual payers included. Unused questions do not carry over. |
-| Unlimited | 50 a day (abuse guard) | UTC day. 50 a day at USD 0.07 for 30 days is USD 105 against USD 200. |
+| Free | `PLAN_FREE_QUESTIONS` (20) | Calendar month, UTC |
+| Plus | `PLAN_PLUS_QUESTIONS` (100) | A month from `paid_since`, annual payers included. Unused questions do not carry over. |
+| Unlimited | None | Counted for reporting only |
+
+No number lives in the code. With plans on and either variable missing, the gate logs an error and allows the question, and `/api/billing/plans` returns 503.
+Changing an env value affects accounts when their plan is next set, not existing rows. Unlimited has no abuse guard, at Sachin's request (`docs/TODOS.md`).
 
 Roles `support`, `admin`, `superadmin`, `aiastra_admin` and `astrologer` are exempt.
 
@@ -81,7 +84,7 @@ Roles `support`, `admin`, `superadmin`, `aiastra_admin` and `astrologer` are exe
 
 1. Before anything else the route calls `checkQuestion`. Over the limit returns 402 and no model runs.
 2. A clarify card costs nothing. The count comes when the answer starts.
-3. `reserveQuestion` adds a `question_usage` row and increments with one conditional `UPDATE ... WHERE used < limit`. Postgres re-checks that condition under the row lock, so two tabs cannot both take the last question. It works on the pooler (`connection_limit=1`) because it needs no open transaction.
+3. `reserve` adds a `question_usage` row and increments with one conditional `UPDATE ... WHERE used < quota`. Postgres re-checks that condition under the row lock, so two tabs cannot both take the last question. It works on the pooler (`connection_limit=1`) because it needs no open transaction.
 4. After `persistAskTurn` it commits. An error, or a declined topic, releases it and gives the question back.
 5. A reservation older than 10 minutes is released on that person's next request. The Lambda limit is 300 s, so such a row belongs to a dead run. No scheduled job is needed.
 6. Later parts of a multi-part question are free only if the server recorded them in `open_parts` when the first part finished, for 1 hour. A made-up `focus` is charged as a new question.
@@ -101,13 +104,13 @@ The switch lets anyone see rupee prices. That is fine because the rupee gateway 
 |---|---|---|
 | `GET /api/billing/plans` | Optional `?region=US\|IN` | `{ country, region, currency, plans[], gateway }`, `Cache-Control: no-store`, no auth |
 | `POST /api/billing/checkout` | `{ plan, interval, region? }` | `{ status: "pending_payment" \| "redirect", checkout_url, plan }`. 400 `invalid_plan`, 401 |
-| GraphQL `me.plan` | | code, desired, paid flag, interval, used, limit, remaining, window, resets_at, exempt. Null when `PLANS_ENABLED` is off |
+| GraphQL `me.plan` | | code, desired, paid flag, interval, used, limit, remaining, window, resets_at, exempt; `limit` is null for Unlimited. Null when `PLANS_ENABLED` is off |
 | GraphQL `me.language`, `completeProfile(input.language)`, `updateProfile(input.language)` | `en` or `hi` | Anything else is treated as `en` |
 | Question routes | | 402 `{ code: "quota_exhausted", usage }`. SSE adds `{type:"usage", usage}` and `usage` on `done` |
 
 ### Frontend experience
 
-- `UsageBar`: Free only, inside `Dashboard` under the navigation. Reads `me.plan`, updates from SSE `usage`, re-reads on window focus for other tabs.
+- `UsageBar`: Free only, in the middle of `TopNavigation`, where the page links were. Reads `me.plan`, updates from SSE `usage`, re-reads on window focus for other tabs.
 - `ProfileMenu`: replaces the name button and logout icon, on mobile too. Closes on Esc and on an outside click; arrow keys move through it.
 - `ChatSection`: on 402 it shows `UpgradeCard` in place of the input.
 - `/pricing`: public. Monthly and annual toggle. Signed out, the button goes to sign-up. Signed in, it calls checkout: a `checkout_url` redirects, otherwise it shows the saved state.
@@ -118,12 +121,11 @@ The switch lets anyone see rupee prices. That is fine because the rupee gateway 
 
 | State | Words |
 |---|---|
-| Bar, 0-3 used | "2 of 5 free questions used" + Upgrade |
-| Bar, 4 used | "1 free question left" + Upgrade, amber |
-| Bar, 5 used | "You have used your 5 free questions" + Upgrade, red |
-| Upgrade card | "You have used your 5 free questions. Choose a plan to keep asking. Your earlier answers stay here." |
-| Plus used up | "You have used this month's 20 questions. They renew on {date}." |
-| Unlimited guard | "You have asked a lot today. You can ask again tomorrow." |
+| Nav, questions left | "2 of 20 questions used" + Upgrade |
+| Nav, one left | "1 question left" + Upgrade, amber |
+| Nav, none left | "20 of 20 questions used" + Upgrade, red |
+| Free used up | "You have used this month's 20 questions. They renew on {date}. Choose a plan to keep asking. Your earlier answers stay here." |
+| Plus used up | "You have used this month's 100 questions. They renew on {date}." |
 | Plan saved, no gateway | "We saved your choice of {plan}. Payments open soon, and you stay on the free plan until then." |
 | Hindi chosen | "Hindi is coming soon. Until then, your readings and the app are in English." |
 
@@ -165,7 +167,7 @@ puts Unlimited at Rs 19,100 a month, which would need an OTP every month. The de
 |---|---|
 | `i18next`, `react-i18next` | Installed by Haiku agent |
 | Migration `20261101140000_billing_plans` | Agent writes; applying needs Sachin's OK |
-| `PLANS_ENABLED=1` on the Lambda | Deploy session, after the migration |
+| `PLANS_ENABLED=1`, `PLAN_FREE_QUESTIONS=20`, `PLAN_PLUS_QUESTIONS=100` on the Lambda | Deploy session, after the migration |
 | `CloudFront-Viewer-Country` in the origin request policy | Deploy session |
 | Rupee prices | Sachin. Defaults: Plus Rs 2,499 and 24,999; Unlimited Rs 9,999 and 99,999 |
 | Legal entity, gateway accounts, keys | Sachin |
@@ -188,7 +190,7 @@ puts Unlimited at Rs 19,100 a month, which would need an OTP every month. The de
 
 | Phase | Ships | Closed by | Deferred |
 |---|---|---|---|
-| 1. Limits and plans (this work) | Sections 2-4, no charging | Tests, then a staging run of 6 questions | Payment |
+| 1. Limits and plans (this work) | Sections 2-4, no charging | Tests, then a staging account taken past its quota | Payment |
 | 2. Gateway | Checkout, webhook Lambda, cancel and portal | A test-mode event sets `is_paid` | Tax automation |
 | 3. Locale | All web strings moved to catalogs; date and time by locale; month shown by name on the birth date (`docs/TODOS.md` P0) | No hard-coded text left | Translation |
 | 4. Hindi | Hindi UI catalog, then Hindi readings with evals | Evals per language, and `AGENTS.md`'s English rule changed | Other languages |
@@ -199,8 +201,7 @@ New UI uses the catalog from Phase 1, so Phase 3 only has to move the old string
 
 Ship Phase 1 with `PLANS_ENABLED` off, apply the migration, then turn it on in staging. It is complete without a gateway, because access reads only the flag. Decisions that were made and can be changed:
 
-- Free's 5 questions are lifetime. Existing users start at 0.
+- Free resets each calendar month. Existing users start at 0.
 - One question is one thing the person asked: multi-part counts once, clarify rounds and failures do not count.
-- Annual Plus gets 20 a month, not 240 at once.
-- "Unlimited" has a stated 50-a-day guard, which the terms must say.
+- Annual Plus gets 100 a month, not 1,200 at once.
 - Hindi is stored and shown as coming soon; no Hindi text ships in Phase 1.

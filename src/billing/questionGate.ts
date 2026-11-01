@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
-import { EXEMPT_ROLES, PLANS, effectivePlan, plansEnabled, periodFor, type PlanCode, type PlanWindow } from './plans.js';
+import { EXEMPT_ROLES, effectivePlan, monthFor, planQuota, plansEnabled, type PlanCode, type PlanWindow } from './plans.js';
 import { PrismaPlanStore, type BillingAccountRow, type PlanStore } from './store.js';
 
 /** Twice the Lambda's 300 s limit, so such a reservation belongs to a dead run. */
@@ -29,7 +29,6 @@ export interface PlanStatus {
 /** A held question; `id` is null when nothing was counted. */
 export interface QuestionTicket {
   id: string | null;
-  counter: 'free' | 'period' | 'none';
   periodStart: Date | null;
   userId: string;
 }
@@ -37,12 +36,12 @@ export interface QuestionTicket {
 export type CheckResult = { ok: true } | { ok: false; usage: PlanStatus };
 export type ReserveResult = { ok: true; ticket: QuestionTicket } | { ok: false; usage: PlanStatus };
 
-const FREE_TICKET = (userId: string): QuestionTicket => ({ id: null, counter: 'none', periodStart: null, userId });
+const FREE_TICKET = (userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
 
 export class QuestionGate {
   constructor(
     private readonly store: PlanStore,
-    private readonly opts: { enabled?: boolean; now?: () => Date } = {}
+    private readonly opts: { enabled?: boolean; now?: () => Date; env?: NodeJS.ProcessEnv } = {}
   ) {}
 
   private get enabled(): boolean {
@@ -53,9 +52,19 @@ export class QuestionGate {
     return this.opts.now?.() ?? new Date();
   }
 
+  /** The account's own column governs. A lapsed paid account has not been reset yet, so it gets the free quota. */
+  private quota(a: BillingAccountRow | null, code: PlanCode): number | null {
+    if (code === 'unlimited') return null;
+    if (!a || (code === 'free' && a.is_paid)) return planQuota('free', this.opts.env);
+    return a.question_quota;
+  }
+
+  private month(a: BillingAccountRow | null, code: PlanCode) {
+    return monthFor(code === 'free' ? null : (a?.paid_since ?? null), this.now());
+  }
+
   private status(a: BillingAccountRow | null, exempt: boolean): PlanStatus {
-    const now = this.now();
-    const code = effectivePlan(a, now);
+    const code = effectivePlan(a, this.now());
     const base = {
       code,
       desired_plan: a?.desired_plan ?? 'free',
@@ -64,21 +73,25 @@ export class QuestionGate {
       interval: code !== 'free' ? (a?.paid_interval ?? null) : null,
     };
     if (exempt) return { ...base, used: 0, limit: null, remaining: null, window: 'none', resets_at: null, exempt: true };
-    const plan = PLANS[code];
-    if (plan.window === 'lifetime') {
-      const used = a?.free_used ?? 0;
-      return { ...base, used, limit: plan.limit, remaining: Math.max(plan.limit - used, 0), window: 'lifetime', resets_at: null, exempt: false };
-    }
-    const period = periodFor(plan.window as 'month' | 'day', a?.paid_since ?? null, now);
-    const used = a?.period_start?.getTime() === period.start.getTime() ? (a?.period_used ?? 0) : 0;
-    return { ...base, used, limit: plan.limit, remaining: Math.max(plan.limit - used, 0), window: plan.window, resets_at: period.end.toISOString(), exempt: false };
+    const month = this.month(a, code);
+    const used = a?.usage_month_start?.getTime() === month.start.getTime() ? (a?.questions_used_this_month ?? 0) : 0;
+    const limit = this.quota(a, code);
+    return {
+      ...base,
+      used,
+      limit,
+      remaining: limit === null ? null : Math.max(limit - used, 0),
+      window: 'month',
+      resets_at: month.end.toISOString(),
+      exempt: false,
+    };
   }
 
   private async isExempt(userId: string): Promise<boolean> {
     return EXEMPT_ROLES.includes((await this.store.getRole(userId)) ?? '');
   }
 
-  /** The plan for `me`; null when limits are off or could not be read. */
+/** The plan for `me`; null when limits are off or could not be read. */
   async getStatus(userId: string): Promise<PlanStatus | null> {
     if (!this.enabled) return null;
     try {
@@ -126,20 +139,17 @@ export class QuestionGate {
         if (earlier) await this.store.deleteUsage(earlier.id);
       }
 
-      const account = await this.store.ensureAccount(userId);
-      const plan = PLANS[effectivePlan(account, this.now())];
-      const lifetime = plan.window === 'lifetime';
-      const periodStart = lifetime ? null : periodFor(plan.window as 'month' | 'day', account.paid_since, this.now()).start;
-      const counter = lifetime ? 'free' : 'period';
+      const account = await this.store.ensureAccount(userId, planQuota('free', this.opts.env));
+      const code = effectivePlan(account, this.now());
+      const periodStart = this.month(account, code).start;
 
-      const row = await this.store.insertUsage(userId, key, counter, periodStart);
+      const row = await this.store.insertUsage(userId, key, periodStart);
       if (!row) return { ok: true, ticket: FREE_TICKET(userId) };
-      const taken = lifetime ? await this.store.takeFree(userId, plan.limit) : await this.store.takePeriod(userId, periodStart as Date, plan.limit);
-      if (!taken) {
+      if (!(await this.store.takeQuestion(userId, periodStart, this.quota(account, code)))) {
         await this.store.deleteUsage(row.id);
         return { ok: false, usage: this.status(await this.store.getAccount(userId), false) };
       }
-      return { ok: true, ticket: { id: row.id, counter, periodStart, userId } };
+      return { ok: true, ticket: { id: row.id, periodStart, userId } };
     } catch (err) {
       console.error('[plans] reserve failed, allowing:', (err as Error).message);
       return { ok: true, ticket: FREE_TICKET(userId) };
@@ -161,7 +171,7 @@ export class QuestionGate {
     if (!ticket.id) return;
     try {
       if (!(await this.store.settleUsage(ticket.id, 'released', {}, this.now()))) return;
-      await this.giveBack(ticket.userId, ticket.counter, ticket.periodStart);
+      if (ticket.periodStart) await this.store.giveBackQuestion(ticket.userId, ticket.periodStart);
     } catch (err) {
       console.error('[plans] release failed:', (err as Error).message);
     }
@@ -171,15 +181,10 @@ export class QuestionGate {
     return new Date(this.now().getTime() - OPEN_PART_MS);
   }
 
-  private async giveBack(userId: string, counter: string, periodStart: Date | null): Promise<void> {
-    if (counter === 'free') await this.store.giveBackFree(userId);
-    else if (counter === 'period' && periodStart) await this.store.giveBackPeriod(userId, periodStart);
-  }
-
   private async releaseStale(userId: string): Promise<void> {
     const stale = await this.store.staleReservations(userId, new Date(this.now().getTime() - STALE_RESERVATION_MS));
     for (const row of stale) {
-      if (await this.store.settleUsage(row.id, 'released', {}, this.now())) await this.giveBack(userId, row.counter, row.period_start);
+      if (await this.store.settleUsage(row.id, 'released', {}, this.now())) await this.store.giveBackQuestion(userId, row.period_start);
     }
   }
 }
