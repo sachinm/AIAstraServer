@@ -28,7 +28,7 @@ Checked in the code on 2026-11-01.
 
 - A new account starts on Free with 20 questions a month. Starting a new conversation does not change the count.
 - The top navigation shows "2 of 20 questions used" on every signed-in page, and it moves when a question is asked. Charts, Remedies and Mantras/Horoscope moved into the profile menu.
-- On the question past their quota the person sees an upgrade card, can still read all their old answers, and no model is called.
+- When the last question is used, the person sees an upgrade card, can still read all their old answers, and no model is called.
 - The avatar opens a menu: name, email, plan, questions left, Upgrade plan, Profile, Log out.
 - `/pricing` shows dollars or rupees by location. The homepage switch changes it.
 - Registration asks for English or Hindi, and the choice is saved.
