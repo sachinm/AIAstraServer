@@ -18,6 +18,7 @@ import { judgePrashna, phraseAsk, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
 import { guidanceFor } from '../coach/content.js';
 import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
+import { loadAgentPrompts } from '../prompts/registry.js';
 
 export const CARD_BUDGET_MS = 300;
 
@@ -49,9 +50,9 @@ function understandingLine(s: ClarifyState): string {
   return s.bucket === 'unknown' ? 'I could not tell which area of life this is about.' : `You are asking about ${BUCKETS[s.bucket].displayName.toLowerCase()}.`;
 }
 
-async function eventFor(runId: string, s: ClarifyState, usage: Usage[]): Promise<ClarifyEvent | null> {
+async function eventFor(runId: string, s: ClarifyState, usage: Usage[], prisma?: PrismaClient | null): Promise<ClarifyEvent | null> {
   if (s.status === 'ASKING' && s.pending) {
-    const { ask, usage: u } = await phraseAsk(s, s.pending);
+    const { ask, usage: u } = await phraseAsk(s, s.pending, prisma);
     if (u) usage.push(u);
     // a question with no life area also gets one line on how to ask (coach/content.ts)
     const guide = ask.criterion === 'bucket' ? guidanceFor(s.bucket, s.bucket === 'unknown' ? 'no_subject' : null) : null;
@@ -110,7 +111,8 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card, needsChildAge, location, needsLocation, birthPlace });
   const runId = await store.create(userId, state);
   const usage: Usage[] = [];
-  const event = await eventFor(runId, state, usage);
+  void loadAgentPrompts(prisma);
+  const event = await eventFor(runId, state, usage, prisma);
   return { runId, state, event, usage, ms: Date.now() - t0 };
 }
 
@@ -145,7 +147,7 @@ export async function answerClarify(
   const last = next.turns[next.turns.length - 1];
   const lastAnswered = next.turns.find((t) => t.answer && t.ask.criterion === s.pending!.criterion && t.answer.value === value.slice(0, 300));
   if (!viaChip && lastAnswered && lastAnswered.answer && !lastAnswered.answer.resolved) {
-    const r = await resolveFreeText(s, s.pending.criterion, value);
+    const r = await resolveFreeText(s, s.pending.criterion, value, prisma);
     if (r.usage) usage.push(r.usage);
     if (r.value) next = absorbAnswer(s, r.value, { viaChip: true, threshold: classifierThreshold(), tz });
   }
@@ -161,7 +163,7 @@ export async function answerClarify(
     const topics = await loadDeclinedTopics(null);
     return { runId, state: next, event: null, usage, ms: Date.now() - t0, declined: topics.find((x) => x.id === 'minors') };
   }
-  const event = await eventFor(runId, next, usage);
+  const event = await eventFor(runId, next, usage, prisma);
   return { runId, state: next, event, usage, ms: Date.now() - t0 };
 }
 

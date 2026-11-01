@@ -32,6 +32,7 @@ import type { ReconcileResult } from './nodes/reconcile.js';
 import { FRAMES, horizonRange } from './packs/frames.js';
 import { buildEvidencePack, hashPack, hashText, mergeSubjectPacks, renderBase, renderSubject, type EvidencePack } from './packs/selector.js';
 import { PROMPTS, PROMPT_VERSION } from './prompts/generated.js';
+import { loadAgentPrompts } from './prompts/registry.js';
 import type { Intent, ReadingEmitter, Usage } from './types.js';
 import { guidanceFor } from './coach/content.js';
 import { prismaLayerLoaders, type LayerLoaders } from './layers/loaders.js';
@@ -113,6 +114,7 @@ async function personaText(prisma: PrismaClient): Promise<string> {
 
 /** Identical bytes for every user and question (cacheable prefix). */
 export async function buildSystem(prisma: PrismaClient): Promise<string> {
+  await loadAgentPrompts(prisma);
   return `${await personaText(prisma)}\n\n${PROMPTS['method']}`;
 }
 

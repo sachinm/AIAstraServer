@@ -31,8 +31,8 @@ export type Criterion = SlotId | 'bucket' | 'child_age' | 'sibling' | 'location'
 /** Criteria outside the two-question cap. */
 const UNCAPPED = new Set<Criterion>(['child_age', 'location']);
 
-export const MAX_QUESTIONS = 2;
-export const ABANDON_AFTER_MS = 10 * 60_000;
+export const MAX_QUESTIONS = 5;
+export const ABANDON_AFTER_MS = 30 * 60_000;
 
 export interface Chip {
   label: string;
