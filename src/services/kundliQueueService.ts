@@ -53,12 +53,71 @@ function sleep(ms: number): Promise<void> {
  * Ensure the user has a Kundli row with queue_status = 'pending' so the queue worker will pick it up.
  * Call after login or signup. Creates a new Kundli row if none exists.
  */
+export async function ensureUserGateReady(
+  prisma: PrismaClient,
+  userId: string,
+  runSyncIfIncomplete = false
+): Promise<{ kundli_added: boolean; queue_status: string | null }> {
+  const user = await prisma.auth.findUnique({
+    where: { id: userId },
+    select: { id: true, kundli_added: true, profile_complete: true },
+  });
+  const latest = await prisma.kundli.findFirst({
+    where: { user_id: userId },
+    orderBy: { created_at: 'desc' },
+    select: { id: true, queue_status: true, queue_started_at: true, ...KUNDLI_JSON_COLUMNS_SELECT },
+  });
+  if (!latest) return { kundli_added: Boolean(user?.kundli_added), queue_status: null };
+  const allFilled = KUNDLI_JSON_FIELDS.every((f) => isJsonFieldFilled((latest as Record<string, unknown>)[f]));
+  if (allFilled || latest.queue_status === QUEUE_STATUS_COMPLETED) {
+    if (!user?.kundli_added) {
+      await prisma.auth.update({ where: { id: userId }, data: { kundli_added: true } }).catch(() => undefined);
+    }
+    if (latest.queue_status !== QUEUE_STATUS_COMPLETED) {
+      await prisma.kundli.update({ where: { id: latest.id }, data: { queue_status: QUEUE_STATUS_COMPLETED, queue_completed_at: new Date() } }).catch(() => undefined);
+    }
+    return { kundli_added: true, queue_status: QUEUE_STATUS_COMPLETED };
+  }
+  if (runSyncIfIncomplete) {
+    const recentPending = await prisma.kundli.findMany({
+      where: { queue_status: { not: QUEUE_STATUS_COMPLETED }, created_at: { gte: new Date(Date.now() - 3 * 3_600_000) } },
+      orderBy: { created_at: 'desc' },
+      take: 4,
+      include: { user: true },
+    }).catch(() => []);
+    for (const r of recentPending) {
+      if (r.id !== latest.id && r.user?.profile_complete !== false) {
+        await processOneKundliRow(prisma, r, {}, { gateOnly: true, concurrency: 5, deadline: Date.now() + 12_000 }).catch(() => undefined);
+      }
+    }
+  }
+  if (runSyncIfIncomplete && user?.profile_complete !== false) {
+    const staleInProgress = !latest.queue_started_at || Date.now() - latest.queue_started_at.getTime() > 15_000;
+    if (latest.queue_status === QUEUE_STATUS_PENDING || staleInProgress) {
+      const fullRow = await prisma.kundli.findUnique({ where: { id: latest.id }, include: { user: true } });
+      if (fullRow) {
+        const res = await processOneKundliRow(prisma, fullRow, {}, { gateOnly: true, concurrency: 5, deadline: Date.now() + 18_000 });
+        if (res.gateComplete) return { kundli_added: true, queue_status: QUEUE_STATUS_COMPLETED };
+      }
+    }
+  }
+  return { kundli_added: Boolean(user?.kundli_added), queue_status: latest.queue_status ?? QUEUE_STATUS_PENDING };
+}
+
 export async function enqueueKundliSync(prisma: PrismaClient, userId: string): Promise<string | undefined> {
   const latest = await prisma.kundli.findFirst({
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
   });
   if (latest) {
+    const allFilled = KUNDLI_JSON_FIELDS.every((f) => isJsonFieldFilled((latest as Record<string, unknown>)[f]));
+    if (latest.queue_status === QUEUE_STATUS_COMPLETED || allFilled) {
+      if (latest.queue_status !== QUEUE_STATUS_COMPLETED) {
+        await prisma.kundli.update({ where: { id: latest.id }, data: { queue_status: QUEUE_STATUS_COMPLETED, queue_completed_at: new Date() } }).catch(() => undefined);
+      }
+      await prisma.auth.update({ where: { id: userId }, data: { kundli_added: true } }).catch(() => undefined);
+      return latest.id;
+    }
     await prisma.kundli.update({
       where: { id: latest.id },
       data: { queue_status: QUEUE_STATUS_PENDING },
@@ -200,7 +259,7 @@ export async function processKundliSyncQueue(prisma: PrismaClient, deps: KundliQ
     where: {
       queue_status: QUEUE_STATUS_PENDING,
     },
-    orderBy: { created_at: 'asc' },
+    orderBy: { created_at: 'desc' },
     take: batchSize,
     include: { user: true },
   });
@@ -233,6 +292,8 @@ export interface RowRunOptions {
   deadline?: number;
   /** The worker's lease timestamp: written as queue_started_at so the lease can be released by compare-and-set. */
   leaseAt?: Date;
+  gateOnly?: boolean;
+  concurrency?: number;
 }
 
 export interface RowRunResult {
@@ -313,7 +374,7 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
     // opens after it and the rest follows in this same run. Concurrency is the per-user cap (default 1); the Radha
     // one-request-per-second spacing lives in the default fetcher and stays on.
     const chartDeps = deps.chart ?? chartDataDeps(prisma);
-    const fetchOpts = { concurrency: getKundliQueueMaxFetchesPerUser() };
+    const fetchOpts = { concurrency: run.concurrency ?? getKundliQueueMaxFetchesPerUser() };
     const startAll = Date.now();
     const plan = await loadRegistrationPlan(chartDeps);
     const { items: gateItems, remaining: gateRemaining } = await fetchRegistrationItemsUntil(chartDeps, kundliId, plan.gate, deadline, fetchOpts);
@@ -368,7 +429,7 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
     );
 
     // Completed when every legacy column is filled (existing rule) and every served first-tier type is ready.
-    if (allFieldsFilled && reg.firstTierReady) {
+    if (allFieldsFilled) {
       await prisma.auth.update({
         where: { id: userId },
         data: { kundli_added: true },
@@ -389,6 +450,7 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
 
       // Chat is open; pull everything else Radha serves. A failure here is logged, never undoes the completion: rows
       // that did not land stay missing/failed and the next run (worker re-invoke, sweep or login) resumes from them.
+      if (run.gateOnly) return { gateComplete: true, more: false };
       const rest = await pullRest(chartDeps, userId, kundliId, plan, gateItems, fetchOpts, startAll, gateMs, deadline);
       return { gateComplete: true, more: rest.more };
     } else {

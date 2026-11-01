@@ -17,7 +17,7 @@ import {
   publicMessageFromChatProviderError,
 } from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
-import { enqueueKundliSync, kundliStatusFromQueue } from '../services/kundliQueueService.js';
+import { enqueueKundliSync, kundliStatusFromQueue, ensureUserGateReady } from '../services/kundliQueueService.js';
 import { scheduleKundliSync } from '../services/kundliSyncWorker.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
@@ -444,7 +444,7 @@ const resolvers = {
         name: user.name ?? null,
         profile_complete: user.profile_complete !== false,
         email_verified: Boolean(user.email_verified_at),
-        kundli_status: kundliStatusFromQueue(latestKundli?.queue_status),
+        kundli_status: kundliStatusFromQueue((await ensureUserGateReady(db, userId, false)).queue_status),
         ...ownProfileFields(user),
       };
     },
@@ -499,8 +499,8 @@ const resolvers = {
       return {
         user_id: user.id,
         is_active: user.is_active ?? false,
-        kundli_added: user.kundli_added ?? false,
-        queue_status: latestKundli?.queue_status ?? null,
+        kundli_added: (await ensureUserGateReady(db, userId, true)).kundli_added,
+        queue_status: (await ensureUserGateReady(db, userId, false)).queue_status,
       };
     },
     async myBiodata(_parent: unknown, _args: unknown, context: GraphQLContext) {

@@ -662,7 +662,10 @@ export async function fetchHoroscopeChart(
 ): Promise<Prisma.JsonValue> {
   if (coords && coords.lat != null && coords.lon != null && coords.tz != null) {
     const extra = { lat: coords.lat, lon: coords.lon, tz: coords.tz };
-    return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+    if (getAstroKundliTransport() === 'lambda' && extra.lat != null && extra.lon != null && extra.tz != null) {
+    return fetchHoroscopeChartImpl(params, type, extra);
+  }
+  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
   }
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
 }
@@ -677,6 +680,9 @@ export async function fetchEngineExport(
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
+  if (getAstroKundliTransport() === 'lambda' && extra.lat != null && extra.lon != null && extra.tz != null) {
+    return fetchHoroscopeChartImpl(params, type, extra);
+  }
   return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 

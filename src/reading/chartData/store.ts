@@ -517,6 +517,88 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
 const defaultFetcher: RadhaFetcher = (req, radhaType, extra) =>
   fetchEngineExport(req.params, radhaType, { ...(req.coords ?? {}), ...extra });
 
+const BUILTIN_CITY_COORDS: Record<string, { lat: number; lon: number; tz: number }> = {
+  'folsom,us': { lat: 38.68, lon: -121.18, tz: -8 },
+  'sacramento,us': { lat: 38.58, lon: -121.49, tz: -8 },
+  'san_francisco,us': { lat: 37.77, lon: -122.42, tz: -8 },
+  'san_jose,us': { lat: 37.34, lon: -121.89, tz: -8 },
+  'los_angeles,us': { lat: 34.05, lon: -118.24, tz: -8 },
+  'new_york,us': { lat: 40.71, lon: -74.01, tz: -5 },
+  'chicago,us': { lat: 41.88, lon: -87.63, tz: -6 },
+  'dallas,us': { lat: 32.78, lon: -96.80, tz: -6 },
+  'houston,us': { lat: 29.76, lon: -95.37, tz: -6 },
+  'seattle,us': { lat: 47.61, lon: -122.33, tz: -8 },
+  'austin,us': { lat: 30.27, lon: -97.74, tz: -6 },
+  'pune,in': { lat: 18.52, lon: 73.86, tz: 5.5 },
+  'mumbai,in': { lat: 19.08, lon: 72.88, tz: 5.5 },
+  'new_delhi,in': { lat: 28.61, lon: 77.21, tz: 5.5 },
+  'delhi,in': { lat: 28.61, lon: 77.21, tz: 5.5 },
+  'chennai,in': { lat: 13.08, lon: 80.27, tz: 5.5 },
+  'bengaluru,in': { lat: 12.97, lon: 77.59, tz: 5.5 },
+  'bangalore,in': { lat: 12.97, lon: 77.59, tz: 5.5 },
+  'hyderabad,in': { lat: 17.39, lon: 78.49, tz: 5.5 },
+  'kolkata,in': { lat: 22.57, lon: 88.36, tz: 5.5 },
+  'ahmedabad,in': { lat: 23.02, lon: 72.57, tz: 5.5 },
+  'london,gb': { lat: 51.51, lon: -0.13, tz: 0 },
+  'toronto,ca': { lat: 43.65, lon: -79.38, tz: -5 },
+  'sydney,au': { lat: -33.87, lon: 151.21, tz: 10 },
+  'dubai,ae': { lat: 25.20, lon: 55.27, tz: 4 },
+  'singapore,sg': { lat: 1.35, lon: 103.82, tz: 8 },
+};
+
+function parseBiodataCoords(biodata: unknown): { lat: number; lon: number; tz: number } | null {
+  if (!biodata || typeof biodata !== 'object') return null;
+  const b = biodata as Record<string, unknown>;
+  if (typeof b.lat === 'number' && typeof b.lon === 'number' && typeof b.tz === 'number') {
+    return { lat: b.lat, lon: b.lon, tz: b.tz };
+  }
+  const placeStr = typeof b.place === 'string' ? b.place : '';
+  const tzStr = typeof b.time_zone === 'string' ? b.time_zone : '';
+  const mPlace = /(\d+)\s*([EW])\s*(\d+)'\s*\d*"?\s*,\s*(\d+)\s*([NS])\s*(\d+)'/i.exec(placeStr);
+  const mTz = /^([+-]?\d+):(\d+)/.exec(tzStr.trim());
+  if (mPlace && mTz) {
+    const lonDeg = Number(mPlace[1]) + Number(mPlace[3]) / 60;
+    const lon = mPlace[2]!.toUpperCase() === 'W' ? -lonDeg : lonDeg;
+    const latDeg = Number(mPlace[4]) + Number(mPlace[6]) / 60;
+    const lat = mPlace[5]!.toUpperCase() === 'S' ? -latDeg : latDeg;
+    const tzSign = mTz[1]!.startsWith('-') ? -1 : 1;
+    const tz = tzSign * (Math.abs(Number(mTz[1])) + Number(mTz[2]) / 60);
+    return { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100, tz };
+  }
+  return null;
+}
+
+async function resolveFallbackCoords(place: string, biodata?: unknown): Promise<{ lat: number; lon: number; tz: number } | null> {
+  const fromBio = parseBiodataCoords(biodata);
+  if (fromBio) return fromBio;
+  const key = place.trim().toLowerCase().replace(/\s+/g, '_');
+  if (BUILTIN_CITY_COORDS[key]) return BUILTIN_CITY_COORDS[key]!;
+  const query = place.replace(/_/g, ' ').replace(/,([A-Z]{2})$/i, ', $1');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`, {
+      headers: { 'User-Agent': 'aiastra-server/1.0' },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (res.ok) {
+      const arr = (await res.json()) as Array<{ lat?: string; lon?: string }>;
+      if (arr[0]?.lat && arr[0]?.lon) {
+        const lat = Math.round(Number(arr[0].lat) * 100) / 100;
+        const lon = Math.round(Number(arr[0].lon) * 100) / 100;
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const cc = place.split(',').pop()?.trim().toUpperCase() ?? '';
+          const tz = cc === 'IN' ? 5.5 : cc === 'NP' ? 5.75 : Math.round(lon / 15);
+          const resolved = { lat, lon, tz };
+          BUILTIN_CITY_COORDS[key] = resolved;
+          return resolved;
+        }
+      }
+    }
+  } catch {
+    // ignore network failure
+  }
+  return null;
+}
+
 export function payloadHash(payload: unknown): string {
   return createHash('md5').update(JSON.stringify(payload ?? null)).digest('hex');
 }
@@ -585,7 +667,10 @@ export function prismaChartDataRepo(prisma: PrismaClient): ChartDataRepo {
       if (!k?.user) return null;
       try {
         const params = authToAstroKundliParams({ date_of_birth: k.user.date_of_birth, place_of_birth: k.user.place_of_birth, time_of_birth: k.user.time_of_birth });
-        const coords = k.lat != null && k.lon != null && k.tz != null ? { lat: k.lat, lon: k.lon, tz: k.tz } : null;
+        let coords = k.lat != null && k.lon != null && k.tz != null ? { lat: k.lat, lon: k.lon, tz: k.tz } : await resolveFallbackCoords(params.place, k.biodata);
+        if (coords && (k.lat == null || k.lon == null || k.tz == null)) {
+          void prisma.kundli.update({ where: { id: kundliId }, data: { lat: coords.lat, lon: coords.lon, tz: coords.tz } }).catch(() => undefined);
+        }
         return { params, coords };
       } catch {
         return null;
