@@ -22,7 +22,9 @@ import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
 import { loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
 import { CURRENT_VARIANT } from '../reading/chartData/store.js';
-import { processKundliSyncQueue, processOneKundliRow, type KundliQueueDeps, type KundliRowWithUser } from './kundliQueueService.js';
+import { readingBuildFactsEnabled } from '../reading/config.js';
+import { buildFactsForKundli } from '../reading/data/factsBuilder.js';
+import { enqueueKundliSync, processKundliSyncQueue, processOneKundliRow, type KundliQueueDeps, type KundliRowWithUser } from './kundliQueueService.js';
 
 export const KUNDLI_SYNC_SOURCE = 'aiastra';
 export const KUNDLI_SYNC_DETAIL_TYPE = 'kundli-sync';
@@ -34,6 +36,11 @@ export const LEASE_MARGIN_MS = 3 * 60_000;
 export const SWEEP_FAILED_RETRY_MS = 6 * 3_600_000;
 /** The Invoke API call (not the pull) is awaited at most this long by the request that schedules it. */
 const INVOKE_TIMEOUT_MS = 2_000;
+/** When the invoke fails on Lambda, the request itself pulls the gate for at most this long. */
+const FALLBACK_GATE_MS = 15_000;
+const FALLBACK_CONCURRENCY = 4;
+/** A polling client restarts a stalled build at most this often, per kundli owner, per container. */
+const RESUME_COOLDOWN_MS = 60_000;
 const KUNDLI_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
 export type KundliSyncEvent = { kind: 'sync'; kundliId: string } | { kind: 'sweep' };
@@ -102,14 +109,21 @@ export interface ScheduleDeps {
 
 /**
  * Start the background pull for one kundli. On Lambda: an async self-invoke (the pull then runs in its own invocation,
- * up to the Lambda timeout, whether or not the user is still connected). Off Lambda, with no kundliId, or when the
- * invoke fails: the old in-process queue run, not awaited. Only the Invoke API call is awaited (capped at 2 s), because
- * an un-awaited call would be frozen with the container once the response is sent. Never throws.
+ * up to the Lambda timeout, whether or not the user is still connected). When that invoke fails on Lambda: the gate only,
+ * awaited under a short deadline, because anything left running would freeze with the container; the sweep does the rest.
+ * Off Lambda or with no kundliId: the old in-process queue run, not awaited. Only the Invoke API call is awaited in the
+ * normal case (capped at 2 s). Never throws.
  */
-export async function scheduleKundliSync(kundliId: string | null | undefined, deps: ScheduleDeps = {}): Promise<'invoked' | 'in_process'> {
+export async function scheduleKundliSync(kundliId: string | null | undefined, deps: ScheduleDeps = {}): Promise<'invoked' | 'gate_sync' | 'in_process'> {
   if (kundliId && (await invokeKundliSyncAsync(kundliId))) return 'invoked';
   try {
     const prisma = deps.prisma ?? (await import('../lib/prisma.js')).prisma;
+    if (kundliId && process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      const row = (await prisma.kundli.findUnique({ where: { id: kundliId }, include: { user: true } })) as KundliRowWithUser | null;
+      const gate = row && (await processOneKundliRow(prisma, row, deps.queue ?? {}, { gateOnly: true, concurrency: FALLBACK_CONCURRENCY, deadline: Date.now() + FALLBACK_GATE_MS }));
+      queueLog({ event: 'kundli_sync_fallback_sync', kundli_id: kundliId, gate_complete: gate?.gateComplete ?? false });
+      return 'gate_sync';
+    }
     void processKundliSyncQueue(prisma, deps.queue).catch((err) => {
       console.error('processKundliSyncQueue (in-process fallback) failed:', (err as Error).message);
     });
@@ -117,6 +131,27 @@ export async function scheduleKundliSync(kundliId: string | null | undefined, de
     console.error('scheduleKundliSync fallback failed:', (err as Error).message);
   }
   return 'in_process';
+}
+
+const lastResumeAt = new Map<string, number>();
+
+/**
+ * Restart a build that is not running, for a client that found the chart incomplete (`me`, `meDetails`, chat). The lease
+ * still decides who runs, so a build in progress is left alone. `force` is the Retry button: it skips the cooldown and
+ * clears the last error so the client stops showing `failed`. Never throws.
+ */
+export async function resumeChartBuild(prisma: PrismaClient, userId: string, opts: { force?: boolean } = {}): Promise<boolean> {
+  if (!opts.force && Date.now() - (lastResumeAt.get(userId) ?? 0) < RESUME_COOLDOWN_MS) return false;
+  lastResumeAt.set(userId, Date.now());
+  try {
+    const kundliId = await enqueueKundliSync(prisma, userId);
+    if (opts.force && kundliId) await prisma.kundli.update({ where: { id: kundliId }, data: { last_sync_error: null } });
+    await scheduleKundliSync(kundliId, { prisma });
+    return true;
+  } catch (err) {
+    queueLogError({ event: 'kundli_sync_resume_failed', user_id: userId, error: (err as Error).message?.slice(0, 300) });
+    return false;
+  }
 }
 
 /** Take the worker lease on a kundli: set queue_started_at when it is empty or older than the lease. Null = held. */
@@ -222,6 +257,23 @@ export async function findIncompleteKundlis(prisma: PrismaClient, plan: Pick<Reg
   return rows.map((r) => r.id);
 }
 
+/**
+ * Kundlis with chat open whose dossier never landed (a fallback run, a crash, a Radha failure). Random order, so kundlis
+ * that keep failing cannot hold every slot. `unsupported` is left out: chat retries it when someone asks a question.
+ */
+export async function findKundlisMissingFacts(prisma: PrismaClient, batch: number): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT k."id" FROM "kundlis" k
+    JOIN "auth" a ON a."id" = k."user_id"
+    WHERE a."is_active" IS DISTINCT FROM false
+      AND a."kundli_added" = true
+      AND k."facts_status" IN ('pending', 'building', 'failed')
+      AND k."id" = (SELECT k2."id" FROM "kundlis" k2 WHERE k2."user_id" = k."user_id" ORDER BY k2."created_at" DESC LIMIT 1)
+    ORDER BY random()
+    LIMIT ${batch}`;
+  return rows.map((r) => r.id);
+}
+
 export interface SweepResult {
   candidates: number;
   outcomes: KundliSyncOutcome[];
@@ -233,7 +285,7 @@ export interface SweepResult {
  * Radha's one-request-per-second spacing in this process holds. A kundli the budget cuts short re-invokes itself; the
  * kundlis not reached wait for the next sweep. Never throws.
  */
-export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; find?: typeof findIncompleteKundlis }): Promise<SweepResult> {
+export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; find?: typeof findIncompleteKundlis; findFacts?: typeof findKundlisMissingFacts }): Promise<SweepResult> {
   const now = deps.now ?? Date.now;
   const startedAt = now();
   const maxMs = deps.maxMs ?? getKundliSyncMaxMs();
@@ -260,7 +312,20 @@ export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; fi
       break;
     }
   }
-  queueLog({ event: 'kundli_sync_sweep_done', candidates: ids.length, processed: outcomes.length, stopped_for_budget: stoppedForBudget });
+  let factsTried = 0;
+  if (readingBuildFactsEnabled() && !stoppedForBudget) {
+    try {
+      const missing = await (deps.findFacts ?? findKundlisMissingFacts)(deps.prisma, deps.batch ?? getKundliSyncSweepBatch());
+      for (const id of missing) {
+        if (now() >= startedAt + maxMs) break;
+        await buildFactsForKundli(deps.prisma, id);
+        factsTried += 1;
+      }
+    } catch (err) {
+      queueLogError({ event: 'kundli_sync_sweep_facts_failed', error: (err as Error).message?.slice(0, 300) });
+    }
+  }
+  queueLog({ event: 'kundli_sync_sweep_done', candidates: ids.length, processed: outcomes.length, facts_tried: factsTried, stopped_for_budget: stoppedForBudget });
   return { candidates: ids.length, outcomes, stoppedForBudget };
 }
 

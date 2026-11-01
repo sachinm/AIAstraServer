@@ -163,6 +163,12 @@ export function getAstroKundliRequestSpacingMs(): number {
   return DEFAULT_ASTROKUNDLI_REQUEST_SPACING_MS;
 }
 
+/** Radha calls in flight per process when the API key is sent. RADHA_MAX_CONCURRENT (integer 1–16), default 4. */
+export function getRadhaMaxConcurrent(): number {
+  const n = Number(process.env.RADHA_MAX_CONCURRENT);
+  return Number.isInteger(n) && n >= 1 && n <= 16 ? n : 4;
+}
+
 const DEFAULT_KUNDLI_QUEUE_BATCH_SIZE = 2;
 /** Default 1: one slice per chunk avoids stacking two export POSTs before the global throttle gap. */
 const DEFAULT_KUNDLI_QUEUE_MAX_FETCHES_PER_USER = 1;
@@ -219,6 +225,11 @@ export function getKundliQueueRowStaggerMs(): number {
 export function getKundliSyncMaxMs(): number {
   const n = Number(process.env.KUNDLI_SYNC_MAX_MS);
   return Number.isFinite(n) && n >= 60_000 && n <= 3_600_000 ? Math.round(n) : 12 * 60_000;
+}
+
+/** How long a worker's lease on `kundlis.queue_started_at` holds: the budget plus one chunk that started just before it. */
+export function getKundliSyncLeaseMs(): number {
+  return getKundliSyncMaxMs() + 3 * 60_000;
 }
 
 /** Kundlis one `kundli-sync-sweep` event processes, oldest first, one after another. KUNDLI_SYNC_SWEEP_BATCH (1–50), default 5. */

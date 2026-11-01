@@ -7,10 +7,11 @@ import {
   getKundliQueueBatchSize,
   getKundliQueueMaxFetchesPerUser,
   getKundliQueueRowStaggerMs,
+  getKundliSyncLeaseMs,
 } from '../config/env.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
-import { scheduleFactsBuild } from '../reading/data/factsBuilder.js';
+import { buildFactsForKundli, scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
 import { fetchRegistrationItemsUntil, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
@@ -50,31 +51,23 @@ function sleep(ms: number): Promise<void> {
 
 
 /**
- * Ensure the user has a Kundli row with queue_status = 'pending' so the queue worker will pick it up.
- * Call after login or signup. Creates a new Kundli row if none exists.
+ * Report whether the chat gate is open, repairing the flags when every legacy column is already filled. It never pulls
+ * chart data: the worker invocation owns the build (docs/reading-engine/38). To restart a stalled build, call
+ * resumeChartBuild in kundliSyncWorker.ts.
  */
 export async function ensureUserGateReady(
   prisma: PrismaClient,
-  userId: string,
-  runSyncIfIncomplete = false
+  userId: string
 ): Promise<{ kundli_added: boolean; queue_status: string | null }> {
   const user = await prisma.auth.findUnique({
     where: { id: userId },
-    select: { id: true, kundli_added: true, profile_complete: true },
+    select: { id: true, kundli_added: true },
   });
-  let latest = await prisma.kundli.findFirst({
+  const latest = await prisma.kundli.findFirst({
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
-    select: { id: true, queue_status: true, queue_started_at: true, ...KUNDLI_JSON_COLUMNS_SELECT },
+    select: { id: true, queue_status: true, ...KUNDLI_JSON_COLUMNS_SELECT },
   });
-  if (!latest && runSyncIfIncomplete && user?.profile_complete !== false) {
-    await enqueueKundliSync(prisma, userId).catch(() => undefined);
-    latest = await prisma.kundli.findFirst({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      select: { id: true, queue_status: true, queue_started_at: true, ...KUNDLI_JSON_COLUMNS_SELECT },
-    });
-  }
   if (!latest) return { kundli_added: Boolean(user?.kundli_added), queue_status: null };
   const allFilled = KUNDLI_JSON_FIELDS.every((f) => isJsonFieldFilled((latest as Record<string, unknown>)[f]));
   if (allFilled || latest.queue_status === QUEUE_STATUS_COMPLETED) {
@@ -85,29 +78,6 @@ export async function ensureUserGateReady(
       await prisma.kundli.update({ where: { id: latest.id }, data: { queue_status: QUEUE_STATUS_COMPLETED, queue_completed_at: new Date() } }).catch(() => undefined);
     }
     return { kundli_added: true, queue_status: QUEUE_STATUS_COMPLETED };
-  }
-  if (runSyncIfIncomplete) {
-    const recentPending = await prisma.kundli.findMany({
-      where: { queue_status: { not: QUEUE_STATUS_COMPLETED }, created_at: { gte: new Date(Date.now() - 3 * 3_600_000) } },
-      orderBy: { created_at: 'desc' },
-      take: 4,
-      include: { user: true },
-    }).catch(() => []);
-    for (const r of recentPending) {
-      if (r.id !== latest.id && r.user?.profile_complete !== false) {
-        await processOneKundliRow(prisma, r, {}, { gateOnly: true, concurrency: 5, deadline: Date.now() + 12_000 }).catch(() => undefined);
-      }
-    }
-  }
-  if (runSyncIfIncomplete && user?.profile_complete !== false) {
-    const staleInProgress = !latest.queue_started_at || Date.now() - latest.queue_started_at.getTime() > 15_000;
-    if (latest.queue_status === QUEUE_STATUS_PENDING || staleInProgress) {
-      const fullRow = await prisma.kundli.findUnique({ where: { id: latest.id }, include: { user: true } });
-      if (fullRow) {
-        const res = await processOneKundliRow(prisma, fullRow, {}, { gateOnly: false, concurrency: 8, deadline: Date.now() + 20_000 });
-        if (res.gateComplete) return { kundli_added: true, queue_status: QUEUE_STATUS_COMPLETED };
-      }
-    }
   }
   return { kundli_added: Boolean(user?.kundli_added), queue_status: latest.queue_status ?? QUEUE_STATUS_PENDING };
 }
@@ -129,7 +99,7 @@ export async function enqueueKundliSync(prisma: PrismaClient, userId: string): P
     const activelyRunning =
       latest.queue_status === QUEUE_STATUS_IN_PROGRESS &&
       latest.queue_started_at &&
-      Date.now() - latest.queue_started_at.getTime() <= 15_000;
+      Date.now() - latest.queue_started_at.getTime() <= getKundliSyncLeaseMs();
     if (!activelyRunning) {
       await prisma.kundli.update({
         where: { id: latest.id },
@@ -317,7 +287,31 @@ export interface RowRunResult {
   more: boolean;
 }
 
-/** Runs one kundli row: gate, completion, then the rest. Exported for the background worker (kundliSyncWorker.ts). */
+const FACTS_RETRY_DELAY_MS = 5_000;
+/** The prompt cache is a speed-up, so a worker run waits for it only this long before moving on to the rest. */
+const GEMINI_CACHE_WAIT_MS = 10_000;
+
+/** In a worker run the dossier lands before chat opens. Its failure never blocks chat: the sweep tries again. */
+async function buildFactsBeforeChat(prisma: PrismaClient, kundliId: string): Promise<void> {
+  try {
+    let built = await buildFactsForKundli(prisma, kundliId);
+    if (built.status === 'failed' && !built.unsupported) {
+      await sleep(FACTS_RETRY_DELAY_MS);
+      built = await buildFactsForKundli(prisma, kundliId);
+    }
+    queueLog({ event: 'chart_build', kundli_id: kundliId, phase: 'facts', status: built.status });
+  } catch (err) {
+    queueLogError({ event: 'chart_build', kundli_id: kundliId, phase: 'facts', status: 'failed', error: (err as Error).message?.slice(0, 300) });
+  }
+}
+
+async function settledWithin(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([work, new Promise((resolve) => { timer = setTimeout(resolve, ms); })]);
+  clearTimeout(timer);
+}
+
+/** Runs one kundli row: gate, dossier, completion, then the rest. Exported for the background worker (kundliSyncWorker.ts). */
 export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWithUser, deps: KundliQueueDeps, run: RowRunOptions = {}): Promise<RowRunResult> {
   const userId = row.user_id;
   const kundliId = row.id;
@@ -444,6 +438,9 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
 
     // Completed when every legacy column is filled (existing rule) and every served first-tier type is ready.
     if (allFieldsFilled) {
+      // Only a worker run (it holds a lease) can wait: on any other path the wait would hold up the user's request.
+      const inWorker = run.leaseAt !== undefined;
+      if (inWorker && readingBuildFactsEnabled()) await buildFactsBeforeChat(prisma, kundliId);
       await prisma.auth.update({
         where: { id: userId },
         data: { kundli_added: true },
@@ -456,10 +453,11 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
         },
       });
       if (!wasCompleted) {
-        void ensureGeminiCacheForUser(prisma, userId).catch((err) => {
+        const cache = ensureGeminiCacheForUser(prisma, userId).catch((err) => {
           console.error('ensureGeminiCacheForUser after kundli complete failed:', (err as Error).message);
         });
-        if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
+        if (inWorker) await settledWithin(cache, GEMINI_CACHE_WAIT_MS);
+        else if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
       }
 
       // Chat is open; pull everything else Radha serves. A failure here is logged, never undoes the completion: rows

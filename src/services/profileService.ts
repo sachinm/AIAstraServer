@@ -7,7 +7,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import { decrypt, encrypt } from '../lib/encrypt.js';
 import { deleteUserCaches } from '../reading/llm/promptCache.js';
 import { buildPlaceOfBirth, normalizeGender, validateCompleteProfile } from '../lib/profileValidators.js';
-import { enqueueKundliSync, ensureUserGateReady } from './kundliQueueService.js';
+import { enqueueKundliSync } from './kundliQueueService.js';
 import { scheduleKundliSync } from './kundliSyncWorker.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 
@@ -62,9 +62,6 @@ export async function completeProfile(
     // a retry after a lost response: nothing is overwritten, but ensure chart sync finishes
     const code = await ensureReferralCode(db, userId, user.referral_code);
     const kundliId = await enqueueKundliSync(db, userId).catch(() => undefined);
-    if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
-      await ensureUserGateReady(db, userId, true).catch(() => undefined);
-    }
     await scheduleKundliSync(kundliId, { prisma: db });
     return { success: true, message: 'Your profile is already complete.', referral_code: code };
   }
@@ -102,11 +99,6 @@ export async function completeProfile(
     return undefined;
   });
   // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
-  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    await ensureUserGateReady(db, userId, true).catch((err) => {
-      console.error('ensureUserGateReady after completeProfile failed:', (err as Error).message);
-    });
-  }
   await scheduleKundliSync(kundliId, { prisma: db });
   ensureGeminiCacheForUser(db, userId).catch((err) => {
     console.error('ensureGeminiCacheForUser after completeProfile failed:', (err as Error).message);
@@ -259,11 +251,6 @@ export async function updateProfile(
     return undefined;
   });
   // background pull in its own Lambda invocation (docs/reading-engine/31); in-process when not on Lambda
-  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    await ensureUserGateReady(db, userId, true).catch((err) => {
-      console.error('ensureUserGateReady after completeProfile failed:', (err as Error).message);
-    });
-  }
   await scheduleKundliSync(kundliId, { prisma: db });
   return { success: true, message: 'Profile updated. Your chart is being rebuilt.', rebuild: true };
 }

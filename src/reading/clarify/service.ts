@@ -19,6 +19,7 @@ import type { ClarifyStore } from './store.js';
 import { guidanceFor } from '../coach/content.js';
 import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
 import { loadAgentPrompts } from '../prompts/registry.js';
+import { inferRealWant } from './realWant.js';
 
 export const CARD_BUDGET_MS = 300;
 
@@ -181,14 +182,14 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
   }
   await store.save(userId, runId, next);
   if (next.status !== 'CONFIRMED') return { state: next, intent: null, event: await eventFor(runId, next, []) };
-  return { state: next, intent: await intentFromState(next), event: null };
+  return { state: next, intent: await intentFromState(next, runId), event: null };
 }
 
 /**
  * The confirmed clarify state as a reading intent: the rules intake of the original question, with the clarified
  * horizon and the bucket's frame, and the exact query as the understanding line.
  */
-export async function intentFromState(s: ClarifyState): Promise<Intent> {
+export async function intentFromState(s: ClarifyState, runId?: string): Promise<Intent> {
   const base = (await runIntake(s.question, s.asOf, { mode: 'rules' })).intent;
   const b = BUCKETS[s.bucket];
   const subFrame = s.subBucket ? b.subBuckets.find((x) => x.id === s.subBucket)?.frame : undefined;
@@ -213,6 +214,13 @@ export async function intentFromState(s: ClarifyState): Promise<Intent> {
     // doc 28 §5: the prashna is cast for the moment the person confirmed the question
     ...(s.status === 'CONFIRMED' && s.prashna ? { prashna: { eligible: s.prashna.eligible, askedAt: new Date(s.confirmedAt ?? s.updatedAt).toISOString(), source: s.prashna.source } } : {}),
     classification: base.classification ? { ...base.classification, bucket: s.bucket, subBucket: s.subBucket, slots: s.slots, missing: [], source: 'rules' } : undefined,
+    clarified: {
+      ...(runId ? { runId } : {}),
+      turns: s.turns.map((t) => ({ criterion: t.ask.criterion, question: t.ask.question, answer: t.answer?.value ?? '' })),
+      assumed: Object.fromEntries(Object.entries(s.assumed).filter((e): e is [string, string] => typeof e[1] === 'string')),
+      exactQuery: s.exactQuery,
+      realWant: inferRealWant(s.question, s.bucket),
+    },
   };
 }
 
