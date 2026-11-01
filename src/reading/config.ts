@@ -1,6 +1,6 @@
 /** Environment switches for the reading engine. All optional. The reading engine is the chat path by default. */
 
-export type ReadingFlow = 'single' | 'graph';
+export type ReadingFlow = 'single' | 'graph' | 'oracle';
 
 /** The reading engine answers chat by default (Sachin, 2026-10-24: "we must use the new chat path"). READING_ENGINE=0 is the kill switch. */
 export function isReadingEngineEnabled(): boolean {
@@ -10,9 +10,35 @@ export function isReadingEngineEnabled(): boolean {
 /**
  * single: intake → evidence pack → ONE streamed call (Phase 1).
  * graph:  intake → pack → parallel specialists → reconcile → streamed synthesis (Phase 2 flow).
+ * oracle: readers on the stored tables → journal → Oracle → validator → journal write (docs/reading-engine/39).
  */
 export function readingFlow(): ReadingFlow {
-  return process.env.READING_FLOW?.trim().toLowerCase() === 'graph' ? 'graph' : 'single';
+  const v = process.env.READING_FLOW?.trim().toLowerCase();
+  return v === 'graph' || v === 'oracle' ? v : 'single';
+}
+
+const positiveUsd = (name: string, fallback: number): number => {
+  const n = Number(process.env[name]);
+  return process.env[name]?.trim() && Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+/** Money limits of one question in the oracle flow (docs/reading-engine/39 §6). */
+export function readingCostCaps(): { fanout: number; oracle: number; query: number } {
+  return {
+    fanout: positiveUsd('READING_COST_CAP_FANOUT_USD', 0.05),
+    oracle: positiveUsd('READING_COST_CAP_ORACLE_USD', 0.25),
+    query: positiveUsd('READING_COST_CAP_QUERY_USD', 0.3),
+  };
+}
+
+/** The remedy reader R14 stays off until the doc 18 gate is opened (docs/reading-engine/33 §8). */
+export function readingRemedyReader(): boolean {
+  return process.env.READING_REMEDY_READER?.trim() === '1';
+}
+
+/** The validator's model step and its one-round loop (docs/reading-engine/39 §4.1). READING_VALIDATOR=0 keeps the rules only. */
+export function readingValidatorModel(): boolean {
+  return process.env.READING_VALIDATOR?.trim() !== '0';
 }
 
 /** db (default): kundli_facts + transit_snapshots filled from the pyjhora Lambda. fixture: golden chart G1, no DB or engine. */

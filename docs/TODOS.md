@@ -70,6 +70,16 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Prompt registry changes the schema from the request path.** `src/reading/prompts/registry.ts` `ensurePromptSchemaAndSeed`
+  runs `ALTER TABLE`, `CREATE TABLE` and `CREATE TRIGGER` on `system_prompts` during a chat turn. That bypasses "migrations are
+  written, never applied", and on a cold Lambda it adds up to 21 statements to the first question. Found reading the code,
+  2026-11-01. Status: open. Done: a migration holds the DDL; the code only reads.
+- **The `aiastra-ops` AWS key is invalid** (`InvalidClientTokenId`, 2026-11-01), so the live Lambda's `READING_FLOW` and models,
+  and CloudWatch timings, could not be read for doc 40. Status: open (deploy session). Done: a working read-only profile.
+- **Doc 39 needs a live bench before it is turned on.** Reader quality and every speed in doc 39 §5 rest on two stored data points
+  per model. `npm run bench:oracle -- --live` costs under $1. Status: open (needs Sachin's OK). Done: §5 holds measured numbers.
+- **Migration M18 (`reading_m18_agent_responses`) must be applied before `READING_FLOW=oracle`.** Without it the journal logs a failed
+  write and loses the agent rows; answers are unaffected. Status: open (deploy session, Sachin's OK).
 - **Chart build reliability needs infra before it ships** (`docs/reading-engine/38` §10). Order: API key and doc 31 §5
   infra, then server, then web; the wrong order slows the gate or drops the profile gate. Status: open (deploy session,
   Sachin's OK). Done: §10's three steps applied and Phase 4's load check run.
@@ -115,6 +125,27 @@ re-applied by it.
 
 ## P2: real, can wait
 
+- **The web does not call `POST /api/chat/prewarm`.** It should fire it without waiting on a `propose` event, and label the reader
+  pills (`R08` → "Vimshottari periods"). Without it, a clarified question whose horizon was answered re-runs timing readers,
+  which is the difference between about 7 s and about 11 s (doc 39 §5). Status: open (web session).
+- **Answer text arrives in one burst.** First token came within 5 ms of the end on both stored runs (`reading_runs`), and doc 24
+  saw the same. So streaming gives no early text at these sizes, and "first token" budgets (doc 12) measure nothing. Status: open.
+  Done: confirmed live whether Gemini or our path holds it, and doc 12's budgets restated as complete time.
+- **Only the oracle flow has a cost cap.** Single and graph flows have none: a 3-subject graph question could reach about $0.43
+  (doc 40 §3). `READING_DAILY_BUDGET_USD` in doc 05 §6 was never built. Status: open. Done: the guard also wraps those flows, or they are retired.
+- **Only the oracle flow scrubs engine names from output.** The rule is prompts only in the single and graph flows, despite a23a734's
+  message ("enforce engine-name redaction"); `grep` finds no output filter there. Status: open. Done: one filter on every flow.
+- **Clarifier model spend is not counted against a question's cap.** Bedrock `gpt-oss-120b` has no row in `llm/models.ts` `PRICES`, and its
+  usage is not kept (under $0.001 per question, doc 23). Status: open. Done: priced from the AWS page and seeded into the guard.
+- **Stored tables lack fields doc 33's curricula use:** star lord per planet (`varga.d1` gives the nakshatra name only), bhava chalit, and
+  `near_cusp`. Readers R07 and R08 report these as gaps. Status: open (Radha session). Done: served, and the curricula restored.
+- **The 6/8/12 friction counts between dasha levels have no source.** Doc 26 Pass 3 and doc 33 R8 use them; Node may not count, and
+  `house_counts` was not in the stored rows read 2026-11-01. Status: open. Done: read from `house_counts` once fetched per kundli.
+- **Planet names differ between tables:** `karaka.chara` says `Raagu` where `dignities` says `Rahu`. A reader or the layer count can treat one
+  planet as two topics. Status: open (Radha session). Done: one spelling.
+- **G1's catalog fixture has only 5 of the 35 types the readers use**, so `npm run bench:oracle` sends them thin tables. Status: open.
+  Done: fixture regenerated from deployed Radha (same work as the G1 P0 item above).
+- **Too few stored runs to measure:** 2 readings with timings in 21 days in `reading_runs`. Status: open. Done: enough staging traffic for percentiles.
 - **A worker re-run briefly closes chat on the web.** `processOneKundliRow` sets `queue_status = in_progress` on every run,
   and `ChatSection.tsx` opens only on `completed`, so a sweep or resume can show the overlay to a user whose chat was open.
   Status: open. Done: the page gates on `me.chart`, or re-runs of a completed row leave `queue_status` alone.
@@ -194,6 +225,8 @@ re-applied by it.
   dispositor and where it sits, every conjunction and drishti, and read from the other lagnas too (Indu, Hora and others).
   Fits doc 34's hierarchy; add the other-lagna readings to it.
 - **Fable rewrite of the Sachin reading** from Radha tables after the deploy and re-pull.
+- **Doc 39 follow-ups (2026-11-01).** `real_want` as a clarify question with chips (doc 33 §8 decision 1); Plan B buckets in the taxonomy; R14
+  on by default (doc 18 gate); `predictions` and calibration (doc 32). All wait on Sachin's decisions or on labels.
 - **Category flows (Sachin, 2026-10-31).** After that, specialised multi-agent flows per category, starting with romance,
   love and relationships, and finances (bank balance, financial luck, gains through career and business), then career,
   parents, legal. The Clarify agent detects the category, which triggers that flow, using stored kundli data or fetching
