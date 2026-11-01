@@ -126,6 +126,12 @@ export class CostGuard {
     return usd;
   }
 
+  /** A call that ended with no usage report (a time-out may still be billed): the reservation stays on the books as spent. */
+  settleUnknown(r: Reservation): void {
+    this.open.delete(r.id);
+    this.lines.push({ node: r.node, stage: r.stage, model: r.model, usd: r.usd, estimate: true });
+  }
+
   /** Money spent before this guard existed (prewarm during clarify) or not tied to one call (cache storage). */
   record(line: CostLine): void {
     this.lines.push(line);

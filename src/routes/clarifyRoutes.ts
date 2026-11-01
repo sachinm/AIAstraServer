@@ -14,7 +14,8 @@
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import { getChatLlmProvider } from '../config/env.js';
-import { isReadingEngineEnabled } from '../reading/config.js';
+import { isReadingEngineEnabled, readingFlow } from '../reading/config.js';
+import { prewarmOracleReaders } from '../reading/oracle/prewarmReaders.js';
 import { answerClarify, beginClarify, confirmAndBuildIntent } from '../reading/clarify/service.js';
 import { PrismaClarifyStore, type ClarifyStore } from '../reading/clarify/store.js';
 import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.js';
@@ -23,6 +24,9 @@ import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 import { parseClientPlace } from '../reading/chartData/place.js';
+
+/** The longest `POST /api/chat/prewarm` holds its request. */
+const ORACLE_PREWARM_CAP_MS = 6_000;
 
 export interface ClarifyRouteDeps {
   prisma: PrismaClient;
@@ -81,7 +85,7 @@ export async function clarifyOnAsk(deps: ClarifyRouteDeps, userId: string, quest
   sse.write(r.event);
   sse.write({ type: 'done', status: 'clarifying', runId: r.runId, ms: r.ms });
   // Track B: the natal layers run while the person reads the question (graph flow only, capped, same request)
-  await prewarmWithCap(prewarmNatalLayers(deps.prisma, userId, r.state));
+  await prewarmWithCap(readingFlow() === 'oracle' ? prewarmOracleReaders(deps.prisma, userId, r.state, r.runId) : prewarmNatalLayers(deps.prisma, userId, r.state));
   return true;
 }
 
@@ -103,6 +107,22 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
       logChatProviderError('clarify-answer', e);
       return res.status(500).json({ error: 'clarify_failed' });
     }
+  });
+
+  /**
+   * Runs the readers for a clarify run whose answers are in (doc 39 §4.3). A request of its own, so a Lambda stays alive for
+   * it. The web sends it without waiting when a `propose` event arrives. Safe to call twice and harmless to skip.
+   */
+  app.post('/api/chat/prewarm', async (req, res) => {
+    const userId = deps.getUserId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const { runId } = req.body as { runId?: string };
+    if (!runId) return res.status(400).json({ error: 'runId is required' });
+    const state = await store().get(userId, runId);
+    if (!state) return res.status(404).json({ error: 'not_found' });
+    if (readingFlow() !== 'oracle') return res.json({ ran: [], cached: [], skipped: [] });
+    const report = await Promise.race([prewarmOracleReaders(deps.prisma, userId, state, runId), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_PREWARM_CAP_MS))]);
+    return res.json(report ? { ran: report.ran, cached: report.cached, skipped: report.skipped } : { ran: [], cached: [], skipped: ['time_cap'] });
   });
 
   app.post('/api/chat/confirm-stream', async (req, res) => {

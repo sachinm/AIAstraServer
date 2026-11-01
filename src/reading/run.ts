@@ -38,6 +38,13 @@ import { guidanceFor } from './coach/content.js';
 import { prismaLayerLoaders, type LayerLoaders } from './layers/loaders.js';
 import { answerShapeRef, fullCacheLayoutActive, fullContextFor, singleSuffix, writerSuffix, type FullContext } from './packs/fullPrefix.js';
 import { ensurePromptCache } from './llm/promptCache.js';
+import { prismaChartRows } from './oracle/chartBundle.js';
+import { runOracleFlow } from './oracle/flow.js';
+import { prismaJournalWriter, type ReadingJournal } from './oracle/journal.js';
+import { loadPrewarmed } from './oracle/prewarm.js';
+import { inferRealWant } from './clarify/realWant.js';
+import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
+import { prashnaSection, transitAtSection } from './layers/sections.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -50,7 +57,7 @@ export interface RunReadingOptions {
   onDelta?: (delta: string) => void;
   onEvent?: ReadingEmitter;
   asOf?: string;
-  flow?: 'single' | 'graph';
+  flow?: 'single' | 'graph' | 'oracle';
   history?: string | null;
   /** Test seam: replaces the data prefetch */
   dataLoader?: (asOf: string) => Promise<ReadingData | null>;
@@ -62,14 +69,22 @@ export interface RunReadingOptions {
   questionPlace?: { lat: number; lon: number; tz: number };
   /** Data for the doc 28 layers (annual, prashna, transit at an asked date); default Radha through Prisma, none with a dataLoader */
   layers?: LayerLoaders;
+  /** Test seam for the oracle flow: replaces the stored-table read */
+  chartRows?: import('./oracle/chartBundle.js').ChartRowSource;
 }
+
+/** The dated layers wait at most this long: past it the reading goes on without them. */
+const ORACLE_LAYER_WAIT_MS = 1_500;
+const withinLayer = <T>(p: Promise<T | null> | undefined): Promise<T | null> => (p ? Promise.race([p.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_LAYER_WAIT_MS))]) : Promise.resolve(null));
 
 /** Longest thinking text stored per run. */
 export const MAX_STORED_THINKING_CHARS = 60_000;
 
 export interface ReadingRunRecord {
   runId: string;
-  flow: 'single' | 'graph' | 'safety';
+  flow: 'single' | 'graph' | 'oracle' | 'safety';
+  /** Oracle flow: every agent's response, held in memory until the turn is saved */
+  journal?: ReadingJournal;
   status: 'done' | 'failed';
   question: string;
   intent: Intent;
@@ -255,6 +270,14 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   timings.dataWait = Date.now() - tData;
   if (!data) throw new ReadingUnavailableError('dossier_missing', 'chart facts are not available yet');
 
+  // the oracle flow reads one subject per query: the other parts follow as readings of their own, each with its own budget
+  const oracleFlow = flowWanted === 'oracle' && !isFastLane(intent);
+  if (oracleFlow && intent.subjects.length > 1) {
+    intent.nextSubjects = [...new Set([...(intent.nextSubjects ?? []), ...intent.subjects.slice(1).map((s) => s.id)])];
+    intent.subjects = intent.subjects.slice(0, 1);
+  }
+  if (oracleFlow && !intent.clarified) intent.clarified = { turns: [], assumed: {}, exactQuery: null, realWant: inferRealWant(question, intent.classification?.bucket) };
+
   // 4. evidence packs
   emit({ type: 'stage', name: 'prepare', status: 'start' });
   const tPack = Date.now();
@@ -273,7 +296,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const packHashes: Record<string, string> = { merged: hashPack(merged), base: hashText(baseText) };
   for (const s of subjects) packHashes[s.id] = hashPack(packs[s.id]!);
 
-  const flow = flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
+  const flow: ReadingRunRecord['flow'] = oracleFlow ? 'oracle' : flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
   const tail = tailFor(intent, question, asOf);
   // dated edges inside the horizon, read from the pack (no computation); READING_CALENDAR=0 turns it off
   const calendar = readingCalendar() ? calendarBlock(buildCalendar(merged, intent, asOf, { lunations: data.transits?.lunations })) : '';
@@ -295,7 +318,7 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   const cacheOwner = { userId, kundliId: data.kundliId };
   // full cache layout: build (or reuse) the day's prefix and start its caches now, without waiting; calls made before a
   // cache is live go out in the base layout
-  const full: FullContext | undefined = fullCacheLayoutActive()
+  const full: FullContext | undefined = !oracleFlow && fullCacheLayoutActive()
     ? fullContextFor(data, asOf, system)
     : undefined;
   if (full) {
@@ -332,7 +355,64 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
     emit({ type: 'stage', name: 'synthesize', status: 'done', ms: timings.synthesize });
   };
 
-  if (flow === 'single') {
+  let journal: ReadingJournal | undefined;
+  let oracleCost: ReturnType<import('./oracle/costGuard.js').CostGuard['summary']> | undefined;
+  let oracleExtras: Record<string, unknown> = {};
+  if (flow === 'oracle') {
+    const layers = opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId }));
+    const askedAt = transitAskedAt(intent, asOf);
+    const [rawAt, rawPrashna] = await Promise.all([
+      withinLayer(askedAt && layers?.transitAt ? layers.transitAt(askedAt) : undefined),
+      withinLayer(layers?.prashna && prashnaApplies(intent, question) ? layers.prashna({ at: intent.prashna!.askedAt, place: intent.questionPlace ?? null, runId }) : undefined),
+    ]);
+    const first = subjects[0]!.id;
+    const prewarmed = await loadPrewarmed(prisma, userId, intent.clarified?.runId);
+    try {
+      const out = await runOracleFlow({
+        rows: opts.chartRows ?? prismaChartRows(prisma),
+        kundliId: data.kundliId,
+        userId,
+        runId,
+        intent,
+        question,
+        asOf,
+        system,
+        pack: packs[first]!,
+        tail,
+        calendar,
+        thinking: 'low',
+        includeThoughts: showThoughts,
+        emit,
+        ...(opts.onDelta ? { onDelta: opts.onDelta } : {}),
+        ...(onThought ? { onThought } : {}),
+        cacheOwner,
+        ...(rawAt && askedAt ? { transitAt: transitAtSection({ payload: rawAt, at: askedAt }) } : {}),
+        ...(rawPrashna ? { prashna: prashnaSection({ payload: (rawPrashna as { payload: unknown }).payload, frameHouses: packs[first]!.keyFrame.houses, placeSource: (rawPrashna as { placeSource: 'current' | 'birth' }).placeSource, dossier: data.dossier }) } : {}),
+        ...(prewarmed ? { prewarmed } : {}),
+      });
+      answer = out.answer;
+      finishReason = out.finishReason;
+      ttftMs = out.ttftMs;
+      stoppedForLoop = out.stoppedForLoop;
+      usages.push(...out.usage);
+      errors.push(...(out.errors as NodeError[]));
+      findings = out.findings;
+      windows = out.windows;
+      agreement = out.agreement;
+      droppedClaims = out.droppedClaims;
+      journal = out.journal;
+      oracleCost = out.guard.summary();
+      oracleExtras = { tier: out.tier, readers: out.readers, validation: out.validation ? { answered: out.validation.answered, source: out.validation.source, missing: out.validation.missing.map((m) => m.part), flags: out.validation.flags } : null };
+      Object.assign(timings, out.timings);
+      timings.synthStart = (out.timings.bundle ?? 0) + Math.max(0, ...Object.entries(out.timings).filter(([k]) => /^(R\d\d|P\d)$/.test(k)).map(([, v]) => v));
+      if (out.thoughts) thinkingText = out.thoughts.slice(0, MAX_STORED_THINKING_CHARS);
+    } catch (err) {
+      // the answer failed, and nothing will save the turn: what the agents did is still written
+      const held = (err as { journal?: ReadingJournal }).journal;
+      if (held) await held.flush(prismaJournalWriter(prisma));
+      throw err;
+    }
+  } else if (flow === 'single') {
     await streamSingle();
   } else {
     const keyFacts = keyFactsCard(merged, intent);
@@ -386,19 +466,23 @@ export async function runReading(prisma: PrismaClient, userId: string, question:
   if (ttftMs !== null && timings.synthStart !== undefined) timings.firstTokenFromStart = timings.synthStart + ttftMs;
   const cachedTokens = usages.reduce((n, u) => n + u.cachedTokens, 0);
   const promptTokens = usages.reduce((n, u) => n + u.promptTokens, 0);
-  const costUsd = totalCostUsd(usages);
+  // the oracle flow's guard also counts prewarm, cache storage and calls with no usage report
+  const costUsd = oracleCost ? oracleCost.usd : totalCostUsd(usages);
   const cachedShare = promptTokens ? Math.round((cachedTokens / promptTokens) * 100) / 100 : 0;
   // per model call: what was sent and how much of it came from a cache (no prompt text)
   const calls = usages.map((u) => ({ node: u.node, model: u.model, promptTokens: u.promptTokens, cachedTokens: u.cachedTokens }));
 
   const models: Record<string, string> = { synth: synthModel };
   if (flow === 'graph') models.specialist = modelFor('specialist');
+  if (flow === 'oracle') Object.assign(models, { synth: modelFor('oracle'), reader: modelFor('reader'), validator: modelFor('validator') });
   if (intake.usage) models.intake = modelFor('intake');
 
   const record: ReadingRunRecord = {
     ...baseRecord, flow, status: 'done', factsVersion: data.factsVersion, dossierHash: data.dossierHash, transitSnapshotId: data.transitSnapshotId, packHashes, findings, windows, agreement,
     answer, thinking: thinkingText || null, models, usage: usages, costUsd, timingsMs: timings,
+    ...(journal ? { journal } : {}),
     cache: {
+      ...(oracleCost ? { cost: oracleCost, ...oracleExtras } : {}),
       promptTokens, cachedTokens, cachedShare, layout: full ? 'full' : 'base', ...(full ? { fullPrefixHash: full.hash, fullPrefixApproxTokens: full.approxTokens } : {}),
       dossier: data.timings.dossierCache, transits: data.timings.transitsCache, priceTable: PRICE_TABLE_VERSION,
     },
