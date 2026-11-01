@@ -91,7 +91,8 @@ export interface EnsureDeps {
   fetcher?: RadhaFetcher;
 }
 
-const FAILED_RETRY_MS = 1_000;
+/** A throttle is retried inside the Radha client and never lands here, so a failed row is a real failure. */
+const FAILED_RETRY_MS = 60_000;
 const UNSUPPORTED_RETRY_MS = 24 * 3_600_000;
 
 function concurrencyDefault(): number {
@@ -244,6 +245,7 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
 
   const toFetch: typeof wanted = [];
   const waiting: typeof wanted = [];
+  const writeThroughs: Promise<void>[] = [];
   for (const w of wanted) {
     const row = rowOf(w);
     const legacyValue = !row && w.type.legacyColumn ? legacy[w.type.legacyColumn] : undefined;
@@ -251,9 +253,9 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
       out[w.key] = { key: w.key, id: w.id, variant: w.variant, status: 'ready', source: 'legacy', payload: legacyValue };
       if (!degraded) {
         // write through so the next read is a row (best effort)
-        void repo
-          .complete(kundliId, { dataType: w.id, variant: '' }, ayanamsa, { status: 'ready', payload: legacyValue, calcVersion: 'legacy' })
-          .catch(() => undefined);
+        writeThroughs.push(
+          repo.complete(kundliId, { dataType: w.id, variant: '' }, ayanamsa, { status: 'ready', payload: legacyValue, calcVersion: 'legacy' }).catch(() => undefined)
+        );
       }
       continue;
     }
@@ -271,6 +273,8 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     }
     toFetch.push(w);
   }
+  // awaited: on Lambda anything still running when the response is sent is frozen with the container
+  await Promise.all(writeThroughs);
   const req = toFetch.length ? await repo.kundliRequest(kundliId) : null;
   if (toFetch.length && !req) {
     for (const w of toFetch) out[w.key] = { key: w.key, id: w.id, variant: w.variant, status: 'failed', source: null, payload: null, error: 'kundli or birth details not found' };
@@ -669,7 +673,7 @@ export function prismaChartDataRepo(prisma: PrismaClient): ChartDataRepo {
         const params = authToAstroKundliParams({ date_of_birth: k.user.date_of_birth, place_of_birth: k.user.place_of_birth, time_of_birth: k.user.time_of_birth });
         let coords = k.lat != null && k.lon != null && k.tz != null ? { lat: k.lat, lon: k.lon, tz: k.tz } : await resolveFallbackCoords(params.place, k.biodata);
         if (coords && (k.lat == null || k.lon == null || k.tz == null)) {
-          void prisma.kundli.update({ where: { id: kundliId }, data: { lat: coords.lat, lon: coords.lon, tz: coords.tz } }).catch(() => undefined);
+          await prisma.kundli.update({ where: { id: kundliId }, data: { lat: coords.lat, lon: coords.lon, tz: coords.tz } }).catch(() => undefined);
         }
         return { params, coords };
       } catch {

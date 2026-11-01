@@ -87,7 +87,7 @@ async function doBuild(prisma: PrismaClient, kundliId: string, opts: { force?: b
   } catch (err) {
     const unsupported = err instanceof EngineUnsupportedError;
     const reason = (err as Error).message.slice(0, 400);
-    await prisma.kundli.update({ where: { id: kundliId }, data: { facts_status: 'failed' } }).catch(() => undefined);
+    await prisma.kundli.update({ where: { id: kundliId }, data: { facts_status: unsupported ? 'unsupported' : 'failed' } }).catch(() => undefined);
     (unsupported ? queueLog : queueLogError)({ event: 'kundli_facts_failed', kundli_id: kundliId, unsupported, error: reason });
     return { status: 'failed', kundliId, reason, unsupported };
   }

@@ -411,7 +411,8 @@ describe('completeProfile validation', () => {
     expect(b.success).toBe(true);
     expect(b.referral_code).toBe(a.referral_code);
     expect(db.rows[0].city).toBe('New Delhi');
-    expect(db.enqueued).toHaveLength(1);
+    // a retry after a lost response overwrites nothing but does make sure the chart build is going
+    expect(db.enqueued).toHaveLength(2);
   });
 
   it('place_of_birth is exactly what normalizePlaceForAstroKundli parses', async () => {

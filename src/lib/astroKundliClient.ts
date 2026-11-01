@@ -8,6 +8,7 @@ import {
   getAstroKundliLambdaRegion,
   ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS,
   getAstroKundliRequestSpacingMs,
+  getRadhaMaxConcurrent,
   isAstroKundliLogResponseEnabled,
 } from '../config/env.js';
 import { decrypt } from './encrypt.js';
@@ -105,6 +106,12 @@ function getLambdaClient(): LambdaClient {
   return cachedLambdaClient;
 }
 
+/**
+ * The client id Radha's per-client limiter sees on the Lambda transport: one per Node process, matching the limiter
+ * below, which is also per process. Never one per call: that would hide our rate from Radha instead of keeping to it.
+ */
+const INTERNAL_SOURCE_IP = `10.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`;
+
 /** APIGW HTTP API v2 event shape expected by Mangum-wrapped FastAPI. */
 function buildApigwHttpApiV2Event(
   method: string,
@@ -133,7 +140,7 @@ function buildApigwHttpApiV2Event(
         method,
         path: rawPath,
         protocol: 'HTTP/1.1',
-        sourceIp: `10.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`,
+        sourceIp: INTERNAL_SOURCE_IP,
         userAgent: 'aiastra-server/astroKundliClient',
       },
       requestId: `aiastra-${Date.now()}`,
@@ -249,33 +256,73 @@ function effectiveExportHoroscopeSpacingMs(): number {
   return Math.max(configured, ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS);
 }
 
-/**
- * Serialize export-horoscope POSTs and enforce a minimum **start-to-start** gap so upstream
- * geocoding (OSM Nominatim, ~1 request/s) is not exceeded even when many Kundli slices are
- * requested in parallel: each slice is one POST, so KUNDLI_JSON_FIELDS.length types need ≥ that many × the gap in wall time
- * per user unless the API skips geocode. This throttle is per Node process only.
- */
-let horoscopeExportTail: Promise<void> = Promise.resolve();
-let lastHoroscopeExportRequestStartAt = 0;
+/** A non-2xx answer from Radha, with its status so the retry below can tell a throttle from a real failure. */
+export class RadhaHttpError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'RadhaHttpError';
+  }
+}
 
-async function withHoroscopeExportThrottle<T>(run: () => Promise<T>): Promise<T> {
-  const prev = horoscopeExportTail;
-  let release!: () => void;
-  horoscopeExportTail = new Promise<void>((r) => {
-    release = r;
-  });
-  await prev;
+/** Gap between call starts when the API key is sent: Radha's limiter does not apply, this only eases cold starts. */
+const RADHA_KEYED_SPACING_MS = 250;
+const RADHA_MAX_ATTEMPTS = 3;
+
+/**
+ * With the API key Radha skips its one-per-second limiter, so calls run in parallel up to RADHA_MAX_CONCURRENT. Without
+ * it the limiter applies: one call at a time at the configured spacing.
+ */
+function radhaLimits(): { maxConcurrent: number; spacingMs: number } {
+  if (getAstroKundliApiKey()) return { maxConcurrent: getRadhaMaxConcurrent(), spacingMs: RADHA_KEYED_SPACING_MS };
+  return { maxConcurrent: 1, spacingMs: effectiveExportHoroscopeSpacingMs() };
+}
+
+/** Every Radha call in this process goes through one set of slots and one next-start time. */
+let radhaInFlight = 0;
+const radhaWaiters: Array<() => void> = [];
+let radhaNextStartAt = 0;
+
+async function withRadhaSlot<T>(run: () => Promise<T>): Promise<T> {
+  while (radhaInFlight >= radhaLimits().maxConcurrent) {
+    await new Promise<void>((resolve) => radhaWaiters.push(resolve));
+  }
+  radhaInFlight += 1;
   try {
-    const spacingMs = effectiveExportHoroscopeSpacingMs();
-    if (spacingMs > 0 && lastHoroscopeExportRequestStartAt > 0) {
-      const earliestNextStart = lastHoroscopeExportRequestStartAt + spacingMs;
-      const waitMs = Math.max(0, earliestNextStart - Date.now());
-      if (waitMs > 0) await sleep(waitMs);
-    }
-    lastHoroscopeExportRequestStartAt = Date.now();
+    const now = Date.now();
+    const startAt = Math.max(now, radhaNextStartAt);
+    radhaNextStartAt = startAt + radhaLimits().spacingMs;
+    if (startAt > now) await sleep(startAt - now);
     return await run();
   } finally {
-    release();
+    radhaInFlight -= 1;
+    radhaWaiters.shift()?.();
+  }
+}
+
+/**
+ * How long to wait before retrying, or null when the error is not a throttle (a real failure is never retried here). The
+ * wait is the one Radha names ("Retry after about 0.5 seconds"), else 1 s, 2 s, ...; jitter only ever lengthens it.
+ */
+export function radhaRetryDelayMs(err: unknown, attempt: number): number | null {
+  const status = err instanceof RadhaHttpError ? err.status : undefined;
+  const lambdaThrottle = (err as { name?: string } | null)?.name === 'TooManyRequestsException';
+  if (status !== 429 && status !== 503 && !lambdaThrottle) return null;
+  const named = /retry after about ([\d.]+) seconds/i.exec((err as Error).message ?? '');
+  const baseMs = named ? Number(named[1]) * 1000 : 1000 * 2 ** (attempt - 1);
+  return Math.round(baseMs * (1 + Math.random() * 0.2));
+}
+
+/** A throttle pushes back every call in this process, not only this one, so a retry does not walk into the same limit. */
+async function callRadha<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await withRadhaSlot(run);
+    } catch (err) {
+      const delayMs = attempt < RADHA_MAX_ATTEMPTS ? radhaRetryDelayMs(err, attempt) : null;
+      if (delayMs === null) throw err;
+      radhaNextStartAt = Math.max(radhaNextStartAt, Date.now() + delayMs);
+      console.warn('[AstroKundli] throttled, retrying', { attempt, delayMs, error: (err as Error).message?.slice(0, 200) });
+    }
   }
 }
 
@@ -531,7 +578,7 @@ export async function checkAstroKundliEndpoint(): Promise<{
 /**
  * Startup probe: intentionally send bogus params to the export endpoint so we can
  * verify request/response/error logging for the 3rd-party integration.
- * Uses the same `withHoroscopeExportThrottle` as real chart fetches so this POST does not
+ * Uses the same `withRadhaSlot` as real chart fetches so this POST does not
  * race the Kundli queue or bypass rate limits on the upstream service.
  * Non-critical: never throws to caller.
  */
@@ -580,7 +627,7 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
   });
 
   try {
-    const { status, ok, rawText } = await withHoroscopeExportThrottle(async () => {
+    const { status, ok, rawText } = await withRadhaSlot(async () => {
       if (transport === 'lambda') {
         console.log('[AstroKundli] startup bogus-probe outgoing', {
           transport: 'lambda',
@@ -652,46 +699,32 @@ export async function probeAstroKundliWithBogusParams(): Promise<void> {
 
 /**
  * Legacy export call (d1, d9, dashas …). When the kundli already has stored coordinates they are sent as lat/lon/tz,
- * so the engine skips geocoding (its geocoder can fail on a city that resolved before). The spacing throttle always
- * applies: the engine allows at most one export request per second per client.
+ * so the engine skips geocoding (its geocoder can fail on a city that resolved before). Goes through the one limiter.
  */
 export async function fetchHoroscopeChart(
   params: AstroKundliRequestParams,
   type: KundliJsonField,
   coords?: { lat: number | null; lon: number | null; tz: number | null } | null
 ): Promise<Prisma.JsonValue> {
-  if (coords && coords.lat != null && coords.lon != null && coords.tz != null) {
-    const extra = { lat: coords.lat, lon: coords.lon, tz: coords.tz };
-    if (getAstroKundliTransport() === 'lambda' && extra.lat != null && extra.lon != null && extra.tz != null) {
-    return fetchHoroscopeChartImpl(params, type, extra);
-  }
-  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
-  }
-  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type));
+  const extra = coords && coords.lat != null && coords.lon != null && coords.tz != null ? { lat: coords.lat, lon: coords.lon, tz: coords.tz } : {};
+  return callRadha(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 
-/**
- * Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body.
- * The spacing throttle always applies: the engine rate-limits exports to one request per second per client,
- * with or without coordinates.
- */
+/** Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body. */
 export async function fetchEngineExport(
   params: AstroKundliRequestParams,
   type: string,
   extra: Record<string, unknown> = {}
 ): Promise<Prisma.JsonValue> {
-  if (getAstroKundliTransport() === 'lambda' && extra.lat != null && extra.lon != null && extra.tz != null) {
-    return fetchHoroscopeChartImpl(params, type, extra);
-  }
-  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(params, type, extra));
+  return callRadha(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 
 /**
  * An export that needs no person (transit or prashna at a given place, doc 28): the body carries only `type` and the
- * fields given (place as lat/lon/tz or `place`, `at`, optional `natal_*`), no dob/tob/place. Same throttle as every call.
+ * fields given (place as lat/lon/tz or `place`, `at`, optional `natal_*`), no dob/tob/place. Same limiter as every call.
  */
 export async function fetchEngineExportAtPlace(type: string, fields: Record<string, unknown>): Promise<Prisma.JsonValue> {
-  return withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(null, type, { ayanamsa: 'LAHIRI', ...fields }));
+  return callRadha(() => fetchHoroscopeChartImpl(null, type, { ayanamsa: 'LAHIRI', ...fields }));
 }
 
 /**
@@ -710,7 +743,7 @@ export interface RadhaCatalog {
 }
 
 export async function fetchRadhaCatalog(): Promise<RadhaCatalog> {
-  const raw = await withHoroscopeExportThrottle(() => fetchHoroscopeChartImpl(null, 'catalog'));
+  const raw = await callRadha(() => fetchHoroscopeChartImpl(null, 'catalog'));
   const catalog = raw as unknown as Partial<RadhaCatalog>;
   if (!catalog || !Array.isArray(catalog.types)) {
     throw new Error('Radha catalog response has no types array');
@@ -834,7 +867,7 @@ async function fetchHoroscopeChartImpl(
           : `HTTP ${status}`);
       // keep the engine's detail (e.g. which export types it accepts, or why a place did not resolve)
       const detail = typeof json === 'object' && json && 'detail' in json ? String((json as { detail?: unknown }).detail).slice(0, 300) : '';
-      throw new Error(detail ? `${base}: ${detail}` : base);
+      throw new RadhaHttpError(detail ? `${base}: ${detail}` : base, status);
     }
 
     return parseAstroKundliResponse(json);

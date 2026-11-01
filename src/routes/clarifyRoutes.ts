@@ -131,7 +131,7 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     const { runId, chatId, edits } = req.body as { runId?: string; chatId?: string | null; edits?: { horizon?: string; bucket?: string } };
     if (!runId) return res.status(400).json({ error: 'runId is required' });
     const pre = await validateAskForUser(deps.prisma, userId);
-    if (!pre.ok) return res.status(400).json({ error: pre.error });
+    if (!pre.ok) return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
     const c = await confirmAndBuildIntent(store(), userId, runId, edits ?? {});
     if ('error' in c) return res.status(c.error === 'not_found' ? 404 : 409).json({ error: c.error });
     // where the question is asked (optional browser location, rounded to two decimals); absent -> the birth place

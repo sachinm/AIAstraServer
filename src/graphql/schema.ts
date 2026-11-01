@@ -18,7 +18,8 @@ import {
 } from '../services/publicChatError.js';
 import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync, kundliStatusFromQueue, ensureUserGateReady } from '../services/kundliQueueService.js';
-import { scheduleKundliSync } from '../services/kundliSyncWorker.js';
+import { resumeChartBuild, scheduleKundliSync } from '../services/kundliSyncWorker.js';
+import { getChartStatus } from '../services/chartStatusService.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
@@ -47,6 +48,8 @@ const typeDefs = /* GraphQL */ `
     email_verified: Boolean!
     "pending | building | ready, from the kundli queue."
     kundli_status: String!
+    "Own profile only (me). The build's state and progress."
+    chart: ChartStatus
     "Own profile only (me). male | female | prefer_not_to_say"
     gender: String
     "Own profile only (me). YYYY-MM-DD; null when not set"
@@ -57,6 +60,23 @@ const typeDefs = /* GraphQL */ `
     country_code: String
     "Own profile only (me)."
     city: String
+  }
+
+  type ChartStatus {
+    "pending | building | chat_ready | ready | failed. Chat is open at chat_ready and ready."
+    status: String!
+    "gate | facts | rest, or null when nothing is running"
+    stage: String
+    gate_done: Int!
+    gate_total: Int!
+    rest_done: Int!
+    rest_total: Int!
+    "pending | building | ready | failed | unsupported"
+    facts_status: String!
+    "full | legacy: what chat answers with right now"
+    reading_mode: String!
+    "A sentence for the user when status is failed"
+    last_error: String
   }
 
   type UserDetails {
@@ -359,6 +379,8 @@ const typeDefs = /* GraphQL */ `
     verifySignupCode(email: String!, code: String!): LoginResult!
     completeProfile(input: CompleteProfileInput!): CompleteProfileResult!
     updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
+    "Restart the caller's chart build (the Retry button). A build already running is left alone."
+    retryChartBuild: ChartStatus
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
     loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
     """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
@@ -436,10 +458,14 @@ const resolvers = {
         orderBy: { created_at: 'desc' },
         select: { queue_status: true },
       });
-      const gateState = await ensureUserGateReady(db, userId, false);
+      const gateState = await ensureUserGateReady(db, userId);
       if (user.profile_complete !== false && gateState.queue_status !== 'completed') {
-        void ensureUserGateReady(db, userId, true).catch(() => undefined);
+        await resumeChartBuild(db, userId);
       }
+      const chart = await getChartStatus(db, userId).catch((err) => {
+        console.error('getChartStatus failed:', (err as Error).message);
+        return null;
+      });
       return {
         id: user.id,
         username: user.username,
@@ -451,6 +477,7 @@ const resolvers = {
         kundli_status: kundliStatusFromQueue(
           user.profile_complete !== false && !gateState.queue_status ? 'in_progress' : gateState.queue_status
         ),
+        chart,
         ...ownProfileFields(user),
       };
     },
@@ -502,11 +529,13 @@ const resolvers = {
         orderBy: { created_at: 'desc' },
         select: { queue_status: true },
       });
+      const gateState = await ensureUserGateReady(db, userId);
+      if (gateState.queue_status !== 'completed') await resumeChartBuild(db, userId);
       return {
         user_id: user.id,
         is_active: user.is_active ?? false,
-        kundli_added: (await ensureUserGateReady(db, userId, true)).kundli_added,
-        queue_status: (await ensureUserGateReady(db, userId, false)).queue_status,
+        kundli_added: gateState.kundli_added,
+        queue_status: gateState.queue_status,
       };
     },
     async myBiodata(_parent: unknown, _args: unknown, context: GraphQLContext) {
@@ -1049,6 +1078,16 @@ const resolvers = {
       }
       if (!context.userId) return { success: false, message: 'Not authenticated', referral_code: null };
       return completeProfile(context.prisma, context.userId, input);
+    },
+    async retryChartBuild(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      try {
+        requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
+      } catch {
+        return null;
+      }
+      if (!context.userId) return null;
+      await resumeChartBuild(context.prisma, context.userId, { force: true });
+      return getChartStatus(context.prisma, context.userId);
     },
     async updateProfile(
       _parent: unknown,

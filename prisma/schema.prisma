@@ -78,8 +78,8 @@ model Kundli {
   lon                Float?
   tz                 Float?
   place_resolved     String?                @map("place_resolved")
-  /// pending | building | ready | failed
-  facts_status       String                 @default("pending") @map("facts_status")
+  /// pending | building | ready | failed | unsupported (the engine does not serve the dossier yet)
+  facts_status      String                 @default("pending") @map("facts_status")
   facts              KundliFacts[]
   transitCharts      TransitSnapshot[]
   transitOverlays    KundliTransitOverlay[]
