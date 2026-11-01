@@ -436,6 +436,10 @@ const resolvers = {
         orderBy: { created_at: 'desc' },
         select: { queue_status: true },
       });
+      const gateState = await ensureUserGateReady(db, userId, false);
+      if (user.profile_complete !== false && gateState.queue_status !== 'completed') {
+        void ensureUserGateReady(db, userId, true).catch(() => undefined);
+      }
       return {
         id: user.id,
         username: user.username,
@@ -444,7 +448,9 @@ const resolvers = {
         name: user.name ?? null,
         profile_complete: user.profile_complete !== false,
         email_verified: Boolean(user.email_verified_at),
-        kundli_status: kundliStatusFromQueue((await ensureUserGateReady(db, userId, false)).queue_status),
+        kundli_status: kundliStatusFromQueue(
+          user.profile_complete !== false && !gateState.queue_status ? 'in_progress' : gateState.queue_status
+        ),
         ...ownProfileFields(user),
       };
     },

@@ -59,8 +59,13 @@ export async function completeProfile(
   if (!user.email_verified_at) return fail('Verify your email first.');
 
   if (user.profile_complete) {
-    // a retry after a lost response: nothing is overwritten
+    // a retry after a lost response: nothing is overwritten, but ensure chart sync finishes
     const code = await ensureReferralCode(db, userId, user.referral_code);
+    const kundliId = await enqueueKundliSync(db, userId).catch(() => undefined);
+    if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      await ensureUserGateReady(db, userId, true).catch(() => undefined);
+    }
+    await scheduleKundliSync(kundliId, { prisma: db });
     return { success: true, message: 'Your profile is already complete.', referral_code: code };
   }
 
