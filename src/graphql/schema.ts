@@ -13,6 +13,7 @@ import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
 import { questionGate, wasDeclined } from '../billing/questionGate.js';
+import { sidebarColumns } from '../services/kundliSidebar.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -78,7 +79,7 @@ const typeDefs = /* GraphQL */ `
     used: Int!
     limit: Int
     remaining: Int
-    "lifetime | month | day | none"
+    "month | none"
     window: String!
     resets_at: String
     exempt: Boolean!
@@ -124,6 +125,8 @@ const typeDefs = /* GraphQL */ `
   type KundliDisplayDataResult {
     success: Boolean!
     error: String
+    "True when this account sees the full charts and dashas."
+    research: Boolean
     biodata: String
     d1: String
     d2: String
@@ -705,7 +708,7 @@ const resolvers = {
       try {
         const user = await db.auth.findUnique({
           where: { id: userId },
-          select: { id: true, is_active: true, kundli_added: true },
+          select: { id: true, is_active: true, kundli_added: true, research: true },
         });
         if (!user || !user.is_active) {
           return { ...empty, error: 'Not available' };
@@ -738,18 +741,20 @@ const resolvers = {
           ['biodata', 'd1', 'd2', 'd4', 'd7', 'd9', 'd10', 'vimsottari_dasa', 'narayana_dasa'],
           kundli
         );
+        const shown = sidebarColumns(user.research === true, data);
         return {
           success: true,
           error: null,
-          biodata: jsonToString(data.biodata as Prisma.JsonValue),
-          d1: jsonToString(data.d1 as Prisma.JsonValue),
-          d2: jsonToString(data.d2 as Prisma.JsonValue),
-          d4: jsonToString(data.d4 as Prisma.JsonValue),
-          d7: jsonToString(data.d7 as Prisma.JsonValue),
-          d9: jsonToString(data.d9 as Prisma.JsonValue),
-          d10: jsonToString(data.d10 as Prisma.JsonValue),
-          vimsottari_dasa: jsonToString(data.vimsottari_dasa as Prisma.JsonValue),
-          narayana_dasa: jsonToString(data.narayana_dasa as Prisma.JsonValue),
+          research: user.research === true,
+          biodata: jsonToString(shown.biodata as Prisma.JsonValue),
+          d1: jsonToString(shown.d1 as Prisma.JsonValue),
+          d2: jsonToString(shown.d2 as Prisma.JsonValue),
+          d4: jsonToString(shown.d4 as Prisma.JsonValue),
+          d7: jsonToString(shown.d7 as Prisma.JsonValue),
+          d9: jsonToString(shown.d9 as Prisma.JsonValue),
+          d10: jsonToString(shown.d10 as Prisma.JsonValue),
+          vimsottari_dasa: jsonToString(shown.vimsottari_dasa as Prisma.JsonValue),
+          narayana_dasa: jsonToString(shown.narayana_dasa as Prisma.JsonValue),
         };
       } catch (err) {
         return {

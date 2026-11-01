@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { clearPaid, markPaid } from '../../../src/billing/account.js';
 import { pickRegion } from '../../../src/billing/geo.js';
-import { normalizeLanguage, validateCompleteProfile } from '../../../src/lib/profileValidators.js';
-import { effectivePlan, periodFor, plansEnabled } from '../../../src/billing/plans.js';
+import { effectivePlan, monthFor, planQuota, plansEnabled } from '../../../src/billing/plans.js';
 import { QuestionGate, partsFromEvent, wasDeclined } from '../../../src/billing/questionGate.js';
 import type { BillingAccountRow, PaymentWrite, PlanStore, UsageRow } from '../../../src/billing/store.js';
+import { normalizeLanguage, validateCompleteProfile } from '../../../src/lib/profileValidators.js';
+
+const NOW = new Date('2026-11-15T12:00:00Z');
+const ENV = { PLAN_FREE_QUESTIONS: '20', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv;
 
 /** Applies each conditional update as Postgres would: one at a time. */
 class MemoryPlanStore implements PlanStore {
@@ -14,13 +17,13 @@ class MemoryPlanStore implements PlanStore {
   failing = false;
   private seq = 0;
 
-  private row(userId: string): BillingAccountRow {
+  private row(userId: string, quota: number | null = 20): BillingAccountRow {
     if (this.failing) throw new Error('db down');
     let a = this.accounts.get(userId);
     if (!a) {
       a = {
         user_id: userId, desired_plan: 'free', desired_interval: null, is_paid: false, paid_plan: null, paid_interval: null,
-        paid_since: null, paid_until: null, billing_country: null, free_used: 0, period_start: null, period_used: 0,
+        paid_since: null, paid_until: null, billing_country: null, question_quota: quota, questions_used_this_month: 0, usage_month_start: null,
       };
       this.accounts.set(userId, a);
     }
@@ -28,36 +31,31 @@ class MemoryPlanStore implements PlanStore {
   }
   async getRole() { if (this.failing) throw new Error('db down'); return this.role; }
   async getAccount(u: string) { if (this.failing) throw new Error('db down'); return this.accounts.get(u) ?? null; }
-  async ensureAccount(u: string) { return this.row(u); }
-  async setDesired(u: string, plan: string, interval: string | null, country: string | null) {
-    return Object.assign(this.row(u), { desired_plan: plan, desired_interval: interval, billing_country: country });
+  async ensureAccount(u: string, quota: number | null) { return this.row(u, quota); }
+  async setDesired(u: string, plan: string, interval: string | null, country: string | null, _now: Date, quota: number | null) {
+    return Object.assign(this.row(u, quota), { desired_plan: plan, desired_interval: interval, billing_country: country });
   }
   async setPayment(u: string, p: PaymentWrite) { return Object.assign(this.row(u), p); }
-  async takeFree(u: string, limit: number) {
+  async setQuota(u: string, quota: number | null) { return Object.assign(this.row(u), { question_quota: quota }); }
+  async takeQuestion(u: string, start: Date, limit: number | null) {
+    if (limit !== null && limit <= 0) return false;
     const a = this.row(u);
-    if (a.free_used >= limit) return false;
-    a.free_used += 1;
-    return true;
-  }
-  async takePeriod(u: string, start: Date, limit: number) {
-    const a = this.row(u);
-    if (a.period_start?.getTime() !== start.getTime()) {
-      a.period_start = start;
-      a.period_used = 1;
+    if (a.usage_month_start?.getTime() !== start.getTime()) {
+      a.usage_month_start = start;
+      a.questions_used_this_month = 1;
       return true;
     }
-    if (a.period_used >= limit) return false;
-    a.period_used += 1;
+    if (limit !== null && a.questions_used_this_month >= limit) return false;
+    a.questions_used_this_month += 1;
     return true;
   }
-  async giveBackFree(u: string) { const a = this.row(u); a.free_used = Math.max(a.free_used - 1, 0); }
-  async giveBackPeriod(u: string, start: Date) {
+  async giveBackQuestion(u: string, start: Date) {
     const a = this.row(u);
-    if (a.period_start?.getTime() === start.getTime()) a.period_used = Math.max(a.period_used - 1, 0);
+    if (a.usage_month_start?.getTime() === start.getTime()) a.questions_used_this_month = Math.max(a.questions_used_this_month - 1, 0);
   }
-  async insertUsage(u: string, key: string, counter: string, period_start: Date | null) {
+  async insertUsage(u: string, key: string, period_start: Date) {
     if (this.usage.some((r) => r.user_id === u && r.key === key)) return null;
-    const row: UsageRow = { id: `r${++this.seq}`, user_id: u, key, counter, period_start, status: 'reserved', open_parts: [], created_at: NOW };
+    const row: UsageRow = { id: `r${++this.seq}`, user_id: u, key, period_start, status: 'reserved', open_parts: [], created_at: NOW };
     this.usage.push(row);
     return row;
   }
@@ -84,10 +82,9 @@ class MemoryPlanStore implements PlanStore {
   }
 }
 
-const NOW = new Date('2026-11-15T12:00:00Z');
-const setup = () => {
+const setup = (nowFn: () => Date = () => NOW, env: NodeJS.ProcessEnv = ENV) => {
   const store = new MemoryPlanStore();
-  const gate = new QuestionGate(store, { enabled: true, now: () => NOW });
+  const gate = new QuestionGate(store, { enabled: true, now: nowFn, env });
   return { store, gate };
 };
 const ask = async (gate: QuestionGate, opts: { key?: string; focus?: string } = {}) => {
@@ -95,6 +92,40 @@ const ask = async (gate: QuestionGate, opts: { key?: string; focus?: string } = 
   if (r.ok) await gate.commit(r.ticket);
   return r.ok;
 };
+const used = (store: MemoryPlanStore) => store.accounts.get('u1')?.questions_used_this_month;
+
+describe('limits come from env, not the code', () => {
+  it('reads each plan from its variable, and unlimited has none', () => {
+    expect(planQuota('free', ENV)).toBe(20);
+    expect(planQuota('plus', ENV)).toBe(100);
+    expect(planQuota('unlimited', {} as NodeJS.ProcessEnv)).toBeNull();
+    expect(planQuota('free', { PLAN_FREE_QUESTIONS: '7' } as NodeJS.ProcessEnv)).toBe(7);
+  });
+
+  it('has no fallback number when a variable is missing or wrong', () => {
+    expect(() => planQuota('free', {} as NodeJS.ProcessEnv)).toThrow(/PLAN_FREE_QUESTIONS/);
+    expect(() => planQuota('plus', { PLAN_PLUS_QUESTIONS: 'lots' } as NodeJS.ProcessEnv)).toThrow(/PLAN_PLUS_QUESTIONS/);
+  });
+
+  it('stamps the env value on a new account, and that column then governs', async () => {
+    const { store, gate } = setup(() => NOW, { PLAN_FREE_QUESTIONS: '3', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv);
+    for (let i = 0; i < 3; i++) expect(await ask(gate)).toBe(true);
+    expect(store.accounts.get('u1')?.question_quota).toBe(3);
+    expect(await ask(gate)).toBe(false);
+    await store.setQuota('u1', 5);
+    expect(await gate.getStatus('u1')).toMatchObject({ limit: 5, remaining: 2, used: 3 });
+    expect(await ask(gate)).toBe(true);
+  });
+
+  it('allows the question and logs when plans are on but the variable is missing', async () => {
+    const { gate } = setup(() => NOW, {} as NodeJS.ProcessEnv);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await gate.reserve('u1')).ok).toBe(true);
+    expect(await gate.getStatus('u1')).toBeNull();
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
+});
 
 describe('the access rule', () => {
   it('uses the paid flag and what the payment covers, never the desired plan', () => {
@@ -109,48 +140,53 @@ describe('the access rule', () => {
 
   it('choosing a plan without paying leaves the person on Free', async () => {
     const { store, gate } = setup();
-    await store.setDesired('u1', 'unlimited', 'year', 'IN');
-    const s = await gate.getStatus('u1');
-    expect(s).toMatchObject({ code: 'free', desired_plan: 'unlimited', desired_interval: 'year', is_paid: false, limit: 5 });
+    await store.setDesired('u1', 'unlimited', 'year', 'IN', NOW, 20);
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'free', desired_plan: 'unlimited', desired_interval: 'year', is_paid: false, limit: 20 });
   });
 
   it('a Plus payer choosing Unlimited stays on Plus until that is paid', async () => {
     const { store, gate } = setup();
-    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW });
-    await store.setDesired('u1', 'unlimited', 'month', 'US');
-    expect(await gate.getStatus('u1')).toMatchObject({ code: 'plus', desired_plan: 'unlimited', limit: 20 });
-    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now: NOW });
-    expect(await gate.getStatus('u1')).toMatchObject({ code: 'unlimited' });
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    await store.setDesired('u1', 'unlimited', 'month', 'US', NOW, 20);
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'plus', desired_plan: 'unlimited', limit: 100 });
+    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'unlimited', limit: null, remaining: null });
   });
 });
 
 describe('the free plan', () => {
-  it('allows 5 questions in total, then refuses, with no reset', async () => {
-    const { gate } = setup();
-    for (let i = 0; i < 5; i++) expect(await ask(gate)).toBe(true);
+  it('allows its quota, then refuses until the next calendar month', async () => {
+    let now = NOW;
+    const { gate, store } = setup(() => now);
+    for (let i = 0; i < 20; i++) expect(await ask(gate)).toBe(true);
     expect(await ask(gate)).toBe(false);
     const c = await gate.check('u1');
     expect(c.ok).toBe(false);
-    if (!c.ok) expect(c.usage).toMatchObject({ used: 5, remaining: 0, window: 'lifetime', resets_at: null });
+    if (!c.ok) expect(c.usage).toMatchObject({ used: 20, remaining: 0, window: 'month', resets_at: '2026-12-01T00:00:00.000Z' });
+    now = new Date('2026-12-01T00:00:01Z');
+    expect((await gate.check('u1')).ok).toBe(true);
+    expect((await gate.getStatus('u1'))?.used).toBe(0);
+    expect(await ask(gate)).toBe(true);
+    expect(used(store)).toBe(1);
   });
 
   it('two requests at once cannot both take the last question', async () => {
     const { store, gate } = setup();
-    Object.assign(await store.ensureAccount('u1'), { free_used: 4 });
+    await store.setQuota('u1', 1);
     const results = await Promise.all([gate.reserve('u1'), gate.reserve('u1')]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect(store.accounts.get('u1')?.free_used).toBe(5);
+    expect(used(store)).toBe(1);
     expect(store.usage).toHaveLength(1);
   });
 
   it('a failed answer gives the question back, once', async () => {
     const { store, gate } = setup();
     const r = await gate.reserve('u1');
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
     if (!r.ok) throw new Error('expected a ticket');
     await gate.release(r.ticket);
     await gate.release(r.ticket);
-    expect(store.accounts.get('u1')?.free_used).toBe(0);
+    expect(used(store)).toBe(0);
   });
 
   it('a committed question is not given back', async () => {
@@ -159,7 +195,7 @@ describe('the free plan', () => {
     if (!r.ok) throw new Error('expected a ticket');
     await gate.commit(r.ticket);
     await gate.release(r.ticket);
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
   });
 
   it('a reservation from a dead run is released on the next request', async () => {
@@ -168,15 +204,6 @@ describe('the free plan', () => {
     store.usage[0].created_at = new Date(NOW.getTime() - 11 * 60_000);
     expect((await gate.getStatus('u1'))?.used).toBe(0);
     expect(store.usage[0].status).toBe('released');
-  });
-
-  it('keeps the old count after a paid plan ends', async () => {
-    const { store, gate } = setup();
-    for (let i = 0; i < 5; i++) await ask(gate);
-    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW });
-    expect(await ask(gate)).toBe(true);
-    await clearPaid(store, 'u1');
-    expect(await ask(gate)).toBe(false);
   });
 });
 
@@ -188,15 +215,15 @@ describe('what counts as one question', () => {
     await gate.commit(r.ticket, { openParts: ['career', 'money'] });
     expect(await ask(gate, { focus: 'career' })).toBe(true);
     expect(await ask(gate, { focus: 'money' })).toBe(true);
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
     expect(await ask(gate, { focus: 'money' })).toBe(true);
-    expect(store.accounts.get('u1')?.free_used).toBe(2);
+    expect(used(store)).toBe(2);
   });
 
   it('a made-up focus is charged', async () => {
     const { store, gate } = setup();
     await ask(gate, { focus: 'career' });
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
   });
 
   it('an open part expires after an hour', async () => {
@@ -206,21 +233,21 @@ describe('what counts as one question', () => {
     await gate.commit(r.ticket, { openParts: ['career'] });
     store.usage[0].created_at = new Date(NOW.getTime() - 61 * 60_000);
     await ask(gate, { focus: 'career' });
-    expect(store.accounts.get('u1')?.free_used).toBe(2);
+    expect(used(store)).toBe(2);
   });
 
   it('a replayed clarify run is not charged twice, but a retry after a failure is', async () => {
     const { store, gate } = setup();
     expect(await ask(gate, { key: 'clarify:r1' })).toBe(true);
     expect(await ask(gate, { key: 'clarify:r1' })).toBe(true);
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
 
     const failed = await gate.reserve('u1', { key: 'clarify:r2' });
     if (!failed.ok) throw new Error('expected a ticket');
     await gate.release(failed.ticket);
-    expect(store.accounts.get('u1')?.free_used).toBe(1);
+    expect(used(store)).toBe(1);
     expect(await ask(gate, { key: 'clarify:r2' })).toBe(true);
-    expect(store.accounts.get('u1')?.free_used).toBe(2);
+    expect(used(store)).toBe(2);
   });
 
   it('reads the parts from a next event and spots a declined turn', () => {
@@ -232,12 +259,12 @@ describe('what counts as one question', () => {
 });
 
 describe('paid plans', () => {
-  it('Plus allows 20 a month, and resets from the day payment began', async () => {
-    const store = new MemoryPlanStore();
+  it('Plus allows its quota a month, and resets from the day payment began', async () => {
     let now = new Date('2026-11-20T00:00:00Z');
-    const gate = new QuestionGate(store, { enabled: true, now: () => now });
-    await markPaid(store, 'u1', { plan: 'plus', interval: 'year', paidUntil: null, now: new Date('2026-10-05T00:00:00Z') });
-    for (let i = 0; i < 20; i++) expect(await ask(gate)).toBe(true);
+    const { store, gate } = setup(() => now);
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'year', paidUntil: null, now: new Date('2026-10-05T00:00:00Z'), env: ENV });
+    expect(store.accounts.get('u1')?.question_quota).toBe(100);
+    for (let i = 0; i < 100; i++) expect(await ask(gate)).toBe(true);
     expect(await ask(gate)).toBe(false);
     expect((await gate.getStatus('u1'))?.resets_at).toBe('2026-12-05T00:00:00.000Z');
     now = new Date('2026-12-05T00:00:00Z');
@@ -245,30 +272,43 @@ describe('paid plans', () => {
     expect((await gate.getStatus('u1'))?.used).toBe(1);
   });
 
-  it('Unlimited stops at the daily guard and resumes the next UTC day', async () => {
-    const store = new MemoryPlanStore();
-    let now = new Date('2026-11-20T10:00:00Z');
-    const gate = new QuestionGate(store, { enabled: true, now: () => now });
-    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now });
-    for (let i = 0; i < 50; i++) expect(await ask(gate)).toBe(true);
-    expect(await ask(gate)).toBe(false);
-    now = new Date('2026-11-21T00:00:01Z');
-    expect(await ask(gate)).toBe(true);
+  it('Unlimited has no limit, and still counts the month', async () => {
+    const { store, gate } = setup();
+    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    for (let i = 0; i < 300; i++) expect(await ask(gate)).toBe(true);
+    expect(store.accounts.get('u1')?.question_quota).toBeNull();
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'unlimited', used: 300, limit: null, remaining: null });
+    expect((await gate.check('u1')).ok).toBe(true);
   });
 
-  it('a renewal of the same plan keeps the window; a lapsed plan falls back to Free', async () => {
+  it('upgrading starts the new plan with a full month', async () => {
+    const { store, gate } = setup();
+    for (let i = 0; i < 20; i++) await ask(gate);
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    expect(await gate.getStatus('u1')).toMatchObject({ used: 0, limit: 100 });
+  });
+
+  it('a renewal keeps the month and any override; a lapsed plan gets the free quota', async () => {
     const { store, gate } = setup();
     const start = new Date('2026-10-05T00:00:00Z');
-    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: new Date('2026-11-05T00:00:00Z'), now: start });
-    expect((await gate.getStatus('u1'))?.code).toBe('free');
-    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: new Date('2026-12-05T00:00:00Z'), now: NOW });
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: new Date('2026-11-05T00:00:00Z'), now: start, env: ENV });
+    await store.setQuota('u1', 150);
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'free', limit: 20 });
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: new Date('2026-12-05T00:00:00Z'), now: NOW, env: ENV });
     expect(store.accounts.get('u1')?.paid_since).toEqual(start);
-    expect((await gate.getStatus('u1'))?.code).toBe('plus');
+    expect(await gate.getStatus('u1')).toMatchObject({ code: 'plus', limit: 150 });
+  });
+
+  it('clearing payment puts the free quota back on the account', async () => {
+    const { store, gate } = setup();
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    await clearPaid(store, 'u1', ENV);
+    expect(store.accounts.get('u1')?.question_quota).toBe(20);
+    expect((await gate.getStatus('u1'))?.code).toBe('free');
   });
 
   it('keeps month windows on short months', () => {
-    const anchor = new Date('2026-01-31T00:00:00Z');
-    const p = periodFor('month', anchor, new Date('2026-02-28T12:00:00Z'));
+    const p = monthFor(new Date('2026-01-31T00:00:00Z'), new Date('2026-02-28T12:00:00Z'));
     expect(p.start.toISOString()).toBe('2026-02-28T00:00:00.000Z');
     expect(p.end.toISOString()).toBe('2026-03-31T00:00:00.000Z');
   });
@@ -278,7 +318,7 @@ describe('staff, the flag and failures', () => {
   it('does not count staff', async () => {
     const { store, gate } = setup();
     store.role = 'superadmin';
-    for (let i = 0; i < 8; i++) expect(await ask(gate)).toBe(true);
+    for (let i = 0; i < 30; i++) expect(await ask(gate)).toBe(true);
     expect(store.usage).toHaveLength(0);
     expect(await gate.getStatus('u1')).toMatchObject({ exempt: true, limit: null, remaining: null });
   });
@@ -291,8 +331,8 @@ describe('staff, the flag and failures', () => {
     expect((await gate.check('u1')).ok).toBe(true);
     expect((await gate.reserve('u1')).ok).toBe(true);
     expect(spy).not.toHaveBeenCalled();
-    expect(plansEnabled({})).toBe(false);
-    expect(plansEnabled({ PLANS_ENABLED: '1' })).toBe(true);
+    expect(plansEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+    expect(plansEnabled({ PLANS_ENABLED: '1' } as NodeJS.ProcessEnv)).toBe(true);
   });
 
   it('lets the question through when the database fails', async () => {

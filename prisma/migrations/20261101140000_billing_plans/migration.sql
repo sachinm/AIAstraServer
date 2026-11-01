@@ -1,6 +1,7 @@
 -- Plans and question limits (docs/billing/README.md). Access reads is_paid and paid_plan; only the payment side writes them.
 -- Rows are created on first use, so this needs no backfill. Nothing reads these tables until PLANS_ENABLED=1.
 ALTER TABLE "auth" ADD COLUMN "language" TEXT NOT NULL DEFAULT 'en';
+ALTER TABLE "auth" ADD COLUMN "research" BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE "billing_accounts" (
     "user_id" TEXT NOT NULL,
@@ -14,9 +15,9 @@ CREATE TABLE "billing_accounts" (
     "paid_until" TIMESTAMPTZ(6),
     "payment_ref" TEXT,
     "billing_country" TEXT,
-    "free_used" INTEGER NOT NULL DEFAULT 0,
-    "period_start" TIMESTAMPTZ(6),
-    "period_used" INTEGER NOT NULL DEFAULT 0,
+    "question_quota" INTEGER,
+    "questions_used_this_month" INTEGER NOT NULL DEFAULT 0,
+    "usage_month_start" TIMESTAMPTZ(6),
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -28,8 +29,7 @@ CREATE TABLE "question_usage" (
     "id" TEXT NOT NULL DEFAULT (uuid_generate_v4())::text,
     "user_id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
-    "counter" TEXT NOT NULL,
-    "period_start" TIMESTAMPTZ(6),
+    "period_start" TIMESTAMPTZ(6) NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'reserved',
     "open_parts" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "chat_id" TEXT,

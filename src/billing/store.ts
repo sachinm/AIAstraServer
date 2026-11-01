@@ -14,17 +14,16 @@ export interface BillingAccountRow {
   paid_since: Date | null;
   paid_until: Date | null;
   billing_country: string | null;
-  free_used: number;
-  period_start: Date | null;
-  period_used: number;
+  question_quota: number | null;
+  questions_used_this_month: number;
+  usage_month_start: Date | null;
 }
 
 export interface UsageRow {
   id: string;
   user_id: string;
   key: string;
-  counter: string;
-  period_start: Date | null;
+  period_start: Date;
   status: string;
   open_parts: string[];
   created_at: Date;
@@ -37,22 +36,21 @@ export interface PaymentWrite {
   paid_since: Date | null;
   paid_until: Date | null;
   payment_ref: string | null;
+  question_quota: number | null;
 }
 
 export interface PlanStore {
   getRole(userId: string): Promise<string | null>;
   getAccount(userId: string): Promise<BillingAccountRow | null>;
-  ensureAccount(userId: string): Promise<BillingAccountRow>;
-  setDesired(userId: string, plan: string, interval: string | null, country: string | null, now: Date): Promise<BillingAccountRow>;
+  ensureAccount(userId: string, quota: number | null): Promise<BillingAccountRow>;
+  setDesired(userId: string, plan: string, interval: string | null, country: string | null, now: Date, newAccountQuota: number | null): Promise<BillingAccountRow>;
   setPayment(userId: string, payment: PaymentWrite): Promise<BillingAccountRow>;
-  /** true when a free question was taken */
-  takeFree(userId: string, limit: number): Promise<boolean>;
-  /** true when a question in the window starting at `start` was taken */
-  takePeriod(userId: string, start: Date, limit: number): Promise<boolean>;
-  giveBackFree(userId: string): Promise<void>;
-  giveBackPeriod(userId: string, start: Date): Promise<void>;
+  setQuota(userId: string, quota: number | null): Promise<BillingAccountRow>;
+  /** true when a question in the month starting at `start` was taken; a null limit is unlimited */
+  takeQuestion(userId: string, start: Date, limit: number | null): Promise<boolean>;
+  giveBackQuestion(userId: string, start: Date): Promise<void>;
   /** null when the key already exists */
-  insertUsage(userId: string, key: string, counter: string, periodStart: Date | null): Promise<UsageRow | null>;
+  insertUsage(userId: string, key: string, periodStart: Date): Promise<UsageRow | null>;
   findUsage(userId: string, key: string): Promise<UsageRow | null>;
   deleteUsage(id: string): Promise<void>;
   /** true when this call moved the row out of `reserved` */
@@ -78,55 +76,48 @@ export class PrismaPlanStore implements PlanStore {
     return this.db.billingAccount.findUnique({ where: { user_id: userId } });
   }
 
-  ensureAccount(userId: string): Promise<BillingAccountRow> {
-    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId }, update: {} });
+  ensureAccount(userId: string, quota: number | null): Promise<BillingAccountRow> {
+    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, question_quota: quota }, update: {} });
   }
 
-  setDesired(userId: string, plan: string, interval: string | null, country: string | null, now: Date): Promise<BillingAccountRow> {
+  setDesired(userId: string, plan: string, interval: string | null, country: string | null, now: Date, newAccountQuota: number | null): Promise<BillingAccountRow> {
     const data = { desired_plan: plan, desired_interval: interval, desired_at: now, ...(country ? { billing_country: country } : {}) };
-    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, ...data }, update: data });
+    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, question_quota: newAccountQuota, ...data }, update: data });
   }
 
   setPayment(userId: string, payment: PaymentWrite): Promise<BillingAccountRow> {
     return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, ...payment }, update: payment });
   }
 
-  async takeFree(userId: string, limit: number): Promise<boolean> {
-    const r = await this.db.billingAccount.updateMany({
-      where: { user_id: userId, free_used: { lt: limit } },
-      data: { free_used: { increment: 1 } },
-    });
-    return r.count === 1;
+  setQuota(userId: string, quota: number | null): Promise<BillingAccountRow> {
+    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, question_quota: quota }, update: { question_quota: quota } });
   }
 
-  async takePeriod(userId: string, start: Date, limit: number): Promise<boolean> {
-    // a new window: only one request wins the reset, and any other falls through to the increment
+  async takeQuestion(userId: string, start: Date, limit: number | null): Promise<boolean> {
+    if (limit !== null && limit <= 0) return false;
+    // a new month: only one request wins the reset, and any other falls through to the increment
     const reset = await this.db.billingAccount.updateMany({
-      where: { user_id: userId, OR: [{ period_start: null }, { period_start: { not: start } }] },
-      data: { period_start: start, period_used: 1 },
+      where: { user_id: userId, OR: [{ usage_month_start: null }, { usage_month_start: { not: start } }] },
+      data: { usage_month_start: start, questions_used_this_month: 1 },
     });
     if (reset.count === 1) return true;
     const r = await this.db.billingAccount.updateMany({
-      where: { user_id: userId, period_start: start, period_used: { lt: limit } },
-      data: { period_used: { increment: 1 } },
+      where: { user_id: userId, usage_month_start: start, ...(limit === null ? {} : { questions_used_this_month: { lt: limit } }) },
+      data: { questions_used_this_month: { increment: 1 } },
     });
     return r.count === 1;
   }
 
-  async giveBackFree(userId: string): Promise<void> {
-    await this.db.billingAccount.updateMany({ where: { user_id: userId, free_used: { gt: 0 } }, data: { free_used: { decrement: 1 } } });
-  }
-
-  async giveBackPeriod(userId: string, start: Date): Promise<void> {
+  async giveBackQuestion(userId: string, start: Date): Promise<void> {
     await this.db.billingAccount.updateMany({
-      where: { user_id: userId, period_start: start, period_used: { gt: 0 } },
-      data: { period_used: { decrement: 1 } },
+      where: { user_id: userId, usage_month_start: start, questions_used_this_month: { gt: 0 } },
+      data: { questions_used_this_month: { decrement: 1 } },
     });
   }
 
-  async insertUsage(userId: string, key: string, counter: string, periodStart: Date | null): Promise<UsageRow | null> {
+  async insertUsage(userId: string, key: string, periodStart: Date): Promise<UsageRow | null> {
     try {
-      return await this.db.questionUsage.create({ data: { user_id: userId, key, counter, period_start: periodStart } });
+      return await this.db.questionUsage.create({ data: { user_id: userId, key, period_start: periodStart } });
     } catch (err) {
       if (isUniqueViolation(err)) return null;
       throw err;

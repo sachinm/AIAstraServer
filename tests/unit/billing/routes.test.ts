@@ -24,6 +24,7 @@ describe('billing routes', () => {
       getUserId: (req) => (req.headers.authorization ? 'u1' : null),
       store,
       enabled: true,
+      env: { PLAN_FREE_QUESTIONS: '20', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv,
     });
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => resolve());
@@ -47,6 +48,8 @@ describe('billing routes', () => {
     const usBody = await us.json();
     expect(usBody).toMatchObject({ country: 'US', region: 'US', currency: 'USD', gateway: null });
     const plus = usBody.plans.find((p: { code: string }) => p.code === 'plus');
+    expect(plus.limit).toBe(100);
+    expect(usBody.plans.find((p: { code: string }) => p.code === 'unlimited').limit).toBeNull();
     expect(plus.prices.month).toEqual({ amount_minor: 5000, currency: 'USD' });
     expect(plus.prices.year).toEqual({ amount_minor: 50000, currency: 'USD' });
     expect(usBody.plans.find((p: { code: string }) => p.code === 'free').prices).toBeNull();
@@ -68,8 +71,8 @@ describe('billing routes', () => {
   it('checkout saves the choice and asks for no payment while no gateway is set', async () => {
     const res = await post({ plan: 'plus', interval: 'year', region: 'IN' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ status: 'pending_payment', checkout_url: null, plan: { code: 'free', limit: 5 } });
-    expect(setDesired).toHaveBeenCalledWith('u1', 'plus', 'year', 'IN', expect.any(Date));
+    expect(await res.json()).toMatchObject({ status: 'pending_payment', checkout_url: null, plan: { code: 'free', limit: 20 } });
+    expect(setDesired).toHaveBeenCalledWith('u1', 'plus', 'year', 'IN', expect.any(Date), 20);
   });
 
   it('checkout refuses a bad plan and a signed-out person', async () => {
