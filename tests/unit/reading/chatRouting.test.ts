@@ -76,6 +76,20 @@ describe('chat routing', () => {
     expect(onEvent.mock.calls.some(([e]) => e.type === 'intent')).toBe(true);
   });
 
+  it('when the engine does not serve the dossier, answers from the basic chart and tells the client', async () => {
+    delete process.env.READING_FALLBACK_LEGACY;
+    process.env.READING_ENGINE = '1';
+    const onEvent = vi.fn();
+    const db = {
+      kundli: {
+        findFirst: vi.fn(async (args: { select?: Record<string, boolean> }) => (args.select?.facts_status ? { id: 'k1', facts_status: 'unsupported' } : null)),
+      },
+    } as unknown as PrismaClient;
+    const r = await chatWithConfiguredProvider(db, 'u1', 'When will I get married?', { onEvent });
+    expect(r.answerText).toBe('legacy answer');
+    expect(onEvent.mock.calls.some(([e]) => e.type === 'info' && e.reason === 'legacy_mode')).toBe(true);
+  });
+
   it('answers through the reading engine when the dossier is available', async () => {
     process.env.READING_ENGINE = '1';
     process.env.READING_FACTS_SOURCE = 'fixture';

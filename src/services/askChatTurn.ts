@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import type { ChatTurnResult } from './chatLlmService.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 import type { ReadingRunRecord } from '../reading/run.js';
+import type { ChartStatus } from './chartStatusService.js';
 
 /** Observability row for one reading. A failure here must never fail the chat turn. */
 async function persistReadingRun(db: PrismaClient, userId: string, chatId: string, messageId: string, r: ReadingRunRecord): Promise<void> {
@@ -43,7 +44,8 @@ async function persistReadingRun(db: PrismaClient, userId: string, chatId: strin
   }
 }
 
-export type AskPreconditionResult = { ok: true } | { ok: false; error: string };
+/** `chart` is set when the only thing in the way is a chart still being built: the client shows it instead of an error. */
+export type AskPreconditionResult = { ok: true } | { ok: false; error: string; chart?: ChartStatus };
 
 export async function validateAskForUser(
   db: PrismaClient,
@@ -55,12 +57,14 @@ export async function validateAskForUser(
   });
   if (!user) return { ok: false, error: 'User not found' };
   if (!user.kundli_added) {
-    const healed = await (await import('./kundliQueueService.js')).ensureUserGateReady(db, userId, true);
+    const healed = await (await import('./kundliQueueService.js')).ensureUserGateReady(db, userId);
     if (healed.kundli_added) return { ok: true };
+    await (await import('./kundliSyncWorker.js')).resumeChartBuild(db, userId);
+    const chart = await (await import('./chartStatusService.js')).getChartStatus(db, userId).catch(() => undefined);
     return {
       ok: false,
-      error:
-        'Your chart is still being prepared. Chat will be available once your Kundli data has finished syncing from AstroKundli.',
+      error: 'Your chart is still being prepared. Chat will open as soon as it is ready.',
+      ...(chart ? { chart } : {}),
     };
   }
   return { ok: true };
