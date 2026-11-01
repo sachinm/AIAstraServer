@@ -70,6 +70,22 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Account Lambda concurrency is only 10.** Sachin's CloudShell output on 2026-11-01 (relayed by another session, not read
+  from AWS by the deploy session) shows total 10, unreserved 10. Doc 38's reserved concurrency of 20 is impossible, so it
+  is not set, and the API, the self-invoke chart worker and the sweep share those 10 slots; a few chart builds at once
+  could throttle chat. Render's pooler cap was not checked. Owner: Sachin (Service Quotas request). Done: limit raised,
+  reserved concurrency set per doc 38 section 6 against the Render cap, or doc 38 revised for 10.
+- **New Radha is live but the server has not caught up.** Radha `b66869a` went live on 2026-11-01 (about 7k lines, including
+  `facts` and `transits`; 105 catalog types, checked with real calls on a synthetic birth, values not checked). Not run:
+  `chart-catalog:sync`, `facts:backfill`, the `transit_snapshots` rebuild, the all-kundlis override. Until then chat
+  readings use the old dossiers. Each writes to the live database. Owner: Sachin's OK, deploy session runs them. Done: all
+  four run, in that order, with the row counts reported.
+- **Staging not exercised after the 2026-11-01 deploy.** Server `e621286` and web `60803ed` are deployed, `/health` is 200 and
+  the site is 200. Not checked: a reading on the current flow, a real sign-up (`kundli_sync_invoked`, `chart_build`, no 429
+  from Radha, `me.chart`), the progress screen in a browser, Radha's env and the sweep rule (`aiastra-ops-deployer` is
+  denied). Owner: deploy session. Done: each checked once.
+- **Radha now refuses calls with no key.** Any caller without `ASTROKUNDLI_API_KEY` gets "unauthorized: Invalid or missing API
+  key". The local `.env` has it; other checkouts and scripts do not. Done: noted wherever `.env` values are kept.
 - **Prompt registry changes the schema from the request path.** `src/reading/prompts/registry.ts` `ensurePromptSchemaAndSeed`
   runs `ALTER TABLE`, `CREATE TABLE` and `CREATE TRIGGER` on `system_prompts` during a chat turn. That bypasses "migrations are
   written, never applied", and on a cold Lambda it adds up to 21 statements to the first question. Found reading the code,
@@ -99,9 +115,6 @@ re-applied by it.
   (Radha deploy). Owner of the run: deploy session.
 - **Local memory.** Running `tsc` and vitest together ran out of memory and killed a test file. Run them separately:
   `NODE_OPTIONS=--max-old-space-size=4096 npx tsc --noEmit`; `npx vitest run <area> --pool=forks --poolOptions.forks.singleFork`.
-- **`.env` lost with the checkout.** Not in git or any worktree. Values live in Render (database) and the Lambda
-  `aiastra-server-api` env config; Sachin restores the file. No values in this file.
-
 - **`transit_snapshots` has no refresh command.** `transits:build` builds only when nothing is stored; the local rows
   cover lookups to about 2027-10-24. To refresh: delete the rows (database write) or raise `TRANSIT_SNAPSHOT_VERSION`,
   then run `transits:build`. Status: blocked (Radha `transits` deploy).
