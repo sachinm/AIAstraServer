@@ -96,7 +96,7 @@ export async function ensureUserGateReady(
     if (latest.queue_status === QUEUE_STATUS_PENDING || staleInProgress) {
       const fullRow = await prisma.kundli.findUnique({ where: { id: latest.id }, include: { user: true } });
       if (fullRow) {
-        const res = await processOneKundliRow(prisma, fullRow, {}, { gateOnly: true, concurrency: 5, deadline: Date.now() + 18_000 });
+        const res = await processOneKundliRow(prisma, fullRow, {}, { gateOnly: false, concurrency: 8, deadline: Date.now() + 20_000 });
         if (res.gateComplete) return { kundli_added: true, queue_status: QUEUE_STATUS_COMPLETED };
       }
     }
