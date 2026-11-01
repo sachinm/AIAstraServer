@@ -24,6 +24,8 @@ import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 import { parseClientPlace } from '../reading/chartData/place.js';
+import { randomUUID } from 'node:crypto';
+import { withRunTrace } from '../reading/metrics/trace.js';
 
 /** The longest `POST /api/chat/prewarm` holds its request. */
 const ORACLE_PREWARM_CAP_MS = 6_000;
@@ -78,14 +80,22 @@ export function clarifyAvailable(): boolean {
 export async function clarifyOnAsk(deps: ClarifyRouteDeps, userId: string, question: string, sse: { write: (o: unknown) => void }): Promise<boolean> {
   if (!clarifyAvailable()) return false;
   const store = deps.store ?? new PrismaClarifyStore(deps.prisma);
-  const r = await beginClarify(deps.prisma, store, userId, question, deps.locationStore ? { locationStore: deps.locationStore } : {});
+  // no question on this trace: declined topics are decided inside the clarifier and must not keep their text
+  const r = await withRunTrace(
+    deps.prisma,
+    { runId: randomUUID(), userId, kind: 'clarify', flow: 'clarify' },
+    () => beginClarify(deps.prisma, store, userId, question, deps.locationStore ? { locationStore: deps.locationStore } : {}),
+    (out) => ({ status: 'done', clarifyRunId: out.runId ?? null })
+  );
   // declined topics fall through: the chat path answers them with the fixed reply and stores them correctly
   if (r.declined || !r.event) return false;
   sse.write({ type: 'start' });
   sse.write(r.event);
   sse.write({ type: 'done', status: 'clarifying', runId: r.runId, ms: r.ms });
   // Track B: the natal layers run while the person reads the question (graph flow only, capped, same request)
-  await prewarmWithCap(readingFlow() === 'oracle' ? prewarmOracleReaders(deps.prisma, userId, r.state, r.runId) : prewarmNatalLayers(deps.prisma, userId, r.state));
+  await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'prewarm', flow: readingFlow(), clarifyRunId: r.runId }, () =>
+    prewarmWithCap(readingFlow() === 'oracle' ? prewarmOracleReaders(deps.prisma, userId, r.state, r.runId) : prewarmNatalLayers(deps.prisma, userId, r.state))
+  );
   return true;
 }
 
@@ -99,7 +109,9 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!runId || typeof value !== 'string' || !value.trim()) return res.status(400).json({ error: 'runId and value are required' });
     try {
       // tz: the browser's IANA timezone, sent with the "Where are you living now?" answer (validated before storing)
-      const r = await answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true, { tz: normalizeTimeZone(tz), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}) });
+      const r = await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'clarify', flow: 'clarify', clarifyRunId: runId }, () =>
+        answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true, { tz: normalizeTimeZone(tz), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}) })
+      );
       if ('error' in r) return res.status(r.error === 'not_found' ? 404 : 409).json({ error: r.error });
       if (r.declined) return res.json({ type: 'declined', runId, category: r.declined.category, reply: r.declined.reply });
       return res.json(r.event ?? { type: 'ready', runId });
@@ -121,7 +133,9 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     const state = await store().get(userId, runId);
     if (!state) return res.status(404).json({ error: 'not_found' });
     if (readingFlow() !== 'oracle') return res.json({ ran: [], cached: [], skipped: [] });
-    const report = await Promise.race([prewarmOracleReaders(deps.prisma, userId, state, runId), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_PREWARM_CAP_MS))]);
+    const report = await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'prewarm', flow: 'oracle', clarifyRunId: runId }, () =>
+      Promise.race([prewarmOracleReaders(deps.prisma, userId, state, runId), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_PREWARM_CAP_MS))])
+    );
     return res.json(report ? { ran: report.ran, cached: report.cached, skipped: report.skipped } : { ran: [], cached: [], skipped: ['time_cap'] });
   });
 
@@ -148,6 +162,7 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
       }
       const result = await chatWithConfiguredProvider(deps.prisma, userId, c.state.question, {
         intent: c.intent,
+        clarifyRunId: runId,
         childAgeConfirmed: c.state.childAge === 'adult',
         onDelta: (delta) => {
           if (delta) sse.write({ type: 'token', delta });

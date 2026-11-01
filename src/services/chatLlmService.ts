@@ -42,6 +42,8 @@ export type ChatWithLlmOptions = {
   onEvent?: ReadingEmitter;
   /** Confirmed intent from the clarifier (skips intake) */
   intent?: Intent;
+  /** The clarify run this answer came from (joins the metrics) */
+  clarifyRunId?: string;
   /** The clarifier confirmed the person's child is 18 or older */
   childAgeConfirmed?: boolean;
   /** Where the question is asked (client location, rounded; parseClientPlace), for the prashna */
@@ -71,6 +73,7 @@ export async function chatWithConfiguredProvider(
           onDelta: options?.onDelta,
           onEvent: options?.onEvent,
           intent: options?.intent,
+          ...(options?.clarifyRunId ? { clarifyRunId: options.clarifyRunId } : {}),
           ...(options?.questionPlace ? { questionPlace: options.questionPlace } : {}),
           onFactsMissing: (kundliId) => {
             if (readingBuildFactsEnabled()) scheduleFactsBuild(prisma, kundliId);
