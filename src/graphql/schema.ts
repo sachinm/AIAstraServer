@@ -144,7 +144,7 @@ const typeDefs = /* GraphQL */ `
 
   type SignupStartResult {
     success: Boolean!
-    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure."
+    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure; SIGNUP_EMAIL_LIMIT when the day's sign-up emails are used up (try tomorrow)."
     code: String
     message: String!
   }

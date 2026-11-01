@@ -16,6 +16,7 @@ import {
   UserNotFoundException,
   UsernameExistsException,
   TooManyRequestsException,
+  LimitExceededException,
 } from '@aws-sdk/client-cognito-identity-provider';
 
 const fake = vi.hoisted(() => ({
@@ -105,6 +106,8 @@ import {
   EMAIL_EXISTS_CODE,
   EMAIL_EXISTS_MESSAGE,
   SIGNUP_RETRY_CODE,
+  SIGNUP_EMAIL_LIMIT_CODE,
+  SIGNUP_EMAIL_LIMIT_MESSAGE,
   SIGNUP_RETRY_MESSAGE,
   SIGNUP_CODE_MESSAGE,
   MAGIC_LINK_REQUEST_MESSAGE,
@@ -477,6 +480,18 @@ describe('signup (cognito)', () => {
       expect(retry.success).toBe(true);
       expect(fake.rows).toHaveLength(1);
       expect(cognito.users.size).toBe(1);
+      err.mockRestore();
+    });
+
+    it("Cognito's daily email limit: the row is deleted and the refusal says to try tomorrow, not in a moment", async () => {
+      cognito.failSignUpWith = exc(LimitExceededException);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const result = await signup(birth, null, null);
+      expect(result).toEqual({ success: false, code: SIGNUP_EMAIL_LIMIT_CODE, message: SIGNUP_EMAIL_LIMIT_MESSAGE });
+      expect(fake.order).toEqual(['db.create', 'cognito.SignUp', 'db.delete']);
+      expect(fake.rows).toHaveLength(0);
+      expect(cognito.users.size).toBe(0);
+      expect(err.mock.calls.some((c) => String(c[0]).includes('daily email limit'))).toBe(true);
       err.mockRestore();
     });
 

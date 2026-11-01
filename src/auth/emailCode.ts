@@ -266,7 +266,8 @@ export async function verifyLoginCode(
 
 export type SignupIdentityResult =
   | { ok: true; reusedExisting: boolean }
-  | { ok: false; reason: 'failed' };
+  /** `email_limit`: Cognito's own sender hit its daily cap (50 emails a day per account); not fixed by retrying. */
+  | { ok: false; reason: 'failed' | 'email_limit' };
 
 /**
  * Signup step 1, after the auth row is written. local: nothing to do. cognito: create the Cognito user
@@ -289,6 +290,13 @@ export async function createSignupIdentity(
     });
     return { ok: true, reusedExisting: out.status === 'exists' };
   } catch (err) {
+    const name = (err as { name?: string } | null)?.name ?? '';
+    if (name === 'LimitExceededException') {
+      // The pool sends through Cognito's default sender, capped at 50 emails a day for the whole account.
+      // Only a pool email configuration backed by SES (or another sender) lifts it: docs/TODOS.md.
+      console.error('Cognito sign-up refused: daily email limit reached (COGNITO_DEFAULT sender):', (err as Error).message);
+      return { ok: false, reason: 'email_limit' };
+    }
     console.error('Cognito sign-up failed:', (err as Error).message);
     return { ok: false, reason: 'failed' };
   }

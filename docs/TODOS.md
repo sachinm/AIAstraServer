@@ -21,6 +21,11 @@ re-applied by it.
   `src`, `prisma`, `scripts`, `tests` survived. Rebuilt from a backup copy and GitHub by the deploy session. Status: in
   progress (deploy session). Done: `develop` rebuilt and pushed, every lost branch recreated, `.env` restored by Sachin,
   the worktree rule in AGENTS.md and CLAUDE.md.
+- **US birth dates can be read with day and month swapped.** `AIAstra_WEB/src/Auth/fields/dateUtils.ts` `parseTypedDate` reads every
+  typed date as DD/MM/YYYY for everyone, so a US person typing 04/05/1990 for April 5 silently gets 4 May, which is a wrong chart.
+  The placeholder says DD/MM/YYYY; `docs/product/auth-registration-review.md` called for locale order. Found reading the code on
+  2026-11-01; which users it hit is not checked. Status: open. Done: the field shows the month by name before saving, and
+  kundlis with day and month both 12 or under are listed for review.
 - **Stored dossiers may not be Radha's.** `kundli_facts` (24 rows) and `transit_snapshots` (24 rows, built 2026-10-25) look
   like the local build (`scripts/backfill-local-facts.ts` plus `docs/reading-engine/drafts/radha/`), not the deployed
   Lambda. `src/reading/data/store.ts` and `src/reading/packs/transitTable.ts` read them, so the chat path depends on them.
@@ -69,6 +74,21 @@ re-applied by it.
   removed, and affected kundlis are found and rebuilt.
 
 ## P1: blocks or risks a release
+
+- **Registration refused: Cognito's default email sender is capped at 50 emails a day for the whole account.** User pool
+  `aiastra-users-staging` (us-east-1_x8CrXCth3) has `EmailSendingAccount: COGNITO_DEFAULT`; every sign-up confirmation,
+  resend and EMAIL_OTP login code counts. On 2026-11-01 20:28Z `SignUp` returned `LimitExceededException` ("Exceeded
+  daily email limit") and the web showed "We could not create your account just now. Please try again in a moment."
+  Reproduced locally with the same client id; the Lambda log has one failure, no loop. The counter resets daily, so
+  sign-up comes back on its own and breaks again on the 51st email. SES in the account has no verified identity and
+  is in sandbox (200/day, verified recipients only); the local provider needs `RESEND_API_KEY` or `SMTP_HOST`, which
+  the Lambda does not have; no Route 53 zone or domain exists in either account. Fix (needs a sending domain Sachin
+  owns): verify the domain in SES us-east-1, request SES production access, add the SES identity policy for
+  `cognito-idp.amazonaws.com`, then `update-user-pool --email-configuration EmailSendingAccount=DEVELOPER,
+  SourceArn=<identity arn>,From=...`. Access path that works today: `aws sts assume-role` into 442728149528 via
+  `OrganizationAccountAccessRole` from profile `amplifyv2`. Code side (shipped on `fix/signup-email-limit-message`):
+  the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: blocked (domain).
+  Done: pool on SES, a fresh sign-up receives its code, the TODO about "Cognito auth not set up" updated.
 
 - **Prompt registry changes the schema from the request path.** `src/reading/prompts/registry.ts` `ensurePromptSchemaAndSeed`
   runs `ALTER TABLE`, `CREATE TABLE` and `CREATE TRIGGER` on `system_prompts` during a chat turn. That bypasses "migrations are
@@ -125,6 +145,19 @@ re-applied by it.
 
 ## P2: real, can wait
 
+- **Payment webhooks cannot reach the API through CloudFront.** `aiastra-server-api` is an AWS_IAM Function URL behind OAC, which rejects a
+  POST without `x-amz-content-sha256` (AWS CloudFront OAC docs, `docs/grokbots/SKILLS.md`). A gateway cannot send that header. Plan in
+  `docs/billing/README.md`: a separate webhook Lambda. Status: open (deploy session, Sachin's OK). Done: a signed test event sets `is_paid`.
+- **The live origin request policy was not read.** `CloudFront-Viewer-Country` must be in policy `e1684868-b4fe-43b2-94ca-ac52642bd67d`, or every
+  visitor sees USD. The check failed on 2026-11-01 because the AWS MCP credentials had expired. Status: open (deploy session). Done: an India
+  request to `/api/billing/plans` returns `INR`.
+- **No published payment terms confirmation for astrology.** Stripe lists "Psychic services and fortune tellers" as prohibited for Japan and Thailand,
+  not the US, and says its list is not exhaustive. Razorpay's list was not found, though it publishes an Astrotalk case study. Status: open (Sachin).
+  Done: written confirmation from each gateway before a live key is used.
+- **The product has two names.** `AIAstra_WEB/src/pages/TopNavigation.tsx` says "Cosmic Vedic"; the page title and chat say "AI Astra". A card statement
+  that matches neither invites chargebacks. Status: open (Sachin). Done: one name, used on the nav and the gateway statement descriptor.
+- **The timeline interview calls a model with no plan check.** `POST /api/timeline/ledger/interview` is open to every signed-in user when
+  `TIMELINE_ENABLED` is on, and is not a counted question. Status: open. Done: capped or restricted to paid plans.
 - **The web does not call `POST /api/chat/prewarm`.** It should fire it without waiting on a `propose` event, and label the reader
   pills (`R08` → "Vimshottari periods"). Without it, a clarified question whose horizon was answered re-runs timing readers,
   which is the difference between about 7 s and about 11 s (doc 39 §5). Status: open (web session).
@@ -282,3 +315,11 @@ Reported by that session; the items are its own open findings. Owners are named 
 ### P3: nice to have
 
 - **Leftover local worktrees and branches.** `chore/pin-lambda-adapter-ecr` (commit 22e456c, merged into `release-candidate-staging`, not `develop`) and its worktree in the session scratchpad remain, along with the `release-candidate-staging` worktrees for the server and web repos. Their git links broke with the 2026-10-31 loss. Owner: the dev session that created them. Done: merged branches removed and worktrees removed, per the cleanup rule.
+
+- **Landing page makes unverified accuracy claims** (`AIAstra_WEB/src/LandingPage.tsx`: "Millimeter-accurate planetary
+  positions using NASA data", "Validated by Vedic scholars from traditional lineages", "AI trained on classical
+  Sanskrit texts"). The business plan's own rule is no accuracy claims before the advisor-validated benchmark. Found
+  2026-11-01 while preparing `docs/a16z-speedrun-sr008-application.md`. Status: open. Done: the three lines replaced
+  with claims we can stand behind (sidereal charts, full divisional set, chart-cited answers).
+- **No billing, privacy policy or terms pages in either repo.** Known from the business plan truth table, not tracked
+  here. Blocks any public paid launch. Status: open. Done: Stripe tiers, `/privacy` and `/terms` routes live.
