@@ -61,7 +61,22 @@ re-applied by it.
 - **Served `dignities` gives Rahu Ketu's row** (`const.house_strengths_of_planets[7]`): Rahu reads debilitated in Taurus
   and exalted in Scorpio. Status: in progress (reading-dev).
 
+- **Node supplies birth coordinates and timezone when none are stored.** `src/reading/chartData/store.ts`
+  `resolveFallbackCoords` uses a hardcoded city table with one fixed offset per city (Folsom -8, so a summer birth is an
+  hour off), or Nominatim with `tz = round(lon / 15)` outside India and Nepal, then writes the result to `kundlis.lat/lon/tz`
+  and sends it to Radha for every later call. A wrong offset means a wrong chart. Found reading the code on 2026-11-01; which
+  kundlis it hit is not checked. Status: open. Done: Radha resolves place and timezone for the birth date, this path is
+  removed, and affected kundlis are found and rebuilt.
+
 ## P1: blocks or risks a release
+
+- **Chart build reliability needs infra before it ships** (`docs/reading-engine/38` §10). Order: API key and doc 31 §5
+  infra, then server, then web; the wrong order slows the gate or drops the profile gate. Status: open (deploy session,
+  Sachin's OK). Done: §10's three steps applied and Phase 4's load check run.
+- **`src/reading/chartData/registration.ts` is broken in the main checkout's uncommitted changes.** Line 1 starts with
+  `b/**`, which does not compile, and the old plan function is kept as `_unusedRegistrationPlanLegacy`. Not from the chart
+  build work; it was there at the start of the 2026-11-01 session. Status: open (whoever owns those uncommitted changes).
+  Done: the stray `b` and the dead function are removed.
 
 - **Release order for house counts.** With `fix/timeline-houses-from-radha` merged but `house_counts` not deployed, real
   kundlis build without Narayana (S4), without Narayana rows in S7, and with no 6/8/12 drop; the report's notes say so.
@@ -86,6 +101,16 @@ re-applied by it.
   will list them as unknown. The server's "unsupported" check does not recognise the new 400 for other ayanamsas.
 
 ## P2: real, can wait
+
+- **A worker re-run briefly closes chat on the web.** `processOneKundliRow` sets `queue_status = in_progress` on every run,
+  and `ChatSection.tsx` opens only on `completed`, so a sweep or resume can show the overlay to a user whose chat was open.
+  Status: open. Done: the page gates on `me.chart`, or re-runs of a completed row leave `queue_status` alone.
+- **Tests that flake.** `ChatSection.location`, `SignIn`, `SignUp` and `LedgerSection` web tests and the server's `auth` and
+  `registrationFullPull` tests hit the 5 s limit at random when the machine is busy, and pass with `--testTimeout=60000`.
+  Running server tests with `--poolOptions.forks.singleFork` leaks env between files: `chatRouting` and `promptCache` fail
+  that way and pass on their own. Status: open. Done: both suites green in one default run.
+- **The "about 30 minutes" notice is out of date** once doc 38 ships (`AIAstra_WEB/src/Auth/readyNotice.ts`). Status: open.
+  Done: reworded from the times Phase 4 measures.
 
 - **`dasha.tara` fails for kundli de3223e3.** "module returned no periods", same on retry. pyjhora's `tara.py` seeds from planets
   in the kendras and returns nothing when there are none, which most likely explains it (chart not opened). Fix: return an

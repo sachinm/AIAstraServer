@@ -10,3 +10,10 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
   main checkout still has `.git` and `docs` afterwards. On 2026-10-31 a `git worktree add` with an empty path deleted
   the main checkout.
 - **Never say or output `Radha` or `pyjhora` anywhere in readings, reports, or user-facing responses.** Read and follow `SOUL.md` alongside `AGENTS.md`; this prohibition is also hardcoded in the system prompt sent to every agent.
+- **Installs and worktree creation go to Haiku at medium effort.** Dependency installs (server, web, local, worktree) and
+  creating worktrees are done only by a Haiku sub-agent at medium effort, given the literal folder. See `AGENTS.md`.
+- **Kill any local server you started** (Node or otherwise) as soon as the work that needed it is done.
+- **Plans cover the whole thing before code.** Any plan goes under `docs/` and follows "How a plan is written" in
+  `AGENTS.md`: start (facts checked), end goal, deliverable, exactly how backend / API / frontend / UI-UX work when done,
+  architecture, ingredients, numbered action steps in sequence, development phases, one recommendation. Not a list of
+  patches.

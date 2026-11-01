@@ -19,7 +19,8 @@ vi.mock('@aws-sdk/client-lambda', () => ({
   },
 }));
 vi.mock('../../../src/services/geminiCacheService.js', () => ({ ensureGeminiCacheForUser: vi.fn(async () => undefined) }));
-vi.mock('../../../src/reading/data/factsBuilder.js', () => ({ scheduleFactsBuild: vi.fn() }));
+const facts = vi.hoisted(() => ({ buildFactsForKundli: vi.fn(async (_prisma: unknown, kundliId: string): Promise<Record<string, unknown>> => ({ status: 'ready', kundliId })) }));
+vi.mock('../../../src/reading/data/factsBuilder.js', () => ({ scheduleFactsBuild: vi.fn(), buildFactsForKundli: facts.buildFactsForKundli }));
 const queue = vi.hoisted(() => ({ processKundliSyncQueue: vi.fn(async () => undefined) }));
 vi.mock('../../../src/services/kundliQueueService.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../src/services/kundliQueueService.js')>()),
@@ -55,6 +56,7 @@ beforeEach(() => {
   lambda.send.mockReset();
   lambda.inputs.length = 0;
   queue.processKundliSyncQueue.mockClear();
+  facts.buildFactsForKundli.mockClear();
   vi.mocked(ensureGeminiCacheForUser).mockClear();
   clearChartDataCaches();
 });
@@ -115,11 +117,16 @@ describe('scheduleKundliSync', () => {
     expect(queue.processKundliSyncQueue).not.toHaveBeenCalled();
   });
 
-  it('falls back to the in-process queue run when the invoke fails', async () => {
+  it('when the invoke fails on Lambda, pulls the gate only and waits for it, so nothing is left to freeze', async () => {
     process.env.AWS_LAMBDA_FUNCTION_NAME = 'aiastra-server-api';
     lambda.send.mockRejectedValue(new Error('AccessDeniedException'));
-    expect(await scheduleKundliSync('k1', { prisma })).toBe('in_process');
-    expect(queue.processKundliSyncQueue).toHaveBeenCalledWith(prisma, undefined);
+    const kundli = makeKundli();
+    const { fetcher, calls } = clockedFetcher();
+    const result = await scheduleKundliSync('k1', { prisma: fakePrisma(kundli), queue: { chart: { repo: memRepo(kundli, EXTRA), fetcher } } });
+    expect(result).toBe('gate_sync');
+    expect(calls).toHaveLength(10); // the gate, not the four rest types
+    expect(kundli.queue_status).toBe('completed');
+    expect(queue.processKundliSyncQueue).not.toHaveBeenCalled();
   });
 
   it('falls back in process when not on Lambda (no invoke) or without a kundli id', async () => {
@@ -268,6 +275,33 @@ describe('runKundliSync', () => {
     expect(kundli.queue_status).toBe('completed');
     expect(kundli.queue_started_at).toBeNull();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('builds the dossier before chat opens, and a failed build still opens chat', async () => {
+    process.env.READING_FACTS_BUILD = '1';
+    const kundli = makeKundli();
+    const prisma = fakePrisma(kundli);
+    const { fetcher } = clockedFetcher();
+    const seenAtBuild: unknown[] = [];
+    facts.buildFactsForKundli.mockImplementationOnce(async (_p, kundliId) => {
+      seenAtBuild.push(kundli.queue_status);
+      return { status: 'failed', kundliId, reason: 'no facts yet', unsupported: true };
+    });
+    const out = await runKundliSync({ prisma, queue: { chart: { repo: memRepo(kundli, EXTRA), fetcher } }, maxMs: 12 * 60_000, invoke: vi.fn(async () => true) }, 'k1');
+    expect(seenAtBuild).toEqual(['in_progress']); // the row was not completed yet
+    expect(facts.buildFactsForKundli).toHaveBeenCalledTimes(1); // unsupported is not retried
+    expect(out).toMatchObject({ status: 'ran', gateComplete: true });
+    expect(kundli.queue_status).toBe('completed');
+  });
+
+  it('the sweep retries dossiers that never landed, after the incomplete charts', async () => {
+    process.env.READING_FACTS_BUILD = '1';
+    const kundli = makeKundli();
+    const prisma = fakePrisma(kundli);
+    const { fetcher } = clockedFetcher();
+    const findFacts = vi.fn(async () => ['k7', 'k8']);
+    await runKundliSyncSweep({ prisma, queue: { chart: { repo: memRepo(kundli, EXTRA), fetcher } }, maxMs: 12 * 60_000, find: vi.fn(async () => []), findFacts });
+    expect(facts.buildFactsForKundli.mock.calls.map((c) => c[1])).toEqual(['k7', 'k8']);
   });
 
   it('stops at the budget, re-invokes itself, and the next run resumes from the first missing item', async () => {

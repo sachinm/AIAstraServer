@@ -204,7 +204,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
 
   const pre = await validateAskForUser(prisma, userId);
   if (!pre.ok) {
-    return res.status(400).json({ error: pre.error });
+    return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
   }
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');

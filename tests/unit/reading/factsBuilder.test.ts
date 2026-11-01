@@ -70,7 +70,7 @@ describe('buildFactsForKundli', () => {
     expect(engine.calls).toBe(1);
   });
 
-  it('marks the kundli failed (unsupported) when the engine does not serve facts yet, without throwing', async () => {
+  it('marks the kundli unsupported when the engine does not serve facts yet, without throwing', async () => {
     engine.impl = async () => {
       throw new EngineUnsupportedError('engine does not serve type=facts yet');
     };
@@ -78,7 +78,7 @@ describe('buildFactsForKundli', () => {
     const r = await buildFactsForKundli(m.prisma, 'k1');
     expect(r).toMatchObject({ status: 'failed', unsupported: true });
     expect(m.upsert).not.toHaveBeenCalled();
-    expect(m.kundliUpdate.mock.calls.at(-1)![0].data).toEqual({ facts_status: 'failed' });
+    expect(m.kundliUpdate.mock.calls.at(-1)![0].data).toEqual({ facts_status: 'unsupported' });
   });
 
   it('records other engine errors as failed but not unsupported', async () => {
