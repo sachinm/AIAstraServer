@@ -47,7 +47,8 @@ model Auth {
   chats                 Chat[]
   readingRuns           ReadingRun[]
   agent_responses ReadingAgentResponse[]
-  prashnaCasts          PrashnaCast[]
+  reading_traces ReadingTrace[]
+  prashnaCasts         PrashnaCast[]
   kundlis               Kundli[]
   userGeneratedContent  UserGeneratedContent[]
 
@@ -554,4 +555,75 @@ model ReadingAgentResponse {
   @@index([run_id], map: "reading_agent_responses_run")
   @@index([user_id, created_at(sort: Desc)], map: "reading_agent_responses_user_created")
   @@map("reading_agent_responses")
+}
+
+/// One query's metrics (docs/reading-engine/41, M19). Written when the query starts, closed when it ends, so status
+/// 'processing' shows what is in flight. run_id equals reading_runs.id for kind 'reading'.
+model ReadingTrace {
+  run_id         String    @id @map("run_id")
+  user_id        String    @map("user_id")
+  /// reading | clarify | prewarm
+  kind           String
+  flow           String?
+  /// Null for clarify and prewarm: declined topics are decided inside the clarifier.
+  question       String?
+  clarify_run_id String?   @map("clarify_run_id")
+  /// processing | done | failed | unavailable
+  status         String
+  agents_spawned Int       @default(0) @map("agents_spawned")
+  agents_failed  Int       @default(0) @map("agents_failed")
+  model_calls    Int       @default(0) @map("model_calls")
+  prompt_tokens  Int       @default(0) @map("prompt_tokens")
+  cached_tokens  Int       @default(0) @map("cached_tokens")
+  output_tokens  Int       @default(0) @map("output_tokens")
+  thought_tokens Int       @default(0) @map("thought_tokens")
+  est_cost_usd   Decimal   @default(0) @map("est_cost_usd") @db.Decimal(10, 6)
+  /// Model calls in est_cost_usd's total with no price: when above 0 the estimate is low.
+  unpriced_calls Int       @default(0) @map("unpriced_calls")
+  ttft_ms        Int?      @map("ttft_ms")
+  ms             Int?
+  error          String?
+  started_at     DateTime  @map("started_at") @db.Timestamptz(6)
+  ended_at       DateTime? @map("ended_at") @db.Timestamptz(6)
+  user           Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  spans          ReadingAgentSpan[]
+
+  @@index([started_at(sort: Desc)], map: "reading_traces_started")
+  @@index([status, started_at(sort: Desc)], map: "reading_traces_status_started")
+  @@index([user_id, started_at(sort: Desc)], map: "reading_traces_user_started")
+  @@index([clarify_run_id], map: "reading_traces_clarify")
+  @@map("reading_traces")
+}
+
+/// One agent or one model call inside a query. Times, tokens and estimated cost only: never prompt or model text.
+model ReadingAgentSpan {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  run_id         String   @map("run_id")
+  agent          String
+  /// reader | specialist | oracle | validator | intake | clarify | step
+  agent_kind     String   @map("agent_kind")
+  /// stage (the agent start to finish) | model_call (one request to a model)
+  level          String
+  model          String?
+  /// ok | cached | failed | skipped | unfinished
+  status         String
+  failure_reason String?  @map("failure_reason")
+  started_at     DateTime @map("started_at") @db.Timestamptz(6)
+  ended_at       DateTime @map("ended_at") @db.Timestamptz(6)
+  ms             Int
+  ttft_ms        Int?     @map("ttft_ms")
+  /// Steps inside a model call, in ms: wait_ms (until the response starts), read_ms (reading it)
+  steps          Json?
+  prompt_tokens  Int      @default(0) @map("prompt_tokens")
+  cached_tokens  Int      @default(0) @map("cached_tokens")
+  output_tokens  Int      @default(0) @map("output_tokens")
+  thought_tokens Int      @default(0) @map("thought_tokens")
+  /// Null when the model has no price, so an unpriced call never reads as free.
+  est_cost_usd   Decimal? @map("est_cost_usd") @db.Decimal(10, 6)
+  run            ReadingTrace @relation(fields: [run_id], references: [run_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([run_id, started_at], map: "reading_agent_spans_run")
+  @@index([agent, level, started_at(sort: Desc)], map: "reading_agent_spans_agent")
+  @@index([agent_kind, level, started_at(sort: Desc)], map: "reading_agent_spans_kind")
+  @@map("reading_agent_spans")
 }

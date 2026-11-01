@@ -13,6 +13,7 @@
  *  - a hard timeout keeps the clarifier sub-second budget honest; callers fall back to rules on any error.
  */
 import { BedrockRuntimeClient, ConverseCommand, type ConverseCommandOutput } from '@aws-sdk/client-bedrock-runtime';
+import { traceModelCall } from '../metrics/trace.js';
 import type { Usage } from '../types.js';
 
 export const DEFAULT_CLARIFY_MODEL = 'openai.gpt-oss-120b-1:0';
@@ -66,7 +67,11 @@ export function extractJsonObject(text: string): unknown {
 }
 
 /** One Converse call that must return a JSON object. Throws on timeout, refusal or unparseable output. */
-export async function callBedrockJson(call: BedrockJsonCall): Promise<{ json: unknown; usage: Usage }> {
+export function callBedrockJson(call: BedrockJsonCall): Promise<{ json: unknown; usage: Usage }> {
+  return traceModelCall(call.node, `bedrock:${call.model}`, () => converseJson(call));
+}
+
+async function converseJson(call: BedrockJsonCall): Promise<{ json: unknown; usage: Usage }> {
   const t0 = Date.now();
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), call.timeoutMs);
