@@ -12,6 +12,7 @@ import { getClientIp } from '../lib/requestMeta.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
+import { questionGate, wasDeclined } from '../billing/questionGate.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -60,6 +61,27 @@ const typeDefs = /* GraphQL */ `
     country_code: String
     "Own profile only (me)."
     city: String
+    "Own profile only (me). en | hi"
+    language: String
+    "Own profile only (me). Null while limits are off."
+    plan: PlanStatus
+  }
+
+  "The person's plan and questions. Access reads the paid state; desired_plan is only what they chose."
+  type PlanStatus {
+    "free | plus | unlimited: what they can use now"
+    code: String!
+    desired_plan: String!
+    desired_interval: String
+    is_paid: Boolean!
+    interval: String
+    used: Int!
+    limit: Int
+    remaining: Int
+    "lifetime | month | day | none"
+    window: String!
+    resets_at: String
+    exempt: Boolean!
   }
 
   type ChartStatus {
@@ -338,6 +360,8 @@ const typeDefs = /* GraphQL */ `
     time_of_birth: String
     country_code: String
     city: String
+    "en | hi"
+    language: String
   }
 
   input StartSignupInput {
@@ -357,6 +381,8 @@ const typeDefs = /* GraphQL */ `
     "male | female | prefer_not_to_say"
     gender: String!
     referral_code: String
+    "en | hi"
+    language: String
   }
 
   input SignUpInput {
@@ -450,6 +476,7 @@ const resolvers = {
           time_of_birth: true,
           country_code: true,
           city: true,
+          language: true,
         },
       });
       if (!user) return null;
@@ -479,6 +506,8 @@ const resolvers = {
         ),
         chart,
         ...ownProfileFields(user),
+        language: user.language ?? 'en',
+        plan: await questionGate(db).getStatus(userId),
       };
     },
     async ask(
@@ -499,9 +528,19 @@ const resolvers = {
         if (!pre.ok) {
           return { success: false, answer: null, error: pre.error };
         }
-        const chatResult = await chatWithConfiguredProvider(db, userId, question);
-        await persistAskTurn(db, userId, chatId, question, chatResult, false);
-        return { success: true, answer: chatResult.answerText, error: null };
+        const gate = questionGate(db);
+        const held = await gate.reserve(userId);
+        if (!held.ok) return { success: false, answer: null, error: 'Question limit reached' };
+        try {
+          const chatResult = await chatWithConfiguredProvider(db, userId, question);
+          const { chatId: savedChatId, messageId } = await persistAskTurn(db, userId, chatId, question, chatResult, false);
+          if (wasDeclined(chatResult)) await gate.release(held.ticket);
+          else await gate.commit(held.ticket, { chatId: savedChatId, messageId });
+          return { success: true, answer: chatResult.answerText, error: null };
+        } catch (err) {
+          await gate.release(held.ticket);
+          throw err;
+        }
       } catch (err) {
         logChatProviderError('graphql ask', err);
         return {

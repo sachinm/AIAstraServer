@@ -51,6 +51,10 @@ model Auth {
   prashnaCasts         PrashnaCast[]
   kundlis               Kundli[]
   userGeneratedContent  UserGeneratedContent[]
+  billing_account       BillingAccount?
+  question_usage        QuestionUsage[]
+  /// en | hi, asked at registration. Readings are English until Hindi ships (docs/billing/README.md).
+  language              String                 @default("en")
 
   @@map("auth")
 }
@@ -626,4 +630,50 @@ model ReadingAgentSpan {
   @@index([agent, level, started_at(sort: Desc)], map: "reading_agent_spans_agent")
   @@index([agent_kind, level, started_at(sort: Desc)], map: "reading_agent_spans_kind")
   @@map("reading_agent_spans")
+}
+
+/// Who may ask what (docs/billing/README.md). is_paid and paid_* are written only by the payment side.
+model BillingAccount {
+  user_id          String    @id
+  desired_plan     String    @default("free")
+  desired_interval String?
+  desired_at       DateTime? @db.Timestamptz(6)
+  is_paid          Boolean   @default(false)
+  paid_plan        String?
+  paid_interval    String?
+  paid_since       DateTime? @db.Timestamptz(6)
+  paid_until       DateTime? @db.Timestamptz(6)
+  payment_ref      String?
+  billing_country  String?
+  free_used        Int       @default(0)
+  period_start     DateTime? @db.Timestamptz(6)
+  period_used      Int       @default(0)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  user             Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("billing_accounts")
+}
+
+/// One row per charged question: reserved, then committed or released.
+model QuestionUsage {
+  id           String    @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id      String
+  key          String
+  /// free | period | none
+  counter      String
+  period_start DateTime? @db.Timestamptz(6)
+  /// reserved | committed | released
+  status       String    @default("reserved")
+  /// Later parts of a multi-part question, which are not charged again.
+  open_parts   String[]  @default([])
+  chat_id      String?
+  message_id   String?
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  settled_at   DateTime? @db.Timestamptz(6)
+  user         Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, key], map: "question_usage_user_key")
+  @@index([user_id, status, created_at], map: "question_usage_user_status")
+  @@map("question_usage")
 }

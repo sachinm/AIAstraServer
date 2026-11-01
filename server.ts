@@ -21,6 +21,8 @@ import { getAstroKundliTransport, getNodeEnv, isAstroKundliConfigured, isDevOrLo
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from './src/services/askChatTurn.js';
+import { partsFromEvent, questionGate, quotaBody, wasDeclined, type QuestionTicket } from './src/billing/questionGate.js';
+import { registerBillingRoutes } from './src/billing/routes.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
 import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
@@ -207,6 +209,11 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
   }
 
+  // the question limit (docs/billing/README.md), before any model runs, the clarifier included
+  const gate = questionGate(prisma);
+  const allowed = await gate.check(userId, focus ? { focus } : {});
+  if (!allowed.ok) return res.status(402).json(quotaBody(allowed.usage));
+
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
@@ -247,13 +254,23 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   pingTimer = setInterval(writeSseComment, ssePingMs);
   writeSseComment();
 
+  let ticket: QuestionTicket | null = null;
   try {
     const q = question.trim();
     // A continuation part skips the clarifier: the person already chose the order, and each part gets its own reading.
     const focusIntent = focus ? await intentForFocus(q, new Date().toISOString().slice(0, 10), focus as SubjectId, focusParts) : undefined;
     // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
     if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
+    const held = await gate.reserve(userId, focus ? { focus } : {});
+    if (!held.ok) {
+      writeSse({ type: 'error', code: 'quota_exhausted', usage: held.usage, message: 'Question limit reached' });
+      return;
+    }
+    ticket = held.ticket;
     writeSse({ type: 'start' });
+    const usageNow = await gate.getStatus(userId);
+    if (usageNow) writeSse({ type: 'usage', usage: usageNow });
+    let openParts: string[] = [];
     // where the question is asked (optional browser location `lat/lon/tz`, rounded); absent -> the birth place
     const questionPlace = parseClientPlace(req.body);
     const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
@@ -262,21 +279,30 @@ app.post('/api/chat/ask-stream', async (req, res) => {
         if (delta) writeSse({ type: 'token', delta });
       },
       // reading engine: intent / stage / windows / thought / next events let the UI show progress and continue
-      onEvent: (event) => writeSse(event),
+      onEvent: (event) => {
+        openParts = partsFromEvent(event) ?? openParts;
+        writeSse(event);
+      },
       ...(focusIntent ? { intent: focusIntent } : {}),
     });
     // a continuation is stored with its part, so the chat history reads as the parts in order
     const storedQ = focusIntent ? `[${FRAMES[focus as SubjectId].label}] ${q}` : q;
-    const { chatId: finalChatId } = await persistAskTurn(prisma, userId, chatId ?? null, storedQ, chatResult, true);
+    const { chatId: finalChatId, messageId } = await persistAskTurn(prisma, userId, chatId ?? null, storedQ, chatResult, true);
+    if (wasDeclined(chatResult)) await gate.release(ticket);
+    else await gate.commit(ticket, { chatId: finalChatId, messageId, openParts });
+    const usage = await gate.getStatus(userId);
     writeSse({
       type: 'done',
       chatId: finalChatId,
       answer: chatResult.answerText,
+      ...(usage ? { usage } : {}),
       ...(chatResult.reading ? { runId: chatResult.reading.runId, grounding: { dropped: chatResult.reading.droppedClaims } } : {}),
     });
   } catch (e) {
     logChatProviderError('ask-stream', e);
-    writeSse({ type: 'error', message: publicMessageFromChatProviderError(e) });
+    if (ticket) await gate.release(ticket);
+    const usage = await gate.getStatus(userId);
+    writeSse({ type: 'error', message: publicMessageFromChatProviderError(e), ...(usage ? { usage } : {}) });
   } finally {
     if (pingTimer) clearInterval(pingTimer);
     res.end();
@@ -284,6 +310,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
 });
 
 registerClarifyRoutes(app, { prisma, getUserId: getUserIdFromRequest });
+registerBillingRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 // life-timeline ledger (docs/reading-engine/27 P0): not mounted unless TIMELINE_ENABLED=1
 registerTimelineRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 
@@ -307,7 +334,17 @@ app.post('/query', async (req, res) => {
       return res.status(401).json({ error: 'User not authorized' });
     }
 
-    const { answer } = await runRagQuery(prisma, userId, question);
+    const gate = questionGate(prisma);
+    const held = await gate.reserve(userId);
+    if (!held.ok) return res.status(402).json(quotaBody(held.usage));
+    let answer: string;
+    try {
+      ({ answer } = await runRagQuery(prisma, userId, question));
+    } catch (err) {
+      await gate.release(held.ticket);
+      throw err;
+    }
+    await gate.commit(held.ticket);
 
     res.status(200).json({
       success: true,

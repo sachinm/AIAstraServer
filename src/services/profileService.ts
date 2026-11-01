@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { decrypt, encrypt } from '../lib/encrypt.js';
 import { deleteUserCaches } from '../reading/llm/promptCache.js';
-import { buildPlaceOfBirth, normalizeGender, validateCompleteProfile } from '../lib/profileValidators.js';
+import { buildPlaceOfBirth, normalizeGender, normalizeLanguage, validateCompleteProfile } from '../lib/profileValidators.js';
 import { enqueueKundliSync } from './kundliQueueService.js';
 import { scheduleKundliSync } from './kundliSyncWorker.js';
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
@@ -79,6 +79,7 @@ export async function completeProfile(
 
   const place = buildPlaceOfBirth(p.city, p.country_code);
   const time = `${p.time_of_birth}:00`;
+  const language = (input as { language?: unknown } | null)?.language;
   await db.auth.update({
     where: { id: userId },
     data: {
@@ -89,6 +90,7 @@ export async function completeProfile(
       city: p.city,
       gender: p.gender,
       profile_complete: true,
+      ...(language ? { language: normalizeLanguage(language) } : {}),
       ...(referredBy ? { referred_by_user_id: referredBy } : {}),
     },
   });
@@ -150,6 +152,7 @@ export type UpdateProfileInput = {
   time_of_birth?: string | null;
   country_code?: string | null;
   city?: string | null;
+  language?: string | null;
 };
 
 export type UpdateProfileResult =
@@ -214,6 +217,7 @@ export async function updateProfile(
     p.city !== current.city;
 
   const data: Record<string, unknown> = { gender: p.gender };
+  if (given(input.language)) data.language = normalizeLanguage(input.language);
   if (name) Object.assign(data, { name, username: name });
   if (birthChanged) {
     const place = buildPlaceOfBirth(p.city, p.country_code);

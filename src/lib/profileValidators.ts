@@ -14,6 +14,14 @@ export function normalizeGender(raw: string | null | undefined): Gender | null {
   return 'prefer_not_to_say';
 }
 
+export const LANGUAGES = ['en', 'hi'] as const;
+export type Language = (typeof LANGUAGES)[number];
+
+/** Anything but Hindi is English. */
+export function normalizeLanguage(raw: unknown): Language {
+  return raw === 'hi' ? 'hi' : 'en';
+}
+
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const REFERRAL_RE = /^[A-Z2-9]{8}$/;
@@ -37,6 +45,7 @@ export const completeProfileSchema = z
     city: z.string().trim().min(1, 'City is required').max(100, 'City is too long'),
     gender: z.string().trim(),
     referral_code: z.string().trim().max(64).optional().nullable(),
+    language: z.string().trim().max(8).optional().nullable(),
   })
   .strict();
 
