@@ -1,10 +1,13 @@
 name: Deploy API Lambda (OIDC)
 
-# Manual only. Builds Dockerfile.lambda, pushes to ECR `aiastra-server-api`, and points the
-# `aiastra-server-api` function at the new image. Does not change env, memory, timeout,
-# Function URL, CloudFront, or IAM; those are owned by aiastra-aws-terraform.
+# Runs on a push to release-candidate-staging (staging) or by manual dispatch. Builds
+# Dockerfile.lambda, pushes to ECR `aiastra-server-api`, and points the `aiastra-server-api`
+# function at the new image. Does not change env, memory, timeout, Function URL, CloudFront,
+# or IAM; those are owned by aiastra-aws-terraform.
 
 on:
+  push:
+    branches: [release-candidate-staging]
   workflow_dispatch:
     inputs:
       image_tag_prefix:
@@ -70,7 +73,7 @@ jobs:
           echo "Pushed $IMAGE_URI" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Update Lambda function code
-        if: ${{ inputs.update_function }}
+        if: ${{ github.event_name == 'push' || inputs.update_function }}
         run: |
           set -euo pipefail
           aws lambda update-function-code \
