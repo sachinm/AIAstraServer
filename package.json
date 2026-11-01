@@ -21,6 +21,7 @@
     "eval:readings": "tsx evals/run.ts",
     "bench:reading": "tsx scripts/bench-reading.ts",
     "bench:oracle": "tsx scripts/bench-oracle.ts",
+    "billing:set-paid": "tsx scripts/billing-set-paid.ts",
     "cache:sweep": "tsx scripts/cache-sweep.ts",
     "chart-catalog:sync": "tsx scripts/sync-chart-catalog.ts",
     "timeline:past": "tsx scripts/timeline-past.ts"

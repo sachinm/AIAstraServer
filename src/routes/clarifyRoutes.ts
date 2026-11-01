@@ -21,6 +21,7 @@ import { PrismaClarifyStore, type ClarifyStore } from '../reading/clarify/store.
 import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
+import { partsFromEvent, questionGate, quotaBody, wasDeclined, type QuestionTicket } from '../billing/questionGate.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 import { parseClientPlace } from '../reading/chartData/place.js';
@@ -146,12 +147,16 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!runId) return res.status(400).json({ error: 'runId is required' });
     const pre = await validateAskForUser(deps.prisma, userId);
     if (!pre.ok) return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
+    const gate = questionGate(deps.prisma);
+    const allowed = await gate.check(userId);
+    if (!allowed.ok) return res.status(402).json(quotaBody(allowed.usage));
     const c = await confirmAndBuildIntent(store(), userId, runId, edits ?? {});
     if ('error' in c) return res.status(c.error === 'not_found' ? 404 : 409).json({ error: c.error });
     // where the question is asked (optional browser location, rounded to two decimals); absent -> the birth place
     const questionPlace = parseClientPlace(req.body);
     if (c.intent && questionPlace) c.intent.questionPlace = questionPlace;
     const sse = openSse(req, res);
+    let ticket: QuestionTicket | null = null;
     try {
       sse.write({ type: 'start' });
       if (!c.intent) {
@@ -160,6 +165,15 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
         sse.write({ type: 'done', status: 'clarifying', runId });
         return;
       }
+      const held = await gate.reserve(userId, { key: `clarify:${runId}` });
+      if (!held.ok) {
+        sse.write({ type: 'error', code: 'quota_exhausted', usage: held.usage, message: 'Question limit reached' });
+        return;
+      }
+      ticket = held.ticket;
+      const usageNow = await gate.getStatus(userId);
+      if (usageNow) sse.write({ type: 'usage', usage: usageNow });
+      let openParts: string[] = [];
       const result = await chatWithConfiguredProvider(deps.prisma, userId, c.state.question, {
         intent: c.intent,
         clarifyRunId: runId,
@@ -167,13 +181,21 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
         onDelta: (delta) => {
           if (delta) sse.write({ type: 'token', delta });
         },
-        onEvent: (event) => sse.write(event),
+        onEvent: (event) => {
+          openParts = partsFromEvent(event) ?? openParts;
+          sse.write(event);
+        },
       });
-      const { chatId: finalChatId } = await persistAskTurn(deps.prisma, userId, chatId ?? null, c.state.question, result, true);
-      sse.write({ type: 'done', chatId: finalChatId, answer: result.answerText, clarifyRunId: runId, ...(result.reading ? { runId: result.reading.runId } : {}) });
+      const { chatId: finalChatId, messageId } = await persistAskTurn(deps.prisma, userId, chatId ?? null, c.state.question, result, true);
+      if (wasDeclined(result)) await gate.release(ticket);
+      else await gate.commit(ticket, { chatId: finalChatId, messageId, openParts });
+      const usage = await gate.getStatus(userId);
+      sse.write({ type: 'done', chatId: finalChatId, answer: result.answerText, clarifyRunId: runId, ...(result.reading ? { runId: result.reading.runId } : {}), ...(usage ? { usage } : {}) });
     } catch (e) {
       logChatProviderError('confirm-stream', e);
-      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e) });
+      if (ticket) await gate.release(ticket);
+      const usage = await gate.getStatus(userId);
+      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e), ...(usage ? { usage } : {}) });
     } finally {
       sse.end();
     }
