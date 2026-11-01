@@ -40,13 +40,32 @@ export const EMAIL_EXISTS_CODE = 'EMAIL_EXISTS';
 export const SIGNUP_RETRY_CODE = 'SIGNUP_RETRY';
 export const SIGNUP_RETRY_MESSAGE =
   'We could not create your account just now. Please try again in a moment.';
+/** Stable code for a signup refused because the email sender's daily limit is used up: retrying today will not help. */
+export const SIGNUP_EMAIL_LIMIT_CODE = 'SIGNUP_EMAIL_LIMIT';
+export const SIGNUP_EMAIL_LIMIT_MESSAGE =
+  'We have reached today’s limit for sign-up emails, so we could not send your code. Please try again tomorrow.';
+
+/** Picks the refusal for a failed identity step; nothing was left behind in either case. */
+function signupIdentityRefusal(reason: 'failed' | 'email_limit'): {
+  success: false;
+  code: typeof SIGNUP_RETRY_CODE | typeof SIGNUP_EMAIL_LIMIT_CODE;
+  message: string;
+} {
+  return reason === 'email_limit'
+    ? { success: false, code: SIGNUP_EMAIL_LIMIT_CODE, message: SIGNUP_EMAIL_LIMIT_MESSAGE }
+    : { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
+}
 export const EMAIL_EXISTS_MESSAGE =
   'This email is already registered. Please sign in instead.';
 
 /** Signup does not sign the user in: they confirm the emailed code first (loginWithMagicLink). */
 export type SignUpResult =
   | { success: true; message: string }
-  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE };
+  | {
+      success: false;
+      message: string;
+      code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE | typeof SIGNUP_EMAIL_LIMIT_CODE;
+    };
 
 /**
  * Issue a JWT for the given user (opaque: only sub and role).
@@ -141,7 +160,11 @@ async function completeLogin(user: { id: string; role: string | null }): Promise
 
 export type SignupStartResult =
   | { success: true; message: string }
-  | { success: false; message: string; code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE };
+  | {
+      success: false;
+      message: string;
+      code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE | typeof SIGNUP_EMAIL_LIMIT_CODE;
+    };
 
 const startSignupSchema = z
   .object({
@@ -200,7 +223,7 @@ export async function startSignup(
     await prisma.auth.delete({ where: { id: created.id } }).catch((err) => {
       console.error('startSignup rollback (delete auth row) failed:', (err as Error).message);
     });
-    return { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
+    return signupIdentityRefusal(identity.reason);
   }
   if (identity.reusedExisting) await sendLoginCode(email);
   else await sendSignupCode(email);
@@ -292,7 +315,7 @@ export async function signup(
     await prisma.auth.delete({ where: { id: created.id } }).catch((err) => {
       console.error('signup rollback (delete auth row) failed:', (err as Error).message);
     });
-    return { success: false, code: SIGNUP_RETRY_CODE, message: SIGNUP_RETRY_MESSAGE };
+    return signupIdentityRefusal(identity.reason);
   }
 
   if (identity.reusedExisting) {

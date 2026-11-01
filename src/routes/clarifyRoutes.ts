@@ -21,9 +21,12 @@ import { PrismaClarifyStore, type ClarifyStore } from '../reading/clarify/store.
 import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
+import { partsFromEvent, questionGate, quotaBody, wasDeclined, type QuestionTicket } from '../billing/questionGate.js';
 import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 import { parseClientPlace } from '../reading/chartData/place.js';
+import { randomUUID } from 'node:crypto';
+import { withRunTrace } from '../reading/metrics/trace.js';
 
 /** The longest `POST /api/chat/prewarm` holds its request. */
 const ORACLE_PREWARM_CAP_MS = 6_000;
@@ -78,14 +81,22 @@ export function clarifyAvailable(): boolean {
 export async function clarifyOnAsk(deps: ClarifyRouteDeps, userId: string, question: string, sse: { write: (o: unknown) => void }): Promise<boolean> {
   if (!clarifyAvailable()) return false;
   const store = deps.store ?? new PrismaClarifyStore(deps.prisma);
-  const r = await beginClarify(deps.prisma, store, userId, question, deps.locationStore ? { locationStore: deps.locationStore } : {});
+  // no question on this trace: declined topics are decided inside the clarifier and must not keep their text
+  const r = await withRunTrace(
+    deps.prisma,
+    { runId: randomUUID(), userId, kind: 'clarify', flow: 'clarify' },
+    () => beginClarify(deps.prisma, store, userId, question, deps.locationStore ? { locationStore: deps.locationStore } : {}),
+    (out) => ({ status: 'done', clarifyRunId: out.runId ?? null })
+  );
   // declined topics fall through: the chat path answers them with the fixed reply and stores them correctly
   if (r.declined || !r.event) return false;
   sse.write({ type: 'start' });
   sse.write(r.event);
   sse.write({ type: 'done', status: 'clarifying', runId: r.runId, ms: r.ms });
   // Track B: the natal layers run while the person reads the question (graph flow only, capped, same request)
-  await prewarmWithCap(readingFlow() === 'oracle' ? prewarmOracleReaders(deps.prisma, userId, r.state, r.runId) : prewarmNatalLayers(deps.prisma, userId, r.state));
+  await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'prewarm', flow: readingFlow(), clarifyRunId: r.runId }, () =>
+    prewarmWithCap(readingFlow() === 'oracle' ? prewarmOracleReaders(deps.prisma, userId, r.state, r.runId) : prewarmNatalLayers(deps.prisma, userId, r.state))
+  );
   return true;
 }
 
@@ -99,7 +110,9 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!runId || typeof value !== 'string' || !value.trim()) return res.status(400).json({ error: 'runId and value are required' });
     try {
       // tz: the browser's IANA timezone, sent with the "Where are you living now?" answer (validated before storing)
-      const r = await answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true, { tz: normalizeTimeZone(tz), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}) });
+      const r = await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'clarify', flow: 'clarify', clarifyRunId: runId }, () =>
+        answerClarify(deps.prisma, store(), userId, runId, value, viaChip === true, { tz: normalizeTimeZone(tz), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}) })
+      );
       if ('error' in r) return res.status(r.error === 'not_found' ? 404 : 409).json({ error: r.error });
       if (r.declined) return res.json({ type: 'declined', runId, category: r.declined.category, reply: r.declined.reply });
       return res.json(r.event ?? { type: 'ready', runId });
@@ -121,7 +134,9 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     const state = await store().get(userId, runId);
     if (!state) return res.status(404).json({ error: 'not_found' });
     if (readingFlow() !== 'oracle') return res.json({ ran: [], cached: [], skipped: [] });
-    const report = await Promise.race([prewarmOracleReaders(deps.prisma, userId, state, runId), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_PREWARM_CAP_MS))]);
+    const report = await withRunTrace(deps.prisma, { runId: randomUUID(), userId, kind: 'prewarm', flow: 'oracle', clarifyRunId: runId }, () =>
+      Promise.race([prewarmOracleReaders(deps.prisma, userId, state, runId), new Promise<null>((r) => setTimeout(() => r(null), ORACLE_PREWARM_CAP_MS))])
+    );
     return res.json(report ? { ran: report.ran, cached: report.cached, skipped: report.skipped } : { ran: [], cached: [], skipped: ['time_cap'] });
   });
 
@@ -132,12 +147,16 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!runId) return res.status(400).json({ error: 'runId is required' });
     const pre = await validateAskForUser(deps.prisma, userId);
     if (!pre.ok) return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
+    const gate = questionGate(deps.prisma);
+    const allowed = await gate.check(userId);
+    if (!allowed.ok) return res.status(402).json(quotaBody(allowed.usage));
     const c = await confirmAndBuildIntent(store(), userId, runId, edits ?? {});
     if ('error' in c) return res.status(c.error === 'not_found' ? 404 : 409).json({ error: c.error });
     // where the question is asked (optional browser location, rounded to two decimals); absent -> the birth place
     const questionPlace = parseClientPlace(req.body);
     if (c.intent && questionPlace) c.intent.questionPlace = questionPlace;
     const sse = openSse(req, res);
+    let ticket: QuestionTicket | null = null;
     try {
       sse.write({ type: 'start' });
       if (!c.intent) {
@@ -146,19 +165,37 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
         sse.write({ type: 'done', status: 'clarifying', runId });
         return;
       }
+      const held = await gate.reserve(userId, { key: `clarify:${runId}` });
+      if (!held.ok) {
+        sse.write({ type: 'error', code: 'quota_exhausted', usage: held.usage, message: 'Question limit reached' });
+        return;
+      }
+      ticket = held.ticket;
+      const usageNow = await gate.getStatus(userId);
+      if (usageNow) sse.write({ type: 'usage', usage: usageNow });
+      let openParts: string[] = [];
       const result = await chatWithConfiguredProvider(deps.prisma, userId, c.state.question, {
         intent: c.intent,
+        clarifyRunId: runId,
         childAgeConfirmed: c.state.childAge === 'adult',
         onDelta: (delta) => {
           if (delta) sse.write({ type: 'token', delta });
         },
-        onEvent: (event) => sse.write(event),
+        onEvent: (event) => {
+          openParts = partsFromEvent(event) ?? openParts;
+          sse.write(event);
+        },
       });
-      const { chatId: finalChatId } = await persistAskTurn(deps.prisma, userId, chatId ?? null, c.state.question, result, true);
-      sse.write({ type: 'done', chatId: finalChatId, answer: result.answerText, clarifyRunId: runId, ...(result.reading ? { runId: result.reading.runId } : {}) });
+      const { chatId: finalChatId, messageId } = await persistAskTurn(deps.prisma, userId, chatId ?? null, c.state.question, result, true);
+      if (wasDeclined(result)) await gate.release(ticket);
+      else await gate.commit(ticket, { chatId: finalChatId, messageId, openParts });
+      const usage = await gate.getStatus(userId);
+      sse.write({ type: 'done', chatId: finalChatId, answer: result.answerText, clarifyRunId: runId, ...(result.reading ? { runId: result.reading.runId } : {}), ...(usage ? { usage } : {}) });
     } catch (e) {
       logChatProviderError('confirm-stream', e);
-      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e) });
+      if (ticket) await gate.release(ticket);
+      const usage = await gate.getStatus(userId);
+      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e), ...(usage ? { usage } : {}) });
     } finally {
       sse.end();
     }

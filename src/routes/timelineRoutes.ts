@@ -30,6 +30,8 @@ import {
   type PastReadingFlowOptions,
 } from '../reading/timeline/pastReadingFlow.js';
 
+import { questionGate } from '../billing/questionGate.js';
+
 export interface TimelineRouteDeps {
   prisma: PrismaClient;
   getUserId: (req: express.Request) => string | null;
@@ -145,6 +147,8 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   app.post('/api/timeline/past-reading/generate', async (req, res) => {
     const userId = auth(req, res);
     if (!userId) return;
+    const plan = await questionGate(prisma).getStatus(userId);
+    if (plan?.code === 'free' && !plan.exempt) return res.status(402).json({ error: 'A paid plan is required', code: 'plan_required', usage: plan });
     const kundliId = await resolveKundli(prisma, userId, kundliParam(req.body?.kundliId));
     if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
     const asOf = typeof req.body?.asOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.asOf) ? req.body.asOf : undefined;

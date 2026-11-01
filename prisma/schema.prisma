@@ -47,9 +47,16 @@ model Auth {
   chats                 Chat[]
   readingRuns           ReadingRun[]
   agent_responses ReadingAgentResponse[]
-  prashnaCasts          PrashnaCast[]
+  reading_traces ReadingTrace[]
+  prashnaCasts         PrashnaCast[]
   kundlis               Kundli[]
   userGeneratedContent  UserGeneratedContent[]
+  billing_account       BillingAccount?
+  question_usage        QuestionUsage[]
+  /// en | hi, asked at registration. Readings are English until Hindi ships (docs/billing/README.md).
+  language              String                 @default("en")
+  /// Shows the full charts and dashas in the chat's right sidebar.
+  research              Boolean                @default(false)
 
   @@map("auth")
 }
@@ -554,4 +561,121 @@ model ReadingAgentResponse {
   @@index([run_id], map: "reading_agent_responses_run")
   @@index([user_id, created_at(sort: Desc)], map: "reading_agent_responses_user_created")
   @@map("reading_agent_responses")
+}
+
+/// One query's metrics (docs/reading-engine/41, M19). Written when the query starts, closed when it ends, so status
+/// 'processing' shows what is in flight. run_id equals reading_runs.id for kind 'reading'.
+model ReadingTrace {
+  run_id         String    @id @map("run_id")
+  user_id        String    @map("user_id")
+  /// reading | clarify | prewarm
+  kind           String
+  flow           String?
+  /// Null for clarify and prewarm: declined topics are decided inside the clarifier.
+  question       String?
+  clarify_run_id String?   @map("clarify_run_id")
+  /// processing | done | failed | unavailable
+  status         String
+  agents_spawned Int       @default(0) @map("agents_spawned")
+  agents_failed  Int       @default(0) @map("agents_failed")
+  model_calls    Int       @default(0) @map("model_calls")
+  prompt_tokens  Int       @default(0) @map("prompt_tokens")
+  cached_tokens  Int       @default(0) @map("cached_tokens")
+  output_tokens  Int       @default(0) @map("output_tokens")
+  thought_tokens Int       @default(0) @map("thought_tokens")
+  est_cost_usd   Decimal   @default(0) @map("est_cost_usd") @db.Decimal(10, 6)
+  /// Model calls in est_cost_usd's total with no price: when above 0 the estimate is low.
+  unpriced_calls Int       @default(0) @map("unpriced_calls")
+  ttft_ms        Int?      @map("ttft_ms")
+  ms             Int?
+  error          String?
+  started_at     DateTime  @map("started_at") @db.Timestamptz(6)
+  ended_at       DateTime? @map("ended_at") @db.Timestamptz(6)
+  user           Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  spans          ReadingAgentSpan[]
+
+  @@index([started_at(sort: Desc)], map: "reading_traces_started")
+  @@index([status, started_at(sort: Desc)], map: "reading_traces_status_started")
+  @@index([user_id, started_at(sort: Desc)], map: "reading_traces_user_started")
+  @@index([clarify_run_id], map: "reading_traces_clarify")
+  @@map("reading_traces")
+}
+
+/// One agent or one model call inside a query. Times, tokens and estimated cost only: never prompt or model text.
+model ReadingAgentSpan {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  run_id         String   @map("run_id")
+  agent          String
+  /// reader | specialist | oracle | validator | intake | clarify | step
+  agent_kind     String   @map("agent_kind")
+  /// stage (the agent start to finish) | model_call (one request to a model)
+  level          String
+  model          String?
+  /// ok | cached | failed | skipped | unfinished
+  status         String
+  failure_reason String?  @map("failure_reason")
+  started_at     DateTime @map("started_at") @db.Timestamptz(6)
+  ended_at       DateTime @map("ended_at") @db.Timestamptz(6)
+  ms             Int
+  ttft_ms        Int?     @map("ttft_ms")
+  /// Steps inside a model call, in ms: wait_ms (until the response starts), read_ms (reading it)
+  steps          Json?
+  prompt_tokens  Int      @default(0) @map("prompt_tokens")
+  cached_tokens  Int      @default(0) @map("cached_tokens")
+  output_tokens  Int      @default(0) @map("output_tokens")
+  thought_tokens Int      @default(0) @map("thought_tokens")
+  /// Null when the model has no price, so an unpriced call never reads as free.
+  est_cost_usd   Decimal? @map("est_cost_usd") @db.Decimal(10, 6)
+  run            ReadingTrace @relation(fields: [run_id], references: [run_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([run_id, started_at], map: "reading_agent_spans_run")
+  @@index([agent, level, started_at(sort: Desc)], map: "reading_agent_spans_agent")
+  @@index([agent_kind, level, started_at(sort: Desc)], map: "reading_agent_spans_kind")
+  @@map("reading_agent_spans")
+}
+
+/// Who may ask what (docs/billing/README.md). is_paid and paid_* are written only by the payment side.
+model BillingAccount {
+  user_id          String    @id
+  desired_plan     String    @default("free")
+  desired_interval String?
+  desired_at       DateTime? @db.Timestamptz(6)
+  is_paid          Boolean   @default(false)
+  paid_plan        String?
+  paid_interval    String?
+  paid_since       DateTime? @db.Timestamptz(6)
+  paid_until       DateTime? @db.Timestamptz(6)
+  payment_ref      String?
+  billing_country  String?
+  /// The most questions this account may ask in a month; null is unlimited. Stamped from env when the plan changes.
+  question_quota   Int?
+  questions_used_this_month Int @default(0)
+  /// The month questions_used_this_month belongs to; a new month starts it again.
+  usage_month_start DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  user             Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("billing_accounts")
+}
+
+/// One row per charged question: reserved, then committed or released.
+model QuestionUsage {
+  id           String    @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id      String
+  key          String
+  period_start DateTime  @db.Timestamptz(6)
+  /// reserved | committed | released
+  status       String    @default("reserved")
+  /// Later parts of a multi-part question, which are not charged again.
+  open_parts   String[]  @default([])
+  chat_id      String?
+  message_id   String?
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  settled_at   DateTime? @db.Timestamptz(6)
+  user         Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, key], map: "question_usage_user_key")
+  @@index([user_id, status, created_at], map: "question_usage_user_status")
+  @@map("question_usage")
 }

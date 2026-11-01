@@ -21,6 +21,11 @@ re-applied by it.
   `src`, `prisma`, `scripts`, `tests` survived. Rebuilt from a backup copy and GitHub by the deploy session. Status: in
   progress (deploy session). Done: `develop` rebuilt and pushed, every lost branch recreated, `.env` restored by Sachin,
   the worktree rule in AGENTS.md and CLAUDE.md.
+- **US birth dates can be read with day and month swapped.** `AIAstra_WEB/src/Auth/fields/dateUtils.ts` `parseTypedDate` reads every
+  typed date as DD/MM/YYYY for everyone, so a US person typing 04/05/1990 for April 5 silently gets 4 May, which is a wrong chart.
+  The placeholder says DD/MM/YYYY; `docs/product/auth-registration-review.md` called for locale order. Found reading the code on
+  2026-11-01; which users it hit is not checked. Status: open. Done: the field shows the month by name before saving, and
+  kundlis with day and month both 12 or under are listed for review.
 - **Stored dossiers may not be Radha's.** `kundli_facts` (24 rows) and `transit_snapshots` (24 rows, built 2026-10-25) look
   like the local build (`scripts/backfill-local-facts.ts` plus `docs/reading-engine/drafts/radha/`), not the deployed
   Lambda. `src/reading/data/store.ts` and `src/reading/packs/transitTable.ts` read them, so the chat path depends on them.
@@ -70,6 +75,38 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Registration refused: Cognito's default email sender is capped at 50 emails a day for the whole account.** User pool
+  `aiastra-users-staging` (us-east-1_x8CrXCth3) has `EmailSendingAccount: COGNITO_DEFAULT`; every sign-up confirmation,
+  resend and EMAIL_OTP login code counts. On 2026-11-01 20:28Z `SignUp` returned `LimitExceededException` ("Exceeded
+  daily email limit") and the web showed "We could not create your account just now. Please try again in a moment."
+  Reproduced locally with the same client id; the Lambda log has one failure, no loop. The counter resets daily, so
+  sign-up comes back on its own and breaks again on the 51st email. SES in the account has no verified identity and
+  is in sandbox (200/day, verified recipients only); the local provider needs `RESEND_API_KEY` or `SMTP_HOST`, which
+  the Lambda does not have; no Route 53 zone or domain exists in either account. Fix (needs a sending domain Sachin
+  owns): verify the domain in SES us-east-1, request SES production access, add the SES identity policy for
+  `cognito-idp.amazonaws.com`, then `update-user-pool --email-configuration EmailSendingAccount=DEVELOPER,
+  SourceArn=<identity arn>,From=...`. Access: the `aiastra-ops` key is invalid. `OrganizationAccountAccessRole` via `amplifyv2`
+  worked on 2026-11-01, but it is an admin path Sachin has not approved for this: get their OK first. Code side (shipped on `fix/signup-email-limit-message`):
+  the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: blocked (domain).
+  Done: pool on SES, a fresh sign-up receives its code, the TODO about "Cognito auth not set up" updated.
+
+- **Account Lambda concurrency is only 10.** Sachin's CloudShell output on 2026-11-01 (relayed by another session, not read
+  from AWS by the deploy session) shows total 10, unreserved 10. Doc 38's reserved concurrency of 20 is impossible, so it
+  is not set, and the API, the self-invoke chart worker and the sweep share those 10 slots; a few chart builds at once
+  could throttle chat. Render's pooler cap was not checked. Owner: Sachin (Service Quotas request). Done: limit raised,
+  reserved concurrency set per doc 38 section 6 against the Render cap, or doc 38 revised for 10.
+- **New Radha catch-up ran on 2026-11-01; checks left.** `chart-catalog:sync`, `facts:backfill --force` (coordinates cleared first, old
+  values backed up in the notes folder `catchup/before-2026-11-01.json`), the `transit_snapshots` rebuild (30 rows,
+  2026-11-01 to 2028-11-01) and the `kundli_data` pull (158 items each, 18 active kundlis) all finished against Radha
+  `b66869a`. Not done: the contacts overlay shows "unavailable" in the snapshot build; `testuser_*` has no place so its
+  facts stay `failed`; `rish`'s tz changed -7 to -8 (December birth, believed right); dossier values not compared against
+  Fable's expected set after the rebuild. Done when: Fable's comparison passes on the rebuilt dossiers.
+- **Staging not exercised after the 2026-11-01 deploy.** Server `e621286` and web `60803ed` are deployed, `/health` is 200 and
+  the site is 200. Not checked: a reading on the current flow, a real sign-up (`kundli_sync_invoked`, `chart_build`, no 429
+  from Radha, `me.chart`), the progress screen in a browser, Radha's env and the sweep rule (`aiastra-ops-deployer` is
+  denied). Owner: deploy session. Done: each checked once.
+- **Radha now refuses calls with no key.** Any caller without `ASTROKUNDLI_API_KEY` gets "unauthorized: Invalid or missing API
+  key". The local `.env` has it; other checkouts and scripts do not. Done: noted wherever `.env` values are kept.
 - **Prompt registry changes the schema from the request path.** `src/reading/prompts/registry.ts` `ensurePromptSchemaAndSeed`
   runs `ALTER TABLE`, `CREATE TABLE` and `CREATE TRIGGER` on `system_prompts` during a chat turn. That bypasses "migrations are
   written, never applied", and on a cold Lambda it adds up to 21 statements to the first question. Found reading the code,
@@ -99,9 +136,6 @@ re-applied by it.
   (Radha deploy). Owner of the run: deploy session.
 - **Local memory.** Running `tsc` and vitest together ran out of memory and killed a test file. Run them separately:
   `NODE_OPTIONS=--max-old-space-size=4096 npx tsc --noEmit`; `npx vitest run <area> --pool=forks --poolOptions.forks.singleFork`.
-- **`.env` lost with the checkout.** Not in git or any worktree. Values live in Render (database) and the Lambda
-  `aiastra-server-api` env config; Sachin restores the file. No values in this file.
-
 - **`transit_snapshots` has no refresh command.** `transits:build` builds only when nothing is stored; the local rows
   cover lookups to about 2027-10-24. To refresh: delete the rows (database write) or raise `TRANSIT_SNAPSHOT_VERSION`,
   then run `transits:build`. Status: blocked (Radha `transits` deploy).
@@ -125,6 +159,33 @@ re-applied by it.
 
 ## P2: real, can wait
 
+- **Payment webhooks cannot reach the API through CloudFront.** `aiastra-server-api` is an AWS_IAM Function URL behind OAC, which rejects a
+  POST without `x-amz-content-sha256` (AWS CloudFront OAC docs, `docs/grokbots/SKILLS.md`). A gateway cannot send that header. Plan in
+  `docs/billing/README.md`: a separate webhook Lambda. Status: open (deploy session, Sachin's OK). Done: a signed test event sets `is_paid`.
+- **The live origin request policy was not read.** `CloudFront-Viewer-Country` must be in policy `e1684868-b4fe-43b2-94ca-ac52642bd67d`, or every
+  visitor sees USD. The check failed on 2026-11-01 because the AWS MCP credentials had expired. Status: open (deploy session). Done: an India
+  request to `/api/billing/plans` returns `INR`.
+- **No published payment terms confirmation for astrology.** Stripe lists "Psychic services and fortune tellers" as prohibited for Japan and Thailand,
+  not the US, and says its list is not exhaustive. Razorpay's list was not found, though it publishes an Astrotalk case study. Status: open (Sachin).
+  Done: written confirmation from each gateway before a live key is used.
+- **The product has two names.** `AIAstra_WEB/src/pages/TopNavigation.tsx` says "Cosmic Vedic"; the page title and chat say "AI Astra". A card statement
+  that matches neither invites chargebacks. Status: open (Sachin). Done: one name, used on the nav and the gateway statement descriptor.
+- **The timeline interview calls a model with no plan check.** `POST /api/timeline/ledger/interview` is open to every signed-in user when
+  `TIMELINE_ENABLED` is on, and is not a counted question. Status: open. Done: capped or restricted to paid plans.
+- **`tests/auth-flow.test.ts` fails on `develop` code.** "me resolver never returns password or PII fields" throws at `db.kundli.findFirst` because
+  its Prisma mock has no `kundli`. The failing line is older than the billing work and the test file was not touched. Seen 2026-11-01 in the full
+  server run (1 failed, 1251 passed). Status: open. Done: the mock covers what `me` reads, and the test passes.
+- **Web and server must ship in order for plans.** The web now always sends `language` in `completeProfile`, so a server without that input rejects
+  registration. Order: migration `20261101140000_billing_plans`, server, web, then `PLAN_FREE_QUESTIONS`, `PLAN_PLUS_QUESTIONS` and `PLANS_ENABLED=1`. Merged to local `develop` 2026-11-01, not pushed. Status: open
+  (deploy session, Sachin's OK). Done: a new registration works on staging and the bar shows.
+- **Web has 17 existing type errors.** `tsc -p tsconfig.app.json` fails on `LandingPage`, `analytics`, `useSpeechRecognition.test`, `MantrasSection`, `RemediesSection` and
+  `routes.tsx`; the same 17 are on `develop` without the plans work (2026-11-01). `vite build` passes because it does not typecheck. Status: open. Done: `tsc` is clean.
+- **`question_usage` SQL has never run against Postgres.** The gate's unit tests use an in-memory store, and no database was used, because migrations
+  are not applied without Sachin's OK. Status: open (deploy session). Done: migration applied on staging, and a test account stops at its quota.
+- **Unlimited has no abuse guard.** Removed at Sachin's request on 2026-11-01. One account can spend without limit against $200 a month: at $0.07 a reading that passes $200 near 95 readings a day,
+  and graph and single flows have no per-question cost cap (item below). Status: open (Sachin). Done: a guard is set, or the risk is accepted.
+- **A missing plan limit lets questions through.** With `PLANS_ENABLED=1` and `PLAN_FREE_QUESTIONS` or `PLAN_PLUS_QUESTIONS` unset, the gate logs an error and allows every question, by design, so no
+  number lives in the code. Status: open (deploy session). Done: both are set on the Lambda before the flag, with an alarm on `[plans] reserve failed`.
 - **The web does not call `POST /api/chat/prewarm`.** It should fire it without waiting on a `propose` event, and label the reader
   pills (`R08` → "Vimshottari periods"). Without it, a clarified question whose horizon was answered re-runs timing readers,
   which is the difference between about 7 s and about 11 s (doc 39 §5). Status: open (web session).
@@ -149,6 +210,12 @@ re-applied by it.
 - **A worker re-run briefly closes chat on the web.** `processOneKundliRow` sets `queue_status = in_progress` on every run,
   and `ChatSection.tsx` opens only on `completed`, so a sweep or resume can show the overlay to a user whose chat was open.
   Status: open. Done: the page gates on `me.chart`, or re-runs of a completed row leave `queue_status` alone.
+- **Server unit tests read the real `.env`.** In a checkout with `.env`, 39 tests in 8 files fail (`astroKundliExportSpacing`,
+  `env`, `geminiChatService`, `auth/emailOnlySignup`, `auth/registrationV2`, `reading/fullPrefixCache`, `reading/promptCache`,
+  `reading/run`); the same code passes all 107 in those files with no `.env` (2026-11-01). `ASTROKUNDLI_API_KEY`,
+  `GEMINI_MAX_OUTPUT_TOKENS`, `GEMINI_CACHE_ENABLED` and `DATABASE_URL` are among the values it holds, so a test run can see
+  live settings. Whether any test reached a live service was not checked. Until fixed, run the tests in a worktree. Status: open.
+  Done: tests do not load `.env`, and the suite passes in the main checkout.
 - **Tests that flake.** `ChatSection.location`, `SignIn`, `SignUp` and `LedgerSection` web tests and the server's `auth` and
   `registrationFullPull` tests hit the 5 s limit at random when the machine is busy, and pass with `--testTimeout=60000`.
   Running server tests with `--poolOptions.forks.singleFork` leaks env between files: `chatRouting` and `promptCache` fail
@@ -276,3 +343,15 @@ Reported by that session; the items are its own open findings. Owners are named 
 ### P3: nice to have
 
 - **Leftover local worktrees and branches.** `chore/pin-lambda-adapter-ecr` (commit 22e456c, merged into `release-candidate-staging`, not `develop`) and its worktree in the session scratchpad remain, along with the `release-candidate-staging` worktrees for the server and web repos. Their git links broke with the 2026-10-31 loss. Owner: the dev session that created them. Done: merged branches removed and worktrees removed, per the cleanup rule.
+
+- **Screenshot review findings (2026-11-01): `AIAstra_WEB/docs/screenshots/walkthrough/FINDINGS.md`.** An independent agent read every walkthrough image and found 32 issues; those not
+  marked fixed there are open. **P1, blocks a public paid launch:** F-03 three product names and "Cosmo" find-and-replace errors; F-04 unsupported landing claims (70% research, NASA accuracy,
+  scholar validation, health) against the chat disclaimer, which raises the item below from P3; F-05 no terms, privacy or refund pages and no consent at sign-up; F-06 placeholder-looking contact
+  details and dead footer links. The stub cannot exercise real servers or paid plans. Status: open. Done: each is fixed or dropped by Sachin, and marked in that file.
+- **Landing page makes unverified accuracy claims, under the name "Cosmo Vedic", on both live sites (production and release-candidate-staging, seen 2026-11-01)** (`AIAstra_WEB/src/LandingPage.tsx`: "Millimeter-accurate planetary
+  positions using NASA data", "Validated by Vedic scholars from traditional lineages", "AI trained on classical
+  Sanskrit texts"). The business plan's own rule is no accuracy claims before the advisor-validated benchmark. Found
+  2026-11-01 while preparing `docs/a16z-speedrun-sr008-application.md`. Status: open. Done: the three lines replaced
+  with claims we can stand behind (sidereal charts, full divisional set, chart-cited answers).
+- **No billing, privacy policy or terms pages in either repo.** Known from the business plan truth table, not tracked
+  here. Blocks any public paid launch. Status: open. Done: Stripe tiers, `/privacy` and `/terms` routes live.

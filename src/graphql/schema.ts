@@ -12,6 +12,8 @@ import { getClientIp } from '../lib/requestMeta.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
+import { questionGate, wasDeclined } from '../billing/questionGate.js';
+import { sidebarColumns } from '../services/kundliSidebar.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -60,6 +62,27 @@ const typeDefs = /* GraphQL */ `
     country_code: String
     "Own profile only (me)."
     city: String
+    "Own profile only (me). en | hi"
+    language: String
+    "Own profile only (me). Null while limits are off."
+    plan: PlanStatus
+  }
+
+  "The person's plan and questions. Access reads the paid state; desired_plan is only what they chose."
+  type PlanStatus {
+    "free | plus | unlimited: what they can use now"
+    code: String!
+    desired_plan: String!
+    desired_interval: String
+    is_paid: Boolean!
+    interval: String
+    used: Int!
+    limit: Int
+    remaining: Int
+    "month | none"
+    window: String!
+    resets_at: String
+    exempt: Boolean!
   }
 
   type ChartStatus {
@@ -102,6 +125,8 @@ const typeDefs = /* GraphQL */ `
   type KundliDisplayDataResult {
     success: Boolean!
     error: String
+    "True when this account sees the full charts and dashas."
+    research: Boolean
     biodata: String
     d1: String
     d2: String
@@ -144,7 +169,7 @@ const typeDefs = /* GraphQL */ `
 
   type SignupStartResult {
     success: Boolean!
-    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure."
+    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure; SIGNUP_EMAIL_LIMIT when the day's sign-up emails are used up (try tomorrow)."
     code: String
     message: String!
   }
@@ -338,6 +363,8 @@ const typeDefs = /* GraphQL */ `
     time_of_birth: String
     country_code: String
     city: String
+    "en | hi"
+    language: String
   }
 
   input StartSignupInput {
@@ -357,6 +384,8 @@ const typeDefs = /* GraphQL */ `
     "male | female | prefer_not_to_say"
     gender: String!
     referral_code: String
+    "en | hi"
+    language: String
   }
 
   input SignUpInput {
@@ -450,6 +479,7 @@ const resolvers = {
           time_of_birth: true,
           country_code: true,
           city: true,
+          language: true,
         },
       });
       if (!user) return null;
@@ -479,6 +509,8 @@ const resolvers = {
         ),
         chart,
         ...ownProfileFields(user),
+        language: user.language ?? 'en',
+        plan: await questionGate(db).getStatus(userId),
       };
     },
     async ask(
@@ -499,9 +531,19 @@ const resolvers = {
         if (!pre.ok) {
           return { success: false, answer: null, error: pre.error };
         }
-        const chatResult = await chatWithConfiguredProvider(db, userId, question);
-        await persistAskTurn(db, userId, chatId, question, chatResult, false);
-        return { success: true, answer: chatResult.answerText, error: null };
+        const gate = questionGate(db);
+        const held = await gate.reserve(userId);
+        if (!held.ok) return { success: false, answer: null, error: 'Question limit reached' };
+        try {
+          const chatResult = await chatWithConfiguredProvider(db, userId, question);
+          const { chatId: savedChatId, messageId } = await persistAskTurn(db, userId, chatId, question, chatResult, false);
+          if (wasDeclined(chatResult)) await gate.release(held.ticket);
+          else await gate.commit(held.ticket, { chatId: savedChatId, messageId });
+          return { success: true, answer: chatResult.answerText, error: null };
+        } catch (err) {
+          await gate.release(held.ticket);
+          throw err;
+        }
       } catch (err) {
         logChatProviderError('graphql ask', err);
         return {
@@ -666,7 +708,7 @@ const resolvers = {
       try {
         const user = await db.auth.findUnique({
           where: { id: userId },
-          select: { id: true, is_active: true, kundli_added: true },
+          select: { id: true, is_active: true, kundli_added: true, research: true },
         });
         if (!user || !user.is_active) {
           return { ...empty, error: 'Not available' };
@@ -699,18 +741,20 @@ const resolvers = {
           ['biodata', 'd1', 'd2', 'd4', 'd7', 'd9', 'd10', 'vimsottari_dasa', 'narayana_dasa'],
           kundli
         );
+        const shown = sidebarColumns(user.research === true, data);
         return {
           success: true,
           error: null,
-          biodata: jsonToString(data.biodata as Prisma.JsonValue),
-          d1: jsonToString(data.d1 as Prisma.JsonValue),
-          d2: jsonToString(data.d2 as Prisma.JsonValue),
-          d4: jsonToString(data.d4 as Prisma.JsonValue),
-          d7: jsonToString(data.d7 as Prisma.JsonValue),
-          d9: jsonToString(data.d9 as Prisma.JsonValue),
-          d10: jsonToString(data.d10 as Prisma.JsonValue),
-          vimsottari_dasa: jsonToString(data.vimsottari_dasa as Prisma.JsonValue),
-          narayana_dasa: jsonToString(data.narayana_dasa as Prisma.JsonValue),
+          research: user.research === true,
+          biodata: jsonToString(shown.biodata as Prisma.JsonValue),
+          d1: jsonToString(shown.d1 as Prisma.JsonValue),
+          d2: jsonToString(shown.d2 as Prisma.JsonValue),
+          d4: jsonToString(shown.d4 as Prisma.JsonValue),
+          d7: jsonToString(shown.d7 as Prisma.JsonValue),
+          d9: jsonToString(shown.d9 as Prisma.JsonValue),
+          d10: jsonToString(shown.d10 as Prisma.JsonValue),
+          vimsottari_dasa: jsonToString(shown.vimsottari_dasa as Prisma.JsonValue),
+          narayana_dasa: jsonToString(shown.narayana_dasa as Prisma.JsonValue),
         };
       } catch (err) {
         return {

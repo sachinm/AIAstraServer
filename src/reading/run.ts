@@ -45,6 +45,7 @@ import { loadPrewarmed } from './oracle/prewarm.js';
 import { inferRealWant } from './clarify/realWant.js';
 import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import { prashnaSection, transitAtSection } from './layers/sections.js';
+import { failureLabel, withRunTrace } from './metrics/trace.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -65,6 +66,8 @@ export interface RunReadingOptions {
   onStale?: (kundliId: string) => void;
   /** Confirmed intent from the clarifier: intake is skipped */
   intent?: Intent;
+  /** The clarify run this reading came from, so the metrics can join them */
+  clarifyRunId?: string;
   /** Where the question is asked (client location, rounded), kept on the intent for the prashna */
   questionPlace?: { lat: number; lon: number; tz: number };
   /** Data for the doc 28 layers (annual, prashna, transit at an asked date); default Radha through Prisma, none with a dataLoader */
@@ -218,12 +221,29 @@ function summarizeIntent(intent: Intent) {
   };
 }
 
-export async function runReading(prisma: PrismaClient, userId: string, question: string, opts: RunReadingOptions = {}): Promise<ReadingResult> {
+export function runReading(prisma: PrismaClient, userId: string, question: string, opts: RunReadingOptions = {}): Promise<ReadingResult> {
+  const runId = randomUUID();
+  return withRunTrace(
+    prisma,
+    { runId, userId, kind: 'reading', flow: opts.flow ?? readingFlow(), question, clarifyRunId: opts.clarifyRunId ?? null },
+    (trace) =>
+      answerQuestion(prisma, userId, question, runId, {
+        ...opts,
+        onEvent: (event) => {
+          trace.observe(event);
+          opts.onEvent?.(event);
+        },
+      }),
+    (r) => ({ status: r.record.status, flow: r.record.flow, ttftMs: r.record.timingsMs.firstTokenFromStart ?? null }),
+    (err) => (err instanceof ReadingUnavailableError ? { status: 'unavailable', error: err.reason } : { status: 'failed', error: failureLabel(err) })
+  );
+}
+
+async function answerQuestion(prisma: PrismaClient, userId: string, question: string, runId: string, opts: RunReadingOptions): Promise<ReadingResult> {
   const tStart = Date.now();
   const emit: ReadingEmitter = opts.onEvent ?? (() => undefined);
   const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
   const flowWanted = opts.flow ?? readingFlow();
-  const runId = randomUUID();
   const timings: Record<string, number> = {};
   const usages: Usage[] = [];
   const errors: NodeError[] = [];

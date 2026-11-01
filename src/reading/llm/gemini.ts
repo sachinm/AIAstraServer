@@ -11,6 +11,7 @@
  */
 import { Agent, fetch as undiciFetch } from 'undici';
 import { getGeminiModelsBaseUrl, getGeminiUndiciBodyTimeoutMs, getGeminiUndiciHeadersTimeoutMs } from '../../config/env.js';
+import { traceModelCall } from '../metrics/trace.js';
 import type { Usage } from '../types.js';
 import { cacheNameFor, invalidateCache, type CacheOwner } from './promptCache.js';
 
@@ -57,6 +58,8 @@ export interface GeminiResult {
   finishReason: string | null;
   ttftMs: number | null;
   stoppedForLoop: boolean;
+  /** Where the time went, for the metrics: waiting for the response to start, then reading it. */
+  timing?: Record<string, number>;
 }
 
 let agent: Agent | undefined;
@@ -251,7 +254,11 @@ function forget(o: GeminiCallOptions, c: ChosenCache): void {
 }
 
 /** Non-streaming call (specialists, intake). Returns the full text. */
-export async function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
+export function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
+  return traceModelCall(o.node, o.model, () => callGeminiWithCache(o));
+}
+
+async function callGeminiWithCache(o: GeminiCallOptions): Promise<GeminiResult> {
   const cache = cacheFor(o);
   try {
     return await callGeminiOnce(o, cache);
@@ -268,20 +275,29 @@ async function callGeminiOnce(o: GeminiCallOptions, cache: ChosenCache | null): 
   const t0 = Date.now();
   const url = `${getGeminiModelsBaseUrl()}/${o.model}:generateContent?key=${encodeURIComponent(apiKey())}`;
   const { res, clear } = await post(url, buildRequestBody(o, cache?.name ?? null, cache?.kind), o);
+  const waitMs = Date.now() - t0;
   try {
     const json = (await res.json()) as GeminiChunk;
     if (json.error?.message) throw new Error(json.error.message);
     const block = json.promptFeedback?.blockReason;
     const text = block ? '' : chunkText(json);
     const ms = Date.now() - t0;
-    return { text, usage: toUsage(o, json, ms), finishReason: json.candidates?.[0]?.finishReason ?? (block ? `BLOCKED_${block}` : null), ttftMs: ms, stoppedForLoop: false };
+    return { text, usage: toUsage(o, json, ms), finishReason: json.candidates?.[0]?.finishReason ?? (block ? `BLOCKED_${block}` : null), ttftMs: ms, stoppedForLoop: false, timing: { wait_ms: waitMs, read_ms: ms - waitMs } };
   } finally {
     clear();
   }
 }
 
 /** Streaming call (synthesizer / single-call path). Deltas go to `onDelta` as they arrive. */
-export async function streamGemini(
+export function streamGemini(
+  o: GeminiCallOptions,
+  onDelta?: (delta: string) => void,
+  onThought?: (delta: string) => void
+): Promise<GeminiResult> {
+  return traceModelCall(o.node, o.model, () => streamGeminiCall(o, onDelta, onThought));
+}
+
+async function streamGeminiCall(
   o: GeminiCallOptions,
   onDelta?: (delta: string) => void,
   onThought?: (delta: string) => void
@@ -298,6 +314,7 @@ export async function streamGemini(
     posted = await post(url, buildRequestBody(o, null), o);
   }
   const { res, abort, clear } = posted;
+  const waitMs = Date.now() - t0;
   if (!res.body) {
     clear();
     throw new Error('Gemini stream response has no body');
@@ -378,5 +395,5 @@ export async function streamGemini(
     }
   }
   const ms = Date.now() - t0;
-  return { text: text.trim(), usage: toUsage(o, last, ms), finishReason, ttftMs, stoppedForLoop };
+  return { text: text.trim(), usage: toUsage(o, last, ms), finishReason, ttftMs, stoppedForLoop, timing: { wait_ms: waitMs, read_ms: ms - waitMs } };
 }

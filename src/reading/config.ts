@@ -7,6 +7,11 @@ export function isReadingEngineEnabled(): boolean {
   return process.env.READING_ENGINE?.trim() !== '0';
 }
 
+/** Per-agent timing and cost rows (docs/reading-engine/41). On by default; READING_METRICS=0 turns the writes off. */
+export function readingMetricsEnabled(): boolean {
+  return process.env.READING_METRICS?.trim() !== '0';
+}
+
 /**
  * single: intake → evidence pack → ONE streamed call (Phase 1).
  * graph:  intake → pack → parallel specialists → reconcile → streamed synthesis (Phase 2 flow).
