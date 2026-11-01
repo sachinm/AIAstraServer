@@ -70,9 +70,6 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
-- **`tests/unit/reading/chartData.test.ts` fails on `develop`.** "an old failure… means refetch" expects a failure one minute
-  old not to refetch, but a6cb60a set `FAILED_RETRY_MS` to 1 s (`chartData/store.ts:94`). Doc 38 is changing this file; check
-  there first. Status: open. Done: the test and the constant agree.
 - **Prompt registry changes the schema from the request path.** `src/reading/prompts/registry.ts` `ensurePromptSchemaAndSeed`
   runs `ALTER TABLE`, `CREATE TABLE` and `CREATE TRIGGER` on `system_prompts` during a chat turn. That bypasses "migrations are
   written, never applied", and on a cold Lambda it adds up to 21 statements to the first question. Found reading the code,
