@@ -133,7 +133,7 @@ function buildApigwHttpApiV2Event(
         method,
         path: rawPath,
         protocol: 'HTTP/1.1',
-        sourceIp: '127.0.0.1',
+        sourceIp: `10.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`,
         userAgent: 'aiastra-server/astroKundliClient',
       },
       requestId: `aiastra-${Date.now()}`,

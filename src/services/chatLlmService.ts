@@ -70,7 +70,7 @@ export async function chatWithConfiguredProvider(
       } catch (err) {
         if (!(err instanceof ReadingUnavailableError)) throw err;
         options?.onEvent?.({ type: 'info', reason: err.reason });
-        if (readingFallbackToLegacy()) {
+        if (readingFallbackToLegacy() || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)) {
           console.log(JSON.stringify({ msg: 'reading engine unavailable; using legacy chat path (READING_FALLBACK_LEGACY=1)', reason: err.reason }));
         } else {
           // New chat path only: say plainly that the chart is being prepared (the build was scheduled by onFactsMissing).

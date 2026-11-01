@@ -4,14 +4,19 @@ const globalForPrisma = globalThis as typeof globalThis & { prisma?: PrismaClien
 
 function buildPrismaClient(): PrismaClient {
   const rawUrl = process.env.DATABASE_URL;
-  if (rawUrl && /connection_limit=1\b/.test(rawUrl)) {
-    const updatedUrl = rawUrl
-      .replace(/connection_limit=1\b/, 'connection_limit=10')
-      .replace(/pool_timeout=\d+/, 'pool_timeout=30');
-    const finalUrl = updatedUrl.includes('pool_timeout=')
-      ? updatedUrl
-      : `${updatedUrl}${updatedUrl.includes('?') ? '&' : '?'}pool_timeout=30`;
-    return new PrismaClient({ datasources: { db: { url: finalUrl } } });
+  if (rawUrl) {
+    let url = rawUrl;
+    if (/connection_limit=1\b/.test(url)) {
+      url = url.replace(/connection_limit=1\b/, 'connection_limit=5');
+    } else if (!/connection_limit=\d+/.test(url)) {
+      url = `${url}${url.includes('?') ? '&' : '?'}connection_limit=5`;
+    }
+    if (!/pool_timeout=\d+/.test(url)) {
+      url = `${url}${url.includes('?') ? '&' : '?'}pool_timeout=30`;
+    }
+    if (url !== rawUrl) {
+      return new PrismaClient({ datasources: { db: { url } } });
+    }
   }
   return new PrismaClient();
 }

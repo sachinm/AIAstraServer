@@ -55,6 +55,8 @@ export async function validateAskForUser(
   });
   if (!user) return { ok: false, error: 'User not found' };
   if (!user.kundli_added) {
+    const healed = await (await import('./kundliQueueService.js')).ensureUserGateReady(db, userId, true);
+    if (healed.kundli_added) return { ok: true };
     return {
       ok: false,
       error:

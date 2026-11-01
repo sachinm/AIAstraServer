@@ -91,7 +91,7 @@ export interface EnsureDeps {
   fetcher?: RadhaFetcher;
 }
 
-const FAILED_RETRY_MS = 5 * 60_000;
+const FAILED_RETRY_MS = 1_000;
 const UNSUPPORTED_RETRY_MS = 24 * 3_600_000;
 
 function concurrencyDefault(): number {
