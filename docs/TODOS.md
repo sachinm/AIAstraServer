@@ -70,16 +70,23 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Billing migration is not applied and `auth.language` is in the schema.** Local `develop` (`8d29ab1`, unpushed) and the checkout's
+  generated Prisma client expect `auth.language` and the plan columns; the live database has neither. Any code using
+  `include: { user: true }` (for example `kundliRequest` in `chartData/store.ts`) fails with "column auth.language does not
+  exist" until the migration is applied. Found 2026-11-01 when the all-kundlis pull failed locally; it was run with a client
+  generated from `origin/develop`. Staging is unaffected today (its RC lacks the billing commit). Owner: Sachin's OK to
+  apply `20261101140000_billing_plans`. Done: applied before the billing commit reaches staging.
 - **Account Lambda concurrency is only 10.** Sachin's CloudShell output on 2026-11-01 (relayed by another session, not read
   from AWS by the deploy session) shows total 10, unreserved 10. Doc 38's reserved concurrency of 20 is impossible, so it
   is not set, and the API, the self-invoke chart worker and the sweep share those 10 slots; a few chart builds at once
   could throttle chat. Render's pooler cap was not checked. Owner: Sachin (Service Quotas request). Done: limit raised,
   reserved concurrency set per doc 38 section 6 against the Render cap, or doc 38 revised for 10.
-- **New Radha is live but the server has not caught up.** Radha `b66869a` went live on 2026-11-01 (about 7k lines, including
-  `facts` and `transits`; 105 catalog types, checked with real calls on a synthetic birth, values not checked). Not run:
-  `chart-catalog:sync`, `facts:backfill`, the `transit_snapshots` rebuild, the all-kundlis override. Until then chat
-  readings use the old dossiers. Each writes to the live database. Owner: Sachin's OK, deploy session runs them. Done: all
-  four run, in that order, with the row counts reported.
+- **New Radha catch-up ran on 2026-11-01; checks left.** `chart-catalog:sync`, `facts:backfill --force` (coordinates cleared first, old
+  values backed up in the notes folder `catchup/before-2026-11-01.json`), the `transit_snapshots` rebuild (30 rows,
+  2026-11-01 to 2028-11-01) and the `kundli_data` pull (158 items each, 18 active kundlis) all finished against Radha
+  `b66869a`. Not done: the contacts overlay shows "unavailable" in the snapshot build; `testuser_*` has no place so its
+  facts stay `failed`; `rish`'s tz changed -7 to -8 (December birth, believed right); dossier values not compared against
+  Fable's expected set after the rebuild. Done when: Fable's comparison passes on the rebuilt dossiers.
 - **Staging not exercised after the 2026-11-01 deploy.** Server `e621286` and web `60803ed` are deployed, `/health` is 200 and
   the site is 200. Not checked: a reading on the current flow, a real sign-up (`kundli_sync_invoked`, `chart_build`, no 429
   from Radha, `me.chart`), the progress screen in a browser, Radha's env and the sweep rule (`aiastra-ops-deployer` is
