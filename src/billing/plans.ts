@@ -6,7 +6,7 @@ export type PlanCode = (typeof PLAN_CODES)[number];
 export const INTERVALS = ['month', 'year'] as const;
 export type Interval = (typeof INTERVALS)[number];
 
-export type PlanWindow = 'month' | 'none';
+export type PlanWindow = 'month' | 'day' | 'none';
 export type Currency = 'USD' | 'INR';
 export type Region = 'US' | 'IN';
 
@@ -64,6 +64,12 @@ export function planQuota(code: PlanCode, env: NodeJS.ProcessEnv = process.env):
   const n = Number(raw);
   if (!raw || !Number.isInteger(n) || n < 0) throw new Error(`${name} must be a whole number`);
   return n;
+}
+
+/** Questions an Unlimited account may ask in a UTC day, from PLAN_UNLIMITED_DAILY_GUARD; null when unset, so no guard. */
+export function unlimitedDailyGuard(env: NodeJS.ProcessEnv = process.env): number | null {
+  const n = Number(env.PLAN_UNLIMITED_DAILY_GUARD?.trim() || NaN);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export interface PaymentState {

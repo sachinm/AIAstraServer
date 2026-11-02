@@ -52,7 +52,7 @@ describe('Auth flow', () => {
     expect(row).not.toBeNull();
   });
 
-  it('me resolver never returns password or PII fields', async () => {
+  it('me resolver never returns the password', async () => {
     const { resolvers } = await import('../src/graphql/schema.js');
     const db = {
       auth: {
@@ -67,6 +67,7 @@ describe('Auth flow', () => {
           time_of_birth: '12:00',
         }),
       },
+      kundli: { findFirst: async () => null },
     } as unknown as typeof prisma;
     const result = await resolvers.Query!.me!(null, {}, {
       userId: 'fake-id',
@@ -81,8 +82,8 @@ describe('Auth flow', () => {
     expect(result).toHaveProperty('email');
     expect(result).toHaveProperty('role');
     expect(result).not.toHaveProperty('password');
-    expect(result).not.toHaveProperty('date_of_birth');
     expect(result).not.toHaveProperty('place_of_birth');
-    expect(result).not.toHaveProperty('time_of_birth');
+    // the person's own birth date and time are returned on purpose: the profile page shows and edits them
+    expect(result).toHaveProperty('date_of_birth', '1990-01-01');
   }, 60000); // first import of the schema module is slow on cold start
 });
