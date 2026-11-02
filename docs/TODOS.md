@@ -1,6 +1,6 @@
 # TODOS: every finding, until it is fixed
 
-The shared list for all agents and sessions on AI Astra (server, Radha, web). Rule in `AGENTS.md`: any error, bug or
+The shared list for all agents and sessions on AI AdAstra (server, Radha, web). Rule in `AGENTS.md`: any error, bug or
 finding you do not fix on the spot goes here, or in a named doc linked from here, before your session ends. Read this
 file before starting work in an area. When an item ships, delete it and say where the fix went in the commit.
 
@@ -185,8 +185,16 @@ re-applied by it.
 - **No published payment terms confirmation for astrology.** Stripe lists "Psychic services and fortune tellers" as prohibited for Japan and Thailand,
   not the US, and says its list is not exhaustive. Razorpay's list was not found, though it publishes an Astrotalk case study. Status: open (Sachin).
   Done: written confirmation from each gateway before a live key is used.
-- **The product has two names.** `AIAstra_WEB/src/pages/TopNavigation.tsx` says "Cosmic Vedic"; the page title and chat say "AI Astra". A card statement
-  that matches neither invites chargebacks. Status: open (Sachin). Done: one name, used on the nav and the gateway statement descriptor.
+- **The card statement name is not settled.** The web nav, page titles and chat now say "AI AdAstra" (2026-11-02). A gateway statement descriptor that
+  does not match invites chargebacks. Status: open (Sachin). Done: the descriptor says AI AdAstra.
+- **The rename to AI AdAstra is merged but not live.** Merged to local `develop` in server and web on 2026-11-02, not pushed; `release-candidate-staging` does not have it, so staging still
+  says "Sign in to AI Astra". Migration `20261102120000_brand_ai_adastra` is written, not applied: `declined_topics.reply` and `system_prompts.prompt` override the code, so decline replies and
+  the clarify prompt keep the old name until it runs. `MAIL_FROM` / `RESEND_FROM` on the API Lambda override the new default sender and were not read (no AWS access in the rename session).
+  Status: open (deploy session). Done: both repos deployed, migration applied, and a declined question, the sign-up email sender and the staging sign-in page all show AI AdAstra.
+- **Text already stored keeps the old name.** Past chat messages and saved readings in the database were not rewritten, and `docs/reading-engine/34`, `36`, `37` and `part1-addendum` are left as
+  dated records. Status: open (Sachin, only if old readings should change). Done: decided.
+- **`scripts/generate-og-image.mjs` crashed once, then worked.** In `AIAstra_WEB`, the first run in a fresh worktree on 2026-11-02 exited with a Node error (message not kept); the same command
+  passed straight after. `vitest` in that same chained command also printed nothing, then passed 292 of 292 when rerun alone. Cause not found. Status: open. Done: seen again and explained, or dropped.
 - **The timeline interview calls a model with no plan check.** `POST /api/timeline/ledger/interview` is open to every signed-in user when
   `TIMELINE_ENABLED` is on, and is not a counted question. Status: open. Done: capped or restricted to paid plans.
 - **`tests/auth-flow.test.ts` fails on `develop` code.** "me resolver never returns password or PII fields" throws at `db.kundli.findFirst` because
