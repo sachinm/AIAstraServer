@@ -39,13 +39,18 @@ export interface ChartDataType {
 export const TITHI_PRAVESHA_DASHA_SYSTEMS = ['tithi_ashtottari', 'mudda', 'patyayini'] as const;
 export const TITHI_PRAVESHA_DASHA_DEFAULT_SYSTEM = TITHI_PRAVESHA_DASHA_SYSTEMS[0];
 
+/** The `params` option Radha's annual types take to draw the year's chart in a divisional chart (D1 when absent). */
+export const ANNUAL_DIVISIONAL_OPTION = 'divisional_chart_factor';
+
 /**
- * The stored variant of a year item: `year=<y>`, plus `;<k>=<v>` for each fixed request option in the catalog's order
- * (e.g. `year=2027;system=tithi_ashtottari`), so one year is stored once per option.
+ * The stored variant of a year item: `year=<y>`, plus `;<k>=<v>` for each fixed request option in the catalog's order,
+ * plus `;divisional_chart_factor=<n>` for a divisional chart (e.g. `year=2027;system=tithi_ashtottari`,
+ * `year=2026;divisional_chart_factor=9`), so one year is stored once per option and chart. D1 (no factor) keeps the plain form.
  */
-export function yearVariant(year: number, fixedParams?: Record<string, unknown>): string {
+export function yearVariant(year: number, fixedParams?: Record<string, unknown>, divisionalChartFactor?: number): string {
   const extra = Object.entries(fixedParams ?? {}).map(([k, v]) => `;${k}=${String(v)}`);
-  return `year=${year}${extra.join('')}`;
+  const chart = divisionalChartFactor != null ? `;${ANNUAL_DIVISIONAL_OPTION}=${divisionalChartFactor}` : '';
+  return `year=${year}${extra.join('')}${chart}`;
 }
 
 /** pyjhora `const.division_chart_factors` */

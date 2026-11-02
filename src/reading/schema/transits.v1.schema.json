@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://aiastra.local/schemas/transits.v1.schema.json",
-  "title": "AI Astra per-kundli transit chart, version 1 (natal_overlay)",
+  "title": "AI AdAstra per-kundli transit chart, version 1 (natal_overlay)",
   "description": "Contract for the pyjhora Lambda `transits` export served per kundli: every transit period already placed against the natal chart. Node selects rows from it; it never derives houses or overlays.",
   "type": "object",
   "required": ["v", "kind", "as_of", "from", "to", "natal", "now", "rows", "double_transit", "sade_sati"],

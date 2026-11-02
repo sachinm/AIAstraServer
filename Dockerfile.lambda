@@ -1,4 +1,4 @@
-# AI Astra API - Lambda container image for `aiastra-server-api`.
+# AI AdAstra API - Lambda container image for `aiastra-server-api`.
 #
 # Runs the same Express app as the plain Dockerfile, fronted by the AWS Lambda Web Adapter
 # extension so a Lambda Function URL with InvokeMode=RESPONSE_STREAM can stream SSE chat

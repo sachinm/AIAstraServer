@@ -160,6 +160,23 @@ describe('timeline ledger routes', () => {
     warn.mockRestore();
   });
 
+  it('the interview is refused on the free plan before any model call', async () => {
+    vi.stubEnv('PLANS_ENABLED', '1');
+    vi.stubEnv('PLAN_FREE_QUESTIONS', '20');
+    const prisma = db.prisma as unknown as Record<string, unknown>;
+    prisma.billingAccount = { findUnique: async () => null };
+    prisma.questionUsage = { findMany: async () => [] };
+    try {
+      interviewCall.mockClear();
+      const r = await call('POST', '/api/timeline/ledger/interview', 'u1', { text: 'In March 2014 I started a job in Pune.' });
+      expect(r.status).toBe(402);
+      expect(r.json).toMatchObject({ code: 'plan_required' });
+      expect(interviewCall).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('the interview proposes, stores nothing, and declines declined topics without calling the model', async () => {
     const before = db.rows.length;
     const r = await call('POST', '/api/timeline/ledger/interview', 'u1', { text: 'In March 2014 I started a job in computing in Pune.' });

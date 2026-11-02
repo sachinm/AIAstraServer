@@ -1,4 +1,4 @@
-﻿# Skills — AI Astra Server (Grok bots)
+﻿# Skills — AI AdAstra Server (Grok bots)
 
 Lessons to reuse across projects. Add dated bullets when something bites twice.
 

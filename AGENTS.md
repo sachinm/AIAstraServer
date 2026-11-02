@@ -1,6 +1,6 @@
 # AGENTS.md — how agents work in this repo
 
-Applies to every coding agent (Claude, Fable, Gemini, Cursor, Codex) working on AI Astra.
+Applies to every coding agent (Claude, Fable, Gemini, Cursor, Codex) working on AI AdAstra.
 
 ## Work in parallel by default
 

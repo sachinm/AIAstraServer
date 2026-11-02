@@ -68,7 +68,7 @@ These are produced by the state machine as of 24 Oct 2026, with a chart whose ru
 **"Will my daughter get married soon?"** The question is about the person's own child, with no age given.
 
 > **Clarifier:** Is your daughter 18 or older? *[18 or older] [Under 18]*
-> **Person:** taps *Under 18* → **App:** "AI Astra does not answer questions about children under 18." (the conversation ends)
+> **Person:** taps *Under 18* → **App:** "AI AdAstra does not answer questions about children under 18." (the conversation ends)
 > **Person:** taps *18 or older* → the clarifier continues with the period question, and the reading proceeds for an adult child, read from the person's own chart.
 
 A stated age decides on its own: "my 13 year old daughter" is declined straight away, whatever else the question says, and "my 25 year old son" needs no age question. Words like "marriage" or "job" never count as proof of age.
