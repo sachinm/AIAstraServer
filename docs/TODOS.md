@@ -90,6 +90,10 @@ re-applied by it.
   the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: blocked (domain).
   Done: pool on SES, a fresh sign-up receives its code, the TODO about "Cognito auth not set up" updated.
 
+- **Unidentified 503 and 404 on the staging sign-up pages.** On 2026-11-01 the browser console on
+  `release-candidate-staging` logged one 503 and one 404 between the landing page and `/signup`. The network log did not
+  capture their URLs, so the source is unknown (the 404 may be the missing favicon, web `FINDINGS.md` F-31). Done: both
+  named, and fixed or explained.
 - **Account Lambda concurrency is only 10.** Sachin's CloudShell output on 2026-11-01 (relayed by another session, not read
   from AWS by the deploy session) shows total 10, unreserved 10. Doc 38's reserved concurrency of 20 is impossible, so it
   is not set, and the API, the self-invoke chart worker and the sweep share those 10 slots; a few chart builds at once
@@ -344,14 +348,9 @@ Reported by that session; the items are its own open findings. Owners are named 
 
 - **Leftover local worktrees and branches.** `chore/pin-lambda-adapter-ecr` (commit 22e456c, merged into `release-candidate-staging`, not `develop`) and its worktree in the session scratchpad remain, along with the `release-candidate-staging` worktrees for the server and web repos. Their git links broke with the 2026-10-31 loss. Owner: the dev session that created them. Done: merged branches removed and worktrees removed, per the cleanup rule.
 
-- **Screenshot review findings (2026-11-01): `AIAstra_WEB/docs/screenshots/walkthrough/FINDINGS.md`.** An independent agent read every walkthrough image and found 32 issues; those not
-  marked fixed there are open. **P1, blocks a public paid launch:** F-03 three product names and "Cosmo" find-and-replace errors; F-04 unsupported landing claims (70% research, NASA accuracy,
-  scholar validation, health) against the chat disclaimer, which raises the item below from P3; F-05 no terms, privacy or refund pages and no consent at sign-up; F-06 placeholder-looking contact
-  details and dead footer links. The stub cannot exercise real servers or paid plans. Status: open. Done: each is fixed or dropped by Sachin, and marked in that file.
-- **Landing page makes unverified accuracy claims, under the name "Cosmo Vedic", on both live sites (production and release-candidate-staging, seen 2026-11-01)** (`AIAstra_WEB/src/LandingPage.tsx`: "Millimeter-accurate planetary
-  positions using NASA data", "Validated by Vedic scholars from traditional lineages", "AI trained on classical
-  Sanskrit texts"). The business plan's own rule is no accuracy claims before the advisor-validated benchmark. Found
-  2026-11-01 while preparing `docs/a16z-speedrun-sr008-application.md`. Status: open. Done: the three lines replaced
-  with claims we can stand behind (sidereal charts, full divisional set, chart-cited answers).
-- **No billing, privacy policy or terms pages in either repo.** Known from the business plan truth table, not tracked
-  here. Blocks any public paid launch. Status: open. Done: Stripe tiers, `/privacy` and `/terms` routes live.
+- **Screenshot review findings (2026-11-01): `AIAstra_WEB/docs/screenshots/walkthrough/FINDINGS.md`.** All P1 and P2 items are fixed on web `develop`, checked with unit tests and the stubbed walkthrough, not on real staging. The 14 P3s stay open apart from those marked there. Done: each P3 fixed or dropped by Sachin, and marked in that file.
+- **The privacy policy promises what the AI provider tier must deliver.** `/privacy` says personal information is not shared for anyone's own purposes. Free-tier Gemini keys may let Google use content to improve its products, and the key's tier was last seen as unfunded (memory, not re-read). If a free key is live, the policy is false. Owner: Sachin. Done: the live key is confirmed on paid terms, or the policy is changed.
+- **Legal pages need inputs and a lawyer.** Terms, privacy and refunds are live on web `develop`, written by an agent and not reviewed. `VITE_LEGAL_ENTITY` and `VITE_SUPPORT_EMAIL` are unset, so the pages say "the operator of AI Astra" and promise an address later. Governing law is worded as "where the entity is established". The 18+ rule, the 12-month liability cap and the refund terms (14 days on the first annual payment, no part-months) are agent defaults. Owner: Sachin. Done: values set, terms approved, lawyer has read them.
+- **Consent is not recorded.** The sign-up checkbox is required in the browser only; the server stores no accepted version or time, so acceptance cannot be proven, and accounts created earlier never accepted. Done: `auth` stores the terms version and time, and existing accounts accept at next sign-in.
+- **No account deletion, which the mobile app needs.** Sachin said on 2026-11-01 a phone app is coming. Apple and Google both require deleting an account from inside an app, with a public privacy URL. The server has no deletion path, and `/privacy` offers deletion by email only. Done: a signed-in delete action removes the account and its data.
+- **Pricing has no tax line.** F-16's saving is shown; whether prices include tax is undecided. Owner: Sachin.
