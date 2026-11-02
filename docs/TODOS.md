@@ -75,6 +75,15 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **`kundli_data` rows do not record which engine commit produced them, and the `current` annual rows look empty.** Checked
+  2026-11-02 on the live database: 0 of 4,006 rows have `engine_commit` (`complete()` in `reading/chartData/store.ts` never
+  sets it; only `kundli_facts` does), so after a Radha deploy there is no way to see which rows came from the old engine
+  (the Rahu/Ketu dignity fix needed a blanket wipe and re-pull for that reason). Separately, a `variant='current'` annual row
+  is a pointer by design: its payload is only `{variant:"year=2026", valid_to, year_used}`; the chart is in the `year=<y>`
+  row it names. A reader that takes the `current` row's payload sees no chart fields. Fix: (1) record the engine commit on
+  each row (Radha's response or the catalog's `engine_commit` at fetch time) and add a "re-pull rows older than commit X"
+  helper; (2) document the pointer in `docs/reading-engine` and make readers follow `variant` (or return the `year` row).
+  Owner: reading-dev. Done: new rows carry `engine_commit`, and a reader asked for the current year gets the chart.
 - **Annual charts in divisional charts are stored but the server's read path cannot ask for them.** On 2026-11-02 the deploy
   session pulled `annual.tithi_pravesha` and `annual.varsha` for 2026-2035 in D2, D7, D9 and D10 straight from the engine
   (`params.divisional_chart_factor`, which Radha accepts: 23 factors) and saved them in `kundli_data` for Sumit's kundli
