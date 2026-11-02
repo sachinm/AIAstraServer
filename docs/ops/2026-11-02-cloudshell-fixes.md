@@ -58,11 +58,17 @@ cat > rules.json <<'EOF'
   { "source": "/terms", "target": "/terms/index.html", "status": "200" },
   { "source": "/privacy", "target": "/privacy/index.html", "status": "200" },
   { "source": "/refunds", "target": "/refunds/index.html", "status": "200" },
+  { "source": "/signin", "target": "/signin/index.html", "status": "200" },
+  { "source": "/signup", "target": "/signup/index.html", "status": "200" },
   { "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>", "target": "/404.html", "status": "200" }
 ]
 EOF
 cat > headers.yml <<'EOF'
 customHeaders:
+  - pattern: '/skies/*'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=2592000'
   - pattern: '/signin'
     headers:
       - key: 'X-Robots-Tag'
