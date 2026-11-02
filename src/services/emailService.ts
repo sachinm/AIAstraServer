@@ -10,7 +10,7 @@ export async function sendMagicLinkEmail(to: string, code: string): Promise<void
   const from =
     process.env.MAIL_FROM?.trim() ||
     process.env.RESEND_FROM?.trim() ||
-    'AdAstra <onboarding@resend.dev>';
+    'AI AdAstra <onboarding@resend.dev>';
   const subject =
     process.env.MAGIC_LINK_EMAIL_SUBJECT?.trim() || 'Your sign-in code';
   const text = `Your sign-in code is ${code}. It expires in 5 minutes. If you did not request this, you can ignore this email.`;

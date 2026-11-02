@@ -1,4 +1,4 @@
-# Grok bots — AI Astra Server
+# Grok bots — AI AdAstra Server
 
 **READ THIS FILE FIRST** before any eng/ops work on this repo.
 
