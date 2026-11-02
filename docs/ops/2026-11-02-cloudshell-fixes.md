@@ -53,11 +53,12 @@ A=d20sdo476h9w6c
 aws amplify get-app --app-id $A --query '{rules:app.customRules,headers:app.customHeaders}' > amplify-before.json
 cat > rules.json <<'EOF'
 [
+  { "source": "/", "target": "/index.html", "status": "200" },
   { "source": "/pricing", "target": "/pricing/index.html", "status": "200" },
   { "source": "/terms", "target": "/terms/index.html", "status": "200" },
   { "source": "/privacy", "target": "/privacy/index.html", "status": "200" },
   { "source": "/refunds", "target": "/refunds/index.html", "status": "200" },
-  { "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>", "target": "/index.html", "status": "200" }
+  { "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>", "target": "/404.html", "status": "200" }
 ]
 EOF
 cat > headers.yml <<'EOF'
@@ -104,7 +105,13 @@ EOF
 aws amplify update-app --app-id $A --custom-rules file://rules.json --custom-headers "$(cat headers.yml)" --query 'app.customRules[].source'
 curl -sI https://vedic-astrology.app/ | grep -iE '^(x-content-type-options|referrer-policy)'
 curl -s https://vedic-astrology.app/pricing | grep -o '<title>[^<]*</title>'
+curl -s https://vedic-astrology.app/ | grep -c 'Discover Your Cosmic'
+curl -s https://vedic-astrology.app/signin | grep -c 'Discover Your Cosmic'
 ```
+
+The last two lines must print `1` then `0`: the home page keeps its content, and sign-in, sign-up and the app no longer
+start with the home page. `/404.html` is the empty app shell from the build. If the first prints `0`, restore
+`amplify-before.json` straight away, because the home page is then blank until its script loads.
 
 Rollback: `amplify-before.json` holds the previous rules and headers. Done when both headers print and `/pricing` has
 its own title. The prerender session checks the live paths after this.
