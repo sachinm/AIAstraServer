@@ -4,12 +4,13 @@
  */
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
-import { EXEMPT_ROLES, effectivePlan, monthFor, planQuota, plansEnabled, type PlanCode, type PlanWindow } from './plans.js';
+import { EXEMPT_ROLES, effectivePlan, monthFor, planQuota, plansEnabled, unlimitedDailyGuard, type PlanCode, type PlanWindow } from './plans.js';
 import { PrismaPlanStore, type BillingAccountRow, type PlanStore } from './store.js';
 
 /** Twice the Lambda's 300 s limit, so such a reservation belongs to a dead run. */
 const STALE_RESERVATION_MS = 10 * 60_000;
 const OPEN_PART_MS = 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 
 /** `me.plan`, and the usage sent to the client. */
 export interface PlanStatus {
@@ -87,6 +88,18 @@ export class QuestionGate {
     };
   }
 
+  /** The usage to refuse with when an Unlimited account has reached today's guard, else null. */
+  private async guardHit(userId: string, a: BillingAccountRow | null): Promise<PlanStatus | null> {
+    if (effectivePlan(a, this.now()) !== 'unlimited') return null;
+    const limit = unlimitedDailyGuard(this.opts.env);
+    if (limit === null) return null;
+    const n = this.now();
+    const start = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+    const used = await this.store.countQuestionsSince(userId, start);
+    if (used < limit) return null;
+    return { ...this.status(a, false), used, limit, remaining: 0, window: 'day', resets_at: new Date(start.getTime() + DAY_MS).toISOString() };
+  }
+
   private async isExempt(userId: string): Promise<boolean> {
     return EXEMPT_ROLES.includes((await this.store.getRole(userId)) ?? '');
   }
@@ -111,7 +124,10 @@ export class QuestionGate {
       if (await this.isExempt(userId)) return { ok: true };
       await this.releaseStale(userId);
       if (opts.focus && (await this.store.findOpenPart(userId, opts.focus, this.partsSince()))) return { ok: true };
-      const usage = this.status(await this.store.getAccount(userId), false);
+      const account = await this.store.getAccount(userId);
+      const hit = await this.guardHit(userId, account);
+      if (hit) return { ok: false, usage: hit };
+      const usage = this.status(account, false);
       return usage.remaining === 0 ? { ok: false, usage } : { ok: true };
     } catch (err) {
       console.error('[plans] check failed, allowing:', (err as Error).message);
@@ -142,6 +158,8 @@ export class QuestionGate {
       const account = await this.store.ensureAccount(userId, planQuota('free', this.opts.env));
       const code = effectivePlan(account, this.now());
       const periodStart = this.month(account, code).start;
+      const hit = await this.guardHit(userId, account);
+      if (hit) return { ok: false, usage: hit };
 
       const row = await this.store.insertUsage(userId, key, periodStart);
       if (!row) return { ok: true, ticket: FREE_TICKET(userId) };

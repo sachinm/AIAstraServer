@@ -56,6 +56,8 @@ export interface PlanStore {
   /** true when this call moved the row out of `reserved` */
   settleUsage(id: string, status: 'committed' | 'released', data: { chatId?: string; messageId?: string; openParts?: string[] }, now: Date): Promise<boolean>;
   staleReservations(userId: string, before: Date): Promise<UsageRow[]>;
+  /** questions taken since `since`, leaving out those given back */
+  countQuestionsSince(userId: string, since: Date): Promise<number>;
   /** the newest committed row after `since` that still has this part open */
   findOpenPart(userId: string, part: string, since: Date): Promise<UsageRow | null>;
   /** true when this call removed the part, so a part is free only once */
@@ -148,6 +150,10 @@ export class PrismaPlanStore implements PlanStore {
 
   staleReservations(userId: string, before: Date): Promise<UsageRow[]> {
     return this.db.questionUsage.findMany({ where: { user_id: userId, status: 'reserved', created_at: { lt: before } } });
+  }
+
+  countQuestionsSince(userId: string, since: Date): Promise<number> {
+    return this.db.questionUsage.count({ where: { user_id: userId, status: { not: 'released' }, created_at: { gte: since } } });
   }
 
   findOpenPart(userId: string, part: string, since: Date): Promise<UsageRow | null> {
