@@ -9,6 +9,9 @@ export const WOULD_NOT_KNOW =
 
 export const PRIVATE_REPLY = "I can't share anything private, about anyone. If you have an account, your own details are there once you sign in.";
 
+/** Says nothing about how: the policy is already public, and what it says is reviewed. */
+export const DATA_REPLY = 'How your information is looked after is set out in our Privacy Policy. Please read it there.';
+
 export const UNSURE =
   'I can tell you what AI AdAstra can do, such as questions about career, study, relationships and timing, read from a birth chart. For anything about your own chart, sign up and let us look at it together.';
 
@@ -29,6 +32,22 @@ const INSIDE: RegExp[] = [
   /\b(what|which|how many)\b.{0,30}\b(dasha|dashas|house system|divisional|varga|data ?points?|data ?sets?|records?|tables?|sources?|calculation)\b/,
   /\b(what|which|whose|are you|is it|built on|running on|powered by|based on)\b.{0,40}\b(model|llm|gpt|chatgpt|openai|gemini|google|claude|anthropic|llama|meta|nemotron|nvidia|bedrock|aws|amazon|cloud|server|database|api|software|code|stack|framework|library|engine)\b/,
   /\b(source ?code|tech ?stack|architecture|intellectual property|trade secret|back ?end|training data|trained)\b/,
+  // where the data came from, and how a reading is put together
+  /\b(data|information|numbers?|facts?|knowledge|readings?|predictions?)\b.{0,30}\b(come|comes|came|from where|sourced?|obtained)\b/,
+  /\bwhere\b.{0,30}\b(get|got|find|found|obtain)\b.{0,20}\b(data|information|numbers?|facts?|knowledge)\b/,
+  /\b(how|what)\b.{0,30}\b(process|method|technique|steps?|logic|secret)\b.{0,30}\b(readings?|charts?|predictions?|answers?|interpret\w*)\b/,
+  /\bhow\b.{0,25}\b(readings?|predictions?|answers?)\b.{0,20}\b(done|made|work|works|created|written|produced|prepared|generated)\b/,
+  /\bwho\b.{0,20}\b(built|made|created|developed|wrote|programmed|owns)\b/,
+];
+
+/** How data is stored or secured. A person may ask how their own details are treated, so these point to the public policy. */
+const DATA_HANDLING: RegExp[] = [
+  /\b(encrypt\w*|decrypt\w*|cipher|aes|rsa|kms|hashing|hashed|salted|tls|ssl)\b/,
+  /\b(how|where|what|which)\b.{0,40}\b(store|stores|stored|storing|storage|hosted|hosting|data ?cent(er|re)s?|backups?)\b/,
+  /\b(store|stores|stored|storing|keep|keeps|kept|save|saves|saved)\b.{0,25}\b(my|your|our|the|users?'?|customers?'?)\b.{0,15}\b(data|details|information|birth)\b/,
+  /\b(how|what)\b.{0,25}\b(secure|security|safe|protect\w*)\b/,
+  /\b(is|are)\b.{0,20}\b(data|details|information)\b.{0,15}\b(safe|secure|protected|sold|shared)\b/,
+  /\b(soc ?2|iso ?27001|penetration test|pen test)\b/,
 ];
 
 /** Asking for someone's account, or for the keys to anything. */
@@ -47,6 +66,7 @@ export type FixedAnswer = { kind: 'inside' | 'private'; answer: string } | null;
 export function fixedAnswer(question: string): FixedAnswer {
   const q = normalize(question);
   if (PRIVATE.some((r) => r.test(q))) return { kind: 'private', answer: PRIVATE_REPLY };
+  if (DATA_HANDLING.some((r) => r.test(q))) return { kind: 'private', answer: DATA_REPLY };
   if (INSIDE.some((r) => r.test(q))) return { kind: 'inside', answer: WOULD_NOT_KNOW };
   return null;
 }
