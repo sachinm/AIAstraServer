@@ -81,6 +81,34 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **`kundli_data` rows do not record which engine commit produced them, and the `current` annual rows look empty.** Checked
+  2026-11-02 on the live database: 0 of 4,006 rows have `engine_commit` (`complete()` in `reading/chartData/store.ts` never
+  sets it; only `kundli_facts` does), so after a Radha deploy there is no way to see which rows came from the old engine
+  (the Rahu/Ketu dignity fix needed a blanket wipe and re-pull for that reason). Separately, a `variant='current'` annual row
+  is a pointer by design: its payload is only `{variant:"year=2026", valid_to, year_used}`; the chart is in the `year=<y>`
+  row it names. A reader that takes the `current` row's payload sees no chart fields. Fix: (1) record the engine commit on
+  each row (Radha's response or the catalog's `engine_commit` at fetch time) and add a "re-pull rows older than commit X"
+  helper; (2) document the pointer in `docs/reading-engine` and make readers follow `variant` (or return the `year` row).
+  Owner: reading-dev. Done: new rows carry `engine_commit`, and a reader asked for the current year gets the chart.
+- **Annual charts in divisional charts are stored but the server's read path cannot ask for them.** On 2026-11-02 the deploy
+  session pulled `annual.tithi_pravesha` and `annual.varsha` for 2026-2035 in D2, D7, D9 and D10 straight from the engine
+  (`params.divisional_chart_factor`, which Radha accepts: 23 factors) and saved them in `kundli_data` for Sumit's kundli
+  under the variant `year=<y>;divisional_chart_factor=<n>`. `parseKey` (`reading/chartData/store.ts`) lets a year key
+  override only options listed in the type's `fixedParams`, and annual.varsha and annual.tithi_pravesha have none, so
+  `annual.varsha@2026;divisional_chart_factor=9` returns "unknown option" and nothing reads those rows. Fix: allow
+  `divisional_chart_factor` (values from `VARGA_FACTORS`, not 1) as an optional override on the annual types in the catalog;
+  `parseKey` puts it in `params` and in the variant after the year; `radhaRequestFields` sends it inside `params` (as the
+  rows were pulled); D1 keeps the plain `year=<y>` variant. Add tests, then register the stored rows. Owner: whoever owns
+  `reading/chartData` (reading-dev / Fable session). Done: `ensureChartData(['annual.varsha@2026;divisional_chart_factor=9'])`
+  returns the stored row without a Radha call.
+- **Uncommitted Radha edit hardcodes one person's reading into `reading_tables`.** In `AIAstra_Radha` (main checkout, not
+  committed or deployed, found 2026-11-02) `src/jhora/reading_tables_export.py` gains `correspondences.chart_specific.
+  counterparty_and_network_profiles` with fixed text such as "senior_construction_roofing_principal",
+  "elder_brother_50s_jyotish_ai_commissioner" and an "h7_behavioral_playbook", and its test asserts Virgo 7th, Mercury
+  lord, Capricorn 11th: values of one specific chart. The same diff deletes the module docstring that records which rules
+  pyjhora does not hold and the open Rahu conflict. A generic export would serve the same text to every kundli.
+  Owner: whoever is editing it, with Sachin. Done: the chart-specific text is moved out of Radha (or computed from the
+  chart), and the deleted docstring is restored.
 - **Registration refused: Cognito's default email sender is capped at 50 emails a day for the whole account.** User pool
   `aiastra-users-staging` (us-east-1_x8CrXCth3) has `EmailSendingAccount: COGNITO_DEFAULT`; every sign-up confirmation,
   resend and EMAIL_OTP login code counts. On 2026-11-01 20:28Z `SignUp` returned `LimitExceededException` ("Exceeded
@@ -176,11 +204,9 @@ re-applied by it.
 ## P2: real, can wait
 
 - **Nothing runs the web type check automatically.** It reports 0 errors (`npm run typecheck`, 2026-11-02), but `npm run build` is only `vite build` and the web repo has no CI. Status: open. Done: a check runs it before a deploy.
-- **The prerendered pages are built but not served, and their URLs are relative.** On staging (c5cc4c5, 2026-11-02) `/`, `/pricing` and `/terms` return byte-identical HTML, because the Amplify rewrite to `/index.html` catches extensionless paths before the built `pricing/index.html` files. The deploy session also reports no canonical tag and a relative `og:url`, because `VITE_SITE_URL` is unset. The pages themselves work: the app renders the right page in the browser. Status: blocked (Sachin runs the four rewrite rules; the absolute URLs are live from Amplify job 19, `VITE_SITE_URL` in `.env.staging`). Done: each public path serves its own title in the raw HTML, with absolute URLs. Staging stays noindex, so it has no canonical tag by design.
-- **App routes get the landing page's HTML.** The Amplify catch-all rewrites to `/index.html`, which is now the prerendered landing page, so raw `/dashboard/chat` carries the landing title and markup (checked 2026-11-02; `id="root"` is not empty). The app replaces it once JS runs, so a slow load can show the landing page first. On an indexable build these routes would also carry the landing page's `index` robots meta and canonical. Status: open. Done: the catch-all serves an empty shell (`dist/404.html` is one), and `/dashboard/chat` still loads.
-- **`customHttp.yml` is not applied on Amplify.** Live `/dashboard/chat` has no `X-Robots-Tag`, and no path has `X-Content-Type-Options` or `Referrer-Policy` (checked 2026-11-02). `get-app` shows no `customHeaders`, and the zip deploy has no Amplify build to read the file. Staging's noindex meta covers crawlers today; an indexable build would have no header protection on sign-in and the app. Status: open. Done: the headers show on live responses, set through app config.
 - **The US | India switch is no longer on the home page.** Sachin asked for it there on 2026-10-31 or later (this session's second request). The 2026-11-02 landing trim moved it to `/pricing` when he said to remove Pricing from the main page, and signed-out visitors have no link to `/pricing`. With `country:null` from the API (P2 "live origin request policy"), a visitor in India sees dollars until they find the switch. Status: open (Sachin decides). Done: the switch has a decided home, and country detection works.
 - **The landing page's 9,500 record figure is not a per-reading count and is partly an estimate.** One reading's measured evidence pack is about 800 to 1,000 records on the G1 fixture. 9,500 is the a16z session's estimate of everything available for one person (about 8,000 across catalog types, about 1,500 for 10-year annual charts); about 791 are stored per person today. Branch `feat/landing-chart-records` in `AIAstra_WEB` says "available", not "reviewed per reading". Found 2026-11-02. Status: open (Sachin approved the "available" wording on 2026-11-02; the figure is still an estimate). Done: the figure is counted from real data, or the copy changes.
+- **Annual charts in divisional charts are stored but the server's read path cannot ask for them.** The deploy session pulled `annual.tithi_pravesha` and `annual.varsha` for years 2026-2035 in D2, D7, D9 and D10 for one kundli and saved them under the variant `year=<y>;divisional_chart_factor=<n>`, because `parseKey` let a year key override only the catalog's `fixedParams` and the annual types have none (`annual.varsha@2026;divisional_chart_factor=9` returned "unknown option"). Status: done on branch `claude/nifty-haibt-721718` (not merged, not deployed): every annual type accepts `;divisional_chart_factor=<n>` (a varga factor other than 1), `parseKey` puts it in `params` and after the year in the variant, `radhaRequestFields` sends it inside `params`, D1 keeps the plain `year=<y>` variant; tests in `tests/unit/reading/chartData.test.ts`. Remaining: merge into `develop` and deploy the API Lambda before the reading plan can read these rows.
 - **Agent metrics have not written a real row yet.** M19 is applied and the code is live on the API Lambda, but no question has been asked since
   the deploy, so `reading_traces` and `reading_agent_spans` are empty (checked 2026-11-02). Status: open (Sachin asks one signed-in staging
   question, deploy session reads the rows). Done: the plan in `docs/reading-engine/41-agent-metrics.md` §8 shows rows for every agent.
