@@ -184,3 +184,22 @@ aws lambda update-function-configuration --function-name $F --environment "$(jq 
 `PLAN_UNLIMITED_DAILY_GUARD` is built and off. To set it, use the same merge as step 6 with
 `PLAN_UNLIMITED_DAILY_GUARD:"100"`. At $0.07 a reading, 100 questions a day is about $210 a month if used every day.
 The Terms and the pricing page must say so before it is on, since the plan is sold as Unlimited.
+
+## 7. Let the public assistant call its models
+
+Without this the assistant still answers, with fixed lines only. Run it, then paste the output.
+
+```bash
+F=aiastra-server-api
+ROLE=$(aws lambda get-function-configuration --function-name $F --query Role --output text | awk -F/ '{print $NF}')
+aws iam put-role-policy --role-name "$ROLE" --policy-name public-assistant-bedrock --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock:InvokeModel"],"Resource":["arn:aws:bedrock:us-east-1::foundation-model/nvidia.nemotron-super-3-120b","arn:aws:bedrock:us-east-1::foundation-model/openai.gpt-oss-120b-1:0"]}]}'
+for M in nvidia.nemotron-super-3-120b openai.gpt-oss-120b-1:0; do
+  echo "== $M"
+  aws bedrock-runtime converse --region us-east-1 --model-id "$M" --messages '[{"role":"user","content":[{"text":"Say hello in three words."}]}]' --inference-config '{"maxTokens":200}' --query 'output.message.content[-1].text' --output text
+done
+```
+
+Done when both print a greeting. If Nemotron says access is denied or the model is not available, gpt-oss carries the assistant
+and nothing else is needed; ask for model access in the Bedrock console if you want Nemotron first.
+
+To turn the assistant and visit log off at any time, set `ASSISTANT_ENABLED=0` on the Lambda.

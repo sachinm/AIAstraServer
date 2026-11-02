@@ -25,6 +25,8 @@ import { partsFromEvent, questionGate, quotaBody, wasDeclined, type QuestionTick
 import { registerBillingRoutes } from './src/billing/routes.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
 import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
+import { registerAssistantRoutes } from './src/routes/assistantRoutes.js';
+import { PrismaAssistantStore } from './src/assistant/store.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
@@ -71,6 +73,8 @@ app.post('/events', async (req, res) => {
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();
+  // the visit log's retention runs with the sweep; a failure there must not stop the sweep's answer
+  await new PrismaAssistantStore(prisma).purge(new Date()).catch((err: Error) => console.warn(JSON.stringify({ msg: 'assistant purge failed', error: err.message.slice(0, 200) })));
   res.json(await runScheduledSweep());
 });
 
@@ -313,6 +317,8 @@ registerClarifyRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 registerBillingRoutes(app, { prisma, getUserId: getUserIdFromRequest });
 // life-timeline ledger (docs/reading-engine/27 P0): not mounted unless TIMELINE_ENABLED=1
 registerTimelineRoutes(app, { prisma, getUserId: getUserIdFromRequest });
+// the assistant on the public pages and the visit log: no sign-in, no account data
+registerAssistantRoutes(app, { prisma });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
