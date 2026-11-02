@@ -75,6 +75,14 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Uncommitted Radha edit hardcodes one person's reading into `reading_tables`.** In `AIAstra_Radha` (main checkout, not
+  committed or deployed, found 2026-11-02) `src/jhora/reading_tables_export.py` gains `correspondences.chart_specific.
+  counterparty_and_network_profiles` with fixed text such as "senior_construction_roofing_principal",
+  "elder_brother_50s_jyotish_ai_commissioner" and an "h7_behavioral_playbook", and its test asserts Virgo 7th, Mercury
+  lord, Capricorn 11th: values of one specific chart. The same diff deletes the module docstring that records which rules
+  pyjhora does not hold and the open Rahu conflict. A generic export would serve the same text to every kundli.
+  Owner: whoever is editing it, with Sachin. Done: the chart-specific text is moved out of Radha (or computed from the
+  chart), and the deleted docstring is restored.
 - **Registration refused: Cognito's default email sender is capped at 50 emails a day for the whole account.** User pool
   `aiastra-users-staging` (us-east-1_x8CrXCth3) has `EmailSendingAccount: COGNITO_DEFAULT`; every sign-up confirmation,
   resend and EMAIL_OTP login code counts. On 2026-11-01 20:28Z `SignUp` returned `LimitExceededException` ("Exceeded
