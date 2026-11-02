@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { authToAstroKundliParams, fetchEngineExport, type AstroKundliRequestParams } from '../../lib/astroKundliClient.js';
-import { BUILTIN_CHART_TYPES, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from './catalog.js';
+import { ANNUAL_DIVISIONAL_OPTION, BUILTIN_CHART_TYPES, VARGA_FACTORS, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from './catalog.js';
 
 export type ItemStatus = 'ready' | 'missing' | 'failed' | 'unsupported';
 export type ItemSource = 'db' | 'legacy' | 'radha' | null;
@@ -106,17 +106,32 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
   const type = types.get(id);
   if (!type) return { id, variant: '', params: {}, error: `unknown chart data type: ${id}` };
   if (type.variantKind === 'year') {
-    // '2027' or, for a type with fixed options, '2027;system=mudda' (only options the catalog lists may be overridden)
+    // '2027', '2027;system=mudda' (only options the catalog lists may be overridden) or '2026;divisional_chart_factor=9'
+    // (any annual type may be drawn in a divisional chart other than D1; D1 is the plain key)
     const [yearText, ...opts] = (arg ?? '').split(';');
     const year = Number(yearText);
     if (!arg || !yearText || !Number.isInteger(year) || year < 1800 || year > 2300) return { id, variant: '', params: {}, type, error: `${id} needs a year: ${id}@<year>` };
     const fixed: Record<string, unknown> = type.fixedParams ? { ...type.fixedParams } : {};
+    let chart: number | undefined;
     for (const o of opts) {
       const m = /^([a-z_]+)=([a-z0-9_]+)$/.exec(o);
+      if (m && m[1] === ANNUAL_DIVISIONAL_OPTION) {
+        const factor = Number(m[2]);
+        if (!(VARGA_FACTORS as readonly number[]).includes(factor) || factor === 1) {
+          return { id, variant: '', params: {}, type, error: `${id}: ${ANNUAL_DIVISIONAL_OPTION} must be a divisional chart factor other than 1 (D1 is ${id}@${year}), got ${JSON.stringify(m[2])}` };
+        }
+        chart = factor;
+        continue;
+      }
       if (!m || !(m[1]! in fixed)) return { id, variant: '', params: {}, type, error: `${id}: unknown option ${JSON.stringify(o)}` };
       fixed[m[1]!] = m[2];
     }
-    return { id, variant: yearVariant(year, type.fixedParams ? fixed : undefined), params: { year, ...fixed }, type };
+    return {
+      id,
+      variant: yearVariant(year, type.fixedParams ? fixed : undefined, chart),
+      params: { year, ...fixed, ...(chart != null ? { [ANNUAL_DIVISIONAL_OPTION]: chart } : {}) },
+      type,
+    };
   }
   if (arg) return { id, variant: '', params: {}, type, error: `${id} takes no variant` };
   // e.g. 'argala.d9' -> { varga: 9 }, sent to Radha with every fetch of this entry
@@ -125,11 +140,13 @@ export function parseKey(key: string, types: ReadonlyMap<string, ChartDataType>)
 
 /**
  * What is sent to Radha for a parsed key. Radha reads fixed options (the varga of arudhas.dN / argala.dN, the system of
- * the year dasha) only from inside `params`; top-level fields are ignored there. The annual `year` stays top-level.
+ * the year dasha, an annual chart's divisional_chart_factor) only from inside `params`; top-level fields are ignored there.
+ * The annual `year` stays top-level.
  */
 export function radhaRequestFields(type: ChartDataType, params: Record<string, unknown>): Record<string, unknown> {
-  if (!type.fixedParams) return params;
-  const inner = Object.fromEntries(Object.keys(type.fixedParams).map((k) => [k, params[k]]));
+  const inner: Record<string, unknown> = Object.fromEntries(Object.keys(type.fixedParams ?? {}).map((k) => [k, params[k]]));
+  if (type.variantKind === 'year' && params[ANNUAL_DIVISIONAL_OPTION] != null) inner[ANNUAL_DIVISIONAL_OPTION] = params[ANNUAL_DIVISIONAL_OPTION];
+  if (!Object.keys(inner).length) return params;
   return type.variantKind === 'year' ? { year: params.year, params: inner } : { params: inner };
 }
 

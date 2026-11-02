@@ -13,8 +13,9 @@ export const getChartDataTool = {
   name: 'getChartData',
   description:
     'Fetch chart data for the person being read. Pass the type ids you need, e.g. "varga.d10", "dasha.vimsottari", ' +
-    '"strength.shadbala", or "annual.varsha@2027" for a yearly item. Returns each item with status ready, missing, failed ' +
-    'or unsupported. Ask only for what the question needs.',
+    '"strength.shadbala", or "annual.varsha@2027" for a yearly item; add ";divisional_chart_factor=9" to a yearly item for ' +
+    'that year\'s chart in a divisional chart (e.g. "annual.varsha@2027;divisional_chart_factor=9"). Returns each item with ' +
+    'status ready, missing, failed or unsupported. Ask only for what the question needs.',
   parameters: {
     type: 'object',
     properties: {
@@ -42,7 +43,7 @@ export interface ToolResult {
 /** Handler: validates the arguments and runs ensureChartData for the kundli the reading belongs to. */
 export async function runGetChartData(deps: EnsureDeps, kundliId: string, args: unknown, opts: EnsureOptions = {}): Promise<ToolResult> {
   const raw = (args as { types?: unknown })?.types;
-  const list = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length < 64) : [];
+  const list = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length < 96) : [];
   const types = [...new Set(list)].slice(0, MAX_ITEMS_PER_CALL);
   const result = await ensureChartData(deps, kundliId, types, opts);
   const items = Object.fromEntries(

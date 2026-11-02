@@ -7,6 +7,7 @@ import {
   ensureChartData,
   needsFetch,
   parseKey,
+  radhaRequestFields,
   type ChartDataRepo,
   type FetchResult,
   type KundliRequest,
@@ -178,6 +179,88 @@ describe('keys and staleness', () => {
     expect(parseKey('annual.tithi_pravesha_dasha@2027;bad', CHART_TYPE_BY_ID).error).toMatch(/unknown option/);
     expect(parseKey('annual.tithi_pravesha_dasha@;system=mudda', CHART_TYPE_BY_ID).error).toMatch(/needs a year/);
     expect(yearVariant(2027)).toBe('year=2027');
+  });
+  it('an annual key may name a divisional chart: the factor goes after the year in the variant and into params', () => {
+    expect(parseKey('annual.varsha@2026;divisional_chart_factor=9', CHART_TYPE_BY_ID)).toMatchObject({
+      id: 'annual.varsha',
+      variant: 'year=2026;divisional_chart_factor=9',
+      params: { year: 2026, divisional_chart_factor: 9 },
+    });
+    expect(parseKey('annual.tithi_pravesha@2035;divisional_chart_factor=144', CHART_TYPE_BY_ID)).toMatchObject({ variant: 'year=2035;divisional_chart_factor=144', params: { year: 2035, divisional_chart_factor: 144 } });
+    for (const id of ['annual.mudda', 'annual.patyayini', 'annual.sahams']) {
+      expect(parseKey(`${id}@2027;divisional_chart_factor=10`, CHART_TYPE_BY_ID).variant).toBe('year=2027;divisional_chart_factor=10');
+    }
+    // with a fixed option the factor follows it, and the option can still be overridden
+    expect(parseKey('annual.tithi_pravesha_dasha@2027;divisional_chart_factor=9', CHART_TYPE_BY_ID)).toMatchObject({
+      variant: 'year=2027;system=tithi_ashtottari;divisional_chart_factor=9',
+      params: { year: 2027, system: 'tithi_ashtottari', divisional_chart_factor: 9 },
+    });
+    expect(parseKey('annual.tithi_pravesha_dasha@2027;divisional_chart_factor=7;system=mudda', CHART_TYPE_BY_ID).variant).toBe('year=2027;system=mudda;divisional_chart_factor=7');
+    // the plain key stays D1, so rows stored before this still match
+    expect(parseKey('annual.varsha@2026', CHART_TYPE_BY_ID)).toMatchObject({ variant: 'year=2026', params: { year: 2026 } });
+    expect(parseKey('annual.varsha@2026', CHART_TYPE_BY_ID).params).not.toHaveProperty('divisional_chart_factor');
+  });
+  it('rejects a divisional factor that is D1, not a varga factor, not a number, or on a type without a year', () => {
+    for (const bad of ['1', '13', '0', 'x', '09x', '']) {
+      expect(parseKey(`annual.varsha@2026;divisional_chart_factor=${bad}`, CHART_TYPE_BY_ID).error).toMatch(/unknown option|divisional_chart_factor/);
+    }
+    expect(parseKey('annual.varsha@2026;divisional_chart_factor=1', CHART_TYPE_BY_ID).error).toMatch(/other than 1/);
+    expect(parseKey('annual.varsha@2026;divisional_chart_factor=13', CHART_TYPE_BY_ID).variant).toBe('');
+    expect(parseKey('annual.varsha@2026;other=9', CHART_TYPE_BY_ID).error).toMatch(/unknown option/);
+    expect(parseKey('annual.varsha@;divisional_chart_factor=9', CHART_TYPE_BY_ID).error).toMatch(/needs a year/);
+    expect(parseKey('varga.d9@2026;divisional_chart_factor=9', CHART_TYPE_BY_ID).error).toMatch(/no variant/);
+  });
+  it('yearVariant puts the divisional factor last, and leaves D1 plain', () => {
+    expect(yearVariant(2026, undefined, 9)).toBe('year=2026;divisional_chart_factor=9');
+    expect(yearVariant(2027, { system: 'mudda' }, 7)).toBe('year=2027;system=mudda;divisional_chart_factor=7');
+    expect(yearVariant(2026, undefined, undefined)).toBe('year=2026');
+  });
+  it('sends the divisional factor to the engine inside params, with the year on top', () => {
+    const varsha = CHART_TYPE_BY_ID.get('annual.varsha')!;
+    expect(radhaRequestFields(varsha, { year: 2026, divisional_chart_factor: 9 })).toEqual({ year: 2026, params: { divisional_chart_factor: 9 } });
+    expect(radhaRequestFields(varsha, { year: 2026 })).toEqual({ year: 2026 });
+    const dasha = CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')!;
+    expect(radhaRequestFields(dasha, { year: 2027, system: 'mudda', divisional_chart_factor: 10 })).toEqual({ year: 2027, params: { system: 'mudda', divisional_chart_factor: 10 } });
+    expect(radhaRequestFields(dasha, { year: 2027, system: 'mudda' })).toEqual({ year: 2027, params: { system: 'mudda' } });
+    expect(radhaRequestFields(CHART_TYPE_BY_ID.get('argala.d9')!, { varga: 9 })).toEqual({ params: { varga: 9 } });
+  });
+  it('reads a stored annual divisional row without calling the engine, and keeps the D1 row apart', async () => {
+    const repo = memRepo();
+    const stored = (variant: string, payload: unknown): StoredRow => ({
+      dataType: 'annual.varsha',
+      variant,
+      params: { year: 2026 },
+      calcVersion: null,
+      payload,
+      status: 'ready',
+      error: null,
+      fetchStartedAt: null,
+      fetchedAt: new Date(),
+      validTo: null,
+    });
+    repo.rows.set('annual.varsha|year=2026;divisional_chart_factor=9', stored('year=2026;divisional_chart_factor=9', { chart: 'd9' }));
+    repo.rows.set('annual.varsha|year=2026', stored('year=2026', { chart: 'd1' }));
+    const fetcher = vi.fn();
+    const out = await ensureChartData({ repo, fetcher }, 'k1', ['annual.varsha@2026;divisional_chart_factor=9', 'annual.varsha@2026', 'annual.varsha@2026;divisional_chart_factor=7']);
+    expect(out['annual.varsha@2026;divisional_chart_factor=9']).toMatchObject({ status: 'ready', source: 'db', variant: 'year=2026;divisional_chart_factor=9', payload: { chart: 'd9' } });
+    expect(out['annual.varsha@2026']).toMatchObject({ status: 'ready', source: 'db', payload: { chart: 'd1' } });
+    // no D7 row, and the type is not served: nothing is requested
+    expect(out['annual.varsha@2026;divisional_chart_factor=7']).toMatchObject({ status: 'unsupported' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('fetches a missing annual divisional chart with the factor inside params and stores it under its own variant', async () => {
+    const repo = memRepo();
+    repo.loadTypes = async () => [
+      { id: 'annual.varsha', family: 'annual', radha_type: 'annual.varsha', change_class: 'annual', tier: 'on_demand', variant_kind: 'year', served: true, calc_version: null, legacy_column: null, sort_order: 500, label: 'Varsha', enabled: true },
+    ];
+    const fetcher = vi.fn().mockResolvedValue({ chart: 'd9' });
+    const out = await ensureChartData({ repo, fetcher }, 'k1', ['annual.varsha@2026;divisional_chart_factor=9']);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]![1]).toBe('annual.varsha');
+    expect(fetcher.mock.calls[0]![2]).toEqual({ year: 2026, params: { divisional_chart_factor: 9 } });
+    expect(out['annual.varsha@2026;divisional_chart_factor=9']).toMatchObject({ status: 'ready', source: 'radha', variant: 'year=2026;divisional_chart_factor=9' });
+    expect(repo.rows.get('annual.varsha|year=2026;divisional_chart_factor=9')).toMatchObject({ status: 'ready', params: { year: 2026, divisional_chart_factor: 9 } });
+    expect(repo.rows.has('annual.varsha|year=2026')).toBe(false);
   });
   it('R14: ensureChartData refuses prashna and points at castPrashna', async () => {
     const out = await ensureChartData({ repo: memRepo(), fetcher: vi.fn() }, 'k1', ['prashna']);
