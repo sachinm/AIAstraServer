@@ -1,4 +1,4 @@
-# SOUL.md — Core Identity, Reading Philosophy & Mandatory Guardrails for All AI Astra Agents
+# SOUL.md — Core Identity, Reading Philosophy & Mandatory Guardrails for All AI AdAstra Agents
 
 Every coding agent and every runtime astrological reading/synthesis agent must read and obey these rules without exception.
 

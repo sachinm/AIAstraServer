@@ -121,6 +121,9 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
     const userId = auth(req, res);
     if (!userId) return;
     if (!available()) return res.status(503).json({ error: 'interview_unavailable' });
+    // a model call that is not a counted question, so the free plan does not get it
+    const plan = await questionGate(prisma).getStatus(userId);
+    if (plan?.code === 'free' && !plan.exempt) return res.status(402).json({ error: 'plan_required', code: 'plan_required', usage: plan });
     const kundliId = await resolveKundli(prisma, userId, kundliParam(req.body?.kundliId));
     if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
     const r = await extractLedgerProposals(req.body?.text, { year: req.body?.year }, {

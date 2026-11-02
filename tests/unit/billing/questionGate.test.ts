@@ -72,6 +72,9 @@ class MemoryPlanStore implements PlanStore {
     if (this.failing) throw new Error('db down');
     return this.usage.filter((r) => r.user_id === u && r.status === 'reserved' && r.created_at < before);
   }
+  async countQuestionsSince(u: string, since: Date) {
+    return this.usage.filter((r) => r.user_id === u && r.status !== 'released' && r.created_at >= since).length;
+  }
   async findOpenPart(u: string, part: string, since: Date) {
     return this.usage.find((r) => r.user_id === u && r.status === 'committed' && r.created_at >= since && r.open_parts.includes(part)) ?? null;
   }
@@ -279,6 +282,26 @@ describe('paid plans', () => {
     expect(store.accounts.get('u1')?.question_quota).toBeNull();
     expect(await gate.getStatus('u1')).toMatchObject({ code: 'unlimited', used: 300, limit: null, remaining: null });
     expect((await gate.check('u1')).ok).toBe(true);
+  });
+
+  it('the daily guard stops Unlimited only when it is set, and only for that day', async () => {
+    let now = NOW;
+    const { store, gate } = setup(() => now, { ...ENV, PLAN_UNLIMITED_DAILY_GUARD: '3' });
+    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    for (let i = 0; i < 3; i++) expect(await ask(gate)).toBe(true);
+    expect(await ask(gate)).toBe(false);
+    const refused = await gate.check('u1');
+    expect(refused).toMatchObject({ ok: false, usage: { code: 'unlimited', used: 3, limit: 3, remaining: 0, window: 'day', resets_at: '2026-11-16T00:00:00.000Z' } });
+    now = new Date('2026-11-16T00:00:00Z');
+    store.usage.forEach((r) => { r.created_at = NOW; });
+    expect((await gate.check('u1')).ok).toBe(true);
+  });
+
+  it('the daily guard does not touch other plans', async () => {
+    const { store, gate } = setup(() => NOW, { ...ENV, PLAN_UNLIMITED_DAILY_GUARD: '1' });
+    await markPaid(store, 'u1', { plan: 'plus', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    expect(await ask(gate)).toBe(true);
+    expect(await ask(gate)).toBe(true);
   });
 
   it('upgrading starts the new plan with a full month', async () => {

@@ -140,7 +140,7 @@ describe('clarify HTTP endpoints', () => {
     const events = await sse('/api/chat/ask-stream', { question: 'When will I get married?', clarify: true });
     const runId = events.find((e) => e.type === 'clarify')!.runId;
     const a = await post('/api/chat/answer', { runId, value: 'after I hurt someone', viaChip: false });
-    expect(a.body).toEqual({ type: 'declined', runId, category: 'deny', reply: 'AI Astra cannot help with that.' });
+    expect(a.body).toEqual({ type: 'declined', runId, category: 'deny', reply: 'AI AdAstra cannot help with that.' });
   });
 
   it('rejects other users, unknown runs and bad bodies', async () => {

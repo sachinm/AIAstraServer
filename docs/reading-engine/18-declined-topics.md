@@ -24,23 +24,23 @@ A match returns one fixed reply and nothing else is computed: no reading, no cla
 | # | Topic id | Category | What it covers | Reply |
 |---|---|---|---|---|
 | 1 | `self_harm` | deny | self-harm or suicide | Crisis message with help lines (988 in the US, Tele-MANAS 14416 in India); no reading |
-| 2 | `violence_harm` | deny | killing, hurting, attacking or harming people or animals; poisoning; "getting away with" harm | "AI Astra cannot help with that." |
-| 3 | `curses_black_magic` | deny | curses, black magic, vashikaran, spells to control or harm someone | "AI Astra cannot help with that." |
-| 4 | `crime` | deny | theft, robbery, fraud, drugs, smuggling, hacking, evading police, blackmail | "AI Astra cannot help with that." |
-| 5 | `abuse_stalking` | deny | stalking, tracking someone secretly, harassment, controlling or forcing someone | "AI Astra cannot help with that." |
-| 6 | `extremism` | deny | terrorism, extremism, bombs, explosives, weapons to attack | "AI Astra cannot help with that." |
-| 7 | `sexual_minors` | deny | any sexual content involving minors | "AI Astra cannot help with that." |
-| 8 | `death_lifespan` | decline | death, lifespan, longevity, maraka, "when will … die", for anyone | "AI Astra does not answer questions about death, lifespan or longevity, for you or anyone else." |
-| 8a | `minors` | decline | anything about a child under 18: a stated age under 18 ("my 13 year old"), teen / toddler / infant, school, class 10, board exams, "my baby". A stated minor age wins over any adult-sounding cue ("my 13 year old daughter … married") | "AI Astra does not answer questions about children under 18." |
-| 8b | `child_age_unconfirmed` | decline | a question about the person's own child ("my son", "my daughter", "my kids") with no stated age of 18 or more. Words like marriage, job or university do not prove age | Clarify-capable clients: the clarifier first asks "Is your daughter 18 or older?" (*18 or older* / *Under 18*); under 18 or an unclear answer ends with the minors decline. Other clients: "AI Astra answers questions about your children only when they are 18 or older. If your child is 18 or older, please include their age, for example \"my 25-year-old daughter\"." |
-| 9 | `baby_sex` | decline | predicting or choosing a baby's sex | "AI Astra does not predict or help choose a baby's sex." |
-| 10 | `third_party_surveillance` | decline | someone else's private actions: cheating, affairs, lying | "AI Astra does not answer questions about someone else's private actions …" |
-| 11 | `gambling_markets` | decline | lottery or betting numbers, stock, coin or team picks, satta and matka | "AI Astra does not give lottery or betting numbers …" |
-| 12 | `public_events` | decline | elections, disasters, wars, market crashes | "AI Astra reads your own chart. It does not forecast elections, disasters, wars or market moves." |
-| 13 | `exact_amount` | decline | exact amounts of money, salary or inheritance | "AI Astra does not predict amounts of money. You can ask when income or savings are likely to grow instead." |
-| 14 | `remedies` | decline | gemstones, mantras, pujas, rituals, upay, yantra | "AI Astra does not recommend remedies …" |
-| 15 | `legal_advice` | decline | whether to sign, sue, plead or settle | "AI Astra does not give legal advice. Please talk to a lawyer. You can still ask about timing in your chart for a legal matter." |
-| 16 | `health` | role_gated | illness, disease, diagnosis, symptoms, medication, accidents, injuries, surgery, hospital, recovery, mental-health conditions | "AI Astra does not answer questions about illness, disease, diagnosis, accidents or injuries." |
+| 2 | `violence_harm` | deny | killing, hurting, attacking or harming people or animals; poisoning; "getting away with" harm | "AI AdAstra cannot help with that." |
+| 3 | `curses_black_magic` | deny | curses, black magic, vashikaran, spells to control or harm someone | "AI AdAstra cannot help with that." |
+| 4 | `crime` | deny | theft, robbery, fraud, drugs, smuggling, hacking, evading police, blackmail | "AI AdAstra cannot help with that." |
+| 5 | `abuse_stalking` | deny | stalking, tracking someone secretly, harassment, controlling or forcing someone | "AI AdAstra cannot help with that." |
+| 6 | `extremism` | deny | terrorism, extremism, bombs, explosives, weapons to attack | "AI AdAstra cannot help with that." |
+| 7 | `sexual_minors` | deny | any sexual content involving minors | "AI AdAstra cannot help with that." |
+| 8 | `death_lifespan` | decline | death, lifespan, longevity, maraka, "when will … die", for anyone | "AI AdAstra does not answer questions about death, lifespan or longevity, for you or anyone else." |
+| 8a | `minors` | decline | anything about a child under 18: a stated age under 18 ("my 13 year old"), teen / toddler / infant, school, class 10, board exams, "my baby". A stated minor age wins over any adult-sounding cue ("my 13 year old daughter … married") | "AI AdAstra does not answer questions about children under 18." |
+| 8b | `child_age_unconfirmed` | decline | a question about the person's own child ("my son", "my daughter", "my kids") with no stated age of 18 or more. Words like marriage, job or university do not prove age | Clarify-capable clients: the clarifier first asks "Is your daughter 18 or older?" (*18 or older* / *Under 18*); under 18 or an unclear answer ends with the minors decline. Other clients: "AI AdAstra answers questions about your children only when they are 18 or older. If your child is 18 or older, please include their age, for example \"my 25-year-old daughter\"." |
+| 9 | `baby_sex` | decline | predicting or choosing a baby's sex | "AI AdAstra does not predict or help choose a baby's sex." |
+| 10 | `third_party_surveillance` | decline | someone else's private actions: cheating, affairs, lying | "AI AdAstra does not answer questions about someone else's private actions …" |
+| 11 | `gambling_markets` | decline | lottery or betting numbers, stock, coin or team picks, satta and matka | "AI AdAstra does not give lottery or betting numbers …" |
+| 12 | `public_events` | decline | elections, disasters, wars, market crashes | "AI AdAstra reads your own chart. It does not forecast elections, disasters, wars or market moves." |
+| 13 | `exact_amount` | decline | exact amounts of money, salary or inheritance | "AI AdAstra does not predict amounts of money. You can ask when income or savings are likely to grow instead." |
+| 14 | `remedies` | decline | gemstones, mantras, pujas, rituals, upay, yantra | "AI AdAstra does not recommend remedies …" |
+| 15 | `legal_advice` | decline | whether to sign, sue, plead or settle | "AI AdAstra does not give legal advice. Please talk to a lawyer. You can still ask about timing in your chart for a legal matter." |
+| 16 | `health` | role_gated | illness, disease, diagnosis, symptoms, medication, accidents, injuries, surgery, hospital, recovery, mental-health conditions | "AI AdAstra does not answer questions about illness, disease, diagnosis, accidents or injuries." |
 
 Checks run in this order: deny topics first, then decline (death, baby's sex, minors, unconfirmed child age, …), then role-gated. Having a child ("When will we have a child?", "Will I conceive this year?") is about the parent and is answered. So "I want to die" is handled as self-harm, not as a death question.
 
@@ -69,7 +69,7 @@ Detection is narrow on purpose, so a passing mention does not block a normal que
 | `astrologer` | practising astrologer | **yes** |
 | `researcher` | research access | **yes** |
 | `client_account_admin` | administers one client organisation's account | no |
-| `aiastra_admin` | AI Astra staff | **yes** |
+| `aiastra_admin` | AI AdAstra staff | **yes** |
 
 - **Registration:** new users are created with role `novice`. This is a code change in `authService`.
 - **Legacy values:** these keep working. `user` reads as `novice`, `astrology_student` as `student`, and `admin`, `superadmin` and `support` as `aiastra_admin`. Admin GraphQL checks accept `aiastra_admin`.
