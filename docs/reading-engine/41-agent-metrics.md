@@ -1,7 +1,8 @@
 # 41 — Agent metrics: what every agent did, for how long, at what cost
 
-Status: Phase 1 code written 2026-11-01, on `develop` once merged. Migration M19 is written and **not applied**, so nothing
-is recorded until it is. Written to "How a plan is written" in `AGENTS.md`.
+Status: Phase 1 code is live on the API Lambda (image `api-faaa60916874`) and M19 is applied, both checked 2026-11-02. **Not
+yet proven:** no question has been asked since the deploy, so both tables are empty and no real row has been written. Written
+to "How a plan is written" in `AGENTS.md`.
 
 ## 1. Start: what exists today
 
@@ -133,8 +134,9 @@ FROM reading_agent_spans WHERE level = 'model_call' AND status = 'ok' GROUP BY a
 
 | Ingredient | Who | Status |
 |---|---|---|
-| Apply M19 | Deploy session, Sachin's OK | **Not done: nothing records until then** |
-| Deploy the server | Deploy session | Not done |
+| Apply M19 | Subscription tiers session | Done 2026-11-01 |
+| Deploy the server | Deploy session | Done 2026-11-01 23:30Z, merge `faaa609` |
+| One signed-in staging question, then check the rows | Sachin asks, deploy session reads | **Not done: Phase 1 is unproven until then** |
 | Retention rule for `reading_agent_spans` | Sachin | Open: rows grow with every query (see §10) |
 
 ## 9. Limits
