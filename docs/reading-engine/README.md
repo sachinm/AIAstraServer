@@ -1,4 +1,4 @@
-# AI Astra Reading Engine — Plan
+# AI AdAstra Reading Engine — Plan
 
 **Status:** proposal, 2026-10-24. No code in this change; this folder is the plan.
 **Owner:** Sachin. **Scope:** chat readings only (no Panchanga, no Prashna, no remedies).

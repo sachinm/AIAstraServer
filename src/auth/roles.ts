@@ -7,7 +7,7 @@
  *   astrologer             practising astrologer
  *   researcher             research access
  *   client_account_admin   administers one client (organisation) account and its users
- *   aiastra_admin          AI Astra staff administrator
+ *   aiastra_admin          AI AdAstra staff administrator
  *
  * Values already in the database keep working through LEGACY_ROLE_MAP. `auth.role` rows and the column default are
  * not rewritten here: that is a separate, approved data migration.
