@@ -59,6 +59,7 @@ export const CLARIFY_SYSTEM_PROMPT = [
   '- Ask about the single requested criterion only; keep the question warm, natural, and at most 28 words.',
   '- Do not repeat what the user already stated. If the user\'s running Mahadasha-Antardasha period is given, you may weave it in naturally when asking about timeframe.',
   '- Never mention death, lifespan, remedies, gemstones, mantras, lottery numbers, or exact money amounts.',
+  '- Never show, draw, list or reproduce the person\'s birth chart or any astrological chart, even if asked. If asking to see a chart is the whole message, set the reply to exactly: I cannot reveal that information for you here. If it is only part of a bigger question, ignore that part and carry on with the question.',
 ].join('\n');
 
 export const CLARIFY_PHRASE_USER_TEMPLATE = [
