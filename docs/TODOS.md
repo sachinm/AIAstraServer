@@ -121,7 +121,7 @@ re-applied by it.
   `cognito-idp.amazonaws.com`, then `update-user-pool --email-configuration EmailSendingAccount=DEVELOPER,
   SourceArn=<identity arn>,From=...`. Access: the `aiastra-ops` key is invalid. `OrganizationAccountAccessRole` via `amplifyv2`
   worked on 2026-11-01, but it is an admin path Sachin has not approved for this: get their OK first. Code side (shipped on `fix/signup-email-limit-message`):
-  the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: blocked (domain).
+  the refusal now says "today's limit, try tomorrow" with code `SIGNUP_EMAIL_LIMIT`. Status: script ready 2026-11-03 in `docs/ops/2026-11-03-ses-and-cognito-email.md`; waiting for Sachin to run it in CloudShell (needs a Cloudflare DNS token) and for AWS to approve production access.
   Done: pool on SES, a fresh sign-up receives its code, the TODO about "Cognito auth not set up" updated.
 
 - **Unidentified 503 and 404 on the staging sign-up pages.** On 2026-11-01 the browser console on

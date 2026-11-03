@@ -124,6 +124,9 @@ its own title. The prerender session checks the live paths after this.
 
 ## 4. Sign-up email: move Cognito off the 50-a-day sender
 
+**Superseded 2026-11-03 by `2026-11-03-ses-and-cognito-email.md`**, which also writes the Cloudflare records and the pool change. The
+command below lacked `--production-access-enabled` and would not have asked for production access; it is fixed here too.
+
 Sender domain: `vedic-astrology.app`, which is on Cloudflare. This is two stages, because DNS and AWS's approval come
 between them.
 
@@ -132,7 +135,7 @@ Stage 1 creates the identity, asks AWS for production access and prints three DN
 ```bash
 D=vedic-astrology.app
 aws sesv2 create-email-identity --email-identity $D --query 'DkimAttributes.Tokens' --output text | tr '\t' '\n' | while read T; do echo "CNAME  ${T}._domainkey.$D  ->  ${T}.dkim.amazonses.com  (DNS only, not proxied)"; done
-aws sesv2 put-account-details --mail-type TRANSACTIONAL --website-url "https://$D" --use-case-description "One-time sign-up and sign-in codes for AI AdAstra, sent only to the person who asked for them through Amazon Cognito." --additional-contact-email-addresses "send.sachin@yahoo.com" --contact-language EN
+aws sesv2 put-account-details --production-access-enabled --mail-type TRANSACTIONAL --website-url "https://$D" --use-case-description "One-time sign-up and sign-in codes for AI AdAstra, sent only to the person who asked for them through Amazon Cognito." --additional-contact-email-addresses "send.sachin@yahoo.com" --contact-language EN
 ```
 
 Add those three CNAME records in Cloudflare, set to DNS only. Stage 2, once
