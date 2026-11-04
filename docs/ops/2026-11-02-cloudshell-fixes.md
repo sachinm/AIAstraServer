@@ -58,11 +58,17 @@ cat > rules.json <<'EOF'
   { "source": "/terms", "target": "/terms/index.html", "status": "200" },
   { "source": "/privacy", "target": "/privacy/index.html", "status": "200" },
   { "source": "/refunds", "target": "/refunds/index.html", "status": "200" },
+  { "source": "/signin", "target": "/signin/index.html", "status": "200" },
+  { "source": "/signup", "target": "/signup/index.html", "status": "200" },
   { "source": "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>", "target": "/404.html", "status": "200" }
 ]
 EOF
 cat > headers.yml <<'EOF'
 customHeaders:
+  - pattern: '/skies/*'
+    headers:
+      - key: 'Cache-Control'
+        value: 'public, max-age=2592000'
   - pattern: '/signin'
     headers:
       - key: 'X-Robots-Tag'
@@ -118,6 +124,9 @@ its own title. The prerender session checks the live paths after this.
 
 ## 4. Sign-up email: move Cognito off the 50-a-day sender
 
+**Superseded 2026-11-03 by `2026-11-03-ses-and-cognito-email.md`**, which also writes the Cloudflare records and the pool change. The
+command below lacked `--production-access-enabled` and would not have asked for production access; it is fixed here too.
+
 Sender domain: `vedic-astrology.app`, which is on Cloudflare. This is two stages, because DNS and AWS's approval come
 between them.
 
@@ -126,7 +135,7 @@ Stage 1 creates the identity, asks AWS for production access and prints three DN
 ```bash
 D=vedic-astrology.app
 aws sesv2 create-email-identity --email-identity $D --query 'DkimAttributes.Tokens' --output text | tr '\t' '\n' | while read T; do echo "CNAME  ${T}._domainkey.$D  ->  ${T}.dkim.amazonses.com  (DNS only, not proxied)"; done
-aws sesv2 put-account-details --mail-type TRANSACTIONAL --website-url "https://$D" --use-case-description "One-time sign-up and sign-in codes for AI AdAstra, sent only to the person who asked for them through Amazon Cognito." --additional-contact-email-addresses "send.sachin@yahoo.com" --contact-language EN
+aws sesv2 put-account-details --production-access-enabled --mail-type TRANSACTIONAL --website-url "https://$D" --use-case-description "One-time sign-up and sign-in codes for AI AdAstra, sent only to the person who asked for them through Amazon Cognito." --additional-contact-email-addresses "send.sachin@yahoo.com" --contact-language EN
 ```
 
 Add those three CNAME records in Cloudflare, set to DNS only. Stage 2, once
@@ -136,7 +145,7 @@ AWS has approved production access:
 ```bash
 D=vedic-astrology.app; POOL=us-east-1_x8CrXCth3; ACC=442728149528
 ARN=arn:aws:ses:us-east-1:$ACC:identity/$D
-aws sesv2 put-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
+aws sesv2 create-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
 aws cognito-idp describe-user-pool --user-pool-id $POOL --query 'UserPool.EmailConfiguration' > email-before.json
 ```
 
@@ -184,3 +193,22 @@ aws lambda update-function-configuration --function-name $F --environment "$(jq 
 `PLAN_UNLIMITED_DAILY_GUARD` is built and off. To set it, use the same merge as step 6 with
 `PLAN_UNLIMITED_DAILY_GUARD:"100"`. At $0.07 a reading, 100 questions a day is about $210 a month if used every day.
 The Terms and the pricing page must say so before it is on, since the plan is sold as Unlimited.
+
+## 7. Let the public assistant call its models
+
+Without this the assistant still answers, with fixed lines only. Run it, then paste the output.
+
+```bash
+F=aiastra-server-api
+ROLE=$(aws lambda get-function-configuration --function-name $F --query Role --output text | awk -F/ '{print $NF}')
+aws iam put-role-policy --role-name "$ROLE" --policy-name public-assistant-bedrock --policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["bedrock:InvokeModel"],"Resource":["arn:aws:bedrock:us-east-1::foundation-model/nvidia.nemotron-super-3-120b","arn:aws:bedrock:us-east-1::foundation-model/openai.gpt-oss-120b-1:0"]}]}'
+for M in nvidia.nemotron-super-3-120b openai.gpt-oss-120b-1:0; do
+  echo "== $M"
+  aws bedrock-runtime converse --region us-east-1 --model-id "$M" --messages '[{"role":"user","content":[{"text":"Say hello in three words."}]}]' --inference-config '{"maxTokens":200}' --query 'output.message.content[-1].text' --output text
+done
+```
+
+Done when both print a greeting. If Nemotron says access is denied or the model is not available, gpt-oss carries the assistant
+and nothing else is needed; ask for model access in the Bedrock console if you want Nemotron first.
+
+To turn the assistant and visit log off at any time, set `ASSISTANT_ENABLED=0` on the Lambda.

@@ -1,5 +1,13 @@
 # The home page assistant, and the visit log
 
+**Built 2026-11-02. Where this differs from the text below, this box is what shipped.**
+- On every public page except `/signin`, including `/signup`, and not for someone signed in. A button, bottom left.
+- Sachin's rule (2026-11-02): it never reveals how charts are built, where the sky is calculated from, or which dasha systems or data points are used. It says "I wouldn't know all that. I leave it to the ancient Vedic texts and the sages and oracles inside the site. They're busy helping real people with real readings in there." So the prompt names none of those things (a test enforces it), a fixed answer catches the question before any model runs, and a word check on the way out replaces any answer that slips.
+- A random visit id in localStorage, not a cookie: the API is on another domain, so a cookie would be third-party. Visits are logged on page load, once per browser session, as Sachin asked for every visitor, not only those who ask a question.
+- On by default, `ASSISTANT_ENABLED=0` turns it off, because agents cannot change Lambda env. With no model access it still answers, with a fixed line.
+- The address comes from `CloudFront-Viewer-Address` when forwarded, else Express's `req.ip`, because a visitor can forge the first hop of `X-Forwarded-For`.
+- Not built: the admin read route and the erasure route (read the tables directly for now; filed in `docs/TODOS.md`).
+
 Plan, 2026-11-02. Sachin's request: a conversational assistant on the home page that answers general questions about
 what AI AdAstra can do, on a Bedrock open-weight model (Nemotron preferred), with example answers: "Will you be able
 to answer questions about my illness?" No. "Can you tell me where my son will go to college?" Yes. "What field are they

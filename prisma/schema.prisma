@@ -679,3 +679,46 @@ model QuestionUsage {
   @@index([user_id, status, created_at], map: "question_usage_user_status")
   @@map("question_usage")
 }
+
+/// The site's visit log: one row per visit id per day (docs/security/assistant-log-controls.md).
+model AssistantVisit {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_id      String
+  day           DateTime @db.Date
+  first_seen_at DateTime @default(now()) @db.Timestamptz(6)
+  last_seen_at  DateTime @default(now()) @db.Timestamptz(6)
+  ip_prefix     String?
+  ip_full       String?
+  user_agent    String?
+  country       String?
+  language      String?
+  referrer      String?
+  landing_path  String?
+  legal_hold    Boolean  @default(false)
+
+  @@unique([visit_id, day], map: "assistant_visits_visit_day")
+  @@index([ip_prefix, day], map: "assistant_visits_ip_prefix_day")
+  @@index([first_seen_at], map: "assistant_visits_first_seen")
+  @@map("assistant_visits")
+}
+
+/// What people asked the public assistant and what it said.
+model AssistantQuestion {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visit_id   String
+  asked_at   DateTime @default(now()) @db.Timestamptz(6)
+  ip         String?
+  question   String
+  answer     String
+  verdict    String
+  outcome    String
+  model      String?
+  tokens_in  Int?
+  tokens_out Int?
+  latency_ms Int?
+  legal_hold Boolean  @default(false)
+
+  @@index([asked_at], map: "assistant_questions_asked_at")
+  @@index([visit_id, asked_at], map: "assistant_questions_visit_asked")
+  @@map("assistant_questions")
+}
