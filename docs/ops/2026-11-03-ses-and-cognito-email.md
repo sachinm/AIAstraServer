@@ -119,7 +119,7 @@ ACC=$(aws sts get-caller-identity --query Account --output text)
 ARN=arn:aws:ses:us-east-1:$ACC:identity/$D
 
 echo "== Let Cognito send as the domain"
-aws sesv2 put-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
+aws sesv2 create-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
 
 echo "== Test email to yourself, outside Cognito"
 aws sesv2 send-email --from-email-address "AI AdAstra <no-reply@$D>" --destination ToAddresses=send.sachin@yahoo.com \

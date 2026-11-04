@@ -145,7 +145,7 @@ AWS has approved production access:
 ```bash
 D=vedic-astrology.app; POOL=us-east-1_x8CrXCth3; ACC=442728149528
 ARN=arn:aws:ses:us-east-1:$ACC:identity/$D
-aws sesv2 put-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
+aws sesv2 create-email-identity-policy --email-identity $D --policy-name cognito --policy "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":[\"ses:SendEmail\",\"ses:SendRawEmail\"],\"Resource\":\"$ARN\",\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"$ACC\"}}}]}"
 aws cognito-idp describe-user-pool --user-pool-id $POOL --query 'UserPool.EmailConfiguration' > email-before.json
 ```
 
