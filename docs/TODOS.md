@@ -723,3 +723,19 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: The personal overlay shape is unverified.** 2026-11-05. `lucky.day_overlay` reads `days[].tara.good` and
   `days[].chandra_bala.good` per the engine's `docs/daily-types.md`; no real overlay has been pulled yet (no engine
   credentials locally). Owner: reading-dev. Done: one real month pulled and the board shows the personal boost.
+
+## Filed 2026-11-05 by the career map Phase 1 build (docs/reading-engine/42, 43)
+
+- **P2: Lucky times routes were not mounted in b434dc8.** 2026-11-05. `server.ts` imported `registerLuckyRoutes` but the
+  call was lost to a CRLF mismatch in the patch. Fixed in the career Phase 1 commit; `tests/unit/serverMounts.test.ts`
+  now fails when a route module is imported and not called. Status: fixed.
+- **P2: Career present state uses five of the seven families.** 2026-11-05. The conditional-dasha, annual (Tithi
+  Pravesha) and karaka-dasha families of doc 43 §8.1 are not built, and the D1/D10 check of each dasha vote waits for
+  the house-state engine (doc 46). `src/reading/area/career.ts` scales the confidence to the families available and
+  says so in `notes`. Owner: reading-dev. Done: seven families, each dasha vote checked in D1 and D10.
+- **P2: `person_facts` values are stored plain.** 2026-11-05. Doc 48 says sealed with the per-user keys of the privacy
+  plan; sealed writes are not live yet (docs/privacy/02). Owner: privacy pass. Done: values sealed like the ledger.
+- **P3: Career sub-areas come from the career marker's drivers, not sub-markers.** 2026-11-05. Phase 1 labels windows
+  (promotion, job change, getting a job, security, pay, abroad, business) by the planets that drive their peak; doc 42
+  §A.2 wants each sub-area as its own marker with its own signification. Needs `MARKER_IDS` to become a parameter
+  (signification, converge and five activators loop over it). Owner: reading-dev.

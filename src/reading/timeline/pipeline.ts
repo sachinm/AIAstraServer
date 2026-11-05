@@ -12,7 +12,7 @@ import { buildFoundation, type Foundation } from './foundation.js';
 import { pastRange, type TimelineInputs } from './inputs.js';
 import type { LifeEvent } from './ledger.js';
 import { matchLedger, type EventMatch, type MatchSummary } from './match.js';
-import { addDaysIso, pastMonths } from './months.js';
+import { addDaysIso, monthsBetween } from './months.js';
 import { buildSignification, type Signification } from './signification.js';
 import { activateDoubleTransit } from './activate/doubleTransit.js';
 import { activateJaimini } from './activate/jaimini.js';
@@ -56,9 +56,17 @@ export interface PastBuildOptions {
 export function buildPastTimeline(inputs: TimelineInputs, opts: PastBuildOptions = {}): PastBuild {
   const env = opts.env ?? process.env;
   if (!isTimelineEnabled(env)) throw new TimelineDisabledError();
+  return buildTimelineSpan(inputs, pastRange(inputs.asOf, timelineConfig(env).years), opts);
+}
+
+/**
+ * The same build over any span of whole months (docs/reading-engine/42 §B.4): the past grid above, or a span around
+ * today for an area reading (24 months back to 24 months ahead). Not gated here: the caller owns its flag.
+ */
+export function buildTimelineSpan(inputs: TimelineInputs, range: { from: string; to: string }, opts: PastBuildOptions = {}): PastBuild {
+  const env = opts.env ?? process.env;
   const config = timelineConfig(env);
   const systems = timelineSystems(env);
-  const range = pastRange(inputs.asOf, config.years);
   const foundation = buildFoundation(inputs.dossier, inputs.houseCounts);
   const stack = buildDashaStack(inputs.dossier, inputs.items, { from: range.from, to: addDaysIso(range.to, 1) });
   const s3ApplicableEvidence = ashtottariApplies(inputs.items['dasha.applicable']);
@@ -83,7 +91,7 @@ export function buildPastTimeline(inputs: TimelineInputs, opts: PastBuildOptions
 
   const weights = opts.weights ?? config.weights;
   const s3Applicable = s3ApplicableEvidence != null;
-  const grid = converge(activations, pastMonths(inputs.asOf, config.years), { config, weights, s3Applicable, foundation, stack });
+  const grid = converge(activations, monthsBetween(range.from, range.to), { config, weights, s3Applicable, foundation, stack });
   return { kundliId: inputs.kundliId, asOf: inputs.asOf, range, systems, config, weights, s3Applicable, s3ApplicableEvidence, foundation, signification, stack, activations, grid, notes };
 }
 

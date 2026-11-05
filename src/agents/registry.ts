@@ -55,6 +55,23 @@ export const AGENTS: AgentDef[] = [
     description: "Pulls the person's tara and chandra bala per day for a month (one engine call with natal fields)",
   },
   {
+    id: 'area.career_inputs',
+    title: 'Career inputs loader',
+    kind: 'engine_pull',
+    module: 'area',
+    subModule: 'career',
+    engineType: 'transit_contacts',
+    description: 'Loads the stored dashas and house table and pulls transit contacts for 24 months back to 24 ahead',
+  },
+  {
+    id: 'area.career_map',
+    title: 'Career map builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'career',
+    description: 'Builds the career map from the timeline grid: present tone, windows by sub-area, horizons, security, Looking back',
+  },
+  {
     id: 'lucky.scenario_windows',
     title: 'Scenario windows builder',
     kind: 'code',

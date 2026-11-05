@@ -91,6 +91,8 @@ export interface KundliInputOptions {
   /** Let ensureChartData call Radha for missing items (it then writes kundli_data rows). Default false: read only. */
   fetch?: boolean;
   years?: number;
+  /** fetch transit contacts for this span instead of the past years (an area reading around today) */
+  span?: { from: string; to: string };
 }
 
 /**
@@ -112,7 +114,7 @@ export async function kundliInputs(prisma: PrismaClient, kundliId: string, asOf:
   }
   const houseCounts = readHouseCounts(items, notes);
   const contacts: TransitContactsPayload[] = [];
-  const range = pastRange(asOf, opts.years ?? 18);
+  const range = opts.span ?? pastRange(asOf, opts.years ?? 18);
   for (const r of contactRanges(range.from, range.to)) {
     try {
       contacts.push(await fetchTransitContacts(kundliId, { ...r, planets: CONTACT_PLANETS.filter((p) => p !== 'Ma') }, { repo }));

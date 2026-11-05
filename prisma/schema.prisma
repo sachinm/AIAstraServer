@@ -74,6 +74,10 @@ model Auth {
   analyticsEvents            AnalyticsEvent[]
 
   @@index([created_at(sort: Desc)], map: "auth_created_at")
+  areaBuilds         AreaBuild[]
+  areaChecks         AreaCheck[]
+  personFacts        PersonFact[]
+
   @@map("auth")
 }
 
@@ -112,6 +116,8 @@ model Kundli {
   content            UserGeneratedContent[]
 
   @@index([user_id], map: "idx_kundlis_user_id")
+  areaBuilds         AreaBuild[]
+
   @@map("kundlis")
 }
 
@@ -934,4 +940,54 @@ model AnalyticsEvent {
   @@index([user_id, at], map: "analytics_events_user_at")
   @@index([event, at], map: "analytics_events_event_at")
   @@map("analytics_events")
+}
+
+/// Career map and other area builds, Phase 1 (docs/reading-engine/42): one deterministic build per kundli, area and day.
+model AreaBuild {
+  id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id    String   @map("user_id")
+  kundli_id  String   @map("kundli_id")
+  area       String
+  as_of      DateTime @map("as_of") @db.Date
+  /// ready | failed
+  status     String
+  result     Json?
+  error      String?
+  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "area_builds_user_fkey")
+  kundli     Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "area_builds_kundli_fkey")
+
+  @@unique([kundli_id, area, as_of], map: "area_builds_key")
+  @@map("area_builds")
+}
+
+/// The person's answer to a Looking-back moment (docs/reading-engine/45 §9): calibration data, never shown back as fact.
+model AreaCheck {
+  id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id    String   @map("user_id")
+  area       String
+  month      String
+  side       String
+  /// yes | partly | no | skip
+  answer     String
+  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "area_checks_user_fkey")
+
+  @@unique([user_id, area, month], map: "area_checks_key")
+  @@map("area_checks")
+}
+
+/// What the person told us about their situation (docs/reading-engine/48 §4.3), one row per key.
+model PersonFact {
+  user_id      String    @map("user_id")
+  key          String
+  value        String
+  /// tapped | typed | chat_inferred | ledger_inferred | estimated
+  source       String
+  confirmed_at DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  user         Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "person_facts_user_fkey")
+
+  @@id([user_id, key])
+  @@map("person_facts")
 }
