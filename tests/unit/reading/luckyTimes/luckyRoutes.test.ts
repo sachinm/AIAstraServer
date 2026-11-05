@@ -114,6 +114,13 @@ describe('lucky routes', () => {
     }
     expect([...db.registry.keys()]).toEqual(expect.arrayContaining(['reading.oracle', 'lucky.day_tables', 'lucky.day_overlay', 'lucky.scenario_windows']));
     expect(db.registry.get('reading.oracle')!.kind).toBe('llm');
+    // M29 tags (docs/admin/03): the bands run, one run per shown scenario, the day tables pull; muhurta charts by month
+    const techniques = db.runs.map((x: any) => x.technique_id);
+    expect(techniques).toEqual(expect.arrayContaining(['lucky.day_tables', 'lucky.avoid_bands', 'lucky.work.sign_contract']));
+    expect(techniques).not.toContain('lucky.work.hard_talk_boss'); // hidden pick: no layer, no run
+    expect(db.runs.find((x: any) => x.technique_id === 'lucky.work.sign_contract')).toMatchObject({ category: 'work', board: 'lucky' });
+    expect(db.runs.find((x: any) => x.technique_id === 'lucky.avoid_bands')).toMatchObject({ category: 'self', board: 'lucky' });
+    for (const run of db.runs) for (const c of run.charts_used ?? []) expect(c).toMatchObject({ type: 'muhurta', variant: expect.stringMatching(/^\d{4}-\d{2}$/) });
   });
 
   it('remove a pick', async () => {

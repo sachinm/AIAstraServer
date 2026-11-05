@@ -4,7 +4,9 @@
  * Range is today −7 … today +14 at the person's place. Missing day rows are pulled on demand by the `lucky.day_tables`
  * agent (engine `muhurta`, one call per month); the person's tara and chandra bala come from the `lucky.day_overlay`
  * agent (engine `muhurta` with natal fields, one call per month); each shown scenario's layer is built by the
- * `lucky.scenario_windows` agent (code). Every agent run is logged (src/agents/registry.ts).
+ * `lucky.scenario_windows` agent (code). Every agent run is logged (src/agents/registry.ts) and tagged with its technique
+ * (src/techniques/catalog.ts): the day's avoid bands are one `lucky.avoid_bands` run, and each shown scenario's layer is
+ * its own `lucky.<scenario id>` run, so each scenario counts on its own in the admin panel (docs/admin/03).
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -127,14 +129,16 @@ async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, mi
   const place = DAY_TABLE_PLACES[preset]!;
   const placeKey = dayTablePlaceKey(place);
   const months = [...new Set(missing.map(monthOf))].slice(0, 2);
-  return withAgentRun(deps.prisma, 'lucky.day_tables', { userId, task: `pull ${preset} ${months.join(',')}`, input: { place: preset, months } }, async () => {
+  return withAgentRun(deps.prisma, 'lucky.day_tables', { userId, task: `pull ${preset} ${months.join(',')}`, input: { preset, months }, technique: 'lucky.day_tables' }, async () => {
     let written = 0;
+    const charts: Array<{ type: string; variant: string; calc_version: string | null }> = [];
     for (const m of months) {
       const from = m;
       const to = monthEnd(m);
       const raw = (await deps.engine!('muhurta', { lat: place.lat, lon: place.lon, tz: standardOffsetHours(place.tzName), params: { from, to, tz_name: place.tzName } })) as { days?: DayRow[]; data?: { days?: DayRow[] } };
       const days = raw?.days ?? raw?.data?.days ?? [];
       const version = (await deps.prisma.chartDataType.findUnique({ where: { id: 'muhurta' }, select: { calc_version: true } }).catch(() => null))?.calc_version ?? null;
+      charts.push({ type: 'muhurta', variant: m.slice(0, 7), calc_version: version });
       for (const day of days) {
         if (typeof day.date !== 'string') continue;
         const payload = JSON.parse(JSON.stringify(day)) as object;
@@ -149,7 +153,7 @@ async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, mi
         written += 1;
       }
     }
-    return { value: written, output: { written } };
+    return { value: written, output: { written }, charts };
   });
 }
 
@@ -165,7 +169,8 @@ async function personalDays(deps: LuckyDeps, userId: string, preset: string, dat
     let row = await deps.prisma.kundliDayOverlay.findUnique({ where: { kundli_id_place_key_month: { kundli_id: natal.kundliId, place_key: placeKey, month: new Date(`${m}T00:00:00Z`) } } }).catch(() => null);
     if (!row && deps.engine) {
       try {
-        row = await withAgentRun(deps.prisma, 'lucky.day_overlay', { userId, task: `overlay ${preset} ${m}`, input: { place: preset, month: m } }, async () => {
+        const ctx = { userId, task: `overlay ${preset} ${m}`, input: { preset, month: m }, technique: 'lucky.personal_overlay', kundliId: natal.kundliId, charts: [{ type: 'muhurta', variant: m.slice(0, 7) }] };
+        row = await withAgentRun(deps.prisma, 'lucky.day_overlay', ctx, async () => {
           const raw = (await deps.engine!('muhurta', { lat: place.lat, lon: place.lon, tz: standardOffsetHours(place.tzName), params: { from: m, to: monthEnd(m), tz_name: place.tzName, ...natal.fields } })) as { days?: unknown[]; data?: { days?: unknown[] } };
           const days = (raw?.days ?? raw?.data?.days ?? []) as Array<{ date?: string; tara?: unknown; chandra_bala?: unknown; grade?: unknown }>;
           const payload = { days: days.map((d) => ({ date: d.date, tara: d.tara ?? null, chandra_bala: d.chandra_bala ?? null, grade: d.grade ?? null })) };
@@ -235,21 +240,17 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   const picks = (await deps.prisma.luckyScenarioPick.findMany({ where: { user_id: userId, shown: true } })).filter((p) => scenarioById(p.scenario_id));
   const personal = await personalDays(deps, userId, preset, [...have]);
 
+  // the day rows each run read: one muhurta payload per month, with the calc version it was stored with
+  const charts = [...new Map(rows.map((r) => [`${r.date.toISOString().slice(0, 7)}|${r.calc_version ?? ''}`, { type: 'muhurta', variant: r.date.toISOString().slice(0, 7), calc_version: r.calc_version ?? null }])).values()];
   const days = await withAgentRun(
     deps.prisma,
     'lucky.scenario_windows',
-    { userId, task: `range ${range.from}..${range.to}`, input: { place: preset, scenarios: picks.map((p) => p.scenario_id), days: rows.length } },
+    { userId, task: `bands ${range.from}..${range.to}`, input: { preset, days: rows.length }, technique: 'lucky.avoid_bands', charts },
     async () => {
       const out: RangeDay[] = rows.map((r) => {
         const row = r.payload as unknown as DayRow;
         const date = r.date.toISOString().slice(0, 10);
         const p = personal.get(date);
-        const layers: RangeDay['layers'] = {};
-        for (const pick of picks) {
-          const rule = scenarioById(pick.scenario_id)!;
-          const sd = scenarioDay(row, rule, p);
-          layers[rule.id] = { verdict: sd.verdict, windows: sd.windows, dayReasons: sd.dayReasons };
-        }
         const good: RangeDay['good'] = [];
         const span = (kind: 'abhijit' | 'amrita' | 'brahma', s?: { start: unknown; end: unknown }) => {
           if (!s) return;
@@ -269,12 +270,36 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
           personal: p ? { tara_good: p.tara?.good ?? null, moon_good: p.chandra_bala?.good ?? null } : null,
           avoid: avoidBands(row).map((b) => ({ kind: b.kind, from: Math.round(b.from), to: Math.round(b.to) })),
           good: good.sort((a, b) => a.from - b.from),
-          layers,
+          layers: {},
         };
       });
-      return { value: out, output: { days: out.length, windows: out.reduce((n, d) => n + Object.values(d.layers).reduce((m, l) => m + l.windows.length, 0), 0) } };
+      return { value: out, output: { days: out.length, avoid: out.reduce((n, d) => n + d.avoid.length, 0) } };
     },
   );
+
+  // one run per shown scenario; layers are put in pick order once all are back
+  const layerSets = await Promise.all(
+    picks.map((pick) => {
+      const rule = scenarioById(pick.scenario_id)!;
+      return withAgentRun(
+        deps.prisma,
+        'lucky.scenario_windows',
+        { userId, task: `${rule.id} ${range.from}..${range.to}`, input: { preset, scenario: rule.id, days: rows.length }, technique: `lucky.${rule.id}`, charts },
+        async () => {
+          const layers = rows.map((r) => {
+            const sd = scenarioDay(r.payload as unknown as DayRow, rule, personal.get(r.date.toISOString().slice(0, 10)));
+            return { verdict: sd.verdict, windows: sd.windows, dayReasons: sd.dayReasons };
+          });
+          return { value: layers, output: { days: layers.length, good_days: layers.filter((l) => l.verdict === 'good').length, windows: layers.reduce((n, l) => n + l.windows.length, 0) } };
+        },
+      );
+    }),
+  );
+  picks.forEach((pick, k) => {
+    layerSets[k]!.forEach((layer, i) => {
+      days[i]!.layers[pick.scenario_id] = layer;
+    });
+  });
 
   const todayRow = rows.find((r) => r.date.toISOString().slice(0, 10) === today);
   return {

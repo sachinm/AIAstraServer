@@ -4,6 +4,62 @@ Status: plan only, for Sachin's review. No code, migration or AWS resource has c
 `AGENTS.md`. Facts were checked on 2026-11-01 by reading code and AWS docs. Live rows and deployed Lambda env were not read;
 where a fact comes from local `.env` or from memory, it says so.
 
+## Update 2026-11-05: what has been done since this plan
+
+Checked against `develop` (`c12111f`), `docs/TODOS.md` and the other sessions' work.
+
+| Track | State | Where |
+|---|---|---|
+| Encryption B0 (leaks closed) and B1 (crypto code, local keys) | **Built and merged** into `develop` (`0f08496` to `37f98c4`), by the "Encryption phases B0 and B1" session, planned by the "Admin panel and data encryption planning" session. Not deployed. | `src/lib/pii/*`, `docs/privacy/02` |
+| Encryption B2 to B5 (M26 columns, KMS keys, sealed writes, backfill, drop plain) | **Not started.** `PII_WRITE_MODE=plain` everywhere, so no field is encrypted in any database. B3 waits on Sachin creating the KMS keys, DynamoDB key table and IAM role. | `docs/admin/02` §1 |
+| Bedrock, phases 0 to 2 of this plan (provider seam, adapter, eval, cutover) | **Not started.** The reading engine still calls Gemini directly at ten call sites. Bedrock is used only by the clarifier (`gpt-oss-120b`, Converse, no streaming, schema or cache). The home page assistant also runs on open models on Bedrock (`src/assistant`, docs/assistant/01). | `src/reading/llm/` |
+| Bedrock pricing in the metrics | Open: no `PRICES` rows for Bedrock models. | TODOS |
+
+Ship gates from the B0/B1 build that still apply before it deploys: `KUNDLI_SYNC_EVENT_TOKEN` set on the Lambda, and `ENCRYPTION_KEY` presence confirmed on the live Lambda (B1 removes `encrypt()`, so birth fields would become plain until B3).
+
+Gaps found in the later work: `person_facts` values are stored plain (doc 48); retention rules per log table are missing; the assistant's visit log has no erasure route (`docs/security/assistant-log-controls.md`); `timeline_calibration.marker` and its scores stay plain.
+
+### Gemma on Bedrock, price and caching (read from AWS pages on 2026-11-05)
+
+Standard tier, per 1M tokens, US East (N. Virginia), US East (Ohio) and US West (Oregon):
+
+| Model | ID | Input | Output |
+|---|---|---|---|
+| Gemma 4 31B | `google.gemma-4-31b` | $0.14 | $0.40 |
+| Gemma 4 26B A4B | `google.gemma-4-26b-a4b` | $0.13 | $0.40 |
+| Gemma 4 E2B | `google.gemma-4-e2b` | $0.04 | $0.08 |
+| Gemma 3 27B | `google.gemma-3-27b-it` | $0.23 | $0.38 |
+| Gemma 3 12B | `google.gemma-3-12b-it` | $0.09 | $0.29 |
+| Gemma 3 4B | `google.gemma-3-4b-it` | $0.04 | $0.08 |
+
+Flex tier is 50% off, Priority is 75% more. **Gemma has no prompt caching:** the pricing page has no cache columns for Google, and the prompt caching page lists only Claude, GPT and Nova models. Gemma 4 is served through the `bedrock-mantle` endpoint (Chat Completions and Responses APIs, streaming and function calling shown). Whether Converse, JSON schema output or caching work with it was not stated in the part of the launch post that could be read.
+
+What this means for the plan: every reader and specialist call resends the chart prefix, so Gemma pays full input price on each of the 17 parallel calls. Claude's cache reads cost 10% of its input price (Sonnet 5.5: $2.00 in, $0.20 cached). On the same basis Haiku 5.5 would be about $0.01 per 1M cached input tokens against Gemma's $0.14, so with a good cache hit rate the Claude arm is cheaper on input despite the higher list price. Gemma stays in the evaluation as a control arm only, and is not a candidate unless Sachin wants the closest Google voice more than caching. The adapter would also need a second call path (Chat Completions on `bedrock-mantle`), not just Converse. Haiku 5.5's Bedrock rate is still the Anthropic list price, unread on AWS's page.
+
+### Bedrock prices for the candidate models (AWS Pricing API, us-east-1, on-demand standard, read 2026-11-05)
+
+This replaces the Anthropic list prices used in section 4.2, which the AWS page had not loaded. Per 1M tokens. The plan allows only `us.` profiles, which AWS prices 10% above `global.`, so the US column is the one that applies.
+
+| Model | Input | Output | Cache read | Cache write 5 min / 1 h |
+|---|---|---|---|---|
+| Claude Haiku 5.5 | $0.11 | $0.55 | $0.011 | $0.1375 / $0.22 |
+| Claude Sonnet 5.5 | $2.20 | $11.00 | $0.11 | $2.75 / $4.40 |
+| Claude Opus 5.5 | $4.40 | $22.00 | $0.22 | $5.50 / $8.80 |
+| Claude Sonnet 5 | $2.20 | $11.00 | $0.22 | $2.75 / $4.40 |
+| Claude Opus 5 | $5.50 | $27.50 | $0.55 | $6.875 / $11.00 |
+| Claude Fable 5.1 (excluded, 30-day retention) | $11.00 | $55.00 | $0.275 | $13.75 / $22.00 |
+| Claude Haiku 4.5 | $1.10 | $5.50 | $0.11 | $1.375 / $2.20 |
+| GPT-6 Astra | $11.00 | $55.00 | $1.10 | $13.75 (30 min) |
+| gpt-oss-120b (clarifier) | $0.15 | $0.60 | none | none |
+| gpt-oss-20b | $0.07 | $0.30 | none | none |
+| Nova 2 Lite | $0.33 | $2.75 | $0.0825 | free |
+| Nova Pro | $0.80 | $3.20 | $0.20 | free |
+| Nova Lite | $0.06 | $0.24 | $0.015 | free |
+| Nova Micro | $0.035 | $0.14 | $0.00875 | free |
+| Nova Premier | $2.50 | $12.50 | $0.625 | free |
+
+Haiku 5.5 has a long-context rate of $0.55 in and $2.75 out; the threshold was not shown. Sonnet 5.5's cache read is half of what the plan assumed. Prices for GPT-6 Sol, Luna, Terra and GPT-5.x were not in the price list for us-east-1, so they are unknown. `PRICES` in `src/reading/llm/models.ts` needs a dated row for each model that is used.
+
 ## Read this first: three things cannot be done as worded
 
 1. **Gemini is not on Bedrock.** The us-east-1 catalogue lists Google only as `gemma-3-4b-it`, `gemma-3-12b-it` and
