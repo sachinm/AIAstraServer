@@ -280,6 +280,8 @@ re-applied by it.
   Done: tests do not load `.env`, and the suite passes in the main checkout.
 - **Tests that flake.** `ChatSection.location`, `SignIn`, `SignUp` and `LedgerSection` web tests and the server's `auth` and
   `registrationFullPull` tests hit the 5 s limit at random when the machine is busy, and pass with `--testTimeout=60000`.
+  The server's `astroKundliExportSpacing` "keeps the start spacing for chart exports … stored coordinates" failed once in
+  a full run with no `.env` (2026-11-04, after a docs-only merge) and passed 3 of 3 alone.
   Running server tests with `--poolOptions.forks.singleFork` leaks env between files: `chatRouting` and `promptCache` fail
   that way and pass on their own. Status: open. Done: both suites green in one default run.
 - **The "about 30 minutes" notice is out of date** once doc 38 ships (`AIAstra_WEB/src/Auth/readyNotice.ts`). Status: open.
