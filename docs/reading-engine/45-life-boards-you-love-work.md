@@ -113,6 +113,7 @@ charges.
 | 10 | **Private by default** | Self-reports, answers and love-life data are sealed and deletable; nothing is shown to anyone else |
 | 11 | **Modular, not a scroll** (Sachin, 2026-11-05) | A screen never stacks sections vertically for the person to scroll past. Sibling sections (areas, worries, horizons, the week's picks) are one panel: a swipeable carousel with chips and dots on the phone and tablet, a tab panel on the desktop. The person jumps to what they care about; the first card is the one the engine ranks highest |
 | 12 | **Set once, never mentioned** (Sachin, 2026-11-05) | Place, time zone, birth details, work level and relationship status are set in the profile once. No screen restates them, no header or footer carries "San Jose · America/Los_Angeles (UTC−8)", and no screen explains itself. A board shows the verdict, the time and one line; the reasoning lives under Why and the settings under the profile |
+| 13 | **Ask before you answer** (Sachin, 2026-11-05) | When the situation is unknown, the board or the chat asks one or two one-tap questions first ("Do you have a job right now?", "Is this about your boss?") and predicts only for that situation. A general prediction that can be caught wrong is never made. Answers are stored with the profile (rule 12) and not asked again while fresh (§3.5) |
 
 ### 3.2 Our brand and what we borrow from Co-Star
 
@@ -166,6 +167,27 @@ The test (§14 step 4) scans every string a person can see, in all three layouts
    pressure on pay. Four of seven independent signals agree." Lists the signals as sentences, not terms.
 3. **Chart details** (Settings → "Show chart details", off by default): the family votes, the periods, the divisional
    charts, the sahams, with their real names. This is the old drawer of doc 44 §3.
+
+### 3.5 The interview: ask before you answer
+
+The chart cannot see whether the person has a job, whether the boss is the problem, or whether they are single. Guessing
+produces the general prediction that gets caught wrong. So every board and every chat answer starts from **known
+facts**, and asks for the missing ones with one tap each, in the person's words, never as a form.
+
+| Trigger | Question (one tap) | What it changes | Stored as |
+|---|---|---|---|
+| First open of Work; Work worry rows; any career question in Ask | "Do you have a job right now?" → *Yes · Between jobs · Own business · Studying* | which worries lead (getting a job vs holding it), the words (clients vs manager), the signatures read | `profile.work_status` (rule 12; re-asked after 90 days or when the person taps "Something changed") |
+| A Work tone of Demanding or a "workplace trouble" question | "Is this about your boss, the politics, the pay, or the role itself?" | which trouble signature and care level the board reads first; the headline | `area_self_reports.hardest` (sealed) |
+| A hard-talk or interview scenario on Lucky times | "Is it your boss, a peer, a client, or a panel?" | the hora and star rules (authority vs peers), the avoid list | the scenario card only; not stored |
+| First open of Love; any love question | "Right now are you single, seeing someone, or committed?" | whether meeting, keeping or mending leads; which points are read (UL vs 5th) | `profile.relationship_status` (sealed, deletable, re-asked after 90 days) |
+| A Love strain tone | "Is this about distance, a fight, family, or trust?" | the strain signature and the what-helps list | `area_self_reports.hardest` |
+| Any time horizon beyond 3 months | "Are you planning something, or just checking?" → *Planning · Checking* | planning shows the windows with dates; checking shows the tone only | not stored |
+| A date in the past (Looking back) | "Did that feel right?" (§9) | the person's confirmed count; calibration | `area_checks` |
+
+Rules: at most two questions before an answer; the question names the person's situation, never a chart term; a skipped
+question gets the chart's estimate with "we're assuming you're employed" shown once; the answer is never shown back as
+a fact and never changes a grade, only what is read first and how it is worded; the chat's Clarify step (doc 17) uses
+the same questions and the same stored answers, so the person is not asked twice across chat and boards.
 
 ## 4. The map of the app
 
