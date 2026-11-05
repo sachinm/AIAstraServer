@@ -311,10 +311,6 @@ registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor:
 registerAreaRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
-// the agent registry (docs/reading-engine/49 §4.1): idempotent seed, never blocks boot
-void seedAgentRegistry(prisma).catch(() => undefined);
-// the technique catalogue (docs/admin/03 §4.1): idempotent seed, logs once, never blocks boot
-void seedTechniqueRegistry(prisma).catch(() => undefined);
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
@@ -367,10 +363,20 @@ app.post('/query', async (req, res) => {
   }
 });
 
+/** The longest boot waits for the registry seeds (they log and give up on their own on failure). */
+const BOOT_SEED_WAIT_MS = 4_000;
+
 async function start(): Promise<void> {
   await checkDatabaseConnection();
   const nodeEnv = getNodeEnv();
   console.log(`✅ Database connected | NODE_ENV=${nodeEnv}`);
+  // The agent registry and the technique catalogue (docs/admin/03 §4.1): awaited before listen, because on Lambda the
+  // process freezes after each response and an unawaited seed never finishes. One statement each; capped so a slow
+  // database never holds the cold start for more than BOOT_SEED_WAIT_MS.
+  await Promise.race([
+    Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)]),
+    new Promise((resolve) => setTimeout(resolve, BOOT_SEED_WAIT_MS)),
+  ]);
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureAdmins();
