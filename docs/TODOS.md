@@ -81,6 +81,11 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **The server auth tests call the real Cognito pool when `.env` says `AUTH_PROVIDER=cognito`.** Found 2026-11-05: with the
+  local `.env` (AUTH_PROVIDER and COGNITO_USER_POOL_ID set), `tests/unit/auth/emailOnlySignup.test.ts` and
+  `registrationV2.test.ts` sent real code requests and failed with Cognito's "Attempt limit exceeded" (33 failures). They pass
+  with `AUTH_PROVIDER=local`. So a test run sends real emails and counts against the live pool. Fix: the vitest setup pins
+  `AUTH_PROVIDER=local` and clears the COGNITO_* variables unless a test stubs them itself.
 - **`kundli_data` rows do not record which engine commit produced them, and the `current` annual rows look empty.** Checked
   2026-11-02 on the live database: 0 of 4,006 rows have `engine_commit` (`complete()` in `reading/chartData/store.ts` never
   sets it; only `kundli_facts` does), so after a Radha deploy there is no way to see which rows came from the old engine
