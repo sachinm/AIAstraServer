@@ -43,7 +43,12 @@ export function buildMessage(triggerSource, code, username) {
   const intro = invited
     ? `You have been invited to AdAstra AI. Your user name is ${username} and your temporary password is:`
     : `${REASON[triggerSource]} Your code is:`;
-  const after = invited ? 'Change it when you first sign in.' : 'It expires soon.';
+  // a sign-in code lasts as long as the app client's AuthSessionValidity (3 minutes on 2026-11-05)
+  const after = invited
+    ? 'Change it when you first sign in.'
+    : triggerSource === 'CustomEmailSender_Authentication'
+      ? 'It works for 3 minutes.'
+      : 'It expires soon.';
 
   const text = [
     'AdAstra AI',

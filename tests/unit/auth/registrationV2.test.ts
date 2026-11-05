@@ -309,7 +309,7 @@ for (const prov of providers) {
       await start();
       const v = await verify('asha@example.com', '000000');
       expect(v).toMatchObject({ success: false, token: null });
-      expect(v.message).toBe('Unable to sign in. Check your code and try again.');
+      expect(v.message).toBe('That code did not work. It may be mistyped or expired: codes last 3 minutes. Send a new code and try again.');
       expect(db.rows[0].email_verified_at).toBeNull();
     });
 
