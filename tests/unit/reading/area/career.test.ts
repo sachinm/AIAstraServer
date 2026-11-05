@@ -71,7 +71,7 @@ const fakeBuild = {
 
 describe('tone rules', () => {
   const SUP = { S1: [3, 0], S4: [2, 0], S6: [2, 0], S7: [0.5, 0] } as Record<string, [number, number]>;
-  const TST = { S1: [0, 3, 'Ve'], S4: [0, 2], S6: [0, 2, 'Sa'], S7: [0, 0.5] } as Record<string, [number, number, string]>;
+  const TST = { S1: [0, 3, 'Ve'], S4: [0, 2], S6: [0, 2, 'Sa'], S7: [0, 0.5] } as Record<string, [number, number, string?]>;
   it('open: a moderate support band now with three families agreeing; confirmed when the main clock agrees', () => {
     const cells = ['2026-09', '2026-10', '2026-11', '2026-12'].map((m) => cell(m, { band: 'moderate', sys: SUP }));
     const p = presentState(fakeBuild, cells, 1);

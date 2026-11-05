@@ -67,6 +67,7 @@
     "nodemailer": "^8.0.4",
     "p-limit": "^7.0.0",
     "pdf-parse-fixed": "^1.1.1",
+    "sharp": "^0.33.5",
     "undici": "^6.21.3",
     "zod": "^3.25.76"
   },

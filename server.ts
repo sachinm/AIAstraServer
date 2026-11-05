@@ -30,6 +30,7 @@ import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { registerAssistantRoutes } from './src/routes/assistantRoutes.js';
 import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
+import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
@@ -307,6 +308,8 @@ registerAssistantRoutes(app, { prisma });
 registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma) });
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
+// personalization wizard and selfie (docs/reading-engine/52)
+registerProfileRoutes(app, { prisma, requireUser });
 // the agent registry (docs/reading-engine/49 §4.1): idempotent seed, never blocks boot
 void seedAgentRegistry(prisma).catch(() => undefined);
 

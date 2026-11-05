@@ -1,4 +1,5 @@
 import { createSchema } from 'graphql-yoga';
+import { chatCategory } from '../chat/categories.js';
 import type { Prisma } from '@prisma/client';
 import {
   signup,
@@ -222,6 +223,7 @@ const typeDefs = /* GraphQL */ `
     id: ID!
     user_id: ID!
     name: String
+    category: String
     is_active: Boolean
     created_at: String
   }
@@ -417,7 +419,7 @@ const typeDefs = /* GraphQL */ `
     """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
     logout: Boolean!
     uploadKundli(fileBase64: String!): UploadKundliResult!
-    createChat: ChatResult!
+    createChat(category: String): ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
     addMessage(chatId: ID!, question: String!, aiAnswer: String!): MessageResult!
     adminUpdateUser(id: ID!, input: AdminUpdateUserInput!): UpdateUserResult!
@@ -787,6 +789,7 @@ const resolvers = {
           id: c.id,
           user_id: c.user_id,
           name: c.name,
+          category: c.category,
           is_active: c.is_active,
           created_at: c.created_at?.toISOString?.() ?? null,
         }));
@@ -1250,7 +1253,7 @@ const resolvers = {
         return { success: false, message: msg, kundli_id: null };
       }
     },
-    async createChat(_parent: unknown, _args: unknown, context: GraphQLContext) {
+    async createChat(_parent: unknown, args: { category?: string | null }, context: GraphQLContext) {
       const result = withAuth(context, () => null);
       if (result && 'success' in result && !result.success) {
         return { success: false, chat: null, error: result.error };
@@ -1264,7 +1267,7 @@ const resolvers = {
           data: { is_active: false },
         });
         const chat = await db.chat.create({
-          data: { user_id: userId, is_active: true },
+          data: { user_id: userId, is_active: true, category: chatCategory(args?.category) },
         });
         return {
           success: true,
@@ -1272,6 +1275,7 @@ const resolvers = {
             id: chat.id,
             user_id: chat.user_id,
             name: chat.name,
+            category: chat.category,
             is_active: chat.is_active,
             created_at: chat.created_at?.toISOString?.() ?? null,
           },

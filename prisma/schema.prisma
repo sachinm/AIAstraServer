@@ -78,6 +78,9 @@ model Auth {
   areaChecks         AreaCheck[]
   personFacts        PersonFact[]
 
+  profilePhoto       ProfilePhoto?
+  photoAttempts      ProfilePhotoAttempt[]
+
   @@map("auth")
 }
 
@@ -151,6 +154,8 @@ model Chat {
   user_id     String
   /// Short title shown in the UI: first user question, trimmed to 50 chars (set when the first message is saved).
   name        String?
+  /// docs/reading-engine/51: general | today | you | love | work | lucky
+  category    String       @default("general")
   is_active   Boolean      @default(true) @map("is_active")
   created_at  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   user        Auth         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -990,4 +995,35 @@ model PersonFact {
 
   @@id([user_id, key])
   @@map("person_facts")
+}
+
+/// The selfie (docs/reading-engine/52 §4): one current photo per person, the previous kept 30 days.
+model ProfilePhoto {
+  user_id     String    @id @map("user_id")
+  bytes       Bytes
+  mime        String
+  width       Int
+  height      Int
+  face_box    Json?     @map("face_box")
+  phash       String?
+  prev_bytes  Bytes?    @map("prev_bytes")
+  replaced_at DateTime? @map("replaced_at") @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user        Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profile_photos_user_fkey")
+
+  @@index([phash], map: "profile_photos_phash")
+  @@map("profile_photos")
+}
+
+/// Every selfie capture sent to the server, for the rate limit (5 an hour, 20 a day).
+model ProfilePhotoAttempt {
+  id      String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id String   @map("user_id")
+  /// ok | too_big | not_jpeg | bad_image | bad_size | no_face
+  outcome String
+  at      DateTime @default(now()) @db.Timestamptz(6)
+  user    Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "profile_photo_attempts_user_fkey")
+
+  @@index([user_id, at], map: "profile_photo_attempts_user_at")
+  @@map("profile_photo_attempts")
 }
