@@ -147,8 +147,36 @@ export function registryRow(a: AgentDef, on?: string) {
 let seeded = false;
 let warned = false;
 
-/** Upserts every definition into `agent_registry`. Idempotent; called at boot and before the first run. */
+/** One statement for the whole seed (one round trip), so it finishes inside a Lambda cold start. */
+const AGENT_SEED_SQL = `INSERT INTO agent_registry (id, title, kind, module, sub_module, provider, model, price_in, price_out, price_cached, price_version, description, enabled, updated_at)
+  SELECT x.id, x.title, x.kind, x.module, x.sub_module, x.provider, x.model, x.price_in, x.price_out, x.price_cached, x.price_version, x.description, coalesce(x.enabled, true), now()
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, title text, kind text, module text, sub_module text, provider text, model text,
+         price_in numeric, price_out numeric, price_cached numeric, price_version text, description text, enabled boolean)
+  ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, kind = EXCLUDED.kind, module = EXCLUDED.module, sub_module = EXCLUDED.sub_module,
+    provider = EXCLUDED.provider, model = EXCLUDED.model, price_in = EXCLUDED.price_in, price_out = EXCLUDED.price_out,
+    price_cached = EXCLUDED.price_cached, price_version = EXCLUDED.price_version, description = EXCLUDED.description,
+    enabled = EXCLUDED.enabled, updated_at = now()`;
+
+type RawCapable = { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => Promise<number> };
+
+/**
+ * Upserts every definition into `agent_registry`. Idempotent; awaited at boot (server.ts, before listen) and before the
+ * first run. With a real client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert
+ * per row. Logs once and never throws.
+ */
 export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
+  const raw = (prisma as unknown as RawCapable).$executeRawUnsafe;
+  if (typeof raw === 'function') {
+    try {
+      await raw.call(prisma, AGENT_SEED_SQL, JSON.stringify(AGENTS.map((a) => registryRow(a))));
+      seeded = true;
+      return AGENTS.length;
+    } catch (e) {
+      if (!warned) console.warn(`[agents] registry seed failed: ${(e as Error).message}`);
+      warned = true;
+      return 0;
+    }
+  }
   let n = 0;
   for (const a of AGENTS) {
     const row = registryRow(a);

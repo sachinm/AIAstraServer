@@ -21,6 +21,23 @@ describe('agent registry', () => {
     expect(code.provider).toBe('none');
     expect(registryRow(AGENTS.find((a) => a.id === 'lucky.day_tables')!).model).toBe('engine:muhurta');
   });
+  it('seeds in one statement when the client has raw SQL', async () => {
+    resetAgentRegistryState();
+    const calls: Array<[string, unknown[]]> = [];
+    const prisma = { $executeRawUnsafe: async (sql: string, ...v: unknown[]) => (calls.push([sql, v]), AGENTS.length) } as never;
+    expect(await seedAgentRegistry(prisma)).toBe(AGENTS.length);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0]).toMatch(/INSERT INTO agent_registry[\s\S]*jsonb_to_recordset[\s\S]*ON CONFLICT \(id\) DO UPDATE/);
+    const rows = JSON.parse(calls[0]![1][0] as string) as Array<{ id: string }>;
+    expect(rows.map((r) => r.id)).toEqual(AGENTS.map((a) => a.id));
+  });
+
+  it('a failing one-statement seed logs and returns 0, never throws', async () => {
+    resetAgentRegistryState();
+    const prisma = { $executeRawUnsafe: async () => { throw new Error('relation missing'); } } as never;
+    expect(await seedAgentRegistry(prisma)).toBe(0);
+  });
+
   it('seeds every agent', async () => {
     const db = fakeLuckyPrisma({ seedSanJose: false });
     expect(await seedAgentRegistry(db.prisma)).toBe(AGENTS.length);

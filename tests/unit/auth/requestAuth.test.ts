@@ -5,7 +5,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { registerClarifyRoutes } from '../../../src/routes/clarifyRoutes.js';
-import { authenticateRequest, forgetUser, makeOptionalUser, makeRequireUser, resetRequestAuthForTests, type AuthRow, type RequestAuthDeps } from '../../../src/auth/requestAuth.js';
+import { authenticateRequest, forgetUser, makeOptionalUser, makeRequireUser, resetRequestAuthForTests, type AuthRow, type RequestAuthDeps, reportTz } from '../../../src/auth/requestAuth.js';
 
 const SECRET = 'request-auth-test-secret-at-least-32-chars';
 const sign = (claims: Record<string, unknown>, opts: jwt.SignOptions = {}) => jwt.sign(claims, SECRET, { expiresIn: '1h', ...opts });
@@ -14,9 +14,10 @@ const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 function rowStore(rows: Record<string, AuthRow | null>) {
   const readRow = vi.fn(async (id: string) => (id in rows ? rows[id]! : null));
   const touchLastSeen = vi.fn(async () => undefined);
+  const touchActivity = vi.fn(async (_id: string, _at: Date) => undefined);
   let t = 1_000_000;
-  const deps: RequestAuthDeps = { readRow, touchLastSeen, now: () => t, secret: SECRET };
-  return { deps, readRow, touchLastSeen, advance: (ms: number) => (t += ms) };
+  const deps: RequestAuthDeps = { readRow, touchLastSeen, touchActivity, now: () => t, secret: SECRET };
+  return { deps, readRow, touchLastSeen, touchActivity, advance: (ms: number) => (t += ms) };
 }
 
 const row = (over: Partial<AuthRow> = {}): AuthRow => ({ role: 'novice', locked_at: null, token_version: 1, last_seen_at: null, ...over });
@@ -114,6 +115,35 @@ describe('authenticateRequest', () => {
     await authenticateRequest(token, s.deps);
     await tick();
     expect(s.touchLastSeen).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes the daily activity row on the same 5-minute tick (M30)', async () => {
+    const s = rowStore({ u1: row() });
+    const token = bearer(sign({ sub: 'u1' }));
+    await authenticateRequest(token, s.deps);
+    await authenticateRequest(token, s.deps);
+    await tick();
+    expect(s.touchActivity).toHaveBeenCalledTimes(1);
+    expect(s.touchActivity.mock.calls[0]![0]).toBe('u1');
+    s.advance(5 * 60_000);
+    await authenticateRequest(token, s.deps);
+    await tick();
+    expect(s.touchActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failing activity write never reaches the request', async () => {
+    const s = rowStore({ u1: row() });
+    s.deps.touchActivity = async () => {
+      throw new Error('relation "user_activity_days" does not exist');
+    };
+    await expect(authenticateRequest(bearer(sign({ sub: 'u1' })), s.deps)).resolves.toMatchObject({ userId: 'u1' });
+    await tick();
+  });
+
+  it('counts days in REPORT_TZ, falling back to Los Angeles', () => {
+    expect(reportTz({})).toBe('America/Los_Angeles');
+    expect(reportTz({ REPORT_TZ: 'nowhere' })).toBe('America/Los_Angeles');
+    expect(reportTz({ REPORT_TZ: 'Asia/Kolkata' })).toBe('Asia/Kolkata');
   });
 
   it('a failing last_seen_at write never reaches the request', async () => {

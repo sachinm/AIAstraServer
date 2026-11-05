@@ -628,8 +628,33 @@ export function techniqueRow(t: TechniqueDef) {
 
 let seedWarned = false;
 
-/** Upserts every technique into `technique_registry`. Idempotent; called at boot. Logs once and never throws. */
+/** One statement for the whole catalogue (one round trip), so it finishes inside a Lambda cold start. */
+const TECHNIQUE_SEED_SQL = `INSERT INTO technique_registry (id, title, category, board, status, charts, algorithm, special, source, code_ref, agents, accuracy, updated_at)
+  SELECT x.id, x.title, x.category, x.board, x.status, coalesce(x.charts, '[]'), coalesce(x.algorithm, '[]'), x.special, x.source, x.code_ref,
+         coalesce(x.agents, '[]'), x.accuracy, now()
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, title text, category text, board text, status text, charts jsonb, algorithm jsonb,
+         special text, source text, code_ref text, agents jsonb, accuracy text)
+  ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, category = EXCLUDED.category, board = EXCLUDED.board, status = EXCLUDED.status,
+    charts = EXCLUDED.charts, algorithm = EXCLUDED.algorithm, special = EXCLUDED.special, source = EXCLUDED.source,
+    code_ref = EXCLUDED.code_ref, agents = EXCLUDED.agents, accuracy = EXCLUDED.accuracy, updated_at = now()`;
+
+/**
+ * Upserts every technique into `technique_registry`. Idempotent; awaited at boot (server.ts, before listen). With a real
+ * client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert per row. Logs once and
+ * never throws.
+ */
 export async function seedTechniqueRegistry(prisma: Pick<PrismaClient, 'techniqueRegistry'>): Promise<number> {
+  const raw = (prisma as unknown as { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => Promise<number> }).$executeRawUnsafe;
+  if (typeof raw === 'function') {
+    try {
+      await raw.call(prisma, TECHNIQUE_SEED_SQL, JSON.stringify(TECHNIQUES.map(techniqueRow)));
+      return TECHNIQUES.length;
+    } catch (e) {
+      if (!seedWarned) console.warn(`[techniques] registry seed failed: ${(e as Error).message}`);
+      seedWarned = true;
+      return 0;
+    }
+  }
   let n = 0;
   for (const t of TECHNIQUES) {
     const row = techniqueRow(t);

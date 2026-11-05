@@ -46,6 +46,8 @@ export interface RequestAuthDeps {
   readRow?: (userId: string) => Promise<AuthRow | null>;
   /** fire-and-forget `last_seen_at` write */
   touchLastSeen?: (userId: string, at: Date) => Promise<unknown>;
+  /** fire-and-forget daily activity row (M30, docs/admin/04), on the same tick as `last_seen_at` */
+  touchActivity?: (userId: string, at: Date) => Promise<unknown>;
   now?: () => number;
   secret?: string;
 }
@@ -59,6 +61,27 @@ const prismaReadRow = (userId: string): Promise<AuthRow | null> =>
 
 const prismaTouchLastSeen = (userId: string, at: Date): Promise<unknown> =>
   prisma.auth.updateMany({ where: { id: userId }, data: { last_seen_at: at } });
+
+/** The zone a day is counted in, shared with the admin's reports (REPORT_TZ, default America/Los_Angeles). */
+export function reportTz(env: NodeJS.ProcessEnv = process.env): string {
+  const tz = env.REPORT_TZ?.trim();
+  if (!tz) return 'America/Los_Angeles';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return 'America/Los_Angeles';
+  }
+}
+
+/** One row per user per local day; a later tick moves last_seen_at and counts a touch. */
+const prismaTouchActivity = (userId: string, at: Date): Promise<unknown> =>
+  prisma.$executeRaw`
+    INSERT INTO user_activity_days (user_id, day, first_seen_at, last_seen_at, touches)
+    VALUES (${userId}, (${at}::timestamptz AT TIME ZONE ${reportTz()})::date, ${at}, ${at}, 1)
+    ON CONFLICT (user_id, day) DO UPDATE
+      SET last_seen_at = GREATEST(user_activity_days.last_seen_at, EXCLUDED.last_seen_at),
+          touches = user_activity_days.touches + 1`;
 
 function header(headers: HeaderSource, name: string): string | undefined {
   if (typeof (headers as Headers).get === 'function') return (headers as Headers).get(name) ?? undefined;
@@ -130,6 +153,10 @@ export async function authenticateRequest(headers: HeaderSource, deps: RequestAu
     row.last_seen_at = at; // the cached copy, so this instance writes at most once per 5 minutes per user
     void Promise.resolve()
       .then(() => (deps.touchLastSeen ?? prismaTouchLastSeen)(userId, at))
+      .catch(() => undefined);
+    // a failure here (the table not there yet, a dropped connection) never touches the request
+    void Promise.resolve()
+      .then(() => (deps.touchActivity ?? prismaTouchActivity)(userId, at))
       .catch(() => undefined);
   }
   return { userId, role: canonicalRole(row.role), locked: false };
