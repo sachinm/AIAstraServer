@@ -16,7 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import { roundPlace, type AtPlace } from '../chartData/place.js';
 import { isMissingTable } from '../chartData/store.js';
 import { fetchTransit, type VargaFactors } from '../chartData/transit.js';
-import { fetchTransitRange, type TransitRangeOptions, type TransitRangePayload } from '../chartData/transitRange.js';
+import { fetchSharedSkyRange, type TransitRangeOptions, type TransitRangePayload } from '../chartData/transitRange.js';
 import { piiHash } from '../../lib/pii/hash.js';
 import { openRow, sealParam } from '../../lib/pii/rawSql.js';
 
@@ -74,7 +74,8 @@ export function rangeKey(opts: TransitRangeOptions, place: AtPlace, ayanamsa = D
     from: opts.from,
     to: opts.to,
     planetsKey: [...new Set(opts.planets ?? ['Sa', 'Ju', 'Ra', 'Ke'])].sort().join(','),
-    flagsKey: `l${opts.lunations === false ? 0 : 1}e${opts.eclipses === false ? 0 : 1}`,
+    // `d` marks a daily range; the monthly key is unchanged so rows stored before the step existed still match
+    flagsKey: `l${opts.lunations === false ? 0 : 1}e${opts.eclipses === false ? 0 : 1}${opts.step === 'day' ? 'd' : ''}`,
     ayanamsa,
   };
 }
@@ -204,7 +205,7 @@ export interface EphemerisDeps {
   repo?: EphemerisRepo;
   /** The Radha call for a miss (default: fetchTransit at the place, no natal fields) */
   fetchSnapshot?: (at: string, place: AtPlace, factors: VargaFactors | undefined) => Promise<unknown>;
-  fetchRange?: (opts: TransitRangeOptions, kundliId: string) => Promise<TransitRangePayload>;
+  fetchRange?: (opts: TransitRangeOptions, place: AtPlace) => Promise<TransitRangePayload>;
 }
 
 let warnedMissing = false;
@@ -267,11 +268,11 @@ const defaultFetchSnapshot = (at: string, place: AtPlace, factors: VargaFactors 
   fetchTransit(null, { at, place, ...(factors === undefined ? {} : Array.isArray(factors) || factors === 'd1-d10' ? { divisionalChartFactors: factors } : {}) });
 
 /**
- * The dated sky over a range at a place (no natal fields), shared by every kundli. The Radha call needs a kundli to
- * name the birth place, so `anyKundliId` is any kundli whose birth place is the place asked for; everything that belongs
- * to that person (natal block, houses, Sade Sati, dhaiya) is removed before it is stored.
+ * The dated sky over a range at a place, shared by every kundli. The Radha call carries the place and the options only,
+ * no person, so the answer has no natal block, houses, Sade Sati or dhaiya; anything of that kind is still removed before
+ * it is stored, as a guard.
  */
-export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, anyKundliId: string, deps: EphemerisDeps = {}): Promise<{ payload: TransitRangePayload; source: 'cache' | 'radha' }> {
+export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, deps: EphemerisDeps = {}): Promise<{ payload: TransitRangePayload; source: 'cache' | 'radha' }> {
   const key = rangeKey(opts, place);
   const repo = deps.repo ?? (await defaultRepo());
   let stored = true;
@@ -284,7 +285,7 @@ export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, 
   }
   const id = `r|${key.placeKey}|${key.from}|${key.to}|${key.planetsKey}|${key.flagsKey}`;
   const payload = await coalesce(id, async () => {
-    const raw = await (deps.fetchRange ?? ((o, k) => fetchTransitRange(k, o)))(opts, anyKundliId);
+    const raw = await (deps.fetchRange ?? ((o, p) => fetchSharedSkyRange(p, o)))(opts, place);
     return stripRangeToSky(raw);
   });
   if (stored) await repo.putRange(key, place, { payload, calcVersion: calcVersionOf(payload) }).catch((err) => warnStore(err, 'write range'));
@@ -294,8 +295,9 @@ export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, 
 // ------------------------------------------------------------------------------------------ per-kundli overlay
 
 /** The key under which a kundli's own range/contacts answer is stored. */
-export function overlayParamsKey(opts: { from: string; to: string; planets?: readonly string[]; orb?: number }): string {
-  return [opts.from, opts.to, [...new Set(opts.planets ?? [])].sort().join(','), opts.orb ?? ''].join('|');
+export function overlayParamsKey(opts: { from: string; to: string; planets?: readonly string[]; orb?: number; step?: 'month' | 'day' }): string {
+  const base = [opts.from, opts.to, [...new Set(opts.planets ?? [])].sort().join(','), opts.orb ?? ''].join('|');
+  return opts.step === 'day' ? `${base}|day` : base;
 }
 
 /**
@@ -306,7 +308,7 @@ export function overlayParamsKey(opts: { from: string; to: string; planets?: rea
 export async function getKundliOverlay<T>(
   kundliId: string,
   kind: OverlayKind,
-  span: { from: string; to: string; planets?: readonly string[]; orb?: number },
+  span: { from: string; to: string; planets?: readonly string[]; orb?: number; step?: 'month' | 'day' },
   fetchFromRadha: () => Promise<T>,
   deps: EphemerisDeps = {},
 ): Promise<{ payload: T; source: 'cache' | 'radha' }> {

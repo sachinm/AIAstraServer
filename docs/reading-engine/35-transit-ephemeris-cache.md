@@ -68,3 +68,31 @@ once and calls Radha directly. A failed Radha call is never stored.
 ## What needs Sachin's OK
 
 1. Wiring this path into a reader. Nothing uses it yet.
+
+## Skills (added 2026-11-04)
+
+Two project skills in `.claude/skills/` carry this rule so every agent applies it:
+
+- `transit-sky-preparation`: find gaps in the shared sky, pull only what is missing, strip person data, verify, report.
+- `transit-reading`: read a person's transits from the shared sky plus their kundli overlay and their stored dasha and
+  annual tables, and produce horizon, sub-category and week-by-week tables.
+
+The rule they enforce: one sky for all users; only the overlay (houses, contacts, sade sati) is per kundli, and it comes
+from the engine, never from Node arithmetic.
+
+## Implemented 2026-11-04 (branch `feat/shared-transit-sky`)
+
+Sachin approved wiring the shared path in and splitting the per-user script.
+
+- `transitRangeParams` passes `step` (`month` default, `day`), allows the Moon only with `day`, and caps a daily range at
+  730 days (the engine's limit). `rangeKey` adds `d` to the flags key for a daily range; the monthly key is unchanged, so
+  rows stored before this still match. `overlayParamsKey` carries the step too. This closes limit 2 above.
+- `fetchSharedSkyRange(place, opts)` asks the engine for the range with a place and the options only, no birth data, so the
+  shared sky is built without any kundli. `getSharedRange(opts, place, deps)` no longer takes a kundli id.
+- `src/reading/transits/skyJobs.ts` holds the two jobs; `scripts/extend-transit-sky.ts` (`npm run transits:sky`) extends
+  the sky for a place over whole calendar years, `scripts/pull-kundli-overlay.ts` (`npm run transits:overlay`) pulls one
+  kundli's own houses. Both take `--dry-run`, which reads the cache and calls nothing. `scripts/build-transit-charts.ts`,
+  which looped every kundli, is removed.
+- Not done: the reader's `TransitChart` is still the engine's per-kundli `transits` export (built once per kundli per
+  24-month horizon, stored in `transit_snapshots`). It carries fields the range export lacks, so assembling it from the
+  shared sky plus the overlay needs an engine change first. Filed in `docs/TODOS.md`.

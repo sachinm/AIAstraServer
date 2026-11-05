@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { asRangePayload, fetchTransitRange, transitRangeParams } from '../../../src/reading/chartData/transitRange.js';
+import { asRangePayload, fetchSharedSkyRange, fetchTransitRange, transitRangeParams } from '../../../src/reading/chartData/transitRange.js';
 import { ensureChartData, movingTypeError } from '../../../src/reading/chartData/store.js';
 import { CHART_TYPE_BY_ID } from '../../../src/reading/chartData/catalog.js';
 
@@ -53,5 +53,29 @@ describe('fetchTransitRange', () => {
     await expect(fetchTransitRange('k1', { from: '2027-01-01', to: '2027-02-01' }, { repo: { kundliRequest: async () => null }, fetcher: vi.fn() })).rejects.toThrow(/not found/);
     expect(asRangePayload(PAYLOAD)).toBe(PAYLOAD);
     expect(asRangePayload({ ...PAYLOAD, stations: [{ planet: 'Sa' }] })).toBeNull();
+  });
+});
+
+describe('step and the person-free sky', () => {
+  it('passes step only when given, and limits a daily range to about two years', () => {
+    expect(transitRangeParams({ from: '2028-01-01', to: '2028-12-31' })).not.toHaveProperty('step');
+    expect(transitRangeParams({ from: '2028-01-01', to: '2028-12-31', step: 'day' })).toMatchObject({ step: 'day' });
+    expect(() => transitRangeParams({ from: '2026-01-01', to: '2028-12-31', step: 'day' })).toThrow(/limit with step 'day'/);
+    expect(() => transitRangeParams({ from: '2026-01-01', to: '2028-12-31', step: 'week' as never })).toThrow(/step must be/);
+  });
+
+  it('allows the Moon only with the day step', () => {
+    expect(() => transitRangeParams({ from: '2028-01-01', to: '2028-12-31', planets: ['Mo'] })).toThrow(/Moon needs step 'day'/);
+    expect(transitRangeParams({ from: '2028-01-01', to: '2028-12-31', step: 'day', planets: ['Mo', 'Ma'] })).toMatchObject({ planets: ['Mo', 'Ma'] });
+  });
+
+  it('asks for the sky with a place and the options only, and accepts the natal: null answer', async () => {
+    const placeFetcher = vi.fn(async (_type: string, _fields: Record<string, unknown>) => ({ ...PAYLOAD, natal: null }));
+    const out = await fetchSharedSkyRange({ lat: 37.341, lon: -121.894, tz: -8 }, { from: '2028-01-01', to: '2028-12-31', step: 'day' }, { placeFetcher });
+    expect(out.from).toBe('2008-10-01');
+    const [type, fields] = placeFetcher.mock.calls[0]!;
+    expect(type).toBe('transit_range');
+    expect(fields).toMatchObject({ lat: 37.34, lon: -121.89, tz: -8, params: { from: '2028-01-01', to: '2028-12-31', step: 'day' } });
+    for (const k of ['dob', 'tob', 'place', 'natal_dob', 'natal_tob', 'natal_place']) expect(fields).not.toHaveProperty(k);
   });
 });

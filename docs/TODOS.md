@@ -583,3 +583,24 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   tab's sessionStorage are not read any more. They stay until the tab closes or the user signs out. (3) Sign-out now removes the
   visit id (`aa_visit`), so the next anonymous page logs a new visit. (4) ESLint errors on untouched lines: `no-explicit-any` in
   `MantrasSection.tsx` and `RemediesSection.tsx`, and an unused `_user` in `ChatSection.tsx`. Done: each fixed or accepted.
+
+- **`transit_instants` payloads come in two shapes.** Found 2026-11-04 while reading Sumit's daily sky rows for the
+  week-by-week career document: of 833 San Jose rows between 2026-09-25 and 2029-01-05, 556 carry
+  `{at_jd, at_local, charts:{d1:{lagna, planets}}, divisional_chart_factors}` and 277 carry the flat
+  `{at_jd, lagna, planets, ...}` with no `charts` and no `at_local`. A reader that takes `payload.charts.d1` skips a third
+  of the days. Fix: normalise on write in `reading/transits/ephemerisCache.ts` (one shape, `at_local` always set) and
+  re-wrap the flat rows in place. Owner: reading-dev. Done: every row in the table has `charts.d1` and `at_local`.
+- **The sky and the overlay are ready, but the daily pull for Sumit has not run.** 2026-11-04. Jobs `npm run transits:sky`
+  and `npm run transits:overlay` exist (branch `feat/shared-transit-sky`), dry runs show San Jose daily 2026 to 2028 and
+  Sumit's daily overlay (kundli 75b0d618) both missing. The real pull failed here with "Could not load credentials": the
+  engine Lambda needs credentials that `aiastra-ops` was never granted. Fix: run both through the deploy session (6 engine
+  calls, no Gemini), then regenerate the day layer of `Sumit-career-week-by-week-2026-10-to-2028-12.docx` from the stored
+  overlay instead of the scratch script. Owner: deploy session. Done: both dry runs report 3 cached, and the document's
+  provenance line no longer says the day layer was counted by a script.
+- **The reader still builds a full per-kundli transit chart.** 2026-11-04. `loadTransitChart` in `reading/data/store.ts`
+  builds the engine's `transits` export per kundli and keeps it in `transit_snapshots` (once per kundli per 24-month
+  horizon, no daily job any more). That payload mixes the shared sky with the person's placements and also carries fields
+  the range export does not (`influences_houses`, `sav`, `bav`, `over_natal`, `double_transit`). Fix, in the engine: serve
+  those fields from `transit_range` with natal data (or split `transits` into a sky part and an overlay part), then build
+  the reader's `TransitChart` from the shared sky plus `kundli_transit_overlays`. Hands-off until the engine pass, so only
+  filed. Owner: reading-dev with the engine pass. Done: no `transit_snapshots` row is written per kundli.
