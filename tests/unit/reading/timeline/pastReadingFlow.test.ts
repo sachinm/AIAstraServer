@@ -9,6 +9,7 @@ import {
   ratePastLifePrediction,
 } from '../../../../src/reading/timeline/pastReadingFlow.js';
 import { registerTimelineRoutes } from '../../../../src/routes/timelineRoutes.js';
+import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 
 beforeEach(() => clearPastReadingMemoryStore());
 
@@ -113,7 +114,7 @@ describe('timeline past-reading HTTP routes', () => {
     app.use(express.json());
     registerTimelineRoutes(app, {
       prisma: fakePrisma,
-      getUserId: (req) => (req.headers['x-user'] as string) || null,
+      requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null),
       enabled: true,
     });
     server = app.listen(0);

@@ -1,4 +1,5 @@
 /** The plan catalog and the access rule (docs/billing/README.md). Question limits come from env, never from this file. */
+import { QUOTA_EXEMPT_ROLES } from '../auth/roles.js';
 
 export const PLAN_CODES = ['free', 'plus', 'unlimited'] as const;
 export type PlanCode = (typeof PLAN_CODES)[number];
@@ -37,8 +38,8 @@ export const PLANS: Record<PlanCode, Plan> = {
   },
 };
 
-/** Staff are never counted. */
-export const EXEMPT_ROLES: readonly string[] = ['support', 'admin', 'superadmin', 'aiastra_admin', 'astrologer'];
+/** Staff are never counted. Compared after canonicalRole, so legacy `support`/`admin`/`superadmin` rows stay exempt. */
+export const EXEMPT_ROLES: readonly string[] = QUOTA_EXEMPT_ROLES;
 
 export function isPlanCode(v: unknown): v is PlanCode {
   return typeof v === 'string' && (PLAN_CODES as readonly string[]).includes(v);

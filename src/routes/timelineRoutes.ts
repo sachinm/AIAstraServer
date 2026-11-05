@@ -31,10 +31,12 @@ import {
 } from '../reading/timeline/pastReadingFlow.js';
 
 import { questionGate } from '../billing/questionGate.js';
+import type { RequireUser } from '../auth/requestAuth.js';
 
 export interface TimelineRouteDeps {
   prisma: PrismaClient;
-  getUserId: (req: express.Request) => string | null;
+  /** writes the 401 itself and returns null (src/auth/requestAuth.ts) */
+  requireUser: RequireUser;
   /** tests: replace the model call */
   interviewCall?: InterviewDeps['call'];
   /** tests: whether the interview model is configured (default: the Gemini chat provider with a key) */
@@ -64,19 +66,15 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   const available = deps.interviewAvailable ?? interviewConfigured;
 
   /** The user id, or a 401 already sent */
-  const auth = (req: express.Request, res: express.Response): string | null => {
-    const userId = deps.getUserId(req);
-    if (!userId) res.status(401).json({ error: 'Unauthorized' });
-    return userId;
-  };
+  const auth = (req: express.Request, res: express.Response): Promise<string | null> => deps.requireUser(req, res);
 
-  app.get('/api/timeline/ledger/meta', (req, res) => {
-    if (!auth(req, res)) return;
+  app.get('/api/timeline/ledger/meta', async (req, res) => {
+    if (!(await auth(req, res))) return;
     res.json({ ...ledgerMeta(), years: timelineConfig().years, interview: available() });
   });
 
   app.get('/api/timeline/ledger', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const kundliId = await resolveKundli(prisma, userId, kundliParam(req.query.kundliId));
     if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
@@ -86,7 +84,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.post('/api/timeline/ledger', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const checked = checkLedgerInput(req.body);
     if (!checked.ok) return res.status(400).json({ error: checked.error, field: checked.field });
@@ -98,7 +96,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.patch('/api/timeline/ledger/:id', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const current = await getLedgerEvent(prisma, userId, req.params.id);
     if (current.status !== 'ok') return sendStoreError(res, current);
@@ -110,7 +108,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.delete('/api/timeline/ledger/:id', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const r = await deleteLedgerEvent(prisma, userId, req.params.id);
     if (r.status !== 'ok') return sendStoreError(res, r);
@@ -118,7 +116,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.post('/api/timeline/ledger/interview', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     if (!available()) return res.status(503).json({ error: 'interview_unavailable' });
     // a model call that is not a counted question, so the free plan does not get it
@@ -138,7 +136,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.get('/api/timeline/past-reading', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const kundliId = await resolveKundli(prisma, userId, kundliParam(req.query.kundliId));
     if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });
@@ -148,7 +146,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.post('/api/timeline/past-reading/generate', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const plan = await questionGate(prisma).getStatus(userId);
     if (plan?.code === 'free' && !plan.exempt) return res.status(402).json({ error: 'A paid plan is required', code: 'plan_required', usage: plan });
@@ -167,7 +165,7 @@ export function registerTimelineRoutes(app: express.Express, deps: TimelineRoute
   });
 
   app.post('/api/timeline/past-reading/rate', async (req, res) => {
-    const userId = auth(req, res);
+    const userId = await auth(req, res);
     if (!userId) return;
     const kundliId = await resolveKundli(prisma, userId, kundliParam(req.body?.kundliId));
     if (!kundliId) return res.status(404).json({ error: 'kundli_not_found' });

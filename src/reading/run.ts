@@ -45,7 +45,7 @@ import { loadPrewarmed } from './oracle/prewarm.js';
 import { inferRealWant } from './clarify/realWant.js';
 import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import { prashnaSection, transitAtSection } from './layers/sections.js';
-import { failureLabel, withRunTrace } from './metrics/trace.js';
+import { currentTrace, failureLabel, withRunTrace } from './metrics/trace.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -265,6 +265,8 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
+  // technique labels for the metrics (docs/admin/01 §4.1.6); `subjects` is narrowed below to what actually fans out
+  currentTrace()?.label({ bucket: intent.classification?.bucket ?? null, template: intent.classification?.template ?? null, subjects: intent.subjects.length });
   emit({ type: 'intent', runId, intent: summarizeIntent(intent), source: intake.source });
 
   const baseRecord = {
@@ -302,6 +304,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   emit({ type: 'stage', name: 'prepare', status: 'start' });
   const tPack = Date.now();
   const subjects = intent.subjects.slice(0, 3);
+  currentTrace()?.label({ subjects: subjects.length });
   const packs: Record<string, EvidencePack> = {};
   for (const s of subjects) {
     packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent });

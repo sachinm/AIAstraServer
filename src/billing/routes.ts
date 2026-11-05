@@ -6,10 +6,14 @@ import { pickRegion, viewerCountry } from './geo.js';
 import { PLANS, PLAN_CODES, currencyForRegion, effectivePlan, isInterval, isPlanCode, planQuota } from './plans.js';
 import { QuestionGate } from './questionGate.js';
 import { PrismaPlanStore, type PlanStore } from './store.js';
+import type { OptionalUser, RequireUser } from '../auth/requestAuth.js';
 
 export interface BillingRouteDeps {
   prisma: PrismaClient;
-  getUserId: (req: express.Request) => string | null;
+  /** writes the 401 itself and returns null (src/auth/requestAuth.ts) */
+  requireUser: RequireUser;
+  /** the caller, if signed in and not locked; never writes a response (the plan list is public) */
+  optionalUser: OptionalUser;
   /** tests */
   store?: PlanStore;
   enabled?: boolean;
@@ -22,7 +26,7 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
 
   app.get('/api/billing/plans', async (req, res) => {
     const country = viewerCountry(req);
-    const userId = deps.getUserId(req);
+    const userId = await deps.optionalUser(req);
     const account = userId ? await store().getAccount(userId).catch(() => null) : null;
     const paying = account && effectivePlan(account) !== 'free' ? account.billing_country : null;
     const region = pickRegion({ billingCountry: paying, requested: req.query.region, country });
@@ -57,8 +61,8 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
   });
 
   app.post('/api/billing/checkout', async (req, res) => {
-    const userId = deps.getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
     const { plan, interval, region: requested } = (req.body ?? {}) as { plan?: unknown; interval?: unknown; region?: unknown };
     if (!isPlanCode(plan)) return res.status(400).json({ error: 'invalid_plan' });
     if (plan !== 'free' && !isInterval(interval)) return res.status(400).json({ error: 'invalid_plan' });

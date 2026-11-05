@@ -55,3 +55,17 @@ export function roleCan(raw: string | null | undefined, cap: Capability): boolea
 export function isAiAstraAdmin(raw: string | null | undefined): boolean {
   return canonicalRole(raw) === 'aiastra_admin';
 }
+
+/** Roles that may use the admin API (docs/admin/01 §4.1.3). Legacy `admin`/`superadmin`/`support` rows map here. */
+export const ADMIN_ROLES: readonly RoleId[] = ['aiastra_admin'];
+
+/** Roles whose questions are never counted against a plan. `client_account_admin` has no rights today. */
+export const QUOTA_EXEMPT_ROLES: readonly RoleId[] = ['aiastra_admin', 'astrologer', 'researcher'];
+
+export function isAdminRole(raw: string | null | undefined): boolean {
+  return ADMIN_ROLES.includes(canonicalRole(raw));
+}
+
+export function isQuotaExempt(raw: string | null | undefined): boolean {
+  return QUOTA_EXEMPT_ROLES.includes(canonicalRole(raw));
+}

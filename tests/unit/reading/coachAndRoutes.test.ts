@@ -10,6 +10,7 @@ import { MemoryClarifyStore } from '../../../src/reading/clarify/store.js';
 import { clearDeclinedTopicsCache } from '../../../src/reading/policy/declined.js';
 import { clearReadingCaches } from '../../../src/reading/data/store.js';
 import { startFakeGemini, type FakeGemini } from '../../helpers/fakeGemini.js';
+import { fakeRequireUser } from '../../helpers/fakeAuth.js';
 
 describe('coaching content', () => {
   it('has a card for every bucket, and no example falls into a declined topic', () => {
@@ -57,11 +58,11 @@ describe('clarify HTTP endpoints', () => {
     app.post('/api/chat/ask-stream', async (req, res) => {
       const write = (o: unknown) => res.write(`data: ${JSON.stringify(o)}\n\n`);
       res.setHeader('Content-Type', 'text/event-stream');
-      const handled = await clarifyOnAsk({ prisma, getUserId, store }, getUserId(req)!, req.body.question, { write });
+      const handled = await clarifyOnAsk({ prisma, requireUser: fakeRequireUser(getUserId), store }, getUserId(req)!, req.body.question, { write });
       if (!handled) write({ type: 'not_clarified' });
       res.end();
     });
-    registerClarifyRoutes(app, { prisma, getUserId, store });
+    registerClarifyRoutes(app, { prisma, requireUser: fakeRequireUser(getUserId), store });
     server = app.listen(0);
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });

@@ -31,6 +31,7 @@ import { approxTokens } from './slices.js';
 import { validateAnswer, type MissingPart, type Validation } from './validator.js';
 import { readingValidatorModel } from '../config.js';
 import { PROMPT_VERSION } from '../prompts/generated.js';
+import { currentTrace } from '../metrics/trace.js';
 
 /** A failed required reader retries only if it failed fast and this much of the join is left. */
 const RETRY_MIN_LEFT_MS = 3_500;
@@ -139,6 +140,9 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   let thoughts = '';
 
   const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna });
+  // the tier (readers.ts tierFor, or the plan-B route's own) and the route are chosen in prepareReaders
+  const tier = prep.plan.tier;
+  currentTrace()?.label({ tier, route: prep.route?.route ?? null });
   const journal = new ReadingJournal({ runId: d.runId, userId: d.userId, question: d.question, tier: prep.plan.tier, promptVersion: PROMPT_VERSION, asOf: d.asOf });
   const bundleMs = prep.bundleMs;
   void startReaderCache(prep, model, d.cacheOwner, guard);
@@ -158,7 +162,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
     const timer = setTimeout(() => ctl.abort(new Error(`${req.id} exceeded ${budget} ms`)), budget);
     try {
       return await Promise.race([
-        impl(req, { model, guard, cacheOwner: d.cacheOwner, signal: ctl.signal, timeoutMs: budget }),
+        impl(req, { model, guard, cacheOwner: d.cacheOwner, signal: ctl.signal, timeoutMs: budget, tier }),
         new Promise<never>((_, rej) => ctl.signal.addEventListener('abort', () => rej(new ReaderFailure(`${req.id} exceeded ${budget} ms`, 'timeout', null)), { once: true })),
       ]);
     } finally {
@@ -248,7 +252,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         const req = buildReaderRequest({ id: 'R14', subject: prep.subject, slice: prep.slice, intent: d.intent, question: d.question, asOf: d.asOf, model, keyFrame: d.pack.keyFrame, findingsText });
         sections.R14 = req.sections;
         try {
-          const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: READERS.R14.timeoutMs });
+          const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: READERS.R14.timeoutMs, tier });
           journalOk(req, out, now() - t0, 'live', 1);
           results = [...results, out];
           ({ brief, grounded } = makeBrief(results, s.failures, sections));
@@ -321,7 +325,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
           const req = buildReaderRequest({ id, subject: prep.subject, slice: prep.slice, intent: d.intent, question: d.question, asOf: d.asOf, model, keyFrame: d.pack.keyFrame, focus });
           const tr = now();
           try {
-            const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: LOOP_READER_MS, maxOutputTokens: LOOP_READER_TOKENS });
+            const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: LOOP_READER_MS, maxOutputTokens: LOOP_READER_TOKENS, tier });
             journalOk(req, out, now() - tr, 'live', 2);
             return { req, out };
           } catch (err) {

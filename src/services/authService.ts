@@ -4,6 +4,7 @@ import { getJwtSecret } from '../graphql/context.js';
 import { generateAccountPassword, hashPassword } from '../lib/hash.js';
 import { encrypt } from '../lib/encrypt.js';
 import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
+import { ACCOUNT_LOCKED_CODE, ACCOUNT_LOCKED_MESSAGE } from '../auth/requestAuth.js';
 import {
   sendLoginCode,
   verifyLoginCode,
@@ -32,7 +33,7 @@ export const SIGNUP_CODE_MESSAGE =
 
 export type LoginResult =
   | { success: true; token: string; user: string; role: string }
-  | { success: false; message: string };
+  | { success: false; message: string; code?: typeof ACCOUNT_LOCKED_CODE };
 
 /** Stable code for a signup refused because the email is already registered. */
 export const EMAIL_EXISTS_CODE = 'EMAIL_EXISTS';
@@ -68,11 +69,12 @@ export type SignUpResult =
     };
 
 /**
- * Issue a JWT for the given user (opaque: only sub and role).
+ * Issue a JWT for the given user: `sub`, `role` (for logs only; requests authorise from the auth row) and `tv`, the row's
+ * token_version, so bumping it ends every session (src/auth/requestAuth.ts).
  */
-export function issueToken(userId: string, role = 'user'): string {
+export function issueToken(userId: string, role = 'user', tokenVersion = 1): string {
   const secret = getJwtSecret();
-  return jwt.sign({ sub: userId, role }, secret, { expiresIn: DEFAULT_EXPIRY });
+  return jwt.sign({ sub: userId, role, tv: tokenVersion }, secret, { expiresIn: DEFAULT_EXPIRY });
 }
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
@@ -125,11 +127,15 @@ export async function loginWithMagicLink(
  * a finished profile gets its kundli sync and cache, and the session token is issued. A signup that has not
  * saved page 2 has no birth data yet, so nothing is enqueued for it.
  */
-async function completeLogin(user: { id: string; role: string | null }): Promise<LoginResult> {
+async function completeLogin(user: { id: string; role: string | null; locked?: boolean }): Promise<LoginResult> {
   const row = await prisma.auth.findFirst({
     where: { id: user.id },
-    select: { profile_complete: true, email_verified_at: true },
+    select: { profile_complete: true, email_verified_at: true, role: true, locked_at: true, token_version: true },
   });
+  // a locked account is refused before anything is written or queued, and gets no token
+  if (user.locked || row?.locked_at) {
+    return { success: false, code: ACCOUNT_LOCKED_CODE, message: ACCOUNT_LOCKED_MESSAGE };
+  }
   if (row && !row.email_verified_at) {
     await prisma.auth
       .update({ where: { id: user.id }, data: { email_verified_at: new Date() } })
@@ -149,12 +155,13 @@ async function completeLogin(user: { id: string; role: string | null }): Promise
     });
   }
 
-  const token = issueToken(user.id, user.role ?? 'user');
+  const role = row?.role ?? user.role ?? 'user';
+  const token = issueToken(user.id, role, row?.token_version ?? 1);
   return {
     success: true,
     token,
     user: user.id,
-    role: user.role ?? 'user',
+    role,
   };
 }
 

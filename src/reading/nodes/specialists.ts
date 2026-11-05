@@ -426,6 +426,8 @@ export async function runSpecialist(args: {
     // the graph's timer (and `signal`) ends the attempt first; this is the backstop for callers without one
     timeoutMs: budget.timeoutMs,
     signal: args.signal,
+    // three subjects run the same analyst three times: the span keeps them apart
+    trace: { subject: args.subject },
   });
   const finishReason = r.finishReason ?? 'no finish reason';
   // messages name the cause only: model output can quote the chart, so it never goes into errors or logs

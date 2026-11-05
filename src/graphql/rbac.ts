@@ -24,6 +24,7 @@ export type AllowedRole = (typeof ALL_AUTHENTICATED_ROLES)[number];
 export interface GraphQLContext {
   userId: string | null;
   role: string | null;
+  locked?: boolean;
   prisma: import('@prisma/client').PrismaClient;
   request: Request;
 }

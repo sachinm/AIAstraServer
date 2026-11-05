@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 import { registerTimelineRoutes } from '../../../../src/routes/timelineRoutes.js';
 import { resetLedgerStoreWarning } from '../../../../src/reading/timeline/ledgerStore.js';
 import type { GeminiResult } from '../../../../src/reading/llm/gemini.js';
+import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 
 /** In-memory `life_events` behind the raw-SQL calls ledgerStore.ts makes; dates come back as Date like pg's driver. */
 function fakePrisma() {
@@ -71,7 +72,7 @@ let base = '';
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
-  const mounted = registerTimelineRoutes(app, { prisma: db.prisma, getUserId: (req) => (req.headers['x-user'] as string) || null, enabled: true, interviewCall, interviewAvailable: () => true });
+  const mounted = registerTimelineRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, interviewCall, interviewAvailable: () => true });
   expect(mounted).toBe(true);
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
@@ -93,7 +94,7 @@ const CATS = ['job.start', 'job.promotion', 'residence.move', 'vehicle.purchase'
 describe('timeline ledger routes', () => {
   it('not mounted when TIMELINE_ENABLED is off', () => {
     const app = express();
-    expect(registerTimelineRoutes(app, { prisma: db.prisma, getUserId: () => 'u1', enabled: false })).toBe(false);
+    expect(registerTimelineRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser(() => 'u1'), enabled: false })).toBe(false);
   });
 
   it('requires a signed-in user', async () => {
