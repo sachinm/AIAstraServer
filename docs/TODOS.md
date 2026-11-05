@@ -821,3 +821,8 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
   generate` run in the main checkout.
 
+- **P3: Check a real selfie upload on staging.** 2026-11-05. `X-Face-Box` was added to the API's CloudFront origin
+  request policy `e1684868-b4fe-43b2-94ca-ac52642bd67d` (only the AI Astra API distribution uses it); the preflight
+  allows it and an unauthenticated upload still returns 401, but nobody has proved the header reaches the origin.
+  Owner: Sachin (needs a signed-in session). Done: a selfie uploads on vedic-astrology.app without a `no_face` error.
+  Status of the earlier P2 above: header added, this is its check.
