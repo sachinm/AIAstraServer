@@ -36,6 +36,30 @@ Flex tier is 50% off, Priority is 75% more. **Gemma has no prompt caching:** the
 
 What this means for the plan: every reader and specialist call resends the chart prefix, so Gemma pays full input price on each of the 17 parallel calls. Claude's cache reads cost 10% of its input price (Sonnet 5.5: $2.00 in, $0.20 cached). On the same basis Haiku 5.5 would be about $0.01 per 1M cached input tokens against Gemma's $0.14, so with a good cache hit rate the Claude arm is cheaper on input despite the higher list price. Gemma stays in the evaluation as a control arm only, and is not a candidate unless Sachin wants the closest Google voice more than caching. The adapter would also need a second call path (Chat Completions on `bedrock-mantle`), not just Converse. Haiku 5.5's Bedrock rate is still the Anthropic list price, unread on AWS's page.
 
+### Bedrock prices for the candidate models (AWS Pricing API, us-east-1, on-demand standard, read 2026-11-05)
+
+This replaces the Anthropic list prices used in section 4.2, which the AWS page had not loaded. Per 1M tokens. The plan allows only `us.` profiles, which AWS prices 10% above `global.`, so the US column is the one that applies.
+
+| Model | Input | Output | Cache read | Cache write 5 min / 1 h |
+|---|---|---|---|---|
+| Claude Haiku 5.5 | $0.11 | $0.55 | $0.011 | $0.1375 / $0.22 |
+| Claude Sonnet 5.5 | $2.20 | $11.00 | $0.11 | $2.75 / $4.40 |
+| Claude Opus 5.5 | $4.40 | $22.00 | $0.22 | $5.50 / $8.80 |
+| Claude Sonnet 5 | $2.20 | $11.00 | $0.22 | $2.75 / $4.40 |
+| Claude Opus 5 | $5.50 | $27.50 | $0.55 | $6.875 / $11.00 |
+| Claude Fable 5.1 (excluded, 30-day retention) | $11.00 | $55.00 | $0.275 | $13.75 / $22.00 |
+| Claude Haiku 4.5 | $1.10 | $5.50 | $0.11 | $1.375 / $2.20 |
+| GPT-6 Astra | $11.00 | $55.00 | $1.10 | $13.75 (30 min) |
+| gpt-oss-120b (clarifier) | $0.15 | $0.60 | none | none |
+| gpt-oss-20b | $0.07 | $0.30 | none | none |
+| Nova 2 Lite | $0.33 | $2.75 | $0.0825 | free |
+| Nova Pro | $0.80 | $3.20 | $0.20 | free |
+| Nova Lite | $0.06 | $0.24 | $0.015 | free |
+| Nova Micro | $0.035 | $0.14 | $0.00875 | free |
+| Nova Premier | $2.50 | $12.50 | $0.625 | free |
+
+Haiku 5.5 has a long-context rate of $0.55 in and $2.75 out; the threshold was not shown. Sonnet 5.5's cache read is half of what the plan assumed. Prices for GPT-6 Sol, Luna, Terra and GPT-5.x were not in the price list for us-east-1, so they are unknown. `PRICES` in `src/reading/llm/models.ts` needs a dated row for each model that is used.
+
 ## Read this first: three things cannot be done as worded
 
 1. **Gemini is not on Bedrock.** The us-east-1 catalogue lists Google only as `gemma-3-4b-it`, `gemma-3-12b-it` and
