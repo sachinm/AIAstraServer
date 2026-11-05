@@ -73,6 +73,12 @@ describe('area routes', () => {
     expect(loadInputs).toHaveBeenCalledTimes(1);
     expect(runs.map((r) => r.agent_id)).toEqual(['area.career_inputs', 'area.career_map']);
     expect(runs.every((r) => r.module === 'area' && r.status === 'ok')).toBe(true);
+    // M29 tags (docs/admin/03): technique, category, board, kundli and the charts the inputs run read
+    expect(runs.every((r) => r.technique_id === 'work.present_tone' && r.category === 'work' && r.board === 'work' && typeof r.kundli_id === 'string')).toBe(true);
+    const charts = runs[0].charts_used as Array<{ type: string; variant?: string }>;
+    expect(charts.length).toBeGreaterThan(0);
+    expect(charts.some((c) => c.type.startsWith('dasha.'))).toBe(true);
+    for (const c of charts.filter((x) => x.type === 'transit_contacts')) expect(c.variant).toMatch(/^\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}$/);
   });
   it('work status: rejects an unknown value; once set, the map hides what does not fit', async () => {
     expect((await call('PUT', '/api/profile/work-status', 'u1', { value: 'astronaut' })).status).toBe(400);

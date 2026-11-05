@@ -1,7 +1,7 @@
 /** Per-agent metrics (docs/reading-engine/41): what gets recorded, in what order, and that a failure never reaches the reading. */
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentKindOf, currentTrace, failureLabel, isPermanent, prismaTraceStore, resetTraceStoreForTests, RunTrace, traceModelCall, withRunTrace, type SpanRow, type TraceStore } from '../../../src/reading/metrics/trace.js';
+import { agentIdOf, agentKindOf, currentTrace, failureLabel, isPermanent, prismaTraceStore, resetTraceStoreForTests, RunTrace, techniqueIdOf, traceModelCall, withRunTrace, type SpanRow, type TraceStore } from '../../../src/reading/metrics/trace.js';
 import { runIntake } from '../../../src/reading/nodes/intake.js';
 import type { ChartRowSource } from '../../../src/reading/oracle/chartBundle.js';
 import { runReading } from '../../../src/reading/run.js';
@@ -345,4 +345,83 @@ describe('runReading records its agents', () => {
     await runReading(bare(m), 'u1', 'When will I get married?');
     expect(m.log).toEqual([]);
   }, 30_000);
+});
+
+describe('span tags (docs/admin/03 §4.1)', () => {
+  it('agentIdOf and techniqueIdOf for each kind', () => {
+    const cases: Array<[string, string, string | null]> = [
+      ['dasha', 'reading.analyst.dasha', 'general.dasha'],
+      ['specialist:dasha', 'reading.analyst.dasha', 'general.dasha'],
+      ['specialist:prashna', 'reading.analyst.prashna', 'general.prashna'],
+      ['R3', 'reading.reader', 'general.reader'],
+      ['P2', 'reading.reader', 'general.reader'],
+      ['oracle', 'reading.oracle', 'general.oracle'],
+      ['synthesize', 'reading.oracle', 'general.oracle'],
+      ['addendum', 'reading.oracle', 'general.oracle'],
+      ['validate', 'reading.validator', 'general.validator'],
+      ['intake', 'reading.intake', 'general.intake'],
+      ['clarify:x', 'reading.clarify', 'general.clarify'],
+      ['clarify.phrase', 'reading.clarify', 'general.clarify'],
+      ['build_pack', 'reading.step', null],
+    ];
+    for (const [name, agent, technique] of cases) {
+      expect(agentIdOf(name, agentKindOf(name)), name).toBe(agent);
+      expect(techniqueIdOf(name, agentKindOf(name)), name).toBe(technique);
+    }
+  });
+
+  it('every registry id a span can get is registered', async () => {
+    const { agentById } = await import('../../../src/agents/registry.js');
+    for (const n of ['dasha', 'specialist:single', 'R01', 'oracle', 'validator', 'intake', 'clarify.resolve', 'build_pack']) expect(agentById(agentIdOf(n)), n).toBeDefined();
+  });
+
+  it('every span carries agent_id, technique_id and the category of its subject or the one subject of the query', async () => {
+    const m = memStore();
+    const t = new RunTrace(id, m.store);
+    t.observe({ type: 'stage', name: 'intake', status: 'start' } as never);
+    t.observe({ type: 'stage', name: 'intake', status: 'done' } as never);
+    t.observe({ type: 'stage', name: 'dasha', subject: 'marriage_relationship', status: 'start' } as never);
+    t.observe({ type: 'stage', name: 'dasha', subject: 'marriage_relationship', status: 'done' } as never);
+    t.addModelCall({ agent: 'specialist:dasha', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage(), subject: 'career_work' });
+    t.addModelCall({ agent: 'oracle', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage() });
+    await t.finish({ status: 'done' });
+    const byAgent = (a: string) => m.spans.filter((s) => s.agent === a);
+    expect(byAgent('intake')[0]).toMatchObject({ agent_id: 'reading.intake', technique_id: 'general.intake', category: 'general' });
+    expect(byAgent('dasha')[0]).toMatchObject({ agent_id: 'reading.analyst.dasha', technique_id: 'general.dasha', category: 'love' });
+    expect(byAgent('specialist:dasha')[0]).toMatchObject({ agent_id: 'reading.analyst.dasha', category: 'work' });
+    // two subjects seen: a span without one is general
+    expect(byAgent('oracle')[0]).toMatchObject({ agent_id: 'reading.oracle', technique_id: 'general.oracle', category: 'general' });
+  });
+
+  it('a query with one subject tags its subject-less spans with that category', async () => {
+    const m = memStore();
+    const t = new RunTrace(id, m.store);
+    t.addModelCall({ agent: 'R01', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage(), subject: 'career_work' });
+    t.addModelCall({ agent: 'oracle', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage() });
+    await t.finish({ status: 'done' });
+    expect(m.spans.find((s) => s.agent === 'oracle')).toMatchObject({ category: 'work' });
+  });
+
+  it('without the M29 columns the store writes the spans without them, keeping the M24 ones', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const spans: Array<Record<string, unknown>> = [];
+    const missing = () => Object.assign(new Error('The column agent_id does not exist in the current database.'), { code: 'P2022' });
+    const db = {
+      readingTrace: { create: async () => undefined, updateMany: async () => undefined },
+      readingAgentSpan: {
+        createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          if (data.some((r) => 'agent_id' in r)) throw missing();
+          spans.push(...data);
+        },
+      },
+    } as unknown as PrismaClient;
+    const t = new RunTrace(id, prismaTraceStore(db));
+    t.addModelCall({ agent: 'R01', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage(), subject: 'career_work' });
+    await t.finish({ status: 'done' });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).not.toHaveProperty('agent_id');
+    expect(spans[0]).not.toHaveProperty('technique_id');
+    expect(spans[0]).not.toHaveProperty('category');
+    expect(spans[0]).toMatchObject({ subject: 'career_work' });
+  });
 });
