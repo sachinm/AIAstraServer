@@ -16,4 +16,10 @@ describe('conversation categories (docs/reading-engine/51)', () => {
     expect(s).toContain('createChat(category: String): ChatResult!');
     expect(s).toContain('category: chatCategory(args?.category)');
   });
+  it('threads can be pinned to the top: pinned on Chat, setChatPinned owned by the user', () => {
+    const s = fs.readFileSync('src/graphql/schema.ts', 'utf8');
+    expect(s).toMatch(/type Chat \{[^}]*pinned: Boolean/);
+    expect(s).toContain('setChatPinned(chatId: ID!, pinned: Boolean!): ChatResult!');
+    expect(s).toContain("db.chat.findFirst({ where: { id: chatId, user_id: userId } })");
+  });
 });

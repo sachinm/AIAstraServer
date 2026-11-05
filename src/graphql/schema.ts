@@ -224,6 +224,7 @@ const typeDefs = /* GraphQL */ `
     user_id: ID!
     name: String
     category: String
+    pinned: Boolean
     is_active: Boolean
     created_at: String
   }
@@ -421,6 +422,7 @@ const typeDefs = /* GraphQL */ `
     uploadKundli(fileBase64: String!): UploadKundliResult!
     createChat(category: String): ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
+    setChatPinned(chatId: ID!, pinned: Boolean!): ChatResult!
     addMessage(chatId: ID!, question: String!, aiAnswer: String!): MessageResult!
     adminUpdateUser(id: ID!, input: AdminUpdateUserInput!): UpdateUserResult!
     adminRefreshUserKundli(userId: ID!): RefreshKundliResult!
@@ -790,6 +792,7 @@ const resolvers = {
           user_id: c.user_id,
           name: c.name,
           category: c.category,
+          pinned: c.pinned_at != null,
           is_active: c.is_active,
           created_at: c.created_at?.toISOString?.() ?? null,
         }));
@@ -1287,6 +1290,24 @@ const resolvers = {
           chat: null,
           error: (err as Error)?.message || 'Server error',
         };
+      }
+    },
+    async setChatPinned(_parent: unknown, { chatId, pinned }: { chatId: string; pinned: boolean }, context: GraphQLContext) {
+      const result = withAuth(context, () => null);
+      if (result && 'success' in result && !result.success) return { success: false, chat: null, error: result.error };
+      const { userId, prisma: db } = context;
+      if (!userId) return { success: false, chat: null, error: 'Not authenticated' };
+      try {
+        const chat = await db.chat.findFirst({ where: { id: chatId, user_id: userId } });
+        if (!chat) return { success: false, chat: null, error: 'Not found' };
+        const updated = await db.chat.update({ where: { id: chatId }, data: { pinned_at: pinned ? new Date() : null } });
+        return {
+          success: true,
+          chat: { id: updated.id, user_id: updated.user_id, name: updated.name, category: updated.category, pinned: updated.pinned_at != null, is_active: updated.is_active, created_at: updated.created_at?.toISOString?.() ?? null },
+          error: null,
+        };
+      } catch (err) {
+        return { success: false, chat: null, error: (err as Error)?.message || 'Server error' };
       }
     },
     async setChatInactive(
