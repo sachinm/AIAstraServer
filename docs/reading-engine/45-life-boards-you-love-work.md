@@ -379,7 +379,7 @@ and the home of the things that belong to the person rather than to a question.
 
 | Page | What it shows | From |
 |---|---|---|
-| **Overview** | The tone for you now; one sentence; one practice for the week | Self tone (§7) |
+| **Overview** | **The companion** ([doc 48](48-companion-memory-on-the-you-board.md)): one line from it, one question or one observation, the person's one-tap answer; it remembers what it learns and every board and the chat read the same memory. Under it, the tone for you now and one practice for the week | Companion facts (doc 48 §4.3), Self tone (§7) |
 | **Who you are** | Three or four short paragraphs: how you move through the world, what you're good at, what trips you up, how you recharge. No planet names. Each paragraph has a "Why" sheet | Lagna, its lord, the Moon and the Moon's star, the 4th and 5th, strong yogas, D9 for inner nature, the Atmakaraka (`karakas.chara.AK`), the star style table (§5.2) |
 | **Chapters** | Your life as chapters (e.g. "2022–2038: Building" and the sub-chapter you are in), each with a plain name, what it asks of you and what it gives. A bar from birth to 100 with "you are here" | The main dasha clock's sub-periods, named by theme (doc 43 §3.2 mapping to plain chapter names) |
 | **Your year** | The theme of the year from the last birthday to the next: three lines and the months that matter | Tithi Pravesha chart, its dasha, Mudda and sahams |
