@@ -756,3 +756,11 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: Analytics events and account audit have no retention.** 2026-11-05. `analytics_events`, `agent_runs`,
   `ReadingRun` and the other system logs are kept until the user is deleted. Owner: privacy pass. Done: a retention
   rule per table in docs/privacy, and a sweep job.
+- **P2: Account-change log is written but not yet shown or complete.** 2026-11-05. `account_events` (migration
+  `20261105240000`) records profile edits, plan choice, gateway payment changes, sign-in and out, facts and photo, each
+  with IP, forwarded chain, user agent, language, country and request id. Missing: sign-up completion, the admin User
+  detail page to read it, retention, and an IP/user agent for gateway payment changes (the webhook Lambda has its own
+  request; pass its facts to `setPayment`). Owner: server and admin.
+- **P3: Signed-out walkthrough e2e is stale.** 2026-11-05. `e2e/walkthrough.spec.ts:83` waits for a region named
+  "9,500 records", which the landing page now renders as a button. The run also deletes the committed screenshots when
+  it fails. Owner: web. Done: spec follows the landing page, and a failed run keeps the old screenshots.

@@ -7,6 +7,7 @@ import { PLANS, PLAN_CODES, currencyForRegion, effectivePlan, isInterval, isPlan
 import { QuestionGate } from './questionGate.js';
 import { PrismaPlanStore, type PlanStore } from './store.js';
 import type { OptionalUser, RequireUser } from '../auth/requestAuth.js';
+import { factsFromExpress, recordAccountEvent } from '../audit/accountEvents.js';
 
 export interface BillingRouteDeps {
   prisma: PrismaClient;
@@ -70,11 +71,27 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
     const country = viewerCountry(req);
     const region = pickRegion({ requested, country });
     const currency = currencyForRegion(region);
+    const before = await store().getAccount(userId).catch(() => null);
+    const audit = (outcome: 'ok' | 'failed', note: string | null): void => {
+      void recordAccountEvent(deps.prisma, {
+        userId,
+        action: 'plan_choice',
+        outcome,
+        fields: ['desired_plan', 'desired_interval', 'billing_country'],
+        before: before ? { desired_plan: before.desired_plan, desired_interval: before.desired_interval, is_paid: before.is_paid, paid_plan: before.paid_plan, billing_country: before.billing_country } : null,
+        after: { desired_plan: plan, desired_interval: plan === 'free' ? null : interval, region, currency, viewer_country: country },
+        note,
+        request: factsFromExpress(req),
+      });
+    };
     try {
       await store().setDesired(userId, plan, plan === 'free' ? null : (interval as string), region, new Date(), planQuota('free', deps.env));
       const usage = await gate().getStatus(userId);
       const gateway = plan === 'free' ? null : paymentGatewayFor(currency);
-      if (!gateway || plan === 'free' || !isInterval(interval)) return res.json({ status: 'pending_payment', checkout_url: null, plan: usage });
+      if (!gateway || plan === 'free' || !isInterval(interval)) {
+        audit('ok', 'pending_payment');
+        return res.json({ status: 'pending_payment', checkout_url: null, plan: usage });
+      }
       const user = await deps.prisma.auth.findUnique({ where: { id: userId }, select: { email: true } });
       const { url } = await gateway.createCheckout({
         userId,
@@ -84,9 +101,11 @@ export function registerBillingRoutes(app: express.Express, deps: BillingRouteDe
         currency,
         amountMinor: PLANS[plan].prices?.[currency][interval] ?? 0,
       });
+      audit('ok', 'redirect_to_checkout');
       return res.json({ status: 'redirect', checkout_url: url, plan: usage });
     } catch (err) {
       console.error('[billing] checkout failed:', (err as Error).message);
+      audit('failed', 'billing_unavailable');
       return res.status(503).json({ error: 'billing_unavailable' });
     }
   });
