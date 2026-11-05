@@ -428,7 +428,7 @@ describe('(4) second login: request code, EMAIL_OTP challenge, 8-digit code', ()
 });
 
 describe('(5) wrong code, expired session, resend', () => {
-  const FAILED = 'Unable to sign in. Check your code and try again.';
+  const FAILED = 'That code did not work. It may be mistyped or expired: codes last 3 minutes. Send a new code and try again.';
 
   it('a wrong code fails with the stable message and the right code still works afterwards', async () => {
     await signedUpAndConfirmed();

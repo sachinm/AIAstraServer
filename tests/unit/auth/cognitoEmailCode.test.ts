@@ -98,6 +98,7 @@ import {
   sendLoginCode,
   verifyLoginCode,
   legacyEmailCode,
+  CODE_TTL_MS,
 } from '../../../src/auth/emailCode.js';
 import {
   signup,
@@ -660,11 +661,12 @@ describe('code formats and provider-neutral copy', () => {
     expect(await verifyLoginCode('asha@example.com', '123456')).toBeNull();
   });
 
-  it('server messages name no code length, expiry number or provider', () => {
+  it('server messages name no code length or provider, and give the lifetime both providers share', () => {
+    expect(CODE_TTL_MS).toBe(3 * 60 * 1000);
     for (const m of [MAGIC_LINK_REQUEST_MESSAGE, SIGNUP_CODE_MESSAGE]) {
-      expect(m).not.toMatch(/8-character|8 character|\d+ minutes|cognito/i);
+      expect(m).not.toMatch(/8-character|8 character|cognito/i);
       expect(m).toContain('Enter the code we emailed you');
-      expect(m).toContain('It expires in a few minutes.');
+      expect(m).toContain('It works for 3 minutes.');
     }
   });
 });
