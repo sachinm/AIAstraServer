@@ -28,6 +28,7 @@ import { parseClientPlace } from '../reading/chartData/place.js';
 import { randomUUID } from 'node:crypto';
 import { withRunTrace } from '../reading/metrics/trace.js';
 import type { RequireUser } from '../auth/requestAuth.js';
+import { SSE_CACHE_CONTROL } from '../lib/noStore.js';
 
 /** The longest `POST /api/chat/prewarm` holds its request. */
 const ORACLE_PREWARM_CAP_MS = 6_000;
@@ -44,7 +45,7 @@ export interface ClarifyRouteDeps {
 /** Opens an SSE response with the same headers and keep-alive pings as ask-stream. */
 export function openSse(req: express.Request, res: express.Response): { write: (obj: unknown) => void; end: () => void } {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Cache-Control', SSE_CACHE_CONTROL);
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.status(200);

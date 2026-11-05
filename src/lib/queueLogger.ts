@@ -4,6 +4,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { redactForLog } from './logRedact.js';
 
 const DEFAULT_LOG_FILE = 'logs/kundli-queue.log';
 
@@ -24,6 +25,8 @@ function ensureDir(filePath: string): void {
  * Write a JSON log line to the queue log file. Also logs to console when KUNDLI_QUEUE_LOG_CONSOLE is set.
  */
 export function queueLog(payload: Record<string, unknown>): void {
+  // an error text can quote a birth detail (an engine or model message): masked like every log line (docs/privacy/02 B0.1)
+  if (typeof payload.error === 'string') payload = { ...payload, error: redactForLog(payload.error, 300) };
   const line = JSON.stringify(payload) + '\n';
   const logPath = getLogPath();
   try {
@@ -41,9 +44,9 @@ export function queueLog(payload: Record<string, unknown>): void {
  * Write an error-level log line to the queue log file.
  */
 export function queueLogError(payload: Record<string, unknown>): void {
-  const withLevel = { ...payload, level: 'error' };
+  const withLevel: Record<string, unknown> = { ...payload, level: 'error' };
   queueLog(withLevel);
   if (process.env.KUNDLI_QUEUE_LOG_CONSOLE === '1') {
-    console.error(JSON.stringify(withLevel));
+    console.error(JSON.stringify(typeof withLevel.error === 'string' ? { ...withLevel, error: redactForLog(withLevel.error, 300) } : withLevel));
   }
 }

@@ -12,6 +12,9 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
 - **Never say or output `Radha` or `pyjhora` anywhere in readings, reports, or user-facing responses.** Read and follow `SOUL.md` alongside `AGENTS.md`; this prohibition is also hardcoded in the system prompt sent to every agent.
 - **Installs and worktree creation go to Haiku at medium effort.** Dependency installs (server, web, local, worktree) and
   creating worktrees are done only by a Haiku sub-agent at medium effort, given the literal folder. See `AGENTS.md`.
+- **We are making a Vedic astrology personal assistant.** Specific to the person or not shown; the chart leads the
+  question and the assistant confirms before it predicts; questions follow known facts; no general prediction. See
+  "We are making a Vedic astrology personal assistant" in `AGENTS.md`.
 - **Kill any local server you started** (Node or otherwise) as soon as the work that needed it is done.
 - **Plans cover the whole thing before code.** Any plan goes under `docs/` and follows "How a plan is written" in
   `AGENTS.md`: start (facts checked), end goal, deliverable, exactly how backend / API / frontend / UI-UX work when done,

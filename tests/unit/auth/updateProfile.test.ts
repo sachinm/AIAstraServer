@@ -3,6 +3,7 @@
  * sync queued); name/gender-only changes do not. In-memory fakes only.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { openResult } from '../../../src/lib/pii/prismaExtension.js';
 
 const calls = vi.hoisted(() => ({ log: [] as string[] }));
 
@@ -143,13 +144,14 @@ describe('ownProfileFields (me)', () => {
     ).toEqual({ gender: 'female', date_of_birth: '1990-01-15', time_of_birth: '09:05', country_code: 'IN', city: 'Pune' });
   });
 
-  it('decrypts encrypted values', () => {
+  it('reads legacy encrypted values once the PII extension has opened them (docs/privacy/02 B1.4)', async () => {
     vi.stubEnv('ENCRYPTION_KEY', 'a'.repeat(64));
     try {
       const dob = encrypt('2001-12-31')!;
       const tob = encrypt('23:59:00')!;
       expect(dob).not.toContain('2001');
-      const out = ownProfileFields({ gender: 'Male', date_of_birth: dob, time_of_birth: tob, country_code: 'US', city: 'Austin' });
+      const row = (await openResult('Auth', { gender: 'Male', date_of_birth: dob, time_of_birth: tob, country_code: 'US', city: 'Austin' }, { keys: () => null, relations: {} })) as Parameters<typeof ownProfileFields>[0];
+      const out = ownProfileFields(row);
       expect(out).toMatchObject({ gender: 'male', date_of_birth: '2001-12-31', time_of_birth: '23:59' });
     } finally {
       vi.unstubAllEnvs();

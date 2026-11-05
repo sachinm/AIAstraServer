@@ -9,6 +9,7 @@
  * Raw SQL is used on purpose so this works whether or not the generated Prisma client knows the new model.
  */
 import type { PrismaClient } from '@prisma/client';
+import { openRows, sealParam } from '../lib/pii/rawSql.js';
 
 export interface UserLocation {
   /** what the person typed, trimmed (for example "Pune, India") */
@@ -77,7 +78,7 @@ export class PrismaUserLocationStore implements UserLocationStore {
     try {
       const q = (async () => {
         const rows = await this.prisma.$queryRaw<Array<{ place: string | null; tz: string | null }>>`SELECT "place", "tz" FROM "user_current_location" WHERE "user_id" = ${userId} LIMIT 1`;
-        return rows;
+        return openRows('user_current_location', rows);
       })();
       const timeout = new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), this.budgetMs).unref?.());
       const rows = await Promise.race([q, timeout]);
@@ -100,7 +101,10 @@ export class PrismaUserLocationStore implements UserLocationStore {
     if (!place) return false;
     const tz = normalizeTimeZone(location.tz);
     try {
-      await this.prisma.$executeRaw`INSERT INTO "user_current_location" ("user_id", "place", "tz", "updated_at") VALUES (${userId}, ${place}, ${tz}, now())
+      const owner = { userId };
+      const placeParam = await sealParam('user_current_location', 'place', place, owner);
+      const tzParam = await sealParam('user_current_location', 'tz', tz, owner);
+      await this.prisma.$executeRaw`INSERT INTO "user_current_location" ("user_id", "place", "tz", "updated_at") VALUES (${userId}, ${placeParam}, ${tzParam}, now())
         ON CONFLICT ("user_id") DO UPDATE SET "place" = EXCLUDED."place", "tz" = EXCLUDED."tz", "lat" = NULL, "lon" = NULL, "updated_at" = now()`;
       return true;
     } catch (err) {
@@ -130,6 +134,7 @@ export class MemoryUserLocationStore implements UserLocationStore {
 /** The person's birth place as stored at sign-up, for the "Same as birth place" chip. Never throws. */
 export async function birthPlaceFor(prisma: PrismaClient, userId: string): Promise<string | null> {
   try {
+    // through the client's PII extension, which opens the sealed value (docs/privacy/02 B1.4)
     const row = await (prisma as unknown as { auth?: { findUnique?: (a: unknown) => Promise<{ place_of_birth?: string | null } | null> } }).auth?.findUnique?.({ where: { id: userId }, select: { place_of_birth: true } });
     return normalizePlace(row?.place_of_birth ?? null);
   } catch {

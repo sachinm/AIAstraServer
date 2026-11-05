@@ -12,12 +12,13 @@
  * The repository is a seam: raw SQL in production (works before the Prisma client knows the models; a missing table
  * degrades to a plain Radha call, nothing breaks), in-memory in tests.
  */
-import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { roundPlace, type AtPlace } from '../chartData/place.js';
 import { isMissingTable } from '../chartData/store.js';
 import { fetchTransit, type VargaFactors } from '../chartData/transit.js';
-import { fetchTransitRange, type TransitRangeOptions, type TransitRangePayload } from '../chartData/transitRange.js';
+import { fetchSharedSkyRange, type TransitRangeOptions, type TransitRangePayload } from '../chartData/transitRange.js';
+import { piiHash } from '../../lib/pii/hash.js';
+import { openRow, sealParam } from '../../lib/pii/rawSql.js';
 
 export const DEFAULT_AYANAMSA = 'LAHIRI';
 
@@ -73,14 +74,15 @@ export function rangeKey(opts: TransitRangeOptions, place: AtPlace, ayanamsa = D
     from: opts.from,
     to: opts.to,
     planetsKey: [...new Set(opts.planets ?? ['Sa', 'Ju', 'Ra', 'Ke'])].sort().join(','),
-    flagsKey: `l${opts.lunations === false ? 0 : 1}e${opts.eclipses === false ? 0 : 1}`,
+    // `d` marks a daily range; the monthly key is unchanged so rows stored before the step existed still match
+    flagsKey: `l${opts.lunations === false ? 0 : 1}e${opts.eclipses === false ? 0 : 1}${opts.step === 'day' ? 'd' : ''}`,
     ayanamsa,
   };
 }
 
-/** Stable hash of a payload, to see whether Radha's answer for the same key ever changes. */
+/** Stable hash of a payload, to see whether Radha's answer for the same key ever changes (over the opened payload). */
 export function sourceHash(payload: unknown): string {
-  return createHash('sha256').update(JSON.stringify(payload ?? null)).digest('hex').slice(0, 16);
+  return piiHash(JSON.stringify(payload ?? null), { len: 16 });
 }
 
 // ------------------------------------------------------------------------------------------- natal-field stripping
@@ -146,7 +148,11 @@ function calcVersionOf(payload: unknown): string | null {
   return v == null ? null : String(v);
 }
 
-/** Raw-SQL repository (like prashna_casts): no dependency on the generated client knowing the models. */
+/**
+ * Raw-SQL repository (like prashna_casts): no dependency on the generated client knowing the models. Overlays belong to a
+ * person and go through sealParam/openRow; transit_instants and transit_range_skies are shared sky rows whose lat/lon/tz
+ * move under the system key and whose place_key becomes an HMAC in M26/M28 (docs/privacy/02 §4.1.3).
+ */
 export function prismaEphemerisRepo(prisma: PrismaClient): EphemerisRepo {
   type Row = { payload: unknown; calc_version: string | null; source_hash: string; fetched_at: Date };
   const toRow = <T>(r: Row | undefined): CachedRow<T> | null => (r ? { payload: r.payload as T, calcVersion: r.calc_version, sourceHash: r.source_hash, fetchedAt: r.fetched_at } : null);
@@ -177,11 +183,12 @@ export function prismaEphemerisRepo(prisma: PrismaClient): EphemerisRepo {
     async getOverlay(k) {
       const rows = await prisma.$queryRaw<Row[]>`SELECT "payload", "calc_version", "source_hash", "fetched_at" FROM "kundli_transit_overlays"
         WHERE "kundli_id" = ${k.kundliId} AND "kind" = ${k.kind} AND "params_key" = ${k.paramsKey} LIMIT 1`;
-      return toRow(rows[0]);
+      return toRow(rows[0] ? await openRow('kundli_transit_overlays', rows[0]) : undefined);
     },
     async putOverlay(k, row) {
+      const payload = await sealParam('kundli_transit_overlays', 'payload', row.payload ?? null, { kundliId: k.kundliId });
       await prisma.$executeRaw`INSERT INTO "kundli_transit_overlays" ("kundli_id", "kind", "params_key", "from_date", "to_date", "calc_version", "source_hash", "payload")
-        VALUES (${k.kundliId}, ${k.kind}, ${k.paramsKey}, ${row.from}::date, ${row.to}::date, ${row.calcVersion}, ${sourceHash(row.payload)}, ${JSON.stringify(row.payload ?? null)}::jsonb)
+        VALUES (${k.kundliId}, ${k.kind}, ${k.paramsKey}, ${row.from}::date, ${row.to}::date, ${row.calcVersion}, ${sourceHash(row.payload)}, ${JSON.stringify(payload)}::jsonb)
         ON CONFLICT ("kundli_id", "kind", "params_key") DO NOTHING`;
     },
   };
@@ -198,7 +205,7 @@ export interface EphemerisDeps {
   repo?: EphemerisRepo;
   /** The Radha call for a miss (default: fetchTransit at the place, no natal fields) */
   fetchSnapshot?: (at: string, place: AtPlace, factors: VargaFactors | undefined) => Promise<unknown>;
-  fetchRange?: (opts: TransitRangeOptions, kundliId: string) => Promise<TransitRangePayload>;
+  fetchRange?: (opts: TransitRangeOptions, place: AtPlace) => Promise<TransitRangePayload>;
 }
 
 let warnedMissing = false;
@@ -261,11 +268,11 @@ const defaultFetchSnapshot = (at: string, place: AtPlace, factors: VargaFactors 
   fetchTransit(null, { at, place, ...(factors === undefined ? {} : Array.isArray(factors) || factors === 'd1-d10' ? { divisionalChartFactors: factors } : {}) });
 
 /**
- * The dated sky over a range at a place (no natal fields), shared by every kundli. The Radha call needs a kundli to
- * name the birth place, so `anyKundliId` is any kundli whose birth place is the place asked for; everything that belongs
- * to that person (natal block, houses, Sade Sati, dhaiya) is removed before it is stored.
+ * The dated sky over a range at a place, shared by every kundli. The Radha call carries the place and the options only,
+ * no person, so the answer has no natal block, houses, Sade Sati or dhaiya; anything of that kind is still removed before
+ * it is stored, as a guard.
  */
-export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, anyKundliId: string, deps: EphemerisDeps = {}): Promise<{ payload: TransitRangePayload; source: 'cache' | 'radha' }> {
+export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, deps: EphemerisDeps = {}): Promise<{ payload: TransitRangePayload; source: 'cache' | 'radha' }> {
   const key = rangeKey(opts, place);
   const repo = deps.repo ?? (await defaultRepo());
   let stored = true;
@@ -278,7 +285,7 @@ export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, 
   }
   const id = `r|${key.placeKey}|${key.from}|${key.to}|${key.planetsKey}|${key.flagsKey}`;
   const payload = await coalesce(id, async () => {
-    const raw = await (deps.fetchRange ?? ((o, k) => fetchTransitRange(k, o)))(opts, anyKundliId);
+    const raw = await (deps.fetchRange ?? ((o, p) => fetchSharedSkyRange(p, o)))(opts, place);
     return stripRangeToSky(raw);
   });
   if (stored) await repo.putRange(key, place, { payload, calcVersion: calcVersionOf(payload) }).catch((err) => warnStore(err, 'write range'));
@@ -288,8 +295,9 @@ export async function getSharedRange(opts: TransitRangeOptions, place: AtPlace, 
 // ------------------------------------------------------------------------------------------ per-kundli overlay
 
 /** The key under which a kundli's own range/contacts answer is stored. */
-export function overlayParamsKey(opts: { from: string; to: string; planets?: readonly string[]; orb?: number }): string {
-  return [opts.from, opts.to, [...new Set(opts.planets ?? [])].sort().join(','), opts.orb ?? ''].join('|');
+export function overlayParamsKey(opts: { from: string; to: string; planets?: readonly string[]; orb?: number; step?: 'month' | 'day' }): string {
+  const base = [opts.from, opts.to, [...new Set(opts.planets ?? [])].sort().join(','), opts.orb ?? ''].join('|');
+  return opts.step === 'day' ? `${base}|day` : base;
 }
 
 /**
@@ -300,7 +308,7 @@ export function overlayParamsKey(opts: { from: string; to: string; planets?: rea
 export async function getKundliOverlay<T>(
   kundliId: string,
   kind: OverlayKind,
-  span: { from: string; to: string; planets?: readonly string[]; orb?: number },
+  span: { from: string; to: string; planets?: readonly string[]; orb?: number; step?: 'month' | 'day' },
   fetchFromRadha: () => Promise<T>,
   deps: EphemerisDeps = {},
 ): Promise<{ payload: T; source: 'cache' | 'radha' }> {

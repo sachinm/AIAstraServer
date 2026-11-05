@@ -16,6 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import { roundPlace, type AtPlace } from './place.js';
 import { isMissingTable, radhaLocalToDate, type KundliRequest } from './store.js';
 import { defaultPlaceFetcher, factorsField, natalFields, transitAt, type PlaceFetcher, type VargaFactors } from './transit.js';
+import { sealParam } from '../../lib/pii/rawSql.js';
 
 export type PlaceSource = 'current' | 'birth';
 
@@ -177,9 +178,12 @@ export function prismaPrashnaRepo(prisma: PrismaClient, chartRepo: { kundliReque
       return req ? { kundliId: k.id, req, placeResolved: k.place_resolved ?? null } : null;
     },
     async insertCast(r) {
+      const owner = { userId: r.userId };
+      const placeResolved = await sealParam('prashna_casts', 'place_resolved', r.placeResolved, owner);
+      const payload = await sealParam('prashna_casts', 'payload', r.payload ?? null, owner);
       const rows = await prisma.$queryRaw<{ id: string }[]>`
         INSERT INTO "prashna_casts" ("user_id", "reading_run_id", "asked_at", "place_resolved", "lat", "lon", "tz", "place_source", "calc_version", "payload")
-        VALUES (${r.userId}, ${r.readingRunId}, ${r.askedAt}, ${r.placeResolved}, ${r.lat}, ${r.lon}, ${r.tz}, ${r.placeSource}, ${r.calcVersion}, ${JSON.stringify(r.payload ?? null)}::jsonb)
+        VALUES (${r.userId}, ${r.readingRunId}, ${r.askedAt}, ${placeResolved}, ${r.lat}, ${r.lon}, ${r.tz}, ${r.placeSource}, ${r.calcVersion}, ${JSON.stringify(payload)}::jsonb)
         RETURNING "id"`;
       return { id: rows[0]!.id };
     },

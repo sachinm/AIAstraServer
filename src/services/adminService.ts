@@ -21,9 +21,12 @@ export async function listUsers(
   };
   if (search && search.trim()) {
     const term = search.trim();
+    // exact match only (docs/admin/01): username and email are sealed columns, found through their blind index once
+    // sealed, so a substring search cannot work (docs/privacy/02 §4.1.4)
     where.OR = [
-      { username: { contains: term, mode: 'insensitive' } },
-      { email: { contains: term, mode: 'insensitive' } },
+      { id: term },
+      { username: { equals: term, mode: 'insensitive' } },
+      { email: { equals: term, mode: 'insensitive' } },
     ];
   }
   const rows = await prisma.auth.findMany({

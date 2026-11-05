@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lucky times</title>
+<meta name="description" content="Mockup of the Lucky times board (doc 47): Today, Week and Month views with sample data for San Jose, Thu 5 Nov 2026.">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#0b0a1f; --surface:#15143a; --surface-2:#1f1e4c; --text:#f4f2ff; --muted:#aaa7cb;
+  --border:rgba(255,255,255,.13); --border-strong:rgba(255,255,255,.28);
+  --go:#2ec4a0; --go-tint:rgba(46,196,160,.20); --go-ink:#eafff8;
+  --avoid:#e3a94e; --avoid-tint:rgba(227,169,78,.08); --avoid-stripe:rgba(227,169,78,.42);
+  --neutral:rgba(255,255,255,.05);
+  --accent:#a78bfa; --grad:linear-gradient(90deg,#8b5cf6 0%,#ec4899 100%);
+  --now:#ff4d4f; --good:#34d399; --steady:#7aa7ff; --careful:#f5b942;
+  --radius:14px; --radius-s:10px; --shadow:0 12px 36px rgba(0,0,0,.40);
+  --focus:#c4b5fd; --hour:44px;
+}
+:root[data-theme="light"]{
+  --bg:#f6f5fb; --surface:#ffffff; --surface-2:#efedf8; --text:#16152e; --muted:#5e5c7a;
+  --border:rgba(20,18,60,.12); --border-strong:rgba(20,18,60,.28);
+  --go:#0f9f7d; --go-tint:rgba(15,159,125,.14); --go-ink:#063b2f;
+  --avoid:#b8791b; --avoid-tint:rgba(184,121,27,.06); --avoid-stripe:rgba(184,121,27,.38);
+  --neutral:rgba(20,18,60,.04);
+  --accent:#7c3aed; --now:#e5484d; --good:#15803d; --steady:#2563eb; --careful:#b45309;
+  --shadow:0 12px 36px rgba(20,18,60,.18); --focus:#7c3aed;
+}
+@media (min-width:820px){ :root{ --hour:48px; } }
+@media (min-width:1100px){ :root{ --hour:52px; } }
+
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font:17px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer}
+button:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.app{max-width:1280px;margin:0 auto;padding:12px 16px 40px}
+.ic{width:1.1em;height:1.1em;vertical-align:-0.18em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.big{width:1.5em;height:1.5em}
+.muted{color:var(--muted)}
+.small{font-size:15px}
+.tiny{font-size:13px}
+
+/* ---------- header ---------- */
+.hdr{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:6px 0 10px}
+.hdr h1{
+  margin:0;font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1 1 auto;
+}
+.hdr .ctl{display:flex;gap:8px;align-items:center}
+.place{
+  height:44px;min-width:44px;padding:0 36px 0 14px;border-radius:12px;border:1px solid var(--border-strong);
+  background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaa7cb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 10px center/18px;
+  color:var(--text);font-size:16px;font-weight:600;appearance:none;-webkit-appearance:none;
+}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;min-width:44px;padding:0 14px;
+  border-radius:12px;border:1px solid var(--border-strong);background:var(--surface);font-weight:600;font-size:16px;
+}
+.btn.primary{border:0;background:var(--grad);color:#fff}
+.btn.ghost{border-color:transparent}
+
+/* ---------- segmented control ---------- */
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:14px;background:var(--surface);border:1px solid var(--border);margin:6px 0 14px}
+.seg button{height:44px;border-radius:10px;font-weight:600;color:var(--muted)}
+.seg button[aria-selected="true"]{background:var(--surface-2);color:var(--text);box-shadow:inset 0 0 0 1px var(--border-strong)}
+@media (min-width:820px){ .seg{max-width:420px} }
+
+/* ---------- cards & chips ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card + .card{margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:14px;font-weight:600;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.state{display:inline-flex;align-items:center;gap:6px;font-weight:700}
+.state.good{color:var(--good)} .state.steady{color:var(--steady)} .state.careful{color:var(--careful)}
+.state.go{color:var(--go)} .state.avoid{color:var(--avoid)} .state.neutral{color:var(--muted)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.dot.good{background:var(--good)} .dot.steady{background:var(--steady)} .dot.careful{background:var(--careful)}
+
+/* ---------- today ---------- */
+.now{display:flex;gap:14px;align-items:flex-start}
+.now .big{font-size:22px;font-weight:700;line-height:1.25;margin:0}
+.now .left{font-size:15px;color:var(--muted);margin-top:4px}
+.banner h2{margin:0 0 4px;font-size:24px;line-height:1.2;letter-spacing:-0.01em}
+.banner .meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin:8px 0;font-size:15px;color:var(--muted)}
+.banner .meta span{display:inline-flex;align-items:center;gap:6px}
+.banner .pl{margin:4px 0}
+.banner .personal{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-right:6px}
+
+.timeline{list-style:none;margin:16px 0 0;padding:0}
+.timeline li{display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:stretch;margin-bottom:8px}
+.timeline .t{font-size:13px;color:var(--muted);padding-top:10px;line-height:1.3}
+.win{
+  width:100%;text-align:left;min-height:56px;border-radius:var(--radius-s);padding:10px 12px;
+  border:1px solid var(--border);background:var(--neutral);display:flex;flex-direction:column;gap:6px;
+  transition:transform .2s ease;
+}
+.win:active{transform:scale(.995)}
+.win.go{background:var(--go-tint);border-color:var(--go);border-left-width:5px}
+.win.avoid{
+  background:var(--avoid-tint) repeating-linear-gradient(135deg,transparent 0 7px,var(--avoid-stripe) 7px 9px);
+  border-color:var(--avoid);border-style:dashed;
+}
+.win.neutral{min-height:44px}
+.win .row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}
+.win .lbl{font-weight:700}
+.win .why{font-size:14px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0 0;font-size:14px;color:var(--muted)}
+.legend .sw{display:inline-block;width:22px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid var(--border)}
+.legend .sw.go{background:var(--go-tint);border-color:var(--go)}
+.legend .sw.avoid{background:var(--avoid-tint) repeating-linear-gradient(135deg,transparent 0 4px,var(--avoid-stripe) 4px 6px);border-color:var(--avoid)}
+.legend .sw.neutral{background:var(--neutral)}
+
+.strip{display:none}
+@media (min-width:1100px){
+  .strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:0 0 14px}
+  .strip button{min-height:64px;border-radius:12px;border:1px solid var(--border);background:var(--surface);padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px}
+  .strip button[aria-current="date"]{box-shadow:inset 0 0 0 2px var(--accent)}
+  .strip .d{font-weight:700}
+  .strip .s{font-size:13px;color:var(--muted)}
+}
+
+/* ---------- week ---------- */
+.week-layout{display:block}
+@media (min-width:1100px){ .week-layout{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start} }
+.wgrid{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.whead{display:grid;grid-template-columns:36px repeat(7,minmax(0,1fr));border-bottom:1px solid var(--border)}
+@media (min-width:820px){ .whead,.wbody{grid-template-columns:52px repeat(7,minmax(0,1fr))!important} }
+.whead .dh{min-width:0;overflow:hidden;padding:8px 2px;text-align:center;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:13px;line-height:1.2}
+.whead .dh .n{font-weight:700;font-size:13px;white-space:nowrap}
+@media (min-width:820px){ .whead .dh .n{font-size:15px} }
+.whead .dh[aria-current="date"] .n{color:var(--accent)}
+.whead .dh .cw{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.wbody{display:grid;grid-template-columns:36px repeat(7,minmax(0,1fr));position:relative}
+.col{min-width:0}
+.gut{position:relative;height:calc(var(--hour) * 16)}
+.gut span{position:absolute;right:4px;transform:translateY(-50%);font-size:11px;color:var(--muted)}
+.col{position:relative;height:calc(var(--hour) * 16);border-left:1px solid var(--border);
+  background:repeating-linear-gradient(to bottom,transparent 0 calc(var(--hour) - 1px),var(--border) calc(var(--hour) - 1px) var(--hour))}
+.band{position:absolute;left:2px;right:2px;border-radius:6px;border:1px solid var(--border);background:var(--neutral);
+  display:flex;align-items:flex-start;padding:2px 4px;overflow:hidden;font-size:11px;line-height:1.2;text-align:left}
+.band::after{content:"";position:absolute;left:0;right:0;top:-8px;bottom:-8px} /* extends the touch area */
+.band.go{background:var(--go-tint);border-color:var(--go)}
+.band.avoid{background:var(--avoid-tint) repeating-linear-gradient(135deg,transparent 0 5px,var(--avoid-stripe) 5px 7px);border-color:var(--avoid);border-style:dashed}
+.band.neutral{display:none}
+.band .bl{display:none;font-weight:600}
+@media (min-width:820px){ .band .bl{display:block} .band{padding:3px 6px;font-size:12px} }
+.nowline{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--now);z-index:2;pointer-events:none}
+.nowline::before{content:"";position:absolute;left:-5px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--now)}
+.nowline span{position:absolute;right:2px;top:-16px;font-size:10px;color:var(--now);font-weight:700}
+.area-list h3{margin:0 0 8px;font-size:20px}
+.area ol{list-style:none;margin:0;padding:0}
+.area li{display:grid;grid-template-columns:92px 1fr;gap:8px;padding:6px 0;font-size:15px;align-items:baseline}
+.area li .w{font-weight:600;white-space:nowrap}
+.area li .y{color:var(--muted)}
+
+/* ---------- month ---------- */
+.mhead{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:13px;color:var(--muted);padding:6px 0}
+.mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.day{
+  min-width:0;overflow:hidden;min-height:56px;border-radius:10px;border:1px solid var(--border);background:var(--surface);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding:6px 2px;
+}
+.day[aria-current="date"]{box-shadow:inset 0 0 0 2px var(--accent)}
+.day .num{font-weight:700;font-size:15px}
+.day .ob{font-size:11px;color:var(--muted);line-height:1.1;display:flex;align-items:center;gap:3px;max-width:100%}
+.day .ob span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:768px){ .day .ob span{white-space:normal} }
+.day .word{display:none}
+.day .bars{display:none}
+@media (min-width:768px){
+  .day{min-height:96px;align-items:flex-start;padding:8px 8px}
+  .day .word{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700}
+  .day .dot{display:none}
+  .day .bars{display:flex;flex-direction:column;gap:3px;width:100%;margin-top:auto}
+  .bar{height:18px;border-radius:5px;background:var(--go-tint);border-left:3px solid var(--go);font-size:11px;padding:0 6px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+}
+.mnote{margin:12px 0 0;font-size:15px;color:var(--muted)}
+
+/* ---------- sheet ---------- */
+.backdrop{position:fixed;inset:0;background:rgba(5,4,20,.55);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:20}
+.backdrop.open{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:640px;z-index:21;
+  background:var(--surface);border:1px solid var(--border);border-bottom:0;border-radius:20px 20px 0 0;
+  padding:12px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:var(--shadow);
+  transform:translateY(calc(100% + 48px));visibility:hidden;
+  transition:transform .28s ease,visibility 0s linear .28s;max-height:85vh;overflow:auto;
+}
+.sheet.open{transform:translateY(0);visibility:visible;transition:transform .28s ease,visibility 0s}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--border-strong);margin:0 auto 10px}
+.sheet h2{margin:0;font-size:22px;line-height:1.2;padding-right:52px}
+.sheet .sub{color:var(--muted);margin:2px 0 10px}
+.sheet .x{position:absolute;right:10px;top:10px;width:44px;height:44px;border-radius:12px}
+.sheet dl{margin:12px 0 0;display:grid;grid-template-columns:130px 1fr;gap:8px 12px;font-size:15px}
+.sheet dt{color:var(--muted)}
+.sheet dd{margin:0}
+.sheet .src{margin-top:14px;font-size:14px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px}
+.sheet .actions{margin-top:14px;display:flex;justify-content:flex-end}
+@media (min-width:820px){ .sheet{bottom:24px;border-radius:20px;border-bottom:1px solid var(--border)} }
+
+/* ---------- carousel / tab panel (one component, three desktop modes) ---------- */
+.car{position:relative;min-width:0}
+.ctrack{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0 4px;align-items:flex-start}
+.ctrack::-webkit-scrollbar{display:none}
+.ctrack::after{content:"";flex:0 0 16px}              /* lets the last card snap to the start */
+.cpanel{flex:0 0 calc(100% - 28px);scroll-snap-align:start;min-width:0}   /* next card peeks 16 px past the 12 px gap */
+.cpanel.box{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.cpanel h4{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px}
+.cpanel h3{margin:0 0 8px;font-size:18px;display:flex;align-items:center;gap:10px}
+.cpanel h3 .cnt{font-size:13px;font-weight:600;color:var(--muted)}
+.ctabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px;margin:0 0 10px}
+.ctabs::-webkit-scrollbar{display:none}
+.ctabs button{height:44px;padding:0 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);
+  font-weight:600;font-size:15px;color:var(--muted);white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:6px}
+.ctabs button[aria-selected="true"]{color:var(--text);box-shadow:inset 0 0 0 2px var(--accent)}
+.ctabs.fill button{flex:1 1 0;min-width:0;padding:0 4px;height:56px;flex-direction:column;gap:1px;line-height:1.15}
+.ctabs.fill .cnt{font-size:11px;font-weight:600;color:var(--muted)}
+.cdots{display:flex;justify-content:center;gap:6px;margin-top:10px}
+.cdots i{width:8px;height:8px;border-radius:50%;background:var(--border-strong);display:block}
+.cdots i.on{background:var(--accent)}
+.cpanel{scroll-margin-top:12px}
+@media (prefers-reduced-motion:reduce){ .ctrack{scroll-behavior:auto} }   /* snap stays, the animation goes */
+@media (min-width:820px){
+  .car[data-desktop="row"] .ctrack{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible;scroll-snap-type:none;padding:0}
+  .car[data-desktop="row"] .ctrack::after{display:none}
+  .car[data-desktop="row"] .cpanel{flex:none}
+  .car[data-desktop="row"] .cdots{display:none}
+}
+@media (min-width:1100px){
+  .car[data-desktop="tabs"] .ctrack,.car[data-desktop="anchors"] .ctrack{display:block;overflow:visible;scroll-snap-type:none;padding:0}
+  .car[data-desktop="tabs"] .ctrack::after,.car[data-desktop="anchors"] .ctrack::after{display:none}
+  .car[data-desktop="tabs"] .cpanel,.car[data-desktop="anchors"] .cpanel{flex:none}
+  .car[data-desktop="tabs"] .cpanel:not(.active){display:none}
+  .car[data-desktop="anchors"] .cpanel{margin-bottom:16px}
+  .car[data-desktop="tabs"] .cdots,.car[data-desktop="anchors"] .cdots{display:none}
+  .ctabs{flex-wrap:wrap;overflow:visible}
+  .ctabs.fill{position:sticky;top:0;z-index:3;background:var(--bg);padding:8px 0;margin:0 0 8px}
+  .ctabs.fill button{flex:0 1 auto;flex-direction:row;height:44px;padding:0 14px;gap:8px}
+}
+.today-top{display:block}
+@media (min-width:1100px){ .today-top{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start;margin-bottom:16px} .today-top>*{min-width:0} .today-top .card+.card{margin-top:0} }
+
+/* ---------- scenarios & filters ---------- */
+.subtabs{margin-top:-4px}
+.ctabs.sub button{height:44px;font-size:14px;padding:0 10px;background:transparent}
+.scen h4{font-size:17px;line-height:1.3;margin-bottom:8px}
+.scen .avoid-line{display:flex;gap:6px;align-items:flex-start;margin:10px 0 0;font-size:15px;color:var(--muted)}
+.scen .avoid-line .ic{margin-top:3px;color:var(--avoid)}
+.scen .foot{display:flex;justify-content:flex-end;margin-top:6px}
+.filters{margin:12px 0 0}
+.filters .q{font-size:15px;color:var(--muted);margin:0 0 6px}
+.filters .ctabs{margin:0}
+.filters .ctabs button[aria-pressed="true"]{color:var(--text);box-shadow:inset 0 0 0 2px var(--accent)}
+.verdict{display:flex;gap:10px;align-items:flex-start;margin:12px 0 0;padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-weight:600}
+.verdict .ic{flex:none;margin-top:3px;color:var(--go)}
+.win.dim{opacity:.42}
+.ask{padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--accent);margin:0 0 10px}
+.ask .q{margin:0 0 8px;font-weight:700}
+.chip.tap{height:44px;padding:0 14px;font-size:15px;cursor:pointer}
+.note-line{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);margin:0 0 6px}
+.note-line .lnk{height:44px;padding:0 8px;color:var(--accent);font-weight:600;font-size:14px;display:inline-flex;align-items:center}
+.win .suits{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+
+/* ---------- settings sheet & mockup panel ---------- */
+.choice{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+.choice label{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);cursor:pointer;font-weight:600}
+.choice input{width:22px;height:22px;margin:0;accent-color:var(--accent)}
+.mock{max-width:1280px;margin:32px auto 40px;padding:12px 16px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--muted);font-size:14px}
+.mock p{margin:6px 0}
+.mock .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mock .place{height:40px;font-size:14px}
+.mock .btn{height:40px;font-size:14px}
+.note{font-size:14px;color:var(--muted);margin:8px 0 0}
+.toprow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="hdr">
+    <h1>Lucky times</h1>
+    <div class="ctl">
+      <button class="btn" id="themeBtn" type="button" aria-pressed="false"></button>
+      <button class="btn" id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="dialog">
+        <svg class="ic big" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="seg" role="tablist" aria-label="View">
+    <button role="tab" type="button" data-view="today" aria-selected="true" aria-controls="view">Today</button>
+    <button role="tab" type="button" data-view="week" aria-selected="false" aria-controls="view">Week</button>
+    <button role="tab" type="button" data-view="month" aria-selected="false" aria-controls="view">Month</button>
+  </div>
+
+  <main id="view" role="tabpanel"></main>
+
+  <div class="sr-only" id="live" aria-live="polite" aria-atomic="true"></div>
+</div>
+
+<!-- Outside the frame: for reviewers only. Nothing here ships. -->
+<aside class="mock" aria-label="Mockup notes">
+  <p><strong>Mockup only.</strong> Sample data for San Jose, Thu 5 Nov 2026 (the clock is fixed at 11:34). The windows stay the San Jose sample when another city is chosen; sunrise and sunset follow the city. Breakpoints: phone &lt;820, tablet 820–1099, desktop ≥1100.</p>
+  <p class="row"><label for="mockPlace">Preview city</label> <select id="mockPlace" class="place"></select> <button class="btn" id="mockReset" type="button">Back to Thu 5 Nov</button></p>
+</aside>
+
+<div class="backdrop" id="backdrop"></div>
+<section class="sheet" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true" tabindex="-1">
+  <div class="grab" aria-hidden="true"></div>
+  <button class="x btn ghost" id="settingsClose" type="button" aria-label="Close">
+    <svg class="ic big" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+  <h2 id="settingsTitle">Where you are</h2>
+  <p class="sub">Set once; your times follow it</p>
+  <div class="choice" id="placeChoice" role="radiogroup" aria-label="City"></div>
+  <div class="actions"><button class="btn primary" type="button" id="settingsDone">Done</button></div>
+</section>
+<section class="sheet" id="why" role="dialog" aria-modal="true" aria-labelledby="whyTitle" aria-hidden="true" tabindex="-1">
+  <div class="grab" aria-hidden="true"></div>
+  <button class="x btn ghost" id="whyClose" type="button" aria-label="Close">
+    <svg class="ic big" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+  <div id="whyBody"></div>
+</section>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- sample data (hard-coded; no astrology is computed here) ---------- */
+const TODAY_KEY = '2026-11-05';
+const NOW_MIN = 11*60+34;            // Thu 11:34 PST, inside the 11:30–12:12 window → 38 min left
+const PLACES = {
+  newyork:{name:'New York', zone:'America/New_York',    off:'UTC−5', rise:'06:32', set:'16:50'},
+  chicago:{name:'Chicago',  zone:'America/Chicago',     off:'UTC−6', rise:'06:30', set:'16:36'},
+  denver: {name:'Denver',   zone:'America/Denver',      off:'UTC−7', rise:'06:32', set:'16:50'},
+  sanjose:{name:'San Jose', zone:'America/Los_Angeles', off:'UTC−8', rise:'06:40', set:'17:02'},
+  pune:   {name:'Pune',     zone:'Asia/Kolkata',        off:'UTC+5:30', rise:'06:36', set:'17:58'}
+};
+const AREA_ICON = {Work:'briefcase',Love:'heart',Money:'coin',Travel:'arrow',Study:'book',Rest:'leaf',Home:'home'};
+
+// window rows: [from,to,kind,label,areas,{m:muhurta,h:hora,c:choghadiya}]
+const W = (f,t,k,l,a,why)=>({from:f,to:t,kind:k,label:l,areas:a||[],why:why||{}});
+const DAYS = {
+  '2026-11-02':{dow:'Mon',n:2,colour:'steady',rise:'06:37',set:'17:05',moon:'Waning gibbous, 38% lit',
+    p1:'Waning Moon, day 8, a winning day · a sharp star (the serpent) until 19:05', p2:'A joined pairing until 10:40 · the Moon rises 01:30, sets 13:22',
+    personal:'A steady day for you: your Moon count is mixed, keep starts small', windows:[
+    W('05:03','05:51','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Venus',c:'—'}),
+    W('05:51','06:37','neutral','Before sunrise',[],{h:'Venus',c:'—'}),
+    W('06:37','07:58','go','First light',['Rest','Love'],{h:'Moon (gentle)',c:'Amrit'}),
+    W('07:58','09:15','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('09:15','10:33','go','Morning start',['Work','Money'],{h:'Jupiter (fruitful)',c:'Shubh'}),
+    W('10:33','11:51','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('11:51','12:12','go','Best of the day',['Work','Study'],{m:'Abhijit (trimmed by yamaganda)',h:'Sun (vigorous)',c:'Udveg'}),
+    W('12:12','13:08','neutral','Midday',[],{h:'Sun',c:'Udveg'}),
+    W('13:08','14:26','avoid','Better to wait',[],{m:'Gulika kaal'}),
+    W('14:26','15:44','go','Afternoon',['Money','Study','Travel'],{h:'Mercury (quick)',c:'Labh'}),
+    W('15:44','17:05','go','Late afternoon',['Love','Rest'],{h:'Moon (gentle)',c:'Amrit'}),
+    W('17:05','18:47','neutral','Evening',[],{h:'Saturn',c:'Char'}),
+    W('18:47','20:10','neutral','Evening',['Rest'],{h:'Jupiter',c:'Rog'}),
+    W('20:10','21:46','avoid','Better to wait',[],{m:'Varjyam'}),
+    W('21:46','23:00','neutral','Wind down',['Rest'],{h:'Mars',c:'Kaal'})]},
+  '2026-11-03':{dow:'Tue',n:3,colour:'steady',rise:'06:38',set:'17:04',moon:'Waning crescent, 28% lit',
+    p1:'Waning Moon, day 9, an empty day for starts · a fierce star (the throne) until 20:12', p2:'A firm pairing until 09:58 · the Moon rises 02:28, sets 13:50',
+    personal:'A steady day for you: your Moon favours home and study', windows:[
+    W('05:04','05:52','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Moon',c:'—'}),
+    W('05:52','06:38','neutral','Before sunrise',[],{}),
+    W('06:38','07:58','neutral','Morning routine',[],{h:'Mars',c:'Rog'}),
+    W('07:58','09:15','neutral','Morning',['Work'],{h:'Sun',c:'Udveg'}),
+    W('09:15','10:33','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('10:33','11:30','go','Mid-morning',['Travel','Love','Money'],{h:'Mercury (quick)',c:'Labh'}),
+    W('11:30','11:51','go','Best of the day',['Work','Money'],{m:'Abhijit (cut by gulika)',h:'Mercury',c:'Labh'}),
+    W('11:51','13:08','avoid','Better to wait',[],{m:'Gulika kaal'}),
+    W('13:08','14:26','neutral','Afternoon',['Rest'],{h:'Saturn',c:'Kaal'}),
+    W('14:26','15:44','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('15:44','17:04','go','Late afternoon',['Work','Money'],{h:'Mars (for pushing through)',c:'Shubh'}),
+    W('17:04','18:46','neutral','Evening',[],{h:'Sun',c:'Kaal (night)'}),
+    W('18:46','20:28','go','Evening',['Money','Study'],{h:'Venus (beneficial)',c:'Labh'}),
+    W('20:28','22:10','neutral','Wind down',['Rest'],{h:'Mercury',c:'Udveg'}),
+    W('22:10','23:00','go','Late',['Rest','Love'],{h:'Moon (gentle)',c:'Shubh'})]},
+  '2026-11-04':{dow:'Wed',n:4,colour:'careful',rise:'06:39',set:'17:03',moon:'Waning crescent, 19% lit',
+    p1:'Waning Moon, day 10, a completion day · a fierce star (the hammock) until 21:05', p2:'A sharp pairing until 15:20 · the Moon rises 03:22, sets 14:19',
+    personal:'A careful day for you: your star count is low, keep big starts for Thursday', windows:[
+    W('05:03','05:51','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Saturn',c:'—'}),
+    W('05:51','06:39','neutral','Before sunrise',[],{}),
+    W('06:39','07:58','go','Morning start',['Money','Study','Work'],{h:'Mercury (quick)',c:'Labh'}),
+    W('07:58','09:15','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('09:15','10:33','neutral','Mid-morning',['Rest'],{h:'Saturn',c:'Kaal'}),
+    W('10:33','11:51','avoid','Better to wait',[],{m:'Gulika kaal (covers abhijit today)'}),
+    W('11:51','13:08','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('13:08','14:26','neutral','Afternoon',[],{h:'Sun',c:'Udveg'}),
+    W('14:26','15:44','go','Afternoon',['Travel','Love'],{h:'Venus (beneficial)',c:'Char'}),
+    W('15:44','17:03','go','Late afternoon',['Money','Study'],{h:'Mercury (quick)',c:'Labh'}),
+    W('17:03','18:45','neutral','Evening',[],{h:'Moon',c:'Udveg (night)'}),
+    W('18:45','20:27','go','Evening',['Rest','Study'],{h:'Saturn (steady chores)',c:'Shubh'}),
+    W('20:27','22:09','go','Late evening',['Love','Money'],{h:'Jupiter (fruitful)',c:'Amrit'}),
+    W('22:09','23:00','neutral','Wind down',['Rest'],{h:'Mars',c:'Char'})]},
+  '2026-11-05':{dow:'Thu',n:5,colour:'good',rise:'06:40',set:'17:02',moon:'Waning crescent, 11% lit',
+    p1:'Waning Moon, day 11, a joy day · a fixed star for agreements until 21:51', p2:'A fasting day for many · the Moon rises 04:12, sets 14:48',
+    personal:'A good day for you: your Moon favours work', obs:'Fasting day', windows:[
+    W('05:02','05:50','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Saturn (steady)',c:'— (before sunrise)'}),
+    W('05:50','06:40','neutral','Before sunrise',[],{h:'Saturn',c:'—'}),
+    W('06:40','07:58','avoid','Better to wait',[],{m:'Yamaganda',h:'Jupiter',c:'Shubh (overridden by the band)'}),
+    W('07:58','09:15','neutral','Morning routine',['Rest'],{h:'Mars (aggressive)',c:'Rog'}),
+    W('09:15','10:33','avoid','Better to wait',[],{m:'Gulika kaal · Dur muhurta 09:27–10:14',h:'Sun',c:'Udveg'}),
+    W('10:33','11:30','go','Mid-morning',['Love','Travel'],{h:'Venus (beneficial)',c:'Char'}),
+    W('11:30','12:12','go','Best of the day',['Money','Study','Work'],{m:'Abhijit muhurta',h:'Venus until 11:51, then Mercury (quick)',c:'Labh from 11:51'}),
+    W('12:12','13:08','go','Early afternoon',['Money','Study'],{h:'Mercury (quick)',c:'Labh'}),
+    W('13:08','13:28','neutral','Short pause',[],{h:'Moon',c:'Amrit, cut short by rahu kaal'}),
+    W('13:28','14:46','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('14:46','15:12','avoid','Better to wait',[],{m:'Dur muhurta'}),
+    W('15:12','15:44','neutral','Steady work only',['Rest'],{h:'Saturn (sluggish)',c:'Kaal'}),
+    W('15:44','17:02','go','Late afternoon',['Work','Money','Love'],{h:'Jupiter (fruitful)',c:'Shubh',m:'Godhuli 16:50–17:14'}),
+    W('17:02','18:44','go','Early evening',['Love','Rest','Travel'],{h:'Moon (gentle)',c:'Amrit (night)'}),
+    W('18:44','19:12','neutral','Evening',[],{h:'Saturn',c:'Char'}),
+    W('19:12','20:48','avoid','Better to wait',[],{m:'Varjyam'}),
+    W('20:48','22:09','neutral','Wind down',['Rest'],{h:'Jupiter',c:'Kaal (night)'}),
+    W('22:09','23:00','neutral','Rest',['Rest'],{h:'Mars',c:'Labh (night)'})]},
+  '2026-11-06':{dow:'Fri',n:6,colour:'good',rise:'06:41',set:'17:01',moon:'Waning crescent, 5% lit',
+    p1:'Waning Moon, day 12, a day for good starts · a quick star (the hand) until 22:30', p2:'A bright pairing until 13:44 · the Moon rises 05:05, sets 15:21',
+    personal:'A good day for you: your Moon favours money and friends', windows:[
+    W('05:03','05:51','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Jupiter',c:'—'}),
+    W('05:51','06:41','neutral','Before sunrise',[],{}),
+    W('06:41','07:58','go','Morning start',['Love','Travel'],{h:'Venus (beneficial)',c:'Char'}),
+    W('07:58','09:15','avoid','Better to wait',[],{m:'Gulika kaal'}),
+    W('09:15','10:33','go','Mid-morning',['Love','Rest'],{h:'Moon (gentle)',c:'Amrit'}),
+    W('10:33','11:51','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('11:51','12:12','go','Best of the day',['Work','Money'],{m:'Abhijit (trimmed by rahu kaal)',h:'Jupiter (fruitful)',c:'Shubh'}),
+    W('12:12','13:08','go','Early afternoon',['Work','Money'],{h:'Jupiter (fruitful)',c:'Shubh'}),
+    W('13:08','14:26','neutral','Afternoon',[],{h:'Mars',c:'Rog'}),
+    W('14:26','15:44','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('15:44','17:01','go','Late afternoon',['Love','Travel'],{h:'Venus (beneficial)',c:'Char'}),
+    W('17:01','18:43','neutral','Evening',[],{h:'Mercury',c:'Rog (night)'}),
+    W('18:43','20:25','neutral','Evening',['Rest'],{h:'Moon',c:'Kaal'}),
+    W('20:25','21:50','go','Late evening',['Money'],{h:'Saturn (long-term saving)',c:'Labh'}),
+    W('21:50','23:00','avoid','Better to wait',[],{m:'Varjyam'})]},
+  '2026-11-07':{dow:'Sat',n:7,colour:'steady',rise:'06:42',set:'17:00',moon:'Waning crescent, 1% lit',
+    p1:'Waning Moon, day 13, a winning day · a soft star (the jewel) until 23:40', p2:'A gentle pairing until 12:02 · the Moon rises 06:02, sets 16:01',
+    personal:'A steady day for you: a quiet day before the new Moon', windows:[
+    W('05:04','05:52','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Mars',c:'—'}),
+    W('05:52','06:42','neutral','Before sunrise',[],{}),
+    W('06:42','07:58','avoid','Better to wait',[],{m:'Gulika kaal'}),
+    W('07:58','09:15','go','Morning start',['Work','Money'],{h:'Jupiter (fruitful)',c:'Shubh'}),
+    W('09:15','10:33','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('10:33','11:30','neutral','Mid-morning',[],{h:'Sun',c:'Udveg'}),
+    W('11:30','12:12','go','Best of the day',['Travel','Love','Work'],{m:'Abhijit muhurta',h:'Sun, then Venus from 11:51',c:'Char'}),
+    W('12:12','13:08','go','Early afternoon',['Love','Travel'],{h:'Venus (beneficial)',c:'Char'}),
+    W('13:08','14:26','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('14:26','15:44','go','Afternoon',['Love','Rest'],{h:'Moon (gentle)',c:'Amrit'}),
+    W('15:44','17:00','neutral','Late afternoon',['Rest'],{h:'Saturn',c:'Kaal'}),
+    W('17:00','18:42','go','Evening',['Money','Work'],{h:'Jupiter (fruitful)',c:'Labh (night)'}),
+    W('18:42','20:24','neutral','Evening',[],{h:'Mars',c:'Udveg'}),
+    W('20:24','22:06','go','Late evening',['Study','Rest'],{h:'Sun',c:'Shubh'}),
+    W('22:06','23:00','go','Late',['Love','Rest'],{h:'Venus (beneficial)',c:'Amrit'})]},
+  '2026-11-08':{dow:'Sun',n:8,colour:'good',rise:'06:43',set:'17:00',moon:'New Moon, 0% lit',
+    p1:'Day 14, then the dark Moon tonight: an empty day for starts · a moving star (the sword) until 00:52', p2:'Festival of lights · the Moon rises 07:01, sets 16:44',
+    personal:'A good day for you: your Moon favours love and family', obs:'Festival of lights', windows:[
+    W('05:05','05:53','go','Early quiet hour',['Study','Rest'],{m:'Brahma muhurta',h:'Mercury',c:'—'}),
+    W('05:53','06:43','neutral','Before sunrise',[],{}),
+    W('06:43','07:58','neutral','Morning',[],{h:'Sun',c:'Udveg'}),
+    W('07:58','09:15','go','Morning start',['Love','Travel'],{h:'Venus (beneficial)',c:'Char'}),
+    W('09:15','10:33','go','Mid-morning',['Money','Study'],{h:'Mercury (quick)',c:'Labh'}),
+    W('10:33','11:30','go','Late morning',['Love','Rest'],{h:'Moon (gentle)',c:'Amrit'}),
+    W('11:30','11:51','go','Best of the day',['Love','Work'],{m:'Abhijit (cut by yamaganda)',h:'Moon',c:'Amrit'}),
+    W('11:51','13:08','avoid','Better to wait',[],{m:'Yamaganda'}),
+    W('13:08','14:26','go','Afternoon',['Work','Money'],{h:'Jupiter (fruitful)',c:'Shubh'}),
+    W('14:26','15:44','avoid','Better to wait',[],{m:'Gulika kaal'}),
+    W('15:44','17:00','avoid','Better to wait',[],{m:'Rahu kaal'}),
+    W('17:00','18:42','go','Evening',['Rest','Love'],{h:'Sun',c:'Shubh (night)'}),
+    W('18:42','20:24','go','Late evening',['Love','Money'],{h:'Venus (beneficial)',c:'Amrit'}),
+    W('20:24','22:06','neutral','Wind down',['Travel'],{h:'Mercury',c:'Char'}),
+    W('22:06','23:00','neutral','Late',[],{h:'Moon',c:'Rog'})]}
+};
+const WEEK_KEYS = Object.keys(DAYS);
+
+/* Scenarios (doc 47 §3.4a). Plain words on the card: hour = hora lord (growth = Jupiter, quick = Mercury, kind = Venus,
+   gentle = Moon, authority = Sun, forceful = Mars, slow = Saturn); slot = choghadiya (good, gain, sweet, moving);
+   day classes = tithi groups (joy, good starts, winning, empty, completion, the dark Moon); star classes = nakshatra groups.
+   Sample week: Mon sharp star · Tue empty day, fierce star · Wed completion day, fierce star · Thu joy day, fixed star ·
+   Fri good-starts day, quick star · Sat winning day, soft star · Sun empty day, moving star, the dark Moon. Mercury direct. */
+const S = (name, rows, avoid, why)=>({name, rows, avoid, why});
+const SCEN = {
+  Work:[
+    S('Sign a contract',[['Thu','11:30–12:12','the day’s best minutes, a growth hour, a fixed star for agreements'],['Thu','15:44–17:02','a growth hour in a good slot on a Thursday for contracts'],['Fri','11:51–12:12','the day’s best minutes in a growth hour, a day for good starts']],
+      'Tue (an empty day for starts), Sat afternoon (a hold band) and Sun (the dark Moon)',
+      {t:'Bhadra or Purna; never Rikta or amavasya',s:'Sthira (fixed): Uttara Phalguni on Thu',h:'Jupiter or Mercury',c:'Shubh, Labh or Amrit; abhijit',m:'Moon in your 10th, 11th or 2nd; tara good',x:'every kalam, varjyam, Mercury retrograde (direct this week)'}),
+    S('Send a resume',[['Fri','12:12–13:08','a growth hour in a good slot, a quick star for sending, a day for good starts'],['Wed','06:39–07:58','a quick hour in a gain slot on a Wednesday for writing'],['Thu','12:12–13:08','a quick hour in a gain slot, right after the best minutes']],
+      'Tue (an empty day) and Sun 11:51–13:08 (a hold band)',
+      {t:'Bhadra or Nanda',s:'Kshipra (quick): Hasta on Fri',h:'Mercury or Sun',c:'Labh or Char',m:'Moon in your 10th or 6th; tara sadhaka or sampat',x:'rahu kaal, gulika; Tikshna stars; Mercury retrograde'}),
+    S('Interview or pitch',[['Thu','11:30–12:12','the day’s best minutes on a joy day; your Moon favours work'],['Sat','11:30–12:12','the day’s best minutes, an authority hour, a winning day'],['Mon','09:15–10:33','a growth hour in a good slot on a winning day']],
+      'Wed (a fierce star, no best minutes) and the midday hold bands on Mon and Tue',
+      {t:'Jaya (winning) or Bhadra',s:'Kshipra or Mridu',h:'Sun or Jupiter',c:'Amrit or Shubh; abhijit',m:'Moon in your 3rd, 10th or 11th; chandra bala good',x:'rahu kaal, yamaganda, dur muhurta; Ugra stars'}),
+    S('Ask for a raise',[['Thu','15:44–17:02','a growth hour on a Thursday, a fixed star, a joy day'],['Thu','11:30–12:12','the day’s best minutes; your Moon favours work'],['Mon','11:51–12:12','the day’s best minutes, an authority hour, a winning day']],
+      'Sat (a slow day for asking), Tue (an empty day) and Sun (the dark Moon)',
+      {t:'Purna or Jaya',s:'Sthira or Kshipra',h:'Jupiter or Sun; Thursday',c:'abhijit',m:'Moon in your 10th or 11th',x:'kalams; Rikta tithi; Saturn hora; Saturday'}),
+    S('Start a project',[['Thu','05:02–05:50','the early quiet hour for the first step, a joy day, a fixed star'],['Fri','11:51–12:12','the best minutes in a growth hour, a day for good starts, a quick star'],['Mon','06:37–07:58','a gentle hour in a sweet slot on a Monday for soft starts']],
+      'Tue and Sun (empty days for starts) and Sat evening',
+      {t:'Bhadra or Nanda',s:'Kshipra or Sthira',h:'Jupiter, Mercury or Moon; Mon, Wed, Thu',c:'Amrit, Shubh, Labh; brahma muhurta for the first step',m:'Moon in your 1st, 3rd or 10th; tara good',x:'Rikta tithi, amavasya; Saturday evening; Tikshna stars; kalams'}),
+    S('Launch',[['Fri','12:12–13:08','a growth hour in a good slot, a quick star for sending'],['Sat','11:30–12:12','the day’s best minutes, an authority hour, a winning day'],['Wed','15:44–17:03','a quick hour in a gain slot, a completion day']],
+      'Tue (an empty day) and every midday hold band',
+      {t:'Purna or Jaya',s:'Kshipra',h:'Sun or Jupiter',c:'Labh; abhijit',m:'Moon in your 10th or 11th',x:'kalams; Mercury retrograde; Ugra stars'}),
+    S('A hard talk with the boss',[['Thu','17:02–18:44','a gentle hour in a sweet slot, a joy day, after the afternoon hold band'],['Mon','15:44–17:05','a gentle hour in a sweet slot on a Monday for soft talks'],['Fri','09:15–10:33','a gentle hour in a sweet slot before the midday hold band']],
+      'Tue (a forceful day, a fierce star) and Sat (a winning day: a contest, not a talk)',
+      {t:'Nanda',s:'Mridu (soft) or Sthira',h:'Moon, Jupiter or Venus; Mon or Thu; the afternoon after rahu kaal',c:'Shubh or Amrit',m:'Moon not in your 8th or 12th; chandra bala good',x:'Tuesday; Mars or Saturn hora; Ugra and Tikshna stars; Jaya tithi; kalams, dur muhurta'}),
+    S('Negotiate',[['Thu','12:12–13:08','a quick hour in a gain slot, a fixed star, a joy day'],['Wed','15:44–17:03','a quick hour in a gain slot, a completion day for closing'],['Sat','17:00–18:42','a growth hour in a gain slot on a winning day']],
+      'Tue (an empty day) and the midday hold bands on Fri and Sun',
+      {t:'Jaya or Purna',s:'Sthira',h:'Mercury or Jupiter',c:'Labh',m:'Moon in your 2nd, 7th or 11th',x:'rahu kaal; Rikta tithi; Mercury retrograde'})],
+  Love:[
+    S('Ask someone out',[['Fri','15:44–17:01','a kind hour in a moving slot on a Friday, a day for good starts'],['Fri','06:41–07:58','a kind hour in a moving slot to start the day'],['Wed','14:26–15:44','a kind hour in a moving slot on a Wednesday for messages']],
+      'Tue and Sat (a forceful day and a slow day) and Sun evening (the dark Moon)',
+      {t:'Nanda or Bhadra',s:'Mridu (soft)',h:'Venus or Mercury; Fri or Wed; the evening Venus hora',c:'Char or Amrit',m:'Moon in your 5th, 7th or 11th; tara mitra or sampat',x:'Tuesday, Saturday; Mars or Saturn hora; Ugra and Tikshna stars; kalams'}),
+    S('A first date',[['Fri','15:44–17:01','a kind hour on a Friday, a quick star, a day for good starts'],['Sat','22:06–23:00','a kind hour in a sweet slot, a soft star'],['Thu','17:02–18:44','a gentle hour in a sweet slot, a joy day']],
+      'Sun (the dark Moon) and Mon 20:10–21:46 (a hold band)',
+      {t:'Nanda',s:'Mridu (soft)',h:'Venus or Moon; Friday',c:'Amrit, Shubh or Char',m:'Moon in your 5th or 7th; chandra bala good',x:'rahu kaal and varjyam at the start time; Tikshna stars; amavasya'}),
+    S('Clear the air',[['Mon','15:44–17:05','a gentle hour in a sweet slot on a Monday for soft talks'],['Thu','17:02–18:44','a gentle hour in a sweet slot, a joy day, a fixed star'],['Fri','09:15–10:33','a gentle hour in a sweet slot on a Friday']],
+      'Tue (a forceful day), Wed (a fierce star) and Sat (a winning day: a contest)',
+      {t:'Nanda',s:'Mridu or Sthira',h:'Moon or Venus; Mon or Fri',c:'Shubh',m:'Moon not in your 8th; tara not vipat or pratyari',x:'Tuesday; Mars hora; Ugra stars; Jaya tithi; dur muhurta'}),
+    S('Propose or commit',[['Thu','11:30–12:12','the day’s best minutes, a fixed star for commitments, a joy day'],['Thu','15:44–17:02','a growth hour in a good slot on a Thursday'],['Fri','12:12–13:08','a growth hour in a good slot, a day for good starts']],
+      'Tue and Sun (empty days), Wed (a fierce star) and every hold band',
+      {t:'Purna or Bhadra',s:'Sthira (fixed)',h:'Jupiter or Venus; Thu or Fri',c:'Amrit or Shubh; abhijit',m:'Moon in your 7th or 2nd; tara sampat or sadhaka',x:'Rikta tithi; kalams; Tikshna and Ugra stars; Venus or Jupiter combust days'}),
+    S('Make up',[['Fri','09:15–10:33','a gentle hour in a sweet slot on a Friday'],['Mon','06:37–07:58','a gentle hour in a sweet slot on a Monday'],['Sat','14:26–15:44','a gentle hour in a sweet slot, a soft star']],
+      'Tue (a forceful day) and Wed (a fierce star)',
+      {t:'Nanda',s:'Mridu (soft)',h:'Venus or Moon; Fri or Mon',c:'Amrit',m:'Moon in your 4th, 5th or 7th',x:'Tuesday; Mars or Saturn hora; Ugra stars'}),
+    S('Meet the family',[['Thu','15:44–17:02','a growth hour in a good slot on a Thursday, a fixed star'],['Fri','12:12–13:08','a growth hour in a good slot, a day for good starts'],['Sat','12:12–13:08','a kind hour in a moving slot, a soft star']],
+      'Tue, Sat evening and the midday hold bands',
+      {t:'Bhadra',s:'Sthira or Mridu',h:'Jupiter or Venus; Thu or Fri',c:'Shubh',m:'Moon in your 2nd, 4th or 7th',x:'Tuesday, Saturday; kalams'}),
+    S('Reconnect with a friend',[['Fri','06:41–07:58','a kind hour in a moving slot on a Friday'],['Wed','14:26–15:44','a kind hour in a moving slot on a Wednesday for messages'],['Thu','17:02–18:44','a gentle hour in a sweet slot, a joy day']],
+      'Sat evening (a slow day) and Mon 20:10–21:46 (a hold band)',
+      {t:'Nanda',s:'Mridu or Kshipra',h:'Venus, Mercury or Moon; Fri or Wed',c:'Char or Amrit',m:'Moon in your 11th or 4th',x:'Saturday evening; kalams'})],
+  Money:[
+    S('Pay',[['Thu','15:44–17:02','a growth hour in a good slot on a Thursday'],['Wed','20:27–22:09','a growth hour in a sweet slot, a completion day for settling'],['Fri','12:12–13:08','a growth hour in a good slot']],
+      'Tue and Sun (empty days) and Thu 13:28–14:46 (a hold band)',
+      {t:'Purna',s:'any',h:'Jupiter; Thursday',c:'Shubh',m:'Moon in your 2nd or 11th',x:'rahu kaal; Rikta tithi'}),
+    S('Invest or buy',[['Thu','11:30–12:12','the day’s best minutes, a quick hour in a gain slot, a fixed star'],['Thu','12:12–13:08','a quick hour in a gain slot, a joy day'],['Wed','06:39–07:58','a quick hour in a gain slot, a completion day']],
+      'Tue and Sun (empty days, the dark Moon) and every hold band',
+      {t:'Bhadra or Purna',s:'Sthira (fixed)',h:'Jupiter or Mercury; Thu or Wed',c:'Labh or Amrit; abhijit',m:'Moon in your 2nd, 11th or 5th',x:'Rikta tithi; amavasya; kalams; Mercury retrograde'}),
+    S('Sell',[['Sat','17:00–18:42','a growth hour in a gain slot on a winning day'],['Mon','14:26–15:44','a quick hour in a gain slot on a winning day'],['Fri','12:12–13:08','a growth hour in a good slot, a quick star']],
+      'Thu 13:28–14:46 and Fri 10:33–11:51 (hold bands), Fri 21:50–23:00',
+      {t:'Jaya',s:'Kshipra (quick)',h:'Mercury',c:'Labh',m:'Moon in your 2nd or 11th',x:'rahu kaal; varjyam'}),
+    S('Lend or borrow',[['Thu','15:44–17:02','a growth hour in a good slot on a Thursday'],['Wed','20:27–22:09','a growth hour in a sweet slot on a Wednesday'],['Fri','11:51–12:12','the day’s best minutes in a growth hour']],
+      'Tue (a day many avoid for borrowing, and an empty day) and every hold band',
+      {t:'any but Rikta',s:'any',h:'Jupiter; Wed or Thu',c:'—',m:'Moon in your 2nd, 11th; 8th for borrowing',x:'Tuesday (practice, not scripture); kalams; Rikta tithi'})],
+  Travel:[
+    S('Set out',[['Sun','07:58–09:15','a kind hour in a moving slot, a moving star for journeys'],['Fri','06:41–07:58','a kind hour in a moving slot, a quick star, a day for good starts'],['Thu','10:33–11:30','a kind hour in a moving slot, a joy day']],
+      'Mon 20:10–21:46 and Fri 21:50–23:00 (hold bands), and heading east on Mon and Sat',
+      {t:'Bhadra or Nanda',s:'Chara (moving): Swati on Sun',h:'Moon, Venus or Mercury',c:'Char or Amrit',m:'Moon in your 3rd, 9th or 12th; tara good',x:'varjyam, yamaganda, rahu kaal; Tikshna stars; amavasya; disha shool (east on Mon and Sat)'}),
+    S('Move house',[['Thu','15:44–17:02','a growth hour in a good slot on a Thursday, a fixed star'],['Mon','06:37–07:58','a gentle hour in a sweet slot on a Monday'],['Fri','09:15–10:33','a gentle hour in a sweet slot, a day for good starts']],
+      'Tue and Sat (a forceful day, a slow day) and Sun (the dark Moon)',
+      {t:'Bhadra or Purna',s:'Sthira (fixed)',h:'Moon or Jupiter; Mon, Thu or Fri',c:'Shubh or Amrit',m:'Moon in your 4th; chandra bala good',x:'Rikta tithi; Tuesday, Saturday; kalams'}),
+    S('Buy a vehicle',[['Fri','15:44–17:01','a kind hour in a moving slot on a Friday, a day for good starts'],['Thu','10:33–11:30','a kind hour in a moving slot, a joy day'],['Sat','12:12–13:08','a kind hour in a moving slot, a winning day']],
+      'Tue (an empty day, a forceful day) and Sun (the dark Moon)',
+      {t:'Purna or Bhadra',s:'Chara or Kshipra',h:'Venus; Thu or Fri',c:'Labh or Shubh',m:'Moon in your 4th or 11th',x:'Rikta tithi; kalams; Tuesday'})],
+  Study:[
+    S('Exam or submit',[['Thu','11:30–12:12','the day’s best minutes, a quick hour in a gain slot'],['Wed','06:39–07:58','a quick hour in a gain slot on a Wednesday, a completion day'],['Fri','11:51–12:12','the day’s best minutes in a growth hour']],
+      'Thu 09:15–10:33 and 13:28–14:46 (hold bands), Sun 14:26–17:00',
+      {t:'Jaya or Purna',s:'Kshipra (quick)',h:'Mercury or Jupiter; Wed or Thu',c:'Labh or Shubh; abhijit',m:'Moon in your 4th, 5th or 3rd',x:'rahu kaal, gulika; Mercury retrograde'}),
+    S('Start learning',[['Thu','05:02–05:50','the early quiet hour on a joy day'],['Wed','06:39–07:58','a quick hour in a gain slot on a Wednesday'],['Fri','12:12–13:08','a growth hour in a good slot, a quick star']],
+      'Tue and Sun (empty days) and Sat (a slow day for starts)',
+      {t:'Bhadra or Nanda',s:'Kshipra or Mridu',h:'Mercury or Jupiter; Wed or Thu',c:'brahma muhurta',m:'Moon in your 4th or 5th',x:'Rikta tithi; Saturday; kalams'})],
+  Home:[
+    S('Start a routine',[['Thu','05:02–05:50','the early quiet hour, a joy day, a fixed star'],['Mon','05:03–05:51','the early quiet hour on a Monday for soft starts'],['Fri','05:03–05:51','the early quiet hour, a day for good starts']],
+      'Tue and Sun (empty days) and Sat evening',
+      {t:'Bhadra',s:'Sthira or Kshipra',h:'Mon or Thu; brahma muhurta',c:'Amrit',m:'Moon in your 1st or 6th',x:'Rikta tithi; Saturday evening'}),
+    S('Rest',[['Sat','14:26–15:44','a gentle hour in a sweet slot, a soft star'],['Thu','17:02–18:44','a gentle hour in a sweet slot after sunset'],['Mon','15:44–17:05','a gentle hour to end the working day']],
+      'nothing; the calmest stretch of each day is shown',
+      {t:'any',s:'any',h:'Saturn for slow chores; after sunset',c:'any',m:'chandrashtama days are named as rest days',x:'nothing'}),
+    S('Repair',[['Sat','07:58–09:15','a growth hour in a good slot on a Saturday for structure'],['Wed','18:45–20:27','a slow hour in a good slot for a long chore'],['Tue','15:44–17:04','a forceful hour in a good slot on a Tuesday for tools']],
+      'Sat 09:15–10:33 (a hold band) and Wed (a fierce star for anything delicate)',
+      {t:'Purna',s:'Sthira (fixed)',h:'Saturn or Mars; Sat or Tue',c:'—',m:'Moon in your 4th',x:'kalams; Tikshna stars'})]
+};
+const AREAS = Object.keys(SCEN);
+/* One one-tap question before a scenario that depends on the person's situation. Asked once per key, remembered for the session. */
+const QUESTIONS = {
+  who:{ q:'Who is it with?', opts:['My boss','A peer','A client','A panel'], scen:['A hard talk with the boss'] },
+  job:{ q:'Do you have a job right now?', opts:['Yes','Between jobs','Own business'], scen:['Send a resume','Interview or pitch'] },
+  rel:{ q:'Right now are you…', opts:['Single','Seeing someone','Committed'], scen:['Ask someone out','A first date','Clear the air'] }
+};
+// weekday abbreviations in prose become full names ("Sun (the dark Moon)" → "Sunday (…)"); before a time they stay short
+const FULL_DAY = {Sun:'Sunday',Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday'};
+const fullDays = s => s.replace(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\b(?!\s*\d)/g, m=>FULL_DAY[m]);
+const questionFor = name => Object.keys(QUESTIONS).find(k=> QUESTIONS[k].scen.includes(name)) || null;
+// The card for an answer: title, rows and the Today filter may change; a scenario may not apply at all.
+function applyAnswer(sc){
+  const a = state.answers, out = Object.assign({}, sc, {title:'Best times this week to '+sc.name.toLowerCase(), note:''});
+  if(sc.name==='A hard talk with the boss' && a.who){
+    const who = {'My boss':'your boss','A peer':'a peer','A client':'a client','A panel':'a panel'}[a.who];
+    out.title = 'Best times this week for a hard talk with '+who; out.note = 'With: '+a.who;
+    if(a.who==='My boss'){ out.rows = [['Thu','15:44–17:02','a growth hour on a Thursday for asking, after the afternoon hold band'],['Mon','11:51–12:12','the day’s best minutes in an authority hour'],['Thu','17:02–18:44','a gentle hour in a sweet slot, a joy day']]; }
+  }
+  if((sc.name==='Send a resume' || sc.name==='Interview or pitch') && a.job){
+    out.note = 'Work: '+a.job;
+    if(a.job==='Own business'){ out.title = 'Best times this week to pitch a client'; }
+    else if(sc.name==='Send a resume'){ out.title = 'Best times this week to send your application'; }
+    else { out.title = 'Best times this week to interview'; }
+  }
+  if(QUESTIONS.rel.scen.includes(sc.name) && a.rel){ out.note = 'You: '+a.rel; }
+  return out;
+}
+// Scenarios that do not apply to the answer are left out of the sub-tabs
+function scenariosFor(area){
+  const r = state.answers.rel;
+  return SCEN[area].filter(sc=>{
+    if(r==='Single' && ['Clear the air','Make up','Propose or commit','Meet the family'].includes(sc.name)) return false;
+    if(r==='Committed' && ['Ask someone out','A first date'].includes(sc.name)) return false;
+    return true;
+  });
+}
+function questionCard(key, ctx){
+  const Q = QUESTIONS[key];
+  return '<div class="ask" role="group" aria-label="'+esc(Q.q)+'"><p class="q">'+esc(Q.q)+'</p><div class="chips">'+
+    Q.opts.map(o=>'<button type="button" class="chip tap" data-answer="'+key+'" data-opt="'+esc(o)+'" data-ctx="'+ctx+'">'+esc(o)+'</button>').join('')+'</div></div>';
+}
+// Today's quick filter: the eight common scenarios → the Thursday windows (by index) that suit them, and the verdict line
+const TODAY_FILTERS = [
+  ['Sign a contract',[6,7,12],'Today: good for signing 11:30–13:08 and 15:44–17:02; avoid 13:28–15:12'],
+  ['Send a resume',[6,7],'Today: good for sending a resume from 11:51 to 13:08; avoid 13:28–15:12'],
+  ['Start a project',[0,6,12],'Today: start before 05:50 or in the best minutes 11:30–12:12; avoid 13:28–15:12'],
+  ['A hard talk with the boss',[13],'Today: wait for the gentle hour 17:02–18:44, after the afternoon hold band; avoid 13:28–15:12'],
+  ['Ask someone out',[5,13],'Today: a kind hour 10:33–11:30 or the early evening 17:02–18:44; avoid 19:12–20:48'],
+  ['A first date',[13],'Today: the early evening 17:02–18:44 suits; avoid 19:12–20:48'],
+  ['Clear the air',[12,13],'Today: 15:44–17:02 or the gentle hour 17:02–18:44; avoid 13:28–15:12'],
+  ['Set out',[5,13],'Today: set out 10:33–11:30 or 17:02–18:44; avoid 06:40–07:58 and 19:12–20:48']
+];
+
+// Nov 2026 starts on a Sunday. [colour, best area + time, observance]
+const MONTH = [
+  ['steady','Love 10:40'],['steady','Money 14:26'],['steady','Study 18:46'],['careful','Travel 14:26'],['good','Money 11:30','Fasting day'],
+  ['good','Work 11:51'],['steady','Travel 11:30'],['good','Love 18:42','Festival of lights'],['careful','Rest 05:03'],['steady','Work 09:20'],
+  ['good','Money 11:30'],['good','Love 16:10'],['steady','Study 12:12'],['careful','Rest 05:05'],['steady','Travel 07:58'],
+  ['steady','Work 11:30','Month turns'],['good','Money 12:12'],['good','Work 11:30'],['steady','Study 18:40'],['good','Love 11:30','Fasting day'],
+  ['careful','Rest 05:10'],['steady','Study 09:15','Evening lamp'],['good','Work 11:30'],['good','Love 17:00','Full Moon'],['steady','Travel 14:26'],
+  ['careful','Rest 05:12'],['good','Money 11:30'],['steady','Love 15:44'],['steady','Study 09:15'],['good','Work 11:30']
+];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/* ---------- helpers ---------- */
+const $ = (s,r)=> (r||document).querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+const ICONS = {
+  check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  pause:'<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+  minus:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+  warn:'<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.5"/>',
+  moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  sunrise:'<path d="M4 17h16M6 13a6 6 0 0 1 12 0M12 3v4M5 8l1.5 1.5M19 8l-1.5 1.5"/>',
+  pin:'<path d="M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.5"/>',
+  light:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  briefcase:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18"/>',
+  heart:'<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+  coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a1.75 1.75 0 0 1 0 3.5H11a1.75 1.75 0 0 0 0 3.5h3.5"/>',
+  arrow:'<path d="M4 12h16M14 6l6 6-6 6"/>',
+  book:'<path d="M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h14"/>',
+  leaf:'<path d="M5 19C5 9 11 4 20 4c0 9-5 15-15 15z"/><path d="M5 19l7-7"/>',
+  star:'<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.5 9.3l6.1-.7z"/>',
+  back:'<path d="M20 12H4M10 6l-6 6 6 6"/>',
+  home:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  filter:'<path d="M4 5h16l-6 8v6l-4-2v-4z"/>'
+};
+const icon = (n,cls)=> '<svg class="ic'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" aria-hidden="true">'+ICONS[n]+'</svg>';
+const KIND = { go:{word:'Good for',icon:'check'}, avoid:{word:'Better to wait',icon:'pause'}, neutral:{word:'Quiet choice',icon:'minus'} };
+const COLOUR = { good:{icon:'check'}, steady:{icon:'minus'}, careful:{icon:'warn'} };
+const colourWord = c => '<span class="state '+c+'">'+icon(COLOUR[c].icon)+c+'</span>';
+const areaChips = a => a.length ? '<span class="chips">'+a.map(x=>'<span class="chip">'+icon(AREA_ICON[x])+x+'</span>').join('')+'</span>' : '';
+const fmtLeft = m => m>=60 ? Math.floor(m/60)+' h '+(m%60)+' min' : m+' min';
+
+/* ---------- state ---------- */
+const state = { view:'today', place:'sanjose', date:TODAY_KEY, theme:'dark', area:'Work', scen:0, filter:null, answers:{} };
+try{ const t=localStorage.getItem('lt-theme'); if(t==='light'||t==='dark') state.theme=t; }catch(e){}
+
+function dateInfo(key){
+  const d = new Date(key+'T12:00:00');
+  return { dow:DOW[d.getDay()], day:d.getDate(), mon:MONTH_NAMES[d.getMonth()], year:d.getFullYear(), label:DOW[d.getDay()]+' '+d.getDate()+' '+MONTH_NAMES[d.getMonth()]+' '+d.getFullYear() };
+}
+function dayFor(key){ return DAYS[key] || Object.assign({}, DAYS[TODAY_KEY], {sample:true}); }
+
+/* ---------- renderers ---------- */
+function renderToday(){
+  const P = PLACES[state.place];
+  const d = dayFor(state.date);
+  const di = dateInfo(state.date);
+  const isToday = state.date===TODAY_KEY;
+  const rise = state.place==='sanjose' ? d.rise : P.rise;
+  const set  = state.place==='sanjose' ? d.set  : P.set;
+
+  let nowCard = '';
+  if(isToday){
+    const cur = d.windows.find(w=> NOW_MIN>=toMin(w.from) && NOW_MIN<toMin(w.to));
+    const left = cur ? toMin(cur.to)-NOW_MIN : 0;
+    let line, kind='neutral', ic='minus';
+    if(cur && cur.kind==='go'){ kind='go'; ic='check'; line='Right now: a good window for '+cur.areas.slice(0,2).map(a=>a.toLowerCase()).join(' and '); }
+    else if(cur && cur.kind==='avoid'){ kind='avoid'; ic='pause'; line='Right now: better to wait until '+cur.to; }
+    else { line='Right now: a quiet stretch, nothing to avoid'; }
+    nowCard = '<section class="card now" aria-label="Right now">'+
+      '<span class="state '+kind+'">'+icon(ic,'big')+'</span>'+
+      '<div><p class="big">'+esc(line)+'</p><p class="left">'+(cur?fmtLeft(left)+' left · until '+cur.to:'')+' · '+KIND[kind].word+'</p></div></section>';
+  } else {
+    nowCard = '<section class="card now" aria-label="Chosen day"><span class="state neutral">'+icon('clock','big')+'</span>'+
+      '<div><p class="big">'+esc(di.label)+'</p>'+
+      '<p style="margin:10px 0 0"><button class="btn primary" type="button" id="backToday">'+icon('back')+'Back to today</button></p></div></section>';
+  }
+
+  // "Planning something today?" — eight common scenarios; one filters the list. A situation question comes first when one applies.
+  const filtersShown = TODAY_FILTERS.filter(([name])=>{
+    const r = state.answers.rel;
+    if(r==='Single' && name==='Clear the air') return false;
+    if(r==='Committed' && (name==='Ask someone out' || name==='A first date')) return false;
+    return true;
+  });
+  const active = state.filter ? TODAY_FILTERS.find(f=>f[0]===state.filter) : null;
+  let suits = null, verdict = '';
+  if(active){
+    const qk = questionFor(active[0]);
+    if(qk && !state.answers[qk]){ verdict = questionCard(qk,'today'); }
+    else {
+      suits = active[1].slice(); let line = active[2];
+      if(active[0]==='A hard talk with the boss' && state.answers.who==='My boss'){ suits=[12,13]; line='Today: for your boss, the growth hour 15:44–17:02 or the gentle hour 17:02–18:44; avoid 13:28–15:12'; }
+      if(active[0]==='Send a resume' && state.answers.job==='Own business'){ line='Today: good for pitching a client 11:30–13:08; avoid 13:28–15:12'; }
+      verdict = '<p class="verdict">'+icon('check')+'<span>'+esc(line)+'</span></p>';
+    }
+  }
+  const filters = isToday ? '<div class="filters"><p class="q" id="planq">Planning something today?</p>'+
+    '<div class="ctabs" role="group" aria-labelledby="planq">'+ filtersShown.map(([name])=>
+      '<button type="button" data-filter="'+esc(name)+'" aria-pressed="'+(state.filter===name)+'">'+esc(name)+'</button>').join('') + '</div>'+ verdict + '</div>' : '';
+
+  const banner = '<section class="card banner" aria-label="The day">'+
+    '<h2>'+esc(di.label)+'</h2>'+
+    '<div class="meta">'+
+      '<span>'+icon('sunrise')+'Sunrise '+rise+' – sunset '+set+'</span>'+
+      '<span>'+icon('moon')+esc(d.moon)+'</span>'+
+      '<span>Day colour: '+colourWord(d.colour)+'</span>'+
+    '</div>'+
+    // three cards: Day · Sky · For you — a carousel on the phone, a three-column row from 820 up; each a title and one line
+    '<div class="car" data-desktop="row" aria-label="The day in three cards">'+
+      '<div class="ctrack" tabindex="0" aria-label="Day, Sky and For you cards; swipe or use the arrow keys">'+
+        '<div class="cpanel box"><h4>'+icon('check')+'Day</h4><p class="pl">'+esc(d.p1)+'</p></div>'+
+        '<div class="cpanel box"><h4>'+icon('moon')+'Sky</h4><p class="pl">'+esc(d.p2)+'</p></div>'+
+        '<div class="cpanel box"><h4>'+icon('star')+'For you</h4><p class="pl">'+esc(d.personal)+'</p></div>'+
+      '</div><div class="cdots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>'+
+    '</div>'+
+  '</section>';
+
+  // the window list in time order, grouped into four segments by start time
+  const SEGS = [['Morning',0,11*60],['Midday',11*60,14*60],['Afternoon',14*60,17*60],['Evening',17*60,24*60]];
+  const winHtml = (w,i)=>{
+    const k = KIND[w.kind];
+    const fit = suits ? suits.includes(i) : null;
+    return '<li><div class="t">'+w.from+'<br>'+w.to+'</div>'+
+      '<button class="win '+w.kind+(fit===false?' dim':'')+'" type="button" data-win="'+i+'" aria-label="'+esc(w.from+' to '+w.to+', '+k.word+(w.areas.length?' '+w.areas.join(', '):'')+', '+w.label+(fit===true?', suits your plan':'')+'. Opens why.')+'">'+
+      '<span class="row"><span class="lbl"><span class="state '+w.kind+'">'+icon(k.icon)+'</span> '+esc(w.label)+(fit===true?' <span class="suits">Suits</span>':'')+'</span><span class="why">'+icon('info')+'Why</span></span>'+
+      (w.kind!=='avoid' && w.areas.length ? '<span class="row"><span class="tiny muted">'+k.word+'</span>'+areaChips(w.areas)+'</span>' : (w.kind==='avoid'?'<span class="tiny muted">'+k.word+' · until '+w.to+'</span>':''))+
+      '</button></li>';
+  };
+  const segs = SEGS.map(([name,a,b])=>{
+    const items = d.windows.map((w,i)=>[w,i]).filter(([w])=> toMin(w.from)>=a && toMin(w.from)<b);
+    const go = items.filter(([w])=>w.kind==='go').length, wait = items.filter(([w])=>w.kind==='avoid').length;
+    return {name, items, go, wait, cnt: go+' go · '+wait+' wait'};
+  });
+  let startSeg = 0;
+  if(isToday){ const s = SEGS.findIndex(([,a,b])=> NOW_MIN>=a && NOW_MIN<b); if(s>=0) startSeg = s; }
+  const list = '<section class="car" data-desktop="anchors" data-start="'+startSeg+'" aria-label="Windows from 05:00 to 23:00">'+
+    '<div class="ctabs fill" role="tablist" aria-label="Part of the day">'+ segs.map((s,i)=>
+      '<button type="button" role="tab" aria-selected="'+(i===startSeg)+'" aria-controls="seg'+i+'"><span>'+s.name+'</span><span class="cnt">'+s.cnt+'</span></button>').join('') + '</div>'+
+    '<div class="ctrack" tabindex="0" aria-label="Four parts of the day; swipe or use the arrow keys">'+ segs.map((s,i)=>
+      '<div class="cpanel" id="seg'+i+'" role="tabpanel" aria-label="'+s.name+'"><h3>'+s.name+' <span class="cnt">'+s.cnt+'</span></h3>'+
+      '<ol class="timeline" style="margin-top:0">'+ s.items.map(([w,i])=>winHtml(w,i)).join('') +'</ol></div>').join('') +
+    '</div><div class="cdots" aria-hidden="true">'+segs.map((s,i)=>'<i'+(i===startSeg?' class="on"':'')+'></i>').join('')+'</div>'+
+  '</section>'+
+  '<div class="legend"><span><span class="sw go"></span>'+icon('check')+' Good for</span><span><span class="sw avoid"></span>'+icon('pause')+' Better to wait</span><span><span class="sw neutral"></span>'+icon('minus')+' Quiet choice</span></div>';
+
+  const strip = '<div class="strip" role="group" aria-label="This week">'+ WEEK_KEYS.map(k=>{
+    const x=DAYS[k]; return '<button type="button" data-date="'+k+'"'+(k===state.date?' aria-current="date"':'')+'><span class="d">'+x.dow+' '+x.n+'</span><span class="s">'+colourWord(x.colour)+'</span><span class="s">'+x.rise+' – '+x.set+'</span></button>';
+  }).join('') + '</div>';
+
+  return strip + '<div class="today-top">'+nowCard+banner+'</div>'+filters+list;
+}
+
+/* "Lucky times this week": area tabs → scenario sub-tabs → one card per scenario */
+function renderScenarioPanel(){
+  const list = scenariosFor(state.area);
+  if(state.scen >= list.length) state.scen = 0;
+  const areaTabs = '<div class="ctabs" role="tablist" aria-label="Area">'+ AREAS.map(a=>
+    '<button type="button" role="tab" data-area="'+a+'" aria-selected="'+(a===state.area)+'">'+icon(AREA_ICON[a])+a+'</button>').join('') + '</div>';
+  const subTabs = '<div class="ctabs sub" role="tablist" aria-label="What you are about to do">'+ list.map((sc,i)=>
+    '<button type="button" role="tab" aria-selected="'+(i===state.scen)+'" aria-controls="sc'+i+'">'+esc(sc.name)+'</button>').join('') + '</div>';
+  const cards = list.map((sc,i)=>{
+    const qk = questionFor(sc.name);
+    let body;
+    if(qk && !state.answers[qk]){ body = questionCard(qk,'week'); }
+    else {
+      const c = applyAnswer(sc);
+      body = (c.note ? '<p class="note-line"><span>'+esc(c.note)+'</span><button type="button" class="lnk" data-change="'+qk+'">Change</button></p>' : '')+
+        '<h4>'+esc(c.title)+'</h4><ol>'+ c.rows.map(r=>'<li><span class="w">'+r[0]+' '+r[1].split('–')[0]+'</span><span><span class="small">'+r[1]+'</span><br><span class="y">'+esc(r[2])+'</span></span></li>').join('') +'</ol>'+
+        '<p class="avoid-line">'+icon('pause')+'<span>Avoid: '+esc(fullDays(c.avoid))+'</span></p>'+
+        '<div class="foot"><button type="button" class="btn ghost" data-scen="'+i+'">'+icon('info')+'Why</button></div>';
+    }
+    return '<div class="cpanel box area scen'+(i===state.scen?' active':'')+'" id="sc'+i+'" role="tabpanel" aria-label="'+esc(sc.name)+'">'+body+'</div>';
+  }).join('');
+  return '<section class="card area-list" aria-label="Lucky times this week"><h3>Lucky times this week</h3>'+areaTabs+
+    '<div class="car subtabs" data-desktop="tabs" data-start="'+state.scen+'">'+subTabs+
+    '<div class="ctrack" tabindex="0" aria-label="One card per plan; swipe or use the arrow keys">'+cards+'</div>'+
+    '<div class="cdots" aria-hidden="true">'+list.map((s,i)=>'<i'+(i===state.scen?' class="on"':'')+'></i>').join('')+'</div></div></section>';
+}
+
+function renderWeek(){
+  const START=6*60, END=22*60, SPAN=END-START;
+  const head = '<div class="whead"><div class="dh" aria-hidden="true"></div>'+ WEEK_KEYS.map(k=>{
+    const x=DAYS[k]; return '<div class="dh"'+(k===TODAY_KEY?' aria-current="date"':'')+'><span class="n">'+x.dow+' '+x.n+'</span><span class="cw"><span class="dot '+x.colour+'"></span>'+x.colour+'</span></div>';
+  }).join('') + '</div>';
+  let gut = '<div class="gut" aria-hidden="true">';
+  for(let h=7;h<22;h++){ gut += '<span style="top:'+((h*60-START)/SPAN*100)+'%">'+String(h).padStart(2,'0')+'</span>'; }
+  gut += '</div>';
+  const cols = WEEK_KEYS.map(k=>{
+    const x=DAYS[k];
+    let out='<div class="col" role="group" aria-label="'+x.dow+' '+x.n+' Nov">';
+    x.windows.forEach((w,i)=>{
+      const a=Math.max(toMin(w.from),START), b=Math.min(toMin(w.to),END); if(b<=a) return;
+      const kd=KIND[w.kind];
+      out += '<button type="button" class="band '+w.kind+'" data-date="'+k+'" data-win="'+i+'" style="top:'+((a-START)/SPAN*100)+'%;height:'+((b-a)/SPAN*100)+'%" aria-label="'+esc(x.dow+' '+w.from+' to '+w.to+', '+kd.word+(w.areas.length?' '+w.areas.join(', '):'')+'. Opens why.')+'"><span class="bl">'+esc(w.kind==='avoid'?'Wait':w.areas.join(' · ')||w.label)+'</span></button>';
+    });
+    if(k===TODAY_KEY) out += '<div class="nowline" style="top:'+((NOW_MIN-START)/SPAN*100)+'%" aria-hidden="true"><span>now</span></div>';
+    return out+'</div>';
+  }).join('');
+  const grid = '<div class="wgrid" aria-label="Week of 2 November 2026, 06:00 to 22:00">'+head+'<div class="wbody">'+gut+cols+'</div></div>'+
+    '<div class="legend"><span><span class="sw go"></span>'+icon('check')+' Good for</span><span><span class="sw avoid"></span>'+icon('pause')+' Better to wait</span><span><span style="display:inline-block;width:22px;border-top:2px solid var(--now);vertical-align:middle;margin-right:6px"></span>now</span></div>';
+  const list = renderScenarioPanel();
+  return '<div class="week-layout"><div>'+grid+'</div><div>'+list+'</div></div>';
+}
+
+function renderMonth(){
+  let cells='';
+  for(let i=0;i<MONTH.length;i++){
+    const n=i+1, key='2026-11-'+String(n).padStart(2,'0'), [c,best,ob]=MONTH[i];
+    cells += '<button type="button" class="day" data-date="'+key+'"'+(key===TODAY_KEY?' aria-current="date"':'')+
+      ' aria-label="'+esc(DOW[i%7]+' '+n+' November, '+c+(ob?', '+ob:'')+', best for '+best+'. Opens the day.')+'">'+
+      '<span class="num">'+n+'</span><span class="dot '+c+'" aria-hidden="true"></span><span class="word state '+c+'">'+icon(COLOUR[c].icon)+c+'</span>'+
+      (ob?'<span class="ob">'+icon('star')+'<span>'+esc(ob)+'</span></span>':'')+
+      '<span class="bars"><span class="bar">'+icon(AREA_ICON[best.split(' ')[0]])+' '+esc(best)+'</span></span>'+
+      '</button>';
+  }
+  return '<div class="toprow"><h2 style="margin:0;font-size:24px">November 2026</h2></div>'+
+    '<div class="mhead" aria-hidden="true">'+DOW.map(d=>'<span>'+d+'</span>').join('')+'</div>'+
+    '<div class="mgrid" role="group" aria-label="November 2026">'+cells+'</div>'+
+    '<div class="legend"><span>'+colourWord('good')+'</span><span>'+colourWord('steady')+'</span><span>'+colourWord('careful')+'</span><span>'+icon('star')+' observance</span></div>';
+}
+
+function render(){
+  const v=$('#view');
+  v.innerHTML = state.view==='today'?renderToday(): state.view==='week'?renderWeek(): renderMonth();
+  document.querySelectorAll('.seg [role=tab]').forEach(b=> b.setAttribute('aria-selected', String(b.dataset.view===state.view)));
+  const di=dateInfo(state.date);
+  $('#live').textContent = 'Showing '+state.view+' view for '+(state.view==='today'?di.label:state.view==='week'?'the week of Mon 2 Nov 2026':'November 2026');
+  initCarousels();
+  selfCheck();
+}
+
+/* ---------- carousel / tab panel wiring ----------
+   Below the breakpoint every .car is a scroll-snap carousel (swipe, chips, dots).
+   From the breakpoint up, data-desktop decides: "tabs" (one panel visible), "anchors" (all panels, chips jump), "row" (three columns). */
+const MQ_DESK = matchMedia('(min-width:1100px)'), MQ_TAB = matchMedia('(min-width:820px)'), MQ_REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
+const GAP = 12;
+function initCarousels(){
+  document.querySelectorAll('.car').forEach(root=>{
+    const track = root.querySelector('.ctrack'); if(!track) return;
+    const panels = [...track.children].filter(e=>e.classList.contains('cpanel'));
+    const tabs = [...root.querySelectorAll('.ctabs [role=tab]')], dots = [...root.querySelectorAll('.cdots i')];
+    const mode = ()=> root.dataset.desktop==='row' ? (MQ_TAB.matches?'row':'car') : (MQ_DESK.matches ? root.dataset.desktop : 'car');
+    let idx = Math.min(panels.length-1, Number(root.dataset.start||0));
+    const paint = ()=>{
+      tabs.forEach((t,i)=>{ t.setAttribute('aria-selected', String(i===idx)); t.tabIndex = i===idx?0:-1; });
+      dots.forEach((d,i)=> d.classList.toggle('on', i===idx));
+      panels.forEach((p,i)=> p.classList.toggle('active', i===idx));
+    };
+    const go = (i, instant)=>{
+      idx = i; paint();
+      const m = mode(), behavior = (instant || MQ_REDUCED.matches) ? 'auto' : 'smooth';
+      if(m==='car'){ track.scrollTo({left: i*(panels[0].offsetWidth+GAP), behavior}); }
+      else if(m==='anchors'){ panels[i].scrollIntoView({behavior, block:'start'}); }
+    };
+    tabs.forEach((t,i)=> t.addEventListener('click', ()=>go(i)));
+    let raf=0;
+    track.addEventListener('scroll', ()=>{
+      if(mode()!=='car') return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(()=>{
+        const n = Math.max(0, Math.min(panels.length-1, Math.round(track.scrollLeft/(panels[0].offsetWidth+GAP))));
+        if(n!==idx){ idx=n; paint(); }
+      });
+    });
+    track.addEventListener('keydown', e=>{   // keyboard swipe when the track itself is focused
+      if(mode()!=='car') return;
+      if(e.key==='ArrowRight'){ e.preventDefault(); go(Math.min(panels.length-1, idx+1)); }
+      if(e.key==='ArrowLeft'){ e.preventDefault(); go(Math.max(0, idx-1)); }
+    });
+    root.goTo = go;
+    paint();
+    if(mode()==='car' && idx>0) go(idx, true);
+  });
+}
+/* any tablist: Left/Right arrows move between tabs and activate */
+document.addEventListener('keydown', e=>{
+  if(e.key!=='ArrowRight' && e.key!=='ArrowLeft') return;
+  const list = e.target.closest && e.target.closest('[role=tablist]'); if(!list) return;
+  const tabs=[...list.querySelectorAll('[role=tab]')]; const i=tabs.indexOf(e.target); if(i<0) return;
+  e.preventDefault(); const n=tabs[(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length]; n.focus(); n.click();
+});
+
+/* ---------- why sheet ---------- */
+let lastFocus=null, openSheetEl=null;
+function openSheet(el, focusEl){
+  lastFocus=document.activeElement; openSheetEl=el;
+  el.classList.add('open'); $('#backdrop').classList.add('open');
+  el.setAttribute('aria-hidden','false'); $('#app').setAttribute('aria-hidden','true');
+  (focusEl||el).focus();
+}
+function closeSheet(){
+  if(!openSheetEl) return;
+  openSheetEl.classList.remove('open'); $('#backdrop').classList.remove('open');
+  openSheetEl.setAttribute('aria-hidden','true'); $('#app').removeAttribute('aria-hidden');
+  openSheetEl=null;
+  if(lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
+}
+function openScenWhy(i){
+  const sc = scenariosFor(state.area)[i]; if(!sc) return;
+  const c = applyAnswer(sc), y = sc.why;
+  const rows=[['Tithi class',y.t],['Star class',y.s],['Hora',y.h],['Choghadiya',y.c],['Your Moon',y.m],['Avoid',y.x]];
+  $('#whyBody').innerHTML = '<h2 id="whyTitle">'+esc(c.title)+'</h2><p class="sub">'+esc(state.area)+(c.note?' · '+esc(c.note):'')+'</p>'+
+    '<dl>'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join('')+'</dl>'+
+    '<p class="src">Muhurta Chintamani; Drik Panchang tutorials. Mercury is direct this week (engine flag).</p>'+
+    '<div class="actions"><button class="btn primary" type="button" id="whyDone">Done</button></div>';
+  openSheet($('#why'), $('#whyClose'));
+  $('#whyDone').addEventListener('click', closeSheet);
+}
+function openWhy(dateKey, idx){
+  const d=dayFor(dateKey), w=d.windows[idx], di=dateInfo(dateKey), k=KIND[w.kind];
+  const rows=[];
+  if(w.why.m) rows.push(['Muhurta',w.why.m]);
+  if(w.why.h) rows.push(['Hora lord',w.why.h]);
+  if(w.why.c) rows.push(['Choghadiya',w.why.c]);
+  rows.push(['Tara bala', d.colour==='careful'?'Vipat (avoid big starts)':d.colour==='steady'?'Janma (intense)':'Sadhaka (good)']);
+  rows.push(['Chandra bala', d.colour==='careful'?'8th from your Moon (chandrashtama)':d.colour==='steady'?'5th from your Moon (mixed)':'10th from your Moon (good)']);
+  rows.push(['Moon’s house', d.colour==='good'?'10th — work':'4th — home and study']);
+  rows.push(['Rule', w.kind==='avoid'?'An avoid band cuts every window it overlaps; it never fades.':w.kind==='go'?'A good muhurta or a suiting hora and choghadiya, outside every avoid band, scores the areas shown.':'Nothing to avoid, nothing that scores high: a quiet choice.']);
+  $('#whyBody').innerHTML = '<h2 id="whyTitle">'+esc(w.label)+'</h2><p class="sub">'+esc(di.dow+' '+di.day+' '+di.mon)+' · '+w.from+'–'+w.to+' · <span class="state '+w.kind+'">'+icon(k.icon)+k.word+'</span></p>'+
+    (w.areas.length?areaChips(w.areas):'')+
+    '<dl>'+rows.map(r=>'<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>').join('')+'</dl>'+
+    '<p class="src">Rules from Drik Panchang’s hora and choghadiya tables; every time and name is a stored engine row.</p>'+
+    '<div class="actions"><button class="btn primary" type="button" id="whyDone">Done</button></div>';
+  openSheet($('#why'), $('#whyClose'));
+  $('#whyDone').addEventListener('click', closeSheet);
+}
+
+/* ---------- self-check: banned words in visible text outside the Why sheet ---------- */
+const BANNED = /\b(sun|mars|mercury|jupiter|venus|saturn|rahu|ketu|tithi|nakshatra|horas?|choghadiya|muhurta|muhurat|dasha|mahadasha|antardasha|storm|hurricane|flood|blizzard|disaster|weather|season|forecast|hospital|emergency|urgent care|doctor|surgery|triage|guaranteed|certain|absolutely|100 ?%|safe|resort|vip|private jet|transit|retrograde|lord|house|lagna|yoga|karana|varjyam|gulika|yamaganda|abhijit|chandrashtama)\b/gi;
+function selfCheck(){
+  // Weekday abbreviations (Sun 8, Sun 18:42, the column head "Sun") are calendar words, not the planet: strip them first.
+  const text = (($('#app').innerText||'') + ' ' + Array.from(document.querySelectorAll('#app option')).map(o=>o.textContent).join(' '))
+    .replace(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)(?=\s*\d|\s*$)/gm,'');
+  const hits = {}; let m;
+  BANNED.lastIndex=0;
+  while((m=BANNED.exec(text))){ hits[m[0].toLowerCase()]=(hits[m[0].toLowerCase()]||0)+1; }
+  const keys=Object.keys(hits);
+  if(keys.length) console.warn('[lucky-times self-check] banned words visible outside Why:', hits);
+  else console.info('[lucky-times self-check] clean ('+state.view+')');
+}
+
+/* ---------- wiring ---------- */
+// The city lives in Settings ("Where you are") only; the mockup panel outside the frame mirrors it for reviewers.
+const mockSel=$('#mockPlace');
+Object.keys(PLACES).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=PLACES[k].name; mockSel.appendChild(o); });
+function paintPlace(){
+  mockSel.value=state.place;
+  $('#placeChoice').innerHTML = Object.keys(PLACES).map(k=>'<label><input type="radio" name="city" value="'+k+'"'+(k===state.place?' checked':'')+'> '+esc(PLACES[k].name)+'</label>').join('');
+}
+mockSel.addEventListener('change', ()=>{ state.place=mockSel.value; paintPlace(); render(); });
+$('#placeChoice').addEventListener('change', e=>{ if(e.target.name==='city'){ state.place=e.target.value; paintPlace(); render(); } });
+$('#mockReset').addEventListener('click', ()=>{ state.date=TODAY_KEY; state.filter=null; state.view='today'; render(); });
+$('#settingsBtn').addEventListener('click', ()=> openSheet($('#settings'), $('#settingsClose')));
+$('#settingsClose').addEventListener('click', closeSheet);
+$('#settingsDone').addEventListener('click', closeSheet);
+paintPlace();
+
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', state.theme);
+  const b=$('#themeBtn'); const light=state.theme==='light';
+  b.innerHTML = icon(light?'moon':'light')+'<span>'+(light?'Dark':'Light')+'</span>';
+  b.setAttribute('aria-pressed', String(light));
+  b.setAttribute('aria-label', light?'Switch to dark theme':'Switch to light theme');
+}
+$('#themeBtn').addEventListener('click', ()=>{ state.theme = state.theme==='light'?'dark':'light'; try{localStorage.setItem('lt-theme',state.theme);}catch(e){} applyTheme(); });
+
+document.querySelectorAll('.seg [role=tab]').forEach(b=> b.addEventListener('click', ()=>{ state.view=b.dataset.view; render(); }));
+[MQ_DESK, MQ_TAB].forEach(mq=> mq.addEventListener('change', render));   // re-wire the panels when a breakpoint is crossed
+
+$('#view').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.id==='backToday'){ state.date=TODAY_KEY; render(); return; }
+  if(b.dataset.answer){ state.answers[b.dataset.answer]=b.dataset.opt; render(); return; }          // one-tap answer, remembered for the session
+  if(b.dataset.change){ delete state.answers[b.dataset.change]; render(); return; }                   // "Change" re-asks that one question
+  if(b.dataset.filter){ state.filter = state.filter===b.dataset.filter ? null : b.dataset.filter; render(); return; }
+  if(b.dataset.area){ state.area=b.dataset.area; state.scen=0; render(); return; }
+  if(b.dataset.scen!==undefined){ openScenWhy(Number(b.dataset.scen)); return; }
+  if(b.dataset.win!==undefined){ openWhy(b.dataset.date||state.date, Number(b.dataset.win)); return; }
+  if(b.dataset.date){ state.date=b.dataset.date; state.view='today'; render(); window.scrollTo({top:0}); return; }
+});
+// keep the active scenario in state when the sub-tabs or a swipe change it
+$('#view').addEventListener('click', e=>{ const t=e.target.closest('.subtabs [role=tab]'); if(t){ state.scen=[...t.parentNode.children].indexOf(t); } });
+$('#view').addEventListener('scroll', e=>{ const tr=e.target.closest && e.target.closest('.subtabs .ctrack'); if(tr){ const p=tr.querySelector('.cpanel'); if(p) state.scen=Math.round(tr.scrollLeft/(p.offsetWidth+GAP)); } }, true);
+$('#whyClose').addEventListener('click', closeSheet);
+$('#backdrop').addEventListener('click', closeSheet);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && openSheetEl) closeSheet(); });
+
+applyTheme();
+render();
+})();
+</script>
+</body>
+</html>

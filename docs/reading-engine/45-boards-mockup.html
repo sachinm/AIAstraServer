@@ -1,0 +1,1169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI AdAstra Boards Mockup</title>
+<style>
+:root{
+  color-scheme:dark;
+  --page:#06051a;--bg:#0b0a1f;--surface:#15142e;--line:#2b2a52;--text:#f2f1fc;--muted:#b4b2d4;
+  --brand:#b9a6ff;--brand-soft:rgba(185,166,255,.16);
+  --teal:#4fd1c0;--teal-soft:rgba(79,209,192,.15);
+  --rose:#f58bb3;--rose-soft:rgba(245,139,179,.15);
+  --gold:#ecc04f;--gold-soft:rgba(236,192,79,.15);
+  --g1:#a78bfa;--g2:#f472b6;--btn1:#6d28d9;--btn2:#be185d;
+  --scr-support:#0a1224;--sf-support:#131d36;--ln-support:#2a3858;
+  --scr-over:#0b0a1f;--sf-over:#15142e;--ln-over:#2b2a52;
+  --scr-opp:#170e1b;--sf-opp:#261728;--ln-opp:#4d3248;
+  --shadow:0 12px 48px rgba(0,0,0,.55);
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    color-scheme:light;
+    --page:#e7e6f2;--bg:#f6f5fc;--surface:#ffffff;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;
+    --brand:#5b21b6;--brand-soft:rgba(91,33,182,.1);
+    --teal:#0a7a6d;--teal-soft:rgba(10,122,109,.1);
+    --rose:#b0306a;--rose-soft:rgba(176,48,106,.1);
+    --gold:#7f5800;--gold-soft:rgba(127,88,0,.12);
+    --g1:#6d28d9;--g2:#be185d;
+    --scr-support:#eef3f8;--sf-support:#ffffff;--ln-support:#cfdae6;
+    --scr-over:#f6f5fc;--sf-over:#ffffff;--ln-over:#d8d6ee;
+    --scr-opp:#fff5ea;--sf-opp:#fffdf9;--ln-opp:#efd6ba;
+    --shadow:0 12px 48px rgba(40,30,90,.18);
+  }
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --page:#e7e6f2;--bg:#f6f5fc;--surface:#ffffff;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;
+  --brand:#5b21b6;--brand-soft:rgba(91,33,182,.1);
+  --teal:#0a7a6d;--teal-soft:rgba(10,122,109,.1);
+  --rose:#b0306a;--rose-soft:rgba(176,48,106,.1);
+  --gold:#7f5800;--gold-soft:rgba(127,88,0,.12);
+  --g1:#6d28d9;--g2:#be185d;
+  --scr-support:#eef3f8;--sf-support:#ffffff;--ln-support:#cfdae6;
+  --scr-over:#f6f5fc;--sf-over:#ffffff;--ln-over:#d8d6ee;
+  --scr-opp:#fff5ea;--sf-opp:#fffdf9;--ln-opp:#efd6ba;
+  --shadow:0 12px 48px rgba(40,30,90,.18);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:17px;line-height:1.5;overflow-x:hidden}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:inherit}
+h1,h2,h3,h4,p,ul,dl,dd{margin:0}
+ul{padding:0;list-style:none}
+svg{display:block;flex:none}
+:focus-visible{outline:3px solid var(--accent,var(--brand));outline-offset:2px;border-radius:8px}
+
+/* board accents */
+.b-you{--accent:var(--teal);--accent-soft:var(--teal-soft)}
+.b-love{--accent:var(--rose);--accent-soft:var(--rose-soft)}
+.b-work{--accent:var(--gold);--accent-soft:var(--gold-soft)}
+.b-none{--accent:var(--brand);--accent-soft:var(--brand-soft)}
+
+/* stage and frame */
+.stage{min-height:100vh;display:grid;grid-template-columns:minmax(220px,280px) minmax(0,420px);justify-content:center;gap:24px;padding:16px;align-items:start}
+.phone{grid-column:2;grid-row:1;position:relative;display:flex;flex-direction:column;height:min(880px,calc(100vh - 32px));min-height:560px;background:var(--bg);border:1px solid var(--line);border-radius:32px;overflow:hidden;box-shadow:var(--shadow)}
+.mock{grid-column:1;grid-row:1;position:sticky;top:16px}
+@media (max-width:760px){
+  .stage{display:block;padding:0}
+  .phone{max-width:420px;width:100%;margin:0 auto;height:100vh;height:100dvh;border-radius:0;border:0;box-shadow:none}
+  .mock{position:static;max-width:420px;margin:0 auto;padding:16px}
+}
+
+.screen{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 16px 28px;background:var(--scr);color:var(--text);--scr:var(--scr-over);--surface:var(--sf-over);--line:var(--ln-over)}
+.screen.lay-support{--scr:var(--scr-support);--surface:var(--sf-support);--line:var(--ln-support);font-size:18px;line-height:1.6}
+.screen.lay-opportunity{--scr:var(--scr-opp);--surface:var(--sf-opp);--line:var(--ln-opp)}
+.screen:focus{outline:none}
+.enter{animation:fade .25s ease both}
+.lay-support .enter{animation:none}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* header */
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px}
+.over{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.title{font-size:36px;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--text)}
+@supports (-webkit-background-clip:text) or (background-clip:text){
+  .title{background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+}
+.tools{display:flex;gap:6px;flex:none}
+.iconbtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);color:var(--text)}
+.iconbtn.plain{border-color:transparent;background:none}
+
+/* segmented control */
+.seg{display:grid;grid-template-columns:.72fr 1.45fr .85fr 1fr;gap:2px;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:18px}
+.seg button{min-height:44px;border-radius:11px;font-size:15px;font-weight:600;color:var(--muted);padding:0 4px;white-space:nowrap;text-align:center}
+.seg button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent);font-weight:800;box-shadow:inset 0 -3px 0 var(--accent)}
+
+/* layout rhythm */
+.stack{display:flex;flex-direction:column;gap:14px}
+.lay-support .stack{gap:22px}
+.lay-opportunity .stack{gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.lay-support .card{padding:20px}
+.card.soft{background:transparent;border-style:dashed}
+.k{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.meta{font-size:14px;color:var(--muted)}
+.muted{color:var(--muted)}
+.big{font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
+.sub-h{font-size:19px;font-weight:700;margin-bottom:4px}
+
+/* tone head */
+.tonechip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 9px;border-radius:999px;border:1.5px solid var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:700;font-size:15px}
+.tonechip.sm{font-size:14px;padding:3px 10px 3px 7px}
+.headline{font-size:28px;line-height:1.2;font-weight:800;letter-spacing:-.01em;margin:14px 0 8px}
+.lay-opportunity .headline{font-size:36px;line-height:1.1;letter-spacing:-.02em}
+.lede{font-size:1.1em}
+
+/* lists */
+.list li{display:flex;gap:10px;padding:7px 0;align-items:flex-start}
+.list li svg{margin-top:4px;color:var(--accent)}
+.lay-support .list li{padding:9px 0}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pair .card{padding:14px 12px}
+@media (min-width:480px){.pair{gap:14px}.pair .card{padding:16px}}
+.lay-support .pair{gap:22px}
+.hd{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:4px;font-size:1.02em}
+.hd svg{color:var(--accent)}
+
+/* rows and buttons */
+.rowbtn{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:10px 0;border-bottom:1px solid var(--line);text-align:left}
+.rowbtn:last-child{border-bottom:0}
+.rowbtn .rcol{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.rowbtn .rq{font-weight:600}
+.rowbtn>svg{color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 8px;border-radius:999px;border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--text);background:transparent}
+.chip svg{color:var(--accent)}
+.btn-primary{min-height:48px;padding:0 22px;border-radius:14px;background:linear-gradient(90deg,var(--btn1),var(--btn2));color:#fff;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.btn-primary[aria-pressed="true"]{background:var(--surface);color:var(--text);border:1.5px solid var(--accent)}
+.btn-ghost{min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.btn-ghost[aria-pressed="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:800}
+.linkbtn{min-height:44px;display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.backbtn{min-height:44px;display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--accent);margin-left:-6px;padding:0 8px 0 2px}
+
+/* now-to-next, bars */
+.steps{display:flex;align-items:stretch;gap:10px;margin:6px 0 8px}
+.st{flex:1}
+.st b{display:flex;align-items:center;gap:8px}
+.st .dot{width:12px;height:12px;border-radius:50%;border:3px solid var(--accent);flex:none}
+.st.now .dot{background:var(--accent)}
+.stline{align-self:center;flex:0 0 28px;height:3px;border-radius:2px;background:var(--line)}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:10px 0}
+.bar span{display:block;height:100%;background:var(--accent);border-radius:6px}
+.hero{border:2px solid var(--accent);background:var(--surface)}
+.herodate{font-size:34px;line-height:1.1;font-weight:800;letter-spacing:-.02em}
+
+details.card summary{min-height:44px;display:flex;align-items:center;justify-content:space-between;font-weight:700;cursor:pointer;list-style:none}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary::after{content:"+";font-size:24px;color:var(--accent);font-weight:400}
+details.card[open] summary::after{content:"\2212"}
+details.card[open] summary{margin-bottom:6px}
+
+/* rung */
+.rung h3{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:15px;color:var(--muted);font-weight:700;margin-bottom:8px}
+.rung .sent{font-size:1.08em;font-weight:700;margin-bottom:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:.95em}
+.kv dt{color:var(--muted);font-weight:600}
+.kv dd{font-weight:600}
+.rung.hidden{border-style:dashed;background:transparent}
+
+/* looking back */
+.rangecard{display:flex;flex-direction:column;gap:6px}
+.q{font-size:1.06em;font-weight:600;margin-bottom:12px}
+.ans{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.notechips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.notechips .btn-ghost{min-height:44px;font-size:15px}
+.confirmed{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.1em}
+.confirmed svg{color:var(--accent)}
+
+/* today */
+.lead{font-size:22px;line-height:1.3;font-weight:700}
+.bcard{display:block;position:relative;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:16px;padding:14px 44px 14px 16px;min-height:44px}
+.bcard .bc-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.bname{font-weight:800;color:var(--accent);font-size:17px}
+.bc-sent{font-size:1.02em;font-weight:600;margin-bottom:4px}
+.bc-date{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:15px}
+.bcard .chev{position:absolute;right:14px;top:50%;margin-top:-10px;color:var(--muted)}
+.changed{display:flex;gap:12px;align-items:flex-start;border:1.5px solid var(--brand);background:var(--brand-soft)}
+.askbar{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:0 16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--muted);text-align:left}
+
+/* ask */
+.chat{display:flex;flex-direction:column;gap:10px;margin:14px 0}
+.bubble{max-width:88%;padding:10px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--line)}
+.bubble.me{align-self:flex-end;background:var(--brand-soft);border-color:var(--brand)}
+.askform{position:sticky;bottom:-14px;display:flex;gap:8px;padding:10px 0 4px;background:var(--scr)}
+.askform input{flex:1;min-width:0;min-height:48px;border-radius:14px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-size:17px}
+.askform .btn-primary{width:48px;padding:0}
+.sugg{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.sugg .btn-ghost{justify-content:flex-start;text-align:left;min-height:48px}
+
+/* chart details (exempt block) */
+.chartd{border:1.5px dashed var(--accent)}
+.chartd dl{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px}
+.chartd dt{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.chartd dd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;line-height:1.45}
+
+/* tab bar */
+.tabbar{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:var(--bg)}
+.tab{position:relative;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:12px;font-weight:600;padding:6px 2px;text-align:center}
+.tab[aria-current="page"]{color:var(--accent);font-weight:800}
+.tab[aria-current="page"]::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+
+/* overlay: sheets */
+.overlay{position:absolute;inset:0;z-index:20;pointer-events:none}
+.overlay.on{pointer-events:auto}
+.backdrop{position:absolute;inset:0;background:rgba(5,4,20,.55)}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:88%;display:flex;flex-direction:column;background:var(--bg);color:var(--text);border:1px solid var(--line);border-bottom:0;border-radius:24px 24px 0 0;animation:slide .26s ease both}
+.nomo .sheet,.nomo .backdrop{animation:none}
+@keyframes slide{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+.sh-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px 4px 20px}
+.sh-head h2{font-size:22px;font-weight:800}
+.sh-body{overflow-y:auto;padding:4px 20px 28px}
+.sh-body p+p,.sh-body p+ul,.sh-body ul+p{margin-top:12px}
+.sh-body .list li svg{color:var(--brand)}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);min-height:56px}
+.switch{min-width:76px;min-height:44px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700}
+.switch[aria-checked="true"]{border-color:var(--brand);background:var(--brand-soft)}
+.switch .knob{width:14px;height:14px;border-radius:50%;border:2.5px solid var(--muted)}
+.switch[aria-checked="true"] .knob{background:var(--brand);border-color:var(--brand)}
+
+/* mockup-only panel */
+.mock details{background:var(--surface);border:1px solid var(--line);border-radius:18px}
+.mock summary{min-height:48px;padding:0 16px;display:flex;align-items:center;font-weight:800;cursor:pointer}
+.mock .mbody{padding:0 16px 16px}
+.mrow{margin-top:14px}
+.mlabel{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.mchips{display:flex;flex-wrap:wrap;gap:8px}
+.mchip{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:999px;font-size:15px;font-weight:600}
+.mchip[aria-checked="true"]{border:2px solid var(--brand);background:var(--brand-soft);font-weight:800}
+.mchip[aria-checked="true"]::before{content:"\2713\00a0"}
+.mnote{font-size:14px;color:var(--muted);margin-top:12px}
+
+/* carousel: siblings side by side, never stacked (rule 11) */
+.car{margin:0 -16px}
+.car-chips{display:flex;gap:8px;overflow-x:auto;padding:0 16px 10px;scrollbar-width:none}
+.car-chips::-webkit-scrollbar{display:none}
+.car-chip{flex:none;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);font-size:15px;font-weight:600;color:var(--muted);background:var(--surface);white-space:nowrap}
+.car-chip[aria-selected="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:800}
+.car-track{position:relative;display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:2px 0 2px 16px;scroll-padding-inline-start:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.car-track::-webkit-scrollbar{display:none}
+.car-track::after{content:"";flex:0 0 16px}
+.car-item{flex:0 0 calc(100% - 28px);min-width:0;scroll-snap-align:start;display:flex;flex-direction:column}
+.car-item>.card,.car-item>.bcard{flex:1}
+.car-dots{display:flex;justify-content:center;gap:8px;padding:10px 16px 0}
+.car-dots span{width:8px;height:8px;border-radius:4px;background:var(--line)}
+.car-dots span.on{background:var(--accent);width:22px}
+.tierchips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none}
+.tierchips::-webkit-scrollbar{display:none}
+@media (prefers-reduced-motion:no-preference){.car-track,.car-chips{scroll-behavior:smooth}}
+
+/* desktop: the frame widens, the tab bar is a left rail, carousels become tab panels */
+@media (min-width:1024px){
+  .stage{grid-template-columns:minmax(220px,260px) minmax(0,980px)}
+  .phone{flex-direction:row;border-radius:24px}
+  .tabbar{order:-1;display:flex;flex-direction:column;justify-content:flex-start;width:100px;flex:none;border-top:0;border-right:1px solid var(--line);padding-top:16px}
+  .tab{min-height:68px;font-size:13px;flex:none}
+  .tab[aria-current="page"]::before{top:14px;bottom:14px;left:0;right:auto;width:3px;height:auto;border-radius:0 3px 3px 0}
+  .screen{padding:20px 32px 36px}
+  .sheet{left:100px}
+  .car{margin:0}
+  .car-chips{padding:0 0 12px;overflow:visible;flex-wrap:wrap}
+  .car-track{display:block;overflow:visible;padding:0;scroll-snap-type:none}
+  .car-track::after{content:none}
+  .car-item{display:none}
+  .car-item.on{display:flex}
+  .car-dots{display:none}
+  .car-row .car-chips{display:none}
+  .car-row .car-track{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .car-row .car-item{display:flex}
+  .tierchips{margin:0;padding:0 0 4px;overflow:visible;flex-wrap:wrap}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <main class="phone" id="phone" aria-label="App mockup">
+    <div class="screen" id="screen" tabindex="-1"></div>
+    <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+    <div class="overlay" id="overlay"></div>
+  </main>
+  <aside class="mock" aria-label="Mockup controls">
+    <details id="mockd" open>
+      <summary>Mockup only</summary>
+      <div class="mbody" id="mockbody"></div>
+    </details>
+  </aside>
+</div>
+<script>
+(function(){
+'use strict';
+
+/* ---------- dates (today is fixed for the mockup: Thursday 5 Nov 2026) ---------- */
+var TODAY_ISO='2026-11-05';
+var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var WEEKDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function pd(iso){var p=iso.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]);}
+function iso(t){return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+function plus(i,n){var t=pd(i);t.setDate(t.getDate()+n);return iso(t);}
+function f(i){var t=pd(i);return t.getDate()+' '+MONTHS[t.getMonth()];}
+function fy(i){var t=pd(i);return f(i)+(t.getFullYear()!==2026?' '+t.getFullYear():'');}
+function days(i){return Math.round((pd(i)-pd(TODAY_ISO))/864e5);}
+function daysText(i){var n=days(i);return n===1?'1 day':n+' days';}
+function inWhen(i){var n=days(i);if(n<14)return 'in '+daysText(i);return 'in about '+Math.round(n/7)+' weeks';}
+function wdDate(i){var t=pd(i);return WEEKDAYS[t.getDay()]+' '+f(i);}
+
+/* ---------- icons ---------- */
+var P={
+  today:'<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  you:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+  love:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  work:'<rect x="3" y="7" width="18" height="13" rx="3"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>',
+  ask:'<path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/>',
+  demanding:'<path d="M3 19L9 8l4 6 3-4 5 9z"/>',
+  easing:'<path d="M3 7c6 0 7 10 18 10"/><path d="M17 13l4 4-4 0"/>',
+  steady:'<path d="M4 9h16M4 15h16"/>',
+  open:'<path d="M5 20V11a7 7 0 0 1 14 0v9"/><path d="M9 20v-6a3 3 0 0 1 6 0v6"/>',
+  closing:'<path d="M7 4h10M7 20h10M8 4c0 5 4 5 4 8s-4 3-4 8M16 4c0 5-4 5-4 8s4 3 4 8"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>',
+  back:'<path d="M15 6l-6 6 6 6"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  check:'<path d="M5 12l5 5 9-10"/>',
+  okc:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12.5l3 3 5-6"/>',
+  wait:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  none:'<circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/>',
+  pause:'<path d="M9 5v14M15 5v14"/>',
+  theme:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',
+  cal:'<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  send:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.5v.5"/>',
+  lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'
+};
+function ic(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+P[n]+'</svg>';}
+
+/* ---------- boards, tones ---------- */
+var BOARD_ORDER=['you','love','work'];
+var TONE_ORDER=['demanding','easing','steady','open','closing'];
+var BOARDS={
+  you:{name:'You',area:'for you',areaNoun:'your own life',mv:'a fresh start',d:{E:'2027-01-18',O:'2027-02-24',C:'2026-11-28',OP:'2027-01-20'}},
+  love:{name:'Love',area:'in love',areaNoun:'your love life',mv:'a conversation',d:{E:'2027-01-14',O:'2027-03-03',C:'2026-11-20',OP:'2027-01-30'}},
+  work:{name:'Work',area:'at work',areaNoun:'your work',mv:'a move',d:{E:'2026-12-10',O:'2027-03-12',C:'2026-12-12',OP:'2027-02-07'}}
+};
+var TONES={
+  demanding:{label:'Demanding',layout:'support',rank:5},
+  easing:{label:'Easing',layout:'support',rank:3},
+  steady:{label:'Steady',layout:'overview',rank:1},
+  open:{label:'Open',layout:'opportunity',rank:2},
+  closing:{label:'Closing',layout:'opportunity',rank:4}
+};
+var LAYOUT_NAME={support:'Support',overview:'Overview',opportunity:'Opportunity'};
+
+function sub(str,b,yr){
+  var D=BOARDS[b].d,ff=yr?fy:f,B=BOARDS[b];
+  return str.replace(/\{(E|O|C|OP)\}/g,function(m,k){return ff(D[k]);})
+    .replace(/\{C1\}/g,ff(plus(D.C,1))).replace(/\{OP1\}/g,ff(plus(D.OP,1)))
+    .replace(/\{a\}/g,B.area).replace(/\{mv\}/g,B.mv).replace(/\{area\}/g,B.areaNoun);
+}
+
+/* ---------- copy: one block per board per tone ---------- */
+var COPY={
+work:{
+ demanding:{h:'A demanding stretch at work.',n:'It eases from {E}.',s:'Eases from {E}',
+  a:'Pick the one task your manager will notice most, and finish it first this week.',btn:'Add to my week',
+  good:['Finishing one thing at a time','Writing down what you agreed','Early nights'],
+  wait:['Asking for a raise','Big career decisions','Replying in the heat of the moment'],
+  protect:['Your sleep and your breaks','Your record of what you delivered']},
+ easing:{h:'The pressure is lifting.',n:'From {E}, a better time to move.',s:'Better from {E}',
+  a:'Update your CV and list three things you would like next. Do not send anything yet.',btn:'Add to my week',
+  before:['Update your CV and work record','Tell one trusted person what you want','Tidy loose ends on current projects'],
+  good:['Preparing quietly','Short catch-ups with colleagues'],
+  wait:['Handing in a notice','Signing anything new before {E}']},
+ steady:{h:'A steady period at work.',n:'Build until {O}.',s:'Next opening {O}',
+  a:'Choose one skill to build over the next 90 days and put 30 minutes a week into it.',btn:'Add to my week',
+  wins:['A clearer role on your current project','A useful new contact','One finished piece of work you can show'],
+  stable:'Your role looks steady. There is no sign of a job ending in the next year.',
+  good:['Learning and practice','Building steady habits at work'],
+  wait:['Rushing a move','Changing teams for the sake of change']},
+ closing:{h:'Finish what you started.',n:'Do it before {C}.',s:'Closes {C}',
+  a:'List what is half done. Pick the two that matter most and finish them this week.',btn:'Add to my week',
+  finish:['The proposal or project that is nearly there','The conversation you have been putting off','The paperwork that blocks a decision'],
+  good:['Following up','Asking for a decision'],
+  wait:['Starting something big','Waiting for a better moment']},
+ open:{h:'A strong stretch for your promotion.',n:'Ask before {OP}.',s:'Open until {OP}',
+  a:'Book time with your manager this month and bring three results you are proud of.',btn:'Add to my week',
+  ask:['The promotion or a bigger role','A pay review','A project that stretches you'],
+  good:['Speaking up in meetings','Sharing your results'],
+  wait:['Waiting for someone to notice','Big changes after {OP}']}
+},
+love:{
+ demanding:{h:'A strained stretch in love.',n:'It eases from {E}.',s:'Eases from {E}',
+  a:'Choose one calm moment this week to say what you need, in one or two sentences.',btn:'Add to my week',
+  good:['Listening before answering','Short, kind messages','Time with people who steady you'],
+  wait:['Deciding anything big together','Late-night arguments','Bringing up old hurts'],
+  protect:['Your sleep and your own space','The small routines you share']},
+ easing:{h:'Things are softening.',n:'From {E}, a better time to talk.',s:'Better from {E}',
+  a:'Start with one small, warm gesture this week. Save the big talk for after {E}.',btn:'Add to my week',
+  before:['Think about what you really want to say','Reconnect over something light','Let one old disagreement rest'],
+  good:['Gentle plans together','Honest, short conversations'],
+  wait:['Long talks about the future before {E}','Deciding who is right']},
+ steady:{h:'A settled stretch in love.',n:'A new opening on {O}.',s:'New opening {O}',
+  a:'Plan one thing to look forward to, together or for yourself, in the next two weeks.',btn:'Add to my week',
+  wins:['A calmer week with someone close','A warm introduction or a reconnection','A conversation that goes better than expected'],
+  stable:'Your closest relationships look steady. There is no sign of a break in the next few months.',
+  good:['Regular time together','Meeting people in relaxed settings'],
+  wait:['Testing someone','Rushing a label or a commitment']},
+ closing:{h:'A good window for a decision.',n:'It closes {C}.',s:'Closes {C}',
+  a:'Decide what you want to say yes to, and say it before {C}.',btn:'Add to my week',
+  finish:['The reply you owe someone','The plan you keep postponing','The question you want answered'],
+  good:['Saying yes clearly','Making a plan with a date'],
+  wait:['Leaving it open','Big changes after {C}']},
+ open:{h:'A warm opening for love.',n:'Say yes to introductions before {OP}.',s:'Open until {OP}',
+  a:'Say yes to the next invitation, even a small one, and keep one evening free this week.',btn:'Add to my week',
+  ask:['An introduction through a friend','A first or second meeting','A serious talk about the future'],
+  good:['Going out and being seen','Saying what you hope for'],
+  wait:['Waiting to feel ready','Big commitments after {OP}']}
+},
+you:{
+ demanding:{h:'A heavy stretch for you.',n:'It lightens from {E}.',s:'Lightens from {E}',
+  a:'Pick one small daily habit, such as a ten-minute walk, and keep it for seven days.',btn:'Add to my week',
+  good:['Rest','Simple routines','Talking to someone you trust'],
+  wait:['Big life decisions','Judging yourself','Taking on extra duties'],
+  protect:['Your energy in the evenings','The people who steady you']},
+ easing:{h:'You’re coming out of it.',n:'From {E}, a better time to start.',s:'Better from {E}',
+  a:'Write down one thing you want to begin after {E}, and one small step you can take now.',btn:'Add to my week',
+  before:['Name what you want to start','Clear one small pile of clutter','Pick a first step and a day for it'],
+  good:['Gentle routines','Spending time outdoors'],
+  wait:['Starting big projects before {E}','Comparing yourself with others']},
+ steady:{h:'A steady stretch.',n:'Good for habits and rest until {O}.',s:'Steady until {O}',
+  a:'Choose one habit to settle in over the next 90 days and put it in your calendar.',btn:'Add to my week',
+  wins:['A routine that finally sticks','A clearer sense of what you want','More energy by the end of the day'],
+  stable:'Your sense of direction looks steady. There is no sign of a big shake-up in the next few months.',
+  good:['Habits and rest','Learning something slowly'],
+  wait:['Rushing a big change','Overfilling your calendar']},
+ closing:{h:'A strong stretch for change.',n:'It closes {C}.',s:'Closes {C}',
+  a:'Choose the one change you keep postponing and take its first step before {C}.',btn:'Add to my week',
+  finish:['The decision you keep postponing','The conversation that clears the air','The first step of a plan you already have'],
+  good:['Deciding and acting','Asking for help'],
+  wait:['Waiting for a perfect moment','Big changes after {C}']},
+ open:{h:'A clear stretch for a fresh start.',n:'Begin before {OP}.',s:'Open until {OP}',
+  a:'Pick one thing you want to begin, and take its first step in the next seven days.',btn:'Add to my week',
+  ask:['A new course or skill','A change of routine or place','Help with something you have carried alone'],
+  good:['Starting something new','Saying what you want'],
+  wait:['Waiting to feel ready','Big changes after {OP}']}
+}
+};
+
+/* lead worry shown on Now, by board and tone */
+var MAINW={
+ work:{demanding:'job-hold',easing:'job-change',steady:'new-job',closing:'job-change',open:'promotion'},
+ love:{demanding:'fighting',easing:'stay',steady:'meet',closing:'marry',open:'meet'},
+ you:{demanding:'stuck',easing:'postponed',steady:'becoming',closing:'postponed',open:'luck'}
+};
+
+/* ---------- why we think so (plain sentences) ---------- */
+var WHYT={
+ demanding:['Your current chapter in life asks a lot of you in {area}.','This year’s chart shows the same pressure, easing around {E}.','A slow-moving influence in the sky this month adds weight until then.'],
+ easing:['Your current chapter is moving into a lighter part for {area}.','This year’s chart shows the pressure lifting from about {E}.','Nothing in the sky this month is adding weight any more.'],
+ steady:['Your current chapter is neither pushing nor pulling on {area}.','This year’s chart shows no large change before {O}.','Nothing in the sky this month is adding weight or opening a door.'],
+ closing:['Your current chapter gives {area} a good opening.','This year’s chart agrees, with the best stretch ending around {C}.','A slow-moving influence in the sky this month helps until then and fades after.'],
+ open:['Your current chapter is at its most helpful for {area}.','This year’s chart marks a clear opening until {OP}.','The sky this month supports bold, honest steps.']
+};
+var WHYN={demanding:5,easing:4,steady:4,closing:5,open:6};
+var WHYC={demanding:'likely',easing:'likely',steady:'likely',closing:'confirmed',open:'confirmed'};
+function whyBody(b,t){
+  var n=WHYN[t];
+  var items=WHYT[t].map(function(s){return sub(s,b);});
+  items.push(n+' of 7 independent signals agree, so we call this '+WHYC[t]+'.');
+  return '<p>Here is what we looked at, in plain words.</p><ul class="list">'+items.map(function(s){return '<li>'+ic('check',18)+'<span>'+s+'</span></li>';}).join('')+'</ul><p class="meta">We only show a date when our records support it. When the signals split, we say so.</p>';
+}
+
+/* ---------- ladder (Ahead) ---------- */
+var RUNGS={
+ demanding:[
+  {s:'Still demanding {a}, with the heaviest week first.',b:'Week of 23 Nov',h:'Week of 9 Nov',c:'confirmed'},
+  {s:'It eases from {E}, and things loosen week by week after that.',b:'From {E}',h:'Until {E}',c:'likely'},
+  {s:'A better time for {mv} opens around {O}.',b:'{O} onward',h:'A slow week in mid-Jan',c:'likely'},
+  {hidden:true}],
+ easing:[
+  {s:'The pressure keeps lifting {a}. Small steps get easier each week.',b:'Week of 23 Nov',h:'The next ten days',c:'confirmed'},
+  {s:'From {E}, a better time for {mv}.',b:'{E}, for about six weeks',h:'A flat week in late Dec',c:'likely'},
+  {s:'A clear opening comes around {O}.',b:'{O} onward',h:'A short pause in late Jan',c:'likely'},
+  {hidden:true}],
+ steady:[
+  {s:'Steady {a}. Nothing sudden is expected this month.',b:'Week of 16 Nov',h:'Nothing stands out',c:'confirmed'},
+  {s:'Steady through to the new year, with small wins in reach.',b:'Week of 11 Jan',h:'A quiet stretch around the holidays',c:'likely'},
+  {s:'A new opening comes around {O}.',b:'{O} onward',h:'Early Feb is slower',c:'likely'},
+  {hidden:true}],
+ closing:[
+  {s:'A good window {a} closes {C}. Use it for what is already in motion.',b:'Now to {C}',h:'The last week before {C}',c:'confirmed'},
+  {s:'After {C} it turns quieter for about two months.',b:'Before {C}',h:'Late Dec to early Jan',c:'likely'},
+  {s:'The next opening comes around {O}.',b:'{O} onward',h:'Mid-Feb is slower',c:'likely'},
+  {s:'Spring 2028 looks like the strongest stretch for a long-term change.',b:'Mar to May 2028',h:'Late 2027',c:'likely'}],
+ open:[
+  {s:'A warm opening {a}. This is the month to ask.',b:'Week of 16 Nov',h:'The last days of November',c:'confirmed'},
+  {s:'The window stays open to {OP}. Act before then.',b:'Mid-Dec to {OP}',h:'Christmas week is slow',c:'confirmed'},
+  {s:'A slower stretch from {OP1}, then another opening around {O}.',b:'{O} onward',h:'{OP1} to {O}',c:'likely'},
+  {s:'Spring 2028 looks like the strongest stretch for a long-term change.',b:'Mar to May 2028',h:'Late 2027',c:'likely'}]
+};
+var RUNG_LABELS=['1 month','3 months','6–9 months','1–2 years'];
+
+/* ---------- worries ---------- */
+var W={
+work:[
+ {id:'job-hold',q:'Will this job hold?',kind:'open',
+  chip:{demanding:'Keep an eye on things',easing:'Looks steady',steady:'No sign of a job ending',closing:'Looks steady',open:'No sign of a job ending'},
+  verdict:{demanding:'Keep an eye on things. Nothing in your chart points to your role ending, but this stretch makes it feel shaky until {E}.',easing:'Looks steady. The pressure on your role is lifting from {E}.',steady:'No sign of a job ending in the next year or more.',closing:'Looks steady. Use the window to {C} to make your place firmer.',open:'No sign of a job ending. Your standing is strongest until {OP}.'},
+  win:'The next 12 months',helps:['Keep a short record of what you delivered','Stay close to the person who decides about your work','Keep your CV current, just in case'],wait:['Quitting in frustration','Taking on a new risk before {E}'],
+  why:['Your work area has a steady base that does not show a break.','The pressure of this stretch is real, but it has an end date.','Most of the signals we use point the same way.'],conf:'likely'},
+ {id:'promotion',q:'Will I get the promotion?',kind:'waiting',chip:'Opens 7 Jan',
+  verdict:'Promised, but waiting. The strongest window opens on 7 Jan and runs to {OP}.',win:'7 Jan to {OP}',
+  helps:['Bring three results to your manager','Ask for the next step in writing','Say what you want, not only what you have done'],wait:['Asking before 7 Jan','Comparing yourself with a colleague'],
+  why:['Your chart shows recognition at work, but not before January.','This year’s chart marks the same stretch as the best time to ask.','Five of seven independent signals agree on the window.'],conf:'likely'},
+ {id:'job-change',q:'Should I change jobs?',kind:'waiting',chip:'Better after {E}',
+  verdict:'A better time to move starts {E}. Before then, prepare rather than leave.',win:'{E} to 14 Feb 2027',
+  helps:['Update your CV and work record','Talk to two people who know your field','Decide what you want next before you look'],wait:['Handing in a notice before {E}','Accepting the first offer without a second look'],
+  why:['Your current chapter makes moving hard until {E}.','After that, a lighter stretch makes a move easier to land.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'new-job',q:'Will I find a new job?',kind:'waiting',chip:'Opens {O}',
+  verdict:'Promised, but waiting. The clearest window to land a new role opens on {O}.',win:'{O} to 30 Jun 2027',
+  helps:['Keep your network warm','Apply in small batches, not all at once','Prepare your story for a gap or a change'],wait:['Applying in a rush before the window'],
+  why:['The strongest stretch for new work begins in March.','Before then, offers tend to stall or fall through.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'abroad',q:'Will I work abroad?',kind:'not',chip:'Not shown in your chart',
+  verdict:'Not shown in your chart for the next two years. We would rather say so than guess.',win:'No window found',
+  helps:['Build skills that travel well','Keep your passport and papers current'],wait:['Paying anyone to arrange a move'],
+  why:['None of the signals we use point to work in another country in the next two years.','If that changes, this page will change with it.'],conf:'likely'},
+ {id:'direction',q:'Where is my career heading?',kind:'open',chip:'Looks steady',
+  verdict:'Towards roles with more responsibility for people and decisions.',win:'The next two years',
+  helps:['Say yes to work that involves leading','Find someone a few steps ahead of you','Write down what you want to be known for'],wait:['Choosing a title over the work itself'],
+  why:['Your chart shows a steady rise in responsibility over time.','The pace is slow, which is why it feels gradual.','Five of seven independent signals agree.'],conf:'likely'}
+],
+love:[
+ {id:'meet',q:'When will I meet someone?',kind:'waiting',chip:'Opens {O}',
+  verdict:'Promised, but waiting. The warmest stretch to meet someone opens on {O}.',win:'{O} to 30 Apr 2027',
+  helps:['Say yes to introductions','Go to places you enjoy, not only places to meet people','Tell two friends you are open to it'],wait:['Settling out of tiredness','Deciding too fast who is right'],
+  why:['Your chart shows a clear opening for a new connection in March.','Before then, meetings tend to stay light.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'marry',q:'Will I marry, and when?',kind:'waiting',chip:'Later in 2027',
+  verdict:'Promised, but later than you may hope. The first clear window is in late 2027.',win:'Sep to Dec 2027',
+  helps:['Get clear on what you want in a partner','Let your family know how you feel','Keep building the life you want either way'],wait:['Choosing only to meet a deadline'],
+  why:['Your chart promises commitment, but not before the second half of 2027.','The slow part is the timing, not the promise.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'stay',q:'Will we stay together?',kind:'open',chip:'Strain eases {E}',
+  verdict:'We see strain, not an ending. The strain eases from {E}.',win:'Strain until {E}',
+  helps:['Say what you need before the 20th','Plan one good evening a week','Avoid deciding anything big in the last week of March'],wait:['Big decisions during a hard week','Keeping score'],
+  why:['Your closest relationship goes through a demanding stretch now.','This year’s chart shows it easing from {E}.','Nothing we see points to an ending.'],conf:'likely'},
+ {id:'fighting',q:'Why do we keep fighting?',kind:'waiting',
+  chip:{demanding:'Eases {E}',easing:'Softening',steady:'Quieter now',closing:'Talk before {C}',open:'A good time to talk'},
+  verdict:'The same pattern repeats: feeling unheard, then pulling away. It softens from {E}.',win:'Softens from {E}',
+  helps:['Say what you need in one sentence','Pause when it gets loud and return the next day','Ask what they heard before you answer'],wait:['Deciding anything big during a fight','Raising old hurts'],
+  why:['Your chart shows a habit of pulling back when you feel unheard.','A demanding stretch makes that habit louder.','The pressure lifts from {E}, and the habit gets easier to change.'],conf:'likely'},
+ {id:'back',q:'Can we get back together?',kind:'not',chip:'Not shown in your chart',
+  verdict:'Not shown in your chart in the next two years. We would rather say so than guess.',win:'No window found',
+  helps:['Give yourself time before deciding','Keep contact kind and short','Look after your own routines'],wait:['Reaching out when you are low'],
+  why:['None of the signals we use point to a return in the next two years.','If that changes, this page will change with it.'],conf:'likely'},
+ {id:'family',q:'Will my family accept this?',kind:'waiting',chip:'Eases 20 Jan',
+  verdict:'Pressure from family is strongest now and eases from 20 Jan.',win:'Eases from 20 Jan',
+  helps:['Give family one honest conversation, not many','Let your partner meet them in a calm setting','Name what you need from them'],wait:['Arguing it out at a family event'],
+  why:['Your chart shows pressure from outside the relationship.','It eases in January and opens up further in spring.','Four of seven independent signals agree.'],conf:'likely'}
+],
+you:[
+ {id:'becoming',q:'Who am I becoming?',kind:'open',chip:'Looks steady',
+  verdict:'Someone steadier and more direct. The chapter you are in is about building, not proving.',win:'The chapter to 2038',
+  helps:['Keep one small promise to yourself each day','Spend time with people who see you clearly','Write down what you are proud of each week'],wait:['Comparing your pace with others'],
+  why:['Your chapter in life is a long, slow building one.','Your chart shows a calm centre that grows with time.','Five of seven independent signals agree.'],conf:'likely'},
+ {id:'stuck',q:'Why do I feel stuck?',kind:'waiting',
+  chip:{demanding:'Lightens {E}',easing:'Loosening',steady:'Resting, not stuck',closing:'Move before {C}',open:'A good time to move'},
+  verdict:'A slow chapter plus a heavy stretch can feel like standing still. It lightens from {E}.',win:'Lightens from {E}',
+  helps:['Do one small thing each day, even ten minutes','Tell one person how you feel','Rest without guilt'],wait:['Big decisions while it feels this heavy','Judging yourself'],
+  why:['Your chapter in life is slow by nature.','The current stretch adds weight on top of it.','The weight lifts from {E}.'],conf:'likely'},
+ {id:'chapter',q:'What chapter am I in?',kind:'open',chip:'A building chapter',
+  verdict:'A long building chapter that asks for patience and gives steadiness in return.',win:'Until 2038',
+  helps:['Choose depth over speed','Let routines do the heavy lifting','Review what you built each year'],wait:['Starting too many things at once'],
+  why:['Your life moves in long chapters, each with its own theme.','The one you are in now began in 2022.','It is well supported by the rest of your chart.'],conf:'confirmed'},
+ {id:'luck',q:'When will my luck turn?',kind:'waiting',chip:'Opens {E}',
+  verdict:'Promised, but waiting. Things start to open from {E}.',win:'{E} to {O}',
+  helps:['Say yes to one invitation a week','Be useful to someone without asking for a return','Keep your options open'],wait:['Gambling on a big risk','Waiting for a sign'],
+  why:['Your chart shows good fortune, but only after this stretch passes.','The first opening is on {E}.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'worth',q:'Why don’t I feel good enough?',kind:'open',chip:'Slowly rising',
+  verdict:'Your confidence is rising slowly, and it holds once it arrives.',win:'The next two years',
+  helps:['Keep a list of things that went well','Do something hard in small pieces','Ask a friend what they value in you'],wait:['Measuring yourself against strangers'],
+  why:['Your chart shows self-doubt early in life that fades with age.','Each new chapter adds steadiness.','Most of the signals we use point the same way.'],conf:'likely'},
+ {id:'postponed',q:'Why do I keep putting off decisions?',kind:'waiting',chip:'Better after {E}',
+  verdict:'Better to decide after {E}. Before then, gather facts rather than choose.',win:'From {E}',
+  helps:['Write each choice down with one pro and one con','Set a date to decide','Talk it through with one person you trust'],wait:['Deciding while it feels heavy'],
+  why:['Judgement is clearer once the heavy stretch has passed.','From {E} the chart supports clear choices.','Four of seven independent signals agree.'],conf:'likely'}
+]
+};
+/* tiers: the first screen shows only the most asked */
+var TIERS=[['top','Most asked'],['mid','Also common'],['low','Less common']];
+var TIER_OF={
+ work:{'job-hold':'top',promotion:'top','job-change':'top','new-job':'top',abroad:'mid',direction:'mid',pay:'low',own:'low'},
+ love:{meet:'top',marry:'top',stay:'top',fighting:'top',back:'mid',family:'mid',distance:'low',second:'low'},
+ you:{becoming:'top',stuck:'top',chapter:'top',luck:'top',worth:'mid',postponed:'mid',path:'low',habits:'low'}
+};
+W.work.push(
+ {id:'pay',q:'Will my pay improve?',kind:'waiting',chip:'Review after 7 Jan',
+  verdict:'Promised, but waiting. A pay review lands best between 7 Jan and {OP}.',win:'7 Jan to {OP}',
+  helps:['Write down what you added this year, in numbers','Find out what the role pays elsewhere','Ask for the review in writing'],wait:['Asking during a hard week before {E}'],
+  why:['Your chart links pay to the same stretch as recognition at work.','This year’s chart shows the same window.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'own',q:'Should I start something of my own?',kind:'waiting',chip:'Not before mid-2027',
+  verdict:'Possible, but not yet. The first supportive stretch for your own venture begins in mid-2027.',win:'Jul to Dec 2027',
+  helps:['Test the idea on the side first','Put aside six months of expenses','Find one person who has done it'],wait:['Leaving a steady role before mid-2027'],
+  why:['Your chart supports independent work later rather than now.','The stretch that helps it begins in the second half of 2027.','Four of seven independent signals agree.'],conf:'likely'});
+W.love.push(
+ {id:'distance',q:'Could my partner be far away, or from abroad?',kind:'open',chip:'Possible from {O}',
+  verdict:'Your chart leaves this open. A connection linked to travel is most likely from {O}.',win:'{O} to 30 Jun 2027',
+  helps:['Say yes to travel plans that come up','Keep in touch with friends who live far away'],wait:['Moving for someone before you have met in person'],
+  why:['Your chart ties new connections to travel in spring.','It is possible, not promised.','Three of seven independent signals agree, so we hold it lightly.'],conf:'split'},
+ {id:'second',q:'Will I marry again?',kind:'waiting',chip:'Late 2027',
+  verdict:'Promised, but later. The clearest window for a second commitment is late 2027.',win:'Sep to Dec 2027',
+  helps:['Let the last chapter close fully','Say what you want this time, early'],wait:['Rushing to replace what was lost'],
+  why:['Your chart shows a second commitment, read from the points that speak for it.','The timing sits in the second half of 2027.','Four of seven independent signals agree.'],conf:'likely'});
+W.you.push(
+ {id:'path',q:'Where is my inner life heading?',kind:'open',chip:'Looks steady',
+  verdict:'A quiet, steady pull towards reflection that deepens with each chapter.',win:'The chapter to 2038',
+  helps:['Ten quiet minutes each morning','One day a month with no screens'],wait:['Big retreats or vows while it feels heavy'],
+  why:['Your chart shows a reflective side that grows with age.','The chapter you are in rewards quiet practice.','Five of seven independent signals agree.'],conf:'likely'},
+ {id:'habits',q:'Can I make a habit stick this time?',kind:'open',chip:'A good time to build',
+  verdict:'A steady stretch is the best time to build habits, and now is one.',win:'Now to {O}',
+  helps:['One habit at a time, for 30 days','Tie it to something you already do'],wait:['Starting five things at once'],
+  why:['Your chart favours slow, repeated effort over bursts.','Nothing in the next few months disturbs a routine.','Most of the signals we use point the same way.'],conf:'confirmed'});
+BOARD_ORDER.forEach(function(b){W[b].forEach(function(w){w.tier=TIER_OF[b][w.id]||'low';});});
+function wOf(b,id){return W[b].filter(function(w){return w.id===id;})[0];}
+function pick(v,t){return (typeof v==='object')?v[t]:v;}
+
+/* ---------- looking back ---------- */
+var LB={
+ work:{ranges:[
+  {k:'The last 6 months',t:'demanding',s:'A demanding stretch at work, mostly in June and July.'},
+  {k:'This year so far',t:'steady',s:'A slow start, a demanding middle and a steadier autumn.'},
+  {k:'Last year',t:'open',s:'A strong year for growth, with the best stretch in spring.'}],
+  moments:[
+  {id:'m1',when:'The last 6 months',q:'June to July 2026 looks like a demanding stretch at work. Did that feel right?'},
+  {id:'m2',when:'This year so far',q:'Around March 2026 things opened up at work, such as a new role or a raise. Did that feel right?'},
+  {id:'m3',when:'Last year',q:'Late 2025 looks like a quiet, steady stretch at work. Did that feel right?'}]},
+ love:{ranges:[
+  {k:'The last 6 months',t:'easing',s:'Things have been softening since early September.'},
+  {k:'This year so far',t:'demanding',s:'A strained first half, easing since late summer.'},
+  {k:'Last year',t:'open',s:'A warm, open year for love, closing with a quiet autumn.'}],
+  moments:[
+  {id:'m1',when:'The last 6 months',q:'Around September 2026 things began to soften in love. Did that feel right?'},
+  {id:'m2',when:'This year so far',q:'April 2026 looks like a strained stretch in love. Did that feel right?'},
+  {id:'m3',when:'Last year',q:'Spring 2025 looks like a warm opening in love, such as meeting someone. Did that feel right?'}]},
+ you:{ranges:[
+  {k:'The last 6 months',t:'steady',s:'A calm stretch, good for habits and rest.'},
+  {k:'This year so far',t:'easing',s:'A slow rebuilding after a heavy start.'},
+  {k:'Last year',t:'demanding',s:'A heavy stretch, mostly in the second half.'}],
+  moments:[
+  {id:'m1',when:'The last 6 months',q:'Summer 2026 looks like a calm stretch for you. Did that feel right?'},
+  {id:'m2',when:'This year so far',q:'Early 2026 looks like a heavy stretch for you. Did that feel right?'},
+  {id:'m3',when:'Last year',q:'October to December 2025 looks like a demanding stretch for you. Did that feel right?'}]}
+};
+var ANS=[['yes','Yes'],['partly','Partly'],['no','Not really'],['skip','Skip']];
+var NOTES=['Different timing','Different area','It was fine'];
+
+/* ---------- Chart details (the only place technical terms may appear) ---------- */
+var CHART_DETAILS=[
+ ['Current period','Saturn / Mercury / Venus (Vimshottari dasha)'],
+ ['Career house','10th house lord Mercury sits in the 6th house'],
+ ['Divisional chart','D10: Jupiter in the 10th, Sun exalted'],
+ ['Slow-moving sky','Transit: Saturn over natal Moon; Rahu in the 8th house'],
+ ['Annual chart','Tithi Pravesha year lord Mars; Mudda dasha Mars / Rahu'],
+ ['Star layer','Moon in Hasta nakshatra, pada 2 (lord: Moon)']
+];
+
+/* ---------- state ---------- */
+var S={
+  tab:'today',
+  page:{you:'now',love:'now',work:'now'},
+  tone:{you:'steady',love:'easing',work:'demanding'},
+  sel:'work',
+  worry:null,
+  sheet:null,
+  chart:false,
+  themePref:'auto',
+  changed:{board:'love',from:'demanding',to:'easing'},
+  acted:{},
+  checks:{you:{},love:{},work:{}},
+  did:{},
+  asks:[],
+  car:{},
+  tier:{you:'top',love:'top',work:'top'},
+  focusKey:null,
+  opener:null
+};
+try{var tp=localStorage.getItem('boards-theme');if(tp==='light'||tp==='dark')S.themePref=tp;}catch(e){}
+
+var $screen=document.getElementById('screen'),$tabbar=document.getElementById('tabbar'),$overlay=document.getElementById('overlay'),$mock=document.getElementById('mockbody'),$phone=document.getElementById('phone');
+
+/* ---------- helpers ---------- */
+function curBoard(){return S.worry?S.worry.board:(BOARD_ORDER.indexOf(S.tab)>-1?S.tab:null);}
+function curLayout(){var b=curBoard();return b?TONES[S.tone[b]].layout:'overview';}
+function prefersDark(){return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;}
+function effDark(){return S.themePref==='dark'||(S.themePref==='auto'&&prefersDark());}
+function applyTheme(){
+  var r=document.documentElement;
+  if(S.themePref==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',S.themePref);
+  try{if(S.themePref==='auto')localStorage.removeItem('boards-theme');else localStorage.setItem('boards-theme',S.themePref);}catch(e){}
+}
+function C(b){return COPY[b][S.tone[b]];}
+function fullLine(b,t){var c=COPY[b][t||S.tone[b]];return c.h+' '+sub(c.n,b);}
+function listHTML(items,b,icon){return '<ul class="list">'+items.map(function(s){return '<li>'+ic(icon||'check',18)+'<span>'+sub(s,b)+'</span></li>';}).join('')+'</ul>';}
+function toneChip(t,small){return '<span class="tonechip'+(small?' sm':'')+'">'+ic(t,small?16:18)+TONES[t].label+'</span>';}
+function actDays(end){
+  var out=[plus(TODAY_ISO,2),plus(TODAY_ISO,9),plus(end,-3)];
+  return out.filter(function(d,i){return days(d)>0&&days(d)<days(end)&&out.indexOf(d)===i;});
+}
+
+/* ---------- carousel (rule 11): chips + snap track + dots on phone and tablet, tab panel on desktop ---------- */
+function isDesk(){return window.matchMedia&&window.matchMedia('(min-width:1024px)').matches;}
+function reducedMotion(){return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+function carousel(id,label,items,mode){
+  var cur=S.car[id]||0;if(cur>=items.length)cur=0;S.car[id]=cur;
+  var h='<div class="car'+(mode==='row'?' car-row':'')+'" data-car="'+id+'">';
+  h+='<div class="car-chips" role="tablist" aria-label="'+label+'">'+items.map(function(it,i){
+    return '<button class="car-chip" role="tab" id="'+id+'-tab-'+i+'" aria-selected="'+(i===cur)+'" aria-controls="'+id+'-p-'+i+'" tabindex="'+(i===cur?0:-1)+'" data-act="car" data-a="'+id+'" data-b="'+i+'" data-fid="'+id+'-tab-'+i+'">'+it.chip+'</button>';}).join('')+'</div>';
+  h+='<div class="car-track">'+items.map(function(it,i){
+    return '<div class="car-item'+(i===cur?' on':'')+'" role="tabpanel" id="'+id+'-p-'+i+'" aria-labelledby="'+id+'-tab-'+i+'">'+it.html+'</div>';}).join('')+'</div>';
+  h+='<div class="car-dots" aria-hidden="true">'+items.map(function(it,i){return '<span'+(i===cur?' class="on"':'')+'></span>';}).join('')+'</div></div>';
+  return h;
+}
+function carTarget(track,item){return item.offsetLeft-16;}
+function setCar(id,i,scroll,focus){
+  var car=$screen.querySelector('[data-car="'+id+'"]');if(!car)return;
+  var chips=car.querySelectorAll('.car-chip'),items=car.querySelectorAll('.car-item'),dots=car.querySelectorAll('.car-dots span');
+  if(i<0)i=0;if(i>=items.length)i=items.length-1;
+  S.car[id]=i;
+  for(var k=0;k<items.length;k++){
+    items[k].classList.toggle('on',k===i);
+    if(chips[k]){chips[k].setAttribute('aria-selected',k===i?'true':'false');chips[k].tabIndex=(k===i?0:-1);}
+    if(dots[k])dots[k].classList.toggle('on',k===i);
+  }
+  if(scroll&&!isDesk()){
+    var track=car.querySelector('.car-track');
+    track.scrollTo({left:carTarget(track,items[i]),behavior:reducedMotion()?'auto':'smooth'});
+    var ch=chips[i];if(ch&&ch.scrollIntoView)ch.scrollIntoView({block:'nearest',inline:'nearest',behavior:reducedMotion()?'auto':'smooth'});
+  }
+  if(focus&&chips[i])chips[i].focus({preventScroll:true});
+}
+function syncCars(){
+  if(isDesk())return;
+  var cars=$screen.querySelectorAll('[data-car]');
+  for(var k=0;k<cars.length;k++){
+    var id=cars[k].getAttribute('data-car'),track=cars[k].querySelector('.car-track'),items=track.children,i=S.car[id]||0;
+    if(!items[i])continue;
+    var sb=track.style.scrollBehavior;track.style.scrollBehavior='auto';track.scrollLeft=carTarget(track,items[i]);track.style.scrollBehavior=sb;
+  }
+}
+var carRaf=null;
+$screen.addEventListener('scroll',function(e){
+  var track=e.target;if(!track.classList||!track.classList.contains('car-track')||isDesk())return;
+  if(carRaf)return;
+  carRaf=requestAnimationFrame(function(){
+    carRaf=null;
+    var car=track.parentNode,id=car.getAttribute('data-car'),items=track.children,best=0,bd=1e9;
+    for(var k=0;k<items.length;k++){var d=Math.abs(carTarget(track,items[k])-track.scrollLeft);if(d<bd){bd=d;best=k;}}
+    if(S.car[id]!==best)setCar(id,best,false,false);
+  });
+},true);
+if(window.matchMedia){var mqd=window.matchMedia('(min-width:1024px)');var cbd=function(){render(false);};if(mqd.addEventListener)mqd.addEventListener('change',cbd);}
+
+/* ---------- views ---------- */
+function topBar(title,over){
+  var dark=effDark();
+  return '<header class="top"><div><p class="over">'+over+'</p><h1 class="title">'+title+'</h1></div><div class="tools">'+
+   '<button class="iconbtn" data-act="theme" aria-label="'+(dark?'Switch to light theme':'Switch to dark theme')+'">'+ic('theme',20)+'</button>'+
+   '<button class="iconbtn" data-act="settings" aria-label="Settings">'+ic('you',20)+'</button></div></header>';
+}
+
+function todayView(){
+  var lead=BOARD_ORDER.slice().sort(function(a,b){return TONES[S.tone[b]].rank-TONES[S.tone[a]].rank;})[0];
+  var h=topBar('Today','Thursday 5 Nov');
+  h+='<div class="stack">';
+  h+='<section class="card b-none" aria-labelledby="fy"><p class="k" id="fy">For you today</p><p class="lead">'+fullLine(lead)+'</p><p class="meta" style="margin-top:8px">From your '+BOARDS[lead].name+' board</p></section>';
+  if(S.changed){
+    var ch=S.changed;
+    h+='<section class="card changed b-none" role="status"><span style="color:var(--brand)">'+ic('info',22)+'</span><div style="flex:1"><p style="font-weight:700">What changed</p><p>'+BOARDS[ch.board].name+' moved from '+TONES[ch.from].label+' to '+TONES[ch.to].label+'.</p><button class="linkbtn" data-act="dismiss">Got it</button></div></section>';
+  }
+  var order=BOARD_ORDER.slice().sort(function(a,b){return TONES[S.tone[b]].rank-TONES[S.tone[a]].rank;});
+  h+='<section aria-label="Your boards" class="b-none">'+carousel('today','Your boards',order.map(function(b){
+    var t=S.tone[b],c=COPY[b][t];
+    return {chip:BOARDS[b].name,html:'<button class="bcard b-'+b+'" data-act="tab" data-a="'+b+'" data-fid="card-'+b+'"><div class="bc-top"><span class="bname">'+BOARDS[b].name+'</span>'+toneChip(t,true)+'</div>'+
+     '<p class="bc-sent">'+c.h+'</p><p class="bc-date">'+ic('cal',16)+sub(c.s,b)+'</p><span class="chev">'+ic('chev',20)+'</span></button>'};
+  }),'row')+'</section>';
+  h+='<section class="pair b-none"><div class="card"><p class="hd">'+ic('check',18)+'Good for</p>'+listHTML(['Finishing one small task','A short walk after lunch','Replying to a message you have been avoiding'],'you')+'</div>'+
+     '<div class="card"><p class="hd">'+ic('pause',18)+'Better to wait</p>'+listHTML(['Big purchases','Hard conversations late in the day'],'you','pause')+'</div></section>';
+  h+='<button class="askbar" data-act="tab" data-a="ask">'+ic('ask',20)+'Ask anything about your life</button>';
+  h+='</div>';
+  return h;
+}
+
+function segHTML(b){
+  var pages=[['now','Now'],['back','Looking back'],['ahead','Ahead'],['worries','Worries']];
+  return '<div class="seg" role="tablist" aria-label="'+BOARDS[b].name+' pages">'+pages.map(function(p){
+    var on=S.page[b]===p[0];
+    return '<button role="tab" aria-selected="'+on+'" data-act="page" data-a="'+b+'" data-b="'+p[0]+'" data-fid="seg-'+p[0]+'">'+p[1]+'</button>';
+  }).join('')+'</div>';
+}
+
+function boardView(b){
+  var pg=S.page[b],body='';
+  if(pg==='now')body=nowPage(b);else if(pg==='back')body=backPage(b);else if(pg==='ahead')body=aheadPage(b);else body=worriesPage(b);
+  return topBar(BOARDS[b].name,'Thursday 5 Nov')+segHTML(b)+'<div role="tabpanel">'+body+'</div>';
+}
+
+function whyLink(b){return '<div><button class="linkbtn" data-act="why" data-a="'+b+'">'+ic('info',18)+'Why we think so</button></div>';}
+function actionCard(b){
+  var c=C(b),on=!!S.acted[b+S.tone[b]];
+  return '<section class="card"><p class="k">One thing to do</p><p style="margin-bottom:14px">'+sub(c.a,b)+'</p><button class="btn-primary" data-act="action" data-a="'+b+'" aria-pressed="'+on+'">'+(on?ic('check',18)+'Added to your week':c.btn)+'</button></section>';
+}
+function pairCards(b,title){
+  var c=C(b);
+  return '<section class="pair" aria-label="'+(title||'This week')+'"><div class="card"><p class="k">'+(title||'This week')+'</p><p class="hd">'+ic('check',18)+'Good for</p>'+listHTML(c.good,b)+'</div>'+
+   '<div class="card"><p class="hd">'+ic('pause',18)+'Better to wait</p>'+listHTML(c.wait,b,'pause')+'</div></section>';
+}
+function mainWorry(b){
+  var t=S.tone[b],w=wOf(b,MAINW[b][t]);
+  return '<section class="card"><p class="k">On your mind</p><button class="rowbtn" style="border:0;min-height:48px;padding:0" data-act="worry" data-a="'+b+'" data-b="'+w.id+'"><span class="rcol"><span class="rq">'+w.q+'</span><span class="chip">'+ic(w.kind==='open'?'okc':w.kind==='waiting'?'wait':'none',16)+sub(pick(w.chip,t),b)+'</span></span>'+ic('chev',20)+'</button></section>';
+}
+function chartBlock(b){
+  if(!(S.chart&&b==='work'))return '';
+  return '<section class="card chartd" data-exempt="1"><h3 class="sub-h">Chart details</h3><p class="meta">Example only.</p><dl>'+
+   CHART_DETAILS.map(function(r){return '<div><dt>'+r[0]+'</dt><dd>'+r[1]+'</dd></div>';}).join('')+'</dl></section>';
+}
+function toneHead(b,t){
+  var c=C(b);
+  return '<section><div>'+toneChip(t)+'</div><h2 class="headline">'+c.h+'</h2><p class="lede">'+sub(c.n,b)+'</p><p class="meta" style="margin-top:8px">Confidence: '+WHYC[t]+'. Updated today.</p></section>';
+}
+function calmLine(){return '<p class="meta" style="font-size:1em">If this is weighing on you, talking to someone helps. <button class="linkbtn" data-act="support" style="min-height:44px">Find support</button></p>';}
+function afterCard(b){
+  var r=RUNGS[S.tone[b]][1];
+  return '<details class="card"><summary>What comes after</summary><p>'+sub(r.s,b,true)+'</p><button class="linkbtn" data-act="page" data-a="'+b+'" data-b="ahead">See what is ahead</button></details>';
+}
+
+function nowPage(b){
+  var t=S.tone[b],c=C(b),D=BOARDS[b].d,h='<div class="stack enter">',n;
+  h+=toneHead(b,t);
+  if(t==='demanding'){
+    h+='<section class="card"><p class="k">When it eases</p><p class="big">'+f(D.E)+'</p><p class="muted">'+inWhen(D.E).replace(/^in/,'In')+'.</p></section>';
+    h+=actionCard(b);
+    h+=pairCards(b);
+    h+='<section class="card"><p class="k">What to protect</p>'+listHTML(c.protect,b)+'</section>';
+    h+=mainWorry(b)+afterCard(b)+whyLink(b)+calmLine();
+  }else if(t==='easing'){
+    h+='<section class="card"><p class="k">From now to next</p><div class="steps"><div class="st now"><b><span class="dot"></span>Now</b><span class="muted">Still demanding, but lifting</span></div><span class="stline" aria-hidden="true"></span><div class="st"><b><span class="dot"></span>'+f(D.E)+'</b><span class="muted">A better time opens</span></div></div><p class="meta">That is '+inWhen(D.E)+'.</p></section>';
+    h+='<section class="card"><p class="k">Before it opens</p>'+listHTML(c.before,b)+'</section>';
+    h+=actionCard(b);
+    h+=pairCards(b);
+    h+=mainWorry(b)+afterCard(b)+whyLink(b)+calmLine();
+  }else if(t==='steady'){
+    h+='<section class="card"><p class="k">Next opening</p><p class="big">'+f(D.O)+'</p><p class="muted">'+inWhen(D.O).replace(/^in/,'In')+'.</p></section>';
+    var r1=RUNGS.steady[0],r2=RUNGS.steady[1];
+    h+='<section class="card"><p class="k">The next 3 months</p><p style="margin-bottom:8px"><b>1 month.</b> '+sub(r1.s,b)+'</p><p style="margin-bottom:6px"><b>3 months.</b> '+sub(r2.s,b)+'</p><button class="linkbtn" data-act="page" data-a="'+b+'" data-b="ahead">See everything ahead</button></section>';
+    h+='<section class="card"><p class="k">Small wins in the next 90 days</p>'+listHTML(c.wins,b)+'</section>';
+    h+='<section class="card"><p class="k">What is stable</p><p>'+c.stable+'</p></section>';
+    h+=actionCard(b)+pairCards(b)+mainWorry(b)+whyLink(b);
+  }else{
+    var closing=t==='closing',end=closing?D.C:D.OP;n=days(end);
+    var ad=actDays(end);
+    h+='<section class="card hero"><p class="k">'+(closing?'This window closes':'This window is open until')+'</p><p class="herodate">'+(closing?'Before ':'')+f(end)+'</p>'+
+      '<div class="bar" role="img" aria-label="'+daysText(end)+' left"><span style="width:'+Math.min(100,Math.round(n/90*100))+'%"></span></div>'+
+      '<p><b>'+daysText(end)+' left</b> to act.</p>'+(ad.length?'<p class="k" style="margin-top:12px">Best days to act</p><ul class="list">'+ad.map(function(d){return '<li>'+ic('cal',18)+'<span>'+wdDate(d)+'</span></li>';}).join('')+'</ul>':'')+'</section>';
+    h+='<section class="card"><p class="k">'+(closing?'Finish before it closes':'What to ask for')+'</p>'+listHTML(closing?c.finish:c.ask,b)+'</section>';
+    h+=actionCard(b)+pairCards(b);
+    h+='<section class="card soft"><p class="k">After that</p><p>A slower stretch from '+f(plus(end,1))+'.</p></section>';
+    h+=mainWorry(b)+whyLink(b);
+  }
+  h+=chartBlock(b);
+  h+='</div>';
+  return h;
+}
+
+function backPage(b){
+  var L=LB[b],ck=S.checks[b],h='<div class="stack enter">';
+  var answered=0,yes=0,partly=0,skipped=0,total=L.moments.length;
+  L.moments.forEach(function(m){var a=ck[m.id];if(!a)return;if(a.a==='skip')skipped++;else{answered++;if(a.a==='yes')yes++;if(a.a==='partly')partly++;}});
+  h+='<section class="card" aria-live="polite"><p class="confirmed">'+ic('okc',24)+'<span>'+(answered+skipped===0?'Nothing confirmed yet.':'You confirmed '+yes+' of '+answered+'.')+'</span></p>'+
+     ((partly||skipped)?'<p class="meta" style="margin-top:6px">'+(partly?partly+' partly. ':'')+(skipped?skipped+' skipped.':'')+'</p>':'')+'</section>';
+  h+=carousel('back-'+b,'Looking back ranges',L.ranges.map(function(r,i){
+    var m=L.moments[i],a=ck[m.id]||{};
+    var c='<article class="card rangecard"><p class="k">'+r.k+'</p><div>'+toneChip(r.t,true)+'</div><p style="font-weight:600">'+r.s+'</p>'+
+      '<hr style="border:0;border-top:1px solid var(--line);margin:10px 0 12px">'+
+      '<p class="k">Did this feel right?</p><p class="q">'+m.q+'</p><div class="ans" role="group" aria-label="Your answer">'+
+      ANS.map(function(x){return '<button class="btn-ghost" data-act="ans" data-a="'+b+'" data-b="'+m.id+'" data-c="'+x[0]+'" aria-pressed="'+(a.a===x[0])+'">'+x[1]+'</button>';}).join('')+'</div>';
+    if(a.a==='partly'||a.a==='no'){
+      c+='<p class="meta" style="margin-top:12px">What was it like? (optional)</p><div class="notechips">'+NOTES.map(function(nt){return '<button class="btn-ghost" data-act="note" data-a="'+b+'" data-b="'+m.id+'" data-c="'+nt+'" aria-pressed="'+(a.note===nt)+'">'+nt+'</button>';}).join('')+'</div>';
+    }
+    if(a.a)c+='<p class="meta" style="margin-top:12px">'+ic('lock',14).replace('<svg','<svg style="display:inline;vertical-align:-2px;margin-right:4px"')+'Saved privately.</p>';
+    c+='</article>';
+    return {chip:r.k,html:c};
+  }));
+  h+='</div>';
+  return h;
+}
+
+function aheadPage(b){
+  var t=S.tone[b],rs=RUNGS[t],h='<div class="stack enter">';
+  h+=carousel('ahead-'+b,'How far ahead',rs.map(function(r,i){
+    var c;
+    if(r.hidden){
+      c='<section class="card rung hidden"><h3><span>'+RUNG_LABELS[i]+'</span></h3><p class="sent" style="margin-bottom:0">Nothing large is moving.</p></section>';
+    }else{
+      c='<section class="card rung"><h3><span>'+RUNG_LABELS[i]+'</span><span class="chip">'+ic(r.c==='confirmed'?'okc':'wait',16)+r.c+'</span></h3><p class="sent">'+sub(r.s,b,true)+'</p>'+
+        '<dl class="kv"><dt>Best window</dt><dd>'+sub(r.b,b,true)+'</dd><dt>Hardest stretch</dt><dd>'+sub(r.h,b,true)+'</dd></dl></section>';
+    }
+    return {chip:RUNG_LABELS[i],html:c};
+  }));
+  h+='</div>';
+  return h;
+}
+
+function worriesPage(b){
+  var t=S.tone[b],tier=S.tier[b],h='<div class="stack enter">';
+  h+='<div class="tierchips" role="radiogroup" aria-label="Which worries">'+TIERS.map(function(x){var n=W[b].filter(function(w){return w.tier===x[0];}).length;return '<button class="car-chip" role="radio" aria-selected="'+(tier===x[0])+'" aria-checked="'+(tier===x[0])+'" data-act="tier" data-a="'+b+'" data-b="'+x[0]+'" data-fid="tier-'+x[0]+'">'+x[1]+' · '+n+'</button>';}).join('')+'</div>';
+  h+='<section class="card" style="padding-top:6px;padding-bottom:6px">';
+  W[b].filter(function(w){return w.tier===tier;}).forEach(function(w){
+    h+='<button class="rowbtn" data-act="worry" data-a="'+b+'" data-b="'+w.id+'" data-fid="w-'+w.id+'"><span class="rcol"><span class="rq">'+w.q+'</span><span class="chip">'+ic(w.kind==='open'?'okc':w.kind==='waiting'?'wait':'none',16)+sub(pick(w.chip,t),b)+'</span></span>'+ic('chev',20)+'</button>';
+  });
+  h+='</section></div>';
+  return h;
+}
+
+function worryView(b,id){
+  var w=wOf(b,id),t=S.tone[b],key=b+':'+id,ans=S.did[key];
+  var kindLabel={open:'Open',waiting:'Waiting',not:'Not shown in your chart'}[w.kind];
+  var h='<div class="top" style="margin-bottom:0"><button class="backbtn" data-act="closeWorry" aria-label="Back to '+BOARDS[b].name+' worries">'+ic('back',22)+BOARDS[b].name+'</button><div class="tools"><button class="iconbtn" data-act="settings" aria-label="Settings">'+ic('you',20)+'</button></div></div>';
+  h+='<div class="stack enter"><h1 class="headline" style="margin-top:4px">'+w.q+'</h1>';
+  h+='<section class="card"><p><span class="tonechip">'+ic(w.kind==='open'?'okc':w.kind==='waiting'?'wait':'none',18)+kindLabel+'</span></p><p class="lede" style="margin-top:12px;font-weight:600">'+sub(pick(w.verdict,t),b)+'</p></section>';
+  h+='<section class="card"><p class="k">Window</p><p class="big" style="font-size:24px">'+sub(w.win,b)+'</p><p class="meta" style="margin-top:6px">Confidence: '+w.conf+'.</p></section>';
+  h+='<section class="card"><p class="k">What helps</p>'+listHTML(w.helps,b)+'</section>';
+  h+='<section class="card"><p class="k">Better to wait on</p>'+listHTML(w.wait,b,'pause')+'</section>';
+  h+='<section class="card"><p class="k">Did this happen?</p><div class="ans" role="group" aria-label="Did this happen?">'+
+    [['yes','Yes'],['partly','Partly'],['notyet','Not yet'],['wrong','Wrong date']].map(function(x){return '<button class="btn-ghost" data-act="did" data-a="'+key+'" data-b="'+x[0]+'" aria-pressed="'+(ans===x[0])+'">'+x[1]+'</button>';}).join('')+'</div>'+
+    (ans?'<p class="meta" style="margin-top:12px">Saved privately.</p>':'')+'</section>';
+  h+='<div><button class="linkbtn" data-act="whyw" data-a="'+b+'" data-b="'+id+'">'+ic('info',18)+'Why we think so</button></div></div>';
+  return h;
+}
+
+function askView(){
+  var h=topBar('Ask','Thursday 5 Nov');
+  h+='<div class="sugg">'+[['work','job-hold'],['love','fighting'],['you','becoming']].map(function(x){var w=wOf(x[0],x[1]);return '<button class="btn-ghost" data-act="askchip" data-a="'+x[0]+'" data-b="'+x[1]+'">'+ic('ask',18)+w.q+'</button>';}).join('')+'</div>';
+  h+='<div class="chat" aria-live="polite">';
+  S.asks.forEach(function(m){h+='<div class="bubble'+(m.me?' me':'')+'">'+m.t+'</div>';});
+  h+='</div>';
+  h+='<form class="askform" id="askform"><input id="askinput" type="text" placeholder="Ask anything about your life" aria-label="Ask anything about your life" autocomplete="off"><button class="btn-primary" type="submit" aria-label="Send">'+ic('send',22)+'</button></form>';
+  return h;
+}
+
+/* ---------- sheets ---------- */
+function sheetHTML(title,body){
+  return '<div class="backdrop" data-act="sheetClose"></div><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetT"><div class="grab"></div><div class="sh-head"><h2 id="sheetT">'+title+'</h2><button class="iconbtn plain" data-act="sheetClose" data-fid="sheet-x" aria-label="Close">'+ic('x',22)+'</button></div><div class="sh-body">'+body+'</div></section>';
+}
+function settingsBody(){
+  var th=[['auto','Auto'],['light','Light'],['dark','Dark']];
+  return '<div class="setrow" style="flex-direction:column;align-items:stretch"><p style="font-weight:700">Theme</p><div class="mchips" role="radiogroup" aria-label="Theme">'+th.map(function(x){return '<button class="mchip" role="radio" aria-checked="'+(S.themePref===x[0])+'" data-act="setTheme" data-a="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div></div>'+
+   '<div class="setrow"><div><p id="cdl" style="font-weight:700">Show chart details</p><p class="meta">For astrologers. Adds technical detail to the Work page.</p></div><button class="switch" role="switch" aria-checked="'+S.chart+'" aria-labelledby="cdl" data-act="toggleChart"><span class="knob"></span>'+(S.chart?'On':'Off')+'</button></div>'+
+   '<div class="setrow"><div><p style="font-weight:700">Birth details</p><p class="meta">Date, time and place, with the time zone and offset. Set once.</p></div><button class="btn-ghost" data-act="noop">Edit</button></div>'+
+   '<div class="setrow"><div><p style="font-weight:700">Work level</p><p class="meta">Employee. Changes how the Work worries are worded.</p></div><button class="btn-ghost" data-act="noop">Change</button></div>'+
+   '<div class="setrow"><div><p style="font-weight:700">Your answers</p><p class="meta">Private to you. Delete them any time.</p></div><button class="btn-ghost" data-act="clearAnswers">Delete my answers</button></div>';
+}
+function sheetContent(){
+  var sh=S.sheet;if(!sh)return '';
+  if(sh.type==='why')return sheetHTML('Why we think so',whyBody(sh.b,S.tone[sh.b]));
+  if(sh.type==='whyw'){var w=wOf(sh.b,sh.id);
+    var items=w.why.map(function(s){return '<li>'+ic('check',18)+'<span>'+sub(s,sh.b)+'</span></li>';}).join('');
+    return sheetHTML('Why we think so','<p>Here is what we looked at, in plain words.</p><ul class="list">'+items+'</ul><p class="meta">Confidence: '+w.conf+'. We only show a date when our records support it.</p>');}
+  if(sh.type==='settings')return sheetHTML('Settings',settingsBody());
+  if(sh.type==='support')return sheetHTML('Talking helps','<p>You do not have to carry this alone. A friend, someone in your family or a counsellor can listen without judging.</p><p class="meta">In the real app, this page lists support lines for your country.</p>');
+  return '';
+}
+
+/* ---------- tab bar, mock panel ---------- */
+var TABS=[['today','Today','b-none'],['you','You','b-you'],['love','Love','b-love'],['work','Work','b-work'],['ask','Ask','b-none']];
+function tabbarHTML(){
+  return TABS.map(function(t){
+    var on=(S.tab===t[0]);
+    return '<button class="tab '+t[2]+'"'+(on?' aria-current="page"':'')+' data-act="tab" data-a="'+t[0]+'" data-fid="tab-'+t[0]+'">'+ic(t[0],24)+t[1]+'</button>';
+  }).join('');
+}
+function mockHTML(){
+  var b=S.sel,t=S.tone[b];
+  function chips(items,cur,act,lbl){return '<div class="mchips" role="radiogroup" aria-label="'+lbl+'">'+items.map(function(x){return '<button class="mchip" role="radio" aria-checked="'+(cur===x[0])+'" data-act="'+act+'" data-a="'+x[0]+'" data-fid="'+act+'-'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div>';}
+  return '<div class="mrow"><p class="mlabel">Board</p>'+chips(BOARD_ORDER.map(function(x){return [x,BOARDS[x].name];}),b,'selBoard','Board')+'</div>'+
+   '<div class="mrow"><p class="mlabel">Tone</p>'+chips(TONE_ORDER.map(function(x){return [x,TONES[x].label];}),t,'selTone','Tone')+'</div>'+
+   '<div class="mrow"><p class="mlabel">Theme</p>'+chips([['auto','Auto'],['light','Light'],['dark','Dark']],S.themePref,'setTheme','Theme')+'</div>'+
+   '<p class="mnote">'+BOARDS[b].name+' shows the <b>'+LAYOUT_NAME[TONES[t].layout]+'</b> layout.</p>'+
+   '<p class="mnote">Today shows: '+BOARD_ORDER.map(function(x){return BOARDS[x].name+' '+TONES[S.tone[x]].label;}).join(', ')+'.</p>';
+}
+
+/* ---------- render ---------- */
+function render(nav){
+  var prevTop=$screen.scrollTop;
+  var b=curBoard(),lay=curLayout();
+  $screen.className='screen lay-'+lay+(b?' b-'+b:' b-none');
+  var html;
+  if(S.worry)html=worryView(S.worry.board,S.worry.id);
+  else if(S.tab==='today')html=todayView();
+  else if(S.tab==='ask')html=askView();
+  else html=boardView(S.tab);
+  $screen.innerHTML=html;
+  if(nav){
+    $screen.scrollTop=0;
+    var kids=$screen.querySelectorAll('.stack');
+    for(var i=0;i<kids.length;i++){if(!kids[i].classList.contains('enter'))kids[i].classList.add('enter');}
+  }else $screen.scrollTop=prevTop;
+  $tabbar.innerHTML=tabbarHTML();
+  var sc=sheetContent();
+  $overlay.className='overlay'+(sc?' on':'')+(lay==='support'?' nomo':'');
+  $overlay.innerHTML=sc;
+  $mock.innerHTML=mockHTML();
+  applyTheme();
+  syncCars();
+  // focus management
+  if(S.sheet&&!S.sheetFocused){var x=$overlay.querySelector('[data-fid="sheet-x"]');if(x){x.focus();S.sheetFocused=true;}}
+  else if(S.focusKey){
+    var els=document.querySelectorAll('[data-fid]');
+    for(var j=0;j<els.length;j++){if(els[j].getAttribute('data-fid')===S.focusKey){els[j].focus({preventScroll:true});break;}}
+  }
+  scanBanned(true);
+}
+
+/* ---------- banned-word self-check ---------- */
+var BANNED_PREFIX=['storm','hurricane','flood','weather','season','forecast','hospital','emergency','urgent','triage','resort','lobby','guaranteed','certain','safe','dasha','nakshatra','house','lord','trine','square','transit','retrograde','saturn','jupiter','venus','mercury','rahu','ketu'];
+var RE_PREFIX=new RegExp('\\b(?:'+BANNED_PREFIX.join('|')+')\\w*','gi');
+var RE_EXACT=/\b(?:sun|moon|mars)\b/gi;
+var RE_ER=/\bER\b/g;
+var RE_D=/\bD(?:10|9)\b/gi;
+function scanBanned(log){
+  var found=[];
+  var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null);
+  var n;
+  function check(txt,where){
+    [RE_PREFIX,RE_EXACT,RE_ER,RE_D].forEach(function(re){
+      re.lastIndex=0;var m;
+      while((m=re.exec(txt))){found.push({word:m[0],where:where});}
+    });
+  }
+  while((n=w.nextNode())){
+    var p=n.parentNode;
+    if(!p||p.nodeName==='SCRIPT'||p.nodeName==='STYLE')continue;
+    if(p.closest&&p.closest('[data-exempt]'))continue;
+    check(n.nodeValue,(txtCtx(p)));
+  }
+  var attrs=document.body.querySelectorAll('[aria-label],[title],[placeholder],[alt]');
+  for(var i=0;i<attrs.length;i++){
+    if(attrs[i].closest('[data-exempt]'))continue;
+    ['aria-label','title','placeholder','alt'].forEach(function(a){var v=attrs[i].getAttribute(a);if(v)check(v,a+': '+v);});
+  }
+  window.__banned=found;
+  if(log&&found.length)found.forEach(function(x){console.warn('Banned word "'+x.word+'" found in: '+x.where);});
+  return found;
+}
+function txtCtx(p){return (p.textContent||'').trim().slice(0,80);}
+
+/* ---------- actions ---------- */
+function openSheet(s,opener){S.sheet=s;S.sheetFocused=false;S.opener=opener||null;}
+function closeSheet(){S.sheet=null;S.sheetFocused=false;S.focusKey=S.opener;S.opener=null;}
+function keyOf(el){return el.getAttribute('data-fid')||null;}
+
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]');if(!el)return;
+  var act=el.getAttribute('data-act'),a=el.getAttribute('data-a'),bb=el.getAttribute('data-b'),cc=el.getAttribute('data-c');
+  var nav=false;
+  if(act==='car'){setCar(a,+bb,true,false);return;}
+  S.focusKey=keyOf(el);
+  switch(act){
+    case 'tier':S.tier[a]=bb;break;
+    case 'noop':return;
+    case 'tab':
+      S.tab=a;S.worry=null;S.sheet=null;
+      if(BOARD_ORDER.indexOf(a)>-1)S.sel=a;
+      nav=true;break;
+    case 'page':S.page[a]=bb;S.worry=null;nav=true;break;
+    case 'worry':S.worry={board:a,id:bb};nav=true;S.focusKey=null;break;
+    case 'closeWorry':{var bd=S.worry.board,id=S.worry.id;S.worry=null;nav=true;S.focusKey='w-'+id;break;}
+    case 'why':openSheet({type:'why',b:a},keyOf(el));break;
+    case 'whyw':openSheet({type:'whyw',b:a,id:bb},keyOf(el));break;
+    case 'settings':openSheet({type:'settings'},null);break;
+    case 'support':openSheet({type:'support'},null);break;
+    case 'sheetClose':closeSheet();break;
+    case 'theme':S.themePref=effDark()?'light':'dark';break;
+    case 'setTheme':S.themePref=a;break;
+    case 'toggleChart':S.chart=!S.chart;break;
+    case 'clearAnswers':S.checks={you:{},love:{},work:{}};S.did={};break;
+    case 'dismiss':S.changed=null;S.focusKey=null;break;
+    case 'action':{var k=a+S.tone[a];S.acted[k]=!S.acted[k];break;}
+    case 'ans':{var cur=S.checks[a][bb]||{};S.checks[a][bb]={a:cc,note:(cc==='partly'||cc==='no')?cur.note:undefined};break;}
+    case 'note':{var c2=S.checks[a][bb];if(c2)c2.note=(c2.note===cc?undefined:cc);break;}
+    case 'did':S.did[a]=(S.did[a]===bb?undefined:bb);break;
+    case 'selBoard':S.sel=a;S.tab=a;S.worry=null;S.page[a]='now';nav=true;S.focusKey='selBoard-'+a;break;
+    case 'selTone':{var bsel=S.sel,old=S.tone[bsel];if(old!==a){S.changed={board:bsel,from:old,to:a};}S.tone[bsel]=a;
+      if(BOARD_ORDER.indexOf(S.tab)===-1){S.tab=bsel;S.page[bsel]='now';S.worry=null;nav=true;}
+      break;}
+    case 'askchip':S.tab=a;S.sel=a;S.page[a]='worries';S.worry={board:a,id:bb};nav=true;S.focusKey=null;break;
+  }
+  render(nav);
+});
+
+document.addEventListener('submit',function(e){
+  if(e.target.id!=='askform')return;
+  e.preventDefault();
+  var inp=document.getElementById('askinput'),v=(inp.value||'').trim();
+  if(!v)return;
+  S.asks.push({me:true,t:v.replace(/</g,'&lt;')});
+  S.asks.push({me:false,t:'In the real app, your answer appears here. It points to a board, for example Work, Worries.'});
+  S.focusKey=null;
+  render(false);
+  var ni=document.getElementById('askinput');if(ni)ni.focus();
+  $screen.scrollTop=$screen.scrollHeight;
+});
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&S.sheet){closeSheet();render(false);return;}
+  var chip=e.target.closest&&e.target.closest('.car-chip[role="tab"]');
+  if(!chip)return;
+  var id=chip.getAttribute('data-a'),i=+chip.getAttribute('data-b'),n=chip.parentNode.children.length,to=null;
+  if(e.key==='ArrowRight')to=(i+1)%n;else if(e.key==='ArrowLeft')to=(i-1+n)%n;else if(e.key==='Home')to=0;else if(e.key==='End')to=n-1;
+  if(to===null)return;
+  e.preventDefault();setCar(id,to,true,true);
+});
+
+/* mock panel starts closed on a phone */
+if(window.matchMedia&&window.matchMedia('(max-width:760px)').matches)document.getElementById('mockd').removeAttribute('open');
+if(window.matchMedia){var mq=window.matchMedia('(prefers-color-scheme: dark)');var cb=function(){if(S.themePref==='auto')render(false);};if(mq.addEventListener)mq.addEventListener('change',cb);}
+
+/* sweep: open every screen state once and report banned words (used for checking) */
+window.__mock={
+  state:S,
+  scan:scanBanned,
+  sweep:function(){
+    var out=[],save=JSON.stringify({tab:S.tab,sel:S.sel,sheet:S.sheet,worry:S.worry,chart:S.chart});
+    function chk(label){render(true);var r=scanBanned(false);if(r.length)out.push({at:label,hits:r});}
+    S.chart=true;
+    chk('today');S.tab='ask';chk('ask');
+    BOARD_ORDER.forEach(function(b){
+      TONE_ORDER.forEach(function(t){
+        var oldTone=S.tone[b];S.tone[b]=t;S.tab=b;S.sel=b;
+        ['now','back','ahead'].forEach(function(p){S.page[b]=p;S.worry=null;S.sheet=null;chk(b+'/'+t+'/'+p);});
+        TIERS.forEach(function(x){S.page[b]='worries';S.tier[b]=x[0];S.worry=null;S.sheet=null;chk(b+'/'+t+'/worries/'+x[0]);});S.tier[b]='top';
+        S.sheet={type:'why',b:b};chk(b+'/'+t+'/why-sheet');S.sheet=null;
+        S.sheet={type:'support'};chk(b+'/'+t+'/support-sheet');S.sheet=null;
+        W[b].forEach(function(w){S.worry={board:b,id:w.id};chk(b+'/'+t+'/worry/'+w.id);S.sheet={type:'whyw',b:b,id:w.id};chk(b+'/'+t+'/worry/'+w.id+'/why');S.sheet=null;});
+        S.worry=null;
+        S.tone[b]=oldTone;
+      });
+    });
+    S.sheet={type:'settings'};chk('settings');S.sheet=null;
+    var s=JSON.parse(save);S.tab=s.tab;S.sel=s.sel;S.sheet=null;S.worry=s.worry;S.chart=s.chart;
+    render(false);
+    return out;
+  }
+};
+
+render(true);
+})();
+</script>
+</body>
+</html>

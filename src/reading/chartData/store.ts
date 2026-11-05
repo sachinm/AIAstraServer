@@ -11,10 +11,11 @@
  * Nothing here computes astrology. When the M7 tables are missing (migration not applied) it degrades to legacy
  * columns + uncached Radha calls instead of failing.
  */
-import { createHash } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { authToAstroKundliParams, fetchEngineExport, type AstroKundliRequestParams } from '../../lib/astroKundliClient.js';
 import { ANNUAL_DIVISIONAL_OPTION, BUILTIN_CHART_TYPES, VARGA_FACTORS, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from './catalog.js';
+import { sealParam } from '../../lib/pii/rawSql.js';
+import { piiHash } from '../../lib/pii/hash.js';
 
 export type ItemStatus = 'ready' | 'missing' | 'failed' | 'unsupported';
 export type ItemSource = 'db' | 'legacy' | 'radha' | null;
@@ -589,39 +590,21 @@ function parseBiodataCoords(biodata: unknown): { lat: number; lon: number; tz: n
   return null;
 }
 
-async function resolveFallbackCoords(place: string, biodata?: unknown): Promise<{ lat: number; lon: number; tz: number } | null> {
+/**
+ * Coordinates for a kundli with none stored: from the engine's own biodata, else the built-in city list, else null
+ * (the engine then resolves the place itself, or answers "place not found"). The birth place is never sent to an
+ * outside geocoder from here (docs/privacy/02 B0.2: the Nominatim fallback is gone).
+ */
+export async function resolveFallbackCoords(place: string, biodata?: unknown): Promise<{ lat: number; lon: number; tz: number } | null> {
   const fromBio = parseBiodataCoords(biodata);
   if (fromBio) return fromBio;
   const key = place.trim().toLowerCase().replace(/\s+/g, '_');
-  if (BUILTIN_CITY_COORDS[key]) return BUILTIN_CITY_COORDS[key]!;
-  const query = place.replace(/_/g, ' ').replace(/,([A-Z]{2})$/i, ', $1');
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`, {
-      headers: { 'User-Agent': 'aiastra-server/1.0' },
-      signal: AbortSignal.timeout(3500),
-    });
-    if (res.ok) {
-      const arr = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-      if (arr[0]?.lat && arr[0]?.lon) {
-        const lat = Math.round(Number(arr[0].lat) * 100) / 100;
-        const lon = Math.round(Number(arr[0].lon) * 100) / 100;
-        if (Number.isFinite(lat) && Number.isFinite(lon)) {
-          const cc = place.split(',').pop()?.trim().toUpperCase() ?? '';
-          const tz = cc === 'IN' ? 5.5 : cc === 'NP' ? 5.75 : Math.round(lon / 15);
-          const resolved = { lat, lon, tz };
-          BUILTIN_CITY_COORDS[key] = resolved;
-          return resolved;
-        }
-      }
-    }
-  } catch {
-    // ignore network failure
-  }
-  return null;
+  return BUILTIN_CITY_COORDS[key] ?? null;
 }
 
+/** md5 of the opened payload (src/lib/pii/hash.ts: sealing the row never changes it). */
 export function payloadHash(payload: unknown): string {
-  return createHash('md5').update(JSON.stringify(payload ?? null)).digest('hex');
+  return piiHash(JSON.stringify(payload ?? null), { alg: 'md5' });
 }
 
 /** Prisma implementation of the repository. */
@@ -655,9 +638,10 @@ export function prismaChartDataRepo(prisma: PrismaClient): ChartDataRepo {
     },
     async claim(kundliId, key, params, ayanamsa, leaseMs) {
       const leaseSeconds = Math.ceil(leaseMs / 1000);
+      const sealedParams = await sealParam('kundli_data', 'params', params, { kundliId });
       const rows = await prisma.$queryRaw<{ id: string }[]>`
         INSERT INTO "kundli_data" ("kundli_id", "data_type", "variant", "params", "ayanamsa", "status", "fetch_started_at")
-        VALUES (${kundliId}, ${key.dataType}, ${key.variant}, ${JSON.stringify(params)}::jsonb, ${ayanamsa}, 'fetching', now())
+        VALUES (${kundliId}, ${key.dataType}, ${key.variant}, ${JSON.stringify(sealedParams)}::jsonb, ${ayanamsa}, 'fetching', now())
         ON CONFLICT ("kundli_id", "data_type", "variant", "ayanamsa") DO UPDATE
           SET "status" = 'fetching', "fetch_started_at" = now(), "error" = NULL
           WHERE "kundli_data"."status" <> 'fetching'

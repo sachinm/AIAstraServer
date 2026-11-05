@@ -91,6 +91,13 @@ describe('keys', () => {
     expect(() => instantOf('2027-03-01 12:00:00')).toThrow(/offset/);
     expect(() => instantOf(new Date('x'))).toThrow(/valid/);
   });
+  it('a daily range has its own key and the monthly key is unchanged', () => {
+    const month = rangeKey({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE);
+    const day = rangeKey({ from: '2028-01-01', to: '2028-12-31', step: 'day' }, SAN_JOSE);
+    expect(month.flagsKey).toBe('l1e1');
+    expect(day.flagsKey).toBe('l1e1d');
+    expect(overlayParamsKey({ from: 'a', to: 'b' })).not.toBe(overlayParamsKey({ from: 'a', to: 'b', step: 'day' }));
+  });
   it('range key defaults to Sa/Ju/Ra/Ke with lunations and eclipses on', () => {
     const k = rangeKey({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE);
     expect(k.planetsKey).toBe('Ju,Ke,Ra,Sa');
@@ -192,8 +199,8 @@ describe('shared range and per-kundli overlay', () => {
   it('stores the shared range without the natal block', async () => {
     const repo = memRepo();
     const fetchRange = vi.fn(async () => range([2, 9]));
-    const first = await getSharedRange({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE, 'k1', { repo, fetchRange });
-    const second = await getSharedRange({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE, 'k2', { repo, fetchRange });
+    const first = await getSharedRange({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE, { repo, fetchRange });
+    const second = await getSharedRange({ from: '2028-01-01', to: '2028-12-31' }, SAN_JOSE, { repo, fetchRange });
     expect(fetchRange).toHaveBeenCalledTimes(1);
     expect(first.source).toBe('radha');
     expect(second.source).toBe('cache');

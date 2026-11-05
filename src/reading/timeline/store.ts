@@ -9,6 +9,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { CalibrationRow } from './calibrate.js';
 import { parseLedger, type LifeEvent } from './ledger.js';
 import type { PastVerification } from './pipeline.js';
+import { openRows } from '../../lib/pii/rawSql.js';
 
 export type LedgerLookup = { status: 'found'; events: LifeEvent[] } | { status: 'unavailable' };
 
@@ -28,7 +29,7 @@ export function resetTimelineStoreWarning(): void {
 export async function readLedger(prisma: PrismaClient, kundliId: string): Promise<LedgerLookup> {
   try {
     const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT "id", "category", "date", "date_precision", "place", "attributes" FROM "life_events" WHERE "kundli_id" = ${kundliId} ORDER BY "date"`;
-    return { status: 'found', events: parseLedger(rows).events };
+    return { status: 'found', events: parseLedger(await openRows('life_events', rows)).events };
   } catch (err) {
     warnOnce('readLedger', err);
     return { status: 'unavailable' };
@@ -41,6 +42,10 @@ export function calibrationRowsToStore(rows: readonly CalibrationRow[]): Calibra
 }
 
 /**
+ * timeline_windows and timeline_matches are sealed into their new `window` / `specifics_sealed` columns (M26,
+ * docs/privacy/02 §4.1.6); until then these inserts write the plain columns as before. timeline_calibration.marker stays
+ * plain: it is part of the row's unique key (see docs/TODOS.md).
+ *
  * Store a verified past build: the build row, its non-quiet windows, the matches and the calibration. Returns the build
  * id, or null when the tables are unavailable (never throws). One transaction, so a half-written build never shows.
  */

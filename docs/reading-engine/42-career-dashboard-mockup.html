@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Career Map Mockup</title>
+<style>
+:root{
+  --bg:#f7f6f2;--card:#ffffff;--ink:#1d1f24;--muted:#5d6370;--line:#e3e1da;--soft:#f0eee8;
+  --accent:#3a4fd6;--support:#2f8f5b;--support-soft:#d9efe2;--test:#c27a12;--test-soft:#f6e7cc;
+  --risk:#b4432f;--risk-soft:#f4d9d3;--band1:#e7e9fb;--band2:#efe6f8;--band3:#e3f1ee;--band4:#f5ece0;
+  --ga:#2f8f5b;--gb:#8cc7a3;--gc:#e4e2dc;--gd:#e2a596;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14161b;--card:#1c1f26;--ink:#eceef2;--muted:#a3a9b6;--line:#2c313b;--soft:#232731;
+  --accent:#8c9bff;--support:#5cc28a;--support-soft:#1f3a2b;--test:#e0a64a;--test-soft:#3d301a;
+  --risk:#e8806c;--risk-soft:#43251f;--band1:#262b45;--band2:#33283f;--band3:#1f3530;--band4:#3a3022;
+  --ga:#4fb57e;--gb:#2e6b4a;--gc:#2b2f38;--gd:#7a3e33;}}
+:root[data-theme="dark"]{
+  --bg:#14161b;--card:#1c1f26;--ink:#eceef2;--muted:#a3a9b6;--line:#2c313b;--soft:#232731;
+  --accent:#8c9bff;--support:#5cc28a;--support-soft:#1f3a2b;--test:#e0a64a;--test-soft:#3d301a;
+  --risk:#e8806c;--risk-soft:#43251f;--band1:#262b45;--band2:#33283f;--band3:#1f3530;--band4:#3a3022;
+  --ga:#4fb57e;--gb:#2e6b4a;--gc:#2b2f38;--gd:#7a3e33;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
+h1{font-size:26px;margin:0}
+h2{font-size:17px;margin:28px 0 10px}
+.sub{color:var(--muted);font-size:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--muted);padding:6px 12px;border-radius:999px;font-size:13px}
+.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab[disabled]{opacity:.55}
+.note{background:var(--soft);border:1px dashed var(--line);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--muted)}
+.grid{display:grid;gap:12px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.when{font-weight:650}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--muted);margin-right:4px}
+.tag.act{background:var(--support-soft);color:var(--support)}
+.tag.hold{background:var(--test-soft);color:var(--test)}
+.score{display:flex;align-items:baseline;gap:8px;margin-top:8px}
+.score b{font-size:26px}
+.meter{height:6px;border-radius:4px;background:var(--soft);overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--accent)}
+.small{font-size:13px;color:var(--muted)}
+.tl{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;overflow-x:auto}
+.tlin{min-width:900px;position:relative}
+.row{display:grid;grid-template-columns:170px 1fr;align-items:center;min-height:30px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.lab{font-size:13px;padding-right:8px}
+.lab small{display:block;color:var(--muted);font-size:11px}
+.track{position:relative;height:28px}
+.bar{position:absolute;top:6px;height:16px;border-radius:5px;cursor:pointer;border:0;padding:0}
+.bar.major{top:2px;height:24px}
+.bar.support{background:var(--support)}
+.bar.test{background:var(--test)}
+.bar.minor.support{background:var(--support-soft);outline:1.5px solid var(--support)}
+.bar.minor.test{background:var(--test-soft);outline:1.5px solid var(--test)}
+.bar:focus-visible{outline:3px solid var(--accent)}
+.band{position:absolute;top:4px;height:20px;border-radius:4px;font-size:11px;padding:2px 6px;white-space:nowrap;overflow:hidden;color:var(--ink)}
+.axis{display:grid;grid-template-columns:170px 1fr}
+.months{position:relative;height:22px;font-size:11px;color:var(--muted)}
+.months span{position:absolute;top:2px}
+.today{position:absolute;top:0;bottom:0;width:2px;background:var(--risk);pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:8px}
+.sw{display:inline-block;width:14px;height:10px;border-radius:3px;vertical-align:middle;margin-right:4px}
+.sec{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px}
+.sec div{border-radius:8px;padding:8px;font-size:12px}
+.weeks{display:grid;grid-template-columns:90px repeat(7,1fr);gap:4px;font-size:12px}
+.weeks .h{color:var(--muted);text-align:center}
+.cell{border-radius:6px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:600;cursor:default}
+.gA{background:var(--ga);color:#fff}.gB{background:var(--gb)}.gC{background:var(--gc)}.gD{background:var(--gd)}
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(440px,100%);background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.15);transform:translateX(105%);transition:transform .2s;overflow-y:auto;padding:18px;z-index:5}
+.drawer.open{transform:none}
+.drawer h3{margin:4px 0 2px;font-size:19px}
+.drawer table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}
+.drawer td{border-top:1px solid var(--line);padding:5px 4px;vertical-align:top}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.x{float:right}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
+
+.switch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0;font-size:13px;color:var(--muted)}
+.switch button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer;min-height:36px}
+.switch button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+#present{margin-top:10px}
+.hero{border-radius:18px;padding:20px;border:1px solid var(--line);background:var(--card)}
+.hero h2.head{margin:0;font-size:24px;line-height:1.25}
+.hero .lede{color:var(--muted);margin-top:6px}
+.conf{display:inline-block;margin-top:8px;font-size:12px;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.list{margin:6px 0 0;padding-left:18px}
+.list li{margin:3px 0}
+.bigdate{font-size:22px;font-weight:600;margin:4px 0}
+.ntn{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
+.ntn .seg{flex:1;height:10px;border-radius:6px}
+.mt{margin-top:12px}
+details#after{margin-top:18px}
+details#after>summary{cursor:pointer;font-weight:600;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.votes td{font-size:12.5px;border-top:1px solid var(--line);padding:4px}
+.support{font-size:13px;color:var(--muted);margin-top:12px}
+body[data-entrance="er"]{--bg:#eef1f3;--card:#ffffff;--ink:#1b2328;--muted:#56626b;--line:#d9dfe3;--soft:#e7ecef;--accent:#2a8a86;--test:#56626b;--test-soft:#e7ecef;--risk:#2a8a86;--risk-soft:#e1efee}
+body[data-entrance="er"] .hero h2.head{font-size:22px;font-weight:600}
+body[data-entrance="er"] #present .card,body[data-entrance="er"] .hero{font-size:17px}
+body[data-entrance="resort"]{--bg:#fbf8f1;--card:#fffdf8;--accent:#9a7a1f;--line:#ece3cf;--soft:#f5eedd}
+body[data-entrance="resort"] .hero{background:linear-gradient(135deg,var(--support-soft),#fbf1d6)}
+body[data-entrance="resort"] .hero h2.head{font-size:26px;font-weight:700}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) body[data-entrance="er"]{--bg:#141a1d;--card:#1b2226;--ink:#e6ecef;--muted:#9eabb3;--line:#2a3338;--soft:#222b30;--accent:#5fbdb7;--test:#9eabb3;--test-soft:#222b30;--risk:#5fbdb7;--risk-soft:#1d3332}
+:root:not([data-theme="light"]) body[data-entrance="resort"]{--bg:#1a1812;--card:#221f17;--accent:#d8b65a;--line:#3a3424;--soft:#2c2819}
+:root:not([data-theme="light"]) body[data-entrance="resort"] .hero{background:linear-gradient(135deg,var(--support-soft),#3a3218)}}
+@media (prefers-reduced-motion: no-preference){body[data-entrance="resort"] .hero{animation:rise .5s ease-out}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="sub">Profile › Career map</div>
+      <h1>Your career map</h1>
+      <div class="sub">Nov 2026 – Dec 2028 · prepared 5 Nov 2026</div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Life area">
+      <button class="tab on" role="tab" aria-selected="true">Career</button>
+      <button class="tab" disabled>Money · soon</button>
+      <button class="tab" disabled>Marriage · soon</button>
+      <button class="tab" disabled>Home · soon</button>
+    </div>
+  </header>
+  <div class="note">Mockup for doc 42. Sample chart; the windows come from a real hand-made career charter, some scores are illustrative. Day grades shown were counted from stored sky rows; in the product they come from the daily overlay.</div>
+
+  <div class="switch" role="group" aria-label="Preview a state (mockup only)">Preview state (mockup only):
+    <button data-s="storm">Storm (ER)</button><button data-s="urgent">Urgent care</button><button data-s="clearing">Clearing</button><button data-s="calm">Calm</button><button data-s="late_summer">Late summer</button><button data-s="fair">Fair</button><button data-s="split">Split verdict</button>
+  </div>
+  <section id="present" aria-live="polite"></section>
+  <details id="after" hidden><summary>What comes after</summary><div id="afterSlot"></div></details>
+  <div id="rest">
+  <h2>Next 90 days</h2>
+  <div class="grid g3" id="next"></div>
+
+  <h2>What the coming months promise</h2>
+  <div class="grid g4" id="horizons"></div>
+
+  <h2>Job security</h2>
+  <div class="card">
+    <div class="sec" id="security"></div>
+    <div class="small" style="margin-top:8px">“Clear” means no sign of a job ending in that period by every rule checked. It is a reading of tendencies, not a guarantee. Tap a period for the rules and your past record.</div>
+  </div>
+
+  <h2>Timeline</h2>
+  <div class="tl"><div class="tlin" id="tl"></div></div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--support)"></i>Major, supports</span>
+    <span><i class="sw" style="background:var(--support-soft);outline:1.5px solid var(--support)"></i>Minor, supports</span>
+    <span><i class="sw" style="background:var(--test)"></i>Major, tests</span>
+    <span><i class="sw" style="background:var(--test-soft);outline:1.5px solid var(--test)"></i>Minor, tests</span>
+    <span><i class="sw" style="background:var(--risk)"></i>Today</span>
+  </div>
+
+  <h2>Week by week</h2>
+  <div class="card">
+    <div class="weeks" id="weeks"></div>
+    <div class="legend">
+      <span><i class="sw gA"></i>Act</span><span><i class="sw gB"></i>Good</span><span><i class="sw gC"></i>Routine</span><span><i class="sw gD"></i>Hold</span>
+    </div>
+  </div>
+
+  <h2>What work suits you</h2>
+  <div class="card">
+    <p style="margin:0 0 6px"><b>Thinking, writing, analysis and trade, inside a large institution.</b> The career planet sits in its own sign in the house of work, which gives skill with words, numbers and systems. Service suits better than your own business; your rise comes inside a big organisation, with work that crosses borders.</p>
+    <div class="small">Read from the natal chart, the career chart and the career significator. This card has no dates.</div>
+  </div>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" aria-label="Window details" aria-hidden="true"></aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const DATA = {"grades": [{"date": "2026-11-02", "g": "D", "h": 8, "tara": "Vadha", "tithi": "K9"}, {"date": "2026-11-03", "g": "C", "h": 9, "tara": "Mitra", "tithi": "K10"}, {"date": "2026-11-04", "g": "B", "h": 9, "tara": "Parama Mitra", "tithi": "K11"}, {"date": "2026-11-05", "g": "B", "h": 10, "tara": "Janma", "tithi": "K12"}, {"date": "2026-11-06", "g": "B", "h": 10, "tara": "Sampat", "tithi": "K13"}, {"date": "2026-11-07", "g": "D", "h": 11, "tara": "Vipat", "tithi": "K14"}, {"date": "2026-11-08", "g": "B", "h": 11, "tara": "Kshema", "tithi": "K15"}, {"date": "2026-11-09", "g": "D", "h": 11, "tara": "Pratyak", "tithi": "S1"}, {"date": "2026-11-10", "g": "D", "h": 12, "tara": "Sadhaka", "tithi": "S2"}, {"date": "2026-11-11", "g": "D", "h": 12, "tara": "Vadha", "tithi": "S3"}, {"date": "2026-11-12", "g": "C", "h": 1, "tara": "Mitra", "tithi": "S4"}, {"date": "2026-11-13", "g": "B", "h": 1, "tara": "Parama Mitra", "tithi": "S5"}, {"date": "2026-11-14", "g": "C", "h": 1, "tara": "Janma", "tithi": "S6"}, {"date": "2026-11-15", "g": "B", "h": 2, "tara": "Sampat", "tithi": "S6"}, {"date": "2026-11-16", "g": "B", "h": 2, "tara": "Sampat", "tithi": "S7"}, {"date": "2026-11-17", "g": "D", "h": 3, "tara": "Vipat", "tithi": "S8"}, {"date": "2026-11-18", "g": "B", "h": 3, "tara": "Kshema", "tithi": "S9"}, {"date": "2026-11-19", "g": "D", "h": 4, "tara": "Pratyak", "tithi": "S10"}, {"date": "2026-11-20", "g": "B", "h": 4, "tara": "Sadhaka", "tithi": "S11"}, {"date": "2026-11-21", "g": "D", "h": 4, "tara": "Vadha", "tithi": "S12"}, {"date": "2026-11-22", "g": "B", "h": 5, "tara": "Mitra", "tithi": "S13"}, {"date": "2026-11-23", "g": "B", "h": 5, "tara": "Parama Mitra", "tithi": "S15"}, {"date": "2026-11-24", "g": "B", "h": 6, "tara": "Sampat", "tithi": "K1"}, {"date": "2026-11-25", "g": "C", "h": 6, "tara": "Vipat", "tithi": "K2"}, {"date": "2026-11-26", "g": "B", "h": 7, "tara": "Kshema", "tithi": "K3"}, {"date": "2026-11-27", "g": "D", "h": 7, "tara": "Pratyak", "tithi": "K4"}, {"date": "2026-11-28", "g": "D", "h": 8, "tara": "Sadhaka", "tithi": "K5"}, {"date": "2026-11-29", "g": "D", "h": 8, "tara": "Vadha", "tithi": "K6"}, {"date": "2026-11-30", "g": "B", "h": 9, "tara": "Mitra", "tithi": "K8"}, {"date": "2026-12-01", "g": "C", "h": 9, "tara": "Parama Mitra", "tithi": "K9"}, {"date": "2026-12-02", "g": "B", "h": 10, "tara": "Janma", "tithi": "K10"}, {"date": "2026-12-03", "g": "A", "h": 10, "tara": "Sampat", "tithi": "K11"}, {"date": "2026-12-04", "g": "C", "h": 11, "tara": "Vipat", "tithi": "K12"}, {"date": "2026-12-05", "g": "C", "h": 11, "tara": "Kshema", "tithi": "K13"}, {"date": "2026-12-06", "g": "D", "h": 11, "tara": "Pratyak", "tithi": "K13"}, {"date": "2026-12-07", "g": "D", "h": 12, "tara": "Sadhaka", "tithi": "K14"}, {"date": "2026-12-08", "g": "D", "h": 12, "tara": "Vadha", "tithi": "K15"}, {"date": "2026-12-09", "g": "B", "h": 1, "tara": "Mitra", "tithi": "S1"}, {"date": "2026-12-10", "g": "B", "h": 1, "tara": "Parama Mitra", "tithi": "S2"}, {"date": "2026-12-11", "g": "B", "h": 1, "tara": "Parama Mitra", "tithi": "S3"}, {"date": "2026-12-12", "g": "D", "h": 2, "tara": "Janma", "tithi": "S4"}, {"date": "2026-12-13", "g": "B", "h": 2, "tara": "Sampat", "tithi": "S5"}, {"date": "2026-12-14", "g": "D", "h": 3, "tara": "Vipat", "tithi": "S6"}, {"date": "2026-12-15", "g": "B", "h": 3, "tara": "Kshema", "tithi": "S7"}, {"date": "2026-12-16", "g": "C", "h": 3, "tara": "Pratyak", "tithi": "S8"}, {"date": "2026-12-17", "g": "C", "h": 4, "tara": "Sadhaka", "tithi": "S9"}, {"date": "2026-12-18", "g": "D", "h": 4, "tara": "Vadha", "tithi": "S10"}, {"date": "2026-12-19", "g": "C", "h": 5, "tara": "Mitra", "tithi": "S11"}, {"date": "2026-12-20", "g": "B", "h": 5, "tara": "Parama Mitra", "tithi": "S12"}, {"date": "2026-12-21", "g": "C", "h": 6, "tara": "Janma", "tithi": "S13"}, {"date": "2026-12-22", "g": "C", "h": 6, "tara": "Sampat", "tithi": "S14"}, {"date": "2026-12-23", "g": "D", "h": 7, "tara": "Vipat", "tithi": "S15"}, {"date": "2026-12-24", "g": "B", "h": 7, "tara": "Kshema", "tithi": "K1"}, {"date": "2026-12-25", "g": "C", "h": 8, "tara": "Sadhaka", "tithi": "K3"}, {"date": "2026-12-26", "g": "D", "h": 8, "tara": "Vadha", "tithi": "K4"}, {"date": "2026-12-27", "g": "B", "h": 9, "tara": "Mitra", "tithi": "K5"}], "jup": [{"h": 9, "from": "2026-11-01", "to": "2027-01-23"}, {"h": 8, "from": "2027-01-24", "to": "2027-06-25"}, {"h": 9, "from": "2027-06-26", "to": "2027-11-25"}, {"h": 10, "from": "2027-11-26", "to": "2028-02-27"}, {"h": 9, "from": "2028-02-28", "to": "2028-07-23"}, {"h": 10, "from": "2028-07-24", "to": "2028-12-25"}, {"h": 11, "from": "2028-12-26", "to": "2028-12-31"}], "sat": [{"h": 4, "from": "2026-11-01", "to": "2027-06-02"}, {"h": 5, "from": "2027-06-03", "to": "2027-10-19"}, {"h": 4, "from": "2027-10-20", "to": "2028-02-22"}, {"h": 5, "from": "2028-02-23", "to": "2028-12-31"}]};
+const START = new Date('2026-11-01'), END = new Date('2028-12-31'), TODAY = new Date('2026-11-05');
+const span = END - START;
+const pct = d => Math.max(0, Math.min(100, (new Date(d) - START) / span * 100));
+const fmt = d => new Date(d).toLocaleDateString('en-GB', {timeZone:'UTC', day:'numeric', month:'short', year:'numeric'});
+
+const NEXT = [
+  {when:'10 Dec 2026 onward', what:'The first easing: a senior’s door opens; recognition or a document by January.', tag:'Mentor', act:true},
+  {when:'12 Dec 2026 – Jan 2027', what:'The pay conversation can be reopened by a senior. Ask for the number then.', tag:'Salary', act:true},
+  {when:'17 Dec 2026 – 1 Feb 2027', what:'Approvals slow down. Apply and prepare; sign nothing hurried.', tag:'Job change', act:false},
+];
+const HOR = [
+  {h:'3 months', to:'Jan 2027', s:58, n:'6 of 9', p:'Effort without visible reward to 10 Dec, then the first easing and a senior’s support.', b:'A slow, testing sub-period to 1 Feb.'},
+  {h:'6 months', to:'Apr 2027', s:48, n:'4 of 9', p:'An interview and offer cycle: opens Dec–Jan, lands Apr–May.', b:'Retrograde delays in Feb–Mar.'},
+  {h:'9 months', to:'Jul 2027', s:55, n:'5 of 9', p:'The career clock turns to income and position from 23 Jul.', b:'Saturn presses the home house to early June.'},
+  {h:'12 months', to:'Oct 2027', s:60, n:'5 of 9', p:'The ask for promotion is prepared; the window opens 26 Nov.', b:'A winter of delay follows, Dec–Feb.'},
+];
+const SEC = [
+  {from:'2026-11-01', to:'2026-12-16', g:'Clear'},
+  {from:'2026-12-17', to:'2027-02-01', g:'Watch'},
+  {from:'2027-02-02', to:'2027-12-12', g:'Clear and protected'},
+  {from:'2027-12-13', to:'2028-02-28', g:'Watch'},
+  {from:'2028-03-01', to:'2028-12-31', g:'Clear and protected'},
+];
+const LANES = [
+  ['job','Getting a job, offers','Tier 1'],['change','Job change','Tier 1'],['promo','Promotion and growth','Tier 1'],
+  ['security','Job security','Tier 1'],['abroad','Abroad and relocation','Tier 1'],['salary','Salary and income','Tier 2'],
+  ['boss','Boss and politics','Tier 2'],['recog','Recognition','Tier 3'],['team','Leading a team','Tier 3'],['mentor','Mentor and sponsor','Tier 3'],
+];
+const W = [
+  {lane:'job', from:'2026-12-10', to:'2027-05-20', peak:'2027-04-15', cls:'minor', pol:'support', title:'Interview and offer cycle', n:4,
+   why:[['Main clock','Jupiter / Sun sub-periods','opens'],['Short clock','Sun from 10 Dec','opens'],['Jupiter','in your 9th to 24 Jan','trigger'],['This year’s chart','year lord in the 4th','confirms (remote terms)']],
+   confirm:'Recruiters or seniors reach out in January.', todo:'Apply in December; judge any offer by whether it sets up the 2027–28 step.'},
+  {lane:'change', from:'2027-02-01', to:'2027-05-20', peak:'2027-04-20', cls:'minor', pol:'support', title:'A possible move, if the offer is right', n:4,
+   why:[['Main clock','Jupiter / Sun / Venus from 1 Apr','opens'],['This year’s chart','four planets in its 10th','a rise, not an exit']],
+   confirm:'A written offer before mid-May.', todo:'Prefer a bigger role in a large institution; avoid a leap to an untested venture.'},
+  {lane:'promo', from:'2027-11-26', to:'2028-02-27', peak:'2027-11-24', cls:'minor', pol:'support', title:'The promotion window opens: the formal ask', n:5,
+   why:[['Jupiter','enters your 10th 26 Nov','trigger'],['Jupiter','on your natal Moon 7 Nov – 7 Mar','trigger'],['Career clock','Sun / Mercury / Jupiter','opens'],['Annual clock','Jupiter months Jan – Mar','confirms']],
+   confirm:'Your manager agrees to put the case forward.', todo:'State the ask formally 23–25 Nov; expect confirmation in stages.'},
+  {lane:'promo', from:'2028-02-28', to:'2028-05-07', peak:'2028-03-07', cls:'major', pol:'support', title:'First signing window: the title, the band', n:9,
+   why:[['Main clock','Jupiter / Moon / Mercury (10th lord)','opens'],['Career clock','Sun / Mercury / Venus','opens'],['Short clock','Sun / Venus from 11 Mar','confirms'],['Rasi clock','status sign','confirms'],['Jupiter','exact on your Moon 7 Mar','trigger'],['Full moon','on your 10th 11–12 Mar','trigger'],['This year’s chart','Jupiter months','confirms']],
+   confirm:'The delay ends 23 Feb; papers move after 11 Mar.', todo:'Sign on an act day; avoid 17 Apr – 13 Jun for new fights.'},
+  {lane:'promo', from:'2028-07-24', to:'2028-10-12', peak:'2028-10-08', cls:'major', pol:'support', title:'Second signing window', n:9,
+   why:[['Career clock','Sun / Mercury / Sun','opens'],['Jupiter','in your 10th from 24 Jul','trigger'],['Jupiter','exact on your 10th lord 8 Oct','trigger'],['This year’s chart','its lagna on your public image','confirms']],
+   confirm:'Public credit for your work in August.', todo:'If the first window passed, this is when it completes.'},
+  {lane:'security', from:'2026-12-17', to:'2027-02-01', peak:'2027-01-10', cls:'minor', pol:'test', title:'A slow, testing stretch (watch)', n:2,
+   why:[['Main clock','Jupiter / Sun / Saturn','tests'],['Mars','turns back in your 9th 10 Jan','trigger']],
+   confirm:'Delays in approvals, not a loss of the role.', todo:'Keep records; do not resign in anger.'},
+  {lane:'security', from:'2027-12-13', to:'2028-02-28', peak:'2028-01-26', cls:'minor', pol:'test', title:'The winter of delay (watch)', n:3,
+   why:[['Main clock','Jupiter / Moon / Saturn','tests'],['Saturn','back in your 4th to 23 Feb','trigger'],['Eclipses','12 and 26 Jan','trigger']],
+   confirm:'The number is corrected late January.', todo:'Hold savings; confirm everything in writing.'},
+  {lane:'abroad', from:'2027-04-01', to:'2027-05-15', peak:'2027-04-20', cls:'minor', pol:'support', title:'Remote or relocation clause', n:3,
+   why:[['Sun and Mercury','in your 4th','trigger'],['This year’s chart','year lord in the 4th','confirms']],
+   confirm:'A hybrid or cross-border reporting line is offered.', todo:'Negotiate terms, not a move.'},
+  {lane:'abroad', from:'2028-08-10', to:'2028-12-31', peak:'2028-08-10', cls:'minor', pol:'support', title:'Preparing a move abroad (papers, budget)', n:3,
+   why:[['Rahu','on your lagna from 24 Jun','trigger'],['Wealth clock','in your 12th from 10 Aug','opens']],
+   confirm:'Budget and documents, not the move itself (2029–31).', todo:'Build foreign relationships; no move in this span.'},
+  {lane:'salary', from:'2026-12-12', to:'2027-01-31', peak:'2026-12-12', cls:'minor', pol:'support', title:'The pay conversation reopens', n:3,
+   why:[['Jupiter','stations on your Venus 12 Dec','trigger'],['Rahu','enters your 2nd 5 Dec','trigger'],['Annual clock','Venus month','confirms']],
+   confirm:'A senior raises your number first.', todo:'Ask for the number in this window.'},
+  {lane:'salary', from:'2028-01-18', to:'2028-04-16', peak:'2028-03-11', cls:'minor', pol:'support', title:'Income inside the role', n:4,
+   why:[['Career clock','Sun / Mercury / Venus','opens'],['Short clock','Sun / Venus (11th lord)','opens']],
+   confirm:'A band revision.', todo:'Tie the raise to the new scope.'},
+  {lane:'boss', from:'2028-04-17', to:'2028-06-13', peak:'2028-05-01', cls:'minor', pol:'test', title:'Friction with a peer', n:2,
+   why:[['Annual clock','Jupiter / Rahu / Mars','tests'],['Career clock','Sun / Mercury / Saturn','slow approvals']],
+   confirm:'A rival claims credit.', todo:'Document results; let the senior settle it.'},
+  {lane:'recog', from:'2027-09-24', to:'2027-09-29', peak:'2027-09-27', cls:'minor', pol:'support', title:'Credit from the head of the institution', n:3,
+   why:[['Jupiter','exact on your natal Sun','trigger'],['Jupiter','in your 9th','trigger']],
+   confirm:'A public mention or award.', todo:'Make the work visible in September.'},
+  {lane:'team', from:'2028-09-18', to:'2028-12-31', peak:'2028-10-01', cls:'minor', pol:'support', title:'A function to build', n:3,
+   why:[['Main clock','Jupiter / Mars (your strongest planet)','opens'],['Jupiter','in your 10th','trigger']],
+   confirm:'Headcount approved.', todo:'Ask for people with the new role.'},
+  {lane:'mentor', from:'2026-11-01', to:'2027-01-23', peak:'2026-12-12', cls:'minor', pol:'support', title:'Jupiter in your 9th: a senior backs you', n:2,
+   why:[['Jupiter','in your 9th','trigger']], confirm:'A senior introduces you.', todo:'Ask for advice, not favours.'},
+  {lane:'mentor', from:'2027-06-26', to:'2027-11-25', peak:'2027-09-27', cls:'minor', pol:'support', title:'Jupiter in your 9th again', n:2,
+   why:[['Jupiter','in your 9th','trigger']], confirm:'Sponsorship for the ask.', todo:'Line up your sponsor before November.'},
+];
+const ADS = [['2026-11-01','2027-05-20','Main: Jupiter / Sun'],['2027-05-20','2028-09-18','Main: Jupiter / Moon'],['2028-09-18','2028-12-31','Main: Jupiter / Mars']];
+const CAR = [['2026-11-01','2027-07-23','Career clock: Sun / Mars'],['2027-07-23','2028-12-31','Career clock: Sun / Mercury']];
+
+function el(t, a = {}, h = '') { const e = document.createElement(t); Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v)); e.innerHTML = h; return e; }
+
+document.getElementById('next').append(...NEXT.map(c => el('div', {class:'card'},
+  `<div class="when">${c.when}</div><div>${c.what}</div><div style="margin-top:8px"><span class="tag ${c.act?'act':'hold'}">${c.act?'Act':'Hold'}</span><span class="tag">${c.tag}</span></div>`)));
+
+document.getElementById('horizons').append(...HOR.map(c => el('div', {class:'card'},
+  `<div class="small">Next ${c.h} · to ${c.to}</div><div style="margin-top:4px">${c.p}</div><div class="small" style="margin-top:6px">Against: ${c.b}</div>
+   <div class="score"><b>${c.s}</b><span class="small">/ 100 · ${c.n} clocks agree</span></div><div class="meter"><i style="width:${c.s}%"></i></div>`)));
+
+const SECCOL = {'Clear and protected':['var(--support-soft)','var(--support)'],'Clear':['var(--soft)','var(--ink)'],'Watch':['var(--test-soft)','var(--test)'],'Risk':['var(--risk-soft)','var(--risk)']};
+document.getElementById('security').append(...SEC.map(s => { const [bg, fg] = SECCOL[s.g];
+  return el('div', {style:`background:${bg};color:${fg}`}, `<b>${s.g}</b><br>${fmt(s.from)} – ${fmt(s.to)}`); }));
+
+const tl = document.getElementById('tl');
+const ax = el('div', {class:'axis'}); ax.append(el('div')); const months = el('div', {class:'months'});
+for (let d = new Date(START); d <= END; d.setUTCMonth(d.getUTCMonth() + 3)) months.append(el('span', {style:`left:${pct(d)}%`}, d.toLocaleDateString('en-GB', {timeZone:'UTC', month:'short', year:'2-digit'})));
+ax.append(months); tl.append(ax);
+function bandRow(label, sub, items, color) {
+  const r = el('div', {class:'row'}); r.append(el('div', {class:'lab'}, `${label}<small>${sub}</small>`));
+  const t = el('div', {class:'track'});
+  items.forEach(([a, b, txt], i) => t.append(el('div', {class:'band', style:`left:${pct(a)}%;width:${pct(b) - pct(a)}%;background:${i % 2 ? color[1] : color[0]}`, title:txt}, txt)));
+  r.append(t); tl.append(r);
+}
+bandRow('Main clock', 'period / sub-period', ADS, ['var(--band1)', 'var(--band2)']);
+bandRow('Career clock', 'conditional dasha', CAR, ['var(--band3)', 'var(--band4)']);
+if (DATA) {
+  bandRow('Jupiter', 'house from lagna', DATA.jup.map(r => [r.from, r.to, 'House ' + r.h]), ['var(--band3)', 'var(--band1)']);
+  bandRow('Saturn', 'house from lagna', DATA.sat.map(r => [r.from, r.to, 'House ' + r.h]), ['var(--band4)', 'var(--band2)']);
+}
+LANES.forEach(([id, label, tier]) => {
+  const r = el('div', {class:'row'}); r.append(el('div', {class:'lab'}, `${label}<small>${tier}</small>`));
+  const t = el('div', {class:'track'});
+  W.forEach((w, i) => { if (w.lane !== id) return;
+    const b = el('button', {class:`bar ${w.cls} ${w.pol}`, style:`left:${pct(w.from)}%;width:${Math.max(0.8, pct(w.to) - pct(w.from))}%`, 'aria-label':`${w.title}, ${fmt(w.from)} to ${fmt(w.to)}`, title:w.title});
+    b.onclick = () => openDrawer(i); t.append(b); });
+  r.append(t); tl.append(r);
+});
+tl.append(el('div', {class:'today', style:`left:calc(170px + (100% - 170px) * ${pct(TODAY) / 100})`}));
+
+const wk = document.getElementById('weeks');
+['Week', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(h => wk.append(el('div', {class:'h'}, h)));
+const NAME = {A:'Act', B:'Good', C:'Routine', D:'Hold'};
+(DATA ? DATA.grades : []).forEach((g, i) => {
+  if (i % 7 === 0) wk.append(el('div', {class:'h', style:'text-align:left'}, new Date(g.date).toLocaleDateString('en-GB', {timeZone:'UTC', day:'numeric', month:'short'})));
+  wk.append(el('div', {class:`cell g${g.g}`, title:`${fmt(g.date)}: ${NAME[g.g]} · Moon in house ${g.h} · tara ${g.tara} · tithi ${g.tithi}`}, g.g));
+});
+
+const dr = document.getElementById('drawer');
+function openDrawer(i) {
+  const w = W[i];
+  dr.innerHTML = `<button class="btn x" aria-label="Close" onclick="closeDrawer()">✕</button>
+   <span class="tag ${w.pol === 'support' ? 'act' : 'hold'}">${w.cls === 'major' ? 'Major' : 'Minor'} · ${w.pol === 'support' ? 'supports' : 'tests'}</span>
+   <h3>${w.title}</h3><div class="small">${fmt(w.from)} – ${fmt(w.to)} · peak ${fmt(w.peak)}</div>
+   <p><b>${w.n} clocks agree.</b></p>
+   <table>${w.why.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="small">${r[2]}</td></tr>`).join('')}</table>
+   <p><b>What would confirm it early:</b> ${w.confirm}</p>
+   <p><b>What to do:</b> ${w.todo}</p>
+   <p class="small">Remedy for this window comes from its ruling planet: a weekly act, a donation of food or books, and conduct. Shown in the product from the remedy reader.</p>
+   <div class="small">Did this happen?</div>
+   <div class="btns">${['Happened', 'Partly', 'Not yet', 'Wrong date'].map((t, k) => `<button class="btn ${k ? '' : 'primary'}" onclick="toast('Saved to your life record: ${t}')">${t}</button>`).join('')}</div>`;
+  dr.classList.add('open'); dr.setAttribute('aria-hidden', 'false'); dr.querySelector('.x').focus();
+}
+function closeDrawer() { dr.classList.remove('open'); dr.setAttribute('aria-hidden', 'true'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+function toast(t) { const x = document.getElementById('toast'); x.textContent = t; x.classList.add('on'); setTimeout(() => x.classList.remove('on'), 1800); }
+
+// ---- Present state: the entrance (doc 44). Sample content; dates from the sample chart's stored windows. ----
+const VOTES = {
+  fair: [['Main clock','Jupiter / Moon / Mercury','Fair','D1: 10th lord in the 10th · D10: 10th · D9: own sign'],['Career clock','Sun / Mercury / Venus','Fair','D1: 11th lord · D10: 11th'],['Rasi clock','sign 10th from the career point','Fair','—'],['Karaka clock','Venus / Mars','Split','D1: 6th · D10: 8th, so not counted'],['This year’s chart','Jupiter months','Fair','year D10: Jupiter in its 10th'],['Slow transits','Jupiter on natal Moon','Fair','—'],['Short clocks','Sun / Venus and Jupiter / Rahu','Neutral','they disagree with each other']],
+  storm: [['Main clock','Jupiter / Sun / Rahu','Storm','D1: Rahu in the 12th · D10: 12th'],['Career clock','Sun / Mars / Venus','Neutral','—'],['Rasi clock','sign 8th from the 10th','Storm','—'],['Karaka clock','Venus / Sun','Fair','D1: 9th lord · D10: kendra'],['This year’s chart','Ketu month','Storm','year D10: Ketu rising'],['Slow transits','Sun in the 12th, Mercury turning','Storm','—'],['Short clocks','Moon / Rahu and Saturn / Saturn','Storm','they agree']],
+};
+function days(g){ if(!DATA) return ''; return DATA.grades.slice(0,7).filter(x=>x.g===g).map(x=>new Date(x.date).toLocaleDateString('en-GB',{timeZone:'UTC',weekday:'short',day:'numeric',month:'short'})).join(', '); }
+const STATES = {
+  storm:{ent:'er', asof:'5 Nov 2026, after the person taps “Tough”', conf:'Likely · most of your chart points this way', votes:'storm',
+    head:'A demanding stretch at work. It eases from 10 Dec 2026', lede:'Here’s what needs care this week, and what’s safe to do.',
+    body:()=>`<div class="two"><div class="card"><b>Needs care</b><ul class="list"><li>${days('D')||'Approvals'}: keep big decisions off these days</li><li>Senior sign-off moves slowly</li></ul></div>
+      <div class="card"><b>Safe to do</b><ul class="list"><li>${days('A')||days('B')}: small moves, follow-ups, one useful conversation</li><li>Send applications; answers come in January</li></ul></div></div>
+      <div class="card mt"><div class="small">When it eases</div><div class="bigdate">10 Dec 2026</div>4 of 7 families agree the pressure lifts after this date. Until then, keep records and keep big decisions for act days.</div>
+      <div class="card mt"><b>Protect</b><ul class="list"><li>Keep a copy of your appraisals and results</li><li>Keep your references current</li><li>Hold spending steady through January</li></ul>
+      <div class="btns"><button class="btn primary" onclick="openDrawer(5)">What to do this week</button></div></div>
+      <div class="card mt"><div class="small">Job security</div><b>No sign of a job ending.</b> The rules find no job-end signal through 16 Dec; from 17 Dec to 1 Feb, “Keep an eye on things” (approvals slow, not a loss of the role). In your past this held 11 of 12 times (illustrative).</div>
+      <div class="support">If work stress is affecting your sleep or health, talking to someone helps.</div>`},
+  clearing:{ent:'er', asof:'20 Nov 2026', conf:'Confirmed · 5 of 7 families agree', votes:'storm',
+    head:'The pressure is lifting. From 10 Dec 2026, a better time to move', lede:'The weeks before are for getting ready.',
+    body:()=>`<div class="ntn"><span>Now</span><span class="seg" style="background:var(--soft)"></span><b>10 Dec</b><span class="seg" style="background:var(--support-soft)"></span><span>Next</span></div>
+      <div class="card mt"><b>Before 10 Dec</b><ul class="list"><li>Update your CV and your profile</li><li>Talk to two people who can open a door</li><li>Write down the number you will ask for</li></ul></div>
+      <div class="card mt"><div class="small">First window after it</div><b>Interview and offer cycle, 10 Dec 2026 – 20 May 2027</b><div class="small">4 of 9 clocks · lands Apr–May</div>
+      <div class="btns"><button class="btn primary" onclick="openDrawer(0)">Plan your first move</button></div></div>
+      <div class="card mt"><div class="small">Job security</div>Now: <b>No sign of a job ending</b>. From 17 Dec: <b>Keep an eye on things</b>.</div>`},
+  urgent:{ent:'er', asof:'12 Jan 2027', conf:'Likely · most of your chart points this way', votes:null,
+    head:'Friction with a senior at work. It eases from 1 Feb 2027', lede:'Your job is not the issue. This is about one relationship and slow approvals.',
+    body:()=>`<div class="card mt"><div class="small">Job security</div><b>No sign of a job ending.</b> The rules find no job-end signal in this stretch.</div>
+      <div class="two"><div class="card"><b>What helps</b><ul class="list"><li>Keep decisions and agreements in writing</li><li>Let results speak in the review, not in meetings</li><li>Find one ally above the conflict</li></ul></div>
+      <div class="card"><b>What not to do</b><div>Don’t resign or escalate in the middle of it. The pressure lifts after 1 Feb.</div></div></div>
+      <div class="card mt"><div class="small">Also in this stretch</div>A project slips by a few weeks while a key planet turns back (from 10 Jan).</div>
+      <div class="support">If work stress is affecting your sleep or health, talking to someone helps.</div>`},
+  calm:{ent:'lobby', asof:'1 Aug 2027', conf:'Confirmed · 5 of 7 families agree', votes:null,
+    head:'A steady period at work. Build until 24 Sep 2027', lede:'Nothing large is moving. This is time for skills and relationships.',
+    body:()=>`<div class="two"><div class="card"><div class="small">Next opening</div><b>Credit from the head of the institution, 24–29 Sep 2027</b><div class="small">3 clocks · then the promotion window from 26 Nov</div></div>
+      <div class="card"><div class="small">Small wins before then</div><ul class="list"><li>Line up your sponsor; a senior backs you from 26 Jun</li><li>Make the work visible in September</li></ul></div></div>
+      <div class="card mt"><span class="small">Job security</span> · <b>Steady ground, with support</b> through Dec 2027.</div>`},
+  late_summer:{ent:'resort', asof:'15 Sep 2028', conf:'Confirmed · 6 of 7 families agree', votes:'fair',
+    head:'Finish what you started before 12 Oct 2028', lede:'Your second signing window is in its last weeks.',
+    body:()=>`<div class="ntn"><span>Now</span><span class="seg" style="background:var(--support)"></span><b>12 Oct</b><span class="seg" style="background:var(--soft)"></span><span>Slower</span></div>
+      <div class="card mt"><b>Finish before 12 Oct</b><ul class="list"><li>Close the title and band conversation</li><li>Sign anything pending on an act day; the peak is 8 Oct</li><li>Ask for the people to build the new function</li></ul></div>
+      <div class="card mt">After that, a slower stretch suited to steady work, with care from 17 Dec 2028.</div>`},
+  fair:{ent:'resort', asof:'1 Mar 2028', conf:'Confirmed · 6 of 7 families agree', votes:'fair',
+    head:'A strong season for your promotion. Ask before 7 May 2028', lede:'Promotion and income are both open now.',
+    body:()=>`<div class="two"><div class="card"><div class="small">The window</div><b>28 Feb – 7 May 2028</b><div>Peak around 7 Mar. 9 of 9 clocks agree.</div>
+      <div class="btns"><button class="btn primary" onclick="openDrawer(3)">Open your best window</button></div></div>
+      <div class="card"><b>What to ask for</b><ul class="list"><li>The title and the band, in writing</li><li>The wider remit you already carry</li><li>Headcount for the function</li></ul></div></div>
+      <div class="card mt"><b>More open doors</b><div>Income inside the role, 18 Jan – 16 Apr 2028</div></div>
+      <div class="card mt"><span class="small">Next season</span><br>A slower stretch from 17 Apr (friction with a peer); big moves before then.</div>
+      <div class="card mt"><span class="small">Job security</span> · <b>No sign of a job ending through Dec 2028.</b> In your past this held 11 of 12 times (illustrative).</div>`},
+  split:{ent:'lobby', asof:'a month where the families split', conf:'Split · 3 for, 3 against, 1 neutral', votes:null,
+    head:'How is work for you right now?', lede:'Your chart is divided about this month, so we’d rather ask than guess.',
+    body:()=>`<div class="btns"><button class="btn" onclick="pick('storm')">Tough</button><button class="btn" onclick="pick('calm')">Okay</button><button class="btn" onclick="pick('fair')">Going well</button><button class="btn" onclick="pick('calm')">Skip</button></div>
+      <div class="small mt">Your answer only changes what we show first. It is private and you can delete it.</div>`},
+};
+function voteTable(k){ if(!k) return ''; return `<details class="mt"><summary class="small" style="cursor:pointer">Why we think so</summary><table class="votes" style="width:100%;border-collapse:collapse;margin-top:6px">${VOTES[k].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td><td class="small">${r[3]}</td></tr>`).join('')}</table><div class="small">A period’s vote counts only when the natal chart and the career chart agree about its ruler. Sample votes.</div></details>`; }
+function render(k){
+  const st = STATES[k]; document.body.dataset.entrance = st.ent;
+  document.querySelectorAll('.switch button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.s===k)));
+  document.getElementById('present').innerHTML = `<div class="hero"><div class="small">As of ${st.asof}</div><h2 class="head">${st.head}</h2><div class="lede">${st.lede}</div><span class="conf">${st.conf}</span>${voteTable(st.votes)}</div>${st.body()}`;
+  const rest = document.getElementById('rest'), after = document.getElementById('after');
+  if (st.ent === 'er') { document.getElementById('afterSlot').append(rest); after.hidden = false; after.open = false; }
+  else { after.after(rest); after.hidden = true; }
+}
+function pick(k){ toast('Thanks. Your board now starts from that.'); render(k); }
+document.querySelectorAll('.switch button').forEach(b=>b.onclick=()=>render(b.dataset.s));
+render('fair');
+</script>
+</body>
+</html>

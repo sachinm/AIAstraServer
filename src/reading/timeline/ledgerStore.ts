@@ -7,6 +7,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { parseLedger, type LifeEvent } from './ledger.js';
 import { MAX_EVENTS_PER_KUNDLI, type LedgerInput } from './ledgerCategories.js';
+import { openRow, openRows } from '../../lib/pii/rawSql.js';
 
 export type LedgerResult<T> = { status: 'ok'; value: T } | { status: 'not_found' } | { status: 'full' } | { status: 'unavailable' };
 
@@ -24,6 +25,8 @@ export function resetLedgerStoreWarning(): void {
 }
 
 type Row = Record<string, unknown>;
+// life_events is sealed into its new `event` column (M26, docs/privacy/02 §4.1.6); until then the plain columns are
+// written as they are and every read goes through openRow, so the switch is in one place.
 
 function toEvent(row: Row): LifeEvent | null {
   return parseLedger([row]).events[0] ?? null;
@@ -38,7 +41,7 @@ export async function resolveKundli(prisma: PrismaClient, userId: string, kundli
 export async function listLedger(prisma: PrismaClient, userId: string, kundliId: string): Promise<LedgerResult<LifeEvent[]>> {
   try {
     const rows = await prisma.$queryRaw<Row[]>`SELECT "id", "category", "date", "date_precision", "place", "attributes" FROM "life_events" WHERE "user_id" = ${userId} AND "kundli_id" = ${kundliId} ORDER BY "date", "created_at"`;
-    return { status: 'ok', value: parseLedger(rows).events };
+    return { status: 'ok', value: parseLedger(await openRows('life_events', rows)).events };
   } catch (err) {
     warnOnce('listLedger', err);
     return { status: 'unavailable' };
@@ -52,7 +55,7 @@ export async function createLedgerEvent(prisma: PrismaClient, userId: string, ku
     const rows = await prisma.$queryRaw<Row[]>`INSERT INTO "life_events" ("user_id", "kundli_id", "category", "date", "date_precision", "place", "attributes", "source")
       VALUES (${userId}, ${kundliId}, ${e.category}, ${e.date}::date, ${e.date_precision}, ${e.place}, ${JSON.stringify(e.attributes)}::jsonb, 'user')
       RETURNING "id", "category", "date", "date_precision", "place", "attributes"`;
-    const ev = rows[0] ? toEvent(rows[0]) : null;
+    const ev = rows[0] ? toEvent(await openRow('life_events', rows[0])) : null;
     return ev ? { status: 'ok', value: ev } : { status: 'unavailable' };
   } catch (err) {
     warnOnce('createLedgerEvent', err);
@@ -64,7 +67,7 @@ export async function createLedgerEvent(prisma: PrismaClient, userId: string, ku
 export async function getLedgerEvent(prisma: PrismaClient, userId: string, id: string): Promise<LedgerResult<LifeEvent>> {
   try {
     const rows = await prisma.$queryRaw<Row[]>`SELECT "id", "category", "date", "date_precision", "place", "attributes" FROM "life_events" WHERE "id" = ${id} AND "user_id" = ${userId} LIMIT 1`;
-    const ev = rows[0] ? toEvent(rows[0]) : null;
+    const ev = rows[0] ? toEvent(await openRow('life_events', rows[0])) : null;
     return ev ? { status: 'ok', value: ev } : { status: 'not_found' };
   } catch (err) {
     warnOnce('getLedgerEvent', err);
@@ -77,7 +80,7 @@ export async function updateLedgerEvent(prisma: PrismaClient, userId: string, id
     const rows = await prisma.$queryRaw<Row[]>`UPDATE "life_events" SET "category" = ${e.category}, "date" = ${e.date}::date, "date_precision" = ${e.date_precision}, "place" = ${e.place}, "attributes" = ${JSON.stringify(e.attributes)}::jsonb
       WHERE "id" = ${id} AND "user_id" = ${userId}
       RETURNING "id", "category", "date", "date_precision", "place", "attributes"`;
-    const ev = rows[0] ? toEvent(rows[0]) : null;
+    const ev = rows[0] ? toEvent(await openRow('life_events', rows[0])) : null;
     return ev ? { status: 'ok', value: ev } : { status: 'not_found' };
   } catch (err) {
     warnOnce('updateLedgerEvent', err);

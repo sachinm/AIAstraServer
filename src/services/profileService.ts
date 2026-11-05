@@ -4,7 +4,6 @@
  */
 import crypto from 'crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { decrypt, encrypt } from '../lib/encrypt.js';
 import { deleteUserCaches } from '../reading/llm/promptCache.js';
 import { buildPlaceOfBirth, normalizeGender, normalizeLanguage, validateCompleteProfile } from '../lib/profileValidators.js';
 import { enqueueKundliSync } from './kundliQueueService.js';
@@ -83,9 +82,10 @@ export async function completeProfile(
   await db.auth.update({
     where: { id: userId },
     data: {
-      date_of_birth: encrypt(p.date_of_birth) ?? p.date_of_birth,
-      time_of_birth: encrypt(time) ?? time,
-      place_of_birth: encrypt(place) ?? place,
+      // sealed by the client's PII extension when PII_WRITE_MODE=sealed (docs/privacy/02 B1.4)
+      date_of_birth: p.date_of_birth,
+      time_of_birth: time,
+      place_of_birth: place,
       country_code: p.country_code,
       city: p.city,
       gender: p.gender,
@@ -193,8 +193,8 @@ export async function updateProfile(
   }
 
   const current = {
-    date_of_birth: decrypt(user.date_of_birth) ?? user.date_of_birth ?? '',
-    time_of_birth: (decrypt(user.time_of_birth) ?? user.time_of_birth ?? '').slice(0, 5),
+    date_of_birth: user.date_of_birth ?? '',
+    time_of_birth: (user.time_of_birth ?? '').slice(0, 5),
     country_code: user.country_code ?? '',
     city: user.city ?? '',
     gender: user.gender ?? '',
@@ -223,9 +223,9 @@ export async function updateProfile(
     const place = buildPlaceOfBirth(p.city, p.country_code);
     const time = `${p.time_of_birth}:00`;
     Object.assign(data, {
-      date_of_birth: encrypt(p.date_of_birth) ?? p.date_of_birth,
-      time_of_birth: encrypt(time) ?? time,
-      place_of_birth: encrypt(place) ?? place,
+      date_of_birth: p.date_of_birth,
+      time_of_birth: time,
+      place_of_birth: place,
       country_code: p.country_code,
       city: p.city,
       kundli_added: false,
@@ -268,7 +268,7 @@ export type OwnProfileFields = {
 };
 
 /**
- * The signed-in user's own birth fields for `me` (Profile page). Decrypts like the rest of the code; returns
+ * The signed-in user's own birth fields for `me` (Profile page). The values arrive opened by the PII extension; returns
  * date_of_birth as YYYY-MM-DD and time_of_birth as HH:MM (24-hour), null when unset (pending signups store an
  * empty DOB) or unreadable. Never used for other users.
  */
@@ -279,9 +279,9 @@ export function ownProfileFields(row: {
   country_code?: string | null;
   city?: string | null;
 }): OwnProfileFields {
-  const dobRaw = decrypt(row.date_of_birth ?? null)?.trim() ?? '';
+  const dobRaw = row.date_of_birth?.trim() ?? '';
   const dobMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(dobRaw);
-  const tobRaw = decrypt(row.time_of_birth ?? null)?.trim() ?? '';
+  const tobRaw = row.time_of_birth?.trim() ?? '';
   const tobMatch = /^(\d{1,2}):(\d{2})/.exec(tobRaw);
   let tob: string | null = null;
   if (tobMatch && Number(tobMatch[1]) < 24 && Number(tobMatch[2]) < 60) {

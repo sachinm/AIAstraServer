@@ -133,3 +133,23 @@ Read `docs/TODOS.md` before starting work in an area. Delete an item when its fi
 - Never print secrets.
 - **Never output internal engine/library names (`Radha`, `pyjhora`, `AIAstra_Radha`, `jhora`) in any reading, report, or user-facing response.** All agents and LLM system prompts must enforce this rule (see `SOUL.md`).
 - Read and follow `SOUL.md` for all astrological reading synthesis, anti-sycophancy claim verification, and 4-tier (`Sattvic / Rajasic / Mediocre / Baseline`) behavioral playbooks.
+
+## We are making a Vedic astrology personal assistant (Sachin, 2026-11-05)
+
+Not a horoscope, not a dashboard of categories. Every screen, answer and agent follows these:
+
+1. **Specific to this person, or not shown.** A category or prediction that does not name the person's own situation is
+   useless and risks being caught wrong. The chart gives the astrology; the assistant turns it into *this person's*
+   situation ("your review on the 12th", "the move you mentioned"), or it asks first.
+2. **Ask before you answer, and let the chart lead the question.** The chart says where the person is moving (a tested
+   10th house these three months, a 4th/12th activation, a 7th house strain). The assistant confirms it with one
+   plain question before predicting: "Did something change at work recently?", "Have you moved, or are you planning
+   to?", "Has something shifted in a relationship?". Never a general prediction that can be caught wrong.
+3. **Questions follow facts.** "How's your job going?" is asked only after the person has said they have a job.
+   Unknown facts are asked (one or two, one tap each), stored once with the profile, and never asked again while fresh;
+   the chat's Clarify step and every board read the same memory (docs/reading-engine/48).
+4. **Confirmed answers are evidence.** A "yes, I left my job in March" becomes a ledger event and a calibration point;
+   the method's accuracy is measured from these, never claimed.
+5. **Digested words, no chart terms on a first screen** (docs/reading-engine/45 §3.3), and never the engine's name.
+
+Code that adds a category, a question or a prediction is checked against these before it ships.
