@@ -816,6 +816,12 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   were upserted by hand from the code's own definitions on 2026-11-05 at 22:20 UTC, so the Techniques page has data
   meanwhile; their model and price columns came from local settings and are overwritten by the first boot of the fixed
   image. Done: after that deploy, `updated_at` on both tables shows the boot time.
+  **Verified 2026-11-05 23:01 UTC on image `api-bb4f4ff0e20f`:** both tables were written at boot (50 techniques, 20 agents).
+  Delete this item once the measurement below is filed.
+- **P3: Cold-start time after the awaited seeds is unmeasured.** Init Duration was 3178 ms and 2768 ms on image
+  `api-bb4f4ff0e20f`, with no baseline from before the change. The seed wait is capped at 4 s. Owner: deploy session.
+  Done: Init Duration from an image before `731acc7` compared with one after, and the cap lowered if the seeds take
+  more than 500 ms.
 - **P3: The main checkout's generated Prisma client is stale.** `node_modules/.prisma/client` in the main checkout
   (`C:/Users/Owner/Documents/work/AIAstra_Server`) predates M29 (no `techniqueRegistry`), so `tsc` and tests run there
   disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
