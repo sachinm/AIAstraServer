@@ -74,9 +74,17 @@ const sweepEvent = (token?: string) => ({ source: 'aws.events', 'detail-type': '
 
 describe('parseKundliSyncEvent', () => {
   it('recognises a kundli-sync event and a sweep event', () => {
-    expect(parseKundliSyncEvent(syncEvent('2b1f-aa'))).toEqual({ kind: 'sync', kundliId: '2b1f-aa' });
-    expect(parseKundliSyncEvent(sweepEvent())).toEqual({ kind: 'sweep' });
-    expect(parseKundliSyncEvent({ detail: { task: 'kundli-sync-sweep' } })).toEqual({ kind: 'sweep' });
+    process.env.KUNDLI_SYNC_EVENT_TOKEN = 'tok';
+    expect(parseKundliSyncEvent(syncEvent('2b1f-aa', 'tok'))).toEqual({ kind: 'sync', kundliId: '2b1f-aa' });
+    expect(parseKundliSyncEvent(sweepEvent('tok'))).toEqual({ kind: 'sweep' });
+    expect(parseKundliSyncEvent({ detail: { task: 'kundli-sync-sweep', token: 'tok' } })).toEqual({ kind: 'sweep' });
+  });
+
+  it('refuses every event when KUNDLI_SYNC_EVENT_TOKEN is unset (the token is mandatory)', () => {
+    expect(parseKundliSyncEvent(syncEvent('2b1f-aa'))).toBeNull();
+    expect(parseKundliSyncEvent(syncEvent('2b1f-aa', 'anything'))).toBeNull();
+    expect(parseKundliSyncEvent(sweepEvent())).toBeNull();
+    expect(parseKundliSyncEvent({ detail: { task: 'kundli-sync-sweep' } })).toBeNull();
   });
 
   it('ignores the cache sweeper, other events, and malformed bodies', () => {
@@ -88,7 +96,7 @@ describe('parseKundliSyncEvent', () => {
     expect(parseKundliSyncEvent('x')).toBeNull();
   });
 
-  it('checks detail.token against KUNDLI_SYNC_EVENT_TOKEN when set', () => {
+  it('checks detail.token against KUNDLI_SYNC_EVENT_TOKEN', () => {
     process.env.KUNDLI_SYNC_EVENT_TOKEN = 'sekret';
     expect(parseKundliSyncEvent(syncEvent('k1', 'sekret'))).toEqual({ kind: 'sync', kundliId: 'k1' });
     expect(parseKundliSyncEvent(syncEvent('k1', 'wrong!'))).toBeNull();
@@ -117,8 +125,18 @@ describe('scheduleKundliSync', () => {
     expect(queue.processKundliSyncQueue).not.toHaveBeenCalled();
   });
 
+  it('on Lambda without the token: no invoke (the worker would refuse it), the gate-only fallback runs instead', async () => {
+    process.env.AWS_LAMBDA_FUNCTION_NAME = 'aiastra-server-api';
+    const kundli = makeKundli();
+    const { fetcher } = clockedFetcher();
+    const result = await scheduleKundliSync('k1', { prisma: fakePrisma(kundli), queue: { chart: { repo: memRepo(kundli, EXTRA), fetcher } } });
+    expect(result).toBe('gate_sync');
+    expect(lambda.send).not.toHaveBeenCalled();
+  });
+
   it('when the invoke fails on Lambda, pulls the gate only and waits for it, so nothing is left to freeze', async () => {
     process.env.AWS_LAMBDA_FUNCTION_NAME = 'aiastra-server-api';
+    process.env.KUNDLI_SYNC_EVENT_TOKEN = 'tok';
     lambda.send.mockRejectedValue(new Error('AccessDeniedException'));
     const kundli = makeKundli();
     const { fetcher, calls } = clockedFetcher();

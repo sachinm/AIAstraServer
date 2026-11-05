@@ -2,6 +2,7 @@
  * Maps LLM / transport failures to safe client-facing strings.
  * Raw provider messages (quota, model hints, billing URLs) must not reach the browser.
  */
+import { redactForLog, stackFrames } from '../lib/logRedact.js';
 
 const QUOTA_OR_RATE =
   /\b429\b|quota|rate\s*limit|resource_exhausted|resource has been exhausted|too many requests|exceeded your current|usage limit|tokens?\s*per\s*(minute|day)|throttl/i;
@@ -30,10 +31,13 @@ function rawMessage(err: unknown): string {
   return String(err ?? '');
 }
 
-/** Log the full error for operators; never send this string to clients. */
+/**
+ * Log the error for operators; never send this string to clients. The message is redacted and cut short, because
+ * provider and engine errors can quote the question, the prompt or a birth detail (docs/privacy/02 B0.1).
+ */
 export function logChatProviderError(scope: string, err: unknown): void {
   const e = err instanceof Error ? err : new Error(String(err));
-  console.error(`[chat-provider] ${scope}`, e.stack || e.message);
+  console.error(`[chat-provider] ${scope}`, { name: e.name, message: redactForLog(e.message, 160), at: stackFrames(e) });
 }
 
 export function publicMessageFromChatProviderError(err: unknown): string {

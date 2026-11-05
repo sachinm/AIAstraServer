@@ -130,14 +130,6 @@ export function getAstroKundliApiKey(): string | undefined {
 }
 
 /**
- * Returns true if AstroKundli API response logging is enabled.
- * Set ASTROKUNDLI_LOG_RESPONSE=1 to log raw API responses (for debugging).
- */
-export function isAstroKundliLogResponseEnabled(): boolean {
-  return process.env.ASTROKUNDLI_LOG_RESPONSE === '1';
-}
-
-/**
  * Default gap between export-horoscope POST **starts** in this process.
  * OSM Nominatim usage policy is effectively one geocode per second; each slice (biodata, d1, …)
  * is a separate POST and may trigger geocoding upstream, so a full Kundli needs ~(number of slices)× this delay
@@ -238,7 +230,7 @@ export function getKundliSyncSweepBatch(): number {
   return Number.isInteger(n) && n >= 1 && n <= 50 ? n : 5;
 }
 
-/** Shared secret carried in kundli-sync / kundli-sync-sweep events (KUNDLI_SYNC_EVENT_TOKEN). Unset = not checked. */
+/** Shared secret carried in kundli-sync / kundli-sync-sweep events (KUNDLI_SYNC_EVENT_TOKEN). Required: unset = every event refused. */
 export function getKundliSyncEventToken(): string | undefined {
   return process.env.KUNDLI_SYNC_EVENT_TOKEN?.trim() || undefined;
 }

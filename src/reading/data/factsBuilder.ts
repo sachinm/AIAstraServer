@@ -3,12 +3,12 @@
  * Called after kundli sync (kundliQueueService), by the backfill script, and lazily when a chat finds no dossier.
  * Coordinates returned by the engine are stored once on the kundli so nothing geocodes again.
  */
-import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { queueLog, queueLogError } from '../../lib/queueLogger.js';
 import { hashText } from '../packs/selector.js';
 import { EngineUnsupportedError, fetchFacts } from './engineClient.js';
 import { FACTS_VERSION } from './store.js';
+import { piiHash } from '../../lib/pii/hash.js';
 
 const inflight = new Map<string, Promise<BuildResult>>();
 
@@ -17,9 +17,13 @@ export type BuildResult =
   | { status: 'skipped'; kundliId: string; reason: string }
   | { status: 'failed'; kundliId: string; reason: string; unsupported: boolean };
 
-/** Hash of the inputs the dossier depends on; a change (admin edit, new birth data) triggers a rebuild. */
-export function sourceHash(parts: Array<string | number | null | undefined>): string {
-  return createHash('sha256').update(parts.map((p) => String(p ?? '')).join('|')).digest('hex').slice(0, 16);
+/**
+ * Hash of the inputs the dossier depends on; a change (admin edit, new birth data) triggers a rebuild. Computed over
+ * the opened birth values (the client's PII extension opens them), so sealing the auth row never changes it; with the
+ * person's hash key it becomes an HMAC (src/lib/pii/hash.ts).
+ */
+export function sourceHash(parts: Array<string | number | null | undefined>, key?: Buffer | null): string {
+  return piiHash(parts.map((p) => String(p ?? '')).join('|'), { len: 16, key });
 }
 
 export function buildFactsForKundli(prisma: PrismaClient, kundliId: string, opts: { force?: boolean; asOf?: string } = {}): Promise<BuildResult> {

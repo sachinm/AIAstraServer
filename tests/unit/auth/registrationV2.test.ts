@@ -289,9 +289,9 @@ for (const prov of providers) {
         country_code: 'IN',
         city: 'New Delhi',
         gender: 'female',
-        date_of_birth: 'enc:1990-01-15',
-        time_of_birth: 'enc:10:30:00',
-        place_of_birth: 'enc:New Delhi,IN',
+        date_of_birth: '1990-01-15',
+        time_of_birth: '10:30:00',
+        place_of_birth: 'New Delhi,IN',
       });
       expect(db.enqueued).toEqual([db.rows[0].id]);
       const me2 = (await gql(ME_PROFILE, {}, v.token)).data.me;

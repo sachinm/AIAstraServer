@@ -45,9 +45,13 @@ const KUNDLI_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
 export type KundliSyncEvent = { kind: 'sync'; kundliId: string } | { kind: 'sweep' };
 
+/**
+ * The token is mandatory (docs/privacy/02 B0.2): with KUNDLI_SYNC_EVENT_TOKEN unset no event is accepted, because
+ * `/events` is reachable by anything that can call the function.
+ */
 function tokenOk(given: unknown): boolean {
   const want = getKundliSyncEventToken();
-  if (!want) return true;
+  if (!want) return false;
   if (typeof given !== 'string') return false;
   const a = Buffer.from(given);
   const b = Buffer.from(want);
@@ -55,8 +59,8 @@ function tokenOk(given: unknown): boolean {
 }
 
 /**
- * Recognises the two worker events. Returns null for anything else (the cache sweeper's event included) and for a
- * matching event whose `detail.token` does not equal KUNDLI_SYNC_EVENT_TOKEN (when that is set).
+ * Recognises the two worker events. Returns null for anything else (the cache sweeper's event included), for a
+ * matching event whose `detail.token` does not equal KUNDLI_SYNC_EVENT_TOKEN, and for every event when that is unset.
  */
 export function parseKundliSyncEvent(body: unknown): KundliSyncEvent | null {
   const b = body as { source?: unknown; 'detail-type'?: unknown; detail?: { kundliId?: unknown; task?: unknown; token?: unknown } } | null;
@@ -72,8 +76,7 @@ export function parseKundliSyncEvent(body: unknown): KundliSyncEvent | null {
 
 /** The event this Lambda sends itself for one kundli. */
 export function kundliSyncEventPayload(kundliId: string): Record<string, unknown> {
-  const token = getKundliSyncEventToken();
-  return { source: KUNDLI_SYNC_SOURCE, 'detail-type': KUNDLI_SYNC_DETAIL_TYPE, detail: { kundliId, ...(token ? { token } : {}) } };
+  return { source: KUNDLI_SYNC_SOURCE, 'detail-type': KUNDLI_SYNC_DETAIL_TYPE, detail: { kundliId, token: getKundliSyncEventToken() ?? '' } };
 }
 
 let lambdaClient: LambdaClient | null = null;
@@ -88,6 +91,11 @@ function client(): LambdaClient {
 export async function invokeKundliSyncAsync(kundliId: string): Promise<boolean> {
   const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME?.trim();
   if (!functionName) return false;
+  // an event without the token would be refused by the worker: take the gate-only fallback instead of losing the build
+  if (!getKundliSyncEventToken()) {
+    queueLogError({ event: 'kundli_sync_token_missing', kundli_id: kundliId });
+    return false;
+  }
   try {
     const out = await client().send(
       new InvokeCommand({ FunctionName: functionName, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify(kundliSyncEventPayload(kundliId))) }),
@@ -261,6 +269,8 @@ export async function findIncompleteKundlis(prisma: PrismaClient, plan: Pick<Reg
  * Kundlis with chat open whose dossier never landed (a fallback run, a crash, a Radha failure). Random order, so kundlis
  * that keep failing cannot hold every slot. `unsupported` is left out: chat retries it when someone asks a question.
  */
+// Raw SQL reviewed for docs/privacy/02 B1.3 (tests/unit/rawSqlAllowList.test.ts): these two sweeps read only ids and
+// plain status, lock and timestamp columns; `last_sync_error IS NOT NULL` gives the same answer sealed or plain.
 export async function findKundlisMissingFacts(prisma: PrismaClient, batch: number): Promise<string[]> {
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT k."id" FROM "kundlis" k

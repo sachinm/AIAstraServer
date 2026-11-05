@@ -74,15 +74,16 @@ describe('adminService', () => {
       );
     });
 
-    it('adds OR search on username and email when search is provided', async () => {
+    it('adds an exact-match OR search on id, username and email when search is provided', async () => {
       const prisma = createMockPrisma({ findMany: async () => [] });
       await adminService.listUsers(prisma, null, 'john');
       expect(prisma.auth.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             OR: [
-              { username: { contains: 'john', mode: 'insensitive' } },
-              { email: { contains: 'john', mode: 'insensitive' } },
+              { id: 'john' },
+              { username: { equals: 'john', mode: 'insensitive' } },
+              { email: { equals: 'john', mode: 'insensitive' } },
             ],
           }),
         })

@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 describe('runReading: thinking', () => {
-  it('streams thoughts as events, keeps them out of the answer, and stores them on the run record', async () => {
+  it('stores thoughts on the run record, keeps them out of the answer, and never streams them (docs/privacy/02 B0.2)', async () => {
     const events: ReadingEvent[] = [];
     const deltas: string[] = [];
     const r = await runReading(prisma, 'u1', 'When will I get married?', {
@@ -44,9 +44,9 @@ describe('runReading: thinking', () => {
       onEvent: (e) => events.push(e),
       onDelta: (d) => deltas.push(d),
     });
-    const thoughtEvents = events.filter((e) => e.type === 'thought');
-    expect(thoughtEvents.map((e) => e.delta).join('')).toBe(THOUGHTS.join(''));
-    // thoughts come before the first answer token
+    // no `thought` frame reaches the client, and no event carries the thinking text
+    expect(events.some((e) => (e.type as string) === 'thought')).toBe(false);
+    expect(JSON.stringify(events)).not.toMatch(/Checking the 7th lord/);
     expect(r.record.thinking).toBe(THOUGHTS.join(''));
     expect(r.answerText).not.toMatch(/Checking the 7th lord/);
     expect(deltas.join('')).not.toMatch(/Checking|weighing the running dasha/);
@@ -63,7 +63,7 @@ describe('runReading: thinking', () => {
     const events: ReadingEvent[] = [];
     const r = await runReading(prisma, 'u1', 'When will I get married?', { asOf: G1_AS_OF, flow: 'single', onEvent: (e) => events.push(e) });
     expect(r.record.thinking).toBeNull();
-    expect(events.some((e) => e.type === 'thought')).toBe(false);
+    expect(events.some((e) => (e.type as string) === 'thought')).toBe(false);
   });
 
   it('is kept next to the answer in graph flow too', async () => {

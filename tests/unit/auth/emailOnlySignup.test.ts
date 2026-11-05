@@ -115,7 +115,7 @@ describe('signup without a password', () => {
     expect(result.success).toBe(true);
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0].email).toBe('asha@example.com');
-    expect(fake.rows[0].date_of_birth).toBe('enc:1990-01-15');
+    expect(fake.rows[0].date_of_birth).toBe('1990-01-15'); // plain until PII_WRITE_MODE=sealed (docs/privacy/02 B1.4)
   });
 
   it('does not sign the user in: no token is returned', async () => {

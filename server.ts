@@ -8,7 +8,6 @@ import { config } from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(__dirname, '..', '.env') });
-import { fetchLatestKundliForUser, kundliRowToChunks } from './kundli-rag.js';
 import { prisma } from './src/lib/prisma.js';
 import { scheduleChartCatalogSyncOnStart } from './src/services/chartCatalogSync.js';
 import { runRagQuery } from './src/services/kundliService.js';
@@ -18,6 +17,8 @@ import { ensureAdmins } from './src/ensureAdmins.js';
 import { optionalUser, requireUser } from './src/auth/requestAuth.js';
 import { lockGuardPlugin } from './src/graphql/lockGuard.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
+import { graphqlLogFields } from './src/lib/logRedact.js';
+import { noStoreMiddleware, SSE_CACHE_CONTROL } from './src/lib/noStore.js';
 import { getAstroKundliTransport, getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
 import { chatWithConfiguredProvider } from './src/services/chatLlmService.js';
@@ -65,6 +66,8 @@ if (trustProxyEnabled) {
 }
 
 app.use(express.json());
+// no response is cached anywhere (GraphQL with or without a bearer token, REST, SSE): docs/privacy/02 §4.2
+app.use(noStoreMiddleware);
 
 // Lambda Web Adapter forwards non-HTTP events (EventBridge schedules) here as POST bodies (AWS_LWA_PASS_THROUGH_PATH).
 // Handled: the LLM cache sweep, and the background chart pull (kundli-sync from this Lambda's own async invoke,
@@ -139,17 +142,12 @@ const graphqlRateLimit = rateLimit({
 
 app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
   const startedAt = Date.now();
-  let body = '';
-  try {
-    body = JSON.stringify(req.body);
-  } catch {
-    // ignore
-  }
+  // the operation's name only: bodies carry emails, sign-in codes, birth details and questions
   console.log('[GraphQL] incoming', {
     path: req.path,
     method: req.method,
     startedAt: new Date(startedAt).toISOString(),
-    bodySnippet: body.slice(0, 300),
+    ...graphqlLogFields(req.body),
   });
   try {
     await (yoga as unknown as express.RequestHandler)(req, res, next);
@@ -201,7 +199,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   if (!allowed.ok) return res.status(402).json(quotaBody(allowed.usage));
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Cache-Control', SSE_CACHE_CONTROL);
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.status(200);
@@ -264,7 +262,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
       onDelta: (delta) => {
         if (delta) writeSse({ type: 'token', delta });
       },
-      // reading engine: intent / stage / windows / thought / next events let the UI show progress and continue
+      // reading engine: intent / stage / windows / next events let the UI show progress and continue (no `thought`: B0.2)
       onEvent: (event) => {
         openParts = partsFromEvent(event) ?? openParts;
         writeSse(event);
@@ -350,30 +348,6 @@ app.post('/query', async (req, res) => {
         timestamp: new Date().toISOString(),
       },
     });
-  }
-});
-
-// Debug endpoint – only available when NODE_ENV !== 'production'; requires JWT and same user
-app.get('/debug/kundli/:user_id', async (req, res) => {
-  if (getNodeEnv() === 'production') {
-    return res.status(404).json({ success: false, error: 'Not found' });
-  }
-  const userId = await requireUser(req, res);
-  if (!userId) return;
-  if (userId !== req.params.user_id) {
-    return res.status(401).json({ error: 'Authorization required' });
-  }
-  try {
-    const row = await fetchLatestKundliForUser(prisma, req.params.user_id);
-    const chunks = kundliRowToChunks(row);
-    res.json({
-      success: true,
-      kundli_id: row.id,
-      chunkCount: chunks.length,
-      chunks,
-    });
-  } catch (e) {
-    res.status(404).json({ success: false, error: (e as Error).message });
   }
 });
 

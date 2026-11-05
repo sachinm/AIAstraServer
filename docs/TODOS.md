@@ -280,6 +280,8 @@ re-applied by it.
   Done: tests do not load `.env`, and the suite passes in the main checkout.
 - **Tests that flake.** `ChatSection.location`, `SignIn`, `SignUp` and `LedgerSection` web tests and the server's `auth` and
   `registrationFullPull` tests hit the 5 s limit at random when the machine is busy, and pass with `--testTimeout=60000`.
+  The server's `astroKundliExportSpacing` "keeps the start spacing for chart exports … stored coordinates" failed once in
+  a full run with no `.env` (2026-11-04, after a docs-only merge) and passed 3 of 3 alone.
   Running server tests with `--poolOptions.forks.singleFork` leaks env between files: `chatRouting` and `promptCache` fail
   that way and pass on their own. Status: open. Done: both suites green in one default run.
 - **The "about 30 minutes" notice is out of date** once doc 38 ships (`AIAstra_WEB/src/Auth/readyNotice.ts`). Status: open.
@@ -455,11 +457,11 @@ Found by reading code; live rows and deployed env were not read. Fixes are seque
 
 - **P1: One person's life story can reach other users.** `src/reading/timeline/pastReadingFlow.ts:359,511` builds the past-reading report from hardcoded narrative about one person's family, business and money; the builders ignore their input (`_inputs`) and run for every report (`:1283-1287`). Reachable when `TIMELINE_ENABLED=1` (deployed value unread). Owner: reading-dev. Done: reports use only the requester's own inputs, with a test using a second chart.
 - **P1: A secret was printed into a session transcript on 2026-11-01.** A read-only sub-agent's `.env` grep printed `ASTROKUNDLI_API_KEY`. The value is not repeated here. Owner: Sachin. Done: key rotated in `.env` and in the Lambda config.
-- **P1: Personal data in logs.** `server.ts:141-146` logs 300 characters of every GraphQL body (emails, sign-in codes, questions). `src/lib/astroKundliClient.ts:839-848` logs 1,500 characters of every Radha response. `src/services/kundliService.ts:120-125` logs raw model output. Radha logs place, coordinates and birth data and appends responses to `logs/export.log` (`src/jhora/export.py:481,496,503,1284,1407`). Owner: dev session. Done: lines removed and `noPiiInLogs` test passing; existing CloudWatch logs given a retention decision by Sachin.
-- **P1: `encrypt()` can silently store plaintext.** `src/lib/encrypt.ts:30` returns the input when `ENCRYPTION_KEY` is unset, and `:59-61` returns ciphertext on a failed decrypt. Local `.env` has no key; deployed value unread. Owner: privacy plan phase 3. Done: replaced, with no plaintext path.
+- **P1: Personal data in logs.** `server.ts:141-146` logs 300 characters of every GraphQL body (emails, sign-in codes, questions). `src/lib/astroKundliClient.ts:839-848` logs 1,500 characters of every Radha response. `src/services/kundliService.ts:120-125` logs raw model output. Radha logs place, coordinates and birth data and appends responses to `logs/export.log` (`src/jhora/export.py:481,496,503,1284,1407`). Owner: dev session. Done: lines removed and `noPiiInLogs` test passing; existing CloudWatch logs given a retention decision by Sachin. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** the three server lines are gone and `tests/unit/noPiiInLogs.test.ts` passes; the engine-side logging and the CloudWatch retention decision are still open.
+- **P1: `encrypt()` can silently store plaintext.** `src/lib/encrypt.ts:30` returns the input when `ENCRYPTION_KEY` is unset, and `:59-61` returns ciphertext on a failed decrypt. Local `.env` has no key; deployed value unread. Owner: privacy plan phase 3. Done: replaced, with no plaintext path. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** no caller imports `encrypt.ts` any more; reads go through `src/lib/pii` (a failed open throws `PII_UNAVAILABLE`). The file itself is deleted in B5.
 - **P2: Admin birth-data handling.** `src/services/adminService.ts:106-108` writes birth fields unencrypted; `adminGetUser` returns them undecrypted (`src/graphql/schema.ts:897`); `adminGetUserKundli` (`:1010`) returns full charts. Role comes from the JWT, not the database (`src/graphql/context.ts:48`). Done: masked, per plan section 4.3.
-- **P2: Debug and event routes.** `GET /debug/kundli/:user_id` (`server.ts:371`) closes only when `NODE_ENV` is `production`, and the Lambda runs as `staging`; it returns the caller's own chart. `POST /events` passes when no token is configured (`src/services/kundliSyncWorker.ts:50`). Done: debug route removed, token mandatory.
-- **P2: Birth place sent to OpenStreetMap.** `src/reading/chartData/store.ts:582` and Radha `src/jhora/export.py:501` send the place string to Nominatim when no coordinates are known. Done: both removed, with the "pick a city" state.
+- **P2: Debug and event routes.** `GET /debug/kundli/:user_id` (`server.ts:371`) closes only when `NODE_ENV` is `production`, and the Lambda runs as `staging`; it returns the caller's own chart. `POST /events` passes when no token is configured (`src/services/kundliSyncWorker.ts:50`). Done: debug route removed, token mandatory. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** `/debug/kundli` removed; kundli-sync events are refused when `KUNDLI_SYNC_EVENT_TOKEN` is unset (see the ship gate below).
+- **P2: Birth place sent to OpenStreetMap.** `src/reading/chartData/store.ts:582` and Radha `src/jhora/export.py:501` send the place string to Nominatim when no coordinates are known. Done: both removed, with the "pick a city" state. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** the server fallback is gone (`resolveFallbackCoords`); the engine side is still open.
 - **P2: Chart hashes are unkeyed.** `kundli_facts.source_hash` is a SHA-256 over stored birth fields (`src/reading/data/factsBuilder.ts:40`), `dossier_hash` (`:54`), and `payload_hash` is an MD5 (`src/reading/chartData/store.ts:607`). Birth data is guessable, so an unkeyed hash reveals it. Done: keyed, per plan 4.1.
 - **P2: Personal data in the browser after sign-out.** `astroUser` keeps name and email in localStorage (`AIAstra_WEB/src/routes.tsx:98`, `src/App.tsx:35`); the birth draft and location stay in sessionStorage (`src/Auth/BirthDetails.tsx:94`, `src/pages/chat-interface/useQuestionLocation.ts:47`); logout clears neither (`src/Auth/logout.ts:19-24`). Done: per plan 4.4.
 - **P2: Groq is the code default for chat.** `src/config/env.ts:254` falls back to `groq` when `CHAT_LLM_PROVIDER` is unset, which sends biodata and charts to Groq. Deployed value unread. Done: provider removed, per plan phase 2.
@@ -505,11 +507,11 @@ the code on 2026-11-04; nothing below was verified on live rows. Each item names
 - **P2: Bedrock calls are unpriced in the metrics.** `src/reading/llm/models.ts:37-55` has no Bedrock rows, so every clarifier span stores
   `est_cost_usd = null` and counts in `unpriced_calls`. Status: open. Done: a dated price row per Bedrock model in `PRICES`.
 - **P2: `birthPlaceFor` reads `place_of_birth` without decrypting.** `src/services/userLocation.ts:131-137` feeds the clarify "Same as birth
-  place" chip from the raw column; with `ENCRYPTION_KEY` set it would show ciphertext. Status: open. Done: privacy plan B1.4.
+  place" chip from the raw column; with `ENCRYPTION_KEY` set it would show ciphertext. Status: open. Done: privacy plan B1.4. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** it reads through the client PII extension, which opens sealed and legacy values.
 - **P2: Model thinking is streamed to the browser.** `src/reading/run.ts:334` sends `thought` deltas over SSE; they mention chart details and
-  are already kept in `reading_runs.thinking`. Status: open. Done: privacy plan B0.2.
+  are already kept in `reading_runs.thinking`. Status: open. Done: privacy plan B0.2. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** no `thought` frame is sent; web branch `feat/privacy-b0-web` (07f1293) drops the handler and the panel.
 - **P2: SSE sends `no-cache`, not `no-store`; GraphQL sends no cache header.** `server.ts:222`, `routes/clarifyRoutes.ts:45`. Status: open.
-  Done: B0.3 and admin step 5.
+  Done: B0.3 and admin step 5. **Fixed on branch `claude/brave-hamilton-8eb27c` (2026-11-04, not merged or deployed):** `no-store` on every response (middleware before all routes, GraphQL with or without a token), `no-store, no-transform` on both SSE routes.
 - **P3: Web `PlanStatus.window` type is incomplete.** `AIAstra_WEB/src/lib/billing.ts:13-27` allows `'month'|'none'` but the server can send
   `'day'` (`PLAN_UNLIMITED_DAILY_GUARD`). Status: open. Done: type widened and the day case shown.
 - **P3: `morgan` is in `package.json:62` and never imported.** Status: open. Done: removed.
@@ -537,3 +539,47 @@ the code on 2026-11-04; nothing below was verified on live rows. Each item names
 - **P3: `ADMIN_EMAILS` no longer grants admin-app access.** Staff sign in with `admin_accounts` (M25) since 2026-11-04;
   `aiastra_admin` on a customer row now only exempts it from the question quota. The old admin GraphQL operations
   (`adminListUsers`, `adminGetUserKundli` and the rest) still exist and still return birth data and charts. Done: removed.
+
+## Filed 2026-11-04 by the privacy B0/B1 build session (branch `claude/brave-hamilton-8eb27c`, web `feat/privacy-b0-web`)
+
+Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deployed, and no AWS resource was created.
+
+- **P1: Ship gate for B0: `KUNDLI_SYNC_EVENT_TOKEN` must be set first.** The token is now mandatory: with it unset, `/events`
+  refuses every kundli-sync and kundli-sync-sweep event. Doc 38 still lists the token as "not confirmed applied". If it is missing,
+  the self-invoke is skipped and the request runs the gate-only fallback instead (`kundli_sync_token_missing` in the queue log),
+  so the rest of the chart waits for a sweep that would also be refused. Owner: deploy session. Done: the token is set on the API
+  Lambda and in the `kundli-sync-sweep` rule input before this branch deploys.
+- **P1: Ship gate for B1: confirm `ENCRYPTION_KEY` on the live Lambda (B0.4) before deploying.** B1 removes the `encrypt()` calls, and
+  writes stay plain until B3. If the live Lambda has the key set, new birth fields become plaintext where they were `enc:`. Reading old
+  `enc:` rows still works while the key is present. Owner: deploy session or Sachin. Done: the key's presence is read (not printed). If it is set,
+  B1 waits for B3, or Sachin accepts plain writes until then.
+- **P2: `timeline_calibration.marker` cannot be sealed as planned.** Doc 01 §4.1.3 seals `marker` and the scores, but `marker` is part of
+  the table's primary key (`kundli_id, system, marker`), so a random-IV seal would break the upsert. The scores are Float columns with no
+  sealed home in M26. Both stay plain for now (`src/lib/pii/fields.ts`). Owner: privacy plan B2. Done: either a keyed deterministic form for
+  `marker` and a sealed JSON column for the scores is added to M26, or Sachin accepts them plain.
+- **P2: The extension is not yet tested against a real database.** `tests/unit/pii/prismaExtension.test.ts` runs the query handler on
+  every model in the field map, with a recording fake and the generated client's real datamodel. Plan B1.2 asks for a test database, and
+  none exists here. Owner: B2. Done: `tests/integration/piiAtRest.test.ts` runs against a throwaway database and reads raw rows
+  through a second plain client.
+- **P2: The PII guard throws at run time on any filter or sort on a sealed column.** A grep found only the old admin user search, which
+  now matches exactly on id, username or email (no substring search). tsc cannot see these cases, so a path the grep missed will
+  fail with `PII_GUARD`. Owner: deploy session. Done: the staging smoke test (sign-in, chart view, one reading, profile edit, admin list)
+  passes on this branch.
+- **P2: Seven scripts make their own `new PrismaClient()` and skip the extension.** These are `backfill-local-facts`, `build-facts-for-all`,
+  `build-transit-charts`, `e2e-live-db`, `oracle-slice-sizes`, `sync-chart-catalog` and `check-assistant-store`. That is harmless while every
+  row is plain, but they would read ciphertext once rows are sealed. Owner: B4.2. Done: each one uses `src/lib/prisma.ts` or is deleted.
+- **P3: Engine error text can still quote the birth place in stored errors.** Log lines now carry only the HTTP status for engine
+  errors, and `queueLog` redacts dates, times, coordinates and emails in `error`. The full engine message (with its `detail`) is still
+  thrown into `kundli_data.error` and `kundlis.last_sync_error`, which are sealed columns once B3 is on. A place name cannot be masked by
+  its shape. Done: the engine returns an error code, and only the code is logged.
+- **P3: Keyed hashes are not used yet.** `src/lib/pii/hash.ts` gives each hash site an HMAC form with the person's hash key. No caller
+  passes one yet, because `key_ref` arrives with M26. Without a key the hashes are the same digests as before, so no dossier rebuilds.
+  Owner: B3/B4. Done: the hash sites pass `hashKeyFor(key_ref)`, and the backfill rewrites `source_hash`/`dossier_hash` in the same
+  transaction as the seal.
+- **P3: Local development key.** `PII_LOCAL_KEY_FILE` for local sealed-mode testing points at `C:\Users\Owner\.aiastra\pii-local-key`
+  (32 random bytes as hex, outside every checkout, value not recorded anywhere). Writes stay plain unless `PII_WRITE_MODE=sealed` is set.
+- **P3: Web findings from the B0 web build (`feat/privacy-b0-web`).** (1) `SignIn.tsx` passes the bare user id string to `handleSignIn`, and
+  the prop is typed `any`; `App` now copes with it. (2) Old `aiastra.registration.details` / `aiastra.questionLocation` values already in a
+  tab's sessionStorage are not read any more. They stay until the tab closes or the user signs out. (3) Sign-out now removes the
+  visit id (`aa_visit`), so the next anonymous page logs a new visit. (4) ESLint errors on untouched lines: `no-explicit-any` in
+  `MantrasSection.tsx` and `RemediesSection.tsx`, and an unused `_user` in `ChatSection.tsx`. Done: each fixed or accepted.
