@@ -1,6 +1,6 @@
 # 02 — Encrypting birth details and charts at rest, and what to do about the wire: build plan
 
-Status: plan only, written 2026-11-04 for the Opus build session. No code, migration or AWS resource has changed. Written to
+Status: plan only, written 2026-11-04 for the Opus build session. Migration numbers moved up one (M26-M28) because M25 is now the admin app's staff accounts. No code, migration or AWS resource has changed. Written to
 "How a plan is written" in `AGENTS.md`. This is the build plan for the encryption track of
 `01-encryption-and-bedrock-plan.md` (its "track B"), separated from the Bedrock move so it can ship on its own, with the three
 questions Sachin asked on 2026-11-04 answered first. Doc 01's design decisions stand unless a row below says otherwise. Facts
@@ -106,8 +106,8 @@ What is **not** promised, and the policy must not say: "never decrypted", "never
 - `services/kundliSyncWorker.ts`: `pii_backfill` event (one person per transaction, resumable).
 - GraphQL: `myBirthDetails` (new), `deleteMyAccount` (new), `me` without birth fields, `myBiodata` filtered, `myKundliDisplayData` per `kundliSidebar.ts`.
 - Migrations (written; staging under the standing OK; live and the destructive one need Sachin's yes):
-  `20261106100000_pii_m25_expand`, `20261106110000_pii_m26_drop_llm_cache_entries` (only when the Bedrock track has removed the prompt cache; otherwise skipped),
-  `20261120100000_pii_m27_contract` (destructive, last).
+  `20261106100000_pii_m26_expand`, `20261106110000_pii_m27_drop_llm_cache_entries` (only when the Bedrock track has removed the prompt cache; otherwise skipped),
+  `20261120100000_pii_m28_contract` (destructive, last).
 - `scripts/pii-audit.ts`, `scripts/pii-reseal-user.ts` (re-seal one person after suspected key exposure).
 - Tests: `tests/unit/pii/*`, `tests/integration/piiAtRest.test.ts` (reads raw rows through a second plain client), `tests/unit/noPiiInLogs.test.ts`,
   `tests/unit/rawSqlAllowList.test.ts`.
@@ -202,7 +202,7 @@ blind index. Raw SQL cannot be seen by it, so the 7 files use `sealParam()`/`ope
 
 #### 4.1.6 Schema changes
 
-`20261106100000_pii_m25_expand` (adds only):
+`20261106100000_pii_m26_expand` (adds only):
 
 ```sql
 ALTER TABLE auth ADD COLUMN key_ref text, ADD COLUMN email_bidx text, ADD COLUMN username_bidx text;
@@ -218,7 +218,7 @@ ALTER TABLE transit_instants      ADD COLUMN place_bidx text;    -- HMAC of plac
 ALTER TABLE transit_range_skies   ADD COLUMN place_bidx text;
 ```
 
-`20261120100000_pii_m27_contract` (destructive, after audit 0 and a Render snapshot, Sachin's explicit yes): `email_bidx` NOT NULL, drop
+`20261120100000_pii_m28_contract` (destructive, after audit 0 and a Render snapshot, Sachin's explicit yes): `email_bidx` NOT NULL, drop
 `auth_email_lower_key`, drop `kundlis.lat/lon/tz`, `prashna_casts.lat/lon/tz`, `user_current_location.lat/lon/tz`, the old `life_events` and
 `timeline_windows` columns, `transit_*.place_key`; drop `ENCRYPTION_KEY` handling.
 
@@ -291,7 +291,7 @@ Browser ── TLS, no-store, memory only ──> CloudFront (CachingDisabled) �
 | Local master key file outside the checkout (`PII_LOCAL_KEY_FILE`), 32 random bytes; path noted in `docs/TODOS.md` without the value | agent | B1 |
 | KMS keys, DynamoDB table, IAM, CloudTrail check (doc 01 §6) | **Sachin or an admin** (the deployer has no IAM/KMS rights; the admin path was given up on 2026-10-25) | B3 |
 | Env on both Lambdas: `PII_KEY_PROVIDER=kms`, the three ARNs/table, `PII_WRITE_MODE` | deploy session | B3 |
-| M25 applied on staging (standing OK) and live (Sachin's yes); M27 needs a Render snapshot and an explicit yes | deploy session | B3, B5 |
+| M26 applied on staging (standing OK) and live (Sachin's yes); M28 needs a Render snapshot and an explicit yes | deploy session | B3, B5 |
 | Facts to read in B0 (never printed): deployed `ENCRYPTION_KEY` presence, share of `enc:` rows, row counts and sizes per table, Render backup retention and encryption statement, CloudTrail state | deploy session / Sachin | B0 |
 | Decision on the committed real chart data in `evals/fixtures/G1`, `kundli.json`, docs 36/37 | Sachin (it is their own data; the question is whether it stays in a repository) | B0 |
 | Lawyer read of the policy words | Sachin | B5 |
@@ -311,13 +311,13 @@ block; `docs/admin/01` owns the `Auth` lock columns and appends first.
 | B1.2 | Prisma extension and guard; client creation | `prismaExtension.ts`, `src/lib/prisma.ts` | every model in `fields.ts` round-trips through the extension against a test database; sealed `where` throws; `email`/`username` rewrite to bidx | after B1.1 |
 | B1.3 | Raw SQL sites and allow-list test; keyed hashes | the 7 raw-SQL files, `rawSql.ts`, `factsBuilder.ts`, `chartData/store.ts`, `transits/ephemerisCache.ts`, `packs/selector.ts`, `timeline/foundation.ts`, `graph.ts:169` | `rawSqlAllowList.test.ts`; sealing a kundli does not change `source_hash` | ∥ with B1.2 (different files) |
 | B1.4 | Callers stop using `encrypt()`; `birthPlaceFor` opens through the extension; sign-in lookups by bidx | `profileService.ts`, `authService.ts`, `auth/emailCode.ts`, `ensureAdmins.ts`, `services/userLocation.ts`, `scripts/seed-queue-users.ts`, `scripts/billing-set-paid.ts` | `tsc`; auth tests; `encrypt.ts` has no importer | after B1.2 |
-| B2.1 | M25 written; `PII_WRITE_MODE=plain` read-both deployed to staging | migration, `schema.prisma` | staging green on sign-in, chart view, one reading, with no sealed row yet | after B1 |
+| B2.1 | M26 written; `PII_WRITE_MODE=plain` read-both deployed to staging | migration, `schema.prisma` | staging green on sign-in, chart view, one reading, with no sealed row yet | after B1 |
 | B2.2 | API shape: `myBirthDetails`, `me` trimmed, `myBiodata` filtered, `deleteMyAccount`; web profile and sidebar | `graphql/schema.ts`, `profileService.ts`, `kundliSidebar.ts`, web `ProfileSection.tsx`, `ChatRightSidebar.tsx` | API and web tests; screenshots per `TEST.MD` into `docs/screenshots/privacy-profile/` | ∥ with B2.1 |
 | B3.1 | Sachin creates the AWS resources from section 6; deploy session sets env; `PII_KEY_PROVIDER=kms` on staging | AWS, env | a new staging sign-up's raw `auth` row shows `pii2:` values and a `key_ref`; CloudTrail shows the unwrap | needs Sachin |
 | B3.2 | Flip `PII_WRITE_MODE=sealed` on staging; measure | env | `pii_key_ms` log line under 50 ms first request, under 5 ms cached; readings unchanged in timing within noise (`reading_traces.ms`) | after B3.1 |
 | B4.1 | Backfill event in the worker; audit script | `services/kundliSyncWorker.ts`, `scripts/pii-audit.ts`, `scripts/pii-reseal-user.ts` | audit shows 0 unsealed on staging; then live with Sachin's yes | after B3.2 |
 | B4.2 | Review scripts and fixtures: delete `backfill-local-facts.ts`; fixtures per Sachin's decision | `scripts/`, `evals/fixtures` | reviewed | ∥ |
-| B5.1 | M27 contract after a Render snapshot and Sachin's yes; remove legacy `enc:` and `ENCRYPTION_KEY` | migration, `pii/*` | applied; audit still 0; all flows green | after B4 |
+| B5.1 | M28 contract after a Render snapshot and Sachin's yes; remove legacy `enc:` and `ENCRYPTION_KEY` | migration, `pii/*` | applied; audit still 0; all flows green | after B4 |
 | B5.2 | Wait out Render backups; dump test; `03-evidence.md` complete; lawyer; policy text | `LegalPages.tsx`, docs | sentinel search of a fresh backup finds nothing; policy live with a new date | after B5.1 |
 
 ## 8. Development phases
@@ -326,7 +326,7 @@ block; `docs/admin/01` owns the `Auth` lock columns and appends first.
 |---|---|---|---|---|
 | B0 Stop the leaks, clean the wire and the browser | B0.1–B0.4 | Same product; no personal data in logs; `no-store`; nothing personal in browser storage; no thinking stream; facts known | `noPiiInLogs.test.ts`; header tests; `03-evidence.md` v1 | everything sealed |
 | B1 Crypto foundation, no AWS | B1.1–B1.4 | All code paths go through the extension; local provider; writes still plain | unit + test-database round trips; `tsc`; `encrypt.ts` unused | real keys |
-| B2 Expand and API | B2.1–B2.2 | M25 on staging; read-both live; profile hides birth details until opened; deletion path exists | staging flows green with plain rows | sealed writes |
+| B2 Expand and API | B2.1–B2.2 | M26 on staging; read-both live; profile hides birth details until opened; deletion path exists | staging flows green with plain rows | sealed writes |
 | B3 Keys on staging | B3.1–B3.2 | New writes sealed on staging; old rows readable | raw row check; latency numbers in `03-evidence.md` | old rows |
 | B4 Backfill | B4.1–B4.2 | Everything sealed; audit 0; fixtures decided | audit on staging then live | contract |
 | B5 Contract and claim | B5.1–B5.2 | Plain columns gone; policy published | dump test; lawyer's yes | database move, if ever; payload encryption above TLS (rejected, section 0) |
@@ -362,9 +362,9 @@ with no key dependency so B3 becomes a configuration flip.
 ### Decisions only Sachin can make
 
 1. **AWS resources** (section 6): KMS keys, DynamoDB table, IAM. Without them the track stops at B2. Recommended: you create them from the list; no standing admin for agents.
-2. **Applying M25 on live** and, much later, **M27** (destructive) after a Render snapshot.
+2. **Applying M26 on live** and, much later, **M28** (destructive) after a Render snapshot.
 3. **The committed real chart data** in `evals/fixtures/G1`, `kundli.json` and docs 36/37: keep (it is yours, and the repo is private) or replace with a synthetic chart. Recommended: replace G1 with a synthetic chart built through the engine once its `facts` export is live, which also closes the "G1 is a stand-in" item in `docs/TODOS.md`.
 4. **Database location** stays doc 01 §9 decision 3; nothing here depends on it.
 
-Stopping after any phase leaves nothing half-migrated: M25 only adds; read-both code reads plain and sealed rows alike; the write mode is a
-flag; M27 is the only destructive step and comes last, after an audit of 0.
+Stopping after any phase leaves nothing half-migrated: M26 only adds; read-both code reads plain and sealed rows alike; the write mode is a
+flag; M28 is the only destructive step and comes last, after an audit of 0.

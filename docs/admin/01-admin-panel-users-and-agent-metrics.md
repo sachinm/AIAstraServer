@@ -5,6 +5,20 @@ Status: plan only, written 2026-11-04 for the Opus build session. No code, migra
 Live rows were not read. The companion plan is `docs/privacy/02-birth-data-charts-and-wire-build-plan.md`; section 9 says
 which goes first and what this plan must do so the other does not break it.
 
+**Revision 2026-11-04 (Sachin): the admin is a separate app.** It lives in its own private repo `sachinm/aiadastra_admin`
+(folder `C:\Users\Owner\Documents\work\aiadastra_admin`), on its own Lambda `aiadastra-admin-api` and its own site
+`admin.vedic-astrology.app`, against the same database. What changes from the text below:
+
+| Below | Now |
+|---|---|
+| Phases A2–A4 in this repo (GraphQL admin ops, `/admin/*` routes in `AIAstra_WEB`) | Built in `aiadastra_admin`: REST under `/api/admin/*` (`api/`, Express + `pg`), and a separate Vite SPA (`web/`). Contract: `aiadastra_admin/api/src/contract.ts`; architecture: `aiadastra_admin/docs/01-architecture-and-api.md` |
+| Phase A1 and the M24 labels | Unchanged, in this repo, branch `feat/admin-a1-lockout`: only the main API can refuse a locked person |
+| Migrations M23, M24 | Unchanged, in this repo. The admin repo never migrates. `admin_actions` gains `actor_kind` (`admin`, `cli`, `system`) and a nullable actor, so CLI and system writes are recorded too |
+| `adminSetRole` bumps `token_version` | It does not: roles are read from the row on every request after A1, so the change applies at once without signing the person out |
+| Sign-in for admins | The admin site calls this API's `requestMagicLink` / `loginWithMagicLink` (Turnstile, emailed code) and sends the JWT to the admin API, which re-checks role, lock and token version from the row. Needs `https://admin.vedic-astrology.app` in `CORS_ORIGINS` and on the Turnstile widget's hostnames |
+| Retention route and EventBridge rule | Still this repo's phase A5; not built yet |
+| Admins are `auth` rows with `aiastra_admin`, signing in with the emailed code | **Staff accounts in their own table `admin_accounts` (M25)**: `adastra-admin` (admin) and `adastra-superadmin` (superadmin), password sign-in on the admin API. Passwords are 64 random characters, only in Secrets Manager `aiadastra/admin/<username>`; the table holds scrypt hashes. Created 2026-11-04. `ADMIN_EMAILS` / `aiastra_admin` now only exempt staff customer accounts from the quota |
+
 **Scope asked for.** Sachin asked for an admin panel that (a) manages users: find them, lock them out, reset their question
 quota, review and change their plan; and (b) shows, per query, how fast the agents worked and what each sub-agent cost in
 tokens, with averages by agent type and by technique. Not in scope now: reading what people asked, or their answers.

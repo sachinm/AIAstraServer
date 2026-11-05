@@ -334,6 +334,12 @@ re-applied by it.
 
 ## P3: nice to have
 
+- **Scene images can be fetched from other websites (no hotlink guard).** Since `fix/auth-scene-fullbleed` (AIAstra_WEB) the
+  39 sky scenes ship as `/assets/<hash>.webp`, cached a year, but any site can still embed or scrape them. Sachin asked
+  (2026-11-04) for CloudFront / Amplify to refuse `/assets/*.webp` requests whose `Referer` is another site (allow empty
+  Referer, the app's domains and staging). Infra change, so it goes to the deploy sub-session. Status: open. Done: a request
+  with a foreign Referer gets 403, the app's own pages still load every scene.
+
 - **The AM/PM select is cut to "AM/P" on a phone.** Seen on `/signup/details` at 390 wide (walkthrough, 2026-11-02). Status: open. Done: the placeholder fits at 375 wide.
 - **Two chat routes skip the question limit.** `POST /api/chat/answer` and `POST /api/chat/prewarm` (`src/routes/clarifyRoutes.ts:106,129`) have no `questionGate` check. A new question is still refused, so a person at their limit can only reach them with a clarify run started earlier, but prewarm runs reader models on the oracle flow, so a direct caller could spend money. Found 2026-11-02. Status: open. Done: both refuse when the account has no questions left, with a test.
 - **The home page HTML is about 78 KB.** The star map (`ConstellationSky.tsx`, 2026-11-02) is prerendered twice, once per layout, with about 180 loose stars as separate circles. It gzips well, and the brief's 20 KB goal was not met. Status: open. Done: one layout per build, or the field stars as a pattern, and the page under 30 KB.
@@ -507,3 +513,26 @@ the code on 2026-11-04; nothing below was verified on live rows. Each item names
 - **P3: Web `PlanStatus.window` type is incomplete.** `AIAstra_WEB/src/lib/billing.ts:13-27` allows `'month'|'none'` but the server can send
   `'day'` (`PLAN_UNLIMITED_DAILY_GUARD`). Status: open. Done: type widened and the day case shown.
 - **P3: `morgan` is in `package.json:62` and never imported.** Status: open. Done: removed.
+
+### Added later on 2026-11-04 while building (branch `feat/admin-a1-lockout`, admin repo `sachinm/aiadastra_admin`)
+
+- **P1: Ship order for `feat/admin-a1-lockout`.** Sign-in and the code-send lookups now select `auth.locked_at` and
+  `token_version`, so the code needs M23 in the database first. M23, M24 and M25 were applied to the shared database on
+  2026-11-04 (standing OK for testing), so the order is already safe; any other database this code runs against needs them
+  first. Owner: deploy session. Done: the branch deployed and a locked test account refused on `/api/chat/ask-stream`.
+- **P1: A real-looking `SUPERADMIN_PASSWORD` is in git history.** The removed `.env.example` lines held one. Found by the
+  build agent on 2026-11-04. If that value was ever used anywhere, rotate it. Owner: Sachin. Done: confirmed unused or rotated.
+- **P2: Eight unit-test files fail on this machine** (44 tests): `auth/emailOnlySignup`, `auth/registrationV2` (the local `.env`
+  sets `AUTH_PROVIDER=cognito`, so local-provider tests call real Cognito), `env.test`, `geminiChatService`,
+  `astroKundliExportSpacing`, `reading/promptCache`, `reading/fullPrefixCache`, `reading/run` (cache, thinking and engine
+  settings read from `.env`). The build agent reports the same files failed before its edits, but that run overlapped its
+  edits, and a clean `develop` baseline was not taken (the branch switch was refused because of uncommitted docs). Owner:
+  next dev session. Done: the eight files run against a neutral test env (no `.env` leakage) and pass on `develop`.
+- **P2: A lock reaches other Lambda instances only after their 30 s auth cache expires.** The admin app runs in its own
+  Lambda and cannot clear the main API's cache. Accepted for now. Done: a shorter TTL, or a cache keyed on `token_version`.
+- **P2: The main web shows no locked screen.** A locked person's next request gets 401 `account_locked`; the web treats it as
+  a session end and signs out, and sign-in then says "This account is locked." Done: a dedicated locked page
+  (`docs/admin/01` step 9).
+- **P3: `ADMIN_EMAILS` no longer grants admin-app access.** Staff sign in with `admin_accounts` (M25) since 2026-11-04;
+  `aiastra_admin` on a customer row now only exempts it from the question quota. The old admin GraphQL operations
+  (`adminListUsers`, `adminGetUserKundli` and the rest) still exist and still return birth data and charts. Done: removed.

@@ -760,11 +760,39 @@ model AdminAction {
   after          Json?
   ip             String?
   created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// M25: the staff account that acted (admin_accounts), for writes from the admin app.
+  actor_admin_id String?  @map("actor_admin_id")
   actor          Auth?    @relation("AdminActionActor", fields: [actor_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "admin_actions_actor_fkey")
   target         Auth?    @relation("AdminActionTarget", fields: [target_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "admin_actions_target_fkey")
+  actor_admin    AdminAccount? @relation(fields: [actor_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "admin_actions_actor_admin_fkey")
 
   @@index([target_user_id, created_at(sort: Desc)], map: "admin_actions_target")
   @@index([actor_user_id, created_at(sort: Desc)], map: "admin_actions_actor")
+  @@index([actor_admin_id, created_at(sort: Desc)], map: "admin_actions_actor_admin")
   @@index([created_at(sort: Desc)], map: "admin_actions_created")
   @@map("admin_actions")
+}
+
+/// Staff accounts for the admin app (M25, aiadastra_admin). Kept apart from customer accounts in `auth`. The password is
+/// only in AWS Secrets Manager (secret_name); this row holds a scrypt hash. role: admin | superadmin. The migration also
+/// makes lower(username) unique, which Prisma cannot express.
+model AdminAccount {
+  id              String        @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  username        String
+  display_name    String        @map("display_name")
+  role            String
+  password_hash   String        @map("password_hash")
+  password_set_at DateTime      @default(now()) @map("password_set_at") @db.Timestamptz(6)
+  secret_name     String?       @map("secret_name")
+  token_version   Int           @default(1) @map("token_version")
+  disabled_at     DateTime?     @map("disabled_at") @db.Timestamptz(6)
+  failed_attempts Int           @default(0) @map("failed_attempts")
+  locked_until    DateTime?     @map("locked_until") @db.Timestamptz(6)
+  last_login_at   DateTime?     @map("last_login_at") @db.Timestamptz(6)
+  last_login_ip   String?       @map("last_login_ip")
+  created_at      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  actions         AdminAction[]
+
+  @@map("admin_accounts")
 }
