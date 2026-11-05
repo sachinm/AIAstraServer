@@ -137,3 +137,7 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Day-table pulls: raw engine answers per place are review copies, not fixtures (the Drik reference and one sample month are kept)
+evals/fixtures/day-tables/*/
+!evals/fixtures/day-tables/sanjose/
