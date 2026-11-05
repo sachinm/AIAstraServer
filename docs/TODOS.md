@@ -622,3 +622,27 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: Conditional dasha checks missing for two systems.** 2026-11-05. `dasha.applicable` returns `applies: null` for
   Shattrimsa Sama and Shodasottari ("deva/pitri hora rule not implemented"), so the career map cannot know whether they
   apply. Owner: engine pass (hands-off until Sachin opens it). Done: both return true or false.
+
+## Filed 2026-11-05 by the life-boards design session (docs/reading-engine/45)
+
+- **P2: No `self` marker and no annual (S5) system in the timeline engine.** 2026-11-05. `src/reading/timeline/markers.ts`
+  has no house-1 marker (health is the only one using house 1) and `converge.ts` has no annual system. The You board
+  (doc 45 §8.3) needs both. Owner: reading-dev. Done: a `self` marker (houses 1, 4, 5, 9; Su Mo Ju; AK; A1; D1, D9, D20)
+  and S5 from Tithi Pravesha, with tests.
+- **P2: No two-chart output (no Ashtakoota or synastry).** 2026-11-05. Neither the catalog nor the engine calls hold
+  compatibility. Love's "is this the right person" worry and partner comparison (doc 45 §8.2) wait on it. Owner: engine
+  pass (hands-off until Sachin opens it). Done: a two-chart type served and stored.
+- **P2: No daily panchang, tarabala or chandrabala fetch.** 2026-11-05. `daily_grade` and `muhurta` exist in the
+  catalog with "no server fetcher yet" (`src/reading/chartData/store.ts`). Today's line and Good for / Better to wait
+  (doc 45 §4.1) need them. Owner: reading-dev with the deploy session. Done: a fetcher and daily rows per person or from
+  the shared sky.
+- **P2: Past-reading ratings may not persist.** 2026-11-05. `past_life_reading` is not seeded in `chart_data_types` and
+  the foreign key is restrictive, so the upsert likely fails and `pastReadingFlow.ts:1125-1191` falls back to memory.
+  Verify against the live table first. Owner: reading-dev. Done: ratings survive a restart.
+- **P3: Annual Tithi Pravesha D10 is not pulled by default.** 2026-11-05. Only D1 for the current year is requested at
+  registration. The Work board's annual check (doc 43 §3.3) needs `divisional_chart_factor=10`. Owner: reading-dev.
+- **P3: Mantras and Remedies colours never render.** 2026-11-05. `AIAstra_WEB/src/pages/dashboard/mantras` and `remedies`
+  build Tailwind classes at runtime (`from-${color}-900/10`), which are never generated; the mantra play button is a fake
+  progress bar. Owner: web-dev. Done: static class map; the button plays or is removed.
+- **P3: No design tokens or shared card in the web app.** 2026-11-05. `tailwind.config.js` has an empty `theme.extend`
+  and the same card class string is copied into every profile file. Fixed in doc 45 step 2. Owner: web-dev.

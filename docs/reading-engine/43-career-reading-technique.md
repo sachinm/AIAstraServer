@@ -1,5 +1,9 @@
 # 43 — The career reading technique: what to look at, in what order, and how to say "it will not happen"
 
+> **Naming (doc 45 §18).** The internal state keys in §8 become `demanding, easing, steady, closing, open` (was storm,
+> clearing, calm, late summer, fair) and the care levels become `role_risk, named_trouble, slowing, none`. The rules and
+> thresholds are unchanged. None of these names is ever shown to a person.
+
 Status: method, 2026-11-05. The astrology that the career module of [doc 42](42-life-area-reading-career.md) codes and
 that its agents follow. Written from the hand-made Sumit career charter (Oct 2026 – Dec 2028), docs 10, 27, 29, 33 and
 34, the stored rows of a real kundli, and outside evidence on what people ask about work (§2).

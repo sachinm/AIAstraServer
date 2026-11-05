@@ -1,5 +1,10 @@
 # 44 — The career board: the storm entrance and the fair-weather entrance
 
+> **Superseded for the user interface by [doc 45](45-life-boards-you-love-work.md) (2026-11-05).** The product has no
+> hospital, urgent-care, resort or weather words on screen; the entrances below are now three layouts (Support, Overview,
+> Opportunity) and five tones (Demanding, Easing, Steady, Open, Closing). Kept for the risks table (§6) and the
+> self-report rules (§3). Do not build the labels in this document.
+
 Status: design, 2026-11-05. The UI/UX of the Career map in [doc 42](42-life-area-reading-career.md) §B.7. The chart rules
 that decide the state are [doc 43](43-career-reading-technique.md) §8. Written by a design agent from Sachin's brief and
 adopted here. Mockup: [42-career-dashboard-mockup.html](42-career-dashboard-mockup.html) (it has a state switcher).

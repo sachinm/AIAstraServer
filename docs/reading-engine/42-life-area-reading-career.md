@@ -1,5 +1,9 @@
 # 42 — The life-area reading: career and profession, the technique, the agents, and the dashboard
 
+> **Generalised by [doc 45](45-life-boards-you-love-work.md) (2026-11-05).** Career is now the Work board of three (You, Love,
+> Work) on one shell. API shape `/api/area/:area`, `weather.ts` becomes `tone.ts`, the "Career map" tab becomes the Work
+> board, and the UI words of section B.7 follow doc 45 sections 3.3 and 7.
+
 Status: plan, 2026-11-05. No code yet. Written after the Sumit week-by-week career charter (Oct 2026 – Dec 2028) was
 built by hand from stored rows. It turns that hand method into a module: one life area, read through every stored layer,
 cross-checked across dasha systems, and shown as a dated dashboard. Career is the first area; money, marriage and residence
