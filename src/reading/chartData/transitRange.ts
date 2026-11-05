@@ -7,20 +7,25 @@
  * callers come here. One Radha call through the shared export client; the payload is returned as is. Nothing here computes
  * astrology; this file only builds the request and checks the payload's outline.
  */
-import { fetchEngineExport } from '../../lib/astroKundliClient.js';
+import { fetchEngineExport, fetchEngineExportAtPlace } from '../../lib/astroKundliClient.js';
+import { roundPlace, type AtPlace } from './place.js';
 import type { ChartDataRepo, RadhaFetcher } from './store.js';
 
 export const TRANSIT_RANGE_TYPE = 'transit_range';
-export const RANGE_PLANETS = ['Ma', 'Ju', 'Sa', 'Ra', 'Ke'] as const;
+export const RANGE_PLANETS = ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke'] as const;
 export type RangePlanet = (typeof RANGE_PLANETS)[number];
 /** Radha's limit (transit_range_export.MAX_SPAN_DAYS) */
 export const TRANSIT_RANGE_MAX_DAYS = 14_700;
+/** and with `step: 'day'` (transit_export: about 2 years) */
+export const TRANSIT_RANGE_MAX_DAILY_DAYS = 730;
 
 export interface TransitRangeOptions {
   /** 'YYYY-MM-DD', birth-place local */
   from: string;
   to: string;
-  /** Default (Radha): Sa, Ju, Ra, Ke */
+  /** `month` (default, one row on the 1st of each month) or `day` (a row every day, at most ~2 years) */
+  step?: 'month' | 'day';
+  /** Default (Radha): Sa, Ju, Ra, Ke. The Moon only with `step: 'day'` */
   planets?: RangePlanet[];
   /** Default true */
   lunations?: boolean;
@@ -106,7 +111,11 @@ export function transitRangeParams(opts: TransitRangeOptions): Record<string, un
   if (!DATE.test(opts.from) || !DATE.test(opts.to) || opts.to < opts.from) throw new Error(`fetchTransitRange: from/to must be 'YYYY-MM-DD' with from <= to, got ${opts.from}..${opts.to}`);
   const days = Math.round((Date.parse(opts.to) - Date.parse(opts.from)) / 86_400_000);
   if (days > TRANSIT_RANGE_MAX_DAYS) throw new Error(`fetchTransitRange: ${days} days is more than the ${TRANSIT_RANGE_MAX_DAYS}-day limit`);
+  if (opts.step !== undefined && opts.step !== 'month' && opts.step !== 'day') throw new Error(`fetchTransitRange: step must be 'month' or 'day', got ${JSON.stringify(opts.step)}`);
+  if (opts.step === 'day' && days > TRANSIT_RANGE_MAX_DAILY_DAYS) throw new Error(`fetchTransitRange: ${days} days is more than the ${TRANSIT_RANGE_MAX_DAILY_DAYS}-day limit with step 'day'`);
+  if (opts.planets?.includes('Mo') && opts.step !== 'day') throw new Error("fetchTransitRange: the Moon needs step 'day'");
   const params: Record<string, unknown> = { from: opts.from, to: opts.to };
+  if (opts.step) params.step = opts.step;
   if (opts.planets?.length) params.planets = [...opts.planets];
   if (opts.lunations != null) params.lunations = opts.lunations;
   if (opts.eclipses != null) params.eclipses = opts.eclipses;
@@ -141,4 +150,28 @@ export async function fetchTransitRange(kundliId: string, opts: TransitRangeOpti
   const payload = asRangePayload(raw);
   if (!payload) throw new Error('fetchTransitRange: Radha response is not a transit_range payload');
   return payload;
+}
+
+export interface SharedSkyDeps {
+  /** A Radha call with no birth data: the type and the fields (place, params). Default: the throttled export client. */
+  placeFetcher?: (radhaType: string, fields: Record<string, unknown>) => Promise<unknown>;
+}
+
+/**
+ * The dated sky at a place with NO person: the request carries the place and the options only, so the answer has no natal
+ * block, no houses, no Sade Sati. It is the same for every kundli (docs/reading-engine/35) and is stored once.
+ */
+export async function fetchSharedSkyRange(place: AtPlace, opts: TransitRangeOptions, deps: SharedSkyDeps = {}): Promise<TransitRangePayload> {
+  const params = transitRangeParams(opts);
+  const raw = await (deps.placeFetcher ?? fetchEngineExportAtPlace)(TRANSIT_RANGE_TYPE, { ...roundPlace(place), params });
+  const payload = asRangePayload(raw) ?? asSkyOnlyPayload(raw);
+  if (!payload) throw new Error('fetchSharedSkyRange: Radha response is not a transit_range payload');
+  return payload;
+}
+
+/** A person-free answer has `natal: null`, which `asRangePayload` refuses; accept it when the rest has the range shape. */
+function asSkyOnlyPayload(raw: unknown): TransitRangePayload | null {
+  const p = raw as { natal?: unknown } | null;
+  if (!p || typeof p !== 'object' || p.natal !== null) return null;
+  return asRangePayload({ ...p, natal: {} });
 }
