@@ -13,9 +13,13 @@ makes that the centre of the You board (doc 45 §8.3) and the single memory ever
 2. **Memory is a table of facts about the person, with provenance and freshness**, not a transcript. Each fact says
    where it came from (the person said it, tapped it, or it was inferred from a question or the ledger), how sure, when,
    and when to ask again. The chart is never a fact in this table; the chart lives in `kundli_data`.
-3. **It asks one thing at a time, chosen by value**: the fact that would most change what the boards show next, that is
-   missing or stale, and that the person has not declined. Never a questionnaire; never the same question twice while
-   fresh; never a chart term.
+3. **The chart leads the question** (Sachin, 2026-11-05): the question engine starts from what the chart says the
+   person is moving into (doc 46's house states now and over the last six months) and asks the one question that
+   confirms it: a tested 10th house these three months → "Did something change at work recently?"; a 4th or 12th
+   activation → "Have you moved, or are you planning to?"; a 7th strain → "Has something shifted in a relationship?".
+   One thing at a time, chosen by how strong the chart signal is and how much the answer changes what is shown. Never a
+   questionnaire; never the same question twice while fresh; never a chart term; never "how's your job going?" before
+   the person has said they have a job.
 4. **It learns from three streams**: answers to its questions, what the person says in chat (the classifier's slots of
    doc 15 already extract employed / between jobs / self-employed / studying, places and people), and the ledger
    (doc 27: events with dates). An inferred fact is confirmed with one tap before it drives a prediction.
@@ -81,12 +85,34 @@ days, a named event until its date plus 14 days, mood 1 day), `declined_at` (the
 simple and complete).
 
 **The question engine** (`policy.ts`, pure code): on each You open, and when a board needs a fact, pick **one** question:
-1. Candidates are facts that are missing, stale, estimated, or inferred-but-unconfirmed, and not declined.
-2. Score each by **value now** = the number of visible cards whose content changes with the answer (Work tone,
-   worry order, scenario cards, the chat's next answer) × a freshness weight × a recency penalty (asked in the last 7
-   days → 0).
+1. Candidates come from two lists: (a) **chart-led** confirmations, generated from `house_state_months` (doc 46): every
+   house whose side was *tested* or *supported* with confidence confirmed or likely in the last 6 months or now, mapped
+   to its confirmation question (table below); (b) facts that are missing, stale, estimated, or inferred-but-unconfirmed.
+   Both exclude declined keys and keys whose prerequisite fact is unknown (sequencing: `work.how_going` needs
+   `work.status = Yes`; `love.how_going` needs `love.status ≠ Single`).
+2. Score each by **chart signal × value now**: the signal is the house state's score (0 for list b), value now is the
+   number of visible cards whose content changes with the answer (Work tone, worry order, scenario cards, the chat's
+   next answer) × a freshness weight × a recency penalty (asked in the last 7 days → 0). A chart-led question beats a
+   housekeeping question when its signal is confirmed.
 3. Pick the top one; at most one question per visit on You, at most two before any answer anywhere (doc 45 §3.5).
 4. Store `asked_at`; on answer store value, source and `confirmed_at`; on skip store `declined_at`.
+
+**Chart-led confirmation questions** (the catalogue's second half; the answer writes a fact *and* a ledger event with
+the month the chart named, so it is also a Looking-back check, doc 45 §9):
+
+| Chart signal (doc 46) | Question | Options | Fact and ledger |
+|---|---|---|---|
+| House 10 tested, last 3 months or now | "Did something change at work recently?" | I left · I was let go · Still there, but harder · A new role · No change | `work.status`, `work.hardest`; `job.end` / `job.role_change` |
+| House 10 supported | "Did something good happen at work lately?" | A promotion · A new job · Recognition · Not yet | `job.promotion` / `job.start` |
+| House 4 or 12 active (moving) | "Have you moved, or are you planning to?" | Moved · Planning · No | `place.current` (asks the city once), `residence.move` |
+| House 9 or 12 active with travel points | "Any travel or time abroad coming up or just done?" | Just travelled · Planning · No | `travel.long`, `residence.abroad` |
+| House 7 strain | "Has something shifted in a relationship?" | Distance · A fight · We separated · Nothing | `love.status`, `love.hardest`; `relationship.end` / `marriage.separation` |
+| House 7 or 5 supported | "Anyone new, or a step forward with someone?" | Met someone · A step forward · Not yet | `love.status`; `relationship.start` / `marriage.engagement` |
+| House 2 or 11 tested or supported | "Did money shift lately?" | A gain · A loss · A loan · No change | `money.gain` / `money.loss` / `money.loan_taken` |
+| House 6 or 8 tested (facts only) | "Has your health or routine needed attention?" | Yes · No | `health.illness` (facts only; no advice) |
+| House 1 with a mahadasha change | "Does life feel like a new chapter has started?" | Yes · Not yet | `self.turning_point` |
+
+The question is asked only once per signal; a "No change" answer is stored as a miss for calibration, never argued with.
 
 **Learning** (`learn.ts`): after every chat answer, the classifier's slots (background, people, places, named events
 with dates) are written as `chat_inferred` facts at 0.6; after every ledger write, the matching facts are updated
@@ -116,6 +142,7 @@ the same request path as the ledger; no fact value in any log; the daily sweep d
 
 | Key | Asked as | Options | Used by |
 |---|---|---|---|
+| `work.how_going` | "How's your job going?" (only when `work.status` = Yes) | Going well · Okay · Rough · Looking to leave | Work tone check; a self-report |
 | `work.status` | "Do you have a job right now?" | Yes · Between jobs · Own business · Studying · Retired | Work worries order, scenario titles, signatures read |
 | `work.level` | "What best describes your work now?" (doc 43 §8.3) | Hourly · Employee · Specialist · Manage people · Senior leader · Own business alone · Own business with staff · Several businesses | Work wording and ceiling |
 | `work.hardest` | "What's hardest at work right now?" (only in a Demanding tone) | My boss · Politics · Pay · The role itself · Nothing much | the trouble signature read first |
