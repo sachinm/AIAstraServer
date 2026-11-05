@@ -365,6 +365,10 @@ re-applied by it.
   parents, legal. The Clarify agent detects the category, which triggers that flow, using stored kundli data or fetching
   what it needs from Radha. Not designed yet; builds on docs 33 and 34.
 - **AGENTS.md and CLAUDE.md for the Radha and web repos** (pointer files), awaiting Sachin's yes.
+- **Admin panel and encryption, planned 2026-11-04, for an Opus build session.** `docs/admin/01-admin-panel-users-and-agent-metrics.md`
+  (lock-out, quota, plan, agent speed and cost per query; phases A1-A5) and `docs/privacy/02-birth-data-charts-and-wire-build-plan.md`
+  (seal birth data and charts at rest; no payload encryption above TLS; phases B0-B5). Order: A1 first, B0 beside it, B1 after A2.
+  Waiting on Sachin: `ADMIN_EMAILS`, live migrations M23-M25, KMS/DynamoDB/IAM creation, the committed G1 fixture.
 
 - **Multi-School Data Requirements (`docs/ASK-REQUIREMENTS.md`, 2026-10-31).** Full specification of must-have Radha data
   points across **Parashara**, **Jaimini / Pt. Sanjay Rath**, **Lunar Astro / Deepanshu Giri**, and **Tajaka/Muhurta**
@@ -466,3 +470,40 @@ Found by reading code; live rows and deployed env were not read. Fixes are seque
 - **P2: The testbed's relay stalled for seconds on this machine.** In the 2026-11-02 run, `short spike` showed a burst of 390 packets and the relay's scheduled network changes never applied. The clean-line loss in `fast` and `light loss 2%`, and the missed recovery in `fast then throttled`, are probably the same stall, not proven. Cause not found. `run.mjs` now measures stalls and reruns.
 - **P2: "No packets means dead" would misfire on a real agent.** `toSample` in web `src/lib/voice/quality.ts` counts a silent second as total loss, but a real agent may send nothing while listening. Needs a keepalive if WebRTC returns.
 - **P3: The Privacy Policy line in `DATA_REPLY` assumes the policy answers storage questions.** Sachin should read it against the policy before launch.
+
+## Filed 2026-11-04 by the admin and encryption planning session (docs/admin/01, docs/privacy/02)
+
+Plans: `docs/admin/01-admin-panel-users-and-agent-metrics.md` (users, lock-out, quota, plan, agent speed and cost per query) and
+`docs/privacy/02-birth-data-charts-and-wire-build-plan.md` (the encryption track of docs/privacy/01 as a build plan). Found reading
+the code on 2026-11-04; nothing below was verified on live rows. Each item names the plan step that closes it.
+
+- **P1: Nobody can be locked out.** `auth.is_active` is read only by `myBiodata` (`src/graphql/schema.ts:607`), one other resolver (`:713`)
+  and the chart-sync sweeps (`src/services/kundliSyncWorker.ts:244,268`). Sign-in (`authService.ts:128-159`, `auth/emailCode.ts`), `ask`,
+  `/api/chat/ask-stream`, `/api/chat/confirm-stream`, billing and timeline routes never read it, and authorisation comes from the 7-day JWT
+  (`graphql/context.ts:32-55`, `server.ts:165-182`), so a role change waits for the next sign-in and a token cannot be revoked. Status: open.
+  Done: admin plan phase A1 (`src/auth/requestAuth.ts`, `locked_at`, `token_version`).
+- **P1: `adminUpdateUser` always reports success.** `schema.ts:1386` ignores the `{success:false}` from `adminService.updateUser`, and
+  `adminService` manages only `MANAGED_ROLES = ['astrology_student','astrologer']` (`adminService.ts:4`), so no `novice` user can be listed or
+  edited. Status: open. Done: admin plan A2 replaces these operations.
+- **P2: Quota exemption uses raw role strings.** `src/billing/plans.ts:41` `EXEMPT_ROLES` lists `support, admin, superadmin, aiastra_admin,
+  astrologer` and compares the raw row value, so `researcher` is not exempt and `roles.ts` is not the source. Status: open. Done: A1 step 3.
+- **P2: Superadmin bootstrap is dead weight.** `src/ensureSuperadmin.ts` upserts a `superadmin` row with a bcrypt password, but there is no
+  password sign-in; the row can only sign in if `SUPERADMIN_EMAIL` receives mail, and the variables are not on the Lambda. Status: open.
+  Done: A1 step 3 (`ensureAdmins` from `ADMIN_EMAILS`).
+- **P2: Metrics spans drop the subject and traces carry no technique label.** `src/reading/metrics/trace.ts:224` keys stages by `name|subject`
+  but `reading_agent_spans` has no `subject` column, so a 3-subject graph run writes three indistinguishable `dasha` rows; `reading_traces` holds
+  only `flow`, while `bucket`/`template` live in `reading_runs.intent.classification`, `tier` in `reading_runs.cache`, and the plan-B `route` is not
+  persisted. Status: open. Done: A3 step 6 (M24).
+- **P2: Metrics have no retention and no "lost" handling.** A dead process leaves `reading_traces.status = processing` forever; spans grow
+  with every query (doc 41 §9). Status: open. Done: A3 step 7 (`/internal/metrics-retention`, `METRICS_RETENTION_DAYS`).
+- **P2: Bedrock calls are unpriced in the metrics.** `src/reading/llm/models.ts:37-55` has no Bedrock rows, so every clarifier span stores
+  `est_cost_usd = null` and counts in `unpriced_calls`. Status: open. Done: a dated price row per Bedrock model in `PRICES`.
+- **P2: `birthPlaceFor` reads `place_of_birth` without decrypting.** `src/services/userLocation.ts:131-137` feeds the clarify "Same as birth
+  place" chip from the raw column; with `ENCRYPTION_KEY` set it would show ciphertext. Status: open. Done: privacy plan B1.4.
+- **P2: Model thinking is streamed to the browser.** `src/reading/run.ts:334` sends `thought` deltas over SSE; they mention chart details and
+  are already kept in `reading_runs.thinking`. Status: open. Done: privacy plan B0.2.
+- **P2: SSE sends `no-cache`, not `no-store`; GraphQL sends no cache header.** `server.ts:222`, `routes/clarifyRoutes.ts:45`. Status: open.
+  Done: B0.3 and admin step 5.
+- **P3: Web `PlanStatus.window` type is incomplete.** `AIAstra_WEB/src/lib/billing.ts:13-27` allows `'month'|'none'` but the server can send
+  `'day'` (`PLAN_UNLIMITED_DAILY_GUARD`). Status: open. Done: type widened and the day case shown.
+- **P3: `morgan` is in `package.json:62` and never imported.** Status: open. Done: removed.
