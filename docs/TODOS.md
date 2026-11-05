@@ -791,3 +791,18 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   forwards only Origin, X-Astra-Authorization, Accept, Access-Control-Request-* and Content-Type, so the selfie's face
   check header may never arrive and every upload could fail with no_face. The shared policy was left unchanged. Owner:
   deploy. Done: `X-Face-Box` added to the origin request policy, then a selfie upload checked on staging.
+
+## Filed 2026-11-05 by the activity and day review build (docs/admin/04)
+
+- **P2: Board function runs are not grouped by the request that caused them (G2).** A Lucky times load writes 1 + N
+  `agent_runs` rows with nothing tying them together, so the day review counts board loads only approximately (same
+  user, module and minute). Owner: server. Done: `agent_runs.request_id` from the request id, and the admin groups by it.
+- **P2: Click events cover only the new boards (G4).** `page_view` and `board_open` are sent by the Lucky times and area
+  boards; Chat, Profile and the landing page send none, so sessions and page counts in the admin are partial. Owner:
+  web. Done: every route sends `page_view` once per view.
+- **P3: Engine pulls inside a reading are not spans (G5).** Chart-data fetches sit inside `step` spans, so their time and
+  cache hits are hidden in the day review. Owner: reading-dev. Done: one span per engine call (type, cache hit, ms).
+- **Decision for Sachin: question text in the admin (G7).** The day review shows what a question was about (category,
+  subjects, horizon, type) and never its words. Showing words would be a superadmin-only, audited Reveal per query, like
+  Reveal email. Owner: Sachin. Done: a yes or no recorded in docs/admin/04.
+

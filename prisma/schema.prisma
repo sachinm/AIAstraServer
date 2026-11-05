@@ -66,6 +66,7 @@ model Auth {
   token_version              Int                    @default(1) @map("token_version")
   /// Updated at most once per 5 minutes per user by request auth.
   last_seen_at               DateTime?              @map("last_seen_at") @db.Timestamptz(6)
+  activity_days              UserActivityDay[]
   admin_actions_done         AdminAction[]          @relation("AdminActionActor")
   admin_actions_on           AdminAction[]          @relation("AdminActionTarget")
   luckyPref                  LuckyPref?
@@ -1119,4 +1120,21 @@ model AccountEvent {
   @@index([action, created_at(sort: Desc)], map: "account_events_action")
   @@index([ip, created_at(sort: Desc)], map: "account_events_ip")
   @@map("account_events")
+}
+
+/// M30 (docs/admin/04): one row per signed-in user per local day (REPORT_TZ, default America/Los_Angeles), upserted on
+/// the same tick that writes auth.last_seen_at (at most every 5 minutes per user per instance). History for the admin's
+/// daily and weekly active users.
+model UserActivityDay {
+  user_id       String   @map("user_id")
+  day           DateTime @db.Date
+  first_seen_at DateTime @map("first_seen_at") @db.Timestamptz(6)
+  last_seen_at  DateTime @map("last_seen_at") @db.Timestamptz(6)
+  /// 5-minute ticks with a request
+  touches       Int      @default(1)
+  user          Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "user_activity_days_user_id_fkey")
+
+  @@id([user_id, day])
+  @@index([day], map: "user_activity_days_day")
+  @@map("user_activity_days")
 }
