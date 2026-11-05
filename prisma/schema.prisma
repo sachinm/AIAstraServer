@@ -102,6 +102,7 @@ model Kundli {
   facts              KundliFacts[]
   transitCharts      TransitSnapshot[]
   transitOverlays    KundliTransitOverlay[]
+  dayOverlays        KundliDayOverlay[]
   chartData          KundliData[]
   user               Auth                   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   content            UserGeneratedContent[]
@@ -327,6 +328,45 @@ model KundliTransitOverlay {
   @@unique([kundli_id, kind, params_key], map: "kundli_transit_overlays_key")
   @@map("kundli_transit_overlays")
 }
+
+/// Shared day table (docs/reading-engine/47): one engine `muhurta` day per (place, date), no person in it.
+model DayTable {
+  id               String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  place_key        String   @map("place_key")
+  place_name       String?  @map("place_name")
+  lat              Float
+  lon              Float
+  tz_name          String   @map("tz_name")
+  date             DateTime @db.Date
+  utc_offset_hours Float    @map("utc_offset_hours")
+  ayanamsa         String   @default("LAHIRI")
+  calc_version     String?  @map("calc_version")
+  engine_commit    String?  @map("engine_commit")
+  source_hash      String   @map("source_hash")
+  payload          Json
+  fetched_at       DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([place_key, date, ayanamsa], map: "day_tables_key")
+  @@index([date], map: "day_tables_date")
+  @@map("day_tables")
+}
+
+/// A kundli's own day facts for a month at a place (tara, chandra bala, grade, the Moon's natal house), as the engine returned them.
+model KundliDayOverlay {
+  id           String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id    String   @map("kundli_id")
+  kundli       Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  place_key    String   @map("place_key")
+  month        DateTime @db.Date
+  calc_version String?  @map("calc_version")
+  source_hash  String   @map("source_hash")
+  payload      Json
+  fetched_at   DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@unique([kundli_id, place_key, month], map: "kundli_day_overlays_key")
+  @@map("kundli_day_overlays")
+}
+
 
 /// One row per reading (reading engine M4): intent, pack hashes, findings, timings, usage, cache.
 model ReadingRun {

@@ -19,6 +19,7 @@
     "facts:backfill": "tsx scripts/build-facts-for-all.ts",
     "transits:sky": "tsx scripts/extend-transit-sky.ts",
     "transits:overlay": "tsx scripts/pull-kundli-overlay.ts",
+    "day-tables:pull": "tsx scripts/pull-day-tables.ts",
     "eval:readings": "tsx evals/run.ts",
     "bench:reading": "tsx scripts/bench-reading.ts",
     "bench:oracle": "tsx scripts/bench-oracle.ts",
