@@ -1,6 +1,6 @@
 # Sign-up email through Resend (2026-11-04)
 
-Goal: Cognito's sign-up, resend and reset codes leave from `AI AdAstra <no-reply@vedic-astrology.app>` through Resend, with no
+Goal: Cognito's sign-up, resend and reset codes leave from `AdAstra AI <no-reply@vedic-astrology.app>` through Resend, with no
 50-a-day cap and no wait for SES production access (DENIED, case 179367262200747). `vedic-astrology.app` is verified in Resend.
 
 How it works: Cognito encrypts each code with our KMS key and calls the Lambda in `lambda/cognito-email-sender/`. The Lambda
@@ -56,7 +56,7 @@ echo "== Package and deploy the Lambda"
 cd lambda/cognito-email-sender
 [ -f package.json ] || echo '{"type":"module","dependencies":{"@aws-crypto/client-node":"^4"}}' > package.json
 npm install --omit=dev --silent && zip -qr ../fn.zip . && cd ..
-ENVV="Variables={KMS_KEY_ARN=$KEY_ARN,RESEND_SECRET_ID=aiastra/resend-api-key,MAIL_FROM=AI AdAstra <no-reply@vedic-astrology.app>}"
+ENVV="Variables={KMS_KEY_ARN=$KEY_ARN,RESEND_SECRET_ID=aiastra/resend-api-key,MAIL_FROM=AdAstra AI <no-reply@vedic-astrology.app>}"
 if aws lambda get-function --function-name $FN >/dev/null 2>&1; then
   aws lambda update-function-code --function-name $FN --zip-file fileb://fn.zip >/dev/null
 else
@@ -89,7 +89,7 @@ If the final `diff` shows more than `LambdaConfig`, `KMSKeyId` and the modified 
 ## 3. Test
 
 Sign up on https://vedic-astrology.app with a real address that is not yours-only; the code must arrive from
-`AI AdAstra <no-reply@vedic-astrology.app>` within a minute. If not: CloudWatch log group `/aws/lambda/aiastra-cognito-email-sender`
+`AdAstra AI <no-reply@vedic-astrology.app>` within a minute. If not: CloudWatch log group `/aws/lambda/aiastra-cognito-email-sender`
 (status codes only, never codes). Then close the TODO "Registration refused: Cognito's default email sender..." in `docs/TODOS.md`.
 
 Resend's free plan is 100 a day and 3,000 a month; a paid plan lifts it. Add Resend to the Privacy Policy as an email processor.
