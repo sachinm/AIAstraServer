@@ -1,4 +1,5 @@
 import { getNodeEnv } from '../config/env.js';
+import { maskEmail } from '../lib/logRedact.js';
 
 /**
  * Send magic-link code email. Configure one of:
@@ -52,9 +53,10 @@ export async function sendMagicLinkEmail(to: string, code: string): Promise<void
   }
 
   const env = getNodeEnv();
-  if (env === 'local' || env === 'development') {
-    console.warn('[email] No RESEND_API_KEY or SMTP_HOST; magic link (dev log only):', {
-      to,
+  // local only, never on a Lambda: the masked recipient, and the code so a developer can sign in without mail
+  if ((env === 'local' || env === 'development') && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    console.warn('[email] No RESEND_API_KEY or SMTP_HOST; sign-in code (local log only):', {
+      to: maskEmail(to),
       code,
     });
     return;

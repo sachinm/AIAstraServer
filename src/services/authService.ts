@@ -2,7 +2,6 @@ import { prisma } from '../lib/prisma.js';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../graphql/context.js';
 import { generateAccountPassword, hashPassword } from '../lib/hash.js';
-import { encrypt } from '../lib/encrypt.js';
 import { DEFAULT_SIGNUP_ROLE } from '../auth/roles.js';
 import { ACCOUNT_LOCKED_CODE, ACCOUNT_LOCKED_MESSAGE } from '../auth/requestAuth.js';
 import {
@@ -294,17 +293,14 @@ export async function signup(
 
   const hashedPassword = await hashPassword(generateAccountPassword());
 
-  const dateOfBirthEnc = encrypt(date_of_birth);
-  const placeOfBirthEnc = place_of_birth ? encrypt(place_of_birth) : null;
-  const timeOfBirthEnc = time_of_birth ? encrypt(time_of_birth) : null;
-
+  // birth fields are sealed by the client's PII extension when PII_WRITE_MODE=sealed (docs/privacy/02 B1.4)
   const created = await prisma.auth.create({
     data: {
       username,
       password: hashedPassword,
-      date_of_birth: dateOfBirthEnc ?? date_of_birth,
-      place_of_birth: placeOfBirthEnc ?? place_of_birth ?? null,
-      time_of_birth: timeOfBirthEnc ?? time_of_birth ?? null,
+      date_of_birth,
+      place_of_birth: place_of_birth ?? null,
+      time_of_birth: time_of_birth ?? null,
       email,
       name: username,
       gender: gender ?? null,

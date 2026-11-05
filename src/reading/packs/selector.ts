@@ -7,7 +7,6 @@
  * Evidence ids are dot paths into the pack itself (e.g. `detail.houses.10.lord`, `varga.D10.d1_lords.10.varga_house`,
  * `transits.rows.Ke_2026-12-06.house_from_lagna`). `resolveEvidence` returns the value, so a claim can be checked.
  */
-import { createHash } from 'node:crypto';
 import { readingFindingsV2, readingFullBase } from '../config.js';
 import { LAGNA_CODE, PLANET_CODES, type PlanetCode, type VargaKey } from '../facts/constants.js';
 import type { Body, DashaPeriod, Dossier, House, Varga } from '../facts/types.js';
@@ -16,6 +15,7 @@ import type { Intent } from '../types.js';
 import { withContacts } from './contacts.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
 import { selectTransits, type SelectedTransitRow, type TransitSection } from './transitTable.js';
+import { piiHash } from '../../lib/pii/hash.js';
 
 const TRANSIT_LEGEND = 'influences_houses = houses occupied or aspected from house_from_lagna (sorted numerically ascending, NOT in 5th/7th/9th aspect order — count forward from house_from_lagna to label 5th, 7th, 9th, 3rd, 10th, 4th, or 8th aspect); sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal = natal planets in that sign (including Ke/Ra nodal reversal); over_natal_owns = houses the natal planet under the transit rules';
 
@@ -460,8 +460,9 @@ export function renderSubject(pack: EvidencePack, analyst: Analyst = 'single'): 
   return JSON.stringify(ordered);
 }
 
-export function hashText(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+/** Pack and dossier hashes, over opened text (src/lib/pii/hash.ts). */
+export function hashText(text: string, key?: Buffer | null): string {
+  return piiHash(text, { len: 16, key });
 }
 
 export function hashPack(pack: EvidencePack, analyst: Analyst = 'single'): string {

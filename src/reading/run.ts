@@ -327,14 +327,13 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   // v2 (doc 25 §2.5f): short templates (T1, T9, T10) need little thinking; an explicit READING_SYNTH_THINKING wins
   const shortTemplate = ['T1', 'T9', 'T10'].includes(intent.classification?.template ?? '');
   const thinking = v2 && shortTemplate && !process.env.READING_SYNTH_THINKING?.trim() ? 'low' : readingSynthThinking();
-  // thought summaries: streamed to the client as `thought` events and kept on the run record (reading_runs.thinking).
-  // They are never written to the application logs.
+  // thought summaries: kept on the run record (reading_runs.thinking) only. They mention chart details, so they are
+  // not streamed to the browser (docs/privacy/02 B0.2) and never written to the application logs.
   const showThoughts = readingIncludeThoughts();
   let thinkingText = '';
   const onThought = showThoughts
     ? (delta: string) => {
         if (thinkingText.length < MAX_STORED_THINKING_CHARS) thinkingText = (thinkingText + delta).slice(0, MAX_STORED_THINKING_CHARS);
-        emit({ type: 'thought', delta });
       }
     : undefined;
   const maxOutputTokens = readingSynthMaxTokens();

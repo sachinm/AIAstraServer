@@ -7,7 +7,6 @@ config();
 
 import { prisma } from '../src/lib/prisma.js';
 import { hashPassword } from '../src/lib/hash.js';
-import { encrypt } from '../src/lib/encrypt.js';
 import { enqueueKundliSync } from '../src/services/kundliQueueService.js';
 
 const SEED_PASSWORD = 'SeedUser#123';
@@ -39,18 +38,15 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const dateOfBirthEnc = encrypt(u.date_of_birth) ?? u.date_of_birth;
-    const placeOfBirthEnc = encrypt(u.place_of_birth) ?? u.place_of_birth;
-    const timeOfBirthEnc = encrypt(u.time_of_birth) ?? u.time_of_birth;
-
+    // sealed by the client's PII extension when PII_WRITE_MODE=sealed (docs/privacy/02 B1.4)
     const created = await prisma.auth.create({
       data: {
         username: u.username,
         email: `${u.username}@example.com`,
         password: hashedPassword,
-        date_of_birth: dateOfBirthEnc,
-        place_of_birth: placeOfBirthEnc,
-        time_of_birth: timeOfBirthEnc,
+        date_of_birth: u.date_of_birth,
+        place_of_birth: u.place_of_birth,
+        time_of_birth: u.time_of_birth,
         role: 'user',
         is_active: true,
         kundli_added: false,

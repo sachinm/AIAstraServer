@@ -4,6 +4,7 @@ import {
   fetchLatestKundliForUser,
   kundliRowToChunks,
 } from '../../kundli-rag.js';
+import { redactForLog } from '../lib/logRedact.js';
 import { createJSONLLMClient, getLLMClient } from '../lib/llmClient.js';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import type { PrismaClient } from '@prisma/client';
@@ -113,16 +114,13 @@ Please give a brief and accurate answer, only based on the above data.
   };
 }
 
-function safeJSONParse(str: string, label = 'response'): unknown {
+/** Exported for tests (tests/unit/noPiiInLogs.test.ts). */
+export function safeJSONParse(str: string, label = 'response'): unknown {
   try {
     return JSON.parse(str);
   } catch (err) {
-    console.error(
-      `❌ Failed to parse ${label}:`,
-      (err as Error).message,
-      '\nRaw:',
-      str
-    );
+    // the length only: the raw text is model output about a person's chart (docs/privacy/02 B0.1)
+    console.error(`❌ Failed to parse ${label}:`, redactForLog((err as Error).message, 120), { rawLength: str.length });
     return null;
   }
 }

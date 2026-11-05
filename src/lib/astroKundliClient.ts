@@ -9,10 +9,8 @@ import {
   ASTROKUNDLI_REQUEST_SPACING_FLOOR_MS,
   getAstroKundliRequestSpacingMs,
   getRadhaMaxConcurrent,
-  isAstroKundliLogResponseEnabled,
 } from '../config/env.js';
-import { decrypt } from './encrypt.js';
-import { queueLog } from './queueLogger.js';
+import { redactForLog } from './logRedact.js';
 
 /** Kundli column names we request from the API (one call per field) */
 export const KUNDLI_JSON_FIELDS = [
@@ -264,6 +262,15 @@ export class RadhaHttpError extends Error {
   }
 }
 
+/**
+ * An engine error as a log line: its status only, because the engine's text can quote the place it could not resolve
+ * (docs/privacy/02 B0.1). Transport errors (timeouts, invoke failures) carry no personal values; they are redacted anyway.
+ */
+export function engineErrorForLog(err: unknown): string {
+  if (err instanceof RadhaHttpError) return `HTTP ${err.status}`;
+  return redactForLog(err, 160);
+}
+
 /** Gap between call starts when the API key is sent: Radha's limiter does not apply, this only eases cold starts. */
 const RADHA_KEYED_SPACING_MS = 250;
 const RADHA_MAX_ATTEMPTS = 3;
@@ -321,12 +328,12 @@ async function callRadha<T>(run: () => Promise<T>): Promise<T> {
       const delayMs = attempt < RADHA_MAX_ATTEMPTS ? radhaRetryDelayMs(err, attempt) : null;
       if (delayMs === null) throw err;
       radhaNextStartAt = Math.max(radhaNextStartAt, Date.now() + delayMs);
-      console.warn('[AstroKundli] throttled, retrying', { attempt, delayMs, error: (err as Error).message?.slice(0, 200) });
+      console.warn('[AstroKundli] throttled, retrying', { attempt, delayMs, error: engineErrorForLog(err) });
     }
   }
 }
 
-/** Auth-like record with optional encrypted DOB/TOB/POB */
+/** Auth-like record: DOB/TOB/POB as opened by the client's PII extension (src/lib/pii/prismaExtension.ts) */
 export interface AuthLikeForKundli {
   date_of_birth: string;
   place_of_birth: string | null;
@@ -334,13 +341,13 @@ export interface AuthLikeForKundli {
 }
 
 /**
- * Map Auth user record to AstroKundli request params. Decrypts DOB/TOB/POB if encrypted.
- * Normalizes dob to YYYY-MM-DD and tob to HH:MM:SS.
+ * Map Auth user record to AstroKundli request params. The values arrive opened (the PII extension opens sealed and
+ * legacy `enc:` values on read). Normalizes dob to YYYY-MM-DD and tob to HH:MM:SS.
  */
 export function authToAstroKundliParams(auth: AuthLikeForKundli): AstroKundliRequestParams {
-  const dobRaw = decrypt(auth.date_of_birth) ?? auth.date_of_birth;
-  const placeRaw = auth.place_of_birth ? (decrypt(auth.place_of_birth) ?? auth.place_of_birth) : '';
-  const tobRaw = auth.time_of_birth ? (decrypt(auth.time_of_birth) ?? auth.time_of_birth) : '00:00:00';
+  const dobRaw = auth.date_of_birth;
+  const placeRaw = auth.place_of_birth ?? '';
+  const tobRaw = auth.time_of_birth || '00:00:00';
 
   const dob = normalizeDob(dobRaw);
   const tob = normalizeTob(tobRaw);
@@ -833,9 +840,7 @@ async function fetchHoroscopeChartImpl(
       }
     }
 
-    const responseStr = JSON.stringify(json);
-    const maxLen = 1500;
-    const truncated = responseStr.length > maxLen;
+    // size and status only: the response is a person's chart, which never goes to a log (docs/privacy/02 B0.1)
     console.log('[AstroKundli] response', {
       transport,
       url: targetLabel,
@@ -843,22 +848,8 @@ async function fetchHoroscopeChartImpl(
       status,
       ok,
       durationMs: Date.now() - startedAt,
-      response_preview: truncated ? responseStr.slice(0, maxLen) + '...[truncated]' : responseStr,
-      truncated,
+      responseBytes: JSON.stringify(json ?? null).length,
     });
-
-    if (isAstroKundliLogResponseEnabled()) {
-      const queueMaxLen = 5000;
-      const queueTruncated = responseStr.length > queueMaxLen;
-      queueLog({
-        event: 'astrokundli_api_response',
-        transport,
-        type,
-        http_status: status,
-        response_preview: queueTruncated ? responseStr.slice(0, queueMaxLen) + '...[truncated]' : responseStr,
-        truncated: queueTruncated,
-      });
-    }
 
     if (!ok) {
       const base =
@@ -872,13 +863,12 @@ async function fetchHoroscopeChartImpl(
 
     return parseAstroKundliResponse(json);
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('[AstroKundli] error', {
       transport,
       url: targetLabel,
       type,
       durationMs: Date.now() - startedAt,
-      error: errorMessage,
+      error: engineErrorForLog(err),
     });
     if (err instanceof Error) {
       throw err;

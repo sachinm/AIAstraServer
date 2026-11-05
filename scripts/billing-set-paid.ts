@@ -7,7 +7,8 @@
  *   npm run billing:set-paid -- --email a@b.com --research on  (or off: the full charts in the chat's right sidebar)
  */
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+// the shared client, so the lookup and writes pass through the PII extension (docs/privacy/02 B1.4)
+import { prisma as db } from '../src/lib/prisma.js';
 import { clearPaid, markPaid } from '../src/billing/account.js';
 import { effectivePlan, isInterval, isPlanCode } from '../src/billing/plans.js';
 import { PrismaPlanStore } from '../src/billing/store.js';
@@ -20,7 +21,6 @@ function arg(name: string): string | undefined {
 async function main(): Promise<void> {
   const email = arg('email')?.trim().toLowerCase();
   if (!email) throw new Error('--email is required');
-  const db = new PrismaClient();
   try {
     const user = await db.auth.findFirst({ where: { email }, select: { id: true } });
     if (!user) throw new Error(`no user with email ${email}`);

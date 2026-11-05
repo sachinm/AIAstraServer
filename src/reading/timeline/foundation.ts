@@ -7,11 +7,11 @@
  * The house-lord chart (§A.1 item 4) goes two hops: house -> its lord -> the house the lord sits in -> that lord's sign
  * lord (dispositor) -> the dispositor's house. Each link carries the dossier path it was read from.
  */
-import { createHash } from 'node:crypto';
 import type { HouseCounts } from '../chartData/houseCounts.js';
 import type { Dossier } from '../facts/types.js';
 import { PLANET_CODES, type PlanetCode } from '../facts/constants.js';
 import type { KarakaCode } from '../packs/frames.js';
+import { piiHash } from '../../lib/pii/hash.js';
 
 export const DUSTHANAS = [6, 8, 12] as const;
 const KENDRAS = new Set([1, 4, 7, 10]);
@@ -88,8 +88,9 @@ export interface Foundation {
 
 const isPlanet = (c: unknown): c is PlanetCode => typeof c === 'string' && (PLANET_CODES as readonly string[]).includes(c);
 
-export function dossierHash(dossier: Dossier): string {
-  return createHash('sha256').update(JSON.stringify(dossier)).digest('hex').slice(0, 16);
+/** Over the opened dossier (src/lib/pii/hash.ts), so sealing the facts row never changes it. */
+export function dossierHash(dossier: Dossier, key?: Buffer | null): string {
+  return piiHash(JSON.stringify(dossier), { len: 16, key });
 }
 
 export function buildFoundation(dossier: Dossier, houseCounts: HouseCounts | null): Foundation {
