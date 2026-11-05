@@ -787,3 +787,7 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   reading-dev. Done: the D10 check and the missing families land (catalogue rows `work.d10_check`,
   `work.*_family`) and the rule is moved to the doc's.
 
+- **P2: CloudFront does not forward `X-Face-Box` to the API on staging.** 2026-11-05. The API's origin request policy
+  forwards only Origin, X-Astra-Authorization, Accept, Access-Control-Request-* and Content-Type, so the selfie's face
+  check header may never arrive and every upload could fail with no_face. The shared policy was left unchanged. Owner:
+  deploy. Done: `X-Face-Box` added to the origin request policy, then a selfie upload checked on staging.
