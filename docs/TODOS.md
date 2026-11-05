@@ -806,3 +806,18 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   subjects, horizon, type) and never its words. Showing words would be a superadmin-only, audited Reveal per query, like
   Reveal email. Owner: Sachin. Done: a yes or no recorded in docs/admin/04.
 
+## Filed 2026-11-05: registry seeds on Lambda
+
+- **P1 (fixed on `fix/registry-seed-on-lambda`, ships with the next server deploy): boot seeds never finished on Lambda.**
+  `server.ts` started `seedAgentRegistry` and `seedTechniqueRegistry` without awaiting them, one upsert per row. Lambda
+  freezes the process after each response, so on image `api-91859654255f` `technique_registry` stayed empty and the 8
+  new agents were never written (the last `agent_registry` write, 22:08 UTC, came from the old image, before the 22:12
+  M29 migration). Both are now one statement each and awaited in `start()` before `listen`, capped at 4 s. The rows
+  were upserted by hand from the code's own definitions on 2026-11-05 at 22:20 UTC, so the Techniques page has data
+  meanwhile; their model and price columns came from local settings and are overwritten by the first boot of the fixed
+  image. Done: after that deploy, `updated_at` on both tables shows the boot time.
+- **P3: The main checkout's generated Prisma client is stale.** `node_modules/.prisma/client` in the main checkout
+  (`C:/Users/Owner/Documents/work/AIAstra_Server`) predates M29 (no `techniqueRegistry`), so `tsc` and tests run there
+  disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
+  generate` run in the main checkout.
+
