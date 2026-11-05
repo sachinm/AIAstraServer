@@ -109,7 +109,7 @@ app.use(
         ? prodOrigins
         : true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With', 'X-Face-Box'],
     credentials: true,
     maxAge: 86400,
   })
