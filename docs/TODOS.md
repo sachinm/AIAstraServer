@@ -525,9 +525,10 @@ the code on 2026-11-04; nothing below was verified on live rows. Each item names
 - **P2: Eight unit-test files fail on this machine** (44 tests): `auth/emailOnlySignup`, `auth/registrationV2` (the local `.env`
   sets `AUTH_PROVIDER=cognito`, so local-provider tests call real Cognito), `env.test`, `geminiChatService`,
   `astroKundliExportSpacing`, `reading/promptCache`, `reading/fullPrefixCache`, `reading/run` (cache, thinking and engine
-  settings read from `.env`). The build agent reports the same files failed before its edits, but that run overlapped its
-  edits, and a clean `develop` baseline was not taken (the branch switch was refused because of uncommitted docs). Owner:
-  next dev session. Done: the eight files run against a neutral test env (no `.env` leakage) and pass on `develop`.
+  settings read from `.env`). Measured 2026-11-04: clean `develop` (2ca2206) fails the same 38 tests by name as
+  `feat/admin-a1-lockout`; the branch adds only its 4 new lock tests in `emailOnlySignup`, which fail for the same Cognito
+  reason and pass with `AUTH_PROVIDER=local`. So the branch causes no regressions; the 38 are pre-existing. Owner: next dev
+  session. Done: the tests set the env they need (no `.env` leakage) and all eight files pass.
 - **P2: A lock reaches other Lambda instances only after their 30 s auth cache expires.** The admin app runs in its own
   Lambda and cannot clear the main API's cache. Accepted for now. Done: a shorter TTL, or a cache keyed on `token_version`.
 - **P2: The main web shows no locked screen.** A locked person's next request gets 401 `account_locked`; the web treats it as
