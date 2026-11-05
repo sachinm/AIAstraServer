@@ -57,7 +57,19 @@ model Auth {
   language              String                 @default("en")
   /// Shows the full charts and dashas in the chat's right sidebar.
   research              Boolean                @default(false)
+  /// M23 (docs/admin/01): set when an admin locks the account; every request and sign-in is refused while set.
+  locked_at             DateTime?              @map("locked_at") @db.Timestamptz(6)
+  locked_reason         String?                @map("locked_reason")
+  /// auth.id of the admin, or 'cli' / 'system'.
+  locked_by             String?                @map("locked_by")
+  /// Compared with the JWT `tv` claim; bumping it ends every session of this account.
+  token_version         Int                    @default(1) @map("token_version")
+  /// Updated at most once per 5 minutes per user by request auth.
+  last_seen_at          DateTime?              @map("last_seen_at") @db.Timestamptz(6)
+  admin_actions_done    AdminAction[]          @relation("AdminActionActor")
+  admin_actions_on      AdminAction[]          @relation("AdminActionTarget")
 
+  @@index([created_at(sort: Desc)], map: "auth_created_at")
   @@map("auth")
 }
 
@@ -589,6 +601,12 @@ model ReadingTrace {
   ttft_ms        Int?      @map("ttft_ms")
   ms             Int?
   error          String?
+  /// M24 technique labels: bucket (buckets/taxonomy.ts), template (T1..T10), tier (oracle readers), route (plan B), subjects.
+  bucket         String?
+  template       String?
+  tier           Int?
+  route          String?
+  subjects       Int?
   started_at     DateTime  @map("started_at") @db.Timestamptz(6)
   ended_at       DateTime? @map("ended_at") @db.Timestamptz(6)
   user           Auth      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -598,6 +616,8 @@ model ReadingTrace {
   @@index([status, started_at(sort: Desc)], map: "reading_traces_status_started")
   @@index([user_id, started_at(sort: Desc)], map: "reading_traces_user_started")
   @@index([clarify_run_id], map: "reading_traces_clarify")
+  @@index([flow, started_at(sort: Desc)], map: "reading_traces_flow_started")
+  @@index([bucket, started_at(sort: Desc)], map: "reading_traces_bucket_started")
   @@map("reading_traces")
 }
 
@@ -626,11 +646,15 @@ model ReadingAgentSpan {
   thought_tokens Int      @default(0) @map("thought_tokens")
   /// Null when the model has no price, so an unpriced call never reads as free.
   est_cost_usd   Decimal? @map("est_cost_usd") @db.Decimal(10, 6)
+  /// M24: the subject a graph analyst ran for, and the oracle reader's tier.
+  subject        String?
+  tier           Int?
   run            ReadingTrace @relation(fields: [run_id], references: [run_id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([run_id, started_at], map: "reading_agent_spans_run")
   @@index([agent, level, started_at(sort: Desc)], map: "reading_agent_spans_agent")
   @@index([agent_kind, level, started_at(sort: Desc)], map: "reading_agent_spans_kind")
+  @@index([started_at(sort: Desc)], map: "reading_agent_spans_started")
   @@map("reading_agent_spans")
 }
 
@@ -721,4 +745,26 @@ model AssistantQuestion {
   @@index([asked_at], map: "assistant_questions_asked_at")
   @@index([visit_id, asked_at], map: "assistant_questions_visit_asked")
   @@map("assistant_questions")
+}
+
+/// One row per admin write (M23, docs/admin/01 §4.1.7). before/after hold plan, quota, role and lock columns only.
+model AdminAction {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  actor_user_id  String?  @map("actor_user_id")
+  /// admin | cli | system
+  actor_kind     String   @default("admin") @map("actor_kind")
+  action         String
+  target_user_id String?  @map("target_user_id")
+  reason         String?
+  before         Json?
+  after          Json?
+  ip             String?
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor          Auth?    @relation("AdminActionActor", fields: [actor_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "admin_actions_actor_fkey")
+  target         Auth?    @relation("AdminActionTarget", fields: [target_user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "admin_actions_target_fkey")
+
+  @@index([target_user_id, created_at(sort: Desc)], map: "admin_actions_target")
+  @@index([actor_user_id, created_at(sort: Desc)], map: "admin_actions_actor")
+  @@index([created_at(sort: Desc)], map: "admin_actions_created")
+  @@map("admin_actions")
 }

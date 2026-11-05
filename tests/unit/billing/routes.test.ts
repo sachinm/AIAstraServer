@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { PrismaClient } from '@prisma/client';
 import { registerBillingRoutes } from '../../../src/billing/routes.js';
 import type { PlanStore } from '../../../src/billing/store.js';
+import { fakeOptionalUser, fakeRequireUser } from '../../helpers/fakeAuth.js';
 
 describe('billing routes', () => {
   let server: ReturnType<express.Express['listen']>;
@@ -21,7 +22,8 @@ describe('billing routes', () => {
     app.use(express.json());
     registerBillingRoutes(app, {
       prisma: {} as PrismaClient,
-      getUserId: (req) => (req.headers.authorization ? 'u1' : null),
+      requireUser: fakeRequireUser((req) => (req.headers.authorization ? 'u1' : null)),
+      optionalUser: fakeOptionalUser((req) => (req.headers.authorization ? 'u1' : null)),
       store,
       enabled: true,
       env: { PLAN_FREE_QUESTIONS: '20', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv,

@@ -78,6 +78,7 @@ import {
   signup,
   requestMagicLink,
   loginWithMagicLink,
+  verifySignupCode,
   MAGIC_LINK_LOGIN_FAILED,
   MAGIC_LINK_REQUEST_MESSAGE,
   EMAIL_EXISTS_CODE,
@@ -236,5 +237,54 @@ describe('email code login end to end', () => {
   it('a code for an unknown email cannot be used to sign in', async () => {
     const result = await loginWithMagicLink('nobody@example.com', 'ABCD2345', null, null);
     expect(result).toEqual({ success: false, message: MAGIC_LINK_LOGIN_FAILED });
+  });
+});
+
+describe('a locked account (docs/admin/01 §4.1.2)', () => {
+  it('gets no code, and the same answer as an unknown address', async () => {
+    await signup(birth, null, null);
+    fake.rows[0].locked_at = new Date();
+    fake.sent.length = 0;
+    const answer = await requestMagicLink('asha@example.com', null, null);
+    expect(answer).toEqual(await requestMagicLink('nobody@example.com', null, null));
+    expect(answer).toEqual({ success: true, message: MAGIC_LINK_REQUEST_MESSAGE });
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('is refused after a correct code: ACCOUNT_LOCKED, no token, nothing queued', async () => {
+    await signup(birth, null, null);
+    const code = lastCodeFor('asha@example.com');
+    fake.rows[0].locked_at = new Date();
+    vi.mocked(scheduleKundliSync).mockClear();
+    const result = await loginWithMagicLink('asha@example.com', code, null, null);
+    expect(result).toEqual({ success: false, code: 'ACCOUNT_LOCKED', message: 'This account is locked.' });
+    expect(scheduleKundliSync).not.toHaveBeenCalled();
+  });
+
+  it('the signup verify path refuses it too', async () => {
+    await signup(birth, null, null);
+    const code = lastCodeFor('asha@example.com');
+    fake.rows[0].locked_at = new Date();
+    expect(await verifySignupCode('asha@example.com', code)).toMatchObject({ success: false, code: 'ACCOUNT_LOCKED' });
+  });
+
+  it('a wrong code for a locked account gets the ordinary failure, so a lock cannot be probed', async () => {
+    await signup(birth, null, null);
+    const code = lastCodeFor('asha@example.com');
+    fake.rows[0].locked_at = new Date();
+    const wrong = code === 'AAAAAAAA' ? 'BBBBBBBB' : 'AAAAAAAA';
+    expect(await loginWithMagicLink('asha@example.com', wrong, null, null)).toEqual({ success: false, message: MAGIC_LINK_LOGIN_FAILED });
+  });
+
+  it('the session token carries the row token_version as tv', async () => {
+    await signup(birth, null, null);
+    const code = lastCodeFor('asha@example.com');
+    fake.rows[0].token_version = 4;
+    const result = await loginWithMagicLink('asha@example.com', code, null, null);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const claims = JSON.parse(Buffer.from(result.token.split('.')[1]!, 'base64url').toString('utf8'));
+      expect(claims).toMatchObject({ sub: fake.rows[0].id, tv: 4 });
+    }
   });
 });

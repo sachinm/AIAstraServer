@@ -27,13 +27,15 @@ import { normalizeTimeZone, type UserLocationStore } from '../services/userLocat
 import { parseClientPlace } from '../reading/chartData/place.js';
 import { randomUUID } from 'node:crypto';
 import { withRunTrace } from '../reading/metrics/trace.js';
+import type { RequireUser } from '../auth/requestAuth.js';
 
 /** The longest `POST /api/chat/prewarm` holds its request. */
 const ORACLE_PREWARM_CAP_MS = 6_000;
 
 export interface ClarifyRouteDeps {
   prisma: PrismaClient;
-  getUserId: (req: express.Request) => string | null;
+  /** writes the 401 itself and returns null (src/auth/requestAuth.ts) */
+  requireUser: RequireUser;
   store?: ClarifyStore;
   /** where the current location is kept (defaults to the `user_current_location` table) */
   locationStore?: UserLocationStore;
@@ -104,8 +106,8 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
   const store = (): ClarifyStore => deps.store ?? new PrismaClarifyStore(deps.prisma);
 
   app.post('/api/chat/answer', async (req, res) => {
-    const userId = deps.getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
     const { runId, value, viaChip, tz } = req.body as { runId?: string; value?: string; viaChip?: boolean; tz?: unknown };
     if (!runId || typeof value !== 'string' || !value.trim()) return res.status(400).json({ error: 'runId and value are required' });
     try {
@@ -127,8 +129,8 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
    * it. The web sends it without waiting when a `propose` event arrives. Safe to call twice and harmless to skip.
    */
   app.post('/api/chat/prewarm', async (req, res) => {
-    const userId = deps.getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
     const { runId } = req.body as { runId?: string };
     if (!runId) return res.status(400).json({ error: 'runId is required' });
     const state = await store().get(userId, runId);
@@ -141,8 +143,8 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
   });
 
   app.post('/api/chat/confirm-stream', async (req, res) => {
-    const userId = deps.getUserId(req);
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
     const { runId, chatId, edits } = req.body as { runId?: string; chatId?: string | null; edits?: { horizon?: string; bucket?: string } };
     if (!runId) return res.status(400).json({ error: 'runId is required' });
     const pre = await validateAskForUser(deps.prisma, userId);

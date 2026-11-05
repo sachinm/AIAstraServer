@@ -1,16 +1,8 @@
-import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma.js';
 import type { PrismaClient } from '@prisma/client';
+import { authenticateRequest, type RequestAuthDeps } from '../auth/requestAuth.js';
 
-export function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 32) {
-    throw new Error(
-      'JWT_SECRET must be set in environment and at least 32 characters'
-    );
-  }
-  return secret;
-}
+export { getJwtSecret } from '../auth/jwtSecret.js';
 
 export interface GraphQLContextParams {
   request: Request;
@@ -18,38 +10,23 @@ export interface GraphQLContextParams {
 
 export interface GraphQLContext {
   userId: string | null;
+  /** canonical role from the auth row (src/auth/roles.ts), not from the token */
   role: string | null;
+  /**
+   * The auth row is locked. Only `me` and `logout` run; every other operation is refused by lockGuardPlugin
+   * (src/graphql/lockGuard.ts) before any resolver starts.
+   */
+  locked?: boolean;
   prisma: PrismaClient;
   request: Request;
 }
 
 /**
- * Build GraphQL context from request.
- * Prefer X-Astra-Authorization: Bearer <token>, then Authorization.
- * CloudFront OAC owns Authorization toward the Lambda Function URL (SigV4);
- * App Runner keeps working with Authorization alone.
+ * Build GraphQL context from request through authenticateRequest (src/auth/requestAuth.ts): the JWT from
+ * X-Astra-Authorization (CloudFront OAC owns Authorization toward the Lambda Function URL), else Authorization,
+ * checked against the auth row (role, lock, token version). Yoga accepts a context factory that returns a Promise.
  */
-export function buildContext({ request }: GraphQLContextParams): GraphQLContext {
-  const custom = request.headers.get('X-Astra-Authorization');
-  const authHeader = custom || request.headers.get('Authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-  let userId: string | null = null;
-  let role: string | null = null;
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, getJwtSecret()) as {
-        sub?: string;
-        userId?: string;
-        role?: string;
-      };
-      userId = decoded.sub ?? decoded.userId ?? null;
-      role = decoded.role ?? 'user';
-    } catch {
-      // Invalid or expired token
-    }
-  }
-
-  return { userId, role, prisma, request };
+export async function buildContext({ request }: GraphQLContextParams, deps: RequestAuthDeps = {}): Promise<GraphQLContext> {
+  const auth = await authenticateRequest(request.headers, deps);
+  return { userId: auth.userId, role: auth.role, locked: auth.locked, prisma, request };
 }

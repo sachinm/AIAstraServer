@@ -25,18 +25,16 @@ import { getChartStatus } from '../services/chartStatusService.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
-import { requireRoles } from './rbac.js';
+import { requireAuth, requireRoles } from './rbac.js';
 import { isTimelineEnabled } from '../reading/timeline/config.js';
 import { listLedger, resolveKundli } from '../reading/timeline/ledgerStore.js';
 import { ALL_AUTHENTICATED_ROLES } from './rbac.js';
 import { askingGuide } from '../reading/coach/content.js';
 import { isBucketId } from '../reading/buckets/taxonomy.js';
-import { roleCan } from '../auth/roles.js';
+import { canonicalRole, isAdminRole, roleCan } from '../auth/roles.js';
 import type { GraphQLContext } from './context.js';
 import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 import { deleteUserCaches } from '../reading/llm/promptCache.js';
-
-const ADMIN_ROLES = ['admin', 'superadmin', 'aiastra_admin'] as const;
 
 const typeDefs = /* GraphQL */ `
   type User {
@@ -45,6 +43,8 @@ const typeDefs = /* GraphQL */ `
     email: String
     role: String
     name: String
+    "Own profile only (me). True when the account is locked: every other operation answers ACCOUNT_LOCKED."
+    locked: Boolean
     "False until page 2 of registration is saved. The web routes such a user to page 2."
     profile_complete: Boolean!
     email_verified: Boolean!
@@ -141,6 +141,8 @@ const typeDefs = /* GraphQL */ `
   type LoginResult {
     success: Boolean!
     message: String
+    "ACCOUNT_LOCKED when the code was right but the account is locked."
+    code: String
     token: String
     user: ID
     role: String
@@ -441,7 +443,9 @@ function withAdmin<T>(
   fn: () => T
 ): T | { success: false; error: string } {
   try {
-    requireRoles(context, [...ADMIN_ROLES]);
+    // the role is the auth row's (src/auth/requestAuth.ts); legacy admin/superadmin/support map to aiastra_admin
+    requireAuth(context);
+    if (!isAdminRole(context.role)) throw new Error('Forbidden');
     return fn();
   } catch (err) {
     const msg = (err as Error)?.message ?? 'Forbidden';
@@ -480,16 +484,19 @@ const resolvers = {
           country_code: true,
           city: true,
           language: true,
+          locked_at: true,
         },
       });
       if (!user) return null;
+      const locked = context.locked === true || Boolean(user.locked_at);
       const latestKundli = await db.kundli.findFirst({
         where: { user_id: userId },
         orderBy: { created_at: 'desc' },
         select: { queue_status: true },
       });
       const gateState = await ensureUserGateReady(db, userId);
-      if (user.profile_complete !== false && gateState.queue_status !== 'completed') {
+      // a locked account gets no chart builds (docs/admin/01 §4.1.1)
+      if (!locked && user.profile_complete !== false && gateState.queue_status !== 'completed') {
         await resumeChartBuild(db, userId);
       }
       const chart = await getChartStatus(db, userId).catch((err) => {
@@ -500,7 +507,8 @@ const resolvers = {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role ?? 'user',
+        role: canonicalRole(user.role),
+        locked,
         name: user.name ?? null,
         profile_complete: user.profile_complete !== false,
         email_verified: Boolean(user.email_verified_at),

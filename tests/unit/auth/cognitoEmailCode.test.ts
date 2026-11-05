@@ -266,7 +266,7 @@ describe('provider switch', () => {
     expect(fake.sent).toHaveLength(1);
     expect(fake.sent[0].code).toHaveLength(8);
     expect(cognito.calls).toHaveLength(0);
-    expect(await verifyLoginCode('asha@example.com', fake.sent[0].code)).toEqual({ id: 'acct-1', role: 'novice' });
+    expect(await verifyLoginCode('asha@example.com', fake.sent[0].code)).toEqual({ id: 'acct-1', role: 'novice', locked: false });
   });
 
   it('cognito calls Cognito and sends no server email', async () => {
@@ -332,7 +332,7 @@ describe('verifyLoginCode (cognito)', () => {
     await sendLoginCode('asha@example.com');
     const code = cognito.codeFor('asha@example.com', 'otp');
     const result = await verifyLoginCode('ASHA@example.com', ` ${code} `);
-    expect(result).toEqual({ id: 'acct-1', role: 'admin' });
+    expect(result).toEqual({ id: 'acct-1', role: 'admin', locked: false });
     const call = cognito.calls.find((c) => c.type === 'RespondToAuthChallenge')!;
     expect(call.input).toMatchObject({
       ChallengeName: 'EMAIL_OTP',
@@ -698,5 +698,39 @@ describe('cognito client wrapper', () => {
     await auth.signUpWithEmail('new@example.com');
     expect(await auth.startEmailOtp('new@example.com')).toEqual({ status: 'not_confirmed' });
     expect(await auth.signUpWithEmail('new@example.com')).toEqual({ status: 'exists' });
+  });
+});
+
+describe('a locked account (cognito)', () => {
+  it('is never sent to Cognito for a code', async () => {
+    addAccount();
+    fake.rows[0].locked_at = new Date();
+    const answer = await requestMagicLink('asha@example.com', null, null);
+    expect(answer).toEqual({ success: true, message: MAGIC_LINK_REQUEST_MESSAGE });
+    expect(cognito.calls).toHaveLength(0);
+  });
+
+  it('a right code still reports the lock, and sign-in is refused without a token', async () => {
+    addAccount();
+    await sendLoginCode('asha@example.com');
+    fake.rows[0].locked_at = new Date();
+    const code = cognito.codeFor('asha@example.com', 'otp');
+    expect(await verifyLoginCode('asha@example.com', code)).toEqual({ id: 'acct-1', role: 'novice', locked: true });
+  });
+
+  it('loginWithMagicLink answers ACCOUNT_LOCKED after the code is accepted', async () => {
+    addAccount();
+    await requestMagicLink('asha@example.com', null, null);
+    fake.rows[0].locked_at = new Date();
+    const login = await loginWithMagicLink('asha@example.com', cognito.codeFor('asha@example.com', 'otp'), null, null);
+    expect(login).toEqual({ success: false, code: 'ACCOUNT_LOCKED', message: 'This account is locked.' });
+  });
+
+  it('the signup confirmation path refuses a locked account too', async () => {
+    addLegacyAccount();
+    await cognito.send(new SignUpCommand({ ClientId: 'client-1', Username: 'asha@example.com' }));
+    fake.rows[0].locked_at = new Date();
+    const confirmed = await verifyLoginCode('asha@example.com', cognito.codeFor('asha@example.com', 'confirm'));
+    expect(confirmed).toMatchObject({ id: 'acct-1', locked: true });
   });
 });

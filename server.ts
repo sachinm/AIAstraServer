@@ -5,7 +5,6 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createYoga } from 'graphql-yoga';
 import { config } from 'dotenv';
-import jwt from 'jsonwebtoken';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(__dirname, '..', '.env') });
@@ -15,7 +14,9 @@ import { scheduleChartCatalogSyncOnStart } from './src/services/chartCatalogSync
 import { runRagQuery } from './src/services/kundliService.js';
 import { schema } from './src/graphql/schema.js';
 import { buildContext, getJwtSecret } from './src/graphql/context.js';
-import { ensureSuperadmin } from './src/ensureSuperadmin.js';
+import { ensureAdmins } from './src/ensureAdmins.js';
+import { optionalUser, requireUser } from './src/auth/requestAuth.js';
+import { lockGuardPlugin } from './src/graphql/lockGuard.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
 import { getAstroKundliTransport, getNodeEnv, isAstroKundliConfigured, isDevOrLocal } from './src/config/env.js';
 import { checkAstroKundliEndpoint, probeAstroKundliWithBogusParams } from './src/lib/astroKundliClient.js';
@@ -118,6 +119,8 @@ app.get('/health', (_req, res) => {
 const yoga = createYoga({
   schema,
   context: buildContext,
+  // a locked account may run only `me` and `logout` (docs/admin/01 §4.1.2)
+  plugins: [lockGuardPlugin()],
   maskedErrors: false,
 });
 
@@ -161,35 +164,14 @@ app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
-/** Prefer X-Astra-Authorization Bearer, else Authorization (CF OAC vs App Runner). */
-function getUserIdFromRequest(req: express.Request): string | null {
-  const headers = req.headers;
-  const custom = headers['x-astra-authorization'];
-  const customVal = Array.isArray(custom) ? custom[0] : custom;
-  const standard = headers.authorization;
-  const authHeader = customVal || standard;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) return null;
-  try {
-    const decoded = jwt.verify(token, getJwtSecret()) as {
-      sub?: string;
-      userId?: string;
-    };
-    return decoded.sub ?? decoded.userId ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
  * Same persistence as GraphQL `ask`. JWT via X-Astra-Authorization or Authorization.
  */
 app.post('/api/chat/ask-stream', async (req, res) => {
-  const userId = getUserIdFromRequest(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+  // 401 unauthorized / session_revoked / account_locked is written here, before any SSE frame
+  const userId = await requireUser(req, res);
+  if (!userId) return;
   const { question, chatId, clarify, focus, parts } = req.body as {
     question?: string;
     chatId?: string | null;
@@ -264,7 +246,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
     // A continuation part skips the clarifier: the person already chose the order, and each part gets its own reading.
     const focusIntent = focus ? await intentForFocus(q, new Date().toISOString().slice(0, 10), focus as SubjectId, focusParts) : undefined;
     // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
-    if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, getUserId: getUserIdFromRequest }, userId, q, { write: writeSse }))) return;
+    if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, requireUser }, userId, q, { write: writeSse }))) return;
     const held = await gate.reserve(userId, focus ? { focus } : {});
     if (!held.ok) {
       writeSse({ type: 'error', code: 'quota_exhausted', usage: held.usage, message: 'Question limit reached' });
@@ -313,20 +295,18 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   }
 });
 
-registerClarifyRoutes(app, { prisma, getUserId: getUserIdFromRequest });
-registerBillingRoutes(app, { prisma, getUserId: getUserIdFromRequest });
+registerClarifyRoutes(app, { prisma, requireUser });
+registerBillingRoutes(app, { prisma, requireUser, optionalUser });
 // life-timeline ledger (docs/reading-engine/27 P0): not mounted unless TIMELINE_ENABLED=1
-registerTimelineRoutes(app, { prisma, getUserId: getUserIdFromRequest });
+registerTimelineRoutes(app, { prisma, requireUser });
 // the assistant on the public pages and the visit log: no sign-in, no account data
 registerAssistantRoutes(app, { prisma });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
   try {
-    const userId = getUserIdFromRequest(req);
-    if (!userId) {
-      return res.status(401).json({ error: 'Authorization required' });
-    }
+    const userId = await requireUser(req, res);
+    if (!userId) return;
     const { question } = req.body as { question?: string; userID?: string };
     if (!question) {
       return res.status(400).json({ error: 'question is required' });
@@ -378,8 +358,9 @@ app.get('/debug/kundli/:user_id', async (req, res) => {
   if (getNodeEnv() === 'production') {
     return res.status(404).json({ success: false, error: 'Not found' });
   }
-  const userId = getUserIdFromRequest(req);
-  if (!userId || userId !== req.params.user_id) {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  if (userId !== req.params.user_id) {
     return res.status(401).json({ error: 'Authorization required' });
   }
   try {
@@ -402,7 +383,7 @@ async function start(): Promise<void> {
   console.log(`✅ Database connected | NODE_ENV=${nodeEnv}`);
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
-    await ensureSuperadmin();
+    await ensureAdmins();
     if (startPeriodicSweep()) console.log('LLM cache sweep: hourly');
     scheduleChartCatalogSyncOnStart(prisma);
     console.log('AstroKundli endpoint: ', isAstroKundliConfigured());
