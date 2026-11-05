@@ -4,7 +4,7 @@
  * shown (no "getting a job" for someone employed who did not say they are looking).
  */
 import type { PrismaClient } from '@prisma/client';
-import { withAgentRun } from '../../agents/registry.js';
+import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
@@ -54,6 +54,14 @@ export async function setWorkStatus(prisma: PrismaClient, userId: string, value:
   return true;
 }
 
+/** The engine payloads a career build read (docs/admin/03 §4.1): the catalogue items it loaded and each contacts range. */
+export function careerChartsRead(inputs: Pick<TimelineInputs, 'items' | 'contacts'>): ChartUsed[] {
+  return [
+    ...Object.keys(inputs.items).map((type) => ({ type })),
+    ...inputs.contacts.filter((c) => typeof c?.from === 'string' && typeof c?.to === 'string').map((c) => ({ type: 'transit_contacts', variant: `${c.from}_${c.to}` })),
+  ];
+}
+
 export async function getCareer(deps: CareerDeps, userId: string): Promise<CareerResult> {
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli' };
@@ -66,12 +74,17 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
   let fresh = false;
   if (!map) {
     const span = careerSpan(asOf);
-    const inputs = await withAgentRun(deps.prisma, 'area.career_inputs', { userId, task: `inputs ${span.from}..${span.to}`, input: { span } }, async () => {
-      const v = deps.loadInputs ? await deps.loadInputs(kundli.id, asOf, span) : await kundliInputs(deps.prisma, kundli.id, asOf, { span });
-      return { value: v, output: v ? { contacts: v.contacts.length, items: Object.keys(v.items).length, notes: v.notes.length } : { missing: true } };
-    });
+    const inputs = await withAgentRun(
+      deps.prisma,
+      'area.career_inputs',
+      { userId, task: `inputs ${span.from}..${span.to}`, input: { span }, technique: 'work.present_tone', kundliId: kundli.id },
+      async () => {
+        const v = deps.loadInputs ? await deps.loadInputs(kundli.id, asOf, span) : await kundliInputs(deps.prisma, kundli.id, asOf, { span });
+        return { value: v, output: v ? { contacts: v.contacts.length, items: Object.keys(v.items).length, notes: v.notes.length } : { missing: true }, charts: v ? careerChartsRead(v) : [] };
+      },
+    );
     if (!inputs) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
-    map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}` }, async () => {
+    map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
       const build = buildTimelineSpan(inputs, span);
       const m = careerMap(build, asOf);
       return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length } };

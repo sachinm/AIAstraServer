@@ -6,7 +6,10 @@
  * Writing a run never breaks the request: a failed insert is logged once and swallowed.
  */
 import type { PrismaClient } from '@prisma/client';
+import { clarifyModelConfig } from '../reading/llm/bedrock.js';
 import { modelFor, PRICE_TABLE_VERSION, priceFor, usageCostUsd, type ModelRole } from '../reading/llm/models.js';
+import { techniqueById } from '../techniques/catalog.js';
+import { categoryOfSubject } from '../techniques/categories.js';
 
 export type AgentKind = 'engine_pull' | 'code' | 'llm';
 
@@ -21,6 +24,9 @@ export interface AgentDef {
   role?: ModelRole;
   /** engine_pull agents: the engine type it calls */
   engineType?: string;
+  /** llm agents that do not run on a reading role's model (clarify runs on Bedrock): the provider and the current model */
+  provider?: 'gemini' | 'bedrock';
+  currentModel?: () => string;
 }
 
 /** The reading roles (doc 41) are registered so their model and price show beside the new agents. */
@@ -34,8 +40,40 @@ const READING_ROLES: Array<{ role: ModelRole; title: string; description: string
   { role: 'validator', title: 'Validator', description: 'Checks the Oracle against the readers (doc 39)' },
 ];
 
+/**
+ * The General Reading's graph analysts (trace.ts GRAPH_ANALYSTS), each its own agent so its spans join the registry
+ * (docs/admin/03 §4.1). They run on the specialist model.
+ */
+const GRAPH_ANALYSTS: Array<{ name: string; title: string; description: string }> = [
+  { name: 'promise', title: 'Promise analyst', description: 'Reads the natal promise of the subject: base, frame, detail, vargas, arudhas' },
+  { name: 'dasha', title: 'Dasha analyst', description: 'Reads the Vimshottari periods in the horizon and their lords in the frame vargas' },
+  { name: 'transit', title: 'Transit analyst', description: 'Reads the selected transit rows and natal-degree contacts in the horizon' },
+  { name: 'nakshatra', title: 'Nakshatra analyst', description: 'Reads the stars of the frame planets, the running lords and the transits' },
+  { name: 'annual', title: 'Annual chart analyst', description: 'Reads the Tithi Pravesha year chart and its dasha when the graph has it' },
+  { name: 'prashna', title: 'Question chart analyst', description: 'Reads the chart of the question moment when the graph has it' },
+];
+
 export const AGENTS: AgentDef[] = [
   ...READING_ROLES.map((r) => ({ id: `reading.${r.role}`, title: r.title, kind: 'llm' as const, module: 'reading', subModule: r.role, description: r.description, role: r.role })),
+  ...GRAPH_ANALYSTS.map((a) => ({ id: `reading.analyst.${a.name}`, title: a.title, kind: 'llm' as const, module: 'reading', subModule: 'analyst', description: a.description, role: 'specialist' as const })),
+  {
+    id: 'reading.clarify',
+    title: 'Clarify',
+    kind: 'llm',
+    module: 'reading',
+    subModule: 'clarify',
+    description: 'Phrases and resolves the clarifying question on a small Bedrock model (clarify/planner.ts)',
+    provider: 'bedrock',
+    currentModel: () => `bedrock:${clarifyModelConfig().model}`,
+  },
+  {
+    id: 'reading.step',
+    title: 'Reading step',
+    kind: 'code',
+    module: 'reading',
+    subModule: 'step',
+    description: 'Any other stage of a reading (pack building, joins, journal): code, no model',
+  },
   {
     id: 'lucky.day_tables',
     title: 'Day tables puller',
@@ -87,15 +125,15 @@ export function agentById(id: string): AgentDef | undefined {
 
 /** The registry row for a definition, with the model and price as of today. */
 export function registryRow(a: AgentDef, on?: string) {
-  const model = a.role ? modelFor(a.role) : a.kind === 'engine_pull' ? `engine:${a.engineType ?? ''}` : null;
-  const price = a.role && model ? priceFor(model, on) : undefined;
+  const model = a.currentModel ? a.currentModel() : a.role ? modelFor(a.role) : a.kind === 'engine_pull' ? `engine:${a.engineType ?? ''}` : null;
+  const price = a.kind === 'llm' && model ? priceFor(model, on) : undefined;
   return {
     id: a.id,
     title: a.title,
     kind: a.kind,
     module: a.module,
     sub_module: a.subModule ?? null,
-    provider: a.kind === 'llm' ? 'gemini' : a.kind === 'engine_pull' ? 'engine' : 'none',
+    provider: a.kind === 'llm' ? (a.provider ?? 'gemini') : a.kind === 'engine_pull' ? 'engine' : 'none',
     model,
     price_in: price ? price.in : null,
     price_out: price ? price.out : null,
@@ -127,10 +165,25 @@ export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
   return n;
 }
 
+/** One engine payload a run read (docs/admin/03 §4.1): its catalogue type, and the range or month it covered. */
+export interface ChartUsed {
+  type: string;
+  variant?: string | null;
+  calc_version?: string | null;
+}
+
 export interface RunContext {
   userId?: string | null;
   task: string;
+  /** counts, ids, tones and scores only: never birth details, a name, a typed place or question text */
   input?: Record<string, unknown>;
+  /** catalogue id (src/techniques/catalog.ts); category and board default from it */
+  technique?: string;
+  category?: string;
+  board?: string;
+  kundliId?: string | null;
+  subject?: string | null;
+  charts?: ChartUsed[];
 }
 
 export interface RunUsage {
@@ -146,6 +199,54 @@ export interface RunResult<T> {
   output?: Record<string, unknown>;
   usage?: RunUsage;
   status?: 'ok' | 'cached' | 'skipped';
+  /** charts known only once the run has read them; added to the context's */
+  charts?: ChartUsed[];
+}
+
+/** Columns added by M29; a database without them gets the row without them. */
+export const M29_AGENT_RUN_COLUMNS = ['technique_id', 'category', 'board', 'kundli_id', 'subject', 'charts_used'] as const;
+const M29_RETRY_MS = 5 * 60_000;
+let m29MissingUntil = 0;
+const unknownTechniques = new Set<string>();
+
+const isMissingColumn = (err: unknown): boolean => {
+  const e = err as { code?: string; message?: string; meta?: { code?: string } } | null;
+  if (e?.code === 'P2022' || e?.code === '42703' || e?.meta?.code === '42703') return true;
+  const msg = e?.message ?? '';
+  return /column .* does not exist/i.test(msg) || M29_AGENT_RUN_COLUMNS.some((c) => msg.includes(`Unknown argument \`${c}\``));
+};
+
+function chartsOf(...lists: Array<ChartUsed[] | undefined>): ChartUsed[] | null {
+  const out: ChartUsed[] = [];
+  const seen = new Set<string>();
+  for (const l of lists) {
+    for (const ch of l ?? []) {
+      if (!ch || typeof ch.type !== 'string' || !ch.type) continue;
+      const row: ChartUsed = { type: ch.type.slice(0, 80), ...(ch.variant != null ? { variant: String(ch.variant).slice(0, 80) } : {}), ...(ch.calc_version != null ? { calc_version: String(ch.calc_version).slice(0, 40) } : {}) };
+      const key = `${row.type}|${row.variant ?? ''}|${row.calc_version ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+  }
+  return out.length ? out : null;
+}
+
+/** The M29 tags of a run: technique, category and board (defaulted from the catalogue), kundli, subject, charts read. */
+export function runTags(ctx: RunContext, resultCharts?: ChartUsed[]) {
+  const t = ctx.technique ? techniqueById(ctx.technique) : undefined;
+  if (ctx.technique && !t && !unknownTechniques.has(ctx.technique)) {
+    unknownTechniques.add(ctx.technique);
+    console.warn(`[agents] unknown technique ${ctx.technique}; the run is written with it as given`);
+  }
+  return {
+    technique_id: ctx.technique ?? null,
+    category: ctx.category ?? t?.category ?? (ctx.subject ? categoryOfSubject(ctx.subject) : null),
+    board: ctx.board ?? t?.board ?? null,
+    kundli_id: ctx.kundliId ?? null,
+    subject: ctx.subject ?? null,
+    charts_used: chartsOf(ctx.charts, resultCharts),
+  };
 }
 
 /**
@@ -181,8 +282,9 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
         : def.kind === 'llm'
           ? null
           : 0;
-    try {
-      await prisma.agentRun.create({
+    const tags = runTags(ctx, result?.charts);
+    const write = (withTags: boolean) =>
+      prisma.agentRun.create({
         data: {
           agent_id: def.id,
           user_id: ctx.userId ?? null,
@@ -199,8 +301,21 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
           ms: ended.getTime() - started.getTime(),
           ...tokens,
           est_cost_usd: cost,
+          ...(withTags ? { ...tags, charts_used: (tags.charts_used ?? undefined) as object | undefined } : {}),
         },
       });
+    try {
+      if (Date.now() < m29MissingUntil) await write(false);
+      else {
+        try {
+          await write(true);
+        } catch (e) {
+          if (!isMissingColumn(e)) throw e;
+          m29MissingUntil = Date.now() + M29_RETRY_MS;
+          console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
+          await write(false);
+        }
+      }
     } catch (e) {
       if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
       warned = true;
@@ -212,4 +327,6 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
 export function resetAgentRegistryState(): void {
   seeded = false;
   warned = false;
+  m29MissingUntil = 0;
+  unknownTechniques.clear();
 }

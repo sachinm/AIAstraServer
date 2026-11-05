@@ -8,6 +8,9 @@
  * Two kinds of span: `stage` (the agent from start to finish, from the stage events every flow already emits) and
  * `model_call` (one model request, from the Gemini and Bedrock wrappers). The context travels through AsyncLocalStorage, so
  * the flows need no change to be measured.
+ *
+ * Every span carries a registry id (`agent_id`, src/agents/registry.ts), a technique id (src/techniques/catalog.ts) and a
+ * category (Self, Love, Work, General) from its subject, so the admin can group them (docs/admin/03 §4.1).
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -15,6 +18,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { readingMetricsEnabled } from '../config.js';
 import { priceFor, usageCostUsd } from '../llm/models.js';
 import type { ReadingEvent, Usage } from '../types.js';
+import { categoryOfSubject, type TechniqueCategory } from '../../techniques/categories.js';
 
 export type TraceKind = 'reading' | 'clarify' | 'prewarm';
 export type AgentKind = 'reader' | 'specialist' | 'oracle' | 'validator' | 'intake' | 'clarify' | 'step';
@@ -38,6 +42,60 @@ export function agentKindOf(name: string): AgentKind {
   if (name === 'intake' || name === 'classify') return 'intake';
   if (name.startsWith('clarify')) return 'clarify';
   return 'step';
+}
+
+/** The analyst a graph stage or call belongs to (`dasha`, `specialist:dasha` → `dasha`), or null. */
+function analystOf(name: string): string | null {
+  const bare = name.replace(/^specialist:/, '');
+  return GRAPH_ANALYSTS.has(bare) ? bare : null;
+}
+
+/**
+ * The agent_registry id of a span (docs/admin/03 §4.1): graph analysts `reading.analyst.<name>`, oracle readers
+ * `reading.reader`, the oracle, synthesizer and addendum `reading.oracle`, then `reading.validator`, `reading.intake`,
+ * `reading.clarify`; every other step `reading.step`.
+ */
+export function agentIdOf(name: string, kind: AgentKind = agentKindOf(name)): string {
+  switch (kind) {
+    case 'specialist': {
+      const a = analystOf(name);
+      return a ? `reading.analyst.${a}` : 'reading.specialist';
+    }
+    case 'reader':
+      return 'reading.reader';
+    case 'oracle':
+      return 'reading.oracle';
+    case 'validator':
+      return 'reading.validator';
+    case 'intake':
+      return 'reading.intake';
+    case 'clarify':
+      return 'reading.clarify';
+    default:
+      return 'reading.step';
+  }
+}
+
+/** The catalogue technique of a span: `general.<analyst>`, `general.reader`, and the General rows of the other roles; null for a step. */
+export function techniqueIdOf(name: string, kind: AgentKind = agentKindOf(name)): string | null {
+  switch (kind) {
+    case 'specialist': {
+      const a = analystOf(name);
+      return a ? `general.${a}` : null;
+    }
+    case 'reader':
+      return 'general.reader';
+    case 'oracle':
+      return 'general.oracle';
+    case 'validator':
+      return 'general.validator';
+    case 'intake':
+      return 'general.intake';
+    case 'clarify':
+      return 'general.clarify';
+    default:
+      return null;
+  }
 }
 
 /** Why a call failed, from its type only: an error message can quote the prompt. */
@@ -72,6 +130,12 @@ export interface SpanRow {
   subject: string | null;
   /** the oracle flow's reader tier (readers.ts tierFor / planB.ts); null elsewhere */
   tier: number | null;
+  /** M29: agent_registry id (agentIdOf) */
+  agent_id: string;
+  /** M29: catalogue technique (techniqueIdOf); null for a plain step */
+  technique_id: string | null;
+  /** M29: self | love | work | general, from the span's subject or the query's single subject */
+  category: TechniqueCategory;
 }
 
 /** Technique labels of one query (docs/admin/01 §4.1.6), written with the totals at `finish`. */
@@ -121,6 +185,8 @@ export interface TraceStore {
 /** Columns added by M24 (labels on traces, subject and tier on spans). */
 const M24_TRACE_COLUMNS = ['bucket', 'template', 'tier', 'route', 'subjects'] as const;
 const M24_SPAN_COLUMNS = ['subject', 'tier'] as const;
+/** Columns added by M29 on spans (registry id, technique, category). */
+const M29_SPAN_COLUMNS = ['agent_id', 'technique_id', 'category'] as const;
 
 const isMissingColumn = (err: unknown): boolean => {
   const e = err as { code?: string; meta?: { code?: string } } | null;
@@ -133,27 +199,46 @@ function without<T extends object>(row: T, keys: readonly string[]): T {
   return out as T;
 }
 
-/** Set when a write finds M24's columns missing: writes leave them out until then, and try them again after. */
+/** Set when a write finds M24's (or M29's) columns missing: writes leave them out until then, and try them again after. */
 let m24MissingUntil = 0;
+let m29MissingUntil = 0;
+
+type Stage = { strip: readonly string[]; mark?: () => void };
 
 export function prismaTraceStore(db: Pick<PrismaClient, 'readingTrace' | 'readingAgentSpan'>): TraceStore {
-  /** Writes with the M24 columns; when the database does not have them yet, writes the rest, so recording goes on. */
-  const tolerant = async <R>(write: (strip: boolean) => Promise<R>): Promise<R> => {
-    if (Date.now() < m24MissingUntil) return write(true);
-    try {
-      return await write(false);
-    } catch (err) {
-      if (!isMissingColumn(err)) throw err;
-      m24MissingUntil = Date.now() + STORE_RETRY_MS;
-      console.warn(JSON.stringify({ msg: 'reading metrics: label columns missing (migration M24 not applied); writing without them' }));
-      return write(true);
+  /**
+   * Writes with every column; when the database lacks the newest ones, drops them stage by stage (M29, then M24) and
+   * writes the rest, so recording goes on.
+   */
+  const tolerant = async <R>(stages: Stage[], start: number, write: (strip: readonly string[]) => Promise<R>): Promise<R> => {
+    for (let i = start; ; i++) {
+      try {
+        return await write(stages[i]!.strip);
+      } catch (err) {
+        if (!isMissingColumn(err) || i + 1 >= stages.length) throw err;
+        stages[i + 1]!.mark?.();
+      }
     }
   };
+  const markM29 = () => {
+    m29MissingUntil = Date.now() + STORE_RETRY_MS;
+    console.warn(JSON.stringify({ msg: 'reading metrics: tag columns missing (migration M29 not applied); writing without them' }));
+  };
+  const markM24 = () => {
+    m24MissingUntil = Date.now() + STORE_RETRY_MS;
+    console.warn(JSON.stringify({ msg: 'reading metrics: label columns missing (migration M24 not applied); writing without them' }));
+  };
+  const spanStages: Stage[] = [{ strip: [] }, { strip: M29_SPAN_COLUMNS, mark: markM29 }, { strip: [...M29_SPAN_COLUMNS, ...M24_SPAN_COLUMNS], mark: markM24 }];
+  const traceStages: Stage[] = [{ strip: [] }, { strip: M24_TRACE_COLUMNS, mark: markM24 }];
   return {
     startRun: (row) => db.readingTrace.create({ data: row }),
-    addSpans: (rows) =>
-      tolerant((strip) => db.readingAgentSpan.createMany({ data: (strip ? rows.map((r) => without(r, M24_SPAN_COLUMNS)) : rows) as unknown as Prisma.ReadingAgentSpanCreateManyInput[] })),
-    finishRun: (runId, data) => tolerant((strip) => db.readingTrace.updateMany({ where: { run_id: runId }, data: strip ? without(data, M24_TRACE_COLUMNS) : data })),
+    addSpans: (rows) => {
+      const now = Date.now();
+      const start = now < m24MissingUntil ? 2 : now < m29MissingUntil ? 1 : 0;
+      return tolerant(spanStages, start, (strip) => db.readingAgentSpan.createMany({ data: (strip.length ? rows.map((r) => without(r, strip)) : rows) as unknown as Prisma.ReadingAgentSpanCreateManyInput[] }));
+    },
+    finishRun: (runId, data) =>
+      tolerant(traceStages, Date.now() < m24MissingUntil ? 1 : 0, (strip) => db.readingTrace.updateMany({ where: { run_id: runId }, data: strip.length ? without(data, strip) : data })),
   };
 }
 
@@ -161,6 +246,7 @@ let storeOffUntil = 0;
 export function resetTraceStoreForTests(): void {
   storeOffUntil = 0;
   m24MissingUntil = 0;
+  m29MissingUntil = 0;
 }
 
 /**
@@ -190,6 +276,8 @@ export class RunTrace {
   private spawned = new Set<string>();
   private failed = new Set<string>();
   private labels: TraceLabels = {};
+  /** distinct subjects seen on this query's spans: a span without one takes the query's subject when there is only one */
+  private subjects = new Set<string>();
 
   constructor(
     readonly id: TraceIdentity,
@@ -247,6 +335,13 @@ export class RunTrace {
     if (kind === 'reader' || kind === 'specialist') this.spawned.add(name.replace(/^specialist:/, ''));
   }
 
+  /** The M29 tags of a span: registry id, technique, and the category of its subject (or the query's single subject). */
+  private tags(name: string, kind: AgentKind, subject: string | null): Pick<SpanRow, 'agent_id' | 'technique_id' | 'category'> {
+    if (subject) this.subjects.add(subject);
+    const only = this.subjects.size === 1 ? [...this.subjects][0]! : null;
+    return { agent_id: agentIdOf(name, kind), technique_id: techniqueIdOf(name, kind), category: categoryOfSubject(subject ?? only) };
+  }
+
   /** One model request, ended either way. Called by the model wrappers. */
   addModelCall(a: { agent: string; model: string; startedAt: number; status: 'ok' | 'failed'; failureReason?: string; usage?: Usage; ttftMs?: number | null; steps?: Record<string, number>; subject?: string | null; tier?: number | null }): void {
     const end = this.now();
@@ -284,6 +379,7 @@ export class RunTrace {
       est_cost_usd: usd === null ? null : round6(usd),
       subject: a.subject ?? null,
       tier: this.tierFor(kind, a.tier),
+      ...this.tags(a.agent, kind, a.subject ?? null),
     });
   }
 
@@ -292,7 +388,7 @@ export class RunTrace {
     const kind = agentKindOf(name);
     this.noteAgent(name, kind);
     if ((kind === 'reader' || kind === 'specialist') && status !== 'ok' && status !== 'cached') this.failed.add(name);
-    this.push({ id: randomUUID(), run_id: this.id.runId, agent: name, agent_kind: kind, level: 'stage', model: null, status, failure_reason: failureReason, started_at: new Date(startedAt), ended_at: new Date(end), ms: end - startedAt, ttft_ms: null, steps: null, prompt_tokens: 0, cached_tokens: 0, output_tokens: 0, thought_tokens: 0, est_cost_usd: null, subject, tier: this.tierFor(kind, null) });
+    this.push({ id: randomUUID(), run_id: this.id.runId, agent: name, agent_kind: kind, level: 'stage', model: null, status, failure_reason: failureReason, started_at: new Date(startedAt), ended_at: new Date(end), ms: end - startedAt, ttft_ms: null, steps: null, prompt_tokens: 0, cached_tokens: 0, output_tokens: 0, thought_tokens: 0, est_cost_usd: null, subject, tier: this.tierFor(kind, null), ...this.tags(name, kind, subject) });
   }
 
   /** Reads the stage events every flow already emits. */
