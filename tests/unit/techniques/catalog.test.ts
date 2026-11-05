@@ -129,4 +129,14 @@ describe('seedTechniqueRegistry', () => {
     const prisma = { techniqueRegistry: { upsert: async () => { throw Object.assign(new Error('relation "technique_registry" does not exist'), { code: 'P2021' }); } } };
     await expect(seedTechniqueRegistry(prisma as any)).resolves.toBe(0);
   });
+
+  it('seeds the catalogue in one statement when the client has raw SQL', async () => {
+    resetTechniqueSeedState();
+    const calls: Array<[string, unknown[]]> = [];
+    const prisma = { $executeRawUnsafe: async (sql: string, ...v: unknown[]) => (calls.push([sql, v]), 1) } as never;
+    expect(await seedTechniqueRegistry(prisma)).toBe(TECHNIQUES.length);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0]).toMatch(/INSERT INTO technique_registry[\s\S]*ON CONFLICT \(id\) DO UPDATE/);
+    expect((JSON.parse(calls[0]![1][0] as string) as unknown[]).length).toBe(TECHNIQUES.length);
+  });
 });
