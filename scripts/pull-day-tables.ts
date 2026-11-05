@@ -13,17 +13,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fetchEngineExportAtPlace } from '../src/lib/astroKundliClient.js';
-import { placeKey } from '../src/reading/transits/ephemerisCache.js';
 import { tzOffsetHours } from '../src/reading/chartData/place.js';
-
-/** The first five places (doc 47 §3.5): four US zones and India. Keys are stable; the sky presets reuse sanjose and pune. */
-export const DAY_TABLE_PLACES: Record<string, { name: string; lat: number; lon: number; tzName: string }> = {
-  newyork: { name: 'New York, US', lat: 40.7128, lon: -74.006, tzName: 'America/New_York' },
-  chicago: { name: 'Chicago, US', lat: 41.8781, lon: -87.6298, tzName: 'America/Chicago' },
-  denver: { name: 'Denver, US', lat: 39.7392, lon: -104.9903, tzName: 'America/Denver' },
-  sanjose: { name: 'San Jose, US', lat: 37.341, lon: -121.894, tzName: 'America/Los_Angeles' },
-  pune: { name: 'Pune, IN', lat: 18.52, lon: 73.857, tzName: 'Asia/Kolkata' },
-};
+import { DAY_TABLE_PLACES, dayTablePlaceKey, standardOffsetHours } from '../src/reading/luckyTimes/places.js';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -67,8 +58,8 @@ async function pullPlace(key: string, from: string, to: string, opts: { dryRun: 
   const { prisma } = await import('../src/lib/prisma.js');
   // The engine takes `tz` as a fixed offset for the request and `params.tz_name` for the per-date offset; the key uses
   // the standard (January) offset so a place has one key all year.
-  const standardTz = tzOffsetHours(place.tzName, new Date(Date.UTC(2026, 0, 15))) ?? 0;
-  const pk = placeKey({ lat: place.lat, lon: place.lon, tz: standardTz });
+  const standardTz = standardOffsetHours(place.tzName);
+  const pk = dayTablePlaceKey(place);
 
   for (const chunk of monthChunks(from, to)) {
     const have = await prisma.dayTable.count({

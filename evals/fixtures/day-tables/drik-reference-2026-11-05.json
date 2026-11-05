@@ -1,0 +1,22 @@
+{
+  "_source": "Drik Panchang day-panchang pages read 2026-11-05 (doc 47 Phase 0 check). Times as printed, local clock. US pages state 'NOT observing DST'.",
+  "_urls": {
+    "sanjose": "https://www.drikpanchang.com/panchang/day-panchang.html?date=05/11/2026&geoname-id=5392171",
+    "newyork": "https://www.drikpanchang.com/panchang/day-panchang.html?date=05/11/2026&geoname-id=5128581",
+    "chicago": "https://www.drikpanchang.com/panchang/day-panchang.html?date=05/11/2026&geoname-id=4887398",
+    "denver": "https://www.drikpanchang.com/panchang/day-panchang.html?date=05/11/2026&geoname-id=5419384",
+    "pune": "https://www.drikpanchang.com/panchang/day-panchang.html?date=05/11/2026&geoname-id=1259229"
+  },
+  "date": "2026-11-05",
+  "places": {
+    "sanjose": { "tz": "America/Los_Angeles", "offset": "-08:00", "sunrise": "06:37", "sunset": "17:05", "moonrise": "04:11+1", "moonset": "15:00", "tithi": { "name": "Dwadashi", "upto": "21:00" }, "nakshatra": { "name": "Uttara Phalguni", "upto": "14:25" }, "yoga": { "name": "Vaidhriti", "upto": "15:39" }, "rahu_kalam": ["13:09", "14:28"], "yamaganda": ["06:37", "07:55"], "gulikai": ["09:14", "10:32"], "abhijit": ["11:30", "12:12"], "dur_muhurtam": [["10:06", "10:48"]], "varjyam": [["23:06", "00:45+1"]], "amrit_kalam": [["07:06", "08:43"]], "brahma_muhurta": ["04:48", "05:43"], "moonsign": "Kanya" },
+    "newyork": { "tz": "America/New_York", "offset": "-05:00", "sunrise": "06:31", "sunset": "16:48", "moonrise": "03:54+1", "moonset": "14:43", "tithi": { "name": "Dwadashi", "upto": "00:00+1" }, "nakshatra": { "name": "Uttara Phalguni", "upto": "17:25" }, "yoga": { "name": "Vaidhriti", "upto": "18:39" }, "rahu_kalam": ["12:56", "14:13"], "yamaganda": ["06:31", "07:48"], "gulikai": ["09:05", "10:22"], "abhijit": ["11:19", "12:00"], "dur_muhurtam": [["09:57", "10:38"]], "varjyam": [["02:06+1", "03:45+1"]], "amrit_kalam": [["10:06", "11:43"]], "brahma_muhurta": ["04:41", "05:36"], "moonsign": "Kanya" },
+    "chicago": { "tz": "America/Chicago", "offset": "-06:00", "sunrise": "06:28", "sunset": "16:40", "moonrise": "03:52+1", "moonset": "14:38", "tithi": { "name": "Dwadashi", "upto": "23:00" }, "nakshatra": { "name": "Uttara Phalguni", "upto": "16:25" }, "yoga": { "name": "Vaidhriti", "upto": "17:39" }, "rahu_kalam": ["12:50", "14:07"], "yamaganda": ["06:28", "07:44"], "gulikai": ["09:01", "10:17"], "abhijit": ["11:13", "11:54"], "dur_muhurtam": [["09:52", "10:33"]], "varjyam": [["01:06+1", "02:45+1"]], "amrit_kalam": [["09:06", "10:43"]], "brahma_muhurta": ["04:38", "05:33"], "moonsign": "Kanya" },
+    "denver": { "tz": "America/Denver", "offset": "-07:00", "sunrise": "06:33", "sunset": "16:53", "moonrise": "04:03+1", "moonset": "14:50", "tithi": { "name": "Dwadashi", "upto": "22:00" }, "nakshatra": { "name": "Uttara Phalguni", "upto": "15:25" }, "yoga": { "name": "Vaidhriti", "upto": "16:39" }, "rahu_kalam": ["13:01", "14:18"], "yamaganda": ["06:33", "07:51"], "gulikai": ["09:08", "10:26"], "abhijit": ["11:23", "12:04"], "dur_muhurtam": [["10:00", "10:41"]], "varjyam": [["00:06+1", "01:45+1"]], "amrit_kalam": [["08:06", "09:43"]], "brahma_muhurta": ["04:44", "05:39"], "moonsign": "Kanya" },
+    "pune": { "tz": "Asia/Kolkata", "offset": "+05:30", "sunrise": "06:36", "sunset": "18:00", "moonrise": "03:55+1", "moonset": "15:17", "tithi": { "name": "Ekadashi", "upto": "10:35" }, "nakshatra": { "name": "Uttara Phalguni", "upto": "03:55+1" }, "yoga": { "name": "Vaidhriti", "upto": "05:09+1" }, "rahu_kalam": ["13:44", "15:09"], "yamaganda": ["06:36", "08:01"], "gulikai": ["09:27", "10:53"], "abhijit": ["11:55", "12:41"], "dur_muhurtam": [["10:24", "11:10"]], "varjyam": [["10:49", "12:27"]], "amrit_kalam": [["20:36", "22:13"]], "brahma_muhurta": ["04:55", "05:46"], "moonsign": "Simha upto 09:34, then Kanya" }
+  },
+  "_notes": [
+    "Drik's tithi 'upto' on the US pages (21:00, 00:00, 23:00, 22:00) looks rounded to the hour on the fetched page; treat the tithi end as approximate for the check, and the kalams, abhijit and sunrise as the exact tests.",
+    "Nakshatra and yoga ends step by one hour per zone, as expected for the same instant across US zones."
+  ]
+}

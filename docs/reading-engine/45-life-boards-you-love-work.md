@@ -111,6 +111,8 @@ charges.
 | 8 | **Calm motion** | One fade or slide per change, 200–300 ms, all off under reduced motion |
 | 9 | **Honest by construction** | A confidence word is shown when it is not certain; a date is shown only when a stored row supports it; *not promised* is said plainly |
 | 10 | **Private by default** | Self-reports, answers and love-life data are sealed and deletable; nothing is shown to anyone else |
+| 11 | **Modular, not a scroll** (Sachin, 2026-11-05) | A screen never stacks sections vertically for the person to scroll past. Sibling sections (areas, worries, horizons, the week's picks) are one panel: a swipeable carousel with chips and dots on the phone and tablet, a tab panel on the desktop. The person jumps to what they care about; the first card is the one the engine ranks highest |
+| 12 | **Set once, never mentioned** (Sachin, 2026-11-05) | Place, time zone, birth details, work level and relationship status are set in the profile once. No screen restates them, no header or footer carries "San Jose · America/Los_Angeles (UTC−8)", and no screen explains itself. A board shows the verdict, the time and one line; the reasoning lives under Why and the settings under the profile |
 
 ### 3.2 Our brand and what we borrow from Co-Star
 

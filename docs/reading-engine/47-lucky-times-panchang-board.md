@@ -132,7 +132,63 @@ Sources: Drik Panchang's choghadiya and hora tutorials (hora lord meanings: Sun 
 "aggressive", Mercury "quick", Jupiter "fruitful", Venus "beneficial", Saturn "sluggish"); Prokerala's vela rule. The
 sources differ on the hora lists, so the table names one source per cell and the app's Why sheet cites it.
 
-**Scoring a window for an area** (code over stored rows):
+### 3.4a Scenarios: what the person is about to do (the real unit of the board)
+
+Sachin, 2026-11-05: *don't be general; target the scenarios people actually use this for.* The board's tabs are the
+areas; the **sub-tabs are scenarios**, and a card is "the best times this week to {scenario}". Each scenario has its
+own classical muhurta rule, read from fields the engine already serves per day (tithi number, the day's star, weekday,
+horas, choghadiya, the kalams, Mercury's motion from `daily_grade`) and the three personal facts. The classical
+classes the rules use:
+
+| Class | Members | Favours |
+|---|---|---|
+| **Tithi groups** (Muhurta Chintamani) | Nanda 1, 6, 11 (joy) · Bhadra 2, 7, 12 (good starts) · Jaya 3, 8, 13 (winning, contests) · Rikta 4, 9, 14 (empty: avoid starts) · Purna 5, 10, 15 (completion); Amavasya avoided for starts | per scenario below |
+| **Nakshatra groups** (Muhurta Chintamani) | Sthira (fixed): Rohini, Uttara Phalguni, Uttara Ashadha, Uttara Bhadrapada · Chara (moving): Punarvasu, Swati, Shravana, Dhanishta, Shatabhisha · Kshipra (quick): Ashwini, Pushya, Hasta (and Abhijit) · Mridu (soft): Mrigashira, Chitra, Anuradha, Revati · Ugra (fierce): Bharani, Magha, Purva Phalguni, Purva Ashadha, Purva Bhadrapada · Tikshna (sharp): Ardra, Ashlesha, Jyeshtha, Moola · Mishra (mixed): Krittika, Vishakha | fixed → contracts, foundations, commitments; moving → travel, vehicles; quick → trade, learning, sending; soft → love, friendship, art; fierce and sharp → confrontation only, never a start; mixed → routine |
+| **Hora lords** and **choghadiya** | §3.4 table | |
+| **Weekday** | Mon (Moon: home, water, soft starts), Tue (Mars: courage, property; not for borrowing or soft talks), Wed (Mercury: trade, writing, sending), Thu (Jupiter: contracts, finance, ceremonies, asking), Fri (Venus: love, art, pleasure), Sat (Saturn: long chores, iron, patience; not for starts), Sun (Sun: authority, applications to officials) | |
+
+**The scenario table** (v1; config `scenarios.v1.json` with a source per row; ⚑ = the person's Moon house and tara add
+a boost or a demotion as in §3.4):
+
+| Tab | Scenario (the card's title) | Favour | Avoid | Personal ⚑ |
+|---|---|---|---|---|
+| Work | **Sign a contract or agreement** | fixed stars; Bhadra or Purna tithi; Thursday or Wednesday; Jupiter or Mercury hora; Shubh, Labh or Amrit; abhijit | rikta tithi, amavasya; every kalam; varjyam; Mercury retrograde (the engine's flag) | Moon in 10, 11, 2; tara good |
+| Work | **Send a resume or application** | quick stars; Bhadra or Nanda tithi; Wednesday, Thursday, Sunday (officials); Mercury or Sun hora; Labh or Char | rahu kaal, gulika; Mercury retrograde; Tikshna stars | Moon in 10 or 6; tara sadhaka or sampat |
+| Work | **Interview, pitch or presentation** | quick or soft stars; Jaya tithi (winning) or Bhadra; Sun or Jupiter hora; abhijit; Amrit or Shubh | rahu kaal, yamaganda, dur muhurta; Ugra stars; Mercury retrograde | Moon in 3, 10 or 11; chandra bala good |
+| Work | **Ask for a raise or promotion** | fixed or quick stars; Purna or Jaya tithi; Thursday; Jupiter or Sun hora; abhijit | kalams; rikta tithi; Saturn hora; Saturday | Moon in 10 or 11 |
+| Work | **Start a project or a new task** | quick or fixed stars; Bhadra or Nanda tithi; Monday, Wednesday, Thursday; Jupiter, Mercury or Moon hora; Amrit, Shubh, Labh; brahma muhurta for the first step | rikta tithi, amavasya; Saturday evening; Tikshna stars; kalams | Moon in 1, 3, 10; tara good |
+| Work | **Launch, announce or publish** | quick stars; Purna or Jaya tithi; Sun or Jupiter hora; abhijit; Labh | kalams; Mercury retrograde; Ugra stars | Moon in 10, 11 |
+| Work | **A hard talk with the boss** (the boss is probably upset) | soft stars, or fixed; Nanda tithi; Monday or Thursday; Moon, Jupiter or Venus hora; Shubh or Amrit; the afternoon after rahu kaal | Tuesday; Mars or Saturn hora; Ugra and Tikshna stars; Jaya tithi (contests); kalams and dur muhurta | Moon not in 8 or 12; chandra bala good |
+| Work | **Negotiate or close a deal** | fixed stars; Jaya or Purna tithi; Mercury or Jupiter hora; Labh | rahu kaal; rikta tithi; Mercury retrograde | Moon in 2, 7, 11 |
+| Love | **Ask someone out, break the ice** | soft stars; Nanda or Bhadra tithi; Friday or Wednesday; Venus or Mercury hora; Char or Amrit; evening Venus hora | Tuesday, Saturday; Mars or Saturn hora; Ugra and Tikshna stars; kalams | Moon in 5, 7, 11; tara mitra or sampat |
+| Love | **A first date** | soft stars; Nanda tithi; Friday; Venus or Moon hora; Amrit, Shubh, Char | rahu kaal and varjyam at the start time; Tikshna stars; amavasya | Moon in 5 or 7; chandra bala good |
+| Love | **Clear the air, a heart-to-heart** | soft or fixed stars; Nanda tithi; Monday or Friday; Moon or Venus hora; Shubh | Tuesday; Mars hora; Ugra stars; Jaya tithi; dur muhurta | Moon not in 8; tara not vipat or pratyari |
+| Love | **Propose, commit, move in** | fixed stars; Purna or Bhadra tithi; Thursday or Friday; Jupiter or Venus hora; abhijit; Amrit or Shubh | rikta tithi; kalams; Tikshna and Ugra stars; Venus or Jupiter combust days (engine flag, Phase 3) | Moon in 7 or 2; tara sampat or sadhaka |
+| Love | **Make up after a fight** | soft stars; Nanda tithi; Friday or Monday; Venus or Moon hora; Amrit | Tuesday; Mars or Saturn hora; Ugra stars | Moon in 4, 5, 7 |
+| Love | **Meet the family** | fixed or soft stars; Bhadra tithi; Thursday or Friday; Jupiter or Venus hora; Shubh | Tuesday, Saturday; kalams | Moon in 2, 4, 7 |
+| Love | **Reconnect with a friend, host people** | soft or quick stars; Nanda tithi; Friday, Wednesday; Venus, Mercury or Moon hora; Char or Amrit | Saturday evening; kalams | Moon in 11 or 4 |
+| Money | **Pay or settle** | Purna tithi; Thursday; Jupiter hora; Shubh | rahu kaal; rikta tithi | Moon in 2, 11 |
+| Money | **Invest, buy, open an account** | fixed stars; Bhadra or Purna tithi; Thursday or Wednesday; Jupiter or Mercury hora; Labh or Amrit; abhijit | rikta tithi; amavasya; kalams; Mercury retrograde | Moon in 2, 11, 5 |
+| Money | **Sell** | quick stars; Jaya tithi; Mercury hora; Labh | rahu kaal; varjyam | Moon in 2, 11 |
+| Money | **Lend or borrow** (practice, not scripture) | Wednesday, Thursday; Jupiter hora | Tuesday (borrowing, a widely followed practice); kalams; rikta tithi | Moon in 2, 11, 8 (borrowing) |
+| Travel | **Set out on a journey** | moving stars; Bhadra or Nanda tithi; Moon, Venus or Mercury hora; Char or Amrit; not into the day's disha shool direction (engine addition) | varjyam, yamaganda, rahu kaal; Tikshna stars; amavasya; Saturday east, Monday east (disha shool table) | Moon in 3, 9, 12; tara good |
+| Travel | **Move house** | fixed stars; Bhadra or Purna tithi; Monday, Thursday, Friday; Moon or Jupiter hora; Shubh or Amrit | rikta tithi; Tuesday, Saturday; kalams | Moon in 4; chandra bala good |
+| Travel | **Buy a vehicle** | moving or quick stars; Purna or Bhadra tithi; Thursday, Friday; Venus hora; Labh or Shubh | rikta tithi; kalams; Tuesday | Moon in 4 or 11 |
+| Study | **Exam, test, submit** | quick stars; Jaya or Purna tithi; Wednesday, Thursday; Mercury or Jupiter hora; Labh or Shubh; abhijit | rahu kaal, gulika; Mercury retrograde | Moon in 4, 5, 3 |
+| Study | **Start learning something** | quick or soft stars; Bhadra or Nanda tithi; Wednesday, Thursday; Mercury or Jupiter hora; brahma muhurta | rikta tithi; Saturday; kalams | Moon in 4, 5 |
+| Home | **Start a routine or habit** | fixed or quick stars; Bhadra tithi; Monday, Thursday; brahma muhurta; Amrit | rikta tithi; Saturday evening | Moon in 1, 6 |
+| Home | **Rest, a quiet day** | any; Saturn hora for slow chores; after sunset | nothing to avoid; the board shows the calmest stretch | chandrashtama days are named as rest days |
+| Home | **Repair or renovate** | fixed stars; Purna tithi; Saturday (Saturn: structure), Tuesday (Mars: tools); Saturn or Mars hora | kalams; Tikshna stars | Moon in 4 |
+
+Rules the table follows: a scenario's card never shows a window inside an avoid band; a window needs at least the hora
+or choghadiya favour plus a non-rikta tithi to be listed; the star class and weekday are boosts, not gates, because a
+week has only seven days and the person needs an answer every week; "no strong time this week" is said plainly with the
+least-bad option named. Sources per row: Muhurta Chintamani (tithi and star classes), the Drik Panchang hora and
+choghadiya tutorials, Dekho Panchang's hora activities, B.V. Raman's *Muhurta* (weekdays, disha shool); "practice" where
+no text is cited.
+
+**Scoring a window for a scenario** (code over stored rows; the area scoring below is the fallback when the person has
+not picked a scenario):
 
 ```
 window = each hora ∩ choghadiya ∩ muhurta cell inside the day, cut by every avoid band (a cut-out, never a fade)
@@ -204,7 +260,7 @@ personal overlay is being pulled, 400 for a date outside the stored span.
 
 | Screen | Phone (375) | iPad and desktop |
 |---|---|---|
-| **Today** (default) | Now card (the running window, "good for money and study, 38 min left", or "Avoid until 15:10: rahu kaal"); the day banner (date, place, sunrise–sunset, the Moon, two plain lines of panchang, day colour); a vertical list of windows in time order, go blocks solid, avoid blocks hatched, each with area chips; "Why" opens a sheet with the Sanskrit names and the rule; place picker in the header | the same, with the week's seven day banners as a strip above |
+| **Today** (default) | Now card (the running window, "good for money and study, 38 min left", or "Avoid until 15:10"); "Planning something today?" scenario chips; the day banner (date, sunrise–sunset, the Moon, the day colour, three cards: Day, Sky, For you); the windows in time order in four swipeable segments, go blocks solid, avoid blocks hatched, each with scenario chips; "Why" opens a sheet with the Sanskrit names and the rule. **No place, zone or offset anywhere on the board** (doc 45 §3.1 rule 12): the place is set once in the profile ("Where you are": city or zip, or "use my location") and the board simply uses it | the same, with the week's seven day banners as a strip above |
 | **Week** | a 7-column compact grid, 06:00–22:00 default, go and avoid bands, a red today line, tap a band for its sheet; below it "Lucky times this week" grouped by area (three rows each) | Outlook-style week grid, full day height, the area list in a right pane |
 | **Month** | iOS-style: a coloured dot per day (day colour), observance marks; tap a day → Today | bars per day: the best window per area; tap → Day |
 | **Why** | per window: the muhurta, hora and choghadiya names, the tara and chandra bala, the source line | same |
@@ -212,6 +268,14 @@ personal overlay is being pulled, 400 for a date outside the stored span.
 
 Words: "Lucky times", "Good for", "Better to wait", "Quiet choice"; no Sanskrit outside Why; never "guaranteed";
 health rows are facts only. Day colours are words first (good / steady / careful) and colour second.
+
+**Modular, not a scroll** (Sachin's review of the first mockup, 2026-11-05; doc 45 §3.1 rule 11): no stacked sections.
+"Lucky times this week" is one panel: on the phone and tablet a swipeable carousel of area cards (Work, Love, Money,
+Travel, Study, Rest) with area chips and dots above it; on the desktop a tab panel with the six areas as tabs. Today's
+window list is grouped into four swipeable segments (Morning, Midday, Afternoon, Evening) with a segmented control that
+jumps to each and shows the go/avoid count; the day banner's panchang lines and the "For you" line are three cards
+(Day, Sky, For you) in a small carousel on the phone and a three-column row on the desktop. The first card is always
+the one the engine ranks highest for the person today.
 
 ## 6. Architecture
 
