@@ -708,3 +708,18 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: `fetchEngineExportAtPlace` returns the payload without the engine's `calc_version` wrapper**, so
   `scripts/pull-day-tables.ts` stored `calc_version` null for all 150 rows. Fixed in the script by reading the catalog's
   version for the type; a client variant that returns the wrapper would be cleaner. Owner: reading-dev.
+
+## Filed 2026-11-05 by the Lucky times v1 build (docs/reading-engine/49)
+
+- **P2 (for Fable): write doc 50, the efficient personal calculation plan for Lucky times.** 2026-11-05. How to compute the
+  personal layers at hour, week and month resolution for every user: when to pull `daily_grade` versus `muhurta` with
+  natal fields, sharing the per-place day once and fanning out only tara, chandra bala and the Moon's house, cache keys
+  and invalidation by `calc_version`, a nightly sweep of the next 14 days for active users, cost per thousand users, and
+  how the scenarios held back in doc 49 §3 come in after the engine pass. Owner: Fable. Done: doc 50 written and reviewed.
+- **P3: Tithi and star groups are a config lookup in Node** (`src/reading/luckyTimes/scenarios.ts`). 2026-11-05. CLAUDE.md
+  says Node computes nothing astrological, not even a lookup; the muhurta groups (Nanda…Purna, fixed…mixed) should come
+  from the engine with each day row. Owner: engine pass. Done: `muhurta` days carry `tithi.group` and `nakshatra.group`
+  and scenarios.ts reads them.
+- **P3: The personal overlay shape is unverified.** 2026-11-05. `lucky.day_overlay` reads `days[].tara.good` and
+  `days[].chandra_bala.good` per the engine's `docs/daily-types.md`; no real overlay has been pulled yet (no engine
+  credentials locally). Owner: reading-dev. Done: one real month pulled and the board shows the personal boost.
