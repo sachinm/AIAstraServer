@@ -1,4 +1,5 @@
 import { createSchema } from 'graphql-yoga';
+import { chatCategory } from '../chat/categories.js';
 import type { Prisma } from '@prisma/client';
 import {
   signup,
@@ -9,6 +10,7 @@ import {
 } from '../services/authService.js';
 import { completeProfile, ownProfileFields, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
+import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
@@ -222,6 +224,8 @@ const typeDefs = /* GraphQL */ `
     id: ID!
     user_id: ID!
     name: String
+    category: String
+    pinned: Boolean
     is_active: Boolean
     created_at: String
   }
@@ -417,8 +421,9 @@ const typeDefs = /* GraphQL */ `
     """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
     logout: Boolean!
     uploadKundli(fileBase64: String!): UploadKundliResult!
-    createChat: ChatResult!
+    createChat(category: String): ChatResult!
     setChatInactive(chatId: ID!): ChatResult!
+    setChatPinned(chatId: ID!, pinned: Boolean!): ChatResult!
     addMessage(chatId: ID!, question: String!, aiAnswer: String!): MessageResult!
     adminUpdateUser(id: ID!, input: AdminUpdateUserInput!): UpdateUserResult!
     adminRefreshUserKundli(userId: ID!): RefreshKundliResult!
@@ -787,6 +792,8 @@ const resolvers = {
           id: c.id,
           user_id: c.user_id,
           name: c.name,
+          category: c.category,
+          pinned: c.pinned_at != null,
           is_active: c.is_active,
           created_at: c.created_at?.toISOString?.() ?? null,
         }));
@@ -1152,7 +1159,19 @@ const resolvers = {
         return { success: false, message: 'Not authenticated', rebuild: false };
       }
       if (!context.userId) return { success: false, message: 'Not authenticated', rebuild: false };
-      return updateProfile(context.prisma, context.userId, input);
+      const result = await updateProfile(context.prisma, context.userId, input);
+      // names of the fields sent, never their values (birth details, name)
+      const sent = Object.entries(input).filter(([, v]) => v !== undefined).map(([k]) => k);
+      const refused = !result.success && /cannot be changed/i.test(result.message ?? '');
+      void recordAccountEvent(context.prisma, {
+        userId: context.userId,
+        action: 'profile_update',
+        outcome: result.success ? 'ok' : refused ? 'refused' : 'failed',
+        fields: sent,
+        note: refused ? 'birth_details_locked' : null,
+        request: factsFromFetch(context.request),
+      });
+      return result;
     },
     async requestMagicLink(
       _parent: unknown,
@@ -1167,7 +1186,15 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return requestMagicLink(email, turnstileToken ?? null, clientIp);
+      const sent = await requestMagicLink(email, turnstileToken ?? null, clientIp);
+      void recordAccountEvent(context.prisma, {
+        userId: null,
+        action: 'sign_in_code_requested',
+        outcome: sent.success ? 'ok' : 'failed',
+        note: subjectTag(email),
+        request: factsFromFetch(context.request),
+      });
+      return sent;
     },
     async loginWithMagicLink(
       _parent: unknown,
@@ -1184,11 +1211,21 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      const login = await loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      const locked = !login.success && 'code' in login && login.code === 'ACCOUNT_LOCKED';
+      void recordAccountEvent(context.prisma, {
+        userId: login.success ? login.user : null,
+        action: 'sign_in',
+        outcome: login.success ? 'ok' : locked ? 'refused' : 'failed',
+        note: login.success ? null : subjectTag(email),
+        request: factsFromFetch(context.request),
+      });
+      return login;
     },
     logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
       // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
       if (context.userId) void deleteUserCaches(context.userId).catch(() => undefined);
+      if (context.userId) void recordAccountEvent(context.prisma, { userId: context.userId, action: 'sign_out', request: factsFromFetch(context.request) });
       return true;
     },
     async uploadKundli(
@@ -1250,7 +1287,7 @@ const resolvers = {
         return { success: false, message: msg, kundli_id: null };
       }
     },
-    async createChat(_parent: unknown, _args: unknown, context: GraphQLContext) {
+    async createChat(_parent: unknown, args: { category?: string | null }, context: GraphQLContext) {
       const result = withAuth(context, () => null);
       if (result && 'success' in result && !result.success) {
         return { success: false, chat: null, error: result.error };
@@ -1264,7 +1301,7 @@ const resolvers = {
           data: { is_active: false },
         });
         const chat = await db.chat.create({
-          data: { user_id: userId, is_active: true },
+          data: { user_id: userId, is_active: true, category: chatCategory(args?.category) },
         });
         return {
           success: true,
@@ -1272,6 +1309,7 @@ const resolvers = {
             id: chat.id,
             user_id: chat.user_id,
             name: chat.name,
+            category: chat.category,
             is_active: chat.is_active,
             created_at: chat.created_at?.toISOString?.() ?? null,
           },
@@ -1283,6 +1321,24 @@ const resolvers = {
           chat: null,
           error: (err as Error)?.message || 'Server error',
         };
+      }
+    },
+    async setChatPinned(_parent: unknown, { chatId, pinned }: { chatId: string; pinned: boolean }, context: GraphQLContext) {
+      const result = withAuth(context, () => null);
+      if (result && 'success' in result && !result.success) return { success: false, chat: null, error: result.error };
+      const { userId, prisma: db } = context;
+      if (!userId) return { success: false, chat: null, error: 'Not authenticated' };
+      try {
+        const chat = await db.chat.findFirst({ where: { id: chatId, user_id: userId } });
+        if (!chat) return { success: false, chat: null, error: 'Not found' };
+        const updated = await db.chat.update({ where: { id: chatId }, data: { pinned_at: pinned ? new Date() : null } });
+        return {
+          success: true,
+          chat: { id: updated.id, user_id: updated.user_id, name: updated.name, category: updated.category, pinned: updated.pinned_at != null, is_active: updated.is_active, created_at: updated.created_at?.toISOString?.() ?? null },
+          error: null,
+        };
+      } catch (err) {
+        return { success: false, chat: null, error: (err as Error)?.message || 'Server error' };
       }
     },
     async setChatInactive(

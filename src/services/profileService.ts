@@ -215,6 +215,9 @@ export async function updateProfile(
     p.time_of_birth !== current.time_of_birth ||
     p.country_code !== current.country_code.toUpperCase() ||
     p.city !== current.city;
+  // Sachin, 2026-11-05: date, time and place of birth are fixed once the profile is complete; every reading, build
+  // and ledger row rests on them. A correction goes through support (the admin module), not the profile page.
+  if (birthChanged) return fail('Your date, time and place of birth cannot be changed. Contact support if they are wrong.');
 
   const data: Record<string, unknown> = { gender: p.gender };
   if (given(input.language)) data.language = normalizeLanguage(input.language);

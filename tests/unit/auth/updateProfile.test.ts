@@ -85,35 +85,14 @@ describe('updateProfile', () => {
     ['country', { country_code: 'US' }],
     ['city', { city: 'Mumbai' }],
   ] as Array<[string, Record<string, string>]>) {
-    it(`a ${label} change rebuilds: derived rows deleted, caches deleted, sync queued`, async () => {
+    it(`a ${label} change is refused: birth details are fixed (Sachin, 2026-11-05), nothing written or rebuilt`, async () => {
       const db = makeDb();
       const r = await updateProfile(db, 'u1', patch);
-      expect(r).toMatchObject({ success: true, rebuild: true });
-      expect(calls.log).toEqual([
-        'auth.update',
-        'kundliData.deleteMany',
-        'kundliFacts.deleteMany',
-        'kundli.updateMany',
-        'deleteUserCaches:u1',
-        'enqueue:u1',
-      ]);
-      expect(db.lastKundliUpdate).toMatchObject({
-        queue_status: 'pending',
-        facts_status: 'pending',
-        d1: Prisma.DbNull,
-        biodata: Prisma.DbNull,
-        lat: null,
-      });
-      expect(db.user.kundli_added).toBe(false);
+      expect(r).toMatchObject({ success: false, rebuild: false });
+      expect(r.message).toContain('cannot be changed');
+      expect(calls.log).toEqual([]);
     });
   }
-
-  it('rewrites place_of_birth in the City,CC form when the place changes', async () => {
-    const db = makeDb();
-    await updateProfile(db, 'u1', { city: 'New Delhi' });
-    expect(db.user.place_of_birth).toBe('New Delhi,IN');
-    expect(db.user.city).toBe('New Delhi');
-  });
 
   it('validates like completeProfile and changes nothing on error', async () => {
     for (const patch of [

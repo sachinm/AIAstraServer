@@ -327,6 +327,27 @@ scores from the config table; the config table carries its source per cell.
 | 3 Engine pass | 7 | moonrise, choghadiya, calendar names, observances, second tithi, chandrashtama | tests per place; the banner complete | |
 | 4 Extras | 8 | ICS, widget, any place | | |
 
+## 9a. Phase 0 check, 2026-11-05 (done)
+
+The November pull ran through the deploy session on Sachin's yes: five places, 150 rows in `day_tables`, 13–16 s per
+place. `scripts/check-day-tables.ts` compared each place's 5 Nov row with Drik Panchang's page
+(`evals/fixtures/day-tables/drik-reference-2026-11-05.json`):
+
+| Field | Result across the five places |
+|---|---|
+| Abhijit | 0 to −1 min |
+| Rahu kaal, gulika, dur muhurta | −3 to +2 min |
+| Tithi, nakshatra, yoga end times | 0 to ±1 min (Pune's tithi differs only because the engine gives the noon tithi and Drik the sunrise one; filed) |
+| Amrita gadiya | 0 to +1 min |
+| Varjyam | matches at San Jose and Pune; New York, Chicago and Denver differ because the engine uses a midnight-to-midnight day and Drik a sunrise-to-sunrise panchang day (filed) |
+| Sunrise, sunset | sunrise +3 to +4 min, sunset −4 to −6 min, one way at every place: a solar-disc and refraction convention in the engine (filed); brahma muhurta and yamaganda move with it |
+
+Verdict: the windows people act on (abhijit, the kalams, dur muhurta, the star and tithi changes) are within the
+tolerance; the sunrise convention and the varjyam day boundary go to the engine pass with the §3.3 additions. The
+rows are usable for Phase 1 as they are; the board shows sunrise and sunset to the minute only after the engine fix.
+`calc_version` was stored empty by the first pull (the client strips the engine's wrapper); the script now reads the
+catalog's version for the type and the rows were backfilled.
+
 ## 10. Recommendation
 
 Pull the month now with the served type and build the board on it; open the engine pass for the missing pieces in

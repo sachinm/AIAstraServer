@@ -690,3 +690,77 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P2: Served day functions not exposed: moonrise/moonset, choghadiya, amrit kaal, lunar month, samvatsara, chandrashtama, udaya lagna, festivals.**
   2026-11-05. All exist in `drik.py` / `vratha.py`; no Lambda type returns them. Doc 47 §3.3 lists the additions. Owner:
   engine pass (Sachin opens).
+
+## Filed 2026-11-05 by the day-tables Phase 0 check (docs/reading-engine/47 §9)
+
+- **P3: Engine sunrise and sunset differ from Drik Panchang by 3–6 minutes, one way.** 2026-11-05. On 5 Nov 2026 at New
+  York, Chicago, Denver, San Jose and Pune the engine's sunrise is 3–4 min later and sunset 4–6 min earlier than Drik's
+  (a shorter day), so brahma muhurta and yamaganda shift by the same amount; abhijit, rahu kaal, gulika and dur muhurta
+  stay within 1–3 min. Looks like the solar-disc and refraction convention (`drik.sunrise`/`sunset` with swisseph flags:
+  centre of the disc without refraction vs Drik's apparent rise of the upper limb). Owner: engine pass. Done: a documented
+  setting, default matching the apparent sunrise, and the five rows within ±2 min of Drik.
+- **P3: Engine varjyam uses a midnight-to-midnight day; Drik uses sunrise-to-sunrise.** 2026-11-05. New York engine
+  varjyam 00:20–01:58 (the previous star's window in today's small hours) vs Drik 02:06–03:45 next morning (today's
+  star's window inside the panchang day); Denver returns none. Amrita gadiya matched because it fell in daylight. Owner:
+  engine pass. Done: `muhurta` days return the windows of the sunrise-to-sunrise panchang day (or both, flagged).
+- **P3: Noon-only panchanga shows the next tithi where Drik shows the sunrise tithi.** 2026-11-05. Pune: engine
+  Dwadashi (noon) vs Drik Ekadashi until 10:35; the same gap already filed under doc 47 (second tithi, sunrise values).
+- **P3: `fetchEngineExportAtPlace` returns the payload without the engine's `calc_version` wrapper**, so
+  `scripts/pull-day-tables.ts` stored `calc_version` null for all 150 rows. Fixed in the script by reading the catalog's
+  version for the type; a client variant that returns the wrapper would be cleaner. Owner: reading-dev.
+
+## Filed 2026-11-05 by the Lucky times v1 build (docs/reading-engine/49)
+
+- **P2 (for Fable): write doc 50, the efficient personal calculation plan for Lucky times.** 2026-11-05. How to compute the
+  personal layers at hour, week and month resolution for every user: when to pull `daily_grade` versus `muhurta` with
+  natal fields, sharing the per-place day once and fanning out only tara, chandra bala and the Moon's house, cache keys
+  and invalidation by `calc_version`, a nightly sweep of the next 14 days for active users, cost per thousand users, and
+  how the scenarios held back in doc 49 §3 come in after the engine pass. Owner: Fable. Done: doc 50 written and reviewed.
+- **P3: Tithi and star groups are a config lookup in Node** (`src/reading/luckyTimes/scenarios.ts`). 2026-11-05. CLAUDE.md
+  says Node computes nothing astrological, not even a lookup; the muhurta groups (Nanda…Purna, fixed…mixed) should come
+  from the engine with each day row. Owner: engine pass. Done: `muhurta` days carry `tithi.group` and `nakshatra.group`
+  and scenarios.ts reads them.
+- **P3: The personal overlay shape is unverified.** 2026-11-05. `lucky.day_overlay` reads `days[].tara.good` and
+  `days[].chandra_bala.good` per the engine's `docs/daily-types.md`; no real overlay has been pulled yet (no engine
+  credentials locally). Owner: reading-dev. Done: one real month pulled and the board shows the personal boost.
+
+## Filed 2026-11-05 by the career map Phase 1 build (docs/reading-engine/42, 43)
+
+- **P2: Lucky times routes were not mounted in b434dc8.** 2026-11-05. `server.ts` imported `registerLuckyRoutes` but the
+  call was lost to a CRLF mismatch in the patch. Fixed in the career Phase 1 commit; `tests/unit/serverMounts.test.ts`
+  now fails when a route module is imported and not called. Status: fixed.
+- **P2: Career present state uses five of the seven families.** 2026-11-05. The conditional-dasha, annual (Tithi
+  Pravesha) and karaka-dasha families of doc 43 §8.1 are not built, and the D1/D10 check of each dasha vote waits for
+  the house-state engine (doc 46). `src/reading/area/career.ts` scales the confidence to the families available and
+  says so in `notes`. Owner: reading-dev. Done: seven families, each dasha vote checked in D1 and D10.
+- **P2: `person_facts` values are stored plain.** 2026-11-05. Doc 48 says sealed with the per-user keys of the privacy
+  plan; sealed writes are not live yet (docs/privacy/02). Owner: privacy pass. Done: values sealed like the ledger.
+- **P3: Career sub-areas come from the career marker's drivers, not sub-markers.** 2026-11-05. Phase 1 labels windows
+  (promotion, job change, getting a job, security, pay, abroad, business) by the planets that drive their peak; doc 42
+  §A.2 wants each sub-area as its own marker with its own signification. Needs `MARKER_IDS` to become a parameter
+  (signification, converge and five activators loop over it). Owner: reading-dev.
+- **P1: No audit log of account changes.** 2026-11-05. Profile edits, sign-in and OTP, plan and billing changes,
+  `person_facts` upserts and photo replacement overwrite their rows with no record of who changed what, when or from
+  where. `admin_actions` exists but nothing writes it, and it covers staff only. Clicks are logged separately in
+  `analytics_events`; this is a different kind of log. Owner: server. Done: an `account_events` table (actor self/staff,
+  action, before/after field names, ip prefix, at) written by `updateProfile`, the auth flows, billing, facts and photos;
+  shown on the admin User detail page.
+- **P2: No Techniques section in the Admin Panel.** 2026-11-05. Nobody can see how Happy Hour(s) scores a window or
+  which rules each scenario uses, except in `scenarios.ts` and `windows.ts`. See docs/admin/02. Owner: admin. Done: a
+  staff-only scenario list and a day view with scores and reason codes.
+- **P2: The lucky-times API sends window scores and reason codes to the user app.** 2026-11-05. The page does not
+  show them, but they are in the network response (`tithi:bhadra`, `hora:Venus`). Owner: server. Done: user responses
+  carry only what the page shows, and the reasons move to the admin API.
+- **P2: Research-flag chart view lives in the user app.** 2026-11-05. `ChatRightSidebar.tsx:207-215` shows raw biodata,
+  D1/D7/D9/D10 and the dasha to research-flag accounts. Owner: admin. Done: moved to the Admin Panel's Techniques section.
+- **P3: Analytics events and account audit have no retention.** 2026-11-05. `analytics_events`, `agent_runs`,
+  `ReadingRun` and the other system logs are kept until the user is deleted. Owner: privacy pass. Done: a retention
+  rule per table in docs/privacy, and a sweep job.
+- **P2: Account-change log is written but not yet shown or complete.** 2026-11-05. `account_events` (migration
+  `20261105240000`) records profile edits, plan choice, gateway payment changes, sign-in and out, facts and photo, each
+  with IP, forwarded chain, user agent, language, country and request id. Missing: sign-up completion, the admin User
+  detail page to read it, retention, and an IP/user agent for gateway payment changes (the webhook Lambda has its own
+  request; pass its facts to `setPayment`). Owner: server and admin.
+- **P3: Signed-out walkthrough e2e is stale.** 2026-11-05. `e2e/walkthrough.spec.ts:83` waits for a region named
+  "9,500 records", which the landing page now renders as a button. The run also deletes the committed screenshots when
+  it fails. Owner: web. Done: spec follows the landing page, and a failed run keeps the old screenshots.

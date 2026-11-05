@@ -1,0 +1,69 @@
+/**
+ * The person's own facts from the personalization wizard and the boards (docs/reading-engine/48 §4.3, 52 §3).
+ * A fixed catalogue: unknown keys and values are refused. `null` means "I'd rather not say" and is stored as `declined`
+ * so nothing asks again (doc 48 §4.1). Nothing here is astrological.
+ */
+import type { PrismaClient } from '@prisma/client';
+
+export const DECLINED = 'declined';
+
+/** key → allowed values ('*' = free short text, e.g. a city) */
+export const FACT_CATALOG: Record<string, readonly string[] | '*'> = {
+  'work.status': ['yes', 'between_jobs', 'own_business', 'studying', 'retired'],
+  'work.level': ['hourly', 'employee', 'specialist', 'manager', 'senior_leader', 'owner_alone', 'owner_staff', 'several_businesses'],
+  'love.status': ['single', 'dating', 'committed', 'married', 'separated', 'complicated'],
+  'family.children': ['none', 'expecting', 'young', 'grown'],
+  'self.focus': '*',
+  'place.current': '*',
+  'wizard.selfie': ['done', 'skipped'],
+  'wizard.done': '*',
+  'wizard.skipped': '*',
+};
+
+const FOCUS = new Set(['career', 'money', 'love', 'family', 'home', 'learning', 'travel', 'health', 'creativity', 'spirituality']);
+
+export type FactCheck = { ok: true; value: string } | { ok: false; error: string };
+
+export function checkFact(key: string, value: unknown): FactCheck {
+  const allowed = FACT_CATALOG[key];
+  if (!allowed) return { ok: false, error: `unknown_key:${key}` };
+  if (value === null) return { ok: true, value: DECLINED };
+  if (typeof value !== 'string' || !value.trim() || value.length > 120) return { ok: false, error: `bad_value:${key}` };
+  const v = value.trim();
+  if (key === 'self.focus') {
+    const parts = v.split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0 || parts.length > 3 || parts.some((p) => !FOCUS.has(p))) return { ok: false, error: 'bad_value:self.focus' };
+    return { ok: true, value: parts.join(',') };
+  }
+  if (allowed === '*') return { ok: true, value: v };
+  return allowed.includes(v) ? { ok: true, value: v } : { ok: false, error: `bad_value:${key}` };
+}
+
+export async function readFacts(prisma: PrismaClient, userId: string) {
+  const rows = await prisma.personFact.findMany({ where: { user_id: userId } });
+  const facts: Record<string, { value: string; source: string; confirmed_at: string | null }> = {};
+  for (const r of rows) facts[r.key] = { value: r.value, source: r.source, confirmed_at: r.confirmed_at?.toISOString() ?? null };
+  return { facts, wizard: { done: facts['wizard.done']?.value ?? null, skipped: facts['wizard.skipped']?.value ?? null } };
+}
+
+/** Writes every fact or none: the whole body is checked first. */
+export async function writeFacts(prisma: PrismaClient, userId: string, input: unknown): Promise<{ ok: true; written: number } | { ok: false; error: string }> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'bad_body' };
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0 || entries.length > 20) return { ok: false, error: 'bad_body' };
+  const checked: Array<[string, string]> = [];
+  for (const [k, v] of entries) {
+    const c = checkFact(k, v);
+    if (!c.ok) return { ok: false, error: c.error };
+    checked.push([k, c.value]);
+  }
+  const now = new Date();
+  for (const [key, value] of checked) {
+    await prisma.personFact.upsert({
+      where: { user_id_key: { user_id: userId, key } },
+      create: { user_id: userId, key, value, source: 'tapped', confirmed_at: now },
+      update: { value, source: 'tapped', confirmed_at: now, updated_at: now },
+    });
+  }
+  return { ok: true, written: checked.length };
+}

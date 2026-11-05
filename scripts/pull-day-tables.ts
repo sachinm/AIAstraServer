@@ -6,7 +6,8 @@
  *
  * The engine caps `muhurta` at 92 days per call; the job asks one calendar month at a time. --dry-run reads the cache
  * and calls nothing. --json-dir also writes each month's raw answer to <dir>/<place>/<yyyy-mm>.json for review.
- * Nothing here computes astrology: the payload is stored as the engine returned it.
+ * Nothing here computes astrology: the payload is stored as the engine returned it. The engine's wrapper (type,
+ * calc_version) is stripped by the client, so the version comes from the catalog table (`chart_data_types.muhurta`).
  */
 import 'dotenv/config';
 import { createHash } from 'node:crypto';
@@ -52,6 +53,13 @@ interface MuhurtaAnswer {
   [k: string]: unknown;
 }
 
+/** The catalog's version for a type (synced from the engine by `chart-catalog:sync`); null when the table has none. */
+async function catalogVersion(typeId: string): Promise<string | null> {
+  const { prisma } = await import('../src/lib/prisma.js');
+  const row = await prisma.chartDataType.findUnique({ where: { id: typeId }, select: { calc_version: true } });
+  return row?.calc_version ?? null;
+}
+
 async function pullPlace(key: string, from: string, to: string, opts: { dryRun: boolean; jsonDir?: string }): Promise<void> {
   const place = DAY_TABLE_PLACES[key];
   if (!place) throw new Error(`unknown place ${key}; known: ${Object.keys(DAY_TABLE_PLACES).join(', ')}`);
@@ -83,7 +91,7 @@ async function pullPlace(key: string, from: string, to: string, opts: { dryRun: 
     })) as MuhurtaAnswer;
     const days = raw?.data?.days ?? (raw as { days?: MuhurtaDay[] }).days ?? [];
     if (!Array.isArray(days) || days.length === 0) throw new Error(`${key} ${chunk.from}: engine returned no days`);
-    const calcVersion = typeof raw.calc_version === 'string' ? raw.calc_version : null;
+    const calcVersion = typeof raw.calc_version === 'string' ? raw.calc_version : await catalogVersion('muhurta');
     const engineCommit = typeof (raw as { engine_commit?: unknown }).engine_commit === 'string' ? (raw as { engine_commit: string }).engine_commit : null;
 
     if (opts.jsonDir) {

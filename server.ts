@@ -28,6 +28,11 @@ import { registerBillingRoutes } from './src/billing/routes.js';
 import { clarifyOnAsk, registerClarifyRoutes } from './src/routes/clarifyRoutes.js';
 import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { registerAssistantRoutes } from './src/routes/assistantRoutes.js';
+import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
+import { registerAreaRoutes } from './src/routes/areaRoutes.js';
+import { registerProfileRoutes } from './src/routes/profileRoutes.js';
+import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
+import { seedAgentRegistry } from './src/agents/registry.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
@@ -104,7 +109,7 @@ app.use(
         ? prodOrigins
         : true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With', 'X-Face-Box'],
     credentials: true,
     maxAge: 86400,
   })
@@ -299,6 +304,14 @@ registerBillingRoutes(app, { prisma, requireUser, optionalUser });
 registerTimelineRoutes(app, { prisma, requireUser });
 // the assistant on the public pages and the visit log: no sign-in, no account data
 registerAssistantRoutes(app, { prisma });
+// Lucky times (docs/reading-engine/49): mounted when LUCKY_ENABLED=1; analytics events always
+registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma) });
+// career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
+registerAreaRoutes(app, { prisma, requireUser });
+// personalization wizard and selfie (docs/reading-engine/52)
+registerProfileRoutes(app, { prisma, requireUser });
+// the agent registry (docs/reading-engine/49 §4.1): idempotent seed, never blocks boot
+void seedAgentRegistry(prisma).catch(() => undefined);
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
