@@ -646,3 +646,30 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   progress bar. Owner: web-dev. Done: static class map; the button plays or is removed.
 - **P3: No design tokens or shared card in the web app.** 2026-11-05. `tailwind.config.js` has an empty `theme.extend`
   and the same card class string is copied into every profile file. Fixed in doc 45 step 2. Owner: web-dev.
+
+## Filed 2026-11-05 by the house-state engine planning session (docs/reading-engine/46)
+
+- **P2: Engine (pyjhora) house-class lambdas return non-classical offsets.** 2026-11-05. In
+  `AIAstra_Radha/src/jhora/horoscope/chart/house.py`: `dushthana_aspects_of_the_raasi` gives offsets 0, 2, 6 (houses 1,
+  3, 7, not 6, 8, 12); `upachaya_*` gives 0, 3, 7, 8 (houses 1, 4, 8, 9, not 3, 6, 10, 11); `chathusra_*` gives 2, 4
+  (houses 3, 5, not 4, 8). `reading_tables_export` uses its own correct constants, so served tables are unaffected, but
+  any new type built on these lambdas would be wrong. Owner: engine pass. Done: lambdas match the classical sets or are
+  removed, with tests.
+- **P3: `house.marakas_from_planet_positions` prints debug output.** 2026-11-05. Stray `print` calls in the engine; noise in
+  Lambda logs if the function is ever served. Owner: engine pass.
+- **P3: `yoga.get_yoga_details` ignores `chart_method`.** 2026-11-05. It builds positions with `drik.dhasavarga` (cyclic),
+  so varga yogas would use the cyclic method regardless of the catalog's chart method. Blocks serving yogas on vargas
+  (doc 46 §C.1). Owner: engine pass.
+- **P3: Two Tajaka yogas are stubs.** 2026-11-05. `tajaka_yoga.gairi_kamboola` and `khallasara` return None. Doc 46 §B.6
+  lists them as gaps. Owner: engine pass.
+- **P3: No gochara vedha in the engine.** 2026-11-05. Nothing computes vedha points for transits; `const.paachaadi_relations`
+  "vedhaka" is unrelated. Doc 46 §B.5 marks the gochara row as partial. Owner: engine pass (new code).
+- **P3: Yoga messages missing for `vihanga` and `hara`.** 2026-11-05. 95 yoga functions, 93 rows in `lang/yoga_msgs_en.json`.
+  Owner: engine pass.
+- **P2: Annual Tajaka layer not served.** 2026-11-05. Muntha (`tajaka.muntha_house`), year lord (`tajaka.lord_of_the_year`),
+  Tajaka aspects and yogas (`tajaka_yoga.get_*_planet_pairs`), sahams on the tithi pravesha chart (`saham.*(pp)` takes
+  positions) and yogas/doshas/ashtakavarga on the annual chart are all computed by the engine but have no Lambda type.
+  Doc 46 §C.1 asks for `annual.tajaka@Y` and a positions option. Owner: engine pass (hands-off until Sachin opens it).
+- **P3: `transit_ashtakavarga` and `daily_grade` have no server fetcher.** 2026-11-05. Both are served by the engine and
+  listed in the catalog as moving types; `store.ts` refuses moving types and nothing else fetches them. Doc 46 §B.5 and
+  doc 45 §4.1 need them. Owner: reading-dev (Node fetch only, no astrology).
