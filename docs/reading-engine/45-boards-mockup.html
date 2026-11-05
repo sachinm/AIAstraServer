@@ -120,7 +120,9 @@ svg{display:block;flex:none}
 .list li{display:flex;gap:10px;padding:7px 0;align-items:flex-start}
 .list li svg{margin-top:4px;color:var(--accent)}
 .lay-support .list li{padding:9px 0}
-.pair{display:grid;gap:14px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pair .card{padding:14px 12px}
+@media (min-width:480px){.pair{gap:14px}.pair .card{padding:16px}}
 .lay-support .pair{gap:22px}
 .hd{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:4px;font-size:1.02em}
 .hd svg{color:var(--accent)}
@@ -238,6 +240,46 @@ details.card[open] summary{margin-bottom:6px}
 .mchip[aria-checked="true"]{border:2px solid var(--brand);background:var(--brand-soft);font-weight:800}
 .mchip[aria-checked="true"]::before{content:"\2713\00a0"}
 .mnote{font-size:14px;color:var(--muted);margin-top:12px}
+
+/* carousel: siblings side by side, never stacked (rule 11) */
+.car{margin:0 -16px}
+.car-chips{display:flex;gap:8px;overflow-x:auto;padding:0 16px 10px;scrollbar-width:none}
+.car-chips::-webkit-scrollbar{display:none}
+.car-chip{flex:none;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);font-size:15px;font-weight:600;color:var(--muted);background:var(--surface);white-space:nowrap}
+.car-chip[aria-selected="true"]{border:2px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:800}
+.car-track{position:relative;display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;padding:2px 0 2px 16px;scroll-padding-inline-start:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.car-track::-webkit-scrollbar{display:none}
+.car-track::after{content:"";flex:0 0 16px}
+.car-item{flex:0 0 calc(100% - 28px);min-width:0;scroll-snap-align:start;display:flex;flex-direction:column}
+.car-item>.card,.car-item>.bcard{flex:1}
+.car-dots{display:flex;justify-content:center;gap:8px;padding:10px 16px 0}
+.car-dots span{width:8px;height:8px;border-radius:4px;background:var(--line)}
+.car-dots span.on{background:var(--accent);width:22px}
+.tierchips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none}
+.tierchips::-webkit-scrollbar{display:none}
+@media (prefers-reduced-motion:no-preference){.car-track,.car-chips{scroll-behavior:smooth}}
+
+/* desktop: the frame widens, the tab bar is a left rail, carousels become tab panels */
+@media (min-width:1024px){
+  .stage{grid-template-columns:minmax(220px,260px) minmax(0,980px)}
+  .phone{flex-direction:row;border-radius:24px}
+  .tabbar{order:-1;display:flex;flex-direction:column;justify-content:flex-start;width:100px;flex:none;border-top:0;border-right:1px solid var(--line);padding-top:16px}
+  .tab{min-height:68px;font-size:13px;flex:none}
+  .tab[aria-current="page"]::before{top:14px;bottom:14px;left:0;right:auto;width:3px;height:auto;border-radius:0 3px 3px 0}
+  .screen{padding:20px 32px 36px}
+  .sheet{left:100px}
+  .car{margin:0}
+  .car-chips{padding:0 0 12px;overflow:visible;flex-wrap:wrap}
+  .car-track{display:block;overflow:visible;padding:0;scroll-snap-type:none}
+  .car-track::after{content:none}
+  .car-item{display:none}
+  .car-item.on{display:flex}
+  .car-dots{display:none}
+  .car-row .car-chips{display:none}
+  .car-row .car-track{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .car-row .car-item{display:flex}
+  .tierchips{margin:0;padding:0 0 4px;overflow:visible;flex-wrap:wrap}
+}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
@@ -544,16 +586,51 @@ you:[
   verdict:'Promised, but waiting. Things start to open from {E}.',win:'{E} to {O}',
   helps:['Say yes to one invitation a week','Be useful to someone without asking for a return','Keep your options open'],wait:['Gambling on a big risk','Waiting for a sign'],
   why:['Your chart shows good fortune, but only after this stretch passes.','The first opening is on {E}.','Four of seven independent signals agree.'],conf:'likely'},
- {id:'worth',q:'Confidence and self-worth',kind:'open',chip:'Slowly rising',
+ {id:'worth',q:'Why don’t I feel good enough?',kind:'open',chip:'Slowly rising',
   verdict:'Your confidence is rising slowly, and it holds once it arrives.',win:'The next two years',
   helps:['Keep a list of things that went well','Do something hard in small pieces','Ask a friend what they value in you'],wait:['Measuring yourself against strangers'],
   why:['Your chart shows self-doubt early in life that fades with age.','Each new chapter adds steadiness.','Most of the signals we use point the same way.'],conf:'likely'},
- {id:'postponed',q:'Decisions I keep postponing',kind:'waiting',chip:'Better after {E}',
+ {id:'postponed',q:'Why do I keep putting off decisions?',kind:'waiting',chip:'Better after {E}',
   verdict:'Better to decide after {E}. Before then, gather facts rather than choose.',win:'From {E}',
   helps:['Write each choice down with one pro and one con','Set a date to decide','Talk it through with one person you trust'],wait:['Deciding while it feels heavy'],
   why:['Judgement is clearer once the heavy stretch has passed.','From {E} the chart supports clear choices.','Four of seven independent signals agree.'],conf:'likely'}
 ]
 };
+/* tiers: the first screen shows only the most asked */
+var TIERS=[['top','Most asked'],['mid','Also common'],['low','Less common']];
+var TIER_OF={
+ work:{'job-hold':'top',promotion:'top','job-change':'top','new-job':'top',abroad:'mid',direction:'mid',pay:'low',own:'low'},
+ love:{meet:'top',marry:'top',stay:'top',fighting:'top',back:'mid',family:'mid',distance:'low',second:'low'},
+ you:{becoming:'top',stuck:'top',chapter:'top',luck:'top',worth:'mid',postponed:'mid',path:'low',habits:'low'}
+};
+W.work.push(
+ {id:'pay',q:'Will my pay improve?',kind:'waiting',chip:'Review after 7 Jan',
+  verdict:'Promised, but waiting. A pay review lands best between 7 Jan and {OP}.',win:'7 Jan to {OP}',
+  helps:['Write down what you added this year, in numbers','Find out what the role pays elsewhere','Ask for the review in writing'],wait:['Asking during a hard week before {E}'],
+  why:['Your chart links pay to the same stretch as recognition at work.','This year’s chart shows the same window.','Four of seven independent signals agree.'],conf:'likely'},
+ {id:'own',q:'Should I start something of my own?',kind:'waiting',chip:'Not before mid-2027',
+  verdict:'Possible, but not yet. The first supportive stretch for your own venture begins in mid-2027.',win:'Jul to Dec 2027',
+  helps:['Test the idea on the side first','Put aside six months of expenses','Find one person who has done it'],wait:['Leaving a steady role before mid-2027'],
+  why:['Your chart supports independent work later rather than now.','The stretch that helps it begins in the second half of 2027.','Four of seven independent signals agree.'],conf:'likely'});
+W.love.push(
+ {id:'distance',q:'Could my partner be far away, or from abroad?',kind:'open',chip:'Possible from {O}',
+  verdict:'Your chart leaves this open. A connection linked to travel is most likely from {O}.',win:'{O} to 30 Jun 2027',
+  helps:['Say yes to travel plans that come up','Keep in touch with friends who live far away'],wait:['Moving for someone before you have met in person'],
+  why:['Your chart ties new connections to travel in spring.','It is possible, not promised.','Three of seven independent signals agree, so we hold it lightly.'],conf:'split'},
+ {id:'second',q:'Will I marry again?',kind:'waiting',chip:'Late 2027',
+  verdict:'Promised, but later. The clearest window for a second commitment is late 2027.',win:'Sep to Dec 2027',
+  helps:['Let the last chapter close fully','Say what you want this time, early'],wait:['Rushing to replace what was lost'],
+  why:['Your chart shows a second commitment, read from the points that speak for it.','The timing sits in the second half of 2027.','Four of seven independent signals agree.'],conf:'likely'});
+W.you.push(
+ {id:'path',q:'Where is my inner life heading?',kind:'open',chip:'Looks steady',
+  verdict:'A quiet, steady pull towards reflection that deepens with each chapter.',win:'The chapter to 2038',
+  helps:['Ten quiet minutes each morning','One day a month with no screens'],wait:['Big retreats or vows while it feels heavy'],
+  why:['Your chart shows a reflective side that grows with age.','The chapter you are in rewards quiet practice.','Five of seven independent signals agree.'],conf:'likely'},
+ {id:'habits',q:'Can I make a habit stick this time?',kind:'open',chip:'A good time to build',
+  verdict:'A steady stretch is the best time to build habits, and now is one.',win:'Now to {O}',
+  helps:['One habit at a time, for 30 days','Tie it to something you already do'],wait:['Starting five things at once'],
+  why:['Your chart favours slow, repeated effort over bursts.','Nothing in the next few months disturbs a routine.','Most of the signals we use point the same way.'],conf:'confirmed'});
+BOARD_ORDER.forEach(function(b){W[b].forEach(function(w){w.tier=TIER_OF[b][w.id]||'low';});});
 function wOf(b,id){return W[b].filter(function(w){return w.id===id;})[0];}
 function pick(v,t){return (typeof v==='object')?v[t]:v;}
 
@@ -612,6 +689,8 @@ var S={
   checks:{you:{},love:{},work:{}},
   did:{},
   asks:[],
+  car:{},
+  tier:{you:'top',love:'top',work:'top'},
   focusKey:null,
   opener:null
 };
@@ -638,6 +717,59 @@ function actDays(end){
   return out.filter(function(d,i){return days(d)>0&&days(d)<days(end)&&out.indexOf(d)===i;});
 }
 
+/* ---------- carousel (rule 11): chips + snap track + dots on phone and tablet, tab panel on desktop ---------- */
+function isDesk(){return window.matchMedia&&window.matchMedia('(min-width:1024px)').matches;}
+function reducedMotion(){return window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;}
+function carousel(id,label,items,mode){
+  var cur=S.car[id]||0;if(cur>=items.length)cur=0;S.car[id]=cur;
+  var h='<div class="car'+(mode==='row'?' car-row':'')+'" data-car="'+id+'">';
+  h+='<div class="car-chips" role="tablist" aria-label="'+label+'">'+items.map(function(it,i){
+    return '<button class="car-chip" role="tab" id="'+id+'-tab-'+i+'" aria-selected="'+(i===cur)+'" aria-controls="'+id+'-p-'+i+'" tabindex="'+(i===cur?0:-1)+'" data-act="car" data-a="'+id+'" data-b="'+i+'" data-fid="'+id+'-tab-'+i+'">'+it.chip+'</button>';}).join('')+'</div>';
+  h+='<div class="car-track">'+items.map(function(it,i){
+    return '<div class="car-item'+(i===cur?' on':'')+'" role="tabpanel" id="'+id+'-p-'+i+'" aria-labelledby="'+id+'-tab-'+i+'">'+it.html+'</div>';}).join('')+'</div>';
+  h+='<div class="car-dots" aria-hidden="true">'+items.map(function(it,i){return '<span'+(i===cur?' class="on"':'')+'></span>';}).join('')+'</div></div>';
+  return h;
+}
+function carTarget(track,item){return item.offsetLeft-16;}
+function setCar(id,i,scroll,focus){
+  var car=$screen.querySelector('[data-car="'+id+'"]');if(!car)return;
+  var chips=car.querySelectorAll('.car-chip'),items=car.querySelectorAll('.car-item'),dots=car.querySelectorAll('.car-dots span');
+  if(i<0)i=0;if(i>=items.length)i=items.length-1;
+  S.car[id]=i;
+  for(var k=0;k<items.length;k++){
+    items[k].classList.toggle('on',k===i);
+    if(chips[k]){chips[k].setAttribute('aria-selected',k===i?'true':'false');chips[k].tabIndex=(k===i?0:-1);}
+    if(dots[k])dots[k].classList.toggle('on',k===i);
+  }
+  if(scroll&&!isDesk()){
+    var track=car.querySelector('.car-track');
+    track.scrollTo({left:carTarget(track,items[i]),behavior:reducedMotion()?'auto':'smooth'});
+    var ch=chips[i];if(ch&&ch.scrollIntoView)ch.scrollIntoView({block:'nearest',inline:'nearest',behavior:reducedMotion()?'auto':'smooth'});
+  }
+  if(focus&&chips[i])chips[i].focus({preventScroll:true});
+}
+function syncCars(){
+  if(isDesk())return;
+  var cars=$screen.querySelectorAll('[data-car]');
+  for(var k=0;k<cars.length;k++){
+    var id=cars[k].getAttribute('data-car'),track=cars[k].querySelector('.car-track'),items=track.children,i=S.car[id]||0;
+    if(!items[i])continue;
+    var sb=track.style.scrollBehavior;track.style.scrollBehavior='auto';track.scrollLeft=carTarget(track,items[i]);track.style.scrollBehavior=sb;
+  }
+}
+var carRaf=null;
+$screen.addEventListener('scroll',function(e){
+  var track=e.target;if(!track.classList||!track.classList.contains('car-track')||isDesk())return;
+  if(carRaf)return;
+  carRaf=requestAnimationFrame(function(){
+    carRaf=null;
+    var car=track.parentNode,id=car.getAttribute('data-car'),items=track.children,best=0,bd=1e9;
+    for(var k=0;k<items.length;k++){var d=Math.abs(carTarget(track,items[k])-track.scrollLeft);if(d<bd){bd=d;best=k;}}
+    if(S.car[id]!==best)setCar(id,best,false,false);
+  });
+},true);
+if(window.matchMedia){var mqd=window.matchMedia('(min-width:1024px)');var cbd=function(){render(false);};if(mqd.addEventListener)mqd.addEventListener('change',cbd);}
+
 /* ---------- views ---------- */
 function topBar(title,over){
   var dark=effDark();
@@ -655,13 +787,12 @@ function todayView(){
     var ch=S.changed;
     h+='<section class="card changed b-none" role="status"><span style="color:var(--brand)">'+ic('info',22)+'</span><div style="flex:1"><p style="font-weight:700">What changed</p><p>'+BOARDS[ch.board].name+' moved from '+TONES[ch.from].label+' to '+TONES[ch.to].label+'.</p><button class="linkbtn" data-act="dismiss">Got it</button></div></section>';
   }
-  h+='<section aria-label="Your boards" class="stack" style="gap:12px">';
-  BOARD_ORDER.forEach(function(b){
+  var order=BOARD_ORDER.slice().sort(function(a,b){return TONES[S.tone[b]].rank-TONES[S.tone[a]].rank;});
+  h+='<section aria-label="Your boards" class="b-none">'+carousel('today','Your boards',order.map(function(b){
     var t=S.tone[b],c=COPY[b][t];
-    h+='<button class="bcard b-'+b+'" data-act="tab" data-a="'+b+'" data-fid="card-'+b+'"><div class="bc-top"><span class="bname">'+BOARDS[b].name+'</span>'+toneChip(t,true)+'</div>'+
-     '<p class="bc-sent">'+c.h+'</p><p class="bc-date">'+ic('cal',16)+sub(c.s,b)+'</p><span class="chev">'+ic('chev',20)+'</span></button>';
-  });
-  h+='</section>';
+    return {chip:BOARDS[b].name,html:'<button class="bcard b-'+b+'" data-act="tab" data-a="'+b+'" data-fid="card-'+b+'"><div class="bc-top"><span class="bname">'+BOARDS[b].name+'</span>'+toneChip(t,true)+'</div>'+
+     '<p class="bc-sent">'+c.h+'</p><p class="bc-date">'+ic('cal',16)+sub(c.s,b)+'</p><span class="chev">'+ic('chev',20)+'</span></button>'};
+  }),'row')+'</section>';
   h+='<section class="pair b-none"><div class="card"><p class="hd">'+ic('check',18)+'Good for</p>'+listHTML(['Finishing one small task','A short walk after lunch','Replying to a message you have been avoiding'],'you')+'</div>'+
      '<div class="card"><p class="hd">'+ic('pause',18)+'Better to wait</p>'+listHTML(['Big purchases','Hard conversations late in the day'],'you','pause')+'</div></section>';
   h+='<button class="askbar" data-act="tab" data-a="ask">'+ic('ask',20)+'Ask anything about your life</button>';
@@ -699,7 +830,7 @@ function mainWorry(b){
 }
 function chartBlock(b){
   if(!(S.chart&&b==='work'))return '';
-  return '<section class="card chartd" data-exempt="1"><h3 class="sub-h">Chart details</h3><p class="meta">For astrologers. Example only, shown because Chart details is on.</p><dl>'+
+  return '<section class="card chartd" data-exempt="1"><h3 class="sub-h">Chart details</h3><p class="meta">Example only.</p><dl>'+
    CHART_DETAILS.map(function(r){return '<div><dt>'+r[0]+'</dt><dd>'+r[1]+'</dd></div>';}).join('')+'</dl></section>';
 }
 function toneHead(b,t){
@@ -716,7 +847,7 @@ function nowPage(b){
   var t=S.tone[b],c=C(b),D=BOARDS[b].d,h='<div class="stack enter">',n;
   h+=toneHead(b,t);
   if(t==='demanding'){
-    h+='<section class="card"><p class="k">When it eases</p><p class="big">'+f(D.E)+'</p><p class="muted">'+inWhen(D.E).replace(/^in/,'In')+'. Until then, it is about getting through, not getting ahead.</p></section>';
+    h+='<section class="card"><p class="k">When it eases</p><p class="big">'+f(D.E)+'</p><p class="muted">'+inWhen(D.E).replace(/^in/,'In')+'.</p></section>';
     h+=actionCard(b);
     h+=pairCards(b);
     h+='<section class="card"><p class="k">What to protect</p>'+listHTML(c.protect,b)+'</section>';
@@ -728,7 +859,7 @@ function nowPage(b){
     h+=pairCards(b);
     h+=mainWorry(b)+afterCard(b)+whyLink(b)+calmLine();
   }else if(t==='steady'){
-    h+='<section class="card"><p class="k">Next opening</p><p class="big">'+f(D.O)+'</p><p class="muted">That is '+inWhen(D.O)+'. Until then, build.</p></section>';
+    h+='<section class="card"><p class="k">Next opening</p><p class="big">'+f(D.O)+'</p><p class="muted">'+inWhen(D.O).replace(/^in/,'In')+'.</p></section>';
     var r1=RUNGS.steady[0],r2=RUNGS.steady[1];
     h+='<section class="card"><p class="k">The next 3 months</p><p style="margin-bottom:8px"><b>1 month.</b> '+sub(r1.s,b)+'</p><p style="margin-bottom:6px"><b>3 months.</b> '+sub(r2.s,b)+'</p><button class="linkbtn" data-act="page" data-a="'+b+'" data-b="ahead">See everything ahead</button></section>';
     h+='<section class="card"><p class="k">Small wins in the next 90 days</p>'+listHTML(c.wins,b)+'</section>';
@@ -742,7 +873,7 @@ function nowPage(b){
       '<p><b>'+daysText(end)+' left</b> to act.</p>'+(ad.length?'<p class="k" style="margin-top:12px">Best days to act</p><ul class="list">'+ad.map(function(d){return '<li>'+ic('cal',18)+'<span>'+wdDate(d)+'</span></li>';}).join('')+'</ul>':'')+'</section>';
     h+='<section class="card"><p class="k">'+(closing?'Finish before it closes':'What to ask for')+'</p>'+listHTML(closing?c.finish:c.ask,b)+'</section>';
     h+=actionCard(b)+pairCards(b);
-    h+='<section class="card soft"><p class="k">After that</p><p>A slower stretch comes from '+f(plus(end,1))+'. Plan for it now so it never catches you out.</p></section>';
+    h+='<section class="card soft"><p class="k">After that</p><p>A slower stretch from '+f(plus(end,1))+'.</p></section>';
     h+=mainWorry(b)+whyLink(b);
   }
   h+=chartBlock(b);
@@ -752,47 +883,48 @@ function nowPage(b){
 
 function backPage(b){
   var L=LB[b],ck=S.checks[b],h='<div class="stack enter">';
-  h+='<p class="meta">How your last two years looked, stretch by stretch. Only moments your chart supports are shown.</p>';
-  L.ranges.forEach(function(r){
-    h+='<section class="card rangecard"><p class="k">'+r.k+'</p><div>'+toneChip(r.t,true)+'</div><p style="font-weight:600">'+r.s+'</p></section>';
-  });
   var answered=0,yes=0,partly=0,skipped=0,total=L.moments.length;
   L.moments.forEach(function(m){var a=ck[m.id];if(!a)return;if(a.a==='skip')skipped++;else{answered++;if(a.a==='yes')yes++;if(a.a==='partly')partly++;}});
-  h+='<section class="card" aria-live="polite"><p class="confirmed">'+ic('okc',24)+'<span>'+(answered+skipped===0?'Answer a few and we will show how well this fits.':'You confirmed '+yes+' of '+answered+'.')+'</span></p>'+
-     '<p class="meta" style="margin-top:6px">'+(answered+skipped===0?'It is your own count, not a score for us.':(partly?partly+' partly. ':'')+(skipped?skipped+' skipped. ':'')+'It is your own count, not a score for us.')+'</p></section>';
-  h+='<h2 class="sub-h" style="margin-top:6px">Did these feel right?</h2>';
-  L.moments.forEach(function(m){
-    var a=ck[m.id]||{};
-    h+='<article class="card"><p class="k">'+m.when+'</p><p class="q">'+m.q+'</p><div class="ans" role="group" aria-label="Your answer">'+
+  h+='<section class="card" aria-live="polite"><p class="confirmed">'+ic('okc',24)+'<span>'+(answered+skipped===0?'Nothing confirmed yet.':'You confirmed '+yes+' of '+answered+'.')+'</span></p>'+
+     ((partly||skipped)?'<p class="meta" style="margin-top:6px">'+(partly?partly+' partly. ':'')+(skipped?skipped+' skipped.':'')+'</p>':'')+'</section>';
+  h+=carousel('back-'+b,'Looking back ranges',L.ranges.map(function(r,i){
+    var m=L.moments[i],a=ck[m.id]||{};
+    var c='<article class="card rangecard"><p class="k">'+r.k+'</p><div>'+toneChip(r.t,true)+'</div><p style="font-weight:600">'+r.s+'</p>'+
+      '<hr style="border:0;border-top:1px solid var(--line);margin:10px 0 12px">'+
+      '<p class="k">Did this feel right?</p><p class="q">'+m.q+'</p><div class="ans" role="group" aria-label="Your answer">'+
       ANS.map(function(x){return '<button class="btn-ghost" data-act="ans" data-a="'+b+'" data-b="'+m.id+'" data-c="'+x[0]+'" aria-pressed="'+(a.a===x[0])+'">'+x[1]+'</button>';}).join('')+'</div>';
     if(a.a==='partly'||a.a==='no'){
-      h+='<p class="meta" style="margin-top:12px">What was it like? (optional)</p><div class="notechips">'+NOTES.map(function(nt){return '<button class="btn-ghost" data-act="note" data-a="'+b+'" data-b="'+m.id+'" data-c="'+nt+'" aria-pressed="'+(a.note===nt)+'">'+nt+'</button>';}).join('')+'</div>';
+      c+='<p class="meta" style="margin-top:12px">What was it like? (optional)</p><div class="notechips">'+NOTES.map(function(nt){return '<button class="btn-ghost" data-act="note" data-a="'+b+'" data-b="'+m.id+'" data-c="'+nt+'" aria-pressed="'+(a.note===nt)+'">'+nt+'</button>';}).join('')+'</div>';
     }
-    if(a.a)h+='<p class="meta" style="margin-top:12px">'+ic('lock',14).replace('<svg','<svg style="display:inline;vertical-align:-2px;margin-right:4px"')+'Saved privately. You can delete it in Settings.</p>';
-    h+='</article>';
-  });
+    if(a.a)c+='<p class="meta" style="margin-top:12px">'+ic('lock',14).replace('<svg','<svg style="display:inline;vertical-align:-2px;margin-right:4px"')+'Saved privately.</p>';
+    c+='</article>';
+    return {chip:r.k,html:c};
+  }));
   h+='</div>';
   return h;
 }
 
 function aheadPage(b){
   var t=S.tone[b],rs=RUNGS[t],h='<div class="stack enter">';
-  h+='<p class="meta">Further out, we show less. A rung appears only when enough of your chart agrees.</p>';
-  rs.forEach(function(r,i){
+  h+=carousel('ahead-'+b,'How far ahead',rs.map(function(r,i){
+    var c;
     if(r.hidden){
-      h+='<section class="card rung hidden"><h3><span>'+RUNG_LABELS[i]+'</span></h3><p class="sent" style="margin-bottom:0">Nothing large is moving.</p></section>';
+      c='<section class="card rung hidden"><h3><span>'+RUNG_LABELS[i]+'</span></h3><p class="sent" style="margin-bottom:0">Nothing large is moving.</p></section>';
     }else{
-      h+='<section class="card rung"><h3><span>'+RUNG_LABELS[i]+'</span><span class="chip">'+ic(r.c==='confirmed'?'okc':'wait',16)+r.c+'</span></h3><p class="sent">'+sub(r.s,b,true)+'</p>'+
+      c='<section class="card rung"><h3><span>'+RUNG_LABELS[i]+'</span><span class="chip">'+ic(r.c==='confirmed'?'okc':'wait',16)+r.c+'</span></h3><p class="sent">'+sub(r.s,b,true)+'</p>'+
         '<dl class="kv"><dt>Best window</dt><dd>'+sub(r.b,b,true)+'</dd><dt>Hardest stretch</dt><dd>'+sub(r.h,b,true)+'</dd></dl></section>';
     }
-  });
-  h+='<p class="meta">Nothing beyond two years is shown here.</p></div>';
+    return {chip:RUNG_LABELS[i],html:c};
+  }));
+  h+='</div>';
   return h;
 }
 
 function worriesPage(b){
-  var t=S.tone[b],h='<div class="stack enter"><p class="meta">The things people lose sleep over, with one answer each.</p><section class="card" style="padding-top:6px;padding-bottom:6px">';
-  W[b].forEach(function(w){
+  var t=S.tone[b],tier=S.tier[b],h='<div class="stack enter">';
+  h+='<div class="tierchips" role="radiogroup" aria-label="Which worries">'+TIERS.map(function(x){var n=W[b].filter(function(w){return w.tier===x[0];}).length;return '<button class="car-chip" role="radio" aria-selected="'+(tier===x[0])+'" aria-checked="'+(tier===x[0])+'" data-act="tier" data-a="'+b+'" data-b="'+x[0]+'" data-fid="tier-'+x[0]+'">'+x[1]+' · '+n+'</button>';}).join('')+'</div>';
+  h+='<section class="card" style="padding-top:6px;padding-bottom:6px">';
+  W[b].filter(function(w){return w.tier===tier;}).forEach(function(w){
     h+='<button class="rowbtn" data-act="worry" data-a="'+b+'" data-b="'+w.id+'" data-fid="w-'+w.id+'"><span class="rcol"><span class="rq">'+w.q+'</span><span class="chip">'+ic(w.kind==='open'?'okc':w.kind==='waiting'?'wait':'none',16)+sub(pick(w.chip,t),b)+'</span></span>'+ic('chev',20)+'</button>';
   });
   h+='</section></div>';
@@ -810,14 +942,13 @@ function worryView(b,id){
   h+='<section class="card"><p class="k">Better to wait on</p>'+listHTML(w.wait,b,'pause')+'</section>';
   h+='<section class="card"><p class="k">Did this happen?</p><div class="ans" role="group" aria-label="Did this happen?">'+
     [['yes','Yes'],['partly','Partly'],['notyet','Not yet'],['wrong','Wrong date']].map(function(x){return '<button class="btn-ghost" data-act="did" data-a="'+key+'" data-b="'+x[0]+'" aria-pressed="'+(ans===x[0])+'">'+x[1]+'</button>';}).join('')+'</div>'+
-    (ans?'<p class="meta" style="margin-top:12px">Thanks. Saved privately. You can delete it in Settings.</p>':'')+'</section>';
+    (ans?'<p class="meta" style="margin-top:12px">Saved privately.</p>':'')+'</section>';
   h+='<div><button class="linkbtn" data-act="whyw" data-a="'+b+'" data-b="'+id+'">'+ic('info',18)+'Why we think so</button></div></div>';
   return h;
 }
 
 function askView(){
   var h=topBar('Ask','Thursday 5 Nov');
-  h+='<p class="muted">Ask anything about your life. Answers point to a board, such as Work, Worries.</p>';
   h+='<div class="sugg">'+[['work','job-hold'],['love','fighting'],['you','becoming']].map(function(x){var w=wOf(x[0],x[1]);return '<button class="btn-ghost" data-act="askchip" data-a="'+x[0]+'" data-b="'+x[1]+'">'+ic('ask',18)+w.q+'</button>';}).join('')+'</div>';
   h+='<div class="chat" aria-live="polite">';
   S.asks.forEach(function(m){h+='<div class="bubble'+(m.me?' me':'')+'">'+m.t+'</div>';});
@@ -834,6 +965,8 @@ function settingsBody(){
   var th=[['auto','Auto'],['light','Light'],['dark','Dark']];
   return '<div class="setrow" style="flex-direction:column;align-items:stretch"><p style="font-weight:700">Theme</p><div class="mchips" role="radiogroup" aria-label="Theme">'+th.map(function(x){return '<button class="mchip" role="radio" aria-checked="'+(S.themePref===x[0])+'" data-act="setTheme" data-a="'+x[0]+'">'+x[1]+'</button>';}).join('')+'</div></div>'+
    '<div class="setrow"><div><p id="cdl" style="font-weight:700">Show chart details</p><p class="meta">For astrologers. Adds technical detail to the Work page.</p></div><button class="switch" role="switch" aria-checked="'+S.chart+'" aria-labelledby="cdl" data-act="toggleChart"><span class="knob"></span>'+(S.chart?'On':'Off')+'</button></div>'+
+   '<div class="setrow"><div><p style="font-weight:700">Birth details</p><p class="meta">Date, time and place, with the time zone and offset. Set once.</p></div><button class="btn-ghost" data-act="noop">Edit</button></div>'+
+   '<div class="setrow"><div><p style="font-weight:700">Work level</p><p class="meta">Employee. Changes how the Work worries are worded.</p></div><button class="btn-ghost" data-act="noop">Change</button></div>'+
    '<div class="setrow"><div><p style="font-weight:700">Your answers</p><p class="meta">Private to you. Delete them any time.</p></div><button class="btn-ghost" data-act="clearAnswers">Delete my answers</button></div>';
 }
 function sheetContent(){
@@ -887,6 +1020,7 @@ function render(nav){
   $overlay.innerHTML=sc;
   $mock.innerHTML=mockHTML();
   applyTheme();
+  syncCars();
   // focus management
   if(S.sheet&&!S.sheetFocused){var x=$overlay.querySelector('[data-fid="sheet-x"]');if(x){x.focus();S.sheetFocused=true;}}
   else if(S.focusKey){
@@ -938,8 +1072,11 @@ document.addEventListener('click',function(e){
   var el=e.target.closest('[data-act]');if(!el)return;
   var act=el.getAttribute('data-act'),a=el.getAttribute('data-a'),bb=el.getAttribute('data-b'),cc=el.getAttribute('data-c');
   var nav=false;
+  if(act==='car'){setCar(a,+bb,true,false);return;}
   S.focusKey=keyOf(el);
   switch(act){
+    case 'tier':S.tier[a]=bb;break;
+    case 'noop':return;
     case 'tab':
       S.tab=a;S.worry=null;S.sheet=null;
       if(BOARD_ORDER.indexOf(a)>-1)S.sel=a;
@@ -984,7 +1121,13 @@ document.addEventListener('submit',function(e){
 });
 
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'&&S.sheet){closeSheet();render(false);}
+  if(e.key==='Escape'&&S.sheet){closeSheet();render(false);return;}
+  var chip=e.target.closest&&e.target.closest('.car-chip[role="tab"]');
+  if(!chip)return;
+  var id=chip.getAttribute('data-a'),i=+chip.getAttribute('data-b'),n=chip.parentNode.children.length,to=null;
+  if(e.key==='ArrowRight')to=(i+1)%n;else if(e.key==='ArrowLeft')to=(i-1+n)%n;else if(e.key==='Home')to=0;else if(e.key==='End')to=n-1;
+  if(to===null)return;
+  e.preventDefault();setCar(id,to,true,true);
 });
 
 /* mock panel starts closed on a phone */
@@ -1003,7 +1146,8 @@ window.__mock={
     BOARD_ORDER.forEach(function(b){
       TONE_ORDER.forEach(function(t){
         var oldTone=S.tone[b];S.tone[b]=t;S.tab=b;S.sel=b;
-        ['now','back','ahead','worries'].forEach(function(p){S.page[b]=p;S.worry=null;S.sheet=null;chk(b+'/'+t+'/'+p);});
+        ['now','back','ahead'].forEach(function(p){S.page[b]=p;S.worry=null;S.sheet=null;chk(b+'/'+t+'/'+p);});
+        TIERS.forEach(function(x){S.page[b]='worries';S.tier[b]=x[0];S.worry=null;S.sheet=null;chk(b+'/'+t+'/worries/'+x[0]);});S.tier[b]='top';
         S.sheet={type:'why',b:b};chk(b+'/'+t+'/why-sheet');S.sheet=null;
         S.sheet={type:'support'};chk(b+'/'+t+'/support-sheet');S.sheet=null;
         W[b].forEach(function(w){S.worry={board:b,id:w.id};chk(b+'/'+t+'/worry/'+w.id);S.sheet={type:'whyw',b:b,id:w.id};chk(b+'/'+t+'/worry/'+w.id+'/why');S.sheet=null;});
