@@ -10,6 +10,7 @@ import {
 } from '../services/authService.js';
 import { completeProfile, ownProfileFields, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
+import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
@@ -1158,7 +1159,19 @@ const resolvers = {
         return { success: false, message: 'Not authenticated', rebuild: false };
       }
       if (!context.userId) return { success: false, message: 'Not authenticated', rebuild: false };
-      return updateProfile(context.prisma, context.userId, input);
+      const result = await updateProfile(context.prisma, context.userId, input);
+      // names of the fields sent, never their values (birth details, name)
+      const sent = Object.entries(input).filter(([, v]) => v !== undefined).map(([k]) => k);
+      const refused = !result.success && /cannot be changed/i.test(result.message ?? '');
+      void recordAccountEvent(context.prisma, {
+        userId: context.userId,
+        action: 'profile_update',
+        outcome: result.success ? 'ok' : refused ? 'refused' : 'failed',
+        fields: sent,
+        note: refused ? 'birth_details_locked' : null,
+        request: factsFromFetch(context.request),
+      });
+      return result;
     },
     async requestMagicLink(
       _parent: unknown,
@@ -1173,7 +1186,15 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return requestMagicLink(email, turnstileToken ?? null, clientIp);
+      const sent = await requestMagicLink(email, turnstileToken ?? null, clientIp);
+      void recordAccountEvent(context.prisma, {
+        userId: null,
+        action: 'sign_in_code_requested',
+        outcome: sent.success ? 'ok' : 'failed',
+        note: subjectTag(email),
+        request: factsFromFetch(context.request),
+      });
+      return sent;
     },
     async loginWithMagicLink(
       _parent: unknown,
@@ -1190,11 +1211,21 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const clientIp = getClientIp(context.request);
-      return loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      const login = await loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      const locked = !login.success && 'code' in login && login.code === 'ACCOUNT_LOCKED';
+      void recordAccountEvent(context.prisma, {
+        userId: login.success ? login.user : null,
+        action: 'sign_in',
+        outcome: login.success ? 'ok' : locked ? 'refused' : 'failed',
+        note: login.success ? null : subjectTag(email),
+        request: factsFromFetch(context.request),
+      });
+      return login;
     },
     logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
       // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
       if (context.userId) void deleteUserCaches(context.userId).catch(() => undefined);
+      if (context.userId) void recordAccountEvent(context.prisma, { userId: context.userId, action: 'sign_out', request: factsFromFetch(context.request) });
       return true;
     },
     async uploadKundli(

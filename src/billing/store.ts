@@ -3,6 +3,7 @@
  * lock, so two requests cannot both take the last question, and it runs on the pooler with no open transaction.
  */
 import type { PrismaClient } from '@prisma/client';
+import { recordAccountEvent } from '../audit/accountEvents.js';
 
 export interface BillingAccountRow {
   user_id: string;
@@ -87,8 +88,22 @@ export class PrismaPlanStore implements PlanStore {
     return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, question_quota: newAccountQuota, ...data }, update: data });
   }
 
-  setPayment(userId: string, payment: PaymentWrite): Promise<BillingAccountRow> {
-    return this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, ...payment }, update: payment });
+  async setPayment(userId: string, payment: PaymentWrite): Promise<BillingAccountRow> {
+    const before = await this.db.billingAccount.findUnique({ where: { user_id: userId } }).catch(() => null);
+    const row = await this.db.billingAccount.upsert({ where: { user_id: userId }, create: { user_id: userId, ...payment }, update: payment });
+    const pick = (r: { is_paid: boolean; paid_plan: string | null; paid_interval: string | null; paid_until: Date | null; question_quota: number | null } | null) =>
+      r ? { is_paid: r.is_paid, paid_plan: r.paid_plan, paid_interval: r.paid_interval, paid_until: r.paid_until?.toISOString() ?? null, question_quota: r.question_quota } : null;
+    // set from the payment gateway's webhook, so there is no browser request (IP, user agent) behind it
+    void recordAccountEvent(this.db, {
+      userId,
+      actor: 'payment_gateway',
+      action: payment.is_paid ? 'plan_payment' : 'plan_cleared',
+      fields: ['is_paid', 'paid_plan', 'paid_interval', 'paid_until', 'question_quota'],
+      before: pick(before),
+      after: pick(row),
+      note: payment.payment_ref ? 'has_payment_ref' : null,
+    });
+    return row;
   }
 
   setQuota(userId: string, quota: number | null): Promise<BillingAccountRow> {

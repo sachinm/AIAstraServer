@@ -29,6 +29,8 @@ const PHOTO_STATUS: Record<string, [number, string]> = {
   rate_limited: [429, 'Too many photos for now. Try again later.'],
 };
 
+import { factsFromExpress, recordAccountEvent } from '../audit/accountEvents.js';
+
 export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDeps): void {
   app.get('/api/profile/facts', async (req, res) => {
     const userId = await deps.requireUser(req, res);
@@ -46,6 +48,15 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
     if (!userId) return;
     try {
       const r = await writeFacts(deps.prisma, userId, (req.body as { facts?: unknown })?.facts);
+      const sent = (req.body as { facts?: unknown })?.facts;
+      void recordAccountEvent(deps.prisma, {
+        userId,
+        action: 'facts_update',
+        outcome: r.ok ? 'ok' : 'failed',
+        fields: sent && typeof sent === 'object' ? Object.keys(sent as object).slice(0, 40) : [],
+        note: r.ok ? null : r.error,
+        request: factsFromExpress(req),
+      });
       return r.ok ? res.status(204).end() : res.status(400).json({ error: r.error });
     } catch (e) {
       console.error('[profile]', (e as Error).message);
@@ -59,6 +70,7 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     try {
       const r = await savePhoto(deps.prisma, userId, body, req.headers['x-face-box'], { sharp: deps.sharp });
+      void recordAccountEvent(deps.prisma, { userId, action: 'photo_upload', outcome: r.status === 'ok' ? 'ok' : r.status === 'rate_limited' ? 'refused' : 'failed', note: r.status === 'ok' ? null : r.status, request: factsFromExpress(req) });
       if (r.status === 'ok') return res.status(201).json({ width: r.width, height: r.height });
       const [code, message] = PHOTO_STATUS[r.status]!;
       return res.status(code).json({ error: r.status, message });
@@ -82,6 +94,7 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
     const userId = await deps.requireUser(req, res);
     if (!userId) return;
     const ok = await removePhoto(deps.prisma, userId, req.query.restore === '1').catch(() => false);
+    void recordAccountEvent(deps.prisma, { userId, action: req.query.restore === '1' ? 'photo_restore' : 'photo_remove', outcome: ok ? 'ok' : 'failed', request: factsFromExpress(req) });
     return ok ? res.status(204).end() : res.status(404).json({ error: 'no_photo' });
   });
 }

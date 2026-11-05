@@ -1089,3 +1089,34 @@ model TechniqueReview {
   @@index([technique_id, created_at(sort: Desc)], map: "technique_reviews_technique")
   @@map("technique_reviews")
 }
+
+/// What a person changes about their account, from which IP and user agent, and when (docs/admin/02). Not clicks
+/// (analytics_events) and not staff writes (admin_actions). No relation: the record outlives the account.
+model AccountEvent {
+  id              String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id         String?
+  /// self | staff | payment_gateway | system
+  actor           String   @default("self")
+  action          String
+  /// ok | refused | failed
+  outcome         String   @default("ok")
+  /// names of what changed, never values
+  fields          Json     @default("[]")
+  before          Json?
+  after           Json?
+  note            String?
+  ip              String?
+  ip_chain        String?
+  user_agent      String?
+  accept_language String?
+  country         String?
+  request_id      String?
+  path            String?
+  method          String?
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id, created_at(sort: Desc)], map: "account_events_user")
+  @@index([action, created_at(sort: Desc)], map: "account_events_action")
+  @@index([ip, created_at(sort: Desc)], map: "account_events_ip")
+  @@map("account_events")
+}
