@@ -116,6 +116,21 @@ appropriately named doc under `docs/` linked from there. This covers side findin
 around, and things another session told you. Say what is wrong, where, how you know, who holds it, and what done means.
 Read `docs/TODOS.md` before starting work in an area. Delete an item when its fix ships. A finding mentioned only in chat is lost.
 
+## Every agent and function is registered and tagged (docs/admin/03)
+
+The admin panel's Techniques and Agents pages read what is registered and tagged here; anything left out does not show.
+
+- **A new agent** (model, engine pull or code) gets an `AGENTS` row in `src/agents/registry.ts`.
+- **A new board function or technique** gets a `TECHNIQUES` row in `src/techniques/catalog.ts`: its charts, its
+  algorithm in plain steps written from the code, its source, its code path and its agents. It stays `planned` (no
+  agents) until it is built.
+- **Every `withAgentRun` call** passes `technique` and `kundliId`, and the charts it read (`charts`, or `charts` in the
+  result when they are known only after the read).
+- **General Reading spans** are tagged by `src/reading/metrics/trace.ts` (`agentIdOf`, `techniqueIdOf`, category from the
+  subject). A new reading stage or analyst name is added there, with its registry and catalogue rows.
+- **Summaries** (`input` and `output` of a run) hold counts, ids, tones and scores only: never birth data, names, places
+  or question text. `tests/unit/techniques/summaries.test.ts` checks the call sites.
+
 ## Tracking files
 
 - `docs/TODOS.md`: every open finding, by priority (see above).

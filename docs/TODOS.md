@@ -756,3 +756,26 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: Analytics events and account audit have no retention.** 2026-11-05. `analytics_events`, `agent_runs`,
   `ReadingRun` and the other system logs are kept until the user is deleted. Owner: privacy pass. Done: a retention
   rule per table in docs/privacy, and a sweep job.
+
+## Filed 2026-11-05 by the techniques-tagging build (docs/admin/03, branch `feat/techniques-tagging`)
+
+- **P3: Spans written before the first subject is known are tagged `general`.** `src/reading/metrics/trace.ts` `tags()`
+  takes the category from the span's subject, else the query's one subject seen so far; intake and early step spans
+  come before any analyst names a subject, so they always read `general`. Owner: reading-dev. Done: intake labels the
+  trace with its subjects (a `TraceLabels` field) and every span uses it.
+- **P3: The single-call path has no technique.** `specialist:single` maps to agent `reading.specialist` with
+  `technique_id` null (no catalogue row for the Phase 1 one-call path). Owner: reading-dev. Done: a `general.single`
+  row, or the path is retired.
+- **P3: Synthesizer spans join `reading.oracle`, not `reading.synth`.** The plan (docs/admin/03 §4.1) maps `synthesize`
+  to `reading.oracle`, but the graph flow's synthesizer runs on the `synth` role's model, so the registry row the admin
+  joins shows the oracle model and price. Each span still carries its own model and cost. Owner: admin. Done: decide
+  whether `synthesize` gets `reading.synth`.
+- **P3: `reading.clarify` is registered on Bedrock with no price.** It runs on `READING_MODEL_CLARIFY` (Bedrock), which
+  has no row in `PRICES` (see the P2 "Bedrock calls are unpriced" item above), so its registry price is null. Owner:
+  server. Done: closes with that item.
+- **P3: The career present-tone confidence rule is Phase 1, not doc 43 §8.1.** `career.ts presentState` calls a tone
+  confirmed at max(3, 60 % of the available families) with the main clock agreeing; doc 43 §8.1 asks for 5 of 7 (4 of 6)
+  including the transit family and a D1/D10-validated main clock. The catalogue row describes the code as built. Owner:
+  reading-dev. Done: the D10 check and the missing families land (catalogue rows `work.d10_check`,
+  `work.*_family`) and the rule is moved to the doc's.
+
