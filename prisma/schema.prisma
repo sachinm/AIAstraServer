@@ -705,12 +705,18 @@ model ReadingAgentSpan {
   /// M24: the subject a graph analyst ran for, and the oracle reader's tier.
   subject        String?
   tier           Int?
+  /// M29 (docs/admin/03): the registry id (agent_registry.id), the catalogue technique and the category (self|love|work|general)
+  agent_id       String?      @map("agent_id")
+  technique_id   String?      @map("technique_id")
+  category       String?
   run            ReadingTrace @relation(fields: [run_id], references: [run_id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([run_id, started_at], map: "reading_agent_spans_run")
   @@index([agent, level, started_at(sort: Desc)], map: "reading_agent_spans_agent")
   @@index([agent_kind, level, started_at(sort: Desc)], map: "reading_agent_spans_kind")
   @@index([started_at(sort: Desc)], map: "reading_agent_spans_started")
+  @@index([technique_id, started_at(sort: Desc)], map: "reading_agent_spans_technique")
+  @@index([agent_id, level, started_at(sort: Desc)], map: "reading_agent_spans_agent_id")
   @@map("reading_agent_spans")
 }
 
@@ -849,6 +855,7 @@ model AdminAccount {
   created_at      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updated_at      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
   actions         AdminAction[]
+  techniqueReviews TechniqueReview[]
 
   @@map("admin_accounts")
 }
@@ -923,11 +930,21 @@ model AgentRun {
   output_tokens  Int           @default(0) @map("output_tokens")
   thought_tokens Int           @default(0) @map("thought_tokens")
   est_cost_usd   Decimal?      @map("est_cost_usd") @db.Decimal(10, 6)
+  /// M29 (docs/admin/03): the catalogue technique this run served, its category and board, and what it read
+  technique_id   String?       @map("technique_id")
+  category       String?
+  board          String?
+  kundli_id      String?       @map("kundli_id")
+  subject        String?
+  /// [{ type, variant?, calc_version? }]: the engine payloads the run read
+  charts_used    Json?         @map("charts_used")
   agent          AgentRegistry @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "agent_runs_agent_fkey")
   user           Auth?         @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "agent_runs_user_fkey")
 
   @@index([agent_id, started_at], map: "agent_runs_agent_started")
   @@index([started_at], map: "agent_runs_started")
+  @@index([technique_id, started_at(sort: Desc)], map: "agent_runs_technique")
+  @@index([category, started_at(sort: Desc)], map: "agent_runs_category")
   @@map("agent_runs")
 }
 
@@ -1028,4 +1045,47 @@ model ProfilePhotoAttempt {
 
   @@index([user_id, at], map: "profile_photo_attempts_user_at")
   @@map("profile_photo_attempts")
+}
+
+/// M29 (docs/admin/03 §4.1): the technique catalogue (src/techniques/catalog.ts), upserted at boot. The admin reads it.
+model TechniqueRegistry {
+  id         String   @id
+  title      String
+  /// self | love | work | general
+  category   String
+  /// you | love | work | lucky | chat
+  board      String
+  /// built | partial | planned
+  status     String
+  charts     Json     @default("[]")
+  algorithm  Json     @default("[]")
+  special    String?
+  source     String?
+  code_ref   String?  @map("code_ref")
+  agents     Json     @default("[]")
+  accuracy   String?
+  updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([category, board], map: "technique_registry_category")
+  @@map("technique_registry")
+}
+
+/// M29: a staff verdict on one run (an agent_runs or a reading_agent_spans row). Written only by the admin API.
+model TechniqueReview {
+  id           String       @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  /// agent_run | span
+  run_kind     String       @map("run_kind")
+  run_id       String       @map("run_id")
+  technique_id String?      @map("technique_id")
+  /// right | wrong | unsure
+  verdict      String
+  /// 500 characters or less
+  note         String?
+  admin_id     String       @map("admin_id")
+  created_at   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  admin        AdminAccount @relation(fields: [admin_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "technique_reviews_admin_id_fkey")
+
+  @@index([run_kind, run_id], map: "technique_reviews_run")
+  @@index([technique_id, created_at(sort: Desc)], map: "technique_reviews_technique")
+  @@map("technique_reviews")
 }
