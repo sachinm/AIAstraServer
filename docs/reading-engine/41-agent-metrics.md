@@ -157,5 +157,8 @@ FROM reading_agent_spans WHERE level = 'model_call' AND status = 'ok' GROUP BY a
 | 3. Admin module | Web: live list, one query's timeline, agent table with p50 and p95 | Sachin can open a query and see which agent was slow |
 | 4. Act | Alarms on p95 and failure rate, retention job, finer steps if the gaps prove large | First slow agent found and fixed from this data |
 
+Phases 2 to 4 are now planned in full in `docs/admin/01-admin-panel-users-and-agent-metrics.md` (2026-11-04): M24 adds `bucket`, `template`, `tier`,
+`route`, `subjects` to traces and `subject`, `tier` to spans, and the admin pages read them.
+
 **Recommendation:** apply M19 and collect a few days of real data before building Phase 3, so the pages are designed around
 what actually turns out slow.

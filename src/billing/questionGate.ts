@@ -4,7 +4,8 @@
  */
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
-import { EXEMPT_ROLES, effectivePlan, monthFor, planQuota, plansEnabled, unlimitedDailyGuard, type PlanCode, type PlanWindow } from './plans.js';
+import { isQuotaExempt } from '../auth/roles.js';
+import { effectivePlan, monthFor, planQuota, plansEnabled, unlimitedDailyGuard, type PlanCode, type PlanWindow } from './plans.js';
 import { PrismaPlanStore, type BillingAccountRow, type PlanStore } from './store.js';
 
 /** Twice the Lambda's 300 s limit, so such a reservation belongs to a dead run. */
@@ -101,7 +102,7 @@ export class QuestionGate {
   }
 
   private async isExempt(userId: string): Promise<boolean> {
-    return EXEMPT_ROLES.includes((await this.store.getRole(userId)) ?? '');
+    return isQuotaExempt(await this.store.getRole(userId));
   }
 
 /** The plan for `me`; null when limits are off or could not be read. */

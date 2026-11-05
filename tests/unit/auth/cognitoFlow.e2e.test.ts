@@ -49,6 +49,11 @@ vi.mock('../../../src/lib/prisma.js', () => ({
         const row = db.rows.find((r) => matches(r, where));
         return row ? { ...row } : null;
       },
+      // request auth reads the row by id (src/auth/requestAuth.ts)
+      findUnique: async ({ where }: { where: Record<string, any> }) => {
+        const row = db.rows.find((r) => matches(r, where));
+        return row ? { ...row } : null;
+      },
       create: async ({ data }: { data: Record<string, any> }) => {
         const row = {
           id: `user-${db.nextId++}`,
@@ -90,6 +95,7 @@ vi.mock('../../../src/services/geminiCacheService.js', () => ({
 
 import { schema } from '../../../src/graphql/schema.js';
 import { buildContext } from '../../../src/graphql/context.js';
+import { resetRequestAuthForTests } from '../../../src/auth/requestAuth.js';
 import { createCognitoAuth, setCognitoAuthForTests } from '../../../src/auth/cognitoClient.js';
 
 const exc = (Cls: new (o: any) => Error) => new Cls({ message: 'x', $metadata: {} });
@@ -267,6 +273,7 @@ const profile = {
 let pool: FakePool;
 
 beforeEach(() => {
+  resetRequestAuthForTests();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-25T10:00:00Z'));
   db.rows.length = 0;
@@ -361,7 +368,7 @@ describe('(3) signup confirmation code signs the user in', () => {
     expect(res).toMatchObject({ success: true, user: 'user-1', role: 'novice' });
     const decoded = jwt.verify(res.token, process.env.JWT_SECRET as string) as { sub: string; role: string };
     expect(decoded).toMatchObject({ sub: 'user-1', role: 'novice' });
-    const ctx = buildContext({ request: request({ Authorization: `Bearer ${res.token}` }) });
+    const ctx = await buildContext({ request: request({ Authorization: `Bearer ${res.token}` }) });
     expect(ctx).toMatchObject({ userId: 'user-1', role: 'novice' });
     expect(pool.users.get('asha@example.com')!.confirmed).toBe(true);
     expect(pool.count('ConfirmSignUp')).toBe(1);

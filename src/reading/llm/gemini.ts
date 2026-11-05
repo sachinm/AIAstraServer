@@ -11,7 +11,7 @@
  */
 import { Agent, fetch as undiciFetch } from 'undici';
 import { getGeminiModelsBaseUrl, getGeminiUndiciBodyTimeoutMs, getGeminiUndiciHeadersTimeoutMs } from '../../config/env.js';
-import { traceModelCall } from '../metrics/trace.js';
+import { traceModelCall, type ModelCallTags } from '../metrics/trace.js';
 import type { Usage } from '../types.js';
 import { cacheNameFor, invalidateCache, type CacheOwner } from './promptCache.js';
 
@@ -44,6 +44,8 @@ export interface GeminiCallOptions {
    * `cachePrefix`.
    */
   fullCache?: { system: string; prefix: string; suffix: string[] };
+  /** metrics only (docs/admin/01 §4.1.6): the subject and oracle tier this call ran for */
+  trace?: ModelCallTags;
 }
 
 /** A cache chosen for one call: `full` sends only the full-layout suffix, `base` drops system and parts[0]. */
@@ -255,7 +257,7 @@ function forget(o: GeminiCallOptions, c: ChosenCache): void {
 
 /** Non-streaming call (specialists, intake). Returns the full text. */
 export function callGemini(o: GeminiCallOptions): Promise<GeminiResult> {
-  return traceModelCall(o.node, o.model, () => callGeminiWithCache(o));
+  return traceModelCall(o.node, o.model, () => callGeminiWithCache(o), o.trace);
 }
 
 async function callGeminiWithCache(o: GeminiCallOptions): Promise<GeminiResult> {
@@ -294,7 +296,7 @@ export function streamGemini(
   onDelta?: (delta: string) => void,
   onThought?: (delta: string) => void
 ): Promise<GeminiResult> {
-  return traceModelCall(o.node, o.model, () => streamGeminiCall(o, onDelta, onThought));
+  return traceModelCall(o.node, o.model, () => streamGeminiCall(o, onDelta, onThought), o.trace);
 }
 
 async function streamGeminiCall(

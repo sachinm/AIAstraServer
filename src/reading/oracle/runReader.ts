@@ -197,7 +197,7 @@ export class ReaderFailure extends Error {
 }
 
 /** Calls the model once. Throws ReaderFailure with the reason, and the bill when there is one. */
-export async function runReader(req: ReaderRequest, a: { model: string; guard: CostGuard; cacheOwner?: CacheOwner; signal?: AbortSignal; timeoutMs?: number; maxOutputTokens?: number }): Promise<ReaderResult> {
+export async function runReader(req: ReaderRequest, a: { model: string; guard: CostGuard; cacheOwner?: CacheOwner; signal?: AbortSignal; timeoutMs?: number; maxOutputTokens?: number; /** metrics only: the plan's tier */ tier?: number }): Promise<ReaderResult> {
   const def = req.def;
   let reservation;
   try {
@@ -221,6 +221,7 @@ export async function runReader(req: ReaderRequest, a: { model: string; guard: C
       temperature: 0.2,
       timeoutMs: a.timeoutMs ?? readerTimeoutMs(def, a.model),
       signal: a.signal,
+      trace: { subject: req.subject, ...(a.tier !== undefined ? { tier: a.tier } : {}) },
     });
   } catch (err) {
     // an HTTP error was not billed; a time-out may have been, so the guard keeps what it reserved

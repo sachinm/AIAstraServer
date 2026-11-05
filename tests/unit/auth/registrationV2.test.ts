@@ -120,6 +120,7 @@ vi.mock('../../../src/lib/encrypt.js', () => ({
 
 import { schema } from '../../../src/graphql/schema.js';
 import { buildContext } from '../../../src/graphql/context.js';
+import { resetRequestAuthForTests } from '../../../src/auth/requestAuth.js';
 import { createCognitoAuth, setCognitoAuthForTests } from '../../../src/auth/cognitoClient.js';
 import { normalizePlaceForAstroKundli } from '../../../src/lib/astroKundliClient.js';
 import { validateSignUpInput } from '../../../src/lib/validators.js';
@@ -222,6 +223,7 @@ function localCode(email: string): string {
 }
 
 beforeEach(() => {
+  resetRequestAuthForTests();
   db.rows.length = 0;
   db.kundlis.length = 0;
   db.mails.length = 0;

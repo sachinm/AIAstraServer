@@ -69,6 +69,15 @@ describe('admin resolvers', () => {
       const result = await resolvers.Query!.adminListUsers!(null, { role: null, search: null }, context);
       expect(result).toMatchObject({ success: true, users: [], error: null });
     });
+
+    it('authorises by the canonical row role: aiastra_admin yes; client_account_admin, researcher and no user no', async () => {
+      const prisma = createMockPrisma({ findMany: async () => [] });
+      expect(await resolvers.Query!.adminListUsers!(null, { role: null, search: null }, createContext({ userId: 'a1', role: 'aiastra_admin', prisma }))).toMatchObject({ success: true });
+      for (const role of ['client_account_admin', 'researcher']) {
+        expect(await resolvers.Query!.adminListUsers!(null, { role: null, search: null }, createContext({ userId: 'u1', role, prisma }))).toMatchObject({ success: false, error: 'Forbidden' });
+      }
+      expect(await resolvers.Query!.adminListUsers!(null, { role: null, search: null }, createContext({ userId: null, role: 'aiastra_admin', prisma }))).toMatchObject({ success: false, error: 'Not authenticated' });
+    });
   });
 
   describe('adminGetUser', () => {

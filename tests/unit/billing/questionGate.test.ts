@@ -346,6 +346,14 @@ describe('staff, the flag and failures', () => {
     expect(await gate.getStatus('u1')).toMatchObject({ exempt: true, limit: null, remaining: null });
   });
 
+  it('exempts by canonical role: legacy staff names, researcher and astrologer; not novice or client_account_admin', async () => {
+    for (const [role, exempt] of [['support', true], ['admin', true], ['aiastra_admin', true], ['astrologer', true], ['researcher', true], ['novice', false], ['user', false], ['client_account_admin', false], [null, false]] as const) {
+      const { store, gate } = setup();
+      store.role = role as never;
+      expect((await gate.getStatus('u1'))?.exempt ?? false).toBe(exempt);
+    }
+  });
+
   it('touches nothing while PLANS_ENABLED is off', async () => {
     const store = new MemoryPlanStore();
     const spy = vi.spyOn(store, 'getRole');

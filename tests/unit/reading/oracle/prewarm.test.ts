@@ -14,6 +14,7 @@ import { buildReaderRequest, readerFindingZ, ReaderFailure, runReader, type Read
 import { registerClarifyRoutes } from '../../../../src/routes/clarifyRoutes.js';
 import { G1_AS_OF } from '../../../helpers/readingFixtures.js';
 import { startFakeGemini, type FakeGemini } from '../../../helpers/fakeGemini.js';
+import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 
 const rows: ChartRowSource = { read: async () => [] };
 const USAGE = { node: 'x', model: 'gemini-3.1-flash-lite', promptTokens: 1000, cachedTokens: 0, outputTokens: 100, thoughtTokens: 0, ms: 1 };
@@ -128,7 +129,7 @@ describe('POST /api/chat/prewarm', () => {
   function route(store: object, userId: string | null = 'u1'): Handler {
     const handlers = new Map<string, Handler>();
     const app = { post: (p: string, h: Handler) => handlers.set(p, h) };
-    registerClarifyRoutes(app as never, { prisma: db(), getUserId: () => userId, store: store as never });
+    registerClarifyRoutes(app as never, { prisma: db(), requireUser: fakeRequireUser(() => userId), store: store as never });
     return handlers.get('/api/chat/prewarm')!;
   }
   const res = () => {

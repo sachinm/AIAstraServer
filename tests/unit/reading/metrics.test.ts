@@ -1,7 +1,9 @@
 /** Per-agent metrics (docs/reading-engine/41): what gets recorded, in what order, and that a failure never reaches the reading. */
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentKindOf, currentTrace, failureLabel, resetTraceStoreForTests, RunTrace, traceModelCall, withRunTrace, type SpanRow, type TraceStore } from '../../../src/reading/metrics/trace.js';
+import { agentKindOf, currentTrace, failureLabel, isPermanent, prismaTraceStore, resetTraceStoreForTests, RunTrace, traceModelCall, withRunTrace, type SpanRow, type TraceStore } from '../../../src/reading/metrics/trace.js';
+import { runIntake } from '../../../src/reading/nodes/intake.js';
+import type { ChartRowSource } from '../../../src/reading/oracle/chartBundle.js';
 import { runReading } from '../../../src/reading/run.js';
 import { clearReadingCaches } from '../../../src/reading/data/store.js';
 import { startFakeGemini, type FakeGemini } from '../../helpers/fakeGemini.js';
@@ -146,6 +148,87 @@ describe('RunTrace', () => {
   }, 5_000);
 });
 
+describe('labels, subject and tier (docs/admin/01 §4.1.6)', () => {
+  it('label() merges, later values win, and the labels are written with the totals at finish', async () => {
+    const m = memStore();
+    const t = new RunTrace(id, m.store);
+    t.label({ bucket: 'career', template: 'T3', subjects: 2 });
+    t.label({ subjects: 1, tier: 3, route: null });
+    await t.finish({ status: 'done' });
+    expect(m.log).toEqual(['start', 'finish']);
+    expect(m.finished[0]).toMatchObject({ bucket: 'career', template: 'T3', subjects: 1, tier: 3, route: null, model_calls: 0 });
+  });
+
+  it('a trace that never labelled writes no label column', async () => {
+    const m = memStore();
+    const t = new RunTrace(id, m.store);
+    await t.finish({ status: 'done' });
+    for (const k of ['bucket', 'template', 'tier', 'route', 'subjects']) expect(m.finished[0]).not.toHaveProperty(k);
+  });
+
+  it('stage spans carry their subject; reader and oracle spans carry the tier, others do not', async () => {
+    const m = memStore();
+    const t = new RunTrace(id, m.store);
+    t.observe({ type: 'stage', name: 'intake', status: 'start' });
+    t.observe({ type: 'stage', name: 'intake', status: 'done' });
+    t.label({ tier: 2 });
+    t.observe({ type: 'stage', name: 'dasha', status: 'start', subject: 'career_work' });
+    t.observe({ type: 'stage', name: 'dasha', status: 'done', subject: 'career_work' });
+    t.observe({ type: 'stage', name: 'R01', status: 'start', subject: 'career_work' });
+    t.observe({ type: 'stage', name: 'R01', status: 'done', subject: 'career_work' });
+    t.addModelCall({ agent: 'R02', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage(), subject: 'career_work', tier: 5 });
+    await t.finish({ status: 'done' });
+    const by = (agent: string) => m.spans.find((s) => s.agent === agent)!;
+    expect(by('intake')).toMatchObject({ subject: null, tier: null });
+    expect(by('dasha')).toMatchObject({ subject: 'career_work', tier: null });
+    expect(by('R01')).toMatchObject({ subject: 'career_work', tier: 2 });
+    expect(by('R02')).toMatchObject({ subject: 'career_work', tier: 5 });
+  });
+
+  it('traceModelCall passes subject and tier to the span', async () => {
+    const m = memStore();
+    await withRunTrace(prismaFrom(m), id, () => traceModelCall('specialist:dasha', 'gemini-3.1-flash-lite', async () => ({ usage: usage({ node: 'specialist:dasha' }) }), { subject: 'marriage_relationship' }));
+    expect(m.spans[0]).toMatchObject({ agent: 'specialist:dasha', subject: 'marriage_relationship', tier: null });
+  });
+
+  it('a missing column counts as permanent, like a missing table', () => {
+    expect(isPermanent(Object.assign(new Error('x'), { code: '42703' }))).toBe(true);
+    expect(isPermanent(Object.assign(new Error('x'), { code: 'P2022' }))).toBe(true);
+    expect(isPermanent(Object.assign(new Error('x'), { code: 'P2010', meta: { code: '42703' } }))).toBe(true);
+    expect(isPermanent(Object.assign(new Error('x'), { code: 'P1001' }))).toBe(false);
+  });
+
+  it('without the M24 columns the store writes the rest, so recording goes on', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const spans: unknown[] = [];
+    const finished: unknown[] = [];
+    const missing = () => Object.assign(new Error('The column subject does not exist in the current database.'), { code: 'P2022' });
+    const db = {
+      readingTrace: {
+        create: async () => undefined,
+        updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+          if ('bucket' in data || 'tier' in data) throw missing();
+          finished.push(data);
+        },
+      },
+      readingAgentSpan: {
+        createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          if (data.some((r) => 'subject' in r)) throw missing();
+          spans.push(...data);
+        },
+      },
+    } as unknown as PrismaClient;
+    const t = new RunTrace(id, prismaTraceStore(db));
+    t.label({ bucket: 'career', tier: 3 });
+    t.addModelCall({ agent: 'R01', model: 'gemini-3.1-flash-lite', startedAt: Date.now(), status: 'ok', usage: usage(), subject: 'career_work' });
+    await t.finish({ status: 'done' });
+    expect(spans).toHaveLength(1);
+    expect(spans[0]).not.toHaveProperty('subject');
+    expect(finished[0]).toMatchObject({ status: 'done', model_calls: 1 });
+    expect(finished[0]).not.toHaveProperty('bucket');
+  });
+});
+
 describe('traceModelCall', () => {
   it('runs the call as usual with no trace', async () => {
     await expect(traceModelCall('R01', 'm', async () => ({ usage: usage(), value: 1 }))).resolves.toMatchObject({ value: 1 });
@@ -216,6 +299,36 @@ describe('runReading records its agents', () => {
     const specialists = m.spans.filter((s) => s.level === 'model_call' && s.agent_kind === 'specialist');
     expect(specialists.length).toBeGreaterThan(1);
     expect(m.finished[0]!.agents_spawned as number).toBeGreaterThan(1);
+  }, 30_000);
+
+  it('graph flow, three subjects: three dasha spans told apart by subject, and the labels land at finish', async () => {
+    process.env.READING_FLOW = 'graph';
+    const m = memStore();
+    const q = 'Tell me about my career, my marriage and my money over the next year';
+    const base = (await runIntake(q, new Date().toISOString().slice(0, 10), { mode: 'rules' })).intent;
+    const ids = ['career_work', 'marriage_relationship', 'income_wealth'] as const;
+    const r = await runReading(bare(m), 'u1', q, { intent: { ...base, questionType: 'describe', horizon: '1y', subjects: ids.map((s) => ({ id: s, weight: 1 })) } });
+    const dasha = m.spans.filter((s) => s.level === 'stage' && s.agent === 'dasha');
+    expect(dasha).toHaveLength(3);
+    expect(dasha.map((s) => s.subject).sort()).toEqual([...ids].sort());
+    const calls = m.spans.filter((s) => s.level === 'model_call' && s.agent === 'specialist:dasha');
+    expect(calls.map((s) => s.subject).sort()).toEqual([...ids].sort());
+    expect(m.finished[0]).toMatchObject({ subjects: 3, bucket: r.record.intent.classification?.bucket ?? null, template: r.record.intent.classification?.template ?? null });
+    expect(m.finished[0]).not.toHaveProperty('tier');
+  }, 30_000);
+
+  it('oracle flow: the trace records the tier and the plan-B route, and reader spans the tier', async () => {
+    const m = memStore();
+    const q = 'Why do I feel so stressed about my career lately?';
+    const asOf = new Date().toISOString().slice(0, 10);
+    const base = (await runIntake(q, asOf, { mode: 'rules' })).intent;
+    const rows: ChartRowSource = { read: async () => [] };
+    await runReading(bare(m), 'u1', q, { flow: 'oracle', asOf, chartRows: rows, intent: { ...base, questionType: 'why_meaning', horizon: '1y', subjects: [{ id: 'career_work', weight: 1 }] } }).catch(() => undefined);
+    expect(m.finished[0]).toMatchObject({ tier: 2, route: 'pressure', subjects: 1 });
+    const readers = m.spans.filter((s) => s.agent_kind === 'reader');
+    expect(readers.length).toBeGreaterThan(0);
+    for (const s of readers) expect(s.tier).toBe(2);
+    expect(readers.filter((s) => s.level === 'model_call').every((s) => s.subject === 'career_work')).toBe(true);
   }, 30_000);
 
   it('a database with no metrics tables does not change the answer', async () => {

@@ -68,6 +68,30 @@ export interface SpanRow {
   thought_tokens: number;
   /** null when the model has no price, so an unpriced call never reads as free */
   est_cost_usd: number | null;
+  /** the subject a stage or call ran for (graph analysts fan out per subject), from the `name|subject` stage key */
+  subject: string | null;
+  /** the oracle flow's reader tier (readers.ts tierFor / planB.ts); null elsewhere */
+  tier: number | null;
+}
+
+/** Technique labels of one query (docs/admin/01 §4.1.6), written with the totals at `finish`. */
+export interface TraceLabels {
+  /** buckets/taxonomy.ts id, from intent.classification */
+  bucket?: string | null;
+  /** T1..T10 */
+  template?: string | null;
+  /** oracle flow tier, 1..5 */
+  tier?: number | null;
+  /** planB.ts route: pressure | mood | luck | will_it_happen */
+  route?: string | null;
+  /** how many subjects fanned out */
+  subjects?: number | null;
+}
+
+/** Optional per-call detail for traceModelCall. */
+export interface ModelCallTags {
+  subject?: string | null;
+  tier?: number | null;
 }
 
 export interface TraceIdentity {
@@ -94,24 +118,63 @@ export interface TraceStore {
   finishRun(runId: string, data: Prisma.ReadingTraceUncheckedUpdateManyInput): Promise<unknown>;
 }
 
+/** Columns added by M24 (labels on traces, subject and tier on spans). */
+const M24_TRACE_COLUMNS = ['bucket', 'template', 'tier', 'route', 'subjects'] as const;
+const M24_SPAN_COLUMNS = ['subject', 'tier'] as const;
+
+const isMissingColumn = (err: unknown): boolean => {
+  const e = err as { code?: string; meta?: { code?: string } } | null;
+  return e?.code === 'P2022' || e?.code === '42703' || e?.meta?.code === '42703';
+};
+
+function without<T extends object>(row: T, keys: readonly string[]): T {
+  const out = { ...row } as Record<string, unknown>;
+  for (const k of keys) delete out[k];
+  return out as T;
+}
+
+/** Set when a write finds M24's columns missing: writes leave them out until then, and try them again after. */
+let m24MissingUntil = 0;
+
 export function prismaTraceStore(db: Pick<PrismaClient, 'readingTrace' | 'readingAgentSpan'>): TraceStore {
+  /** Writes with the M24 columns; when the database does not have them yet, writes the rest, so recording goes on. */
+  const tolerant = async <R>(write: (strip: boolean) => Promise<R>): Promise<R> => {
+    if (Date.now() < m24MissingUntil) return write(true);
+    try {
+      return await write(false);
+    } catch (err) {
+      if (!isMissingColumn(err)) throw err;
+      m24MissingUntil = Date.now() + STORE_RETRY_MS;
+      console.warn(JSON.stringify({ msg: 'reading metrics: label columns missing (migration M24 not applied); writing without them' }));
+      return write(true);
+    }
+  };
   return {
     startRun: (row) => db.readingTrace.create({ data: row }),
-    addSpans: (rows) => db.readingAgentSpan.createMany({ data: rows as unknown as Prisma.ReadingAgentSpanCreateManyInput[] }),
-    finishRun: (runId, data) => db.readingTrace.updateMany({ where: { run_id: runId }, data }),
+    addSpans: (rows) =>
+      tolerant((strip) => db.readingAgentSpan.createMany({ data: (strip ? rows.map((r) => without(r, M24_SPAN_COLUMNS)) : rows) as unknown as Prisma.ReadingAgentSpanCreateManyInput[] })),
+    finishRun: (runId, data) => tolerant((strip) => db.readingTrace.updateMany({ where: { run_id: runId }, data: strip ? without(data, M24_TRACE_COLUMNS) : data })),
   };
 }
 
 let storeOffUntil = 0;
 export function resetTraceStoreForTests(): void {
   storeOffUntil = 0;
+  m24MissingUntil = 0;
 }
 
-/** The migration is not applied, or the client has no such model: no point trying again on every span. */
-function isPermanent(err: unknown): boolean {
-  const e = err as { code?: string; message?: string } | null;
-  return err instanceof TypeError || e?.code === 'P2021' || e?.code === '42P01' || /does not exist/i.test(e?.message ?? '');
+/**
+ * The migration is not applied, or the client has no such model: no point trying again on every span. Covers a missing
+ * table (P2021 / 42P01) and a missing column (P2022 / 42703). M24's own columns are first retried without them in
+ * prismaTraceStore, so only a column that is still missing after that turns the store off.
+ */
+export function isPermanent(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; meta?: { code?: string } } | null;
+  const codes = [e?.code ?? '', e?.meta?.code ?? ''];
+  return err instanceof TypeError || codes.some((c) => ['P2021', 'P2022', '42P01', '42703'].includes(c)) || /does not exist/i.test(e?.message ?? '');
 }
+
+const LABEL_KEYS = ['bucket', 'template', 'tier', 'route', 'subjects'] as const;
 
 const costOf = (u: Usage, on: string): number | null => (priceFor(u.model, on) ? usageCostUsd(u, on) : null);
 const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;
@@ -120,12 +183,13 @@ export class RunTrace {
   private buffer: SpanRow[] = [];
   private chain: Promise<unknown> = Promise.resolve();
   private timer: ReturnType<typeof setTimeout> | undefined;
-  private open = new Map<string, { name: string; startedAt: number }>();
+  private open = new Map<string, { name: string; subject: string | null; startedAt: number }>();
   private readonly startedAt: number;
   private readonly on: string;
   private totals = { prompt: 0, cached: 0, output: 0, thought: 0, usd: 0, calls: 0, unpriced: 0 };
   private spawned = new Set<string>();
   private failed = new Set<string>();
+  private labels: TraceLabels = {};
 
   constructor(
     readonly id: TraceIdentity,
@@ -168,12 +232,23 @@ export class RunTrace {
     }
   }
 
+  /** Adds technique labels; a later value for the same label wins. Written once, with the totals, at `finish`. */
+  label(l: TraceLabels): void {
+    for (const k of LABEL_KEYS) if (l[k] !== undefined) (this.labels as Record<string, unknown>)[k] = l[k];
+  }
+
+  /** A reader's or the Oracle's span carries the query's tier unless the call named its own. */
+  private tierFor(kind: AgentKind, explicit: number | null | undefined): number | null {
+    if (explicit !== undefined && explicit !== null) return explicit;
+    return kind === 'reader' || kind === 'oracle' ? (this.labels.tier ?? null) : null;
+  }
+
   private noteAgent(name: string, kind: AgentKind): void {
     if (kind === 'reader' || kind === 'specialist') this.spawned.add(name.replace(/^specialist:/, ''));
   }
 
   /** One model request, ended either way. Called by the model wrappers. */
-  addModelCall(a: { agent: string; model: string; startedAt: number; status: 'ok' | 'failed'; failureReason?: string; usage?: Usage; ttftMs?: number | null; steps?: Record<string, number> }): void {
+  addModelCall(a: { agent: string; model: string; startedAt: number; status: 'ok' | 'failed'; failureReason?: string; usage?: Usage; ttftMs?: number | null; steps?: Record<string, number>; subject?: string | null; tier?: number | null }): void {
     const end = this.now();
     const kind = agentKindOf(a.agent);
     this.noteAgent(a.agent, kind);
@@ -207,24 +282,27 @@ export class RunTrace {
       output_tokens: u?.outputTokens ?? 0,
       thought_tokens: u?.thoughtTokens ?? 0,
       est_cost_usd: usd === null ? null : round6(usd),
+      subject: a.subject ?? null,
+      tier: this.tierFor(kind, a.tier),
     });
   }
 
-  private addStage(name: string, startedAt: number, status: string, failureReason: string | null): void {
+  private addStage(name: string, subject: string | null, startedAt: number, status: string, failureReason: string | null): void {
     const end = this.now();
     const kind = agentKindOf(name);
     this.noteAgent(name, kind);
     if ((kind === 'reader' || kind === 'specialist') && status !== 'ok' && status !== 'cached') this.failed.add(name);
-    this.push({ id: randomUUID(), run_id: this.id.runId, agent: name, agent_kind: kind, level: 'stage', model: null, status, failure_reason: failureReason, started_at: new Date(startedAt), ended_at: new Date(end), ms: end - startedAt, ttft_ms: null, steps: null, prompt_tokens: 0, cached_tokens: 0, output_tokens: 0, thought_tokens: 0, est_cost_usd: null });
+    this.push({ id: randomUUID(), run_id: this.id.runId, agent: name, agent_kind: kind, level: 'stage', model: null, status, failure_reason: failureReason, started_at: new Date(startedAt), ended_at: new Date(end), ms: end - startedAt, ttft_ms: null, steps: null, prompt_tokens: 0, cached_tokens: 0, output_tokens: 0, thought_tokens: 0, est_cost_usd: null, subject, tier: this.tierFor(kind, null) });
   }
 
   /** Reads the stage events every flow already emits. */
   observe(e: ReadingEvent): void {
     if (e.type !== 'stage' || typeof e.name !== 'string') return;
-    const key = `${e.name}|${typeof e.subject === 'string' ? e.subject : ''}`;
+    const subject = typeof e.subject === 'string' && e.subject ? e.subject : null;
+    const key = `${e.name}|${subject ?? ''}`;
     const status = e.status as string;
     if (status === 'start') {
-      this.open.set(key, { name: e.name, startedAt: this.now() });
+      this.open.set(key, { name: e.name, subject, startedAt: this.now() });
       return;
     }
     if (status === 'retrying') return;
@@ -233,12 +311,19 @@ export class RunTrace {
     // a stage reported only when done (the journal) has no start: its own `ms`, if any, gives one
     const startedAt = began?.startedAt ?? this.now() - (typeof e.ms === 'number' ? e.ms : 0);
     const finished = status === 'done' ? (e.cached ? 'cached' : 'ok') : status;
-    this.addStage(e.name, startedAt, finished, typeof e.reason === 'string' ? e.reason : null);
+    this.addStage(e.name, subject, startedAt, finished, typeof e.reason === 'string' ? e.reason : null);
+  }
+
+  /** Only the labels that were set, so a trace that never labelled writes no label column at all. */
+  private labelColumns(): Pick<Prisma.ReadingTraceUncheckedUpdateManyInput, (typeof LABEL_KEYS)[number]> {
+    const out: Record<string, unknown> = {};
+    for (const k of LABEL_KEYS) if (this.labels[k] !== undefined) out[k] = this.labels[k];
+    return out;
   }
 
   /** Writes what is left and closes the trace. Waits at most FINISH_WAIT_MS, and never throws. */
   async finish(s: FinishSummary): Promise<void> {
-    for (const o of this.open.values()) this.addStage(o.name, o.startedAt, 'unfinished', null);
+    for (const o of this.open.values()) this.addStage(o.name, o.subject, o.startedAt, 'unfinished', null);
     this.open.clear();
     this.flush();
     const end = this.now();
@@ -260,6 +345,7 @@ export class RunTrace {
         thought_tokens: this.totals.thought,
         est_cost_usd: round6(this.totals.usd),
         unpriced_calls: this.totals.unpriced,
+        ...this.labelColumns(),
       })
     );
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -299,16 +385,17 @@ export async function withRunTrace<T>(
 }
 
 /** Wraps one model request. With no trace running (a script, a test) it only runs the request. */
-export async function traceModelCall<T extends { usage: Usage; ttftMs?: number | null; timing?: Record<string, number> }>(agent: string, model: string, call: () => Promise<T>): Promise<T> {
+export async function traceModelCall<T extends { usage: Usage; ttftMs?: number | null; timing?: Record<string, number> }>(agent: string, model: string, call: () => Promise<T>, tags: ModelCallTags = {}): Promise<T> {
   const trace = currentTrace();
   if (!trace) return call();
   const startedAt = Date.now();
+  const extra = { subject: tags.subject ?? null, tier: tags.tier ?? null };
   try {
     const r = await call();
-    trace.addModelCall({ agent, model: r.usage.model, startedAt, status: 'ok', usage: r.usage, ...(r.ttftMs !== undefined ? { ttftMs: r.ttftMs } : {}), ...(r.timing ? { steps: r.timing } : {}) });
+    trace.addModelCall({ agent, model: r.usage.model, startedAt, status: 'ok', usage: r.usage, ...(r.ttftMs !== undefined ? { ttftMs: r.ttftMs } : {}), ...(r.timing ? { steps: r.timing } : {}), ...extra });
     return r;
   } catch (err) {
-    trace.addModelCall({ agent, model, startedAt, status: 'failed', failureReason: failureLabel(err) });
+    trace.addModelCall({ agent, model, startedAt, status: 'failed', failureReason: failureLabel(err), ...extra });
     throw err;
   }
 }

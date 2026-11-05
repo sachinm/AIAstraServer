@@ -16,7 +16,8 @@ import { sendMagicLinkEmail } from '../services/emailService.js';
 import { getCognitoAuth } from './cognitoClient.js';
 
 export type AuthProvider = 'local' | 'cognito';
-export type AccountRef = { id: string; role: string | null };
+/** `locked`: the code was right but the account is locked (auth.locked_at); the caller refuses to issue a token. */
+export type AccountRef = { id: string; role: string | null; locked?: boolean };
 
 const CODE_TTL_MS = 5 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,9 +48,10 @@ async function legacySendLoginCode(emailRaw: string): Promise<void> {
 
   const user = await prisma.auth.findFirst({
     where: { email: { equals: email, mode: 'insensitive' } },
-    select: { id: true, email: true },
+    select: { id: true, email: true, locked_at: true },
   });
-  if (!user) return;
+  // a locked account gets no code; the caller answers exactly as for an unknown address
+  if (!user || user.locked_at) return;
 
   const plain = generateMagicLinkCode();
   const hash = await hashPassword(plain);
@@ -84,6 +86,7 @@ async function legacyVerifyLoginCode(
     select: {
       id: true,
       role: true,
+      locked_at: true,
       magic_link_code_hash: true,
       magic_link_expires_at: true,
     },
@@ -98,7 +101,8 @@ async function legacyVerifyLoginCode(
     where: { id: user.id },
     data: { magic_link_code_hash: null, magic_link_expires_at: null },
   });
-  return { id: user.id, role: user.role };
+  // checked only after the code matched, so a locked address cannot be told apart by guessing
+  return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
 }
 
 export const legacyEmailCode = {
@@ -133,6 +137,7 @@ async function findAccountByEmail(email: string) {
       email: true,
       username: true,
       role: true,
+      locked_at: true,
       cognito_session: true,
       cognito_session_expires_at: true,
     },
@@ -149,7 +154,8 @@ async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
 
   // Only accounts we hold are sent to Cognito: unknown emails are a silent no-op, like the local provider.
   const user = await findAccountByEmail(email);
-  if (!user) return;
+  // a locked account gets no code; the caller answers exactly as for an unknown address
+  if (!user || user.locked_at) return;
 
   try {
     const cognito = getCognitoAuth();
@@ -223,14 +229,14 @@ async function cognitoVerifyLoginCode(
       const answered = await cognito.answerEmailOtp(user.email, code, stored as string);
       if (answered.status !== 'ok') return null;
       await clearStoredSession(user.id, stored);
-      return { id: user.id, role: user.role };
+      return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
     }
 
     // No sign-in session: this is the signup (or first-time, lazily created) confirmation code.
     // ConfirmSignUp fails for confirmed users.
     const confirmed = await cognito.confirmSignUp(user.email, code);
     if (confirmed.status !== 'confirmed') return null;
-    return { id: user.id, role: user.role };
+    return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
   } catch (err) {
     console.error('Cognito login code check failed:', (err as Error).message);
     return null;

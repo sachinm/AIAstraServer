@@ -18,6 +18,7 @@ import { prepareReaders, startReaderCache } from './prepare.js';
 import { getReaderMemo, savePrewarmed, setReaderMemo, type HeldReader } from './prewarm.js';
 import { ReaderFailure, runReader } from './runReader.js';
 import { readerTimeoutMs } from './readers.js';
+import { currentTrace } from '../metrics/trace.js';
 
 /** The cap the readers' prefix cache gets before the readers start without it. */
 const CACHE_WAIT_MS = 1_500;
@@ -44,6 +45,7 @@ export async function prewarmOracleReaders(prisma: PrismaClient, userId: string,
     const model = modelFor('reader');
     const guard = new CostGuard({ on: s.asOf });
     const prep = await prepareReaders({ rows: opts.rows ?? prismaChartRows(prisma), kundliId: data.kundliId, intent, question: s.question, asOf: s.asOf, pack, model });
+    currentTrace()?.label({ tier: prep.plan.tier, route: prep.route?.route ?? null, subjects: 1 });
     const owner = { userId, kundliId: data.kundliId };
     await Promise.race([startReaderCache(prep, model, owner, guard), new Promise((r) => setTimeout(r, CACHE_WAIT_MS))]);
     const entries: Array<{ key: string; held: HeldReader }> = [];
@@ -57,7 +59,7 @@ export async function prewarmOracleReaders(prisma: PrismaClient, userId: string,
           return;
         }
         try {
-          const out = await impl(req, { model, guard, cacheOwner: owner, timeoutMs: readerTimeoutMs(req.def, model) });
+          const out = await impl(req, { model, guard, cacheOwner: owner, timeoutMs: readerTimeoutMs(req.def, model), tier: prep.plan.tier });
           const held = { finding: out.finding, usage: out.usage };
           if (!out.repaired) {
             setReaderMemo(req.cacheKey, held);
