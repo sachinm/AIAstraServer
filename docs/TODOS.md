@@ -604,3 +604,21 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   those fields from `transit_range` with natal data (or split `transits` into a sky part and an overlay part), then build
   the reader's `TransitChart` from the shared sky plus `kundli_transit_overlays`. Hands-off until the engine pass, so only
   filed. Owner: reading-dev with the engine pass. Done: no `transit_snapshots` row is written per kundli.
+
+## Filed 2026-11-05 by the career area-reading planning session (docs/reading-engine/42, 43)
+
+- **P2: Questions are not labelled by bucket, so nothing can be ranked from our own users.** 2026-11-05. `reading_traces`
+  holds four rows and all have `bucket` null; the clarify `subBucket` lives only inside `intent_confirmed` JSON. Doc 43 §2
+  ranks career sub-areas from outside sources until we have 500 labelled career questions. Owner: reading-dev. Done: each
+  trace has its bucket and sub-bucket, and a count query by sub-bucket works.
+- **P2: Ledger categories cannot record most career events.** 2026-11-05. `src/reading/timeline/ledgerCategories.ts` has
+  only job start, end, promotion, transfer and role change. The career map's feedback needs salary change, gap, work
+  travel, relocation for work, recognition, team, business start, offer and visa (doc 42 §B.3). Owner: reading-dev.
+  Done: the categories exist in server and web and have tests.
+- **P2: Only four of 17 career sub-areas have a classifier sub-bucket.** 2026-11-05. `src/reading/buckets/taxonomy.ts`
+  has job change, promotion, job search, workplace trouble and career direction; doc 43 §2 ranks 17 (job security,
+  abroad, government job, business, salary, exams, transfer and others are missing). Owner: reading-dev. Done: Tier 1 and
+  Tier 2 sub-areas have sub-buckets and cues, with classifier tests.
+- **P3: Conditional dasha checks missing for two systems.** 2026-11-05. `dasha.applicable` returns `applies: null` for
+  Shattrimsa Sama and Shodasottari ("deva/pitri hora rule not implemented"), so the career map cannot know whether they
+  apply. Owner: engine pass (hands-off until Sachin opens it). Done: both return true or false.
