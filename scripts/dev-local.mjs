@@ -8,6 +8,10 @@ const env = {
   LUCKY_ENABLED: '1',
   AREA_ENABLED: '1',
   TIMELINE_ENABLED: '1',
+  // the question quota in the header (free plan) needs plans on, as on staging
+  PLANS_ENABLED: process.env.PLANS_ENABLED ?? '1',
+  PLAN_FREE_QUESTIONS: process.env.PLAN_FREE_QUESTIONS ?? '20',
+  PLAN_PLUS_QUESTIONS: process.env.PLAN_PLUS_QUESTIONS ?? '200',
   // https://developers.cloudflare.com/turnstile/troubleshooting/testing/ : always passes
   TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
 };

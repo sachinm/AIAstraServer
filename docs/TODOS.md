@@ -739,3 +739,20 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   (promotion, job change, getting a job, security, pay, abroad, business) by the planets that drive their peak; doc 42
   §A.2 wants each sub-area as its own marker with its own signification. Needs `MARKER_IDS` to become a parameter
   (signification, converge and five activators loop over it). Owner: reading-dev.
+- **P1: No audit log of account changes.** 2026-11-05. Profile edits, sign-in and OTP, plan and billing changes,
+  `person_facts` upserts and photo replacement overwrite their rows with no record of who changed what, when or from
+  where. `admin_actions` exists but nothing writes it, and it covers staff only. Clicks are logged separately in
+  `analytics_events`; this is a different kind of log. Owner: server. Done: an `account_events` table (actor self/staff,
+  action, before/after field names, ip prefix, at) written by `updateProfile`, the auth flows, billing, facts and photos;
+  shown on the admin User detail page.
+- **P2: No Techniques section in the Admin Panel.** 2026-11-05. Nobody can see how Happy Hour(s) scores a window or
+  which rules each scenario uses, except in `scenarios.ts` and `windows.ts`. See docs/admin/02. Owner: admin. Done: a
+  staff-only scenario list and a day view with scores and reason codes.
+- **P2: The lucky-times API sends window scores and reason codes to the user app.** 2026-11-05. The page does not
+  show them, but they are in the network response (`tithi:bhadra`, `hora:Venus`). Owner: server. Done: user responses
+  carry only what the page shows, and the reasons move to the admin API.
+- **P2: Research-flag chart view lives in the user app.** 2026-11-05. `ChatRightSidebar.tsx:207-215` shows raw biodata,
+  D1/D7/D9/D10 and the dasha to research-flag accounts. Owner: admin. Done: moved to the Admin Panel's Techniques section.
+- **P3: Analytics events and account audit have no retention.** 2026-11-05. `analytics_events`, `agent_runs`,
+  `ReadingRun` and the other system logs are kept until the user is deleted. Owner: privacy pass. Done: a retention
+  rule per table in docs/privacy, and a sweep job.
