@@ -33,6 +33,7 @@ import { registerAreaRoutes } from './src/routes/areaRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
+import { seedTechniqueRegistry } from './src/techniques/catalog.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
@@ -312,6 +313,8 @@ registerAreaRoutes(app, { prisma, requireUser });
 registerProfileRoutes(app, { prisma, requireUser });
 // the agent registry (docs/reading-engine/49 §4.1): idempotent seed, never blocks boot
 void seedAgentRegistry(prisma).catch(() => undefined);
+// the technique catalogue (docs/admin/03 §4.1): idempotent seed, logs once, never blocks boot
+void seedTechniqueRegistry(prisma).catch(() => undefined);
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
