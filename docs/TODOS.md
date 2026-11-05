@@ -673,3 +673,20 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
 - **P3: `transit_ashtakavarga` and `daily_grade` have no server fetcher.** 2026-11-05. Both are served by the engine and
   listed in the catalog as moving types; `store.ts` refuses moving types and nothing else fetches them. Doc 46 §B.5 and
   doc 45 §4.1 need them. Owner: reading-dev (Node fetch only, no astrology).
+
+## Filed 2026-11-05 by the lucky-times planning session (docs/reading-engine/47)
+
+- **P3: Engine `drik.nakshatra` start time is wrong when the star began the previous day.** 2026-11-05. `daily_export._star_span`
+  works around it; any new type calling `drik.nakshatra` directly inherits the bug (so do `amrita_gadiya` and `varjyam`
+  in drik). Owner: engine pass. Done: `nakshatra()` returns the true start or the export's `_star_span` is the shared path.
+- **P3: Engine `panchanga_at` returns noon values only and drops a second tithi, star or yoga in the same day.** 2026-11-05.
+  `prashna_export.panchanga_at`; the extra tuple drik returns is discarded. Doc 47 §3.3 asks for sunrise values and a
+  `changes[]` list. Owner: engine pass.
+- **P3: Engine `_resolve_place` uses today's UTC offset from Nominatim for any non-Indian city.** 2026-11-05. `export._resolve_place`
+  → `utils.get_place_timezone_offset` (timezonefinder at "now"); the bundled `data/world_cities_with_tz.csv` with IANA
+  zones is not consulted. Callers must pass `params.tz_name`; doc 47 §3.3 asks the API to resolve it. Owner: engine pass.
+- **P3: Engine `drik.vaara` turns to the next weekday just after local noon.** 2026-11-05. Documented in `docs/daily-types.md`
+  and worked around in the export; a direct caller gets the wrong weekday in the afternoon. Owner: engine pass.
+- **P2: Served day functions not exposed: moonrise/moonset, choghadiya, amrit kaal, lunar month, samvatsara, chandrashtama, udaya lagna, festivals.**
+  2026-11-05. All exist in `drik.py` / `vratha.py`; no Lambda type returns them. Doc 47 §3.3 lists the additions. Owner:
+  engine pass (Sachin opens).
