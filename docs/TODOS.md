@@ -803,8 +803,9 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   requires every declared selector. Doc 53 §4.4 selects `general.annual_set` on "horizon within 24 months **or** question
   type timing" and `general.person` on "slot other_person **or** a person subject". The catalogue declares the first
   half of each (annual: horizons now/3m/6m/1y/custom; person: subjects children, siblings, marriage_relationship) and
-  says so in `special`. Owner: reading-dev. Done: the matcher gains an any-of group (or the two rows are split) and the
-  two selectors say the whole rule.
+  says so in `special`. **2026-11-06:** the person half is now an any-of rule in `src/techniques/use.ts` (the slot
+  other_person selects `general.person` on any subject); the annual half stays. Owner: reading-dev. Done: the matcher
+  gains an any-of group (or the row is split) and the annual selector says the whole rule.
 - **P2: Analyst contracts name the v2 prompts and `findings.v2`, which only run under `READING_FINDINGS=v2`.**
   `src/reading/nodes/specialists.ts` picks `prompts/v2/<analyst>.md` and the v2 schema only when `readingFindingsV2()`
   is on; otherwise `prompts/<analyst>.md` and the v1 schema run. The catalogue rows general.promise / dasha / transit /
@@ -862,3 +863,33 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   allows it and an unauthenticated upload still returns 401, but nobody has proved the header reaches the origin.
   Owner: Sachin (needs a signed-in session). Done: a selfie uploads on vedic-astrology.app without a `no_face` error.
   Status of the earlier P2 above: header added, this is its check.
+
+## Filed 2026-11-06 by the techniques-in-use build (doc 54 §5 S5, branch `feat/techniques-in-use`)
+
+- **P2: The life horizon no longer runs the year-chart reader R11 in the oracle flow.** `general.annual` selects
+  horizons now/3m/6m/1y/custom (doc 53 §4.4), and `src/techniques/use.ts READER_TECHNIQUE` ties R11 to it, so a tier-1
+  life reading (horizon `life`) drops R11 from `BY_TIER[1]`. Everything else selects as before (the graph's annual layer
+  already ran only within 13 months). Owner: Sachin (product) / reading-dev. Done: either `life` is added to the
+  annual selectors (or the any-of "or question type timing" rule of the matcher item above lands), or this is accepted
+  and the item deleted.
+- **P2: The analysts' own user turn does not carry FACTS yet.** `run.ts` puts the confirmed `person_facts` in the tail
+  (writer, single call, Oracle) as `FACTS (...)`, but `nodes/specialists.ts runSpecialist` and the oracle readers'
+  `buildReaderRequest` still send no FACTS, though every analyst contract lists it (doc 53 §4.4). Adding it changes the
+  specialist prompts and must join the findings-cache key (`nodes/findingsCache.ts findingCacheKey`) and the readers'
+  `cacheKey`. Owner: reading-dev. Done: FACTS in both, both cache keys include a facts hash, prompt tests updated.
+- **P2: Prewarm does not apply the technique selection.** `oracle/prewarmReaders.ts` calls `prepareReaders` without
+  `allowedReaders`, so during clarify it may read a reader the question will not run (only R11 on a life horizon
+  today; any reader once selectors narrow). Harmless (an unused memo) but billed. Owner: reading-dev. Done: prewarm
+  computes `techniquesForQuestion` with the facts it has and passes `allowedReaders`.
+- **P2: Digest fields with no dossier equivalent are kept from the dossier on the digest path.** `packs/digestSource.ts`
+  keeps the dossier's values for body `deg` (the digest card's `degree` is not stated as degrees within the sign in doc
+  54 §2), `conj` (the digest's conjunctions include an 8° rule the dossier's do not), the varga lagna sign and the varga
+  house `sign` (the dossier's varga rows carry sign numbers), the star lord's house, shadbala rupas and `co_lord`, and
+  `detail.yogas` (its filter reads a source label digest rows lack). Owner: reading-dev with S1. Done: each is either
+  served by the digest in the pack's spelling or confirmed as dossier-only, and this list shrinks to the latter.
+- **P3: The deterministic readers' Narayana and Chara periods wait for the activation calendar.** `general.jaimini`
+  reads points, house classes and argala; the rasi-dasha half of its contract (doc 53 §4.4) needs `kundli_activation`
+  (S1, M33) in the pack. Owner: reading-dev. Done: the digest section carries the horizon's Narayana/Chara rows and the
+  reader cites them.
+- **P3: Deterministic readers are not prewarmed or cached.** They are code over the pack (milliseconds), so they rerun
+  per question; noted only so nobody adds a model call there without the cost guard. Owner: reading-dev.
