@@ -85,8 +85,15 @@ describe('technique catalogue', () => {
       expect(t.status, id).toBe('built');
       expect(t.special, id).toContain(successor);
     }
-    for (const id of ['general.varga_dynamics', 'general.strength_yoga', 'general.jaimini', 'general.person', 'self.protection', 'love.protection', 'love.meet', 'love.health', 'love.reconcile']) {
+    for (const id of ['general.varga_dynamics', 'general.strength_yoga', 'general.jaimini', 'general.person', 'self.varga', 'self.nakshatra', 'love.varga', 'love.nakshatra']) {
       expect(techniqueById(id)?.status, id).toBe('planned');
+    }
+    // doc 54 §3 (S3): the Self and Love layers read from the digest, and the love.status sub-areas
+    for (const id of ['self.promise', 'self.affliction', 'self.protection', 'self.activation', 'self.transit', 'self.annual', 'love.promise', 'love.affliction', 'love.protection', 'love.activation', 'love.transit', 'love.annual', 'love.meet', 'love.health', 'love.reconcile']) {
+      const t = techniqueById(id)!;
+      expect(t.status, id).toBe('built');
+      expect(t.agents, id).toEqual([id.startsWith('self.') ? 'area.self_board' : 'area.love_board']);
+      expect(t.code, id).toMatch(/^src\/reading\/area\//);
     }
     for (const id of ['general.transit', 'general.nakshatra', 'general.prashna', 'general.oracle', 'general.validator', 'general.intake', 'general.clarify', 'general.reader']) expect(techniqueById(id)?.status, id).toBe('built');
     expect(TECHNIQUES.filter((t) => t.id.startsWith('digest.')).every((t) => t.category === 'general' && t.board === 'chat')).toBe(true);
@@ -95,9 +102,10 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/digest\//);
     }
-    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general + 3 digest; planned: 4 work + 8 love layers + 3 love sub-areas + 8 self layers + 4 general
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11 + 3);
-    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 8 + 3 + 8 + 4);
+    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general + 3 digest + 6 self layers + 6 love layers + 3 love sub-areas;
+    // planned: 4 work + 2 love layers + 2 self layers + 4 general
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11 + 3 + 6 + 6 + 3);
+    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 2 + 2 + 4);
     expect(TECHNIQUES).toHaveLength(63);
   });
 

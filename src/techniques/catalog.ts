@@ -449,7 +449,52 @@ interface LayerTarget {
   planets: string;
   /** the digest point rows the layers read */
   points: string;
+  /** the layers built from the digest (src/reading/area/houseLayers.ts); the rest stay planned */
+  built: { agent: string; config: string; layers: Partial<Record<string, string[]>> };
 }
+
+/** What the built layers do, written from src/reading/area/houseLayers.ts (doc 54 §3). */
+const BUILT_LAYER_STEPS = (t: { houses: string; houseNumbers: number[]; vargas: string[] }): Record<string, string[]> => ({
+  promise: [
+    `For each of ${t.houses}: read the D1 house card from the digest`,
+    "The lord in the house itself or in a house the engine labels kendra or trikona: +2; the lord's dignity exalted, own or moolatrikona: +2",
+    'Each occupant and each graha drishti whose functional nature the engine labels benefic: +1 (malefic: −1, kept for the score only)',
+    'SAV of the house ≥ 28: +1; a yoga in the register whose houses or planets include the house or its lord: +1 to +2 by class',
+    "The lord's avastha scales the supports: x0.5 when mrita or sushupta, x1.25 when jagrat or deepta",
+    "The area's planets: dignified in D1 +1; shadbala ratio ≥ 1.2 +1",
+    'Each support becomes one plain line; the digest keys go in its evidence',
+  ],
+  affliction: [
+    'The lord in a house the engine labels dusthana: 2; debilitated without a cancellation in the yoga register: 2; combust: 1 (no release); in planetary war: 1',
+    "Saturn or a node (Love: also Mars) occupying the house: 1.5, aspecting it: 1; the same conjunct or aspecting the area's planets",
+    'The named yogas of the area (Kemadruma for Self; Kalathra and Manglik for Love) and doshas on the houses, unless the register lists their cancellation; the Moon in gandanta for Self',
+    "Each pressure's until-date: the end of the afflicting planet's period running today in the activation calendar (the main clock first, else any family); none when it is not running",
+  ],
+  protection: [
+    "Jupiter aspecting or occupying the houses, aspecting or joining the area's planets, or aspecting the house of its points: +2",
+    "Benefic argala on the houses (primary argala, not obstructed, functional benefic): +1; the house lord's dispositor dignified: +1",
+    "A cancellation in the yoga register (neecha bhanga and the like) naming a house lord or one of the area's planets: +2",
+    'The owning varga check: the varga house lord dignified (Love: D9 h7; Self: D9 h1): +2',
+  ],
+  activation: [
+    `Read every activation row from 13 months back to 30 years ahead that activates houses ${t.houseNumbers.join(',')}, to level 2`,
+    `Grade the period lord: functional benefic +1 / malefic −1; dignity in D1 ±1 and in ${t.vargas.find((v) => v !== 'D1') ?? 'D9'} ±1; it owns one of the houses +1, else owns a dusthana −1. A sign period is graded by the lord of that sign's D1 house card (+1 when that house is one of the area's)`,
+    'Families vote like the Work board: main clock, conditional clock, sign clock, karaka clock, and the short clocks only when Yogini and Tithi Ashtottari agree; a system votes support at ≥ 0.5 and test at ≤ −0.5 of its level-weighted sum',
+    'Windows ahead: level-2 periods inside 36 months land in a sub-area when their lord is one of its distinguishing planets (a sign period when it activates one of its houses); overlaps merge; a main-clock change inside 30 years is a turning point',
+  ],
+  transit: [
+    "Read the kundli's stored sky overlay covering today (never fetched here); omitted with a note when none is stored",
+    "Jupiter in one of the houses (the engine's house_from_lagna): a support until it moves on; Saturn: a pressure until it moves on; Rahu or Ketu: a pressure",
+    'Self: a running sade sati span is a pressure until its end',
+    'The layer is one vote in the tone',
+  ],
+  annual: [
+    'Pick the year chart whose year dashas cover today (the tithi pravesha before the varsha chart)',
+    "Each house's year lord in the house itself or a kendra/trikona of the year chart without debility: confirms; in a dusthana: contradicts",
+    "The area's sahams in a kendra of the year chart: confirms (Love: santapa and paradara there contradict)",
+    'The sum is one vote in the tone and one plain line under This year',
+  ],
+});
 
 function houseStateLayers(t: LayerTarget): TechniqueDef[] {
   const vargaCharts = t.vargas.map((v) => c('divisional', v));
@@ -459,22 +504,26 @@ function houseStateLayers(t: LayerTarget): TechniqueDef[] {
   const planetIn = inp('planet', `D1 and ${t.vargas[0] === 'D1' ? t.vargas[1] : t.vargas[0]} cards of ${t.planets}`, 'planet_card');
   const pointIn = inp('point', t.points, 'point_row');
   const yogaIn = inp('yoga', `yogas and doshas joining houses ${t.houseNumbers.join(',')} or their lords or ${t.planets}`, 'yoga_row');
-  const row = (name: string, title: string, section: string, charts: TechniqueChart[], algorithm: string[], inputs: ContractInput[], special?: string): TechniqueDef => ({
-    id: `${t.prefix}.${name}`,
-    title,
-    category: t.prefix,
-    board: t.board,
-    status: 'planned',
-    charts,
-    algorithm,
-    ...(special ? { special } : {}),
-    source: `docs/reading-engine/46 §${section}; 53 §4.5`,
-    code: 'not built (house-state engine, doc 46, read from the digest, doc 53 step 6)',
-    agents: [],
-    accuracy: 'none',
-    selectors,
-    contract: codeContract(inputs, 'house_state.v1'),
-  });
+  const steps = BUILT_LAYER_STEPS(t);
+  const row = (name: string, title: string, section: string, charts: TechniqueChart[], algorithm: string[], inputs: ContractInput[], special?: string): TechniqueDef => {
+    const fns = t.built.layers[name];
+    return {
+      id: `${t.prefix}.${name}`,
+      title,
+      category: t.prefix,
+      board: t.board,
+      status: fns ? 'built' : 'planned',
+      charts,
+      algorithm: fns ? steps[name]! : algorithm,
+      ...(special ? { special } : {}),
+      source: `docs/reading-engine/46 §${section}; 53 §4.5${fns ? '; 54 §3' : ''}`,
+      code: fns ? `src/reading/area/houseLayers.ts ${fns.join(', ')}; ${t.built.config}; boardService.ts getAreaBoard` : 'not built (house-state engine, doc 46, read from the digest, doc 53 step 6)',
+      agents: fns ? [t.built.agent] : [],
+      accuracy: fns ? `area_checks:${t.prefix}` : 'none',
+      selectors,
+      contract: codeContract(inputs, fns ? 'area_board.v1' : 'house_state.v1'),
+    };
+  };
   const layers = [
     row('promise', `Natal promise of ${t.houses}`, 'B.2', [c('natal', 'facts'), c('natal', 'house_counts'), c('natal', 'dignities'), c('natal', 'aspects'), c('jaimini', 'argala'), c('ashtakavarga', 'sav'), c('natal', 'strength.bhava'), c('natal', 'yogas'), c('natal', 'doshas'), c('jaimini', 'arudhas'), c('natal', 'avasthas')], [
       `For ${t.houses}: lord in a kendra, trikona or the house itself +2; in 6, 8 or 12 −2`,
@@ -541,10 +590,12 @@ function houseStateLayers(t: LayerTarget): TechniqueDef[] {
 const LOVE_PLANNED = houseStateLayers({
   prefix: 'love', board: 'love', houses: 'house 7', houseNumbers: [7, 5, 11, 2, 4, 8, 12], vargas: ['D9', 'D7', 'D30'], karakas: 'Venus for the 7th',
   subjects: ['marriage_relationship'], planets: 'Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord', points: 'UL, A7, DK, AL',
+  built: { agent: 'area.love_board', config: 'love.ts LOVE', layers: { promise: ['promiseLayer'], affliction: ['afflictionLayer', 'releaseOf'], protection: ['protectionLayer'], activation: ['gradeRow', 'familyVotes', 'aheadWindows'], transit: ['transitLayer'], annual: ['currentYear', 'annualLayer'] } },
 });
 const SELF_PLANNED = houseStateLayers({
   prefix: 'self', board: 'you', houses: 'houses 1, 4 and 5 with the Moon', houseNumbers: [1, 4, 5, 9, 12], vargas: ['D1', 'D9', 'D20', 'D24', 'D12', 'D4', 'D7', 'D60'], karakas: 'Sun for the 1st, Moon and Mercury for the 4th, Jupiter for the 5th',
   subjects: ['general_life_direction', 'health_body', 'education_learning', 'spirituality_moksha'], planets: 'the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK', points: 'AK, SL, AL',
+  built: { agent: 'area.self_board', config: 'self.ts SELF', layers: { promise: ['promiseLayer'], affliction: ['afflictionLayer', 'releaseOf'], protection: ['protectionLayer'], activation: ['gradeRow', 'familyVotes', 'aheadWindows'], transit: ['transitLayer'], annual: ['currentYear', 'annualLayer'] } },
 });
 
 /** The Love sub-areas the companion memory's love.status selects (doc 53 §4.5; doc 46 §B.12): planned rows over the same layers. */
@@ -559,13 +610,13 @@ const LOVE_SUBAREAS: TechniqueDef[] = (
   title: s.title,
   category: 'love' as const,
   board: 'love' as const,
-  status: 'planned' as const,
+  status: 'built' as const,
   charts: [c('natal', 'facts'), c('divisional', 'D9'), c('dasha', 'vimshottari'), c('transit', 'transit_contacts')],
-  algorithm: [...s.steps, `Selected when the companion memory says love.status is ${s.statuses.join(' or ')}`],
-  source: 'docs/reading-engine/53 §4.5; 46 §B.12',
-  code: 'not built (house-state engine, doc 46, read from the digest, doc 53 step 6)',
-  agents: [],
-  accuracy: 'none',
+  algorithm: [...s.steps, `Leads the Love board when the companion memory says love.status is ${s.statuses.join(' or ')} (love.ts LOVE_LEAD); its windows show only when love.status fits it (LOVE_FIT)`],
+  source: 'docs/reading-engine/53 §4.5; 46 §B.12; 54 §3',
+  code: 'src/reading/area/love.ts LOVE_LEAD, LOVE_FIT; boardService.ts shapeBoard',
+  agents: ['area.love_board'],
+  accuracy: 'area_checks:love',
   selectors: { boards: ['love' as const], subjects: ['marriage_relationship' as const], houses: [7, 5, 11], vargas: ['D9'], facts: { 'love.status': [...s.statuses] } },
   contract: codeContract([inp('findings', 'the eight Love layers of this kundli (love.promise … love.nakshatra)', 'findings_in')], 'board_subarea.v1'),
 }));
