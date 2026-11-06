@@ -814,10 +814,6 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   `{ boards: ['lucky'] }`: the act the person taps picks the scenario, which no clarify slot or fact expresses. The
   contracts test leaves them out of the "no two built rows share output, selectors and inputs" check. Owner: lucky.
   Done: a `scenario` selector (or the act as a slot) once the Lucky times board sends it.
-- **P2: Step 0 of doc 53 is not finished in the admin app.** The server side ships (M31, contracts, matcher, trace
-  label, seed); the admin Techniques page does not yet show `selectors` and `contract` (`GET /techniques/:id`, doc 53
-  §4.7–§4.8) and docs/admin/05 (the techniques catalogue document, untracked in the main checkout) is not regenerated.
-  Owner: admin. Done: the admin page shows "Reads", "Prompt" and "Selected when"; docs/admin/05 lists both fields.
 - **P3: `general.clarify`'s system prompt lives in the database.** The clarify agent reads `clarify.system` from
   `system_prompts` (`src/reading/clarify/planner.ts getAgentPrompt`), so its contract says `db:clarify.system`;
   `contractProblems` accepts any `db:` name without checking it exists. Owner: reading-dev. Done: the check reads
