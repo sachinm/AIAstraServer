@@ -1,9 +1,11 @@
 /**
- * The technique catalogue (docs/admin/03 §4.1): one entry per board function or reading technique, with the charts it
- * reads, its algorithm in plain steps (written from the code path it names), its source, the agents that run it and
- * where its accuracy evidence comes from. The catalogue is code; at boot it is upserted into `technique_registry`, which
- * the admin panel reads. Runs are tagged with a technique id when they are written (src/agents/registry.ts withAgentRun,
- * src/reading/metrics/trace.ts).
+ * The technique catalogue (docs/admin/03 §4.1; docs/reading-engine/53 §4.3): one entry per board function or reading
+ * technique, with the charts it reads, its algorithm in plain steps (written from the code path it names), its source,
+ * the agents that run it and where its accuracy evidence comes from. Since doc 53 every row is also a contract: its
+ * `selectors` say when the clarify context and the companion memory pick it, its `contract` what it reads (digest
+ * sections in a named layout, src/techniques/layouts.ts), under which prompt, and what it returns. The catalogue is code;
+ * at boot it is upserted into `technique_registry`, which the admin panel reads. Runs are tagged with a technique id when
+ * they are written (src/agents/registry.ts withAgentRun, src/reading/metrics/trace.ts).
  *
  * Nothing here computes anything astrological: it labels. Steps describe what the named code does with the engine's
  * stored values.
@@ -11,8 +13,11 @@
 import type { PrismaClient } from '@prisma/client';
 import { FAMILIES, FAMILIES_NOT_BUILT } from '../reading/area/career.js';
 import { SCENARIOS, type ScenarioRule } from '../reading/luckyTimes/scenarios.js';
+import { HORIZONS, SUBJECT_IDS, type SubjectId } from '../reading/packs/frames.js';
 import { SYSTEM_LABELS } from '../reading/timeline/types.js';
 import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
+import type { ContractInput, ContractSection, TechniqueContract, TechniqueSelectors } from './contracts.js';
+import type { LayoutId } from './layouts.js';
 
 export type TechniqueBoard = 'you' | 'love' | 'work' | 'lucky' | 'chat';
 export type TechniqueStatus = 'built' | 'partial' | 'planned';
@@ -43,9 +48,22 @@ export interface TechniqueDef {
   agents: string[];
   /** area_checks:<area> | staff | none */
   accuracy: string;
+  /** when the clarify context picks it (doc 53 §4.3); an empty object matches everything */
+  selectors: TechniqueSelectors;
+  /** what it reads, under which prompt, and what it returns (doc 53 §4.3) */
+  contract: TechniqueContract;
 }
 
 const c = (source: ChartSource, id: string): TechniqueChart => ({ source, id });
+const inp = (section: ContractSection, filter: string, layout: LayoutId): ContractInput => ({ section, filter, layout });
+/** A code technique: no prompt, no user turn, an output type instead of a schema (doc 53 §4.3). */
+const codeContract = (inputs: ContractInput[], output: string, synthesizer?: string): TechniqueContract => ({ inputs, system: 'none', user: [], output, ...(synthesizer ? { synthesizer } : {}) });
+
+/** The user-turn fields every General Reading analyst is sent (doc 53 §4.3, §4.4: FACTS carries the matched person_facts). */
+export const ANALYST_USER_FIELDS = ['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS'];
+const ALL_SUBJECTS: SubjectId[] = [...SUBJECT_IDS];
+const ALL_HORIZONS: string[] = [...HORIZONS, 'custom'];
+const ALL_BOARDS: TechniqueBoard[] = ['chat', 'you', 'love', 'work', 'lucky'];
 
 // ---------------------------------------------------------------- Work board (src/reading/area/career.ts)
 
@@ -65,6 +83,13 @@ const CAREER_CHARTS: TechniqueChart[] = [
 ];
 const CAREER_AGENTS = ['area.career_inputs', 'area.career_map'];
 const GRID_STEP = 'Read the timeline grid for the career marker, built from the stored dashas, house table and transit contacts over 24 months back to 24 months ahead (timeline/pipeline.ts buildTimelineSpan)';
+
+/** The Work board's selectors: the board itself and the career subject; the companion memory's work.status gates sub-areas inside the service, not whole techniques (careerService.ts fitsStatus). */
+const WORK_SELECTORS: TechniqueSelectors = { boards: ['work'], subjects: ['career_work'], houses: [10, 6, 1, 2, 11], vargas: ['D1', 'D10'] };
+const WORK_HOUSE_INPUT = inp('house', 'D1,D10 houses 10,6,1,2,11', 'house_card');
+const WORK_ACTIVATION_INPUT = inp('activation', 'families S1, S4, S2+S3, S6/S6D, S7 ±24 months', 'activation_row');
+const WORK_TRANSIT_INPUT = inp('transit', 'contacts and double transit on houses 10,6,1 and their lords ±24 months', 'transit_row');
+const WORK_CONTRACT = codeContract([WORK_HOUSE_INPUT, WORK_ACTIVATION_INPUT, WORK_TRANSIT_INPUT], 'career_map.v1');
 
 const WORK_BUILT: TechniqueDef[] = [
   {
@@ -92,6 +117,8 @@ const WORK_BUILT: TechniqueDef[] = [
     code: 'src/reading/area/career.ts presentState',
     agents: CAREER_AGENTS,
     accuracy: 'area_checks:career',
+    selectors: WORK_SELECTORS,
+    contract: WORK_CONTRACT,
   },
   {
     id: 'work.security_grade',
@@ -113,6 +140,8 @@ const WORK_BUILT: TechniqueDef[] = [
     code: 'src/reading/area/career.ts securityGrade',
     agents: CAREER_AGENTS,
     accuracy: 'staff',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([inp('house', 'D1 houses 10,9,5,6,8,12 and their lords', 'house_card'), WORK_ACTIVATION_INPUT, WORK_TRANSIT_INPUT], 'career_map.v1'),
   },
   {
     id: 'work.subarea_windows',
@@ -129,12 +158,14 @@ const WORK_BUILT: TechniqueDef[] = [
       'Support windows of the business marker become business; of the money marker, pay, when they overlap a career support window; of the residence marker, abroad, when a driver is Rahu or the 12th or 9th lord',
       'Each window keeps its dates, peak month, band, score (to one decimal), the families active and the driver planets',
       'Sort by start date, then get_job, job_change, promotion, job_security, abroad, pay, business',
-      "The service hides sub-areas that do not fit the person's stated work status (careerService.ts fitsStatus)",
+      "The service hides sub-areas that do not fit the person's stated work status (careerService.ts fitsStatus): get_job only for between_jobs or studying; promotion and job_security not for between_jobs, studying or own_business; business for own_business or when the status is unknown",
     ],
     source: 'docs/reading-engine/43 §2, §8.3',
     code: 'src/reading/area/career.ts careerMap (ahead), careerSubareas',
     agents: CAREER_AGENTS,
     accuracy: 'staff',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([WORK_HOUSE_INPUT, inp('house', 'D1 houses 2,11 (money), 4 (residence), 7 (business) and their lords', 'house_card'), WORK_ACTIVATION_INPUT, WORK_TRANSIT_INPUT], 'career_map.v1'),
   },
   {
     id: 'work.horizons',
@@ -153,6 +184,8 @@ const WORK_BUILT: TechniqueDef[] = [
     code: 'src/reading/area/career.ts careerMap (horizons)',
     agents: CAREER_AGENTS,
     accuracy: 'staff',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([WORK_HOUSE_INPUT, inp('activation', 'families S1, S4, S2+S3, S6/S6D, S7 this month to +12 months', 'activation_row'), WORK_TRANSIT_INPUT], 'career_map.v1'),
   },
   {
     id: 'work.looking_back',
@@ -172,6 +205,8 @@ const WORK_BUILT: TechniqueDef[] = [
     code: 'src/reading/area/career.ts careerMap (back); src/reading/area/careerService.ts recordCheck',
     agents: CAREER_AGENTS,
     accuracy: 'area_checks:career',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([WORK_HOUSE_INPUT, inp('activation', 'families S1, S4, S2+S3, S6/S6D, S7 −12 months to this month', 'activation_row'), WORK_TRANSIT_INPUT], 'career_map.v1'),
   },
 ];
 
@@ -189,10 +224,12 @@ const WORK_PLANNED: TechniqueDef[] = [
       "Read the houses of the rajya and karma sahams",
       'Cast one vote (support, test or neutral) as the sixth family of the present tone',
     ],
-    source: 'docs/reading-engine/43 §8.1 (family 5); 46 §B.6',
-    code: 'not built (career.ts FAMILIES_NOT_BUILT)',
+    source: 'docs/reading-engine/43 §8.1 (family 5); 46 §B.6; 53 §4.5',
+    code: 'not built (career.ts FAMILIES_NOT_BUILT; reads the digest annual set, doc 53 step 3)',
     agents: [],
     accuracy: 'none',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([inp('annual', 'TP current year, D1 and D10, houses 10,6,1,2,11; rajya and karma sahams; year dasha running this month', 'annual_row')], 'family_vote.v1', 'work.present_tone'),
   },
   {
     id: 'work.conditional_family',
@@ -206,10 +243,12 @@ const WORK_PLANNED: TechniqueDef[] = [
       "Take the running lords at three levels and cast the main clock's career polarity rule on them",
       'No vote when none applies',
     ],
-    source: 'docs/reading-engine/43 §8.1 (family 2); 46 §B.4',
-    code: 'not built (career.ts FAMILIES_NOT_BUILT)',
+    source: 'docs/reading-engine/43 §8.1 (family 2); 46 §B.4; 53 §4.5',
+    code: 'not built (career.ts FAMILIES_NOT_BUILT; reads the activation calendar, doc 53 step 3)',
     agents: [],
     accuracy: 'none',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([inp('activation', 'conditional systems named by dasha.applicable, levels 1–3, periods covering this month ±1, houses 10,6,1', 'activation_row')], 'family_vote.v1', 'work.present_tone'),
   },
   {
     id: 'work.karaka_family',
@@ -223,10 +262,12 @@ const WORK_PLANNED: TechniqueDef[] = [
       'AmK or the 10th lord running gives support unless it is afflicted in D10',
       'One planet, one vote across the main, conditional and karaka clocks',
     ],
-    source: 'docs/reading-engine/43 §8.1 (family 4); 46 §B.4',
-    code: 'not built (career.ts FAMILIES_NOT_BUILT)',
+    source: 'docs/reading-engine/43 §8.1 (family 4); 46 §B.4; 53 §4.5',
+    code: 'not built (career.ts FAMILIES_NOT_BUILT; reads the activation calendar, doc 53 step 3)',
     agents: [],
     accuracy: 'none',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([inp('activation', 'karaka dasha level 3, periods covering this month ±1', 'activation_row'), inp('point', 'AmK and the 10th lord in D1 and D10', 'point_row'), inp('planet', 'D10 card of the running karaka lord', 'planet_card')], 'family_vote.v1', 'work.present_tone'),
   },
   {
     id: 'work.d10_check',
@@ -242,10 +283,12 @@ const WORK_PLANNED: TechniqueDef[] = [
       "When D1 and D10 disagree, the family's vote is split and not counted",
     ],
     special: 'Waits for the house-state engine (doc 46)',
-    source: 'docs/reading-engine/43 §8.1; 46 §B.7',
-    code: 'not built (career.ts header: waits for doc 46)',
+    source: 'docs/reading-engine/43 §8.1; 46 §B.7; 53 §4.5',
+    code: 'not built (career.ts header: waits for doc 46; reads the D10 house cards of the digest, doc 53 step 3)',
     agents: [],
     accuracy: 'none',
+    selectors: WORK_SELECTORS,
+    contract: codeContract([inp('activation', 'running lords of the main, conditional and karaka clocks this month', 'activation_row'), inp('planet', 'D1, D10, D9, D60 cards of those lords', 'planet_card'), inp('house', 'D10 houses 10,6,1,2,11', 'house_card')], 'vote_check.v1', 'work.present_tone'),
   },
 ];
 
@@ -253,22 +296,29 @@ const WORK_PLANNED: TechniqueDef[] = [
 
 const LUCKY_CHARTS: TechniqueChart[] = [c('panchang', 'tithi'), c('panchang', 'nakshatra'), c('panchang', 'weekday'), c('panchang', 'hora'), c('panchang', 'muhurta'), c('panchang', 'kalams')];
 const list = (xs: readonly string[]): string => (xs.length ? xs.join(', ') : 'none');
+const LUCKY_SELECTORS: TechniqueSelectors = { boards: ['lucky'] };
+const PANCHANG_INPUT = inp('panchang', "the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)", 'panchang_day');
+const OVERLAY_INPUT = inp('panchang', "the person's overlay for the same days (tara, chandra bala, grade)", 'panchang_day');
 
-/** One scenario's algorithm, from its rule row (scenarios.ts) and the scoring in windows.ts scenarioDay. */
+/**
+ * One scenario's algorithm, from its rule row (scenarios.ts) and the scoring in windows.ts scenarioDay. Every step is
+ * marked General (the same for everyone at the place, from the shared day table) or Personal (from the person's chart),
+ * as doc 53 §4.6 asks; the Why sheet groups them the same way.
+ */
 export function scenarioAlgorithm(s: ScenarioRule): string[] {
   const from = s.hours[0] === 'sunrise' ? 'sunrise' : `${String(s.hours[0]).padStart(2, '0')}:00`;
   const steps = [
-    "Read the place's stored day row (engine muhurta: panchang at noon, horas, kalams, muhurtas)",
-    s.dayAvoid.length ? `Whole day avoided on: ${list(s.dayAvoid)}` : 'No weekday is avoided',
-    `Candidates: each hora between ${from} and ${String(s.hours[1]).padStart(2, '0')}:00 local, cut to those hours, 20 minutes or more${s.useBrahma ? '; plus brahma muhurta (+2)' : ''}`,
-    'Cut out the avoid bands (rahu kalam, yamagandam, gulikai, durmuhurtam, varjyam); drop pieces under 20 minutes',
-    `Weekday favoured (+1): ${list(s.dayFavour)}`,
-    `Tithi group, inside its own span: favoured (+1) ${list(s.tithiFavour)}; avoided (piece dropped) ${list(s.tithiAvoid)}`,
-    `Star group, inside its own span: favoured (+1) ${list(s.starFavour)}; avoided (−2) ${list(s.starAvoid)}`,
-    `Hora lord: favoured (+2) ${list(s.horaFavour)}; avoided (−3) ${list(s.horaAvoid)}`,
-    'Abhijit overlap of 10 minutes or more (+2); amrita gadiya overlap (+2); good muhurtas covering half the piece (+1)',
-    "Personal overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)",
-    `Keep pieces scoring ${s.floor} or more; show the best two in time order`,
+    "General: read the place's stored day row (engine muhurta: panchang at noon, horas, kalams, muhurtas)",
+    s.dayAvoid.length ? `General: whole day avoided on: ${list(s.dayAvoid)}` : 'General: no weekday is avoided',
+    `General: candidates are each hora between ${from} and ${String(s.hours[1]).padStart(2, '0')}:00 local, cut to those hours, 20 minutes or more${s.useBrahma ? '; plus brahma muhurta (+2)' : ''}`,
+    'General: cut out the avoid bands (rahu kalam, yamagandam, gulikai, durmuhurtam, varjyam); drop pieces under 20 minutes',
+    `General: weekday favoured (+1): ${list(s.dayFavour)}`,
+    `General: tithi group, inside its own span: favoured (+1) ${list(s.tithiFavour)}; avoided (piece dropped) ${list(s.tithiAvoid)}`,
+    `General: star group, inside its own span: favoured (+1) ${list(s.starFavour)}; avoided (−2) ${list(s.starAvoid)}`,
+    `General: hora lord: favoured (+2) ${list(s.horaFavour)}; avoided (−3) ${list(s.horaAvoid)}`,
+    'General: abhijit overlap of 10 minutes or more (+2); amrita gadiya overlap (+2); good muhurtas covering half the piece (+1)',
+    "Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)",
+    `General: keep pieces scoring ${s.floor} or more; show the best two in time order`,
   ];
   return steps;
 }
@@ -286,6 +336,8 @@ const LUCKY_SCENARIO_ROWS: TechniqueDef[] = SCENARIOS.map((s) => ({
   code: `src/reading/luckyTimes/scenarios.ts SCENARIOS['${s.id}']; windows.ts scenarioDay`,
   agents: ['lucky.scenario_windows'],
   accuracy: 'staff',
+  selectors: LUCKY_SELECTORS,
+  contract: codeContract([PANCHANG_INPUT, OVERLAY_INPUT], 'windows.v1'),
 }));
 
 // The three shared Lucky times rows serve every area. 'general' is kept for the chat's own techniques, so these are
@@ -299,32 +351,39 @@ const LUCKY_SHARED: TechniqueDef[] = [
     status: 'built',
     charts: [c('panchang', 'kalams'), c('panchang', 'muhurta')],
     algorithm: [
-      "Read the place's stored day row (engine muhurta)",
-      'Avoid bands: rahu kalam, yamagandam, gulikai, every durmuhurtam and varjyam span, in time order; an end before its start is read as past midnight',
-      'Good spans: brahma muhurta, abhijit and every amrita gadiya',
-      'What is running now: an avoid band first, then a good span, else the next good span',
+      "General: read the place's stored day row (engine muhurta)",
+      'General: avoid bands: rahu kalam, yamagandam, gulikai, every durmuhurtam and varjyam span, in time order; an end before its start is read as past midnight',
+      'General: good spans: brahma muhurta, abhijit and every amrita gadiya',
+      'General: what is running now: an avoid band first, then a good span, else the next good span',
     ],
     source: 'docs/reading-engine/49 §4.1; 47 §3',
     code: 'src/reading/luckyTimes/windows.ts avoidBands, nowState; service.ts getRange',
     agents: ['lucky.scenario_windows'],
     accuracy: 'staff',
+    selectors: LUCKY_SELECTORS,
+    contract: codeContract([PANCHANG_INPUT], 'day_bands.v1'),
   },
   {
     id: 'lucky.personal_overlay',
-    title: 'Personal overlay (tara and chandra bala)',
+    title: 'Personal overlay (tara, chandra bala and the chart marks)',
     category: 'self',
     board: 'lucky',
     status: 'built',
     charts: [c('panchang', 'muhurta'), c('nakshatra', 'tara'), c('panchang', 'chandra_bala')],
     algorithm: [
-      "Once per month and place, call the engine's muhurta with the person's natal fields",
-      "Store each day's tara, chandra bala and grade (kundli_day_overlays)",
-      "Use the engine's own good/bad verdicts: +1 / −1 each on every window of that day",
+      "Personal: once per month and place, call the engine's muhurta with the person's natal fields",
+      "Personal: store each day's tara (the day's star counted from the Moon star: janma, sampat, vipat, kshema, pratyak, sadhaka, vadha, mitra, parama mitra), chandra bala (the Moon's house from the natal Moon) and grade (kundli_day_overlays)",
+      "Personal: use the engine's own good/bad verdicts: +1 / −1 each on every window of that day",
+      "Personal (planned, doc 53 §4.6): the hora lord's nature for this chart, functional benefic or malefic from the digest planet cards of D1, moves a window by ±1",
+      "Personal (planned, doc 53 §4.6): whether the day's tithi lord or star lord is a running dasha lord in the activation calendar, marked on the window",
     ],
-    source: 'docs/reading-engine/49 §4.1',
+    special: 'The two chart marks are planned additions (doc 53 step 7); today only tara and chandra bala score',
+    source: 'docs/reading-engine/49 §4.1; 53 §4.6',
     code: 'src/reading/luckyTimes/service.ts personalDays; windows.ts personalScore',
     agents: ['lucky.day_overlay'],
     accuracy: 'staff',
+    selectors: LUCKY_SELECTORS,
+    contract: codeContract([OVERLAY_INPUT, inp('planet', 'D1 cards of the seven hora lords (nature column); planned', 'planet_card'), inp('activation', 'periods running on each day, every system; planned', 'activation_row')], 'day_overlay.v1'),
   },
   {
     id: 'lucky.day_tables',
@@ -334,30 +393,69 @@ const LUCKY_SHARED: TechniqueDef[] = [
     status: 'built',
     charts: [c('panchang', 'muhurta')],
     algorithm: [
-      'Find the days in today −7 … today +14 that the place has no stored row for',
-      "Call the engine's muhurta for at most two missing months at the place",
-      'Store one row per day (day_tables) with its calc version and a hash of the payload; one sky for every user at that place',
+      'General: find the days in today −7 … today +14 that the place has no stored row for',
+      "General: call the engine's muhurta for at most two missing months at the place",
+      'General: store one row per day (day_tables) with its calc version and a hash of the payload; one sky for every user at that place',
     ],
     source: 'docs/reading-engine/47 §3; 49 §4.1',
     code: 'src/reading/luckyTimes/service.ts pullDayTables',
     agents: ['lucky.day_tables'],
     accuracy: 'none',
+    selectors: LUCKY_SELECTORS,
+    contract: codeContract([PANCHANG_INPUT], 'day_tables.v1'),
+  },
+  {
+    id: 'lucky.panchang_limbs',
+    title: 'The five limbs of the day (vara, tithi, nakshatra, yoga, karana)',
+    category: 'self',
+    board: 'lucky',
+    status: 'planned',
+    charts: [c('panchang', 'weekday'), c('panchang', 'tithi'), c('panchang', 'nakshatra'), c('panchang', 'yoga'), c('panchang', 'karana')],
+    algorithm: [
+      "General: read the day's five limbs from the place's stored day row, each with its end time",
+      "General: vara: the weekday and its lord, favoured or avoided per the act's scenario row",
+      "General: tithi: its group (nanda, bhadra, jaya, rikta, purna; amavasya) per the scenario's tithi lists",
+      "General: nakshatra: the Moon's star and its group per the scenario's star lists",
+      'General: yoga (Sun + Moon longitude, 27 yogas): avoided — Vishkambha, Atiganda, Shoola, Ganda, Vyaghata, Vajra, Vyatipata, Parigha, Vaidhriti; favoured — Siddhi, Shubha, Amrita, Brahma, Indra, Dhruva, Harshana, Sukarma, Priti, Ayushman, Saubhagya, Shobhana',
+      'General: karana (half tithi, 11 karanas): avoided — Vishti (Bhadra); favoured for most acts — Bava, Balava, Kaulava, Taitila, Gara, Vanija; the four fixed karanas (Shakuni, Chatushpada, Naga, Kimstughna) by the rule of the act',
+      'General: the general limbs decide the day gate: a day whose yoga or karana is avoided is gated out for the act',
+      "Personal: the person's marks (lucky.personal_overlay) then move a window by ±1; they never open a gated day",
+    ],
+    special: 'Yoga and karana are stored in the day table today but not scored (doc 53 §1); this row scores them (doc 53 step 7)',
+    source: 'docs/reading-engine/53 §4.6; Muhurta Chintamani; B.V. Raman, Muhurta',
+    code: 'not built (luckyTimes/windows.ts gains yoga and karana in DayRow and scenarioDay, doc 53 step 7)',
+    agents: [],
+    accuracy: 'none',
+    selectors: LUCKY_SELECTORS,
+    contract: codeContract([inp('panchang', "the place's day rows today −7 … today +14: vara, tithi, nakshatra, yoga, karana with end times", 'panchang_day')], 'limbs.v1', 'lucky.avoid_bands'),
   },
 ];
 
-// ---------------------------------------------------------------- Love and Self (planned: house-state engine, doc 46 Part B)
+// ---------------------------------------------------------------- Love and Self (planned: house-state engine, doc 46 Part B; digest readers, doc 53 §4.5)
 
 interface LayerTarget {
   prefix: 'love' | 'self';
   board: 'love' | 'you';
   houses: string;
+  houseNumbers: number[];
   vargas: string[];
   karakas: string;
+  subjects: SubjectId[];
+  /** the digest planet cards the layers read (doc 53 §4.5) */
+  planets: string;
+  /** the digest point rows the layers read */
+  points: string;
 }
 
 function houseStateLayers(t: LayerTarget): TechniqueDef[] {
   const vargaCharts = t.vargas.map((v) => c('divisional', v));
-  const row = (name: string, title: string, section: string, charts: TechniqueChart[], algorithm: string[], special?: string): TechniqueDef => ({
+  const houseFilter = `D1,${t.vargas.filter((v) => v !== 'D1').join(',')} houses ${t.houseNumbers.join(',')}`;
+  const selectors: TechniqueSelectors = { boards: [t.board], subjects: t.subjects, houses: t.houseNumbers, vargas: t.vargas };
+  const houseIn = inp('house', houseFilter, 'house_card');
+  const planetIn = inp('planet', `D1 and ${t.vargas[0] === 'D1' ? t.vargas[1] : t.vargas[0]} cards of ${t.planets}`, 'planet_card');
+  const pointIn = inp('point', t.points, 'point_row');
+  const yogaIn = inp('yoga', `yogas and doshas joining houses ${t.houseNumbers.join(',')} or their lords or ${t.planets}`, 'yoga_row');
+  const row = (name: string, title: string, section: string, charts: TechniqueChart[], algorithm: string[], inputs: ContractInput[], special?: string): TechniqueDef => ({
     id: `${t.prefix}.${name}`,
     title,
     category: t.prefix,
@@ -366,12 +464,14 @@ function houseStateLayers(t: LayerTarget): TechniqueDef[] {
     charts,
     algorithm,
     ...(special ? { special } : {}),
-    source: `docs/reading-engine/46 §${section}`,
-    code: 'not built (house-state engine, doc 46)',
+    source: `docs/reading-engine/46 §${section}; 53 §4.5`,
+    code: 'not built (house-state engine, doc 46, read from the digest, doc 53 step 6)',
     agents: [],
     accuracy: 'none',
+    selectors,
+    contract: codeContract(inputs, 'house_state.v1'),
   });
-  return [
+  const layers = [
     row('promise', `Natal promise of ${t.houses}`, 'B.2', [c('natal', 'facts'), c('natal', 'house_counts'), c('natal', 'dignities'), c('natal', 'aspects'), c('jaimini', 'argala'), c('ashtakavarga', 'sav'), c('natal', 'strength.bhava'), c('natal', 'yogas'), c('natal', 'doshas'), c('jaimini', 'arudhas'), c('natal', 'avasthas')], [
       `For ${t.houses}: lord in a kendra, trikona or the house itself +2; in 6, 8 or 12 −2`,
       "Lord's dignity +2 / −2 (neecha bhanga checked); functional benefic / malefic occupants and graha drishti ±1; rasi drishti ±0.5",
@@ -379,48 +479,92 @@ function houseStateLayers(t: LayerTarget): TechniqueDef[] {
       'Yogas that include the house or its lord +1 to +3; doshas touching it −1 to −2',
       `Natural karaka strong / weak ±1 (${t.karakas}); arudha of the house with benefics / malefics ±1; its special lagna +1`,
       "Lord's avastha: x1.25 awake, x0.5 dead; cap the sum to −8..+8; below −3 the house is not promised",
-    ]),
+      'Each support is one row, "D1.h1 aspected_by Ju", with its digest key',
+    ], [houseIn, planetIn, pointIn, yogaIn]),
     row('affliction', `Afflictions on ${t.houses}`, 'B.3', [c('natal', 'facts'), c('natal', 'dignities'), c('natal', 'aspects'), c('natal', 'doshas'), c('natal', 'avasthas'), c('natal', 'house_counts')], [
       'Lord in a dusthana; combust, in war or debilitated lord; malefic conjunction or drishti on the house or its lord',
       'Papakartari, nodes on the axis, dosha membership, lord in a dead avastha',
-      'Each affliction names its release (its own period, a neecha bhanga pair, a benefic period with D1 and the varga agreeing) or none',
+      'Each affliction names its release (its own period, a neecha bhanga pair, a benefic period with D1 and the varga agreeing) or none: the release date is the end of the afflicting planet\'s running period in the activation calendar',
       'Afflictions set the baseline and name the blocker; they never flip a verdict alone',
-    ]),
+    ], [houseIn, planetIn, yogaIn, inp('activation', `running and next periods of the afflicting planets, houses ${t.houseNumbers.join(',')}`, 'activation_row')]),
+    row('protection', `What protects ${t.houses}`, 'B.3', [c('natal', 'aspects'), c('natal', 'dignities'), c('jaimini', 'argala'), c('natal', 'yogas'), c('natal', 'avasthas'), ...vargaCharts], t.prefix === 'self' ? [
+      "Jupiter's drishti on the lagna or the Moon (digest house card aspected_graha)",
+      'Neecha Bhanga and the other cancellations in the yoga register',
+      'Benefic argala on houses 1, 4 and 5',
+      "The dispositor of the lagna lord being strong (the digest planet card's dispositor chain and dignity)",
+      'Each protection is one row with its digest key; protections raise the floor of the verdict and never add a promise',
+    ] : [
+      'Jupiter on house 7, on Venus or on UL (digest house and point cards aspected_graha)',
+      "The D9 7th lord dignified (digest house card D9.h7 lord_dignity)",
+      'Benefic argala on UL and on house 7',
+      'Each protection is one row with its digest key; protections raise the floor of the verdict and never add a promise',
+    ], [houseIn, planetIn, pointIn, yogaIn]),
     row('activation', `Activation of ${t.houses} by every dasha system`, 'B.4', [c('dasha', 'vimshottari'), c('dasha', 'conditional'), c('dasha', 'narayana'), c('dasha', 'chara'), c('dasha', 'karaka'), c('annual', 'tithi_pravesha_dasha'), c('dasha', 'yogini'), c('dasha', 'tithi_ashtottari'), ...vargaCharts], [
       'Seven families: main graha clock, conditional clock, rasi clock, karaka clock, annual clock, transit clock, short confirmers (Yogini and Tithi Ashtottari voting only when they agree)',
       'Polarity of each running planet to the house: supports when it lords, occupies, signifies, or lords the 5th, 9th or 11th from it; tests when it lords 6, 8 or 12 or sits 6, 8 or 12 from it',
       `A dasha vote counts only when D1 and the owning varga (${t.vargas[0]}) agree; D9 breaks a tie; D60 only with a birth time to the minute`,
       'One planet, one vote across the graha clocks',
-    ]),
+      "Periods thirty years ahead from the activation calendar, graded benefic or malefic by the period lord's nature and dignity in D1 and D9",
+    ], [inp('activation', `every served system, periods from today to +30 years activating houses ${t.houseNumbers.join(',')}`, 'activation_row'), planetIn]),
     row('transit', `Transits over ${t.houses}`, 'B.5', [c('transit', 'transit_contacts'), c('transit', 'double_transit'), c('transit', 'sade_sati'), c('transit', 'eclipses'), c('ashtakavarga', 'transit_ashtakavarga')], [
       'Slow planets in the house: Jupiter supports, Saturn tests unless 3, 6, 10 or 11 from the Moon with a bindu, Rahu amplifies, Ketu detaches',
       'Slow planets on the lord, karaka or arudha (contacts with stations); double transit on the house',
       'Sade sati and dhaiya phases; eclipses on the axis or the lord, with dates',
       'Transit ashtakavarga bindus in the planet’s own BAV support or test',
-    ]),
+    ], [inp('transit', `shared sky with the overlay: Sa, Ju, Ra, Ke and eclipses over houses ${t.houseNumbers.join(',')}, their lords and arudhas, ±24 months`, 'transit_row'), houseIn]),
     row('annual', `This year's chart for ${t.houses}`, 'B.6', [c('annual', 'tithi_pravesha'), c('annual', 'sahams'), c('annual', 'mudda'), c('annual', 'patyayini'), c('annual', 'tithi_pravesha_dasha')], [
       "The year chart's lord of the house and its place: kendra/trikona with dignity confirms, 6/8/12 contradicts",
       'Occupants, aspects and argala in the year chart at half weight; where the natal lord falls this year',
       "The house's sahams in a kendra of the year chart with a strong lord",
       'The running Mudda, Patyayini or year tithi ashtottari lord gives the month',
       'Returns confirms, amplifies, contradicts or silent; changes confidence by one step and never makes a verdict alone',
-    ], 'Muntha, the year lord and Tajaka yogas are engine gaps'),
+    ], [inp('annual', `TP and VP of the current, previous and next year, houses ${t.houseNumbers.join(',')}, their sahams and year dashas`, 'annual_row')], 'Muntha, the year lord and Tajaka yogas are engine gaps'),
     row('varga', `Owning divisional chart of ${t.houses}`, 'B.7', vargaCharts, [
       `Owning varga first: ${t.vargas.join(', ')}`,
       "The natal lord of the house in the varga (sign, house, dignity); the varga's own house and lord; vargottama",
       "The running period lord's place in the varga; the arudha of the house in the varga",
       'Returns agrees when its net side matches the activation side; a dasha vote counts only then',
-    ]),
+    ], [houseIn, planetIn, inp('point', `arudhas of houses ${t.houseNumbers.join(',')} in ${t.vargas.join(', ')}`, 'point_row')]),
     row('nakshatra', `Nakshatra charter of ${t.houses}`, 'B.8', [c('nakshatra', 'cusp_nak'), c('nakshatra', 'star_lord'), c('nakshatra', 'occupant_stars')], [
       "Cusp star of the house: its mission; the lord's star: through whom it delivers; occupants' stars: their flavour",
       'One charter line per star and house from the reviewed charter table (config, with its source)',
       "When the running PD lord's star lord is the house's lord or karaka, the vote is delivered through the star: confidence one step up",
-    ]),
+    ], [inp('star', 'Moon star, lagna star and the tara table', 'star_profile'), inp('house', `${houseFilter} (cusp_star column)`, 'house_card'), planetIn]),
   ];
+  return layers;
 }
 
-const LOVE_PLANNED = houseStateLayers({ prefix: 'love', board: 'love', houses: 'house 7', vargas: ['D9', 'D7', 'D30'], karakas: 'Venus for the 7th' });
-const SELF_PLANNED = houseStateLayers({ prefix: 'self', board: 'you', houses: 'houses 1, 4 and 5 with the Moon', vargas: ['D1', 'D9', 'D4', 'D7', 'D24', 'D60'], karakas: 'Sun for the 1st, Moon and Mercury for the 4th, Jupiter for the 5th' });
+const LOVE_PLANNED = houseStateLayers({
+  prefix: 'love', board: 'love', houses: 'house 7', houseNumbers: [7, 5, 11, 2, 4, 8, 12], vargas: ['D9', 'D7', 'D30'], karakas: 'Venus for the 7th',
+  subjects: ['marriage_relationship'], planets: 'Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord', points: 'UL, A7, DK, AL',
+});
+const SELF_PLANNED = houseStateLayers({
+  prefix: 'self', board: 'you', houses: 'houses 1, 4 and 5 with the Moon', houseNumbers: [1, 4, 5, 9, 12], vargas: ['D1', 'D9', 'D20', 'D24', 'D12', 'D4', 'D7', 'D60'], karakas: 'Sun for the 1st, Moon and Mercury for the 4th, Jupiter for the 5th',
+  subjects: ['general_life_direction', 'health_body', 'education_learning', 'spirituality_moksha'], planets: 'the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK', points: 'AK, SL, AL',
+});
+
+/** The Love sub-areas the companion memory's love.status selects (doc 53 §4.5; doc 46 §B.12): planned rows over the same layers. */
+const LOVE_SUBAREAS: TechniqueDef[] = (
+  [
+    { name: 'meet', title: 'Meeting someone', statuses: ['single', 'dating'], steps: ['Promise and activation of house 7 and UL for a new bond; Venus and the 7th lord running or transited', 'Windows from the activation calendar where house 7, 5 or 11 is activated with D9 agreeing'] },
+    { name: 'health', title: 'How the relationship is', statuses: ['dating', 'committed', 'married'], steps: ['Present state of house 7 and D9 h7: support and strain this month from the activation, transit and annual layers', 'The tone from the votes of the layers (doc 45 §7)'] },
+    { name: 'reconcile', title: 'Strain and reconciling', statuses: ['separated', 'complicated'], steps: ['Afflictions on house 7, its lord, Venus and UL and their release dates (love.affliction)', 'Periods ahead where the afflicting planet stops running and a supporter of 7 or 5 starts (love.activation)', 'Protections that hold the bond (love.protection)'] },
+  ] as const
+).map((s) => ({
+  id: `love.${s.name}`,
+  title: s.title,
+  category: 'love' as const,
+  board: 'love' as const,
+  status: 'planned' as const,
+  charts: [c('natal', 'facts'), c('divisional', 'D9'), c('dasha', 'vimshottari'), c('transit', 'transit_contacts')],
+  algorithm: [...s.steps, `Selected when the companion memory says love.status is ${s.statuses.join(' or ')}`],
+  source: 'docs/reading-engine/53 §4.5; 46 §B.12',
+  code: 'not built (house-state engine, doc 46, read from the digest, doc 53 step 6)',
+  agents: [],
+  accuracy: 'none',
+  selectors: { boards: ['love' as const], subjects: ['marriage_relationship' as const], houses: [7, 5, 11], vargas: ['D9'], facts: { 'love.status': [...s.statuses] } },
+  contract: codeContract([inp('findings', 'the eight Love layers of this kundli (love.promise … love.nakshatra)', 'findings_in')], 'board_subarea.v1'),
+}));
 
 // ---------------------------------------------------------------- General Reading (chat): graph analysts and oracle readers
 
@@ -432,33 +576,82 @@ const ANALYST_STEPS = (sections: string): string[] => [
   'The model returns structured findings whose claims cite evidence ids in the pack',
   'Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it',
 ];
+/** Every subject on the chat board (doc 53 §4.4 "always"). */
+const GENERAL_SELECTORS: TechniqueSelectors = { subjects: ALL_SUBJECTS, boards: ['chat'] };
+const analystContract = (inputs: ContractInput[], system: string, output: string): TechniqueContract => ({ inputs, system, user: ANALYST_USER_FIELDS, output, synthesizer: 'general.oracle' });
+const FRAME_HOUSES = inp('house', "D1 and the frame's vargas, the frame's houses", 'house_card');
+const FRAME_LORDS = inp('planet', "D1 cards of the frame's house lords and karakas", 'planet_card');
+const DOC33 = 'docs/reading-engine/33';
+const TEXT_QUESTION = inp('text', 'the question, the history of the thread, the clarify turns', 'text_in');
 
 const GENERAL: TechniqueDef[] = [
   {
     id: 'general.promise',
-    title: 'Promise analyst',
+    title: 'House promise analyst',
     category: 'general',
     board: 'chat',
     status: 'built',
     charts: [c('natal', 'facts'), ...FRAME_VARGAS, c('jaimini', 'arudhas'), c('jaimini', 'special_lagnas')],
-    algorithm: ANALYST_STEPS('base, frame, detail, varga, arudha'),
-    source: 'docs/reading-engine/03 §3',
+    algorithm: [...ANALYST_STEPS('base, frame, detail, varga, arudha'), 'The D1 house that owns the subject leads (doc 46 §B.11); the frame names its vargas, lords, karakas and arudhas'],
+    special: 'Becomes general.house_promise in D3 (doc 53 §4.4); the id stays so tagged runs keep joining',
+    source: 'docs/reading-engine/03 §3; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.promise',
     agents: ['reading.analyst.promise'],
     accuracy: 'staff',
+    selectors: GENERAL_SELECTORS,
+    contract: analystContract([FRAME_HOUSES, FRAME_LORDS, inp('point', "arudhas and special lagnas of the frame", 'point_row'), inp('yoga', "yogas touching the frame's houses or their lords", 'yoga_row')], 'src/reading/prompts/v2/promise.md', 'findings.v2'),
+  },
+  {
+    id: 'general.varga_dynamics',
+    title: 'Varga dynamics analyst',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: ['D2', 'D4', 'D7', 'D9', 'D10', 'D12', 'D24', 'D30', 'D60', 'D16', 'D20', 'D27', 'D40', 'D45', 'D81', 'D108', 'D144'].map((v) => c('divisional', v)),
+    algorithm: [
+      "The frame names the subject's vargas (D9 for marriage, D10 for career, D2, D4, D7, D24, D12, D30, D60 by frame); the deeper set (D16, D20, D27, D40, D45, D81, D108, D144) joins when the question type is why_meaning or the horizon is life",
+      "Read the house and planet cards of each named varga for the frame's houses",
+      'Flag where D1 and the varga agree: lord dignity in both, occupants in both; disagreement lowers confidence',
+      'Return findings that cite the digest keys of the varga rows',
+    ],
+    source: 'docs/reading-engine/53 §4.4; 33 R3',
+    code: 'not built (code-path reader first, doc 53 step 5)',
+    agents: [],
+    accuracy: 'none',
+    selectors: { ...GENERAL_SELECTORS, vargas: ['D2', 'D4', 'D7', 'D9', 'D10', 'D12', 'D24', 'D30', 'D60', 'D16', 'D20', 'D27', 'D40', 'D45', 'D81', 'D108', 'D144'] },
+    contract: analystContract([inp('house', "each frame varga, the frame's houses", 'house_card'), inp('planet', "each frame varga, the frame's lords and karakas; the D1↔Dn agreement flags", 'planet_card')], 'src/reading/prompts/readers/R03-varga.md', 'findings.v3'),
   },
   {
     id: 'general.dasha',
-    title: 'Dasha analyst',
+    title: 'Dasha analyst (all systems)',
     category: 'general',
     board: 'chat',
     status: 'built',
     charts: [c('natal', 'facts'), ...FRAME_VARGAS, c('dasha', 'vimshottari'), c('dasha', 'narayana')],
     algorithm: [...ANALYST_STEPS('base, frame, detail, varga, dasha'), "The dasha section holds the Vimshottari periods inside the horizon, each period lord's place in the frame vargas and the running Narayana sign"],
-    source: 'docs/reading-engine/03 §3',
+    special: 'Becomes general.dasha_all_systems in D3 (doc 53 §4.4): every served system from the activation calendar, grouped into the seven families of doc 46 §B.4; the id stays so tagged runs keep joining',
+    source: 'docs/reading-engine/03 §3; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.dasha',
     agents: ['reading.analyst.dasha'],
     accuracy: 'staff',
+    selectors: { ...GENERAL_SELECTORS, horizons: ALL_HORIZONS },
+    contract: analystContract([inp('activation', "periods inside the horizon activating the frame's houses, every served system, grouped by family; Vimshottari MD/AD/PD at level 3; dasha.applicable", 'activation_row'), FRAME_LORDS, FRAME_HOUSES], 'src/reading/prompts/v2/dasha.md', 'findings.v2'),
+  },
+  {
+    id: 'general.annual',
+    title: 'Annual set analyst',
+    category: 'general',
+    board: 'chat',
+    status: 'built',
+    charts: [c('natal', 'facts'), c('annual', 'tithi_pravesha'), c('annual', 'tithi_pravesha_dasha')],
+    algorithm: [...ANALYST_STEPS('base, frame, annual'), 'Runs only when the graph has the Tithi Pravesha year chart and its dasha for the question'],
+    special: 'Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha and year lord when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months; a timing question on a longer horizon is a planned any-of rule',
+    source: 'docs/reading-engine/28 §5; 53 §4.4',
+    code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.annual',
+    agents: ['reading.analyst.annual'],
+    accuracy: 'staff',
+    selectors: { ...GENERAL_SELECTORS, horizons: ['now', '3m', '6m', '1y', 'custom'] },
+    contract: analystContract([inp('annual', "TP and VP of the current, previous and next year, D1, D9, D10, the frame's houses; year dashas; sahams in the frame's houses; muntha and year lord when served", 'annual_row')], 'src/reading/prompts/annual.md', 'findings.v2'),
   },
   {
     id: 'general.transit',
@@ -468,10 +661,13 @@ const GENERAL: TechniqueDef[] = [
     status: 'built',
     charts: [c('natal', 'facts'), c('jaimini', 'arudhas'), c('dasha', 'vimshottari'), c('dasha', 'narayana'), c('transit', 'transit_overlay'), c('transit', 'transit_contacts'), c('transit', 'transit_at')],
     algorithm: [...ANALYST_STEPS('base, frame, arudha, dasha, transits and transit_at'), "The transits section holds the selected transit rows for the frame's houses and natal points, with the natal-degree contacts clipped to the horizon; transit_at is the sky at an asked date"],
-    source: 'docs/reading-engine/03 §3; 28 §5',
+    special: 'Revised in D3 (doc 53 §4.4): contacts to the lords and karakas, double transit, sade sati, eclipses and transit ashtakavarga scores from the shared sky and the overlay',
+    source: 'docs/reading-engine/03 §3; 28 §5; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.transit',
     agents: ['reading.analyst.transit'],
     accuracy: 'staff',
+    selectors: { ...GENERAL_SELECTORS, horizons: ALL_HORIZONS },
+    contract: analystContract([inp('transit', "shared sky with the overlay for the frame's houses, lords and karakas inside the horizon; double transit; sade sati; eclipses; transit ashtakavarga", 'transit_row'), FRAME_LORDS], 'src/reading/prompts/v2/transit.md', 'findings.v2'),
   },
   {
     id: 'general.nakshatra',
@@ -480,24 +676,52 @@ const GENERAL: TechniqueDef[] = [
     board: 'chat',
     status: 'built',
     charts: [c('natal', 'facts'), c('nakshatra', 'janma'), c('dasha', 'vimshottari'), c('transit', 'transit_overlay')],
-    algorithm: ANALYST_STEPS('base, frame, detail, dasha, transits'),
-    source: 'docs/reading-engine/03 §3',
+    algorithm: [...ANALYST_STEPS('base, frame, detail, dasha, transits'), "Revised in D3 (doc 53 §4.4): the star profile, the cusp stars of the frame's houses and the star lords' places from the planet cards"],
+    source: 'docs/reading-engine/03 §3; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.nakshatra',
     agents: ['reading.analyst.nakshatra'],
     accuracy: 'staff',
+    selectors: GENERAL_SELECTORS,
+    contract: analystContract([inp('star', 'Moon star, lagna star, the tara table, gandanta flags', 'star_profile'), inp('house', "D1, the frame's houses (cusp_star column)", 'house_card'), inp('planet', "D1 cards of the star lords of the frame's cusps and the Moon", 'planet_card')], 'src/reading/prompts/v2/nakshatra.md', 'findings.v2'),
   },
   {
-    id: 'general.annual',
-    title: 'Annual chart analyst',
+    id: 'general.strength_yoga',
+    title: 'Strength and yoga analyst',
     category: 'general',
     board: 'chat',
-    status: 'built',
-    charts: [c('natal', 'facts'), c('annual', 'tithi_pravesha'), c('annual', 'tithi_pravesha_dasha')],
-    algorithm: [...ANALYST_STEPS('base, frame, annual'), 'Runs only when the graph has the Tithi Pravesha year chart and its dasha for the question'],
-    source: 'docs/reading-engine/28 §5',
-    code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.annual',
-    agents: ['reading.analyst.annual'],
-    accuracy: 'staff',
+    status: 'planned',
+    charts: [c('natal', 'yogas'), c('natal', 'doshas'), c('natal', 'strength'), c('ashtakavarga', 'sav'), c('natal', 'avasthas')],
+    algorithm: [
+      "Read the yoga register filtered by the frame's planets and houses: present yogas, doshas and cancellations with their class",
+      "Read the shadbala ranks and avasthas of the frame's lords and karakas, and the SAV of the frame's houses",
+      'Return findings with graces[]: the yogas and strengths that carry the subject, each citing its digest key',
+    ],
+    source: 'docs/reading-engine/53 §4.4; 33 R5, R6',
+    code: 'not built (code-path reader first, doc 53 step 5)',
+    agents: [],
+    accuracy: 'none',
+    selectors: GENERAL_SELECTORS,
+    contract: analystContract([inp('yoga', "D1 yogas, doshas and cancellations joining the frame's planets or houses", 'yoga_row'), inp('planet', "D1 cards of the frame's lords and karakas (shadbala_rank, nature, avasthas)", 'planet_card'), inp('house', "D1, the frame's houses (sav column)", 'house_card')], 'src/reading/prompts/readers/R06-yoga-dosha.md', 'findings.v3'),
+  },
+  {
+    id: 'general.jaimini',
+    title: 'Jaimini analyst',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: [c('jaimini', 'charakaraka'), c('jaimini', 'arudhas'), c('jaimini', 'argala'), c('dasha', 'narayana'), c('dasha', 'chara')],
+    algorithm: [
+      'Read the point cards: AK, AmK, DK, UL, AL and the A-houses of the frame, with their places and lords',
+      "Read the argala on the frame's houses from the house cards",
+      'Read the Narayana and Chara periods inside the horizon from the activation calendar',
+      'Return findings citing the point and activation keys',
+    ],
+    source: 'docs/reading-engine/53 §4.4; 33 R4',
+    code: 'not built (code-path reader first, doc 53 step 5)',
+    agents: [],
+    accuracy: 'none',
+    selectors: GENERAL_SELECTORS,
+    contract: analystContract([inp('point', 'AK, AmK, DK, UL, AL and the A-houses of the frame', 'point_row'), inp('house', "D1, the frame's houses (argala column)", 'house_card'), inp('activation', 'Narayana and Chara periods inside the horizon', 'activation_row')], 'src/reading/prompts/readers/R04-jaimini.md', 'findings.v3'),
   },
   {
     id: 'general.prashna',
@@ -507,10 +731,32 @@ const GENERAL: TechniqueDef[] = [
     status: 'built',
     charts: [c('natal', 'facts'), c('natal', 'prashna')],
     algorithm: [...ANALYST_STEPS('base, frame, prashna'), 'Runs only when the graph has the chart of the question moment'],
-    source: 'docs/reading-engine/28 §5',
+    source: 'docs/reading-engine/28 §5; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.prashna',
     agents: ['reading.analyst.prashna'],
     accuracy: 'staff',
+    selectors: { ...GENERAL_SELECTORS, slots: ['prashna'] },
+    contract: analystContract([inp('prashna', 'the cast of the question moment', 'prashna_card'), FRAME_HOUSES], 'src/reading/prompts/prashna.md', 'findings.v2'),
+  },
+  {
+    id: 'general.person',
+    title: 'The person in your chart',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: [c('natal', 'facts'), c('natal', 'aspects'), c('divisional', 'D12'), c('divisional', 'D9'), c('divisional', 'D7'), c('divisional', 'D3'), c('dasha', 'vimshottari')],
+    algorithm: [
+      "The person named in the question (mother, father, spouse, child, sibling) maps to a house and a varga of the owner's chart (oracle/readers.ts personIn); the reading never uses another person's birth data",
+      "Read the person's house card in D1 and the named varga, and the karaka's planet card",
+      'Return findings with about: the person, citing the digest keys',
+    ],
+    special: 'Selected for the person subjects; the clarify slot other_person (any subject) is a planned any-of rule of the matcher',
+    source: 'docs/reading-engine/53 §4.4; 33 R13',
+    code: 'not built (code-path reader first, doc 53 step 5; today readers.ts R13 covers it in the oracle flow)',
+    agents: [],
+    accuracy: 'none',
+    selectors: { boards: ['chat'], subjects: ['children', 'siblings', 'marriage_relationship'] },
+    contract: analystContract([inp('house', "D1 and the person's varga (D12, D9, D7, D3), the person's house", 'house_card'), inp('planet', "D1 card of the person's karaka", 'planet_card')], 'src/reading/prompts/readers/R13-person.md', 'findings.v3'),
   },
   {
     id: 'general.reader',
@@ -529,10 +775,28 @@ const GENERAL: TechniqueDef[] = [
       'Natal readers are not sent the question, so their findings are reused across questions',
       'Every call holds a reservation from the cost guard; a reader past the join deadline is dropped',
     ],
-    source: 'docs/reading-engine/33 §2; 39 §4.1',
+    special: 'In D3 the CHART CORE becomes the digest house and planet cards of D1 plus the frame vargas (doc 53 §4.2)',
+    source: 'docs/reading-engine/33 §2; 39 §4.1; 53 §4.2',
     code: 'src/reading/oracle/readers.ts READERS; runReader.ts',
     agents: ['reading.reader'],
     accuracy: 'staff',
+    selectors: GENERAL_SELECTORS,
+    contract: {
+      inputs: [
+        inp('house', 'CHART CORE (nine stored types) and D1 plus the frame vargas, the frame houses', 'house_card'),
+        inp('planet', 'CHART CORE: every planet in D1', 'planet_card'),
+        inp('yoga', 'present yogas and doshas (R01, R06)', 'yoga_row'),
+        inp('point', 'arudhas and argala of the frame (R03, R04)', 'point_row'),
+        inp('activation', 'Vimshottari and the other dasha systems inside the horizon (R08, R09, R04)', 'activation_row'),
+        inp('transit', "the question's transit rows (R07, R10, R13, P1–P3)", 'transit_row'),
+        inp('annual', 'TP, VP, sahams, Mudda and Patyayini of the years in the horizon (R11)', 'annual_row'),
+        inp('prashna', 'the cast when the question is prashna-eligible (R12)', 'prashna_card'),
+      ],
+      system: 'src/reading/prompts/readers/_shared.md',
+      user: ANALYST_USER_FIELDS,
+      output: 'findings.v2',
+      synthesizer: 'general.oracle',
+    },
   },
   {
     id: 'general.oracle',
@@ -545,11 +809,14 @@ const GENERAL: TechniqueDef[] = [
       'Join the readers (or the graph analysts) into a brief',
       'Write the answer from the findings, streaming it',
       'An addendum may follow when the validator finds a missing part',
+      'In D3 it also receives the digest rows the findings cite (by key) and the confirmed person_facts (doc 53 §4.2, §4.4)',
     ],
-    source: 'docs/reading-engine/39 §4.1; 41',
+    source: 'docs/reading-engine/39 §4.1; 41; 53 §4.4',
     code: 'src/reading/oracle/flow.ts; src/reading/run.ts (synthesize)',
     agents: ['reading.oracle', 'reading.synth'],
     accuracy: 'staff',
+    selectors: GENERAL_SELECTORS,
+    contract: { inputs: [inp('findings', 'every finding of the readers or analysts of this query, with the digest rows they cite', 'findings_in'), TEXT_QUESTION], system: 'src/reading/prompts/oracle/system.md', user: ['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS', 'TEMPLATE'], output: 'answer.markdown', synthesizer: 'general.validator' },
   },
   {
     id: 'general.validator',
@@ -567,6 +834,8 @@ const GENERAL: TechniqueDef[] = [
     code: 'src/reading/oracle/validator.ts',
     agents: ['reading.validator'],
     accuracy: 'staff',
+    selectors: GENERAL_SELECTORS,
+    contract: { inputs: [inp('text', 'the question, the clarify turns and the answer', 'text_in')], system: 'src/reading/prompts/oracle/validator.md', user: ['QUESTION', 'CLARIFY_TURNS', 'ANSWER'], output: 'validator.v1' },
   },
   {
     id: 'general.intake',
@@ -580,6 +849,8 @@ const GENERAL: TechniqueDef[] = [
     code: 'src/reading/nodes/intake.ts',
     agents: ['reading.intake'],
     accuracy: 'staff',
+    selectors: { boards: ['chat'] },
+    contract: { inputs: [TEXT_QUESTION], system: 'src/reading/prompts/intake.md', user: ['TODAY', 'QUESTION', 'HISTORY'], output: 'intent.v1' },
   },
   {
     id: 'general.clarify',
@@ -592,15 +863,97 @@ const GENERAL: TechniqueDef[] = [
       'Classify the question into a bucket by rules first',
       'Phrase, resolve or ask the question-chart detail with a small model (900 ms budget), while the chart loads in the background',
       'Declined topics are decided here and their text is never kept',
+      'Its confirmed intent (subject, horizon, question type, slots) and the companion memory select the techniques of the query (doc 53 §4.3 selectTechniques)',
     ],
-    source: 'docs/reading-engine/13; 48',
+    source: 'docs/reading-engine/13; 48; 53 §4.3',
     code: 'src/reading/clarify/planner.ts; service.ts',
     agents: ['reading.clarify'],
     accuracy: 'staff',
+    selectors: { boards: ['chat'] },
+    contract: { inputs: [TEXT_QUESTION, inp('text', "the intake's intent: bucket, subjects, horizon, the slots filled and missing", 'text_in')], system: 'db:clarify.system', user: ['TODAY', 'QUESTION', 'BUCKET', 'SLOTS', 'HISTORY'], output: 'intent.v1' },
   },
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_PLANNED, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...SELF_PLANNED, ...GENERAL];
+// ---------------------------------------------------------------- The digest (doc 53 §4.1): code techniques, once per kundli
+
+/** The digest precedes every board and reading (doc 53 §4.7 gate), so its rows select on every board. */
+const DIGEST_SELECTORS: TechniqueSelectors = { boards: ALL_BOARDS };
+
+const DIGEST: TechniqueDef[] = [
+  {
+    id: 'digest.build',
+    title: 'Kundli digest (the first-time breakdown)',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: [c('natal', 'dignities'), c('natal', 'aspects'), c('jaimini', 'argala'), c('jaimini', 'arudhas'), c('natal', 'house_counts'), c('ashtakavarga', 'sav'), c('natal', 'facts'), c('natal', 'relations'), c('natal', 'avasthas'), c('natal', 'strength.shadbala'), c('natal', 'benefic_malefic'), c('natal', 'yogas'), c('natal', 'doshas'), c('jaimini', 'charakaraka'), c('natal', 'sphutas'), c('annual', 'tithi_pravesha'), c('annual', 'varsha'), c('nakshatra', 'janma'), c('natal', 'panchanga')],
+    algorithm: [
+      'Deterministic, no model: read the kundli\'s stored kundli_data rows (ensureChartData fetches what is missing) and write kundli_digest rows in six sections, each with its source (type@variant@calc_version + JSON path)',
+      "house D<n>.h<1..12>: lord, lord's house, sign and dignity, co-lord, occupants (with dignity and nature), aspected_by graha / rasi, argala (primary, secondary, obstructed), SAV, class (kendra, trikona, dusthana, upachaya, maraka, badhaka when served), cusp star and its lord, arudha of the house, the Tajaka lord when the year chart is loaded — from dignities.dN, aspects.dN, argala.dN, arudhas.dN, house_counts, ashtakavarga, facts.houses (D1)",
+      'planet D<n>.<planet>: sign, house, degree, star and pada and star lord, dignity, retro, combust, war, dispositor and its house, dispositor chain (D1, from avasthas), avasthas, shadbala rank and ratio (D1), natural and functional nature (D1), owns houses, aspects_to, aspected_by, conjunctions (same sign; within 8° from avasthas.proximity_audit) — from dignities.dN, aspects.dN, relations.dN, avasthas.dN, strength.shadbala, benefic_malefic',
+      'yoga D1.<yoga id>: present, planets, houses, class (raja, dhana, mahapurusha, dosha, cancellation), source rule — from yogas, doshas, facts.yogas; per varga once the engine serves it',
+      "point AK…DK, A1…A12, UL, AL, SL, HL, GL, IL, MD, GK, sphutas: the point's sign and house in D1 and in each named varga, its lord and the lord's place — from charakaraka, arudhas(.dN), sphutas",
+      "annual TP<year> and VP<year>, ten years back to ten ahead: the year chart's lagna, house lords and occupants, aspects, sahams in houses, year dasha (Tithi Ashtottari, Mudda, Patyayini) periods, muntha and year lord once served — from annual.*@year=Y (D1, D9, D10)",
+      'star profile: Moon star and its lord, lagna star, the 27-star tara table from the Moon, gandanta flags — from facts.nakshatra_profile, panchanga.birth',
+      'It selects, counts, joins and dates; it never derives a sign, a lord, an aspect, a dignity or a yoga (doc 46 §C.3; the no-astrology test guards it)',
+      'Status on kundlis: pending → building → ready with digest_version and digest_built_at; stale when an input row\'s calc version changes or a new digest version ships; failed with the error type',
+    ],
+    special: 'Roughly 170 stored rows read and 1,500–3,000 digest rows written per kundli, under 10 s on the API Lambda',
+    source: 'docs/reading-engine/53 §4.1; 46 §C.3',
+    code: 'not built (src/reading/digest/build.ts, doc 53 step 1)',
+    agents: [],
+    accuracy: 'none',
+    selectors: DIGEST_SELECTORS,
+    contract: codeContract([
+      inp('house', 'dignities.dN, aspects.dN, argala.dN, arudhas.dN, house_counts, ashtakavarga, facts.houses (D1); every served varga', 'house_card'),
+      inp('planet', 'dignities.dN, aspects.dN, relations.dN, avasthas.dN, strength.shadbala, benefic_malefic; every served varga', 'planet_card'),
+      inp('yoga', 'yogas, doshas, facts.yogas (D1)', 'yoga_row'),
+      inp('point', 'charakaraka, arudhas(.dN), sphutas', 'point_row'),
+      inp('annual', 'annual.{tithi_pravesha,varsha,tithi_pravesha_dasha,mudda,patyayini,sahams}@year=Y, D1, D9, D10, Y in −10…+10', 'annual_row'),
+      inp('star', 'facts.nakshatra_profile, panchanga.birth', 'star_profile'),
+    ], 'kundli_digest.v1'),
+  },
+  {
+    id: 'digest.annual_set',
+    title: 'Annual set, ten years back and ahead',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: [c('annual', 'tithi_pravesha'), c('annual', 'varsha'), c('annual', 'tithi_pravesha_dasha'), c('annual', 'mudda'), c('annual', 'patyayini'), c('annual', 'sahams'), c('divisional', 'D9'), c('divisional', 'D10')],
+    algorithm: [
+      'For each year from ten back to ten ahead, pull TP and VP in D1, D9 and D10 with their year dashas and sahams from the engine (about 380 calls per kundli, batched at registration, about 25 per minute)',
+      'Store each as kundli_data rows (type, variant year=Y) and write the digest annual rows from them',
+      'Mark the digest stale when a year is missing and queue the pull',
+    ],
+    source: 'docs/reading-engine/53 §4.1, step 2',
+    code: 'not built (src/reading/digest/annualSet.ts, doc 53 step 2)',
+    agents: [],
+    accuracy: 'none',
+    selectors: DIGEST_SELECTORS,
+    contract: codeContract([inp('annual', 'annual.* for Y in −10…+10, D1, D9, D10', 'annual_row')], 'kundli_digest.v1', 'digest.build'),
+  },
+  {
+    id: 'digest.activation',
+    title: 'Activation calendar, thirty years ahead',
+    category: 'general',
+    board: 'chat',
+    status: 'planned',
+    charts: [c('dasha', 'all_systems'), c('dasha', 'applicable'), c('natal', 'facts')],
+    algorithm: [
+      'Every period of every served dasha system (43 graha and rasi systems; level 3 for the six that offer it) from birth to thirty years ahead',
+      "Each period carries the houses it activates as the engine states them: for graha dashas the lord's house, the houses it owns and the houses it aspects (from the planet cards); for rasi dashas the sign's house and its lord's house",
+      'One row per period in kundli_activation (kundli_id, system, level, lord_or_sign, from, to, houses), so "which periods activate house 7 between 2027 and 2030 under any system" is one indexed query',
+    ],
+    source: 'docs/reading-engine/53 §4.1, step 3',
+    code: 'not built (src/reading/digest/activation.ts, doc 53 step 3)',
+    agents: [],
+    accuracy: 'none',
+    selectors: DIGEST_SELECTORS,
+    contract: codeContract([inp('activation', 'every served system, levels 1–3, birth to +30 years', 'activation_row'), inp('planet', 'D1 cards (house, owns, aspects_to) of the nine planets', 'planet_card')], 'kundli_activation.v1', 'digest.build'),
+  },
+];
+
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_PLANNED, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...GENERAL, ...DIGEST];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 
@@ -623,20 +976,23 @@ export function techniqueRow(t: TechniqueDef) {
     code_ref: t.code,
     agents: t.agents as unknown as object,
     accuracy: t.accuracy,
+    selectors: t.selectors as unknown as object,
+    contract: t.contract as unknown as object,
   };
 }
 
 let seedWarned = false;
 
 /** One statement for the whole catalogue (one round trip), so it finishes inside a Lambda cold start. */
-const TECHNIQUE_SEED_SQL = `INSERT INTO technique_registry (id, title, category, board, status, charts, algorithm, special, source, code_ref, agents, accuracy, updated_at)
+export const TECHNIQUE_SEED_SQL = `INSERT INTO technique_registry (id, title, category, board, status, charts, algorithm, special, source, code_ref, agents, accuracy, selectors, contract, updated_at)
   SELECT x.id, x.title, x.category, x.board, x.status, coalesce(x.charts, '[]'), coalesce(x.algorithm, '[]'), x.special, x.source, x.code_ref,
-         coalesce(x.agents, '[]'), x.accuracy, now()
+         coalesce(x.agents, '[]'), x.accuracy, coalesce(x.selectors, '{}'), coalesce(x.contract, '{}'), now()
     FROM jsonb_to_recordset($1::jsonb) AS x(id text, title text, category text, board text, status text, charts jsonb, algorithm jsonb,
-         special text, source text, code_ref text, agents jsonb, accuracy text)
+         special text, source text, code_ref text, agents jsonb, accuracy text, selectors jsonb, contract jsonb)
   ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, category = EXCLUDED.category, board = EXCLUDED.board, status = EXCLUDED.status,
     charts = EXCLUDED.charts, algorithm = EXCLUDED.algorithm, special = EXCLUDED.special, source = EXCLUDED.source,
-    code_ref = EXCLUDED.code_ref, agents = EXCLUDED.agents, accuracy = EXCLUDED.accuracy, updated_at = now()`;
+    code_ref = EXCLUDED.code_ref, agents = EXCLUDED.agents, accuracy = EXCLUDED.accuracy, selectors = EXCLUDED.selectors,
+    contract = EXCLUDED.contract, updated_at = now()`;
 
 /**
  * Upserts every technique into `technique_registry`. Idempotent; awaited at boot (server.ts, before listen). With a real
