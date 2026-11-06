@@ -75,14 +75,23 @@ describe('technique catalogue', () => {
       expect(t.status, id).toBe('built');
       expect(t.special, id).toContain(successor);
     }
-    for (const id of ['general.varga_dynamics', 'general.strength_yoga', 'general.jaimini', 'general.person', 'digest.build', 'digest.annual_set', 'digest.activation', 'self.protection', 'love.protection', 'love.meet', 'love.health', 'love.reconcile']) {
+    for (const id of ['digest.build', 'digest.annual_set', 'digest.activation', 'self.protection', 'love.protection', 'love.meet', 'love.health', 'love.reconcile']) {
       expect(techniqueById(id)?.status, id).toBe('planned');
+    }
+    // the deterministic readers over the digest (doc 53 step 5, doc 54 §5 S5): built as code paths with code agents
+    for (const id of ['general.varga_dynamics', 'general.strength_yoga', 'general.jaimini', 'general.person']) {
+      const t = techniqueById(id)!;
+      expect(t.status, id).toBe('built');
+      expect(t.code, id).toMatch(/^src\/reading\/codeReaders\/readers\.ts /);
+      expect(t.contract.system, id).toBe('none');
+      expect(t.contract.output, id).toBe('findings.v2');
+      expect(t.agents, id).toEqual([`reading.code.${id.slice('general.'.length)}`]);
     }
     for (const id of ['general.transit', 'general.nakshatra', 'general.prashna', 'general.oracle', 'general.validator', 'general.intake', 'general.clarify', 'general.reader']) expect(techniqueById(id)?.status, id).toBe('built');
     expect(TECHNIQUES.filter((t) => t.id.startsWith('digest.')).every((t) => t.category === 'general' && t.board === 'chat')).toBe(true);
-    // built: 13 lucky scenarios + 5 work + 3 lucky shared + 11 general; planned: 4 work + 1 lucky + 8 love layers + 3 love sub-areas + 8 self layers + 4 general + 3 digest
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 3 + 11);
-    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 1 + 8 + 3 + 8 + 4 + 3);
+    // built: 13 lucky scenarios + 5 work + 3 lucky shared + 11 general + 4 deterministic general readers; planned: 4 work + 1 lucky + 8 love layers + 3 love sub-areas + 8 self layers + 3 digest
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 3 + 11 + 4);
+    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 1 + 8 + 3 + 8 + 3);
     expect(TECHNIQUES).toHaveLength(63);
   });
 

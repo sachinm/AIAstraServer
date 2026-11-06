@@ -46,6 +46,18 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
   return { facts, wizard: { done: facts['wizard.done']?.value ?? null, skipped: facts['wizard.skipped']?.value ?? null } };
 }
 
+/**
+ * The facts the person has confirmed (a confirmation time, a catalogue key), key → value, for the technique matcher
+ * and the reading's FACTS line (docs/reading-engine/53 §4.3–§4.4). `declined` stays, so a caller can tell "rather not say"
+ * from "not asked".
+ */
+export async function confirmedFacts(prisma: PrismaClient, userId: string): Promise<Record<string, string>> {
+  const { facts } = await readFacts(prisma, userId);
+  const out: Record<string, string> = {};
+  for (const [k, f] of Object.entries(facts)) if (f.confirmed_at && FACT_CATALOG[k]) out[k] = f.value;
+  return out;
+}
+
 /** Writes every fact or none: the whole body is checked first. */
 export async function writeFacts(prisma: PrismaClient, userId: string, input: unknown): Promise<{ ok: true; written: number } | { ok: false; error: string }> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'bad_body' };

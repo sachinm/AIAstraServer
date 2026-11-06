@@ -25,6 +25,7 @@ import { readingCacheLayout, readingFindingsV2 } from '../config.js';
 import { explicitCacheEnabled } from '../llm/promptCache.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Dossier } from '../facts/types.js';
+import type { DigestView } from '../digest/types.js';
 import type { TransitChart } from '../transits/types.js';
 import type { Intent } from '../types.js';
 import { FRAMES, type SubjectId } from './frames.js';
@@ -127,7 +128,15 @@ export interface FullContextInput {
   transits: TransitChart | null;
   asOf: string;
   system: string;
+  /**
+   * The kundli's digest when it is ready (docs/reading-engine/53 §4.2): the cached evidence is then rendered from its
+   * rows (packs/digestSource.ts), the same bytes for every question about this kundli on this digest version and day.
+   */
+  digest?: DigestView | null;
 }
+
+/** The part of the memo key that names the digest a prefix was rendered from (none on the dossier path). */
+export const digestKey = (d: DigestView | null | undefined): string => (d ? `${d.kundliId}@${d.version}@${d.builtAt ?? ''}` : '');
 
 const memo = new Map<string, FullContext>();
 const MEMO_MAX = 200;
@@ -143,7 +152,8 @@ export function clearFullContexts(): void {
  */
 export function buildFullContext(input: FullContextInput, memoKey?: string | null): FullContext {
   const v2 = readingFindingsV2();
-  const key = memoKey ? `${memoKey}|${input.asOf}|${v2 ? 2 : 1}|${hashText(input.system)}|${process.env.READING_FULL_BASE ?? ''}` : null;
+  const dk = digestKey(input.digest);
+  const key = memoKey ? `${memoKey}|${input.asOf}|${v2 ? 2 : 1}|${hashText(input.system)}|${process.env.READING_FULL_BASE ?? ''}${dk ? `|${dk}` : ''}` : null;
   const hit = key ? memo.get(key) : undefined;
   if (hit) return hit;
   const pack = buildEvidencePack({
@@ -153,6 +163,7 @@ export function buildFullContext(input: FullContextInput, memoKey?: string | nul
     asOf: input.asOf,
     intent: { horizon: FULL_HORIZON, mentionsPlanets: [], focusPoints: [] },
     fullScope: true,
+    ...(input.digest ? { digest: input.digest } : {}),
   });
   const evidence: Partial<Record<PackSection, unknown>> = {};
   for (const sec of CACHED_SECTIONS) if (pack.sections[sec] !== undefined) evidence[sec] = pack.sections[sec];
@@ -173,8 +184,8 @@ export function buildFullContext(input: FullContextInput, memoKey?: string | nul
 }
 
 /** The day's full context for loaded reading data (memoised on the dossier hash and transit snapshot). */
-export function fullContextFor(data: { dossier: Dossier; transits: TransitChart | null; dossierHash?: string | null; transitSnapshotId?: string | null }, asOf: string, system: string): FullContext {
-  return buildFullContext({ dossier: data.dossier, transits: data.transits, asOf, system }, data.dossierHash ? `${data.dossierHash}|${data.transitSnapshotId ?? ''}` : null);
+export function fullContextFor(data: { dossier: Dossier; transits: TransitChart | null; dossierHash?: string | null; transitSnapshotId?: string | null }, asOf: string, system: string, digest?: DigestView | null): FullContext {
+  return buildFullContext({ dossier: data.dossier, transits: data.transits, asOf, system, ...(digest ? { digest } : {}) }, data.dossierHash ? `${data.dossierHash}|${data.transitSnapshotId ?? ''}` : null);
 }
 
 // ---------------------------------------------------------------- what a call adds (EXTRA EVIDENCE) and grounding

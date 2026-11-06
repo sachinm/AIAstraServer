@@ -32,6 +32,9 @@ const FINISH_WAIT_MS = 2_000;
 const STORE_RETRY_MS = 5 * 60_000;
 
 const GRAPH_ANALYSTS = new Set(['promise', 'dasha', 'transit', 'nakshatra', 'annual', 'prashna']);
+/** The deterministic readers over the digest (codeReaders/readers.ts CODE_ANALYSTS): spans named `code:<name>`, code steps with their own registry row and technique. */
+const CODE_READERS = new Set(['varga_dynamics', 'strength_yoga', 'jaimini', 'person']);
+const codeReaderOf = (name: string): string | null => (name.startsWith('code:') && CODE_READERS.has(name.slice(5)) ? name.slice(5) : null);
 
 export function agentKindOf(name: string): AgentKind {
   if (/^[RP]\d+$/.test(name)) return 'reader';
@@ -71,8 +74,10 @@ export function agentIdOf(name: string, kind: AgentKind = agentKindOf(name)): st
       return 'reading.intake';
     case 'clarify':
       return 'reading.clarify';
-    default:
-      return 'reading.step';
+    default: {
+      const c = codeReaderOf(name);
+      return c ? `reading.code.${c}` : 'reading.step';
+    }
   }
 }
 
@@ -93,8 +98,10 @@ export function techniqueIdOf(name: string, kind: AgentKind = agentKindOf(name))
       return 'general.intake';
     case 'clarify':
       return 'general.clarify';
-    default:
-      return null;
+    default: {
+      const c = codeReaderOf(name);
+      return c ? `general.${c}` : null;
+    }
   }
 }
 
