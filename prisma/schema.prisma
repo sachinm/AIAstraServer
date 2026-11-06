@@ -111,7 +111,14 @@ model Kundli {
   place_resolved     String?                @map("place_resolved")
   /// pending | building | ready | failed | unsupported (the engine does not serve the dossier yet)
   facts_status       String                 @default("pending") @map("facts_status")
+  /// pending | building | ready | stale | failed (M32, docs/reading-engine/53 §4.1, 54 §2)
+  digest_status      String                 @default("pending") @map("digest_status")
+  digest_version     String?                @map("digest_version")
+  digest_built_at    DateTime?              @map("digest_built_at") @db.Timestamptz(6)
+  digest_error       String?                @map("digest_error")
   facts              KundliFacts[]
+  digestRows         KundliDigest[]
+  activations        KundliActivation[]
   transitCharts      TransitSnapshot[]
   transitOverlays    KundliTransitOverlay[]
   dayOverlays        KundliDayOverlay[]
@@ -120,6 +127,7 @@ model Kundli {
   content            UserGeneratedContent[]
 
   @@index([user_id], map: "idx_kundlis_user_id")
+  @@index([digest_status], map: "idx_kundlis_digest_status")
   areaBuilds         AreaBuild[]
 
   @@map("kundlis")
@@ -267,6 +275,47 @@ model KundliData {
   @@unique([kundli_id, data_type, variant, ayanamsa], name: "kundli_data_key", map: "kundli_data_key")
   @@index([data_type, status], map: "idx_kundli_data_type_status")
   @@map("kundli_data")
+}
+
+/// The kundli digest (M32, docs/reading-engine/53 §4.1, 54 §2): one row per (kundli, section, key), built by code from
+/// the stored engine rows; `source` lists the engine type, variant, calc version and JSON path of every value.
+model KundliDigest {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id      String   @map("kundli_id")
+  /// house | planet | yoga | point | annual | star
+  section        String
+  key            String
+  row            Json
+  source         Json     @default("[]")
+  digest_version String   @map("digest_version")
+  built_at       DateTime @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([kundli_id, section, key], name: "kundli_digest_key", map: "kundli_digest_key")
+  @@index([kundli_id, section], map: "idx_kundli_digest_section")
+  @@map("kundli_digest")
+}
+
+/// The activation calendar (M33, docs/reading-engine/53 §4.1, 54 §2): one row per stored dasha period, birth to thirty
+/// years ahead, with the D1 houses it activates as the engine states them.
+model KundliActivation {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id      String   @map("kundli_id")
+  system         String
+  family         String
+  level          Int
+  lord           String?
+  sign           String?
+  from_date      DateTime @map("from_date") @db.Date
+  to_date        DateTime @map("to_date") @db.Date
+  houses         Int[]    @default([])
+  parent_lord    String?  @map("parent_lord")
+  digest_version String   @map("digest_version")
+  kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([kundli_id, from_date, to_date], map: "idx_kundli_activation_range")
+  @@index([houses], map: "idx_kundli_activation_houses", type: Gin)
+  @@map("kundli_activation")
 }
 
 /// Global transit snapshots, one row per date range (reading engine M3).
