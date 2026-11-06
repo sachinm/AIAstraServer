@@ -110,6 +110,22 @@ export const AGENTS: AgentDef[] = [
     description: 'Builds the career map from the timeline grid: present tone, windows by sub-area, horizons, security, Looking back',
   },
   {
+    id: 'area.self_board',
+    title: 'You board builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'self',
+    description: 'Builds the You board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
+  },
+  {
+    id: 'area.love_board',
+    title: 'Love board builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'love',
+    description: 'Builds the Love board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
+  },
+  {
     id: 'lucky.scenario_windows',
     title: 'Scenario windows builder',
     kind: 'code',

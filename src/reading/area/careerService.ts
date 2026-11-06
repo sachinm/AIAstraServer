@@ -102,19 +102,23 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
   return { status: 'ok', map: shown, work, built_at: asOf, cached: !fresh };
 }
 
-export async function recordCheck(prisma: PrismaClient, userId: string, month: unknown, side: unknown, answer: unknown): Promise<boolean> {
+/** The boards whose Looking-back answers are stored in `area_checks` (doc 45 §9; doc 54 §3 adds self and love). */
+export const CHECK_AREAS = ['career', 'self', 'love'] as const;
+export type CheckArea = (typeof CHECK_AREAS)[number];
+
+export async function recordCheck(prisma: PrismaClient, userId: string, month: unknown, side: unknown, answer: unknown, area: CheckArea = 'career'): Promise<boolean> {
   if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) return false;
   if (side !== 'support' && side !== 'test') return false;
   if (!['yes', 'partly', 'no', 'skip'].includes(String(answer))) return false;
   await prisma.areaCheck.upsert({
-    where: { user_id_area_month: { user_id: userId, area: 'career', month } },
-    create: { user_id: userId, area: 'career', month, side, answer: String(answer) },
+    where: { user_id_area_month: { user_id: userId, area, month } },
+    create: { user_id: userId, area, month, side, answer: String(answer) },
     update: { side, answer: String(answer) },
   });
   return true;
 }
 
-export async function checksFor(prisma: PrismaClient, userId: string): Promise<Record<string, string>> {
-  const rows = await prisma.areaCheck.findMany({ where: { user_id: userId, area: 'career' } });
+export async function checksFor(prisma: PrismaClient, userId: string, area: CheckArea = 'career'): Promise<Record<string, string>> {
+  const rows = await prisma.areaCheck.findMany({ where: { user_id: userId, area } });
   return Object.fromEntries(rows.map((r) => [r.month, r.answer]));
 }
