@@ -110,6 +110,14 @@ export const AGENTS: AgentDef[] = [
     description: 'Builds the career map from the timeline grid: present tone, windows by sub-area, horizons, security, Looking back',
   },
   {
+    id: 'life.dashboard',
+    title: 'Life reading dashboard',
+    kind: 'code',
+    module: 'life',
+    subModule: 'dashboard',
+    description: 'Builds Part 1 of the life reading (doc 34) from the stored digest and activation calendar: the promise scale per area, cross-system timing windows, the rule for now',
+  },
+  {
     id: 'lucky.scenario_windows',
     title: 'Scenario windows builder',
     kind: 'code',

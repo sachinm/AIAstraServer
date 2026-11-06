@@ -10,13 +10,13 @@ beforeEach(() => resetTechniqueSeedState());
 describe('technique catalogue', () => {
   it('ids are unique and look like <category or board>.<name>', () => {
     expect(new Set(TECHNIQUES.map((t) => t.id)).size).toBe(TECHNIQUES.length);
-    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest)\.[a-z0-9_.]+$/);
+    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life)\.[a-z0-9_.]+$/);
   });
 
   it('every category, board, status and chart source is valid', () => {
     for (const t of TECHNIQUES) {
       expect(TECHNIQUE_CATEGORIES).toContain(t.category);
-      expect(['you', 'love', 'work', 'lucky', 'chat']).toContain(t.board);
+      expect(['you', 'love', 'work', 'lucky', 'chat', 'timeline']).toContain(t.board);
       expect(['built', 'partial', 'planned']).toContain(t.status);
       for (const ch of t.charts) expect(CHART_SOURCES).toContain(ch.source);
       expect(t.algorithm.length).toBeGreaterThan(0);
@@ -80,10 +80,10 @@ describe('technique catalogue', () => {
     }
     for (const id of ['general.transit', 'general.nakshatra', 'general.prashna', 'general.oracle', 'general.validator', 'general.intake', 'general.clarify', 'general.reader']) expect(techniqueById(id)?.status, id).toBe('built');
     expect(TECHNIQUES.filter((t) => t.id.startsWith('digest.')).every((t) => t.category === 'general' && t.board === 'chat')).toBe(true);
-    // built: 13 lucky scenarios + 5 work + 3 lucky shared + 11 general; planned: 4 work + 1 lucky + 8 love layers + 3 love sub-areas + 8 self layers + 4 general + 3 digest
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 3 + 11);
+    // built: 13 lucky scenarios + 5 work + 3 lucky shared + 11 general + 3 life; planned: 4 work + 1 lucky + 8 love layers + 3 love sub-areas + 8 self layers + 4 general + 3 digest
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 3 + 11 + 3);
     expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 1 + 8 + 3 + 8 + 4 + 3);
-    expect(TECHNIQUES).toHaveLength(63);
+    expect(TECHNIQUES).toHaveLength(66);
   });
 
   it('the planned work families and the house-state layers are there', () => {

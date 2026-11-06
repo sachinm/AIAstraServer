@@ -30,6 +30,7 @@ import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { registerAssistantRoutes } from './src/routes/assistantRoutes.js';
 import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
+import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
@@ -309,6 +310,8 @@ registerAssistantRoutes(app, { prisma });
 registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma) });
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
+// life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
+registerLifeReadingRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
 
