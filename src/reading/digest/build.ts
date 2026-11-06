@@ -144,7 +144,8 @@ function annualTables(items: Record<string, unknown>, key: string, varga: string
   const houses = ref(items, key, 'houses');
   const planets = ref(items, key, 'dignities');
   if (!houses && !planets && !ref(items, key, 'lagna')) return null;
-  return { varga, houses, planets, aspects: ref(items, key, 'aspects'), argala: ref(items, key, 'argala'), arudhas: null, avasthas: null };
+  const houseCounts = ref(items, key, 'house_counts') ?? ref(items, 'house_counts');
+  return { varga, houses, planets, aspects: ref(items, key, 'aspects'), argala: ref(items, key, 'argala'), arudhas: null, avasthas: null, houseCounts };
 }
 
 interface Built<T> {
@@ -255,6 +256,12 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
     } else if (fh && Array.isArray(fh.class)) {
       cls = fh.class.map(str).filter((c): c is string => Boolean(c));
       source.push(src.of(t.d1!.facts!, `houses.${h}.class`));
+    } else if (Array.isArray(raw.classification)) {
+      cls = raw.classification.map(str).filter((c): c is string => Boolean(c));
+      source.push(src.of(t.houses!, `[${i}].classification`));
+    } else if (Array.isArray(raw.class)) {
+      cls = raw.class.map(str).filter((c): c is string => Boolean(c));
+      source.push(src.of(t.houses!, `[${i}].class`));
     }
     const bmBadhaka = t.d1?.benefic && isObj(t.d1.benefic.value) && isObj((t.d1.benefic.value as Obj).badhaka) ? ((t.d1.benefic.value as Obj).badhaka as Obj) : null;
     if (bmBadhaka && int(bmBadhaka.badhaka_house) === h && !cls.includes('badhaka')) {
@@ -477,13 +484,13 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
         varga: `D${f}`,
         planet: p,
         sign,
-        house: null,
+        house: int(o.house),
         degree: degreeOf(o.longitude),
         star: str(o.nakshatra),
         pada: Number.isInteger(pada) && pada > 0 ? pada : null,
-        starLord: null,
-        dignity: null,
-        retro: null,
+        starLord: planetCode(o.star_lord) ?? planetCode(o.nakshatra_lord),
+        dignity: str(o.dignity),
+        retro: bool(o.retro) ?? bool(o.is_retrograde),
         combust: null,
         war: null,
         dispositor: null,
@@ -660,9 +667,14 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
     const lord = planetCode(x.lord);
     const lp = lord && isObj(planetsObj[lord]) ? (planetsObj[lord] as Obj) : null;
     if (lp) source.push(src.of(fx.ref, `vargas.${varga}.planets.${lord}`));
+    const cls = Array.isArray(x.class)
+      ? x.class.map(str).filter((c): c is string => Boolean(c))
+      : Array.isArray(x.classification)
+        ? x.classification.map(str).filter((c): c is string => Boolean(c))
+        : [];
     houses.push({
       key: `${varga}.h${h}`,
-      row: { varga, house: h, sign: signLabel(x.sign), lord, lordHouse: lp ? int(lp.house) : null, lordSign: lp ? signLabel(lp.sign) : null, lordDignity: lp ? str(lp.dignity) : null, coLord: null, occupants, aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: [], cuspStar: null, arudha: null },
+      row: { varga, house: h, sign: signLabel(x.sign), lord, lordHouse: lp ? int(lp.house) : null, lordSign: lp ? signLabel(lp.sign) : null, lordDignity: lp ? str(lp.dignity) : null, coLord: null, occupants, aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: cls, cuspStar: null, arudha: null },
       source,
     });
   }

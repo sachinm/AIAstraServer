@@ -145,5 +145,7 @@ describe('digest-backed work families (work.d10_check, work.annual_family, work.
     expect(p.votes.find((f) => f.family === 'annual')?.vote).toBe('support');
     expect(p.votes.find((f) => f.family === 'conditional')?.vote).toBe('support');
     expect(p.votes.find((f) => f.family === 'karaka')?.vote).toBe('support');
+    const fullMap = careerMap(build, G1_AS_OF, { view, activation });
+    expect(fullMap.notes.some((n) => n.includes('not built yet'))).toBe(false);
   });
 });
