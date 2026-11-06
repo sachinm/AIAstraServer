@@ -7,7 +7,8 @@
  * Node selects digest rows, reads the engine's labels into a side (labels.ts), counts and sums weights. It derives
  * nothing astrological.
  */
-import type { ActivationFamily, ActivationRow, AnnualRow, DigestView, HouseCard } from '../digest/types.js';
+import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
+import type { AnnualRow, DigestView, HouseCard } from '../digest/types.js';
 import type { LifeArea } from './areas.js';
 import { covers, dignitySide, houseClassSide, natureSide, planetSide, sideValue, type Side } from './labels.js';
 import type { SkyView } from './sky.js';

@@ -3,7 +3,8 @@ import { LIFE_AREAS, lifeArea } from '../../../../src/reading/life/areas.js';
 import { composeDashboard, confirmQuestion, longDate, type LifeDashboard } from '../../../../src/reading/life/compose.js';
 import { promiseScale } from '../../../../src/reading/life/promise.js';
 import { areaTiming } from '../../../../src/reading/life/timing.js';
-import type { ActivationRow, DigestView } from '../../../../src/reading/digest/types.js';
+import type { ActivationRow } from '../../../../src/reading/digest/activation.js';
+import type { DigestView } from '../../../../src/reading/digest/types.js';
 import { makeView, row } from './fixture.js';
 
 const today = '2026-11-05';

@@ -11,7 +11,8 @@
  * as one plain question before anything is predicted from it (AGENTS.md rule 2), worded from their own stored facts
  * (rule 3). Never medical, legal or financial advice.
  */
-import type { ActivationRow, DigestView } from '../digest/types.js';
+import type { ActivationRow } from '../digest/activation.js';
+import type { DigestView } from '../digest/types.js';
 import { LIFE_AREAS, type LifeArea, type LifeAreaId } from './areas.js';
 import { functionalSide, planetName, planetSide } from './labels.js';
 import type { AreaPromise, ScaleLine, Verdict } from './promise.js';

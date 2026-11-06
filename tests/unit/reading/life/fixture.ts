@@ -2,7 +2,8 @@
  * A synthetic DigestView (doc 54 §2) for the life reading tests: no real birth data, no person. Every house and planet
  * card is built from a "tone" (strong or weak) and per-card overrides.
  */
-import type { ActivationFamily, ActivationRow, AnnualRow, DigestView, HouseCard, PlanetCard } from '../../../../src/reading/digest/types.js';
+import type { ActivationFamily, ActivationRow } from '../../../../src/reading/digest/activation.js';
+import type { AnnualRow, DigestView, HouseCard, PlanetCard } from '../../../../src/reading/digest/types.js';
 
 export type Tone = 'strong' | 'weak';
 const SIGNS = ['Sign1', 'Sign2', 'Sign3', 'Sign4', 'Sign5', 'Sign6', 'Sign7', 'Sign8', 'Sign9', 'Sign10', 'Sign11', 'Sign12'];

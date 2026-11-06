@@ -15,7 +15,8 @@
  *
  * Node selects rows, intersects date ranges, counts and sums weights. It derives nothing astrological.
  */
-import type { ActivationFamily, ActivationRow, AnnualRow, DigestView } from '../digest/types.js';
+import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
+import type { AnnualRow, DigestView } from '../digest/types.js';
 import type { LifeArea } from './areas.js';
 import { overlaps } from './labels.js';
 import { ANNUAL_WEIGHTS, FAMILY_WEIGHTS, LAYER_WEIGHTS, annualSide, periodLord, periodSide, type AreaPromise } from './promise.js';
