@@ -46,6 +46,8 @@ import { inferRealWant } from './clarify/realWant.js';
 import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import { prashnaSection, transitAtSection } from './layers/sections.js';
 import { currentTrace, failureLabel, withRunTrace } from './metrics/trace.js';
+import { TECHNIQUES } from '../techniques/catalog.js';
+import { techniqueIdsFor } from '../techniques/contracts.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -198,6 +200,20 @@ function tailFor(intent: Intent, question: string, asOf: string, shapeByRef = fa
   return parts.join('\n\n');
 }
 
+/**
+ * The built catalogue techniques the confirmed intent selects (docs/reading-engine/53 §4.3), for the trace. Labels only;
+ * the companion memory is not read here yet (step 4 of doc 53), and a failure means no label, never a failed reading.
+ */
+function selectedTechniques(intent: Intent): string[] | null {
+  try {
+    const slots = Object.keys(intent.classification?.slots ?? {});
+    if (intent.prashna?.eligible) slots.push('prashna');
+    return techniqueIdsFor({ intent, facts: {}, board: 'chat', slots }, TECHNIQUES.filter((t) => t.status !== 'planned'));
+  } catch {
+    return null;
+  }
+}
+
 function summarizeIntent(intent: Intent) {
   return {
     subjects: intent.subjects.map((s) => ({ id: s.id, label: FRAMES[s.id].label })),
@@ -266,7 +282,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
   // technique labels for the metrics (docs/admin/01 §4.1.6); `subjects` is narrowed below to what actually fans out
-  currentTrace()?.label({ bucket: intent.classification?.bucket ?? null, template: intent.classification?.template ?? null, subjects: intent.subjects.length });
+  currentTrace()?.label({ bucket: intent.classification?.bucket ?? null, template: intent.classification?.template ?? null, subjects: intent.subjects.length, techniques: selectedTechniques(intent) });
   emit({ type: 'intent', runId, intent: summarizeIntent(intent), source: intake.source });
 
   const baseRecord = {
