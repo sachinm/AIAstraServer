@@ -12,6 +12,7 @@ import {
 import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { buildFactsForKundli, scheduleFactsBuild } from '../reading/data/factsBuilder.js';
+import { markDigestInputsChanged } from '../reading/digest/status.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
 import { fetchRegistrationItemsUntil, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
@@ -186,10 +187,10 @@ async function pullRest(
   startAll: number,
   gateMs: number,
   deadline: number
-): Promise<{ more: boolean }> {
+): Promise<{ more: boolean; fetched: number }> {
   if (restPullInFlight.has(kundliId)) {
     queueLog({ event: 'kundli_full_pull_already_running', user_id: userId, kundli_id: kundliId });
-    return { more: false };
+    return { more: false, fetched: 0 };
   }
   restPullInFlight.add(kundliId);
   let restItems: Record<string, ChartItem> = {};
@@ -227,7 +228,7 @@ async function pullRest(
     wall_ms: wallMs,
     ...(error ? { error } : {}),
   });
-  return { more: remaining.length > 0 };
+  return { more: remaining.length > 0, fetched: count((i) => i.source === 'radha') };
 }
 
 /**
@@ -464,6 +465,9 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
       // that did not land stay missing/failed and the next run (worker re-invoke, sweep or login) resumes from them.
       if (run.gateOnly) return { gateComplete: true, more: false };
       const rest = await pullRest(chartDeps, userId, kundliId, plan, gateItems, fetchOpts, startAll, gateMs, deadline);
+      // the registration pull stored new engine rows: the digest is behind them (ready -> stale, failed -> pending; a new
+      // kundli is pending already), and the digest sweep rebuilds it (docs/reading-engine/53 §4.1 Status)
+      if (rest.fetched > 0) await markDigestInputsChanged(prisma, kundliId);
       return { gateComplete: true, more: rest.more };
     } else {
       queueLog({

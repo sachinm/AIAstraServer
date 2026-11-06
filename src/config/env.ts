@@ -235,6 +235,17 @@ export function getKundliSyncEventToken(): string | undefined {
   return process.env.KUNDLI_SYNC_EVENT_TOKEN?.trim() || undefined;
 }
 
+/** Shared secret carried in kundli-digest / kundli-digest-sweep events (KUNDLI_DIGEST_EVENT_TOKEN). Required: unset = every digest event refused. */
+export function getKundliDigestEventToken(): string | undefined {
+  return process.env.KUNDLI_DIGEST_EVENT_TOKEN?.trim() || undefined;
+}
+
+/** Elapsed-time budget of one kundli-digest-sweep event (DIGEST_SWEEP_MAX_MS, 10000–600000), default 60 s. */
+export function getDigestSweepMaxMs(): number {
+  const n = Number(process.env.DIGEST_SWEEP_MAX_MS);
+  return Number.isFinite(n) && n >= 10_000 && n <= 600_000 ? Math.round(n) : 60_000;
+}
+
 /** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
 export type ChatLlmProvider = 'groq' | 'gemini';
 
