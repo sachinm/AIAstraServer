@@ -151,6 +151,14 @@ export const AGENTS: AgentDef[] = [
     description: 'Builds the Love board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
   },
   {
+    id: 'life.dashboard',
+    title: 'Life reading dashboard',
+    kind: 'code',
+    module: 'life',
+    subModule: 'dashboard',
+    description: 'Builds Part 1 of the life reading (doc 34) from the stored digest and activation calendar: the promise scale per area, cross-system timing windows, the rule for now',
+  },
+  {
     id: 'lucky.scenario_windows',
     title: 'Scenario windows builder',
     kind: 'code',

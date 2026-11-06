@@ -42,7 +42,7 @@ describe('every technique is a contract (doc 53 §4.3)', () => {
   it('selector values are real subjects, boards, horizons and fact values', () => {
     for (const t of TECHNIQUES) {
       for (const s of t.selectors.subjects ?? []) expect(SUBJECT_IDS, `${t.id} subject ${s}`).toContain(s);
-      for (const b of t.selectors.boards ?? []) expect(['chat', 'you', 'love', 'work', 'lucky'], t.id).toContain(b);
+      for (const b of t.selectors.boards ?? []) expect(['chat', 'you', 'love', 'work', 'lucky', 'timeline'], t.id).toContain(b);
       for (const h of t.selectors.horizons ?? []) expect(['now', '3m', '6m', '1y', '3y', 'life', 'custom'], t.id).toContain(h);
       for (const [key, values] of Object.entries(t.selectors.facts ?? {})) {
         const allowed = FACT_CATALOG[key];

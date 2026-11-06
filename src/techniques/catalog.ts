@@ -19,7 +19,7 @@ import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
 import type { ContractInput, ContractSection, TechniqueContract, TechniqueSelectors } from './contracts.js';
 import type { LayoutId } from './layouts.js';
 
-export type TechniqueBoard = 'you' | 'love' | 'work' | 'lucky' | 'chat';
+export type TechniqueBoard = 'you' | 'love' | 'work' | 'lucky' | 'chat' | 'timeline';
 export type TechniqueStatus = 'built' | 'partial' | 'planned';
 export type ChartSource = 'natal' | 'divisional' | 'dasha' | 'transit' | 'annual' | 'panchang' | 'nakshatra' | 'jaimini' | 'ashtakavarga';
 export const CHART_SOURCES: readonly ChartSource[] = ['natal', 'divisional', 'dasha', 'transit', 'annual', 'panchang', 'nakshatra', 'jaimini', 'ashtakavarga'];
@@ -63,7 +63,7 @@ const codeContract = (inputs: ContractInput[], output: string, synthesizer?: str
 export const ANALYST_USER_FIELDS = ['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS'];
 const ALL_SUBJECTS: SubjectId[] = [...SUBJECT_IDS];
 const ALL_HORIZONS: string[] = [...HORIZONS, 'custom'];
-const ALL_BOARDS: TechniqueBoard[] = ['chat', 'you', 'love', 'work', 'lucky'];
+const ALL_BOARDS: TechniqueBoard[] = ['chat', 'you', 'love', 'work', 'lucky', 'timeline'];
 
 // ---------------------------------------------------------------- Work board (src/reading/area/career.ts)
 
@@ -1009,7 +1009,109 @@ const DIGEST: TechniqueDef[] = [
   },
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_PLANNED, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...GENERAL, ...DIGEST];
+// ---------------------------------------------------------------- The life reading, Part 1 (doc 34; doc 54 §4): Profile → Timeline
+
+const LIFE_AREA_LINE = 'self 1,9,10; money 2,11,9,5 (D2); work 10,6,1 (D10); home 4,2,11 (D4); marriage 7,2,11,12 (D9); children 5,9 (D7); parents 4,9 (D12); siblings 3,11,1 (D3); legal 6,10,8 (D30, else D10); health 1,6,8 (D30); travel 12,9,3,7 (D4); learning 4,5,2,9 (D24); dharma 9,12,8,5 (D20)';
+/** The Timeline card only: no chat or board flow selects these. */
+const LIFE_SELECTORS: TechniqueSelectors = { boards: ['timeline'], houses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], vargas: ['D1', 'D9', 'D2', 'D3', 'D4', 'D7', 'D10', 'D12', 'D20', 'D24', 'D30'] };
+const LIFE_CHARTS: TechniqueChart[] = [
+  c('natal', 'digest.house'),
+  c('natal', 'digest.planet'),
+  c('natal', 'digest.yoga'),
+  c('divisional', 'D9'),
+  c('divisional', 'owning varga'),
+  c('dasha', 'kundli_activation'),
+  c('annual', 'digest.annual'),
+  c('transit', 'transit_snapshot.double_transit'),
+];
+const LIFE_AGENTS = ['life.dashboard'];
+const LIFE_PROMISE_INPUTS: ContractInput[] = [
+  inp('house', 'D1 houses of the area; D9 and the owning varga, primary house', 'house_card'),
+  inp('planet', 'D1 karakas of the area; the primary house lord in D9 and the owning varga', 'planet_card'),
+  inp('yoga', 'D1 yogas on the area houses or their lords', 'yoga_row'),
+];
+const LIFE_TIMING_INPUTS: ContractInput[] = [
+  inp('activation', 'every family, levels 1-2, today to +15 years, the area houses', 'activation_row'),
+  inp('annual', 'TP and VP of each year a window touches, D1 card of the primary house', 'annual_row'),
+  inp('transit', 'stored natal-overlay double_transit windows and Saturn/Rahu/Ketu rows (read only; none fetched)', 'transit_row'),
+];
+
+const LIFE: TechniqueDef[] = [
+  {
+    id: 'life.promise_scale',
+    title: 'Life areas: the weighed promise scale',
+    category: 'general',
+    board: 'timeline',
+    status: 'built',
+    charts: LIFE_CHARTS,
+    algorithm: [
+      `Thirteen areas, each with D1 houses (primary first), karakas and an owning varga from the subject frames: ${LIFE_AREA_LINE}`,
+      "D1 (35): per area house (primary weighted 2, others 1) the lord's dignity, the class of the house the lord sits in (dusthana tests, kendra or trikona supports), each occupant's dignity or else its natural nature, SAV (28+ supports, 24 or less tests), argala open against obstructed; each karaka's functional nature, else dignity, else combustion; yogas on the area houses or their lords (raja, dhana, mahapurusha, cancellation support; doshas test)",
+      "Vargas (20): D9 for every area and the owning varga beside it when the digest holds it (10 + 10, else D9 alone): the primary house lord and occupants in that varga, and the D1 primary lord's dignity there",
+      "Dashas (25): the period running today in each family (Vimshottari 8, rasi 6, conditional 4, Yogini 3, Tithi Ashtottari 2, others 2), silent unless it activates an area house; otherwise its lord's functional nature, else dignity, decides the side; a rasi period reads the lord of its sign from the D1 house cards",
+      "Annual (10): this year's TP (6) and VP (4) D1 card of the primary house: lord dignity and occupants averaged",
+      'Transit (10): from the stored natal-overlay chart only: Saturn, Rahu or Ketu on an area house tests, a Jupiter-Saturn double transit on one supports',
+      'Each layer earns its weight times (support + half of neutral) over its lines; the score is the sum over the layers that are there, scaled to 100',
+      "Verdict from D1 and vargas only: 60 % or more promised, 40-59 % partial, under 40 % not written; withholding planets are the test lines' planets, heaviest first",
+    ],
+    special: "The antardasha lord's place from the mahadasha lord (6/8/12) is not read: it would be a derivation in Node; filed in docs/TODOS.md for the engine",
+    source: 'docs/reading-engine/34 §2, §3; 54 §4',
+    code: 'src/reading/life/promise.ts promiseScale',
+    agents: LIFE_AGENTS,
+    accuracy: 'none',
+    selectors: LIFE_SELECTORS,
+    contract: codeContract([...LIFE_PROMISE_INPUTS, inp('activation', 'periods running today, levels 1-2', 'activation_row')], 'life_promise.v1', 'life.dashboard'),
+  },
+  {
+    id: 'life.timing_agreement',
+    title: 'Life areas: when it improves, by agreement across systems',
+    category: 'general',
+    board: 'timeline',
+    status: 'built',
+    charts: LIFE_CHARTS,
+    algorithm: [
+      'Candidates: each Vimshottari sub-period (level 2, else level 1) in the next 15 years that activates an area house and whose lord does not test the area',
+      'Another family agrees when one of its periods overlapping the window activates an area house without testing it; it contradicts when every such period tests it',
+      'Dated only when Vimshottari and at least one of conditional, rasi, Yogini or Tithi Ashtottari agree; otherwise the window is a possibility, written as one, with its year only',
+      "Score: 55 times the area's promise ratio + Vimshottari 8 + the agreeing families' weights - the contradicting families' weights + TP 6 and VP 4 when a year the window touches supports the primary house + 10 when a stored double transit falls on an area house inside the window",
+      'Grade: 70+ strong, 50-69 moderate, under 50 weak; the basis names how many systems agree, whether the year chart confirms, whether the sky confirms or could not be checked, and how many disagree',
+      'The best three dated windows by score, shown in date order',
+    ],
+    special: 'The stored transit chart covers about two years; windows past it carry "the sky check is not available" and do not earn the transit points',
+    source: 'docs/reading-engine/34 §2, §3; 54 §4',
+    code: 'src/reading/life/timing.ts areaTiming',
+    agents: LIFE_AGENTS,
+    accuracy: 'none',
+    selectors: LIFE_SELECTORS,
+    contract: codeContract(LIFE_TIMING_INPUTS, 'life_windows.v1', 'life.dashboard'),
+  },
+  {
+    id: 'life.dashboard',
+    title: 'Your life at a glance (Part 1 of the life reading)',
+    category: 'general',
+    board: 'timeline',
+    status: 'built',
+    charts: LIFE_CHARTS,
+    algorithm: [
+      'Needs the digest: when it is not ready the answer is preparing and the kundli is queued (digest_status pending unless building)',
+      'Per area run the promise scale (life.promise_scale) and the timing (life.timing_agreement)',
+      'Shown only when the area has a pressure now (a test line in the running periods or the sky) or a dated window',
+      "Issue: the heaviest current test line as a plain sentence with its end date, then one confirming question worded from the person's stored facts (work.status, love.status, family.children)",
+      'Cause: the planets of the current test lines and the withholding planets, the running periods that touch the area, and one plain sentence',
+      "Solution: two practical steps per area, the date to hold until, the best window to act in, and traditional support from the chart's strongest functional benefic (a weekday and a gesture)",
+      'Rule now: the running Vimshottari sub-period; its lord testing gives hold-and-prepare with what happens if broken, otherwise act on what is ready',
+      'Stored per kundli per day in area_builds (area life); template sentences only, no model',
+    ],
+    source: 'docs/reading-engine/34 §1, §5 Part 1; 54 §4',
+    code: 'src/reading/life/compose.ts composeDashboard; service.ts getLifeReading',
+    agents: LIFE_AGENTS,
+    accuracy: 'none',
+    selectors: LIFE_SELECTORS,
+    contract: codeContract([...LIFE_PROMISE_INPUTS, ...LIFE_TIMING_INPUTS], 'life_reading.v1'),
+  },
+];
+
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_PLANNED, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...GENERAL, ...DIGEST, ...LIFE];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

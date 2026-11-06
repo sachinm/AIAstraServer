@@ -10,13 +10,13 @@ beforeEach(() => resetTechniqueSeedState());
 describe('technique catalogue', () => {
   it('ids are unique and look like <category or board>.<name>', () => {
     expect(new Set(TECHNIQUES.map((t) => t.id)).size).toBe(TECHNIQUES.length);
-    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest)\.[a-z0-9_.]+$/);
+    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life)\.[a-z0-9_.]+$/);
   });
 
   it('every category, board, status and chart source is valid', () => {
     for (const t of TECHNIQUES) {
       expect(TECHNIQUE_CATEGORIES).toContain(t.category);
-      expect(['you', 'love', 'work', 'lucky', 'chat']).toContain(t.board);
+      expect(['you', 'love', 'work', 'lucky', 'chat', 'timeline']).toContain(t.board);
       expect(['built', 'partial', 'planned']).toContain(t.status);
       for (const ch of t.charts) expect(CHART_SOURCES).toContain(ch.source);
       expect(t.algorithm.length).toBeGreaterThan(0);
@@ -102,11 +102,11 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/digest\//);
     }
-    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general + 3 digest + 6 self layers + 6 love layers + 3 love sub-areas;
+    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general + 3 digest + 6 self layers + 6 love layers + 3 love sub-areas + 3 life;
     // planned: 4 work + 2 love layers + 2 self layers + 4 general
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11 + 3 + 6 + 6 + 3);
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11 + 3 + 6 + 6 + 3 + 3);
     expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 2 + 2 + 4);
-    expect(TECHNIQUES).toHaveLength(63);
+    expect(TECHNIQUES).toHaveLength(66);
   });
 
   it('the planned work families and the house-state layers are there', () => {
