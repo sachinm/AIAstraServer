@@ -18,6 +18,7 @@ describe('cognito email wording', () => {
     expect(m.html).toContain('Your Personal Vedic Astrology Assistant');
     expect(m.text).toMatch(/by signing in to the AdAstra AI app with this email address/);
     expect(m.text).toMatch(/replies are not read/);
+    expect(m.text).toContain('It works for 3 minutes.');
   });
   it('puts the safety notes below the code, in text and html', () => {
     const m = buildMessage('CustomEmailSender_Authentication', '654321', 'u');

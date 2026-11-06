@@ -22,13 +22,13 @@ const DEFAULT_EXPIRY = '7d';
 
 /** Same response whether or not the email exists. */
 export const MAGIC_LINK_REQUEST_MESSAGE =
-  "If that email is registered, we've sent it a code. Enter the code we emailed you. It expires in a few minutes.";
+  "If that email is registered, we've sent it a code. Enter the code we emailed you. It works for 3 minutes.";
 
 export const MAGIC_LINK_LOGIN_FAILED =
-  'Unable to sign in. Check your code and try again.';
+  'That code did not work. It may be mistyped or expired: codes last 3 minutes. Send a new code and try again.';
 
 export const SIGNUP_CODE_MESSAGE =
-  'Account created. Enter the code we emailed you. It expires in a few minutes.';
+  'Account created. Enter the code we emailed you. It works for 3 minutes.';
 
 export type LoginResult =
   | { success: true; token: string; user: string; role: string }

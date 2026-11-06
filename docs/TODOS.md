@@ -81,6 +81,11 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **The server auth tests call the real Cognito pool when `.env` says `AUTH_PROVIDER=cognito`.** Found 2026-11-05: with the
+  local `.env` (AUTH_PROVIDER and COGNITO_USER_POOL_ID set), `tests/unit/auth/emailOnlySignup.test.ts` and
+  `registrationV2.test.ts` sent real code requests and failed with Cognito's "Attempt limit exceeded" (33 failures). They pass
+  with `AUTH_PROVIDER=local`. So a test run sends real emails and counts against the live pool. Fix: the vitest setup pins
+  `AUTH_PROVIDER=local` and clears the COGNITO_* variables unless a test stubs them itself.
 - **`kundli_data` rows do not record which engine commit produced them, and the `current` annual rows look empty.** Checked
   2026-11-02 on the live database: 0 of 4,006 rows have `engine_commit` (`complete()` in `reading/chartData/store.ts` never
   sets it; only `kundli_facts` does), so after a Radha deploy there is no way to see which rows came from the old engine
@@ -816,8 +821,19 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   were upserted by hand from the code's own definitions on 2026-11-05 at 22:20 UTC, so the Techniques page has data
   meanwhile; their model and price columns came from local settings and are overwritten by the first boot of the fixed
   image. Done: after that deploy, `updated_at` on both tables shows the boot time.
+  **Verified 2026-11-05 23:01 UTC on image `api-bb4f4ff0e20f`:** both tables were written at boot (50 techniques, 20 agents).
+  Delete this item once the measurement below is filed.
+- **P3: Cold-start time after the awaited seeds is unmeasured.** Init Duration was 3178 ms and 2768 ms on image
+  `api-bb4f4ff0e20f`, with no baseline from before the change. The seed wait is capped at 4 s. Owner: deploy session.
+  Done: Init Duration from an image before `731acc7` compared with one after, and the cap lowered if the seeds take
+  more than 500 ms.
 - **P3: The main checkout's generated Prisma client is stale.** `node_modules/.prisma/client` in the main checkout
   (`C:/Users/Owner/Documents/work/AIAstra_Server`) predates M29 (no `techniqueRegistry`), so `tsc` and tests run there
   disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
   generate` run in the main checkout.
 
+- **P3: Check a real selfie upload on staging.** 2026-11-05. `X-Face-Box` was added to the API's CloudFront origin
+  request policy `e1684868-b4fe-43b2-94ca-ac52642bd67d` (only the AI Astra API distribution uses it); the preflight
+  allows it and an unauthenticated upload still returns 401, but nobody has proved the header reaches the origin.
+  Owner: Sachin (needs a signed-in session). Done: a selfie uploads on vedic-astrology.app without a `no_face` error.
+  Status of the earlier P2 above: header added, this is its check.

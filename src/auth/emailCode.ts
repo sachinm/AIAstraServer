@@ -19,7 +19,11 @@ export type AuthProvider = 'local' | 'cognito';
 /** `locked`: the code was right but the account is locked (auth.locked_at); the caller refuses to issue a token. */
 export type AccountRef = { id: string; role: string | null; locked?: boolean };
 
-const CODE_TTL_MS = 5 * 60 * 1000;
+/**
+ * In step with the Cognito app client's AuthSessionValidity (3 minutes on 2026-11-05), so the "It works for 3 minutes"
+ * in authService.ts and on the sign-in page is true for either provider. Change all three together.
+ */
+export const CODE_TTL_MS = 3 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isWellFormedEmail(email: string): boolean {
