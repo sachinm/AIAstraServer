@@ -168,7 +168,7 @@ export const AGENTS: AgentDef[] = [
     kind: 'code',
     module: 'life',
     subModule: 'dashboard',
-    description: 'Builds Part 1 of the life reading (doc 34) from the stored digest and activation calendar: the promise scale per area, cross-system timing windows, the rule for now',
+    description: 'Builds the life reading (doc 34, doc 55) from the stored digest and activation calendar: the promise scale per area, cross-system timing windows, the rule for now, and the remaining largest Mahadasha (10-18+ yrs) & Antardasha life charter',
   },
   {
     id: 'lucky.scenario_windows',

@@ -14,7 +14,7 @@ import { SIGN_NAMES } from '../facts/constants.js';
 import { lordCode } from '../timeline/dashas.js';
 import { VARGA_FACTORS } from '../chartData/catalog.js';
 import { buildActivationRows, type ActivationRowInput } from './activation.js';
-import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type YogaRow } from './types.js';
+import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type YogaRow } from './types.js';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -330,6 +330,9 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
   const bodies = facts && isObj(facts.bodies) ? (facts.bodies as Obj) : null;
   const avRows = t.avasthas && isObj(t.avasthas.value) ? arr((t.avasthas.value as Obj).planets) : [];
   const chains = t.d1 && t.avasthas && isObj(t.avasthas.value) ? arr(resolvePath(t.avasthas.value, 'lunar_astro.dispositor_chains.rasi')) : [];
+  const dashaCharterObj = t.d1 && t.avasthas && isObj(t.avasthas.value) && isObj((t.avasthas.value as Obj).dasha_charter) ? ((t.avasthas.value as Obj).dasha_charter as Obj) : null;
+  const mdCharters = dashaCharterObj ? arr(dashaCharterObj.mahadasha_charters) : [];
+  const adMatrix = dashaCharterObj && isObj(dashaCharterObj.antardasha_fruition_matrix) ? (dashaCharterObj.antardasha_fruition_matrix as Obj) : null;
   const shad = t.d1?.shadbala && isObj(t.d1.shadbala.value) ? arr((t.d1.shadbala.value as Obj).planets) : [];
   const bm = t.d1?.benefic && isObj(t.d1.benefic.value) ? (t.d1.benefic.value as Obj) : null;
   const bmPlanets = bm ? arr(bm.planets) : [];
@@ -366,6 +369,56 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
     if (ci >= 0) {
       chain = arr((chains[ci] as Obj).chain).map(planetCode).filter((c): c is string => Boolean(c));
       source.push(src.of(t.avasthas!, `lunar_astro.dispositor_chains.rasi[${ci}].chain`));
+    }
+
+    let dashaCharter: DashaCharterDigest | null = null;
+    if (t.d1 && dashaCharterObj) {
+      const mci = mdCharters.findIndex((m) => planetCode(m) === p);
+      const matKey = adMatrix ? Object.keys(adMatrix).find((k) => planetCode(k) === p) : undefined;
+      if (mci >= 0 || matKey) {
+        const mc = mci >= 0 && isObj(mdCharters[mci]) ? (mdCharters[mci] as Obj) : null;
+        if (mci >= 0) source.push(src.of(t.avasthas!, `dasha_charter.mahadasha_charters[${mci}]`));
+        const v1 = mc && isObj(mc.vector_1_house_occupied) ? (mc.vector_1_house_occupied as Obj) : null;
+        const v2 = mc && isObj(mc.vector_2_sign_dispositor) ? (mc.vector_2_sign_dispositor as Obj) : null;
+        const v3 = mc && isObj(mc.vector_3_nakshatra_lord) ? (mc.vector_3_nakshatra_lord as Obj) : null;
+        const v4 = mc && isObj(mc.vector_4_co_lordship_and_drishti) ? (mc.vector_4_co_lordship_and_drishti as Obj) : null;
+        const v5 = mc && isObj(mc.vector_5_yogi_avayogi) ? (mc.vector_5_yogi_avayogi as Obj) : null;
+        const fruition: Record<string, AntardashaFruitionCell> = {};
+        if (matKey && isObj(adMatrix![matKey])) {
+          for (const [ak, av] of Object.entries(adMatrix![matKey] as Obj)) {
+            const adCode = planetCode(ak);
+            if (!adCode || !isObj(av)) continue;
+            fruition[adCode] = {
+              houseFromMd: int(av.house_from_md),
+              houseFromLagna: int(av.house_from_lagna),
+              fruitionClass: str(av.fruition_class),
+              isStarLordOfMd: bool(av.is_star_lord_of_md) ?? false,
+              isSignDispositorOfMd: bool(av.is_sign_dispositor_of_md) ?? false,
+              isCoLordPartnerOfMd: bool(av.is_co_lord_partner_of_md) ?? false,
+              isShadAshtaka68: bool(av.is_shad_ashtaka_6_8) ?? false,
+              isDwirdwadasha212: bool(av.is_dwirdwadasha_2_12) ?? false,
+            };
+          }
+          source.push(src.of(t.avasthas!, `dasha_charter.antardasha_fruition_matrix.${matKey}`));
+        }
+        dashaCharter = {
+          housesOwned: arr(v4?.houses_owned ?? mc?.own_houses).map(int).filter((h): h is number => h != null),
+          housesCoOwned: arr(v4?.houses_co_owned).map(int).filter((h): h is number => h != null),
+          coLordPartner: planetCode(v4?.co_lord_partner),
+          rasiDrishtiHouses: arr(v4?.rasi_drishti_houses).map(int).filter((h): h is number => h != null),
+          grahaDrishtiHouses: arr(v4?.graha_drishti_houses).map(int).filter((h): h is number => h != null),
+          arudhasInSign: arr(v1?.arudhas_in_sign).map(str).filter((s): s is string => Boolean(s)),
+          dispositorHouse: int(v2?.dispositor_house),
+          dispositorDignity: str(v2?.dispositor_dignity),
+          starLordHouse: int(v3?.star_lord_house),
+          starLordDignity: str(v3?.star_lord_dignity),
+          starLordArudhas: arr(v3?.star_lord_arudhas).map(str).filter((s): s is string => Boolean(s)),
+          isYogi: bool(v5?.is_yogi) ?? false,
+          isAvayogi: bool(v5?.is_avayogi) ?? false,
+          isSahayogi: bool(v5?.is_sahayogi) ?? false,
+          fruition,
+        };
+      }
     }
 
     let shadbalaRatio: number | null = null;
@@ -446,6 +499,7 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
         aspectsTo: g ? uniq(g.houses).sort(byNum) : [],
         aspectedBy: uniq(aspectedBy.map((x) => x.planet)),
         conjunctions: sign ? [...signOf.entries()].filter(([q, s]) => q !== p && s === sign).map(([q]) => q) : [],
+        ...(t.d1 ? { dashaCharter } : {}),
       },
       source,
     });

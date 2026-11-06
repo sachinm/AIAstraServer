@@ -44,6 +44,35 @@ export interface HouseCard {
   arudha: string | null;
 }
 
+export interface AntardashaFruitionCell {
+  houseFromMd: number | null;
+  houseFromLagna: number | null;
+  fruitionClass: string | null;
+  isStarLordOfMd: boolean;
+  isSignDispositorOfMd: boolean;
+  isCoLordPartnerOfMd: boolean;
+  isShadAshtaka68: boolean;
+  isDwirdwadasha212: boolean;
+}
+
+export interface DashaCharterDigest {
+  housesOwned: number[];
+  housesCoOwned: number[];
+  coLordPartner: string | null;
+  rasiDrishtiHouses: number[];
+  grahaDrishtiHouses: number[];
+  arudhasInSign: string[];
+  dispositorHouse: number | null;
+  dispositorDignity: string | null;
+  starLordHouse: number | null;
+  starLordDignity: string | null;
+  starLordArudhas: string[];
+  isYogi: boolean;
+  isAvayogi: boolean;
+  isSahayogi: boolean;
+  fruition: Record<string, AntardashaFruitionCell>;
+}
+
 export interface PlanetCard {
   varga: string;
   planet: string;
@@ -69,6 +98,8 @@ export interface PlanetCard {
   aspectsTo: number[];
   aspectedBy: string[];
   conjunctions: string[];
+  /** D1 only: 5-vector Mahadasha charter & 9×9 Antardasha fruition map from avasthas.dasha_charter */
+  dashaCharter?: DashaCharterDigest | null;
 }
 
 export interface YogaRow {

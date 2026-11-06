@@ -25,6 +25,23 @@ const BANNED_RE = new RegExp(`\\b(${BANNED.join('|')})s?\\b`, 'i');
 function visibleStrings(d: LifeDashboard): string[] {
   const out: string[] = d.rule_now ? [d.rule_now] : [];
   for (const a of d.areas) out.push(a.label, a.issue, a.cause.text, a.basis, ...a.solution, ...a.improves.map((w) => w.basis));
+  if (d.charter) {
+    out.push(d.charter.headline, d.charter.charter_summary);
+    for (const ac of d.charter.area_charters) {
+      out.push(ac.label, ac.theme, ac.promise_note, ac.guidance, ac.basis);
+    }
+    for (const ad of d.charter.antardashas) {
+      out.push(ad.headline, ad.basis);
+      for (const n of ad.areas) out.push(n.label, n.summary, n.timing, n.action);
+    }
+    if (d.charter.bridge) {
+      out.push(d.charter.bridge.summary);
+      for (const ad of d.charter.bridge.antardashas) {
+        out.push(ad.headline, ad.basis);
+        for (const n of ad.areas) out.push(n.label, n.summary, n.timing, n.action);
+      }
+    }
+  }
   return out;
 }
 

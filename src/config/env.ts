@@ -614,3 +614,53 @@ export function getLuckyReferencePlaces(): readonly LuckyReferencePlaceConfig[] 
   return DEFAULT_LUCKY_REFERENCE_PLACES;
 }
 
+// ── Life Reading & Mahadasha Charter Thresholds (docs/reading-engine/34, 54 §4, 55) ─
+
+function parseClampedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n)) return Math.max(min, Math.min(max, n));
+  }
+  return fallback;
+}
+
+/**
+ * Forward horizon (in years) for Life Reading timing windows (`life.timing_agreement`).
+ * Env: `LIFE_HORIZON_YEARS` (default 15, clamped to 5..30).
+ */
+export function getLifeHorizonYears(): number {
+  return parseClampedIntEnv('LIFE_HORIZON_YEARS', 15, 5, 30);
+}
+
+/**
+ * Minimum remaining years in the running Vimshottari Mahadasha for it to serve as the
+ * primary multi-decade Life Charter on its own (`life.mahadasha_charter`, doc 55 §4.1).
+ * When the running Mahadasha has fewer years left than this threshold, the largest
+ * Mahadasha within `getLifeCharterHorizonYears()` is chartered and the running
+ * Mahadasha's remaining Antardashas are included as a transition bridge.
+ * Env: `LIFE_CHARTER_MIN_REMAINING_YEARS` (default 10, clamped to 3..18).
+ */
+export function getLifeCharterMinRemainingYears(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_MIN_REMAINING_YEARS', 10, 3, 18);
+}
+
+/**
+ * Lookahead horizon (in years) used to select the remaining largest Mahadasha (10–20 yr span)
+ * and enumerate its Antardashas (`life.mahadasha_charter`, doc 55 §4.1).
+ * Env: `LIFE_CHARTER_HORIZON_YEARS` (default 20, clamped to 10..30).
+ */
+export function getLifeCharterHorizonYears(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_HORIZON_YEARS', 20, 10, 30);
+}
+
+/**
+ * Maximum number of activated life areas highlighted inside each Antardasha row
+ * of the Mahadasha Charter (`life.mahadasha_charter`, doc 55 §4.1).
+ * Env: `LIFE_CHARTER_MAX_AREAS_PER_AD` (default 3, clamped to 1..6).
+ */
+export function getLifeCharterMaxAreasPerAd(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_MAX_AREAS_PER_AD', 3, 1, 6);
+}
+
+

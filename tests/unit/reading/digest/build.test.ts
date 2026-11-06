@@ -71,13 +71,19 @@ describe('buildDigestRows on a research kundli', () => {
     expect(byKey.get('house|D12.h1')!.source[0]!.type).toBe('facts');
   });
 
-  it('D1 planet cards carry the dispositor chain, avasthas, shadbala and nature', () => {
+  it('D1 planet cards carry the dispositor chain, avasthas, shadbala, nature, and dashaCharter (5-vector + 9x9 fruition)', () => {
     const mo = get<PlanetCard>('planet', 'D1.Mo')!;
     expect(mo.chain[0]).toBe('Mo');
     expect(Object.keys(mo.avasthas).length).toBeGreaterThan(0);
     expect(mo.shadbalaRank).not.toBeNull();
     expect(mo.natural).toBeTruthy();
     expect(mo.owns.length).toBeGreaterThan(0);
+    expect(mo.dashaCharter).toBeTruthy();
+    expect(Object.keys(mo.dashaCharter!.fruition)).toEqual(expect.arrayContaining(['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']));
+    expect(mo.dashaCharter!.fruition.Su?.houseFromMd).toBeGreaterThanOrEqual(1);
+    expect(mo.dashaCharter!.fruition.Su?.fruitionClass).toBeTruthy();
+    const su = get<PlanetCard>('planet', 'D1.Su')!;
+    expect(su.dashaCharter?.housesOwned).toEqual([9]);
     const ra = get<PlanetCard>('planet', 'D1.Ra')!;
     expect(ra.shadbalaRank).toBeNull(); // shadbala has the seven grahas only
   });
