@@ -49,6 +49,7 @@ import { currentTrace, failureLabel, withRunTrace } from './metrics/trace.js';
 import { slotsOf, techniquesForQuestion, type TechniqueUse, type TechniqueUseOptions } from '../techniques/use.js';
 import { confirmedFacts, DECLINED } from '../profile/facts.js';
 import { loadDigest } from './digest/load.js';
+import { activationFor, type ActivationRow } from './digest/activation.js';
 import type { DigestView } from './digest/types.js';
 import { personIn } from './oracle/readers.js';
 import { runCodeReaders, toFinding, type CodeFinding } from './codeReaders/readers.js';
@@ -84,6 +85,8 @@ export interface RunReadingOptions {
   facts?: Record<string, string>;
   /** Test seam: the kundli's digest (null = not ready); default loadDigest through Prisma, none with a dataLoader */
   digest?: DigestView | null;
+  /** Test seam: activation calendar rows for the reading's horizon; default activationFor through Prisma when digest is ready */
+  activation?: readonly ActivationRow[] | null;
 }
 
 /** The dated layers wait at most this long: past it the reading goes on without them. */
@@ -252,6 +255,16 @@ async function digestWithin(prisma: PrismaClient, kundliId: string, ms: number):
   }
 }
 
+/** Activation calendar rows overlapping [from, to) within `ms`, or null on failure/timeout. Never throws. */
+async function activationWithin(prisma: PrismaClient, kundliId: string, hz: { from: string; to: string }, ms: number): Promise<ActivationRow[] | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([activationFor(prisma, kundliId, { from: hz.from, to: hz.to }).catch(() => null), new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)))]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function summarizeIntent(intent: Intent) {
   return {
     subjects: intent.subjects.map((s) => ({ id: s.id, label: FRAMES[s.id].label })),
@@ -366,6 +379,12 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
       : opts.dataLoader
         ? null
         : await digestWithin(prisma, data.kundliId, DIGEST_WAIT_MS);
+  const activation: readonly ActivationRow[] | null =
+    opts.activation !== undefined
+      ? opts.activation
+      : !digest || opts.dataLoader
+        ? null
+        : await activationWithin(prisma, data.kundliId, horizonRange(intent.horizon, asOf), DIGEST_WAIT_MS);
   timings.digest = Date.now() - tDigest;
   const facts = await factsPromise;
 
@@ -377,7 +396,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   const packs: Record<string, EvidencePack> = {};
   const named = personIn(question);
   for (const s of subjects) {
-    packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent, ...(digest ? { digest, person: named } : {}) });
+    packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent, ...(digest ? { digest, person: named, ...(activation ? { activation } : {}) } : {}) });
   }
   const merged = mergeSubjectPacks(subjects.map((s) => packs[s.id]!));
   timings.pack = Date.now() - tPack;

@@ -59,6 +59,9 @@ export const VARGA_FACTORS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 20, 24,
 /** Divisional charts Radha's `arudhas` and `argala` types are offered for (R-4c). D1 arudhas stay the plain `arudhas` entry. */
 export const ARUDHA_ARGALA_VARGAS = [1, 2, 3, 4, 7, 9, 10, 12, 20, 24, 30, 60] as const;
 
+/** Deep divisional charts (the remaining 11 of `VARGA_FACTORS`) for which `dignities.dN` and `house_counts.dN` are catalogued (Wave 3). */
+export const DEEP_VARGAS = [5, 6, 8, 11, 16, 27, 40, 45, 81, 108, 144] as const;
+
 /** Radha types that also take `varga` (doc 34); offered for the same charts. D1 stays the plain entry of each type. */
 export const VARGA_TABLE_TYPES = ['dignities', 'aspects', 'relations'] as const;
 
@@ -201,10 +204,15 @@ function build(): ChartDataType[] {
       natal({ id: `dignities.d${f}`, family: 'strength', radhaType: 'dignities', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 700 + i, label: `Planet dignities, house lords and occupants in D${f}` });
       natal({ id: `aspects.d${f}`, family: 'strength', radhaType: 'aspects', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 720 + i, label: `Planet aspect table in D${f}` });
       natal({ id: `relations.d${f}`, family: 'strength', radhaType: 'relations', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 740 + i, label: `Planet relations (natural, temporary, compound) in D${f}` });
+      natal({ id: `yogas.d${f}`, family: 'yoga', radhaType: 'yogas', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 800 + i, label: `Yogas and raja yogas in D${f}` });
     }
   });
   AVASTHA_VARGAS.forEach((f, i) => {
     natal({ id: `avasthas.d${f}`, family: 'strength', radhaType: 'avasthas', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 760 + i, label: `Planetary avasthas in D${f}` });
+  });
+  DEEP_VARGAS.forEach((f, i) => {
+    natal({ id: `dignities.d${f}`, family: 'strength', radhaType: 'dignities', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 770 + i, label: `Planet dignities, house lords and occupants in D${f}` });
+    natal({ id: `house_counts.d${f}`, family: 'special', radhaType: 'house_counts', fixedParams: { varga: f }, tier: 'on_demand', sortOrder: 785 + i, label: `House counts in D${f}` });
   });
 
   const annual = (id: string, label: string, sortOrder: number, fixedParams?: Record<string, unknown>): void => {
@@ -218,6 +226,7 @@ function build(): ChartDataType[] {
   annual('annual.mudda', 'Mudda dasha', 520);
   annual('annual.patyayini', 'Patyayini dasha', 530);
   annual('annual.sahams', 'Sahams', 540);
+  annual('annual.tajaka', 'Tajaka annual Muntha, year/month lords, aspects and yogas', 550);
 
   // Moving: depends on the moment asked for (`at`), so it is never stored per person (no kundli_data row).
   out.push({ id: 'transit', family: 'transit', radhaType: 'transit', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 600, label: 'Transit chart at a moment (any divisional chart)' });

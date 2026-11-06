@@ -897,10 +897,6 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   A `kundli-digest` event runs `buildDigest` with `fetch` for natal types and would refresh them; year rows are never
   re-fetched for a calc-version change (store.ts `needsFetch`: "a year=<y> row … is never re-fetched"), so those need
   a deliberate refresh. Done: the four reach about 690 rows with annual house cards.
-- **Eleven vargas have no engine house table** (D5, D6, D8, D11, D16, D27, D40, D45, D81, D108, D144): the digest writes
-  planet cards (sign, degree, star, pada) and no house cards, because placing a sign in a house is a count Node may not
-  make. The engine's `house_counts` already takes `varga`; a catalogue entry `house_counts.dN` (or `dignities.dN` for
-  every varga) would let the digest write their house cards. Owner: engine catalogue pass. Done: `D16.h1` … exist.
 - **Star names differ between payloads**: `dignities` writes Tamil names (`Uthiram`), the dossier Sanskrit (`Uttara
   Phalguni`), `varga.dN` abbreviations (`UPha`). The digest keeps each as written; a consumer must not join star names
   across sections. Done: the engine writes one naming, or the digest gains a label table from the engine.

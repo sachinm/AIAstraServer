@@ -17,6 +17,7 @@ import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frame
 import { selectTransits, type SelectedTransitRow, type TransitSection } from './transitTable.js';
 import { piiHash } from '../../lib/pii/hash.js';
 import type { DigestView } from '../digest/types.js';
+import type { ActivationRow } from '../digest/activation.js';
 import { digestSection, overlayDigest, personFor, type DigestPerson } from './digestSource.js';
 
 const TRANSIT_LEGEND = 'influences_houses = houses occupied or aspected from house_from_lagna (sorted numerically ascending, NOT in 5th/7th/9th aspect order — count forward from house_from_lagna to label 5th, 7th, 9th, 3rd, 10th, 4th, or 8th aspect); sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal = natal planets in that sign (including Ke/Ra nodal reversal); over_natal_owns = houses the natal planet under the transit rules';
@@ -165,6 +166,8 @@ export interface BuildPackInput {
   digest?: DigestView | null;
   /** the person the question names (oracle/readers.ts personIn), for the digest section's person rows */
   person?: { person: string } | null;
+  /** activation calendar rows inside the horizon (kundli_activation, doc 53 §4.4) */
+  activation?: readonly ActivationRow[] | null;
   /**
    * Full scope (the `full` cache layout, packs/fullPrefix.ts): every house, varga, arudha, special lagna and yoga, all
    * planets as karakas, and every Vimshottari antardasha of the life next to the horizon's periods. The sections keep the
@@ -393,11 +396,25 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   const baseOut = readingFullBase() ? { ...base, ...fullBaseExtras(d) } : base;
   let sections: EvidencePack['sections'] = { base: baseOut, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
   if (input.digest) {
-    sections = overlayDigest(sections as Record<string, unknown>, input.digest) as EvidencePack['sections'];
+    const asOfYear = Number(asOf.slice(0, 4));
+    const years = Number.isInteger(asOfYear) && asOfYear > 0 ? [asOfYear - 1, asOfYear, asOfYear + 1] : [];
+    sections = overlayDigest(sections as Record<string, unknown>, input.digest, {
+      activation: input.activation,
+      years,
+      houses: frameHouses,
+      asOf,
+      fullScope: full,
+    }) as EvidencePack['sections'];
     const person: DigestPerson | null = personFor(input.subject, input.person);
-    const rasiPeriods = (d.dasha.narayana?.periods ?? [])
-      .filter((p) => p.end >= hz.from && p.start <= hz.to)
-      .map((p) => ({ system: 'narayana', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end }));
+    const charaPeriods = ((d.dasha as { chara?: { periods?: Array<{ md_sign_name: string; ad_sign_name: string; md_lord: string; start: string; end: string }> } }).chara?.periods ?? []);
+    const rasiPeriods = [
+      ...(d.dasha.narayana?.periods ?? [])
+        .filter((p) => p.end >= hz.from && p.start <= hz.to)
+        .map((p) => ({ system: 'narayana', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end })),
+      ...charaPeriods
+        .filter((p) => p.end >= hz.from && p.start <= hz.to)
+        .map((p) => ({ system: 'chara', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end })),
+    ];
     // a full-scope pack is the cached evidence, which holds no digest section (fullPrefix.ts CACHED_SECTIONS)
     if (!full) sections.digest = digestSection(input.digest, {
       houses: frameHouses,
@@ -407,6 +424,8 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       deep: intent.questionType === 'why_meaning' || intent.horizon === 'life',
       person,
       rasiPeriods,
+      activation: input.activation,
+      years,
     });
   }
   const approxTokens = Math.ceil(JSON.stringify(sections).length / 3.6);

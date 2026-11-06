@@ -123,6 +123,7 @@ describe('catalog', () => {
     const m15 = readFileSync(path.resolve('prisma/migrations/20261027110000_reading_m15_transit_range/migration.sql'), 'utf8');
     const m16 = readFileSync(path.resolve('prisma/migrations/20261031120000_reading_m16_house_counts/migration.sql'), 'utf8');
     const m17 = readFileSync(path.resolve('prisma/migrations/20261031110000_reading_m17_radha_reading_types/migration.sql'), 'utf8');
+    const m34 = readFileSync(path.resolve('prisma/migrations/20261106060000_reading_m34_deep_varga_chart_types/migration.sql'), 'utf8');
     const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
     const m12Ids = ['transit_contacts'];
     const m14Ids = ['prashna'];
@@ -131,14 +132,20 @@ describe('catalog', () => {
     /** rows M14 relabels: seeded earlier with the old label, the new label set by an UPDATE in M14 */
     const m14Relabel: Record<string, string> = { 'annual.tithi_pravesha_dasha': 'Tithi pravesha dasha' };
     const isM11 = (id: string) => /^(arudhas|argala)\.d\d+$/.test(id);
+    const isM34 = (id: string) =>
+      id === 'annual.tajaka' ||
+      /^yogas\.d\d+$/.test(id) ||
+      /^house_counts\.d\d+$/.test(id) ||
+      /^dignities\.d(5|6|8|11|16|27|40|45|81|108|144)$/.test(id);
     const isM17 = (id: string) =>
-      /^(dignities|aspects|relations|avasthas)\.d\d+$/.test(id) ||
-      /^dasha\..+\.l3$/.test(id) ||
-      ['daily_grade', 'muhurta', 'transit_ashtakavarga', 'reading_tables', 'avasthas'].includes(id);
+      !isM34(id) &&
+      (/^(dignities|aspects|relations|avasthas)\.d\d+$/.test(id) ||
+        /^dasha\..+\.l3$/.test(id) ||
+        ['daily_grade', 'muhurta', 'transit_ashtakavarga', 'reading_tables', 'avasthas'].includes(id));
     const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number], label = t.label) =>
       `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${label}')`;
     for (const t of BUILTIN_CHART_TYPES) {
-      const sql = isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
+      const sql = isM34(t.id) ? m34 : isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
       expect(sql).toContain(seedRow(t, m14Relabel[t.id] ?? t.label));
       if (m14Relabel[t.id]) {
         expect(m14).toContain(`SET "label" = '${t.label}'`);

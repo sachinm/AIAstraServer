@@ -85,4 +85,72 @@ describe('evidence pack from the digest (doc 53 §4.2): same sections, same fiel
     expect(b).not.toBe(a); // memoised separately: the digest version is in the key
     expect(buildFullContext({ dossier, transits, asOf: G1_AS_OF, system: 'sys', digest }, 'k1')).toBe(b);
   });
+
+  it('populates dasha.activation, digest.rasi (Narayana + Chara) and multi-year annual set when activation and digest.annual rows exist', () => {
+    const asOfYear = Number(G1_AS_OF.slice(0, 4));
+    const annualDigest = {
+      ...digest,
+      annual: (year?: number) => {
+        const rows = [
+          {
+            kind: 'TP' as const,
+            year: asOfYear - 1,
+            varga: 'D1',
+            lagna: 'Leo',
+            houses: [{ varga: 'D1', house: 10, sign: 'Taurus', lord: 'Ve', lordHouse: 1, lordSign: 'Leo', lordDignity: 'friend', coLord: null, occupants: [], aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null }],
+            dashas: [{ system: 'tithi_ashtottari', periods: [{ lord: 'Ve', from: `${asOfYear - 1}-05-01`, to: `${asOfYear - 1}-08-01` }] }],
+            sahams: [{ name: 'karma', sign: 'Taurus', house: 10 }],
+          },
+          {
+            kind: 'TP' as const,
+            year: asOfYear,
+            varga: 'D1',
+            lagna: 'Scorpio',
+            houses: [
+              { varga: 'D1', house: 1, sign: 'Scorpio', lord: 'Ma', lordHouse: 10, lordSign: 'Leo', lordDignity: 'friend', coLord: 'Ke', occupants: [], aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null },
+              { varga: 'D1', house: 10, sign: 'Leo', lord: 'Su', lordHouse: 10, lordSign: 'Leo', lordDignity: 'own', coLord: null, occupants: [{ planet: 'Su', dignity: 'own', nature: null }], aspectedGraha: ['Ju'], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null },
+            ],
+            dashas: [{ system: 'tithi_ashtottari', periods: [{ lord: 'Su', from: `${asOfYear}-01-01`, to: `${asOfYear}-12-31` }] }],
+            sahams: [{ name: 'rajya', sign: 'Leo', house: 10 }],
+            muntha: { sign: 'Leo', house: 10 },
+            yearLord: 'Su',
+            tajakaYogas: [{ id: 'ithasala', present: true }],
+          },
+          {
+            kind: 'TP' as const,
+            year: asOfYear,
+            varga: 'D10',
+            lagna: 'Aries',
+            houses: [{ varga: 'D10', house: 10, sign: 'Capricorn', lord: 'Sa', lordHouse: 10, lordSign: 'Capricorn', lordDignity: 'own', coLord: null, occupants: [], aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null }],
+            dashas: [],
+            sahams: [],
+          },
+          {
+            kind: 'VP' as const,
+            year: asOfYear + 1,
+            varga: 'D1',
+            lagna: 'Sagittarius',
+            houses: [{ varga: 'D1', house: 10, sign: 'Virgo', lord: 'Me', lordHouse: 10, lordSign: 'Virgo', lordDignity: 'exalted', coLord: null, occupants: [], aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null }],
+            dashas: [],
+            sahams: [],
+          },
+        ];
+        return rows.filter((r) => year == null || r.year === year);
+      },
+    };
+    const h10Sign = digest.house('D1', 10)!.sign!;
+    const activation = [
+      { system: 'dwisatpathi', family: 'conditional' as const, level: 2 as const, lord: 'Ju', sign: null, from: '2026-01-01', to: '2026-09-01', houses: [10, 1], parentLord: 'Me' },
+      { system: 'chara', family: 'rasi' as const, level: 2 as const, lord: null, sign: h10Sign, from: '2026-02-01', to: '2026-11-01', houses: [10], parentLord: 'Aries' },
+    ];
+    const p = buildEvidencePack({ dossier, transits, subject: 'career_work', asOf: G1_AS_OF, intent, digest: annualDigest, activation });
+    expect(resolveEvidence(p, 'dasha.activation.dwisatpathi_Ju_2026-01-01.family')).toBe('conditional');
+    expect(resolveEvidence(p, `digest.rasi.chara_${h10Sign}_2026-02-01.system`)).toBe('chara');
+    expect(resolveEvidence(p, 'annual.year_used')).toBe(asOfYear);
+    expect(resolveEvidence(p, `annual.years.TP${asOfYear}_D1.yearLord`)).toBe('Su');
+    expect(resolveEvidence(p, `annual.years.TP${asOfYear}_D10.varga`)).toBe('D10');
+    expect(resolveEvidence(p, `annual.years.TP${asOfYear - 1}_D1.year`)).toBe(asOfYear - 1);
+    expect(resolveEvidence(p, `annual.years.VP${asOfYear + 1}_D1.kind`)).toBe('VP');
+    expect(resolveEvidence(p, `digest.annual.TP${asOfYear}_D1.yearLord`)).toBe('Su');
+  });
 });

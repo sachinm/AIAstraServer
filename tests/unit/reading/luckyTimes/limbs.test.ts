@@ -144,9 +144,15 @@ describe('scopes and the personal hora mark', () => {
       expect(same.score).toBe(peer.score + 1);
     }
     // Thursday + Pushya = Amrita Siddhi (+1 general reason); runningLords matching Saturn (Pushya lord) adds personal:dasha_lord (+1 personal reason)
-    const pushyaRow = { ...withLimb(thu, 'yoga', 'Vriddhi'), panchanga_at_noon: { ...(thu.panchanga_at_noon as Record<string, unknown>), yoga: { name: 'Vriddhi', start_hours: 0, end_hours: 24 }, nakshatra: { number: 8, name: 'Pushya', lord: 'Saturn', start_hours: 0, end_hours: 24 } } };
+    const pushyaRow = { ...withLimb(thu, 'yoga', 'Vriddhi'), panchanga_at_noon: { ...(thu.panchanga_at_noon as Record<string, unknown>), yoga: { name: 'Vriddhi', start_hours: 0, end_hours: 24 }, nakshatra: { number: 8, name: 'Pushya', lord: 'Saturn', group: 'kshipra', start_hours: 0, end_hours: 24 } } };
     const amrita = scenarioDay(pushyaRow, s, undefined, { runningLords: ['Saturn'] });
     expect(amrita.windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'amrita_siddhi', scope: 'general' });
     expect(amrita.windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'personal:dasha_lord', scope: 'personal' });
+    expect(amrita.windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'star:quick', scope: 'general' });
+    // Amavasya (tithi 30) is gated out even if an older payload sent group='purna', and Sanskrit tikshna group penalizes windows by star_avoid:sharp
+    const amavasyaRow = { ...withLimb(thu, 'yoga', 'Vriddhi'), panchanga_at_noon: { ...(thu.panchanga_at_noon as Record<string, unknown>), yoga: { name: 'Vriddhi', start_hours: 0, end_hours: 24 }, tithi: { number: 30, group: 'purna', start_hours: 0, end_hours: 24 } } };
+    expect(scenarioDay(amavasyaRow, contract)).toMatchObject({ verdict: 'avoid_day', windows: [], dayReasons: expect.arrayContaining(['tithi_avoid:amavasya']) });
+    const tikshnaRow = { ...withLimb(thu, 'yoga', 'Vriddhi'), panchanga_at_noon: { ...(thu.panchanga_at_noon as Record<string, unknown>), yoga: { name: 'Vriddhi', start_hours: 0, end_hours: 24 }, nakshatra: { number: 6, name: 'Ardra', group: 'tikshna', start_hours: 0, end_hours: 24 } } };
+    expect(scenarioDay(tikshnaRow, s).windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'star_avoid:sharp', scope: 'general' });
   });
 });

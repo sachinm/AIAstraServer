@@ -179,7 +179,7 @@ afterEach(() => {
 /** The stored year variant of an annual type: `year=<y>`, plus `;system=<s>` for the Tithi Pravesh year dasha. */
 const yearKey = (id: string, year: number) => yearVariant(year, CHART_TYPE_BY_ID.get(id)?.fixedParams);
 
-const ANNUAL = ['annual.tithi_pravesha', 'annual.tithi_pravesha_dasha', 'annual.varsha', 'annual.mudda', 'annual.patyayini', 'annual.sahams'];
+const ANNUAL = ['annual.tithi_pravesha', 'annual.tithi_pravesha_dasha', 'annual.varsha', 'annual.mudda', 'annual.patyayini', 'annual.sahams', 'annual.tajaka'];
 
 describe('registration set (full pull)', () => {
   const types = mergeChartTypes(fullyServed());

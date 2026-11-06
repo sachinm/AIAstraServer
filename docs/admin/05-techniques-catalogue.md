@@ -60,9 +60,9 @@ Counts: 66 techniques (Self (You board): 15, Love: 14, Work: 16, General Reading
 | `digest.activation` | Activation calendar, thirty years ahead | general | General Reading chat | Built | all systems (dasha), applicable (dasha), facts (natal) | `digest.activation` | none |
 | `digest.annual_set` | Annual set, ten years back and ahead | general | General Reading chat | Built | Tithi Pravesha (annual), varsha (annual), tithi pravesha dasha (annual), mudda (annual), patyayini (annual), sahams (annual), D9 (divisional), D10 (divisional) | `digest.annual_set` | none |
 | `digest.build` | Kundli digest (the first-time breakdown) | general | General Reading chat | Built | dignities (natal), aspects (natal), argala (jaimini), arudhas (jaimini), house counts (natal), sav (ashtakavarga), facts (natal), avasthas (natal), strength.shadbala (natal), benefic malefic (natal), yogas (natal), doshas (natal), charakaraka (jaimini), sphutas (natal), Tithi Pravesha (annual), varsha (annual), janma (nakshatra), panchanga (natal) | `digest.build` | staff |
-| `general.annual` | Annual set analyst | general | General Reading chat | Built | facts (natal), Tithi Pravesha (annual), tithi pravesha dasha (annual) | `reading.analyst.annual` | staff |
+| `general.annual` | Annual set analyst | general | General Reading chat | Built | facts (natal), Tithi Pravesha (annual), tithi pravesha dasha (annual), varsha (annual), sahams (annual), mudda (annual), patyayini (annual), tajaka (annual) | `reading.analyst.annual` | staff |
 | `general.clarify` | Clarify | general | General Reading chat | Built | — | `reading.clarify` | staff |
-| `general.dasha` | Dasha analyst (all systems) | general | General Reading chat | Built | facts (natal), D1 (divisional), D2 (divisional), D3 (divisional), D4 (divisional), D7 (divisional), D9 (divisional), D10 (divisional), Vimshottari (dasha), Narayana (dasha) | `reading.analyst.dasha` | staff |
+| `general.dasha` | Dasha analyst (all systems) | general | General Reading chat | Built | facts (natal), D1 (divisional), D2 (divisional), D3 (divisional), D4 (divisional), D7 (divisional), D9 (divisional), D10 (divisional), Vimshottari (dasha), Narayana (dasha), conditional (dasha), Chara (dasha), karaka (dasha), Yogini (dasha), Tithi Ashtottari (dasha) | `reading.analyst.dasha` | staff |
 | `general.intake` | Intake | general | General Reading chat | Built | — | `reading.intake` | staff |
 | `general.jaimini` | Jaimini analyst | general | General Reading chat | Built | charakaraka (jaimini), arudhas (jaimini), argala (jaimini), Narayana (dasha), Chara (dasha) | `reading.code.jaimini` | staff |
 | `general.nakshatra` | Nakshatra analyst | general | General Reading chat | Built | facts (natal), janma (nakshatra), Vimshottari (dasha), transit overlay (transit) | `reading.analyst.nakshatra` | staff |
@@ -1474,7 +1474,7 @@ Counts: 66 techniques (Self (You board): 15, Love: 14, Work: 16, General Reading
 
 **Built** · board: General Reading chat · accuracy: staff
 
-**Reads:** facts (natal), Tithi Pravesha (annual), tithi pravesha dasha (annual)
+**Reads:** facts (natal), Tithi Pravesha (annual), tithi pravesha dasha (annual), varsha (annual), sahams (annual), mudda (annual), patyayini (annual), tajaka (annual)
 
 **Algorithm:**
 
@@ -1482,9 +1482,9 @@ Counts: 66 techniques (Self (You board): 15, Love: 14, Work: 16, General Reading
 2. It is sent the evidence pack sections base, frame, annual, built for the subject's frame (houses, karakas, vargas, arudhas, special lagnas): from the kundli digest when its status is ready (packs/digestSource.ts, field by field, the dossier's value where the digest has none), else from the stored dossier
 3. The model returns structured findings whose claims cite evidence ids in the pack
 4. Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it
-5. Runs only when the graph has the Tithi Pravesha year chart and its dasha for the question
+5. Runs when the graph or the digest has the Tithi Pravesha / Varsha year charts (current, previous and next year in D1, D9, D10), their year dashas, sahams, muntha, year lord and Tajaka yogas for the question
 
-**Special:** Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha and year lord when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months (so the oracle reader R11 runs only then too); a timing question on a longer horizon is a planned any-of rule. Reads the digest when it is ready for base; the annual section stays the year chart fetched for the question until the digest annual rows are read
+**Special:** Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha, year lord and Tajaka yogas when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months (so the oracle reader R11 runs only then too). Reads the digest when it is ready for base and the multi-year annual set
 
 **Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; horizon is now, 3m, 6m, 1y, custom
 
@@ -1527,7 +1527,7 @@ Counts: 66 techniques (Self (You board): 15, Love: 14, Work: 16, General Reading
 
 **Built** · board: General Reading chat · accuracy: staff
 
-**Reads:** facts (natal), D1 (divisional), D2 (divisional), D3 (divisional), D4 (divisional), D7 (divisional), D9 (divisional), D10 (divisional), Vimshottari (dasha), Narayana (dasha)
+**Reads:** facts (natal), D1 (divisional), D2 (divisional), D3 (divisional), D4 (divisional), D7 (divisional), D9 (divisional), D10 (divisional), Vimshottari (dasha), Narayana (dasha), conditional (dasha), Chara (dasha), karaka (dasha), Yogini (dasha), Tithi Ashtottari (dasha)
 
 **Algorithm:**
 
@@ -1535,9 +1535,9 @@ Counts: 66 techniques (Self (You board): 15, Love: 14, Work: 16, General Reading
 2. It is sent the evidence pack sections base, frame, detail, varga, dasha, built for the subject's frame (houses, karakas, vargas, arudhas, special lagnas): from the kundli digest when its status is ready (packs/digestSource.ts, field by field, the dossier's value where the digest has none), else from the stored dossier
 3. The model returns structured findings whose claims cite evidence ids in the pack
 4. Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it
-5. The dasha section holds the Vimshottari periods inside the horizon, each period lord's place in the frame vargas and the running Narayana sign
+5. The dasha section holds the Vimshottari periods inside the horizon, each period lord's place in the frame vargas, the running Narayana sign, and (when the digest and activation calendar are ready) every served system overlapping the horizon in dasha.activation
 
-**Special:** Becomes general.dasha_all_systems in D3 (doc 53 §4.4): every served system from the activation calendar, grouped into the seven families of doc 46 §B.4; the id stays so tagged runs keep joining. Reads the digest when it is ready for base, detail and varga; the dasha section stays the dossier periods until the activation calendar is read
+**Special:** Becomes general.dasha_all_systems in D3 (doc 53 §4.4): every served system from the activation calendar, grouped into the seven families of doc 46 §B.4; the id stays so tagged runs keep joining. Reads the digest when it is ready for base, detail, varga and dasha.activation
 
 **Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; horizon is now, 3m, 6m, 1y, 3y, life, custom
 

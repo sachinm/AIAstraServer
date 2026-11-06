@@ -7,7 +7,7 @@
  * day with plain-word reason keys. Node only cuts the engine's windows by the engine's avoid bands and adds the scores
  * the scenario table (scenarios.ts, cited) assigns; it derives no astrological value.
  */
-import { isAmritaSiddhi, karanaName, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type StarGroup, type TithiGroup, type Weekday, type YogaName } from './scenarios.js';
+import { isAmritaSiddhi, karanaName, normalizeStarGroup, normalizeTithiGroup, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type StarGroup, type TithiGroup, type Weekday, type YogaName } from './scenarios.js';
 
 /** The engine's CLOCK: hours from the local midnight of the row's date (may exceed 24). */
 export interface Clock {
@@ -253,11 +253,11 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
 
   const tithiObj = row.panchanga_at_noon?.tithi;
   const tithiNo = tithiObj?.number;
-  const tithiGroup = (tithiObj?.group as TithiGroup | undefined) ?? (typeof tithiNo === 'number' ? tithiGroupOf(tithiNo) : null);
+  const tithiGroup = normalizeTithiGroup(tithiObj?.group, tithiNo);
   const tithiSpan = spanOf(tithiObj);
   const starObj = row.panchanga_at_noon?.nakshatra;
   const starNo = starObj?.number;
-  const starGroup = (starObj?.group as StarGroup | undefined) ?? (typeof starNo === 'number' ? starGroupOf(starNo) : null);
+  const starGroup = normalizeStarGroup(starObj?.group, starNo);
   const starSpan = spanOf(starObj);
 
   const sunrise = toMin(row.sunrise);

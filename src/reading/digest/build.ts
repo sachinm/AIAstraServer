@@ -105,6 +105,7 @@ interface ChartTables {
   argala: Ref | null;
   arudhas: Ref | null;
   avasthas: Ref | null;
+  houseCounts?: Ref | null;
   /** D1 only */
   d1?: { facts: Ref | null; houseCounts: Ref | null; ashtakavarga: Ref | null; shadbala: Ref | null; benefic: Ref | null };
 }
@@ -122,6 +123,7 @@ function natalTablesFromFacts(items: Record<string, unknown>): ChartTables | nul
 }
 
 function natalTablesWith(items: Record<string, unknown>, f: number, houses: Ref | null, planets: Ref | null): ChartTables {
+  const hc = ref(items, natalKey('house_counts', f));
   return {
     varga: vargaName(f),
     houses,
@@ -130,8 +132,9 @@ function natalTablesWith(items: Record<string, unknown>, f: number, houses: Ref 
     argala: ref(items, `argala.d${f}`),
     arudhas: ref(items, natalKey('arudhas', f)),
     avasthas: ref(items, natalKey('avasthas', f)),
+    houseCounts: hc,
     ...(f === 1
-      ? { d1: { facts: ref(items, FACTS_ITEM), houseCounts: ref(items, 'house_counts'), ashtakavarga: ref(items, 'ashtakavarga'), shadbala: ref(items, 'strength.shadbala'), benefic: ref(items, 'benefic_malefic') } }
+      ? { d1: { facts: ref(items, FACTS_ITEM), houseCounts: hc, ashtakavarga: ref(items, 'ashtakavarga'), shadbala: ref(items, 'strength.shadbala'), benefic: ref(items, 'benefic_malefic') } }
       : {}),
   };
 }
@@ -244,7 +247,7 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
     }
 
     let cls: string[] = [];
-    const hc = t.d1?.houseCounts;
+    const hc = t.houseCounts ?? t.d1?.houseCounts;
     const hcClass = hc && isObj(hc.value) && isObj((hc.value as Obj).house_class) ? ((hc.value as Obj).house_class as Obj)[String(h)] : null;
     if (Array.isArray(hcClass)) {
       cls = hcClass.map(str).filter((c): c is string => Boolean(c));
@@ -1082,6 +1085,8 @@ export const DIGEST_NATAL_TYPES: readonly string[] = [
   'dignities', 'aspects', 'argala.d1', 'arudhas', 'house_counts', 'ashtakavarga', 'avasthas', 'strength.shadbala', 'benefic_malefic',
   'yogas', 'doshas', 'karaka.chara', 'sphutas', 'panchanga.birth', 'relations', 'dasha.applicable',
   ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `varga.d${f}`),
+  ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `dignities.d${f}`),
+  ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `house_counts.d${f}`),
 ];
 
 const BATCH = 500;

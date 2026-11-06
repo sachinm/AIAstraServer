@@ -113,10 +113,12 @@ async function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   }
 }
 
-/** The optional doc 28 layers this run offers (data loader present and the question qualifies). */
-export function optionalLayersFor(deps: Pick<GraphDeps, 'intent' | 'asOf' | 'question' | 'layers'>): Array<(typeof OPTIONAL_LAYERS)[number]> {
+/** The optional doc 28 layers this run offers (data loader or digest pack section present and the question qualifies). */
+export function optionalLayersFor(deps: Pick<GraphDeps, 'intent' | 'asOf' | 'question' | 'layers'> & Partial<Pick<GraphDeps, 'packs'>>): Array<(typeof OPTIONAL_LAYERS)[number]> {
   const out: Array<(typeof OPTIONAL_LAYERS)[number]> = [];
-  if (deps.layers?.annual && annualApplies(deps.intent, deps.asOf)) out.push('annual');
+  const first = deps.intent.subjects[0]?.id;
+  const hasPackAnnual = Boolean(first && deps.packs?.[first]?.sections.annual);
+  if ((deps.layers?.annual || hasPackAnnual) && annualApplies(deps.intent, deps.asOf)) out.push('annual');
   if (deps.layers?.prashna && prashnaApplies(deps.intent, deps.question)) out.push('prashna');
   return out;
 }
@@ -241,7 +243,13 @@ export function buildReadingGraph(deps: GraphDeps) {
           (added[input.subject] ??= {})[sec] = value;
         };
         if (optionalLayer) {
-          const section = await within(name === 'annual' ? loadAnnual() : loadPrashna(), budget.timeoutMs, name);
+          const existing = usePack?.sections[name];
+          const loaded = name === 'annual'
+            ? (deps.layers?.annual ? await within(loadAnnual(), budget.timeoutMs, name) : null)
+            : (deps.layers?.prashna ? await within(loadPrashna(), budget.timeoutMs, name) : null);
+          const section = loaded && existing && typeof loaded === 'object' && typeof existing === 'object'
+            ? { ...(loaded as Record<string, unknown>), ...(existing as Record<string, unknown>), ...(loaded as Record<string, unknown>) }
+            : (loaded ?? existing ?? null);
           if (!section) throw new SpecialistNoDataError(`no ${name} data`);
           attach(name, section);
         } else if (datedTransit) {

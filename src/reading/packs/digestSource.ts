@@ -11,7 +11,8 @@
  * - `digestSection`: the `digest` pack section the deterministic readers read and cite. It is keyed so that an evidence
  *   id is `digest.<section>.<digest key>[.<field>]` (digest key `D9.h7` → `digest.house.D9.h7.lordDignity`).
  */
-import type { DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../digest/types.js';
+import type { AnnualRow, DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../digest/types.js';
+import type { ActivationRow } from '../digest/activation.js';
 import { PERSON_OF_SUBJECT, PERSON_SIGNIFIERS } from '../codeReaders/rules.js';
 
 export interface DigestPerson {
@@ -46,6 +47,8 @@ export interface DigestPackSection {
   vargas: string[];
   /** Narayana / Chara periods inside the horizon that activate the frame houses, keyed by period id (general.jaimini) */
   rasi?: Record<string, DigestRasiPeriod>;
+  /** TP and VP rows of the current, previous and next year in D1, D9, D10 (general.annual) */
+  annual?: Record<string, AnnualRow>;
 }
 
 /** The vargas the varga-dynamics reader adds for an explain or a whole-life question (doc 53 §4.4). */
@@ -70,6 +73,10 @@ export interface DigestSectionInput {
   person: DigestPerson | null;
   /** optional Narayana / Chara rasi periods inside the horizon */
   rasiPeriods?: Array<{ system?: string; sign: string; lord: string; from: string; to: string }>;
+  /** optional activation calendar rows overlapping the horizon (kundli_activation) */
+  activation?: readonly ActivationRow[] | null;
+  /** optional years to include from digest.annual (current, previous and next year TP/VP in D1/D9/D10) */
+  years?: readonly number[];
 }
 
 /** The digest rows a question's deterministic readers read: frame houses and planets in D1 and the frame's vargas, the yogas that touch them, the frame's points. */
@@ -116,7 +123,31 @@ export function digestSection(view: DigestView, a: DigestSectionInput): DigestPa
     const k = keyOf(`${sys}_${rp.sign}_${rp.from}`);
     rasi[k] = { system: sys, sign: rp.sign, lord: rp.lord, from: rp.from, to: rp.to, houses: matchedHouses };
   }
-  return { version: view.version, house, planet, yoga, point, person: a.person, vargas, ...(Object.keys(rasi).length ? { rasi } : {}) };
+  for (const row of a.activation ?? []) {
+    if (row.family !== 'rasi' || !row.sign) continue;
+    const matchedHouses = houses.filter((h) => row.houses.includes(h) || view.house('D1', h)?.sign === row.sign);
+    if (!matchedHouses.length) continue;
+    const lord = row.lord ?? view.house('D1', matchedHouses[0]!)?.lord ?? '';
+    const k = keyOf(`${row.system}_${row.sign}_${row.from}`);
+    rasi[k] = { system: row.system, sign: row.sign, lord, from: row.from, to: row.to, houses: matchedHouses };
+  }
+  const annual: Record<string, AnnualRow> = {};
+  for (const y of a.years ?? []) {
+    for (const row of view.annual(y)) {
+      annual[keyOf(`${row.kind}${row.year}_${row.varga}`)] = row;
+    }
+  }
+  return {
+    version: view.version,
+    house,
+    planet,
+    yoga,
+    point,
+    person: a.person,
+    vargas,
+    ...(Object.keys(rasi).length ? { rasi } : {}),
+    ...(Object.keys(annual).length ? { annual } : {}),
+  };
 }
 
 /** The person a question is about: the one it names, else the person subject's (doc 53 §4.4). */
@@ -219,11 +250,76 @@ function overlayVarga(o: Record<string, unknown>, view: DigestView, key: string)
   return out;
 }
 
+export interface OverlayDigestExtra {
+  activation?: readonly ActivationRow[] | null;
+  years?: readonly number[];
+  houses?: readonly number[];
+  asOf?: string;
+  fullScope?: boolean;
+}
+
+function annualFromDigest(view: DigestView, extra: OverlayDigestExtra): Record<string, unknown> | undefined {
+  const wantedYears = extra.years ?? [];
+  if (!wantedYears.length) return undefined;
+  const rows = wantedYears.flatMap((y) => view.annual(y));
+  if (!rows.length) return undefined;
+  const curYear = extra.asOf ? Number(extra.asOf.slice(0, 4)) : wantedYears[Math.floor(wantedYears.length / 2)]!;
+  const primary = rows.find((r) => r.year === curYear && r.kind === 'TP' && r.varga === 'D1') ?? rows.find((r) => r.year === curYear && r.varga === 'D1') ?? rows[0]!;
+  const lagnaHouse = primary.houses.find((h) => h.house === 1);
+  const bodies: Record<string, unknown> = {};
+  const occupants: Record<string, string[]> = {};
+  for (const h of primary.houses) {
+    for (const occ of h.occupants ?? []) {
+      bodies[occ.planet] = { ...(h.sign ? { sign: h.sign } : {}), h: h.house, ...(occ.dignity ? { dig: occ.dignity } : {}) };
+      (occupants[String(h.house)] ??= []).push(occ.planet);
+    }
+  }
+  const dashaTree = primary.dashas[0];
+  const periods: Record<string, unknown> = {};
+  let running: Record<string, unknown> | undefined;
+  for (const p of dashaTree?.periods ?? []) {
+    periods[keyOf(`${p.lord}_${p.from}`)] = { lord: p.lord, from: p.from, to: p.to };
+    if (extra.asOf && p.from <= extra.asOf && extra.asOf < p.to && !running) running = { lord: p.lord, from: p.from, to: p.to };
+  }
+  const frameHouses = extra.houses ?? [];
+  const yearsMap: Record<string, unknown> = {};
+  for (const r of rows) {
+    const houses = Object.fromEntries(
+      r.houses
+        .filter((h) => !frameHouses.length || h.house === 1 || frameHouses.includes(h.house))
+        .map((h) => [`h${h.house}`, h])
+    );
+    yearsMap[keyOf(`${r.kind}${r.year}_${r.varga}`)] = {
+      kind: r.kind,
+      year: r.year,
+      varga: r.varga,
+      lagna: r.lagna,
+      houses,
+      dashas: r.dashas,
+      sahams: r.sahams.filter((s) => !frameHouses.length || s.house == null || frameHouses.includes(s.house)),
+      ...(r.muntha ? { muntha: r.muntha } : {}),
+      ...(r.yearLord ? { yearLord: r.yearLord } : {}),
+      ...(r.tajakaYogas?.length ? { tajakaYogas: r.tajakaYogas } : {}),
+    };
+  }
+  return {
+    year_used: primary.year,
+    chart: {
+      lagna: { sign: primary.lagna, ...(lagnaHouse?.lord ? { lord: lagnaHouse.lord } : {}) },
+      bodies,
+      occupants,
+    },
+    ...(dashaTree ? { dasha: { system: dashaTree.system, ...(running ? { running } : {}), periods } } : {}),
+    years: yearsMap,
+  };
+}
+
 /**
  * The pack sections rewritten from the digest (doc 53 §4.2). Same keys as the dossier path; each value is the digest's
- * when it has the field, else the dossier's. `transits`, `dasha` and `frame` are not digest sections and stay.
+ * when it has the field, else the dossier's. When activation rows or digest annual rows are supplied, `dasha.activation`
+ * and `annual` are populated too.
  */
-export function overlayDigest(sections: Record<string, unknown>, view: DigestView): Record<string, unknown> {
+export function overlayDigest(sections: Record<string, unknown>, view: DigestView, extra?: OverlayDigestExtra): Record<string, unknown> {
   const out = { ...sections };
   const base = sections.base as Record<string, unknown> | undefined;
   if (base) {
@@ -267,6 +363,34 @@ export function overlayDigest(sections: Record<string, unknown>, view: DigestVie
       a[k] = p ? { ...o, sign: or(p.sign, o.sign), h: or(p.house, o.h), ...('lord' in o ? { lord: or(p.lord, o.lord) } : {}) } : o;
     }
     out.arudha = a;
+  }
+  if (!extra?.fullScope) {
+    if (extra?.activation?.length && isObj(out.dasha)) {
+      const frameHouses = extra.houses ?? [];
+      const act: Record<string, unknown> = {};
+      for (const r of extra.activation) {
+        if (frameHouses.length && !r.houses.some((h) => frameHouses.includes(h))) continue;
+        const k = keyOf(`${r.system}_${r.lord ?? r.sign ?? `L${r.level}`}_${r.from}`);
+        act[k] = {
+          system: r.system,
+          family: r.family,
+          level: r.level,
+          ...(r.lord ? { lord: r.lord } : {}),
+          ...(r.sign ? { sign: r.sign } : {}),
+          from: r.from,
+          to: r.to,
+          houses: r.houses,
+          ...(r.parentLord ? { within: r.parentLord } : {}),
+        };
+      }
+      if (Object.keys(act).length) {
+        out.dasha = { ...(out.dasha as Record<string, unknown>), activation: act };
+      }
+    }
+    if (out.annual === undefined && extra?.years?.length) {
+      const ann = annualFromDigest(view, extra);
+      if (ann) out.annual = ann;
+    }
   }
   return out;
 }

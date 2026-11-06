@@ -4,7 +4,7 @@
  * card shapes; it is not the digest builder.
  */
 import type { Dossier } from '../../src/reading/facts/types.js';
-import type { DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../../src/reading/digest/types.js';
+import type { AnnualRow, DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../../src/reading/digest/types.js';
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -14,6 +14,7 @@ export interface SyntheticDigest {
   yogas?: YogaRow[];
   points?: PointRow[];
   vargas?: string[];
+  annual?: AnnualRow[];
 }
 
 /** A DigestView over explicit rows (for the deterministic readers' tests). */
@@ -41,7 +42,7 @@ export function digestView(rows: SyntheticDigest, meta: { kundliId?: string; ver
     vargas: () => vargas,
     yogas: () => rows.yogas ?? [],
     points: (v) => (rows.points ?? []).filter((p) => !v || p.varga === v),
-    annual: () => [],
+    annual: (year) => (rows.annual ?? []).filter((a) => year == null || a.year === year),
     star: () => null,
     sourceOf: () => [],
   };

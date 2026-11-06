@@ -119,23 +119,26 @@ describe('deterministic readers on a synthetic digest', () => {
     expect(resolvesAll(pack, f.claims.flatMap((c) => c.evidence))).toBe(true);
   });
 
-  it('jaimini cites Narayana/Chara rasi periods when rasiPeriods are present in digestSection', () => {
+  it('jaimini cites Narayana/Chara rasi periods when rasiPeriods or activation rows are present in digestSection', () => {
     const view = digestView({
-      houses: { D1: { 10: { sign: 'Aries', lord: 'Ma', class: ['kendra'] } } },
+      houses: { D1: { 10: { sign: 'Aries', lord: 'Ma', class: ['kendra'] }, 6: { sign: 'Sagittarius', lord: 'Ju', class: ['dusthana'] } } },
       vargas: ['D1'],
     });
     const digest = digestSection(view, {
-      houses: [10],
-      planets: ['Ma'],
+      houses: [10, 6],
+      planets: ['Ma', 'Ju'],
       vargas: [],
       points: [],
       deep: false,
       person: null,
       rasiPeriods: [{ system: 'narayana', sign: 'Aries', lord: 'Ma', from: '2026-01-01', to: '2027-01-01' }],
+      activation: [{ system: 'chara', family: 'rasi', level: 2, lord: null, sign: 'Sagittarius', from: '2026-03-01', to: '2026-09-01', houses: [6], parentLord: 'Aries' }],
     });
-    const p: EvidencePack = { ...pack, sections: { digest }, keyFrame: { houses: [10], lords: ['Ma'], karakas: [], vargas: [] } };
+    const p: EvidencePack = { ...pack, sections: { digest }, keyFrame: { houses: [10, 6], lords: ['Ma', 'Ju'], karakas: [], vargas: [] } };
     const f = jaimini(p);
-    expect(f.claims.some((c) => c.rule === 'rasi_period_active')).toBe(true);
+    expect(f.claims.filter((c) => c.rule === 'rasi_period_active')).toHaveLength(2);
+    expect(f.claims.some((c) => c.text.includes('Narayana rasi period Aries'))).toBe(true);
+    expect(f.claims.some((c) => c.text.includes('Chara rasi period Sagittarius'))).toBe(true);
     expect(resolvesAll(p, f.claims.flatMap((c) => c.evidence))).toBe(true);
   });
 

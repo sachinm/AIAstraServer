@@ -304,9 +304,47 @@ export function tithiGroupOf(n: number): TithiGroup | null {
   return null;
 }
 
+const VALID_TITHI_GROUPS = new Set<TithiGroup>(['nanda', 'bhadra', 'jaya', 'rikta', 'purna', 'amavasya']);
+
+/** Normalizes the engine's tithi.group (or falls back to tithiNumber); tithi 30 is always 'amavasya'. */
+export function normalizeTithiGroup(group: unknown, tithiNumber?: unknown): TithiGroup | null {
+  if (tithiNumber === 30) return 'amavasya';
+  if (typeof group === 'string') {
+    const g = group.trim().toLowerCase() as TithiGroup;
+    if (VALID_TITHI_GROUPS.has(g)) return g;
+  }
+  return typeof tithiNumber === 'number' ? tithiGroupOf(tithiNumber) : null;
+}
+
 export function starGroupOf(n: number): StarGroup | null {
   for (const [g, list] of Object.entries(STAR_GROUPS)) if (list.includes(n)) return g as StarGroup;
   return null;
+}
+
+const STAR_GROUP_BY_NAME: Readonly<Record<string, StarGroup>> = {
+  dhruva: 'fixed',
+  chara: 'moving',
+  kshipra: 'quick',
+  mridu: 'soft',
+  ugra: 'fierce',
+  tikshna: 'sharp',
+  misra: 'mixed',
+  fixed: 'fixed',
+  moving: 'moving',
+  quick: 'quick',
+  soft: 'soft',
+  fierce: 'fierce',
+  sharp: 'sharp',
+  mixed: 'mixed',
+};
+
+/** Normalizes the engine's nakshatra.group (Sanskrit dhruva..tikshna or English fixed..mixed), or falls back to starNumber. */
+export function normalizeStarGroup(group: unknown, starNumber?: unknown): StarGroup | null {
+  if (typeof group === 'string') {
+    const mapped = STAR_GROUP_BY_NAME[group.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return typeof starNumber === 'number' ? starGroupOf(starNumber) : null;
 }
 
 /** The catalog shown in the Add drop-down, grouped by area. */
