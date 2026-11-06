@@ -97,13 +97,29 @@ describe('buildDigestRows on a research kundli', () => {
     expect(rows.some((r) => r.section === 'point' && r.key.startsWith('D1.sphuta.'))).toBe(true);
   });
 
-  it('annual rows for each stored year chart, with house cards, and sahams on the D1 Varsha row', () => {
+  it('annual rows for each stored year chart, with house cards (including classification), and sahams on the D1 Varsha row', () => {
     const vp = get<AnnualRow>('annual', 'VP2026.D1')!;
     expect(vp.lagna).toBeTruthy();
     expect(vp.houses).toHaveLength(12);
+    expect(vp.houses.find((h) => h.house === 1)?.class).toContain('kendra');
+    expect(vp.houses.find((h) => h.house === 10)?.class).toContain('kendra');
+    expect(vp.houses.find((h) => h.house === 8)?.class).toContain('dusthana');
     expect(vp.sahams.length).toBeGreaterThan(0);
     expect(get<AnnualRow>('annual', 'VP2026.D9')?.houses).toHaveLength(12);
-    expect(get<AnnualRow>('annual', 'TP2026.D1')?.kind).toBe('TP');
+    const tp = get<AnnualRow>('annual', 'TP2026.D1')!;
+    expect(tp.kind).toBe('TP');
+    expect(tp.houses.find((h) => h.house === 10)?.class).toContain('kendra');
+
+    // Also verify fallback to raw.classification on annual.houses when house_counts is absent
+    const withoutHc: Record<string, unknown> = {
+      'annual.varsha@year=2026': {
+        lagna: { sign: 'Aries' },
+        houses: [{ house: 10, sign: 'Capricorn', lord: { name: 'Saturn', code: 'Sa' }, lord_house: 10, occupants: [], classification: ['kendra', 'upachaya'] }],
+      },
+    };
+    const rowsNoHc = buildDigestRows(withoutHc, { kundliId: 'no-hc' });
+    const vpNoHc = rowsNoHc.find((r) => r.key === 'VP2026.D1')?.row as AnnualRow;
+    expect(vpNoHc.houses.find((h) => h.house === 10)?.class).toEqual(['kendra', 'upachaya']);
   });
 
   it('the year dashas of a D1 year row come from the stored year-dasha rows', () => {

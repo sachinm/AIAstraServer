@@ -93,7 +93,7 @@ async function runTopUp(deps: DigestEventDeps, kundliId: string, maxCalls: numbe
 async function runBuild(deps: DigestEventDeps, kundliId: string, trigger: 'event' | 'sweep'): Promise<DigestBuildResult> {
   try {
     return await withAgentRun(deps.prisma, 'digest.build', { task: `digest-${trigger}`, technique: 'digest.build', kundliId, input: { trigger, version: DIGEST_VERSION } }, async () => {
-      const r = await (deps.build ?? ((p, id) => buildDigest(p, id)))(deps.prisma, kundliId);
+      const r = await (deps.build ?? ((p, id) => buildDigest(p, id, { fetch: true })))(deps.prisma, kundliId);
       return { value: r, output: { status: r.status, rows: r.rows, activation: r.activation, ms: r.ms, error_type: r.error ?? null } };
     });
   } catch (err) {
@@ -225,7 +225,7 @@ export async function queueDigestBuild(prisma: PrismaClient, kundliId: string): 
       return 'invoked';
     }
     if (fn) return 'skipped'; // on Lambda without the token: the sweep builds it
-    void buildDigest(prisma, kundliId).catch(() => undefined);
+    void buildDigest(prisma, kundliId, { fetch: true }).catch(() => undefined);
     return 'in_process';
   } catch (err) {
     queueLogError({ event: 'digest_queue_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });

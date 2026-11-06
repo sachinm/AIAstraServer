@@ -36,6 +36,11 @@ export const FAMILIES: Array<{ id: string; label: string; systems: SystemId[]; m
   { id: 'jaimini', label: 'Jaimini points', systems: ['S7'], mode: 'any' },
 ];
 export const FAMILIES_NOT_BUILT = ['conditional clock', "this year's chart", 'karaka clock'];
+const FAMILIES_NOT_BUILT_BY_ID: ReadonlyArray<{ id: string; label: string }> = [
+  { id: 'conditional', label: 'conditional clock' },
+  { id: 'annual', label: "this year's chart" },
+  { id: 'karaka', label: 'karaka clock' },
+];
 
 export interface FamilyVote {
   family: string;
@@ -423,7 +428,7 @@ export function careerMap(build: PastBuild, asOf: string, digest?: CareerDigestI
   if (i < 0) throw new Error(`careerMap: ${month} is not inside the build span`);
   const present = presentState(build, cells, i, digest);
   const votedIds = new Set(present.votes.map((v) => v.family));
-  const missingFamilies = FAMILIES_NOT_BUILT.filter((f) => !votedIds.has(f));
+  const missingFamilies = FAMILIES_NOT_BUILT_BY_ID.filter((f) => !votedIds.has(f.id)).map((f) => f.label);
   const notes = [
     ...build.notes,
     ...(missingFamilies.length ? [`Phase 1: the ${missingFamilies.join(', ')} families are not built yet; confidence scales to the families available.`] : []),
