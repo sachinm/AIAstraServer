@@ -4,6 +4,8 @@ Generated from `technique_registry` (the catalogue in `src/techniques/catalog.ts
 Panel shows the same rows with their runs, timings and accuracy at https://admin.vedic-astrology.app/techniques. Regenerate
 with the script noted at the end after the catalogue changes.
 
+Every row is a contract (doc 53 §4.3): *Selected when* says which questions or boards choose it; *Contract* says what it reads, in which table layout, under which prompt, and what it returns.
+
 Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work: 16); 32 built, 0 partly built, 31 planned. Agents registered: 20.
 
 ## Summary
@@ -92,6 +94,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha and year lord when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months; a timing question on a longer horizon is a planned any-of rule
 
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; horizon is now, 3m, 6m, 1y, custom
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · TP and VP of the current, previous and next year, D1, D9, D10, the frame's houses; year dashas; sahams in the frame's houses; muntha and year lord when served | annual_row | `src/reading/prompts/annual.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
+
 **Source:** docs/reading-engine/28 §5; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.annual`  
 **Agents:** `reading.analyst.annual`
@@ -108,6 +118,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Phrase, resolve or ask the question-chart detail with a small model (900 ms budget), while the chart loads in the background
 3. Declined topics are decided here and their text is never kept
 4. Its confirmed intent (subject, horizon, question type, slots) and the companion memory select the techniques of the query (doc 53 §4.3 selectTechniques)
+
+**Selected when:** board is chat
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| text · the question, the history of the thread, the clarify turns<br>text · the intake's intent: bucket, subjects, horizon, the slots filled and missing | text_in<br>text_in | `db:clarify.system` | TODAY, QUESTION, BUCKET, SLOTS, HISTORY | intent.v1 | — |
 
 **Source:** docs/reading-engine/13; 48; 53 §4.3  
 **Code:** `src/reading/clarify/planner.ts; service.ts`  
@@ -129,6 +147,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Becomes general.dasha_all_systems in D3 (doc 53 §4.4): every served system from the activation calendar, grouped into the seven families of doc 46 §B.4; the id stays so tagged runs keep joining
 
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; horizon is now, 3m, 6m, 1y, 3y, life, custom
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · periods inside the horizon activating the frame's houses, every served system, grouped by family; Vimshottari MD/AD/PD at level 3; dasha.applicable<br>planet · D1 cards of the frame's house lords and karakas<br>house · D1 and the frame's vargas, the frame's houses | activation_row<br>planet_card<br>house_card | `src/reading/prompts/v2/dasha.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
+
 **Source:** docs/reading-engine/03 §3; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.dasha`  
 **Agents:** `reading.analyst.dasha`
@@ -142,6 +168,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 **Algorithm:**
 
 1. Read the question into an intent: subjects, horizon, question type, format and named planets, and nothing else
+
+**Selected when:** board is chat
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| text · the question, the history of the thread, the clarify turns | text_in | `src/reading/prompts/intake.md` | TODAY, QUESTION, HISTORY | intent.v1 | — |
 
 **Source:** docs/reading-engine/41  
 **Code:** `src/reading/nodes/intake.ts`  
@@ -161,6 +195,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 4. Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it
 5. Revised in D3 (doc 53 §4.4): the star profile, the cusp stars of the frame's houses and the star lords' places from the planet cards
 
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| star · Moon star, lagna star, the tara table, gandanta flags<br>house · D1, the frame's houses (cusp_star column)<br>planet · D1 cards of the star lords of the frame's cusps and the Moon | star_profile<br>house_card<br>planet_card | `src/reading/prompts/v2/nakshatra.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
+
 **Source:** docs/reading-engine/03 §3; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.nakshatra`  
 **Agents:** `reading.analyst.nakshatra`
@@ -177,6 +219,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Write the answer from the findings, streaming it
 3. An addendum may follow when the validator finds a missing part
 4. In D3 it also receives the digest rows the findings cite (by key) and the confirmed person_facts (doc 53 §4.2, §4.4)
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| findings · every finding of the readers or analysts of this query, with the digest rows they cite<br>text · the question, the history of the thread, the clarify turns | findings_in<br>text_in | `src/reading/prompts/oracle/system.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS, TEMPLATE | answer.markdown | `general.validator` |
 
 **Source:** docs/reading-engine/39 §4.1; 41; 53 §4.4  
 **Code:** `src/reading/oracle/flow.ts; src/reading/run.ts (synthesize)`  
@@ -195,6 +245,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. The model returns structured findings whose claims cite evidence ids in the pack
 4. Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it
 5. Runs only when the graph has the chart of the question moment
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; the question names prashna
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| prashna · the cast of the question moment<br>house · D1 and the frame's vargas, the frame's houses | prashna_card<br>house_card | `src/reading/prompts/prashna.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
 
 **Source:** docs/reading-engine/28 §5; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.prashna`  
@@ -216,6 +274,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Becomes general.house_promise in D3 (doc 53 §4.4); the id stays so tagged runs keep joining
 
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 and the frame's vargas, the frame's houses<br>planet · D1 cards of the frame's house lords and karakas<br>point · arudhas and special lagnas of the frame<br>yoga · yogas touching the frame's houses or their lords | house_card<br>planet_card<br>point_row<br>yoga_row | `src/reading/prompts/v2/promise.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
+
 **Source:** docs/reading-engine/03 §3; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.promise`  
 **Agents:** `reading.analyst.promise`
@@ -234,6 +300,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 4. Every call holds a reservation from the cost guard; a reader past the join deadline is dropped
 
 **Special:** In D3 the CHART CORE becomes the digest house and planet cards of D1 plus the frame vargas (doc 53 §4.2)
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · CHART CORE (nine stored types) and D1 plus the frame vargas, the frame houses<br>planet · CHART CORE: every planet in D1<br>yoga · present yogas and doshas (R01, R06)<br>point · arudhas and argala of the frame (R03, R04)<br>activation · Vimshottari and the other dasha systems inside the horizon (R08, R09, R04)<br>transit · the question's transit rows (R07, R10, R13, P1–P3)<br>annual · TP, VP, sahams, Mudda and Patyayini of the years in the horizon (R11)<br>prashna · the cast when the question is prashna-eligible (R12) | house_card<br>planet_card<br>yoga_row<br>point_row<br>activation_row<br>transit_row<br>annual_row<br>prashna_card | `src/reading/prompts/readers/_shared.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
 
 **Source:** docs/reading-engine/33 §2; 39 §4.1; 53 §4.2  
 **Code:** `src/reading/oracle/readers.ts READERS; runReader.ts`  
@@ -255,6 +329,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Revised in D3 (doc 53 §4.4): contacts to the lords and karakas, double transit, sade sati, eclipses and transit ashtakavarga scores from the shared sky and the overlay
 
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; horizon is now, 3m, 6m, 1y, 3y, life, custom
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| transit · shared sky with the overlay for the frame's houses, lords and karakas inside the horizon; double transit; sade sati; eclipses; transit ashtakavarga<br>planet · D1 cards of the frame's house lords and karakas | transit_row<br>planet_card | `src/reading/prompts/v2/transit.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v2 | `general.oracle` |
+
 **Source:** docs/reading-engine/03 §3; 28 §5; 53 §4.4  
 **Code:** `src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.transit`  
 **Agents:** `reading.analyst.transit`
@@ -270,6 +352,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. After the answer has gone out, rules check it answered the question (under 5 ms, no model)
 2. Then a cheap model call with a 2 s budget; on any failure the rules stand
 3. It reports; the flow decides whether one loop back through at most two readers runs
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| text · the question, the clarify turns and the answer | text_in | `src/reading/prompts/oracle/validator.md` | QUESTION, CLARIFY_TURNS, ANSWER | validator.v1 | — |
 
 **Source:** docs/reading-engine/39 §4.1  
 **Code:** `src/reading/oracle/validator.ts`  
@@ -287,6 +377,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Each period carries the houses it activates as the engine states them: for graha dashas the lord's house, the houses it owns and the houses it aspects (from the planet cards); for rasi dashas the sign's house and its lord's house
 3. One row per period in kundli_activation (kundli_id, system, level, lord_or_sign, from, to, houses), so "which periods activate house 7 between 2027 and 2030 under any system" is one indexed query
 
+**Selected when:** board is chat, you, love, work, lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · every served system, levels 1–3, birth to +30 years<br>planet · D1 cards (house, owns, aspects_to) of the nine planets | activation_row<br>planet_card | `none` | — | kundli_activation.v1 | `digest.build` |
+
 **Source:** docs/reading-engine/53 §4.1, step 3  
 **Code:** `not built (src/reading/digest/activation.ts, doc 53 step 3)`  
 **Agents:** none yet
@@ -302,6 +400,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. For each year from ten back to ten ahead, pull TP and VP in D1, D9 and D10 with their year dashas and sahams from the engine (about 380 calls per kundli, batched at registration, about 25 per minute)
 2. Store each as kundli_data rows (type, variant year=Y) and write the digest annual rows from them
 3. Mark the digest stale when a year is missing and queue the pull
+
+**Selected when:** board is chat, you, love, work, lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · annual.* for Y in −10…+10, D1, D9, D10 | annual_row | `none` | — | kundli_digest.v1 | `digest.build` |
 
 **Source:** docs/reading-engine/53 §4.1, step 2  
 **Code:** `not built (src/reading/digest/annualSet.ts, doc 53 step 2)`  
@@ -327,6 +433,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Roughly 170 stored rows read and 1,500–3,000 digest rows written per kundli, under 10 s on the API Lambda
 
+**Selected when:** board is chat, you, love, work, lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · dignities.dN, aspects.dN, argala.dN, arudhas.dN, house_counts, ashtakavarga, facts.houses (D1); every served varga<br>planet · dignities.dN, aspects.dN, relations.dN, avasthas.dN, strength.shadbala, benefic_malefic; every served varga<br>yoga · yogas, doshas, facts.yogas (D1)<br>point · charakaraka, arudhas(.dN), sphutas<br>annual · annual.{tithi_pravesha,varsha,tithi_pravesha_dasha,mudda,patyayini,sahams}@year=Y, D1, D9, D10, Y in −10…+10<br>star · facts.nakshatra_profile, panchanga.birth | house_card<br>planet_card<br>yoga_row<br>point_row<br>annual_row<br>star_profile | `none` | — | kundli_digest.v1 | — |
+
 **Source:** docs/reading-engine/53 §4.1; 46 §C.3  
 **Code:** `not built (src/reading/digest/build.ts, doc 53 step 1)`  
 **Agents:** none yet
@@ -343,6 +457,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Read the argala on the frame's houses from the house cards
 3. Read the Narayana and Chara periods inside the horizon from the activation calendar
 4. Return findings citing the point and activation keys
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| point · AK, AmK, DK, UL, AL and the A-houses of the frame<br>house · D1, the frame's houses (argala column)<br>activation · Narayana and Chara periods inside the horizon | point_row<br>house_card<br>activation_row | `src/reading/prompts/readers/R04-jaimini.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v3 | `general.oracle` |
 
 **Source:** docs/reading-engine/53 §4.4; 33 R4  
 **Code:** `not built (code-path reader first, doc 53 step 5)`  
@@ -362,6 +484,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Selected for the person subjects; the clarify slot other_person (any subject) is a planned any-of rule of the matcher
 
+**Selected when:** board is chat; subject is children or siblings or marriage relationship
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 and the person's varga (D12, D9, D7, D3), the person's house<br>planet · D1 card of the person's karaka | house_card<br>planet_card | `src/reading/prompts/readers/R13-person.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v3 | `general.oracle` |
+
 **Source:** docs/reading-engine/53 §4.4; 33 R13  
 **Code:** `not built (code-path reader first, doc 53 step 5; today readers.ts R13 covers it in the oracle flow)`  
 **Agents:** none yet
@@ -377,6 +507,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Read the yoga register filtered by the frame's planets and houses: present yogas, doshas and cancellations with their class
 2. Read the shadbala ranks and avasthas of the frame's lords and karakas, and the SAV of the frame's houses
 3. Return findings with graces[]: the yogas and strengths that carry the subject, each citing its digest key
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| yoga · D1 yogas, doshas and cancellations joining the frame's planets or houses<br>planet · D1 cards of the frame's lords and karakas (shadbala_rank, nature, avasthas)<br>house · D1, the frame's houses (sav column) | yoga_row<br>planet_card<br>house_card | `src/reading/prompts/readers/R06-yoga-dosha.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v3 | `general.oracle` |
 
 **Source:** docs/reading-engine/53 §4.4; 33 R5, R6  
 **Code:** `not built (code-path reader first, doc 53 step 5)`  
@@ -394,6 +532,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Read the house and planet cards of each named varga for the frame's houses
 3. Flag where D1 and the varga agree: lord dignity in both, occupants in both; disagreement lowers confidence
 4. Return findings that cite the digest keys of the varga rows
+
+**Selected when:** board is chat; subject is career work or income wealth or debt loss expense or property home or vehicles or marriage relationship or children or health body or education learning or spirituality moksha or foreign relocation or travel journeys or siblings or litigation government or speculation lottery or general life direction or explain term; in D2, D4, D7, D9, D10, D12, D24, D30, D60, D16, D20, D27, D40, D45, D81, D108, D144
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · each frame varga, the frame's houses<br>planet · each frame varga, the frame's lords and karakas; the D1↔Dn agreement flags | house_card<br>planet_card | `src/reading/prompts/readers/R03-varga.md` | TODAY, SUBJECT, FRAME, HORIZON, REAL_WANT, QUESTION, FACTS | findings.v3 | `general.oracle` |
 
 **Source:** docs/reading-engine/53 §4.4; 33 R3  
 **Code:** `not built (code-path reader first, doc 53 step 5)`  
@@ -414,6 +560,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. General: good spans: brahma muhurta, abhijit and every amrita gadiya
 4. General: what is running now: an avoid band first, then a good span, else the next good span
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans) | panchang_day | `none` | — | day_bands.v1 | — |
+
 **Source:** docs/reading-engine/49 §4.1; 47 §3  
 **Code:** `src/reading/luckyTimes/windows.ts avoidBands, nowState; service.ts getRange`  
 **Agents:** `lucky.scenario_windows`
@@ -429,6 +583,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. General: find the days in today −7 … today +14 that the place has no stored row for
 2. General: call the engine's muhurta for at most two missing months at the place
 3. General: store one row per day (day_tables) with its calc version and a hash of the payload; one sky for every user at that place
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans) | panchang_day | `none` | — | day_tables.v1 | — |
 
 **Source:** docs/reading-engine/47 §3; 49 §4.1  
 **Code:** `src/reading/luckyTimes/service.ts pullDayTables`  
@@ -454,6 +616,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 10. Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)
 11. General: keep pieces scoring 3 or more; show the best two in time order
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['home.start_routine']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -473,6 +643,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 5. Personal (planned, doc 53 §4.6): whether the day's tithi lord or star lord is a running dasha lord in the activation calendar, marked on the window
 
 **Special:** The two chart marks are planned additions (doc 53 step 7); today only tara and chandra bala score
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the person's overlay for the same days (tara, chandra bala, grade)<br>planet · D1 cards of the seven hora lords (nature column); planned<br>activation · periods running on each day, every system; planned | panchang_day<br>planet_card<br>activation_row | `none` | — | day_overlay.v1 | — |
 
 **Source:** docs/reading-engine/49 §4.1; 53 §4.6  
 **Code:** `src/reading/luckyTimes/service.ts personalDays; windows.ts personalScore`  
@@ -497,6 +675,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 9. General: abhijit overlap of 10 minutes or more (+2); amrita gadiya overlap (+2); good muhurtas covering half the piece (+1)
 10. Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)
 11. General: keep pieces scoring 3 or more; show the best two in time order
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
 
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['study.exam_submit']; windows.ts scenarioDay`  
@@ -524,6 +710,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** The direction rule for each weekday is not yet applied.
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['travel.set_out']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -547,6 +741,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Yoga and karana are stored in the day table today but not scored (doc 53 §1); this row scores them (doc 53 step 7)
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14: vara, tithi, nakshatra, yoga, karana with end times | panchang_day | `none` | — | limbs.v1 | `lucky.avoid_bands` |
+
 **Source:** docs/reading-engine/53 §4.6; Muhurta Chintamani; B.V. Raman, Muhurta  
 **Code:** `not built (luckyTimes/windows.ts gains yoga and karana in DayRow and scenarioDay, doc 53 step 7)`  
 **Agents:** none yet
@@ -565,6 +767,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 4. One planet, one vote across the graha clocks
 5. Periods thirty years ahead from the activation calendar, graded benefic or malefic by the period lord's nature and dignity in D1 and D9
 
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · every served system, periods from today to +30 years activating houses 1,4,5,9,12<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK | activation_row<br>planet_card | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.4; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -581,6 +791,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Papakartari, nodes on the axis, dosha membership, lord in a dead avastha
 3. Each affliction names its release (its own period, a neecha bhanga pair, a benefic period with D1 and the varga agreeing) or none: the release date is the end of the afflicting planet's running period in the activation calendar
 4. Afflictions set the baseline and name the blocker; they never flip a verdict alone
+
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br>yoga · yogas and doshas joining houses 1,4,5,9,12 or their lords or the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br>activation · running and next periods of the afflicting planets, houses 1,4,5,9,12 | house_card<br>planet_card<br>yoga_row<br>activation_row | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.3; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -602,6 +820,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Muntha, the year lord and Tajaka yogas are engine gaps
 
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · TP and VP of the current, previous and next year, houses 1,4,5,9,12, their sahams and year dashas | annual_row | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.6; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -617,6 +843,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Cusp star of the house: its mission; the lord's star: through whom it delivers; occupants' stars: their flavour
 2. One charter line per star and house from the reviewed charter table (config, with its source)
 3. When the running PD lord's star lord is the house's lord or karaka, the vote is delivered through the star: confidence one step up
+
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| star · Moon star, lagna star and the tara table<br>house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12 (cusp_star column)<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK | star_profile<br>house_card<br>planet_card | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.8; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -638,6 +872,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 6. Lord's avastha: x1.25 awake, x0.5 dead; cap the sum to −8..+8; below −3 the house is not promised
 7. Each support is one row, "D1.h1 aspected_by Ju", with its digest key
 
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br>point · AK, SL, AL<br>yoga · yogas and doshas joining houses 1,4,5,9,12 or their lords or the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK | house_card<br>planet_card<br>point_row<br>yoga_row | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.2; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -656,6 +898,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 4. The dispositor of the lagna lord being strong (the digest planet card's dispositor chain and dignity)
 5. Each protection is one row with its digest key; protections raise the floor of the verdict and never add a promise
 
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br>point · AK, SL, AL<br>yoga · yogas and doshas joining houses 1,4,5,9,12 or their lords or the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK | house_card<br>planet_card<br>point_row<br>yoga_row | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.3; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -673,6 +923,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. Sade sati and dhaiya phases; eclipses on the axis or the lord, with dates
 4. Transit ashtakavarga bindus in the planet’s own BAV support or test
 
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| transit · shared sky with the overlay: Sa, Ju, Ra, Ke and eclipses over houses 1,4,5,9,12, their lords and arudhas, ±24 months<br>house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12 | transit_row<br>house_card | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.5; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -689,6 +947,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. The natal lord of the house in the varga (sign, house, dignity); the varga's own house and lord; vargottama
 3. The running period lord's place in the varga; the arudha of the house in the varga
 4. Returns agrees when its net side matches the activation side; a dasha vote counts only then
+
+**Selected when:** board is you; subject is general life direction or health body or education learning or spirituality moksha; about houses 1, 4, 5, 9, 12; in D1, D9, D20, D24, D12, D4, D7, D60
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12<br>planet · D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br>point · arudhas of houses 1,4,5,9,12 in D1, D9, D20, D24, D12, D4, D7, D60 | house_card<br>planet_card<br>point_row | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.7; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -710,6 +976,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 4. One planet, one vote across the graha clocks
 5. Periods thirty years ahead from the activation calendar, graded benefic or malefic by the period lord's nature and dignity in D1 and D9
 
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · every served system, periods from today to +30 years activating houses 7,5,11,2,4,8,12<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord | activation_row<br>planet_card | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.4; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -726,6 +1000,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Papakartari, nodes on the axis, dosha membership, lord in a dead avastha
 3. Each affliction names its release (its own period, a neecha bhanga pair, a benefic period with D1 and the varga agreeing) or none: the release date is the end of the afflicting planet's running period in the activation calendar
 4. Afflictions set the baseline and name the blocker; they never flip a verdict alone
+
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord<br>yoga · yogas and doshas joining houses 7,5,11,2,4,8,12 or their lords or Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord<br>activation · running and next periods of the afflicting planets, houses 7,5,11,2,4,8,12 | house_card<br>planet_card<br>yoga_row<br>activation_row | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.3; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -747,6 +1029,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Muntha, the year lord and Tajaka yogas are engine gaps
 
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · TP and VP of the current, previous and next year, houses 7,5,11,2,4,8,12, their sahams and year dashas | annual_row | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.6; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -762,6 +1052,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Present state of house 7 and D9 h7: support and strain this month from the activation, transit and annual layers
 2. The tone from the votes of the layers (doc 45 §7)
 3. Selected when the companion memory says love.status is dating or committed or married
+
+**Selected when:** board is love; subject is marriage relationship; love status is dating or committed or married; about houses 7, 5, 11; in D9
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| findings · the eight Love layers of this kundli (love.promise … love.nakshatra) | findings_in | `none` | — | board_subarea.v1 | — |
 
 **Source:** docs/reading-engine/53 §4.5; 46 §B.12  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -779,6 +1077,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Windows from the activation calendar where house 7, 5 or 11 is activated with D9 agreeing
 3. Selected when the companion memory says love.status is single or dating
 
+**Selected when:** board is love; subject is marriage relationship; love status is single or dating; about houses 7, 5, 11; in D9
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| findings · the eight Love layers of this kundli (love.promise … love.nakshatra) | findings_in | `none` | — | board_subarea.v1 | — |
+
 **Source:** docs/reading-engine/53 §4.5; 46 §B.12  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -794,6 +1100,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Cusp star of the house: its mission; the lord's star: through whom it delivers; occupants' stars: their flavour
 2. One charter line per star and house from the reviewed charter table (config, with its source)
 3. When the running PD lord's star lord is the house's lord or karaka, the vote is delivered through the star: confidence one step up
+
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| star · Moon star, lagna star and the tara table<br>house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12 (cusp_star column)<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord | star_profile<br>house_card<br>planet_card | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.8; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -815,6 +1129,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 6. Lord's avastha: x1.25 awake, x0.5 dead; cap the sum to −8..+8; below −3 the house is not promised
 7. Each support is one row, "D1.h1 aspected_by Ju", with its digest key
 
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord<br>point · UL, A7, DK, AL<br>yoga · yogas and doshas joining houses 7,5,11,2,4,8,12 or their lords or Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord | house_card<br>planet_card<br>point_row<br>yoga_row | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.2; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -831,6 +1153,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. The D9 7th lord dignified (digest house card D9.h7 lord_dignity)
 3. Benefic argala on UL and on house 7
 4. Each protection is one row with its digest key; protections raise the floor of the verdict and never add a promise
+
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord<br>point · UL, A7, DK, AL<br>yoga · yogas and doshas joining houses 7,5,11,2,4,8,12 or their lords or Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord | house_card<br>planet_card<br>point_row<br>yoga_row | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.3; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -849,6 +1179,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. Protections that hold the bond (love.protection)
 4. Selected when the companion memory says love.status is separated or complicated
 
+**Selected when:** board is love; subject is marriage relationship; love status is separated or complicated; about houses 7, 5, 11; in D9
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| findings · the eight Love layers of this kundli (love.promise … love.nakshatra) | findings_in | `none` | — | board_subarea.v1 | — |
+
 **Source:** docs/reading-engine/53 §4.5; 46 §B.12  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -866,6 +1204,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. Sade sati and dhaiya phases; eclipses on the axis or the lord, with dates
 4. Transit ashtakavarga bindus in the planet’s own BAV support or test
 
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| transit · shared sky with the overlay: Sa, Ju, Ra, Ke and eclipses over houses 7,5,11,2,4,8,12, their lords and arudhas, ±24 months<br>house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12 | transit_row<br>house_card | `none` | — | house_state.v1 | — |
+
 **Source:** docs/reading-engine/46 §B.5; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
 **Agents:** none yet
@@ -882,6 +1228,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. The natal lord of the house in the varga (sign, house, dignity); the varga's own house and lord; vargottama
 3. The running period lord's place in the varga; the arudha of the house in the varga
 4. Returns agrees when its net side matches the activation side; a dasha vote counts only then
+
+**Selected when:** board is love; subject is marriage relationship; about houses 7, 5, 11, 2, 4, 8, 12; in D9, D7, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D9,D7,D30 houses 7,5,11,2,4,8,12<br>planet · D1 and D9 cards of Venus, Jupiter, the Moon, the 7th lord and the D9 7th lord<br>point · arudhas of houses 7,5,11,2,4,8,12 in D9, D7, D30 | house_card<br>planet_card<br>point_row | `none` | — | house_state.v1 | — |
 
 **Source:** docs/reading-engine/46 §B.7; 53 §4.5  
 **Code:** `not built (house-state engine, doc 46, read from the digest, doc 53 step 6)`  
@@ -909,6 +1263,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Asks one question first (relationship)
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['love.ask_out']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -935,6 +1297,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Asks one question first (relationship)
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['love.clear_air']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -960,6 +1330,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 11. General: keep pieces scoring 3 or more; show the best two in time order
 
 **Special:** Asks one question first (relationship)
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
 
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['love.first_date']; windows.ts scenarioDay`  
@@ -989,6 +1367,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Mercury's motion is not yet checked.
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['money.invest_buy']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -1014,6 +1400,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 11. General: keep pieces scoring 3 or more; show the best two in time order
 
 **Special:** Asks one question first (job)
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
 
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.ask_raise']; windows.ts scenarioDay`  
@@ -1041,6 +1435,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Asks one question first (who)
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.hard_talk_boss']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -1066,6 +1468,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 11. General: keep pieces scoring 3 or more; show the best two in time order
 
 **Special:** Asks one question first (job)
+
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
 
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.interview']; windows.ts scenarioDay`  
@@ -1093,6 +1503,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Asks one question first (job)
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.send_resume']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -1119,6 +1537,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Mercury's motion is not yet checked; avoid signing while it moves backward.
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.sign_contract']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -1143,6 +1569,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 10. Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)
 11. General: keep pieces scoring 3 or more; show the best two in time order
 
+**Selected when:** board is lucky
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| panchang · the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br>panchang · the person's overlay for the same days (tara, chandra bala, grade) | panchang_day<br>panchang_day | `none` | — | windows.v1 | — |
+
 **Source:** Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial  
 **Code:** `src/reading/luckyTimes/scenarios.ts SCENARIOS['work.start_project']; windows.ts scenarioDay`  
 **Agents:** `lucky.scenario_windows`
@@ -1159,6 +1593,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 2. Rank by band order x 100 + score; keep the best support window and the hardest test window
 3. The 6- and 12-month rungs show only windows at moderate band or above; the 1- and 3-month rungs at possible or above
 4. A rung is quiet when neither clears its bar
+
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D10 houses 10,6,1,2,11<br>activation · families S1, S4, S2+S3, S6/S6D, S7 this month to +12 months<br>transit · contacts and double transit on houses 10,6,1 and their lords ±24 months | house_card<br>activation_row<br>transit_row | `none` | — | career_map.v1 | — |
 
 **Source:** docs/reading-engine/45 §10  
 **Code:** `src/reading/area/career.ts careerMap (horizons)`  
@@ -1177,6 +1619,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. A month is an edge when its band is moderate or above and either its side (test or support) differs from the month before or the month before was below moderate
 4. Keep the last two test edges and the last two support edges, rank by band then by recency, keep three, show them in month order
 5. The person answers yes, partly, no or skip to each moment; the answers are stored in area_checks (area career)
+
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D10 houses 10,6,1,2,11<br>activation · families S1, S4, S2+S3, S6/S6D, S7 −12 months to this month<br>transit · contacts and double transit on houses 10,6,1 and their lords ±24 months | house_card<br>activation_row<br>transit_row | `none` | — | career_map.v1 | — |
 
 **Source:** docs/reading-engine/45 §9  
 **Code:** `src/reading/area/career.ts careerMap (back); src/reading/area/careerService.ts recordCheck`  
@@ -1204,6 +1654,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Short clocks vote only when Yogini and Tithi Ashtottari agree. The conditional clock, this year's chart, karaka clock families are not built, so the thresholds scale to the families available
 
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D10 houses 10,6,1,2,11<br>activation · families S1, S4, S2+S3, S6/S6D, S7 ±24 months<br>transit · contacts and double transit on houses 10,6,1 and their lords ±24 months | house_card<br>activation_row<br>transit_row | `none` | — | career_map.v1 | — |
+
 **Source:** docs/reading-engine/43 §8.1  
 **Code:** `src/reading/area/career.ts presentState`  
 **Agents:** `area.career_inputs`, `area.career_map`
@@ -1224,6 +1682,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 6. Grade this month and the 12 after
 
 **Special:** A test without a gate planet is only "watch"
+
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 houses 10,9,5,6,8,12 and their lords<br>activation · families S1, S4, S2+S3, S6/S6D, S7 ±24 months<br>transit · contacts and double transit on houses 10,6,1 and their lords ±24 months | house_card<br>activation_row<br>transit_row | `none` | — | career_map.v1 | — |
 
 **Source:** docs/reading-engine/43 §6–§7  
 **Code:** `src/reading/area/career.ts securityGrade`  
@@ -1246,6 +1712,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 7. Sort by start date, then get_job, job_change, promotion, job_security, abroad, pay, business
 8. The service hides sub-areas that do not fit the person's stated work status (careerService.ts fitsStatus): get_job only for between_jobs or studying; promotion and job_security not for between_jobs, studying or own_business; business for own_business or when the status is unknown
 
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1,D10 houses 10,6,1,2,11<br>house · D1 houses 2,11 (money), 4 (residence), 7 (business) and their lords<br>activation · families S1, S4, S2+S3, S6/S6D, S7 ±24 months<br>transit · contacts and double transit on houses 10,6,1 and their lords ±24 months | house_card<br>house_card<br>activation_row<br>transit_row | `none` | — | career_map.v1 | — |
+
 **Source:** docs/reading-engine/43 §2, §8.3  
 **Code:** `src/reading/area/career.ts careerMap (ahead), careerSubareas`  
 **Agents:** `area.career_inputs`, `area.career_map`
@@ -1263,6 +1737,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 3. Read the houses of the rajya and karma sahams
 4. Cast one vote (support, test or neutral) as the sixth family of the present tone
 
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · TP current year, D1 and D10, houses 10,6,1,2,11; rajya and karma sahams; year dasha running this month | annual_row | `none` | — | family_vote.v1 | `work.present_tone` |
+
 **Source:** docs/reading-engine/43 §8.1 (family 5); 46 §B.6; 53 §4.5  
 **Code:** `not built (career.ts FAMILIES_NOT_BUILT; reads the digest annual set, doc 53 step 3)`  
 **Agents:** none yet
@@ -1278,6 +1760,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Read which conditional dashas the engine says apply to the chart (dasha.applicable)
 2. Take the running lords at three levels and cast the main clock's career polarity rule on them
 3. No vote when none applies
+
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · conditional systems named by dasha.applicable, levels 1–3, periods covering this month ±1, houses 10,6,1 | activation_row | `none` | — | family_vote.v1 | `work.present_tone` |
 
 **Source:** docs/reading-engine/43 §8.1 (family 2); 46 §B.4; 53 §4.5  
 **Code:** `not built (career.ts FAMILIES_NOT_BUILT; reads the activation calendar, doc 53 step 3)`  
@@ -1298,6 +1788,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 
 **Special:** Waits for the house-state engine (doc 46)
 
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · running lords of the main, conditional and karaka clocks this month<br>planet · D1, D10, D9, D60 cards of those lords<br>house · D10 houses 10,6,1,2,11 | activation_row<br>planet_card<br>house_card | `none` | — | vote_check.v1 | `work.present_tone` |
+
 **Source:** docs/reading-engine/43 §8.1; 46 §B.7; 53 §4.5  
 **Code:** `not built (career.ts header: waits for doc 46; reads the D10 house cards of the digest, doc 53 step 3)`  
 **Agents:** none yet
@@ -1313,6 +1811,14 @@ Counts: 63 techniques (General Reading: 18, Self (You board): 15, Love: 14, Work
 1. Read the running karaka dasha lord (dasha.karaka.l3)
 2. AmK or the 10th lord running gives support unless it is afflicted in D10
 3. One planet, one vote across the main, conditional and karaka clocks
+
+**Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · karaka dasha level 3, periods covering this month ±1<br>point · AmK and the 10th lord in D1 and D10<br>planet · D10 card of the running karaka lord | activation_row<br>point_row<br>planet_card | `none` | — | family_vote.v1 | `work.present_tone` |
 
 **Source:** docs/reading-engine/43 §8.1 (family 4); 46 §B.4; 53 §4.5  
 **Code:** `not built (career.ts FAMILIES_NOT_BUILT; reads the activation calendar, doc 53 step 3)`  
