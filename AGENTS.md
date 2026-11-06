@@ -123,7 +123,10 @@ The admin panel's Techniques and Agents pages read what is registered and tagged
 - **A new agent** (model, engine pull or code) gets an `AGENTS` row in `src/agents/registry.ts`.
 - **A new board function or technique** gets a `TECHNIQUES` row in `src/techniques/catalog.ts`: its charts, its
   algorithm in plain steps written from the code, its source, its code path and its agents. It stays `planned` (no
-  agents) until it is built.
+  agents) until it is built. A technique is a contract (docs/reading-engine/53 §4.3): its `selectors` say when the
+  clarify context and the companion memory pick it, its `contract` what it reads (digest sections in a layout from
+  `src/techniques/layouts.ts`), under which prompt, with which user fields, and what it returns. A new technique without
+  both fields fails the catalogue test (`tests/unit/techniques/contracts.test.ts`).
 - **Every `withAgentRun` call** passes `technique` and `kundliId`, and the charts it read (`charts`, or `charts` in the
   result when they are known only after the read).
 - **General Reading spans** are tagged by `src/reading/metrics/trace.ts` (`agentIdOf`, `techniqueIdOf`, category from the

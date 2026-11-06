@@ -150,6 +150,8 @@ export interface TraceLabels {
   route?: string | null;
   /** how many subjects fanned out */
   subjects?: number | null;
+  /** M31: the catalogue technique ids the clarify context selected (src/techniques/contracts.ts techniqueIdsFor) */
+  techniques?: string[] | null;
 }
 
 /** Optional per-call detail for traceModelCall. */
@@ -187,6 +189,8 @@ const M24_TRACE_COLUMNS = ['bucket', 'template', 'tier', 'route', 'subjects'] as
 const M24_SPAN_COLUMNS = ['subject', 'tier'] as const;
 /** Columns added by M29 on spans (registry id, technique, category). */
 const M29_SPAN_COLUMNS = ['agent_id', 'technique_id', 'category'] as const;
+/** Column added by M31 on traces (the techniques a query selected, docs/reading-engine/53 §4.3). */
+const M31_TRACE_COLUMNS = ['techniques'] as const;
 
 const isMissingColumn = (err: unknown): boolean => {
   const e = err as { code?: string; meta?: { code?: string } } | null;
@@ -199,16 +203,17 @@ function without<T extends object>(row: T, keys: readonly string[]): T {
   return out as T;
 }
 
-/** Set when a write finds M24's (or M29's) columns missing: writes leave them out until then, and try them again after. */
+/** Set when a write finds M24's (or M29's, or M31's) columns missing: writes leave them out until then, and try them again after. */
 let m24MissingUntil = 0;
 let m29MissingUntil = 0;
+let m31MissingUntil = 0;
 
 type Stage = { strip: readonly string[]; mark?: () => void };
 
 export function prismaTraceStore(db: Pick<PrismaClient, 'readingTrace' | 'readingAgentSpan'>): TraceStore {
   /**
-   * Writes with every column; when the database lacks the newest ones, drops them stage by stage (M29, then M24) and
-   * writes the rest, so recording goes on.
+   * Writes with every column; when the database lacks the newest ones, drops them stage by stage (spans: M29, then M24;
+   * traces: M31, then M24) and writes the rest, so recording goes on.
    */
   const tolerant = async <R>(stages: Stage[], start: number, write: (strip: readonly string[]) => Promise<R>): Promise<R> => {
     for (let i = start; ; i++) {
@@ -228,8 +233,12 @@ export function prismaTraceStore(db: Pick<PrismaClient, 'readingTrace' | 'readin
     m24MissingUntil = Date.now() + STORE_RETRY_MS;
     console.warn(JSON.stringify({ msg: 'reading metrics: label columns missing (migration M24 not applied); writing without them' }));
   };
+  const markM31 = () => {
+    m31MissingUntil = Date.now() + STORE_RETRY_MS;
+    console.warn(JSON.stringify({ msg: 'reading metrics: techniques column missing (migration M31 not applied); writing without it' }));
+  };
   const spanStages: Stage[] = [{ strip: [] }, { strip: M29_SPAN_COLUMNS, mark: markM29 }, { strip: [...M29_SPAN_COLUMNS, ...M24_SPAN_COLUMNS], mark: markM24 }];
-  const traceStages: Stage[] = [{ strip: [] }, { strip: M24_TRACE_COLUMNS, mark: markM24 }];
+  const traceStages: Stage[] = [{ strip: [] }, { strip: M31_TRACE_COLUMNS, mark: markM31 }, { strip: [...M31_TRACE_COLUMNS, ...M24_TRACE_COLUMNS], mark: markM24 }];
   return {
     startRun: (row) => db.readingTrace.create({ data: row }),
     addSpans: (rows) => {
@@ -237,8 +246,11 @@ export function prismaTraceStore(db: Pick<PrismaClient, 'readingTrace' | 'readin
       const start = now < m24MissingUntil ? 2 : now < m29MissingUntil ? 1 : 0;
       return tolerant(spanStages, start, (strip) => db.readingAgentSpan.createMany({ data: (strip.length ? rows.map((r) => without(r, strip)) : rows) as unknown as Prisma.ReadingAgentSpanCreateManyInput[] }));
     },
-    finishRun: (runId, data) =>
-      tolerant(traceStages, Date.now() < m24MissingUntil ? 1 : 0, (strip) => db.readingTrace.updateMany({ where: { run_id: runId }, data: strip.length ? without(data, strip) : data })),
+    finishRun: (runId, data) => {
+      const now = Date.now();
+      const start = now < m24MissingUntil ? 2 : now < m31MissingUntil ? 1 : 0;
+      return tolerant(traceStages, start, (strip) => db.readingTrace.updateMany({ where: { run_id: runId }, data: strip.length ? without(data, strip) : data }));
+    },
   };
 }
 
@@ -247,6 +259,7 @@ export function resetTraceStoreForTests(): void {
   storeOffUntil = 0;
   m24MissingUntil = 0;
   m29MissingUntil = 0;
+  m31MissingUntil = 0;
 }
 
 /**
@@ -260,7 +273,7 @@ export function isPermanent(err: unknown): boolean {
   return err instanceof TypeError || codes.some((c) => ['P2021', 'P2022', '42P01', '42703'].includes(c)) || /does not exist/i.test(e?.message ?? '');
 }
 
-const LABEL_KEYS = ['bucket', 'template', 'tier', 'route', 'subjects'] as const;
+const LABEL_KEYS = ['bucket', 'template', 'tier', 'route', 'subjects', 'techniques'] as const;
 
 const costOf = (u: Usage, on: string): number | null => (priceFor(u.model, on) ? usageCostUsd(u, on) : null);
 const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;

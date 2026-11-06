@@ -797,6 +797,35 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   check header may never arrive and every upload could fail with no_face. The shared policy was left unchanged. Owner:
   deploy. Done: `X-Face-Box` added to the origin request policy, then a selfie upload checked on staging.
 
+## Filed 2026-11-05 by the technique-contracts build (docs/reading-engine/53 step 0, branch `feat/technique-contracts`)
+
+- **P2: The selector matcher is all-of; two doc 53 rows want any-of.** `src/techniques/contracts.ts selectorsMatch`
+  requires every declared selector. Doc 53 §4.4 selects `general.annual_set` on "horizon within 24 months **or** question
+  type timing" and `general.person` on "slot other_person **or** a person subject". The catalogue declares the first
+  half of each (annual: horizons now/3m/6m/1y/custom; person: subjects children, siblings, marriage_relationship) and
+  says so in `special`. Owner: reading-dev. Done: the matcher gains an any-of group (or the two rows are split) and the
+  two selectors say the whole rule.
+- **P2: Analyst contracts name the v2 prompts and `findings.v2`, which only run under `READING_FINDINGS=v2`.**
+  `src/reading/nodes/specialists.ts` picks `prompts/v2/<analyst>.md` and the v2 schema only when `readingFindingsV2()`
+  is on; otherwise `prompts/<analyst>.md` and the v1 schema run. The catalogue rows general.promise / dasha / transit /
+  nakshatra state the v2 path (`src/techniques/catalog.ts`). Owner: reading-dev. Done: the v2 flag is the default on
+  staging (or the contract records both paths).
+- **P2: Lucky scenario rows are not told apart by selectors.** All 13 `lucky.<area>.<act>` rows carry
+  `{ boards: ['lucky'] }`: the act the person taps picks the scenario, which no clarify slot or fact expresses. The
+  contracts test leaves them out of the "no two built rows share output, selectors and inputs" check. Owner: lucky.
+  Done: a `scenario` selector (or the act as a slot) once the Lucky times board sends it.
+- **P2: Step 0 of doc 53 is not finished in the admin app.** The server side ships (M31, contracts, matcher, trace
+  label, seed); the admin Techniques page does not yet show `selectors` and `contract` (`GET /techniques/:id`, doc 53
+  §4.7–§4.8) and docs/admin/05 (the techniques catalogue document, untracked in the main checkout) is not regenerated.
+  Owner: admin. Done: the admin page shows "Reads", "Prompt" and "Selected when"; docs/admin/05 lists both fields.
+- **P3: `general.clarify`'s system prompt lives in the database.** The clarify agent reads `clarify.system` from
+  `system_prompts` (`src/reading/clarify/planner.ts getAgentPrompt`), so its contract says `db:clarify.system`;
+  `contractProblems` accepts any `db:` name without checking it exists. Owner: reading-dev. Done: the check reads
+  `BUILTIN_AGENT_PROMPTS` keys.
+- **P3: `digest.*` rows select on every board.** They are the gate before every reading and board (doc 53 §4.7), so
+  their selectors list all five boards; `run.ts` writes only built rows on the trace, so they do not show on traces
+  until built. Owner: reading-dev. Done: the digest status gate lands (doc 53 step 1) and the rows become built.
+
 ## Filed 2026-11-05 by the activity and day review build (docs/admin/04)
 
 - **P2: Board function runs are not grouped by the request that caused them (G2).** A Lucky times load writes 1 + N
