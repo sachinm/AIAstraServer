@@ -32,6 +32,8 @@ import { validateAnswer, type MissingPart, type Validation } from './validator.j
 import { readingValidatorModel } from '../config.js';
 import { PROMPT_VERSION } from '../prompts/generated.js';
 import { currentTrace } from '../metrics/trace.js';
+import { toReaderOutput, type CodeFinding } from '../codeReaders/readers.js';
+import type { CodeReaderId } from './brief.js';
 
 /** A failed required reader retries only if it failed fast and this much of the join is left. */
 const RETRY_MIN_LEFT_MS = 3_500;
@@ -83,6 +85,12 @@ export interface OracleFlowDeps {
   prashna?: unknown;
   prewarmed?: PrewarmedSet;
   guard?: CostGuard;
+  /** the readers the selected techniques allow (src/techniques/use.ts); absent = every reader of the tier */
+  allowedReaders?: readonly ReaderId[] | null;
+  /** the deterministic readers' findings on the digest (codeReaders/readers.ts): code, no model, already run */
+  codeFindings?: CodeFinding[];
+  /** the technique ids of the query once the tier's readers are known, for the trace (doc 53 §4.3) */
+  techniqueIds?: (readers: ReaderId[], tier: number) => string[] | null;
   /** Test seams */
   readerImpl?: typeof runReader;
   now?: () => number;
@@ -139,11 +147,26 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   const errors: OracleFlowResult['errors'] = [];
   let thoughts = '';
 
-  const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna });
+  const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna, allowedReaders: d.allowedReaders ?? null });
   // the tier (readers.ts tierFor, or the plan-B route's own) and the route are chosen in prepareReaders
   const tier = prep.plan.tier;
-  currentTrace()?.label({ tier, route: prep.route?.route ?? null });
+  let techniques: string[] | null | undefined;
+  try {
+    techniques = d.techniqueIds?.(prep.plan.ids, tier);
+  } catch {
+    techniques = undefined;
+  }
+  currentTrace()?.label({ tier, route: prep.route?.route ?? null, ...(techniques !== undefined ? { techniques } : {}) });
   const journal = new ReadingJournal({ runId: d.runId, userId: d.userId, question: d.question, tier: prep.plan.tier, promptVersion: PROMPT_VERSION, asOf: d.asOf });
+  // the deterministic readers ran in code before the flow: they join the brief like a reader, and the journal and the
+  // trace show them (no model, no cost)
+  const codeReaders = (d.codeFindings ?? []).map((f) => ({ id: `code:${f.analyst}` as CodeReaderId, subject: f.subject, finding: toReaderOutput(f) }));
+  const codeSections: Record<string, unknown> = d.pack.sections.digest !== undefined ? { digest: d.pack.sections.digest } : {};
+  for (const r of codeReaders) {
+    // a span for the Day review only: the client is not sent a stage it has no label for
+    currentTrace()?.observe({ type: 'stage', name: r.id, status: 'done', ms: 0, subject: r.subject });
+    journal.record({ agent: r.id, agentKind: 'reader', round: 1, subject: r.subject, model: null, promptName: null, dataKeys: Object.keys(codeSections), digest: digestOf(r.finding), highlights: highlightsOf(r.finding), status: 'ok', source: 'live', usage: null, ms: 0 });
+  }
   const bundleMs = prep.bundleMs;
   void startReaderCache(prep, model, d.cacheOwner, guard);
 
@@ -178,7 +201,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   };
 
   const makeBrief = (results: ReaderResult[], failures: Failure[], sections: Record<string, Record<string, unknown>>): { brief: OracleBrief; grounded: GroundedReader[] } => {
-    const grounded = results.map((r) => groundReader(r.id, r.subject, r.finding, sections[r.id] ?? {}));
+    const grounded = [...results.map((r) => groundReader(r.id, r.subject, r.finding, sections[r.id] ?? {})), ...codeReaders.map((r) => groundReader(r.id, r.subject, r.finding, codeSections))];
     const allSections = Object.assign({}, d.pack.sections, ...Object.values(sections));
     const brief = buildBrief({ readers: grounded, failed: failures, missingTypes: prep.missingTypes, pack: { ...d.pack, sections: allSections }, intent: d.intent, question: d.question, asOf: d.asOf, tier: prep.plan.tier, ...(prep.route ? { note: prep.route.note } : {}) });
     return { brief, grounded };

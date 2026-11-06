@@ -53,9 +53,21 @@ const GRAPH_ANALYSTS: Array<{ name: string; title: string; description: string }
   { name: 'prashna', title: 'Question chart analyst', description: 'Reads the chart of the question moment when the graph has it' },
 ];
 
+/**
+ * The deterministic readers of the General Reading over the digest (src/reading/codeReaders/readers.ts; doc 53 §4.4
+ * step 5): code, no model. Their spans are `code:<name>` (trace.ts).
+ */
+const CODE_READERS: Array<{ name: string; title: string; description: string }> = [
+  { name: 'varga_dynamics', title: 'Divisional chart agreement', description: "Compares the frame house lords' dignity and the occupants of D1 with the frame's vargas, from the digest; no model" },
+  { name: 'strength_yoga', title: 'Strength and yoga reader', description: "Lists the present yogas and doshas touching the frame, the SAV of the frame houses and the shadbala of the frame lords, from the digest; no model" },
+  { name: 'jaimini', title: 'Jaimini reader', description: "Places the chara karakas and arudhas of the frame by house class and reads the argala on the frame houses, from the digest; no model" },
+  { name: 'person', title: 'Person reader', description: "Reads the person's house in D1 and the relationship varga and the karaka's card, from the digest; no model" },
+];
+
 export const AGENTS: AgentDef[] = [
   ...READING_ROLES.map((r) => ({ id: `reading.${r.role}`, title: r.title, kind: 'llm' as const, module: 'reading', subModule: r.role, description: r.description, role: r.role })),
   ...GRAPH_ANALYSTS.map((a) => ({ id: `reading.analyst.${a.name}`, title: a.title, kind: 'llm' as const, module: 'reading', subModule: 'analyst', description: a.description, role: 'specialist' as const })),
+  ...CODE_READERS.map((a) => ({ id: `reading.code.${a.name}`, title: a.title, kind: 'code' as const, module: 'reading', subModule: 'code_reader', description: a.description })),
   {
     id: 'reading.clarify',
     title: 'Clarify',

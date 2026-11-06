@@ -23,6 +23,7 @@ import { FRAMES, horizonRange, type SubjectId } from '../packs/frames.js';
 import { detectTopic } from '../policy/declined.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
+import type { CodeAnalyst } from '../codeReaders/readers.js';
 
 /** Why a specialist produced no finding (sent on `stage` events and logged; docs/reading-engine/30). */
 export type SpecialistFailureReason = 'timeout' | 'parse' | 'schema' | 'model_error' | 'no_data';
@@ -216,7 +217,8 @@ export const findingZ = z.object({
 });
 
 export interface Finding {
-  analyst: SpecialistAnalyst;
+  /** a model analyst, or a deterministic reader over the digest (codeReaders/readers.ts), whose finding joins the brief the same way */
+  analyst: SpecialistAnalyst | CodeAnalyst;
   subject: SubjectId;
   verdict: z.infer<typeof findingZ>['verdict'];
   /** −3…+3; undefined for findings from before layer scoring */

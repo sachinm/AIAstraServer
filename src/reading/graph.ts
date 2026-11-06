@@ -76,6 +76,13 @@ export interface GraphDeps {
   layers?: LayerLoaders;
   /** Full cache layout: the user's cached prefix (readers send only a suffix; grounding sees the cached evidence too) */
   full?: FullContext;
+  /**
+   * The analysts each subject runs, from the selected techniques (src/techniques/use.ts). Absent: today's fixed rule
+   * (analystsFor and the optional layers). The nakshatra pass and the optional layers stay on the first subject.
+   */
+  analystsBySubject?: Partial<Record<string, SpecialistAnalyst[]>>;
+  /** Findings of the deterministic readers on the digest (code, already run): they join reconcile beside the analysts' */
+  codeFindings?: Finding[];
 }
 
 const State = Annotation.Root({
@@ -140,8 +147,11 @@ export function buildReadingGraph(deps: GraphDeps) {
   const fanOut = (): Send[] => {
     const sends: Send[] = [];
     const analysts = analystsFor(deps.intent);
+    const chosen = deps.analystsBySubject;
     for (const s of deps.intent.subjects) {
-      for (const a of analysts) {
+      // the selected techniques narrow today's rule per subject; promise and dasha always run (use.ts ALWAYS_ANALYSTS)
+      const mine = chosen ? analysts.filter((a) => a === 'promise' || a === 'dasha' || (chosen[s.id] ?? []).includes(a)) : analysts;
+      for (const a of mine) {
         // the nakshatra pass is person-centric: one per run, on the first subject
         if (a === 'nakshatra' && s.id !== deps.intent.subjects[0]!.id) continue;
         sends.push(new Send('analyst', { analyst: a, subject: s.id } satisfies WorkerInput));
@@ -149,7 +159,8 @@ export function buildReadingGraph(deps: GraphDeps) {
     }
     const out = sends.slice(0, 10);
     // the year chart and the question chart are person-centric: one each per run, on the first subject
-    if (first) for (const a of optionalLayersFor(deps)) out.push(new Send('analyst', { analyst: a, subject: first } satisfies WorkerInput));
+    const firstChosen = first && chosen ? chosen[first] ?? [] : null;
+    if (first) for (const a of optionalLayersFor(deps)) if (!firstChosen || firstChosen.includes(a)) out.push(new Send('analyst', { analyst: a, subject: first } satisfies WorkerInput));
     return out;
   };
 
@@ -279,7 +290,7 @@ export function buildReadingGraph(deps: GraphDeps) {
       deps.emit({ type: 'stage', name: 'reconcile', status: 'start' });
       // full layout: a reader saw the cached evidence overlaid with its own pack; its ids are checked against that overlay
       const packs = Object.fromEntries(Object.entries(deps.packs).map(([k, p]) => [k, withFullEvidence(added[k] ? { ...p, sections: { ...p.sections, ...added[k] } } : p, deps.full)]));
-      const rec = reconcile({ findings: s.findings, packs, intent: deps.intent, asOf: deps.asOf, keyFacts: deps.keyFacts, question: deps.question, dossier: deps.dossier, transits: deps.transits, failed: s.failed });
+      const rec = reconcile({ findings: [...s.findings, ...(deps.codeFindings ?? [])], packs, intent: deps.intent, asOf: deps.asOf, keyFacts: deps.keyFacts, question: deps.question, dossier: deps.dossier, transits: deps.transits, failed: s.failed });
       const ms = Date.now() - t0;
       deps.emit({ type: 'stage', name: 'reconcile', status: 'done', ms });
       if (rec.windows.length) deps.emit({ type: 'windows', windows: rec.windows.slice(0, 10).map((w) => ({ from: w.from, to: w.to, polarity: w.polarity, label: w.label })) });

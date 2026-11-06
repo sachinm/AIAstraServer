@@ -245,8 +245,9 @@ export async function runReader(req: ReaderRequest, a: { model: string; guard: C
 }
 
 /** The same finding in the shape reconcile reads, for the readers that feed a convergence layer. */
-export function toLayerFinding(r: Pick<ReaderResult, 'id' | 'subject' | 'finding'>): Finding | null {
-  const analyst = READERS[r.id].layer;
+export function toLayerFinding(r: { id: string; subject: SubjectId; finding: ReaderOutput }): Finding | null {
+  // a deterministic reader (codeReaders) has no READERS row and feeds no convergence layer
+  const analyst = (READERS as Partial<Record<string, ReaderDef>>)[r.id]?.layer;
   if (!analyst) return null;
   const f = r.finding;
   return { analyst, subject: r.subject, verdict: f.verdict, layerScore: f.layerScore, status: 'ok', claims: f.claims, windows: f.windows, caveats: f.caveats, keyFacts: [], form: f.form, culprits: f.culprits, contributors: f.contributors };

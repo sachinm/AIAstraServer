@@ -52,10 +52,10 @@ describe('every technique is a contract (doc 53 §4.3)', () => {
     }
   });
 
-  it('built analysts and readers return findings.v2 to the oracle; planned analysts findings.v3', () => {
+  it('built analysts and readers return findings.v2 to the oracle; planned analysts findings.v3; code readers have no user turn', () => {
     for (const t of TECHNIQUES.filter((x) => x.contract.synthesizer === 'general.oracle')) {
       expect(t.contract.output, t.id).toBe(t.status === 'planned' ? 'findings.v3' : 'findings.v2');
-      expect(t.contract.user, t.id).toEqual(['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS']);
+      expect(t.contract.user, t.id).toEqual(t.contract.system === 'none' ? [] : ['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS']);
     }
     expect(techniqueById('general.oracle')!.contract.output).toBe('answer.markdown');
     expect(techniqueById('general.validator')!.contract.output).toBe('validator.v1');

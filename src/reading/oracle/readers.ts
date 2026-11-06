@@ -143,17 +143,29 @@ export interface ReaderPlan {
   required: Set<ReaderId>;
 }
 
-/** Which readers run for this question, and which of them hold the join. */
-export function planReaders(a: { intent: Intent; question: string; asOf: string; realWant?: string | null; route?: PlanBRoute | null; prashna?: boolean }): ReaderPlan {
+/** The readers of a tier (doc 33 §3.1), before the question's own additions. */
+export function readersForTier(tier: Tier): ReaderId[] {
+  return [...(BY_TIER[tier] ?? [])];
+}
+
+/**
+ * Which readers run for this question, and which of them hold the join. `allowed` (src/techniques/use.ts) is the set
+ * the selected techniques allow: the tier's readers are intersected with it, and R02, R08 (and R10 for a horizon of
+ * 36 months or less) are kept whatever it says.
+ */
+export function planReaders(a: { intent: Intent; question: string; asOf: string; realWant?: string | null; route?: PlanBRoute | null; prashna?: boolean; allowed?: readonly ReaderId[] | null }): ReaderPlan {
   const tier = a.route?.tier ?? tierFor(a.intent, a.question, a.realWant);
-  const ids = new Set<ReaderId>(a.route?.readers ?? BY_TIER[tier]);
+  const hz = horizonRange(a.intent.horizon, a.asOf);
+  const floor = new Set<ReaderId>(['R02', 'R08', ...(hz.months <= 36 ? (['R10'] as ReaderId[]) : [])]);
+  const allowed = a.allowed ? new Set(a.allowed) : null;
+  const ok = (id: ReaderId): boolean => !allowed || allowed.has(id) || floor.has(id);
+  const ids = new Set<ReaderId>((a.route?.readers ?? BY_TIER[tier]).filter(ok));
   const person = personIn(a.question);
-  if (person && !a.route) ids.add('R13');
-  if (a.prashna) ids.add('R12');
-  if (readingRemedyReader() && (a.realWant === 'what_can_i_do' || a.route?.route === 'pressure')) ids.add('R14');
+  if (person && !a.route && ok('R13')) ids.add('R13');
+  if (a.prashna && ok('R12')) ids.add('R12');
+  if (readingRemedyReader() && (a.realWant === 'what_can_i_do' || a.route?.route === 'pressure') && ok('R14')) ids.add('R14');
   const required = new Set<ReaderId>();
   for (const id of ['R02', 'R08', 'R13', 'P1', 'P2', 'P3'] as ReaderId[]) if (ids.has(id)) required.add(id);
-  const hz = horizonRange(a.intent.horizon, a.asOf);
   if (ids.has('R10') && hz.months <= 36) required.add('R10');
   return { tier, ids: [...ids], required };
 }

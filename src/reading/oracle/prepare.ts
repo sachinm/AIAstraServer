@@ -44,11 +44,13 @@ export async function prepareReaders(a: {
   model: string;
   transitAt?: unknown;
   prashna?: unknown;
+  /** the readers the selected techniques allow (src/techniques/use.ts); absent = every reader of the tier */
+  allowedReaders?: readonly ReaderId[] | null;
 }): Promise<PreparedReaders> {
   const subject = a.pack.subject;
   const route = planBRoute(a.question);
   const realWant = a.intent.clarified?.realWant?.id ?? null;
-  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna) });
+  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna), allowed: a.allowedReaders ?? null });
   const person = personIn(a.question);
   const vargas = subjectVargas(subject);
   const types = fetchPlan(plan.ids, { vargas, person });
