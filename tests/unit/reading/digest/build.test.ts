@@ -126,6 +126,47 @@ describe('buildDigestRows on a research kundli', () => {
     expect(h1.source[0]).toMatchObject({ type: 'facts', path: 'houses.1' });
   });
 
+  it('reads Wave 3 engine fields (varga yogas, badhaka, surya/chandra arudhas, and annual tajaka) when present', () => {
+    const bm = fx.items.benefic_malefic as Record<string, unknown>;
+    const aru = fx.items.arudhas as Record<string, unknown>;
+    const items: Record<string, unknown> = {
+      ...fx.items,
+      'yogas.d9': {
+        yogas: [{ id: 'gaja_kesari', name_en: 'Gaja Kesari Yoga', present: true, planets: ['Ju', 'Mo'], houses: [1, 4], class: 'raja' }],
+      },
+      benefic_malefic: {
+        ...bm,
+        badhaka: { badhaka_house: 11, sign_index: 3, sign: 'Cancer', badhaka_lord: { id: 1, name: 'Moon', code: 'Mo' }, natural_badhaka_lords: [] },
+      },
+      arudhas: {
+        ...aru,
+        surya_arudhas: [{ house: 9, label: 'S9', sign: 'Taurus', house_from_lagna: 9 }],
+        chandra_arudhas: [{ house: 7, label: 'C7', sign: 'Pisces', house_from_lagna: 7 }],
+      },
+      'annual.tajaka@year=2026': {
+        muntha: { sign: 'Leo', house_from_lagna: 12 },
+        year_lord: { id: 0, name: 'Sun', code: 'Su' },
+        yoga_list: [{ id: 'ishkavala', present: true }, { id: 'induvara', present: false }],
+      },
+    };
+    const w3 = buildDigestRows(items, { kundliId: 'w3' });
+    const w3Map = new Map(w3.map((r) => [`${r.section}|${r.key}`, r]));
+    expect(w3Map.get('yoga|D9.gaja_kesari')?.row).toMatchObject({ id: 'gaja_kesari', class: 'raja', source: 'yogas.d9' });
+    expect((w3Map.get('house|D1.h11')?.row as HouseCard).class).toContain('badhaka');
+    expect(w3Map.get('point|D1.badhaka')?.row).toMatchObject({ id: 'badhaka', sign: 'Cancer', house: 11, lord: 'Mo' });
+    expect(w3Map.get('point|D1.S9')?.row).toMatchObject({ id: 'S9', sign: 'Taurus', house: 9 });
+    expect(w3Map.get('point|D1.C7')?.row).toMatchObject({ id: 'C7', sign: 'Pisces', house: 7 });
+    const vp = w3Map.get('annual|VP2026.D1')?.row as AnnualRow;
+    expect(vp.muntha).toEqual({ sign: 'Leo', house: 12 });
+    expect(vp.yearLord).toBe('Su');
+    expect(vp.tajakaYogas).toEqual([{ id: 'ishkavala', present: true }, { id: 'induvara', present: false }]);
+    for (const r of w3) {
+      for (const s of r.source) {
+        expect(resolvePath(items[itemKey(s.type, s.variant)], s.path), `${r.key}: ${s.type} ${s.path}`).not.toBeUndefined();
+      }
+    }
+  });
+
   it('an empty input gives no rows', () => {
     expect(buildDigestRows({}, { kundliId: 'x' })).toEqual([]);
   });

@@ -253,6 +253,11 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
       cls = fh.class.map(str).filter((c): c is string => Boolean(c));
       source.push(src.of(t.d1!.facts!, `houses.${h}.class`));
     }
+    const bmBadhaka = t.d1?.benefic && isObj(t.d1.benefic.value) && isObj((t.d1.benefic.value as Obj).badhaka) ? ((t.d1.benefic.value as Obj).badhaka as Obj) : null;
+    if (bmBadhaka && int(bmBadhaka.badhaka_house) === h && !cls.includes('badhaka')) {
+      cls = [...cls, 'badhaka'];
+      source.push(src.of(t.d1!.benefic!, 'badhaka.badhaka_house'));
+    }
 
     let cuspStar: HouseCard['cuspStar'] = null;
     if (fh && isObj(fh.cusp_nak) && str((fh.cusp_nak as Obj).name)) {
@@ -713,15 +718,15 @@ function yogaRows(items: Record<string, unknown>, src: Sources): Built<YogaRow>[
   factYogas.forEach((y, i) => {
     if (isObj(y) && str(y.name) && str(y.class)) classByName.set(str(y.name)!.toLowerCase(), { cls: str(y.class)!, i });
   });
-  const add = (b: Built<YogaRow>) => {
-    const name = b.row.name.toLowerCase();
-    const prev = seen.get(name) ?? seen.get(`id:${b.row.id}`);
+  const add = (b: Built<YogaRow>, varga = 'D1') => {
+    const name = `${varga}:${b.row.name.toLowerCase()}`;
+    const prev = seen.get(name) ?? seen.get(`${varga}:id:${b.row.id}`);
     if (prev) {
       prev.source.push(...b.source);
       return;
     }
     seen.set(name, b);
-    seen.set(`id:${b.row.id}`, b);
+    seen.set(`${varga}:id:${b.row.id}`, b);
     out.push(b);
   };
   const codes = (v: unknown) => arr(v).map(planetCode).filter((p): p is string => Boolean(p));
@@ -735,8 +740,20 @@ function yogaRows(items: Record<string, unknown>, src: Sources): Built<YogaRow>[
     const fc = classByName.get(name.toLowerCase());
     const source = [src.of(yogas!, `[${i}]`)];
     if (fc && facts) source.push(src.of(facts, `yogas[${fc.i}].class`));
-    add({ key: `D1.${id}`, row: { id, name, planets: codes(y.planets), houses: houses(y.houses), class: fc?.cls ?? 'named', source: 'yogas' }, source });
+    add({ key: `D1.${id}`, row: { id, name, planets: codes(y.planets), houses: houses(y.houses), class: fc?.cls ?? 'named', source: 'yogas' }, source }, 'D1');
   });
+  for (const f of VARGA_FACTORS) {
+    if (f === 1) continue;
+    const vy = ref(items, `yogas.d${f}`, 'yogas') ?? ref(items, `yogas@varga=${f}`, 'yogas');
+    if (!vy) continue;
+    const varga = `D${f}`;
+    arr(vy.value).forEach((y, i) => {
+      if (!isObj(y) || y.present !== true) return;
+      const id = str(y.id) ?? slug(String(y.name_en ?? `yoga_${i}`));
+      const name = str(y.name_en) ?? id;
+      add({ key: `${varga}.${id}`, row: { id, name, planets: codes(y.planets), houses: houses(y.houses), class: str(y.class) ?? 'named', source: `yogas.d${f}` }, source: [src.of(vy, `[${i}]`)] }, varga);
+    });
+  }
   const doshas = ref(items, 'doshas', 'doshas');
   arr(doshas?.value).forEach((d, i) => {
     if (!isObj(d) || d.present !== true) return;
@@ -818,9 +835,28 @@ function pointRows(items: Record<string, unknown>, tables: Map<string, ChartTabl
       const l = lordOfSign(t, sign, src);
       push({ key: `${t.varga}.${str(r.id)}`, row: { id: str(r.id)!, varga: t.varga, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: [src.of(t.arudhas!, `special_points[${i}]`), ...l.source] });
     });
+    for (const field of ['surya_arudhas', 'chandra_arudhas'] as const) {
+      arr(a[field]).forEach((r, i) => {
+        if (!isObj(r) || !str(r.label)) return;
+        const sign = str(r.sign);
+        const l = lordOfSign(t, sign, src);
+        const label = str(r.label)!;
+        push({ key: `${t.varga}.${label}`, row: { id: label, varga: t.varga, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: [src.of(t.arudhas!, `${field}[${i}]`), ...l.source] });
+      });
+    }
   }
 
   const d1 = tables.get('D1');
+  const bmBadhaka = d1?.d1?.benefic && isObj(d1.d1.benefic.value) && isObj((d1.d1.benefic.value as Obj).badhaka) ? ((d1.d1.benefic.value as Obj).badhaka as Obj) : null;
+  if (bmBadhaka && d1?.d1?.benefic) {
+    const sign = str(bmBadhaka.sign);
+    const l = lordOfSign(d1, sign, src);
+    push({
+      key: 'D1.badhaka',
+      row: { id: 'badhaka', varga: 'D1', sign, house: int(bmBadhaka.badhaka_house), lord: planetCode(bmBadhaka.badhaka_lord) ?? l.lord, lordHouse: l.lordHouse },
+      source: [src.of(d1.d1.benefic, 'badhaka'), ...l.source],
+    });
+  }
   // the dossier's special lagnas (BB, BL, GL, HL, IL, …) not already placed from the arudhas table
   const sl = facts ? resolvePath(facts.value, 'special_lagnas') : null;
   if (isObj(sl)) {
@@ -890,7 +926,45 @@ function annualRows(items: Record<string, unknown>, src: Sources): Built<AnnualR
         if (s && sahams.length) source.push(src.of(s));
       }
     }
-    out.push({ key: `${kind}${year}.${varga}`, row: { kind, year, varga, lagna: lagnaRef ? str(lagnaRef.value) : null, houses: cards.map((c) => c.row), dashas, sahams }, source });
+    let muntha: AnnualRow['muntha'];
+    let yearLord: AnnualRow['yearLord'];
+    let tajakaYogas: AnnualRow['tajakaYogas'];
+    if (kind === 'VP' && varga === 'D1') {
+      const tj = ref(items, `annual.tajaka@year=${year}`);
+      if (tj && isObj(tj.value)) {
+        const tjObj = tj.value as Obj;
+        if (isObj(tjObj.muntha)) {
+          muntha = { sign: str((tjObj.muntha as Obj).sign), house: int((tjObj.muntha as Obj).house_from_lagna) };
+          source.push(src.of(tj, 'muntha'));
+        }
+        if (tjObj.year_lord != null) {
+          yearLord = planetCode(tjObj.year_lord);
+          source.push(src.of(tj, 'year_lord'));
+        }
+        if (Array.isArray(tjObj.yoga_list)) {
+          tajakaYogas = arr(tjObj.yoga_list)
+            .filter((y): y is Obj => isObj(y) && Boolean(str(y.id)))
+            .map((y) => ({ id: str(y.id)!, present: y.present === true }));
+          source.push(src.of(tj, 'yoga_list'));
+        }
+      }
+    }
+    out.push({
+      key: `${kind}${year}.${varga}`,
+      row: {
+        kind,
+        year,
+        varga,
+        lagna: lagnaRef ? str(lagnaRef.value) : null,
+        houses: cards.map((c) => c.row),
+        dashas,
+        sahams,
+        ...(muntha !== undefined ? { muntha } : {}),
+        ...(yearLord !== undefined ? { yearLord } : {}),
+        ...(tajakaYogas !== undefined ? { tajakaYogas } : {}),
+      },
+      source,
+    });
   }
   return out;
 }

@@ -866,11 +866,6 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   `reasons: [{ key, scope }]` and the old strings move to `reasonKeys` (doc 54 §6). The web build on the same branch
   reads both shapes; the web build live today reads `reasons` as strings and would call `.startsWith` on an object.
   Owner: deploy session. Done: web `feat/lucky-five-limbs` live on Amplify before the server image that carries it.
-- **P2: Only the noon yoga and karana are in the stored day row.** `panchanga_at_noon.yoga` / `.karana` hold one limb
-  each with its span; a karana is half a tithi, so most of the act hours have a second karana (and often a second yoga)
-  that the row does not name. Outside the noon spans no yoga or karana rule applies. Owner: engine pass. Done: the
-  engine's `muhurta` day row lists every yoga and karana of the day with start and end, and `windows.ts limbSpans`
-  reads the list.
 - **P3: Yoga and karana names are matched by spelling.** The engine spells several names its own way (Soola,
   Vaidhrithi, Vriyana, Subha, Baalava, VishtiBhadra, Sakuna, Kimstugna); `scenarios.ts SPELLING` maps them to the
   classical names. A new engine spelling would silently match no rule. Owner: engine pass. Done: the engine returns a

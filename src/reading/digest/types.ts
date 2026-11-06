@@ -97,6 +97,9 @@ export interface AnnualRow {
   houses: HouseCard[];
   dashas: Array<{ system: string; periods: Array<{ lord: string; from: string; to: string }> }>;
   sahams: Array<{ name: string; sign: string | null; house: number | null }>;
+  muntha?: { sign: string | null; house: number | null } | null;
+  yearLord?: string | null;
+  tajakaYogas?: Array<{ id: string; present: boolean }>;
 }
 
 export interface StarProfile {
