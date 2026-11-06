@@ -664,6 +664,8 @@ model ReadingTrace {
   tier           Int?
   route          String?
   subjects       Int?
+  /// M31: the catalogue technique ids the clarify context selected for this query (docs/reading-engine/53 §4.3)
+  techniques     Json?
   started_at     DateTime           @map("started_at") @db.Timestamptz(6)
   ended_at       DateTime?          @map("ended_at") @db.Timestamptz(6)
   user           Auth               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -1065,6 +1067,10 @@ model TechniqueRegistry {
   code_ref   String?  @map("code_ref")
   agents     Json     @default("[]")
   accuracy   String?
+  /// M31 (docs/reading-engine/53 §4.3): when the clarify context selects it (subjects, boards, houses, vargas, questionTypes, horizons, facts, slots)
+  selectors  Json     @default("{}")
+  /// M31: what it reads (inputs with section, filter, layout), its system prompt, user fields, output schema and synthesizer
+  contract   Json     @default("{}")
   updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@index([category, board], map: "technique_registry_category")
