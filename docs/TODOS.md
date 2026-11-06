@@ -884,7 +884,53 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   Vaidhrithi, Vriyana, Subha, Baalava, VishtiBhadra, Sakuna, Kimstugna); `scenarios.ts SPELLING` maps them to the
   classical names. A new engine spelling would silently match no rule. Owner: engine pass. Done: the engine returns a
   stable id per yoga and karana, or a test that fails on an unknown name in day_tables.
-- **P2: The hora-lord functional nature is wired to null.** `LuckyDeps.functionalNatureOf` is in place and tested with
-  a fake; `server.ts` passes `null` until S1's `loadDigest(prisma, kundliId)` is merged. Owner: whoever merges S1 and
-  S2. Done: `functionalNatureOf` reads the digest's D1 planet cards and `personal:hora_benefic` shows on a ready
-  kundli.
+
+## Filed 2026-11-06 by the digest-core build (doc 54 S1, doc 53 steps 1–3, branch `feat/digest-core`)
+
+M32 and M33 are applied to the shared database; the 24 research kundlis are digested (`ready`, 15,700 digest rows,
+231,879 activation rows). Open items:
+
+### P1: blocks or risks a release
+- **Deploy wiring for the digest (deploy session).** The Lambda needs `KUNDLI_DIGEST_EVENT_TOKEN` (without it every
+  digest event is refused, by design), optionally `DIGEST_SWEEP_MAX_MS` (default 60 s) and `DIGEST_ANNUAL_MAX_CALLS`
+  (default 40), and an EventBridge rule `kundli-digest-sweep` every 15 min sending `{ "source": "kundli-digest-sweep",
+  "token": … }` to `/events`. Until then new kundlis stay `pending` (boards fall back as doc 53 §4.7 says). Done: the
+  rule fires and a new sign-up's kundli reaches `ready` within one sweep.
+- **The annual set was not proven against the engine locally.** `ensureAnnualSet` for kundli `3784ca07…` with a cap of 6
+  reached ensureChartData and the engine client, which failed with "Could not load credentials from any providers"
+  (transport `lambda`; no local credentials can invoke the engine, see memory `aws-working-commands`). Six
+  `kundli_data` rows (annual 2026 D9/D10 and nearby keys of that kundli) are now `failed`; ensureChartData retries
+  failed rows after 60 s, so the first sweep on the Lambda refills them. Done: one sweep on the Lambda logs
+  `digest_sweep_done` with a top-up whose `fetched > 0`, and that kundli's `annual` section grows.
+
+### P2: real, can wait
+- **Four research kundlis hold old-shape rows** (`1ae7437b`, `6589af09`, `be89e63f`, `f3d117b0`): `dignities` at calc
+  version 1 (planets only, no house table), no `dignities.dN` / `aspects.dN` / `house_counts` / `avasthas` / `.l3` trees,
+  and annual year rows at calc version 1 (lagna and planets only). Their digest is partial (about 405 rows instead of
+  about 690; D1 house cards come from the dossier, D2–D60 from the dossier's vargas, annual rows have no house cards).
+  A `kundli-digest` event runs `buildDigest` with `fetch` for natal types and would refresh them; year rows are never
+  re-fetched for a calc-version change (store.ts `needsFetch`: "a year=<y> row … is never re-fetched"), so those need
+  a deliberate refresh. Done: the four reach about 690 rows with annual house cards.
+- **Eleven vargas have no engine house table** (D5, D6, D8, D11, D16, D27, D40, D45, D81, D108, D144): the digest writes
+  planet cards (sign, degree, star, pada) and no house cards, because placing a sign in a house is a count Node may not
+  make. The engine's `house_counts` already takes `varga`; a catalogue entry `house_counts.dN` (or `dignities.dN` for
+  every varga) would let the digest write their house cards. Owner: engine catalogue pass. Done: `D16.h1` … exist.
+- **Star names differ between payloads**: `dignities` writes Tamil names (`Uthiram`), the dossier Sanskrit (`Uttara
+  Phalguni`), `varga.dN` abbreviations (`UPha`). The digest keeps each as written; a consumer must not join star names
+  across sections. Done: the engine writes one naming, or the digest gains a label table from the engine.
+- **Digest build time**: 5–22 s per research kundli from this machine to the shared database (most of it inserting
+  about 10,000 activation rows in batches of 500). Doc 53 §4.1 expects under 10 s on the Lambda; measure there. If it
+  is over, raise the batch size for `kundli_activation` or insert with one `unnest` statement.
+- **Doc 53 §4.7 statement timeout of 2 s for digest reads is not set** (`load.ts` reads with the client default).
+- **`conditional` activation rows are written for every conditional system stored**, whether or not `dasha.applicable`
+  says it applies to this chart; doc 46 §B.4 votes only when one applies. The consumer (S3/S4/S5) must check
+  `dasha.applicable` (`applies: true`). Done: either the consumer filters, or the row gains an `applies` flag.
+- **`digest_built_at` doubles as the build start while `building`** (the sweep re-runs a build stuck over 10 min).
+  When the status is `ready` it is the build time. A separate `digest_started_at` column would be cleaner.
+
+### Found, not from this branch
+- **`tests/unit/rawSqlAllowList.test.ts` fails on `develop`**: `src/agents/registry.ts`, `src/auth/requestAuth.ts` and
+  `src/techniques/catalog.ts` use raw SQL and are not on its reviewed list (they were not changed for raw SQL here).
+  Done: each is added to `REVIEWED_PLAIN` with its reason, or to `SEALING`.
+- **Migration checksums**: M32 and M33 were recorded in `_prisma_migrations` with the sha256 of the files as written
+  (LF). A CRLF checkout changes the checksum `prisma migrate` computes; the same holds for earlier migrations.

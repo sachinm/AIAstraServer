@@ -40,6 +40,7 @@ import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
 import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kundliSyncWorker.js';
+import { handleKundliDigestEvent, parseKundliDigestEvent } from './src/reading/digest/event.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -76,10 +77,13 @@ app.use(express.json());
 app.use(noStoreMiddleware);
 
 // Lambda Web Adapter forwards non-HTTP events (EventBridge schedules) here as POST bodies (AWS_LWA_PASS_THROUGH_PATH).
-// Handled: the LLM cache sweep, and the background chart pull (kundli-sync from this Lambda's own async invoke,
+// Handled: the LLM cache sweep, the kundli digest (kundli-digest, kundli-digest-sweep), and the background chart pull (kundli-sync from this Lambda's own async invoke,
 // kundli-sync-sweep from EventBridge; docs/reading-engine/31). The response is sent only when the work is done, so the
 // invocation lives as long as the pull. Anything else is acknowledged and ignored.
 app.post('/events', async (req, res) => {
+  // the kundli digest (docs/reading-engine/53 §4.7): one kundli, or the sweep; token-guarded like kundli-sync
+  const digest = parseKundliDigestEvent(req.body);
+  if (digest) return res.json(await handleKundliDigestEvent(digest, { prisma }));
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();

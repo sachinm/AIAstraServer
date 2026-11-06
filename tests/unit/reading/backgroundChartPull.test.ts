@@ -382,8 +382,9 @@ describe('sweep', () => {
     const prisma = {
       kundli: {
         update: vi.fn(async (a: { where: { id: string } }) => ((a.where.id === 'old' ? pOld : pNew).kundli.update as any)(a)), // eslint-disable-line @typescript-eslint/no-explicit-any
-        updateMany: vi.fn(async (a: { where: { id: string } }) => {
-          order.push(a.where.id);
+        updateMany: vi.fn(async (a: { where: { id: string }; data: Record<string, unknown> }) => {
+          // the lease calls only (the digest status marks after a pull are updateMany calls too)
+          if ('queue_started_at' in a.data) order.push(a.where.id);
           return ((a.where.id === 'old' ? pOld : pNew).kundli.updateMany as any)(a); // eslint-disable-line @typescript-eslint/no-explicit-any
         }),
         findUnique: vi.fn(async (a: { where: { id: string } }) => ((a.where.id === 'old' ? pOld : pNew).kundli.findUnique as any)(a)), // eslint-disable-line @typescript-eslint/no-explicit-any
