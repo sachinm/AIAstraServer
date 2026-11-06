@@ -12,7 +12,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { FAMILIES, FAMILIES_NOT_BUILT } from '../reading/area/career.js';
-import { SCENARIOS, type ScenarioRule } from '../reading/luckyTimes/scenarios.js';
+import { SCENARIOS, YOGA_AVOID_DEFAULT, YOGA_FAVOUR_DEFAULT, type ScenarioRule } from '../reading/luckyTimes/scenarios.js';
 import { HORIZONS, SUBJECT_IDS, type SubjectId } from '../reading/packs/frames.js';
 import { SYSTEM_LABELS } from '../reading/timeline/types.js';
 import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
@@ -294,7 +294,7 @@ const WORK_PLANNED: TechniqueDef[] = [
 
 // ---------------------------------------------------------------- Lucky times (src/reading/luckyTimes)
 
-const LUCKY_CHARTS: TechniqueChart[] = [c('panchang', 'tithi'), c('panchang', 'nakshatra'), c('panchang', 'weekday'), c('panchang', 'hora'), c('panchang', 'muhurta'), c('panchang', 'kalams')];
+const LUCKY_CHARTS: TechniqueChart[] = [c('panchang', 'tithi'), c('panchang', 'nakshatra'), c('panchang', 'weekday'), c('panchang', 'hora'), c('panchang', 'muhurta'), c('panchang', 'kalams'), c('panchang', 'yoga'), c('panchang', 'karana')];
 const list = (xs: readonly string[]): string => (xs.length ? xs.join(', ') : 'none');
 const LUCKY_SELECTORS: TechniqueSelectors = { boards: ['lucky'] };
 const PANCHANG_INPUT = inp('panchang', "the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)", 'panchang_day');
@@ -315,9 +315,12 @@ export function scenarioAlgorithm(s: ScenarioRule): string[] {
     `General: weekday favoured (+1): ${list(s.dayFavour)}`,
     `General: tithi group, inside its own span: favoured (+1) ${list(s.tithiFavour)}; avoided (piece dropped) ${list(s.tithiAvoid)}`,
     `General: star group, inside its own span: favoured (+1) ${list(s.starFavour)}; avoided (−2) ${list(s.starAvoid)}`,
+    `General: yoga (the engine's name at noon), inside its own span: avoided (cut out like an avoid band; a day it fills is gated out) ${list(s.yogaAvoid)}; favoured (+1) ${list(s.yogaFavour)}`,
+    `General: karana (the engine's name at noon), inside its own span: avoided (cut out; a day it fills is gated out) ${list(s.karanaAvoid)}; favoured (named, no score) ${list(s.karanaFavour)}`,
     `General: hora lord: favoured (+2) ${list(s.horaFavour)}; avoided (−3) ${list(s.horaAvoid)}`,
     'General: abhijit overlap of 10 minutes or more (+2); amrita gadiya overlap (+2); good muhurtas covering half the piece (+1)',
     "Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)",
+    "Personal: the hora lord's functional nature for this chart, when the digest gives it: benefic +1 / malefic −1; it never opens a gated piece",
     `General: keep pieces scoring ${s.floor} or more; show the best two in time order`,
   ];
   return steps;
@@ -374,16 +377,16 @@ const LUCKY_SHARED: TechniqueDef[] = [
       "Personal: once per month and place, call the engine's muhurta with the person's natal fields",
       "Personal: store each day's tara (the day's star counted from the Moon star: janma, sampat, vipat, kshema, pratyak, sadhaka, vadha, mitra, parama mitra), chandra bala (the Moon's house from the natal Moon) and grade (kundli_day_overlays)",
       "Personal: use the engine's own good/bad verdicts: +1 / −1 each on every window of that day",
-      "Personal (planned, doc 53 §4.6): the hora lord's nature for this chart, functional benefic or malefic from the digest planet cards of D1, moves a window by ±1",
+      "Personal: the hora lord's nature for this chart, functional benefic or malefic from the digest planet cards of D1, moves a window by ±1 (read through functionalNatureOf; no mark while the digest is not wired or not ready)",
       "Personal (planned, doc 53 §4.6): whether the day's tithi lord or star lord is a running dasha lord in the activation calendar, marked on the window",
     ],
-    special: 'The two chart marks are planned additions (doc 53 step 7); today only tara and chandra bala score',
+    special: 'The hora-lord mark is built and reads the digest through functionalNatureOf, wired to null until the digest reader lands (doc 54 S1); the dasha-lord mark is planned',
     source: 'docs/reading-engine/49 §4.1; 53 §4.6',
-    code: 'src/reading/luckyTimes/service.ts personalDays; windows.ts personalScore',
+    code: 'src/reading/luckyTimes/service.ts personalDays, LuckyDeps.functionalNatureOf; windows.ts personalScore, scenarioDay (hora nature)',
     agents: ['lucky.day_overlay'],
     accuracy: 'staff',
     selectors: LUCKY_SELECTORS,
-    contract: codeContract([OVERLAY_INPUT, inp('planet', 'D1 cards of the seven hora lords (nature column); planned', 'planet_card'), inp('activation', 'periods running on each day, every system; planned', 'activation_row')], 'day_overlay.v1'),
+    contract: codeContract([OVERLAY_INPUT, inp('planet', 'D1 cards of the seven hora lords (nature column)', 'planet_card'), inp('activation', 'periods running on each day, every system; planned', 'activation_row')], 'day_overlay.v1'),
   },
   {
     id: 'lucky.day_tables',
@@ -409,23 +412,24 @@ const LUCKY_SHARED: TechniqueDef[] = [
     title: 'The five limbs of the day (vara, tithi, nakshatra, yoga, karana)',
     category: 'self',
     board: 'lucky',
-    status: 'planned',
+    status: 'built',
     charts: [c('panchang', 'weekday'), c('panchang', 'tithi'), c('panchang', 'nakshatra'), c('panchang', 'yoga'), c('panchang', 'karana')],
     algorithm: [
       "General: read the day's five limbs from the place's stored day row, each with its end time",
       "General: vara: the weekday and its lord, favoured or avoided per the act's scenario row",
       "General: tithi: its group (nanda, bhadra, jaya, rikta, purna; amavasya) per the scenario's tithi lists",
       "General: nakshatra: the Moon's star and its group per the scenario's star lists",
-      'General: yoga (Sun + Moon longitude, 27 yogas): avoided — Vishkambha, Atiganda, Shoola, Ganda, Vyaghata, Vajra, Vyatipata, Parigha, Vaidhriti; favoured — Siddhi, Shubha, Amrita, Brahma, Indra, Dhruva, Harshana, Sukarma, Priti, Ayushman, Saubhagya, Shobhana',
-      'General: karana (half tithi, 11 karanas): avoided — Vishti (Bhadra); favoured for most acts — Bava, Balava, Kaulava, Taitila, Gara, Vanija; the four fixed karanas (Shakuni, Chatushpada, Naga, Kimstughna) by the rule of the act',
-      'General: the general limbs decide the day gate: a day whose yoga or karana is avoided is gated out for the act',
+      `General: yoga (the engine's name at noon with its span; 27 yogas, spelling matched to the classical names): avoided — ${list(YOGA_AVOID_DEFAULT)}; favoured (+1) — ${list(YOGA_FAVOUR_DEFAULT)}`,
+      "General: karana (the engine's name at noon with its span; 11 karanas): avoided — Vishti (Bhadra); favoured for most acts — Bava, Balava, Kaulava, Taitila, Gara, Vanija (named on the window, no score); the four fixed karanas (Shakuni, Chatushpada, Naga, Kimstughna) carry no default until the act-by-act rule is reviewed",
+      'General: the general limbs decide the day gate: an avoided yoga or karana span is cut out of every candidate like an avoid band, so a day it fills is gated out for the act (day reason yoga_avoid / karana_avoid); a favoured yoga adds +1 to a piece inside its span',
+      "General: the day's yoga and karana (name and end hour) ride on each day of the range for the Why sheet",
       "Personal: the person's marks (lucky.personal_overlay) then move a window by ±1; they never open a gated day",
     ],
-    special: 'Yoga and karana are stored in the day table today but not scored (doc 53 §1); this row scores them (doc 53 step 7)',
-    source: 'docs/reading-engine/53 §4.6; Muhurta Chintamani; B.V. Raman, Muhurta',
-    code: 'not built (luckyTimes/windows.ts gains yoga and karana in DayRow and scenarioDay, doc 53 step 7)',
-    agents: [],
-    accuracy: 'none',
+    special: 'Only the noon yoga and karana are in the stored row; outside their spans no yoga or karana rule applies until the engine gives the next limb',
+    source: 'docs/reading-engine/53 §4.6, 54 §6; Muhurta Chintamani; B.V. Raman, Muhurta',
+    code: 'src/reading/luckyTimes/scenarios.ts yogaAvoid/yogaFavour/karanaAvoid/karanaFavour, yogaName, karanaName; windows.ts dayLimbs, scenarioDay; service.ts getRange',
+    agents: ['lucky.scenario_windows'],
+    accuracy: 'staff',
     selectors: LUCKY_SELECTORS,
     contract: codeContract([inp('panchang', "the place's day rows today −7 … today +14: vara, tithi, nakshatra, yoga, karana with end times", 'panchang_day')], 'limbs.v1', 'lucky.avoid_bands'),
   },

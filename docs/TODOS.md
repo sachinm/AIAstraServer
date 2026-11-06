@@ -862,3 +862,29 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   allows it and an unauthenticated upload still returns 401, but nobody has proved the header reaches the origin.
   Owner: Sachin (needs a signed-in session). Done: a selfie uploads on vedic-astrology.app without a `no_face` error.
   Status of the earlier P2 above: header added, this is its check.
+
+## Filed 2026-11-05 by the Lucky five limbs build (doc 54 S2, branch `feat/lucky-five-limbs`)
+
+- **P2: Ship the web Why sheet before (or with) the server.** `GET /api/lucky/range` windows now carry
+  `reasons: [{ key, scope }]` and the old strings move to `reasonKeys` (doc 54 §6). The web build on the same branch
+  reads both shapes; the web build live today reads `reasons` as strings and would call `.startsWith` on an object.
+  Owner: deploy session. Done: web `feat/lucky-five-limbs` live on Amplify before the server image that carries it.
+- **P2: Only the noon yoga and karana are in the stored day row.** `panchanga_at_noon.yoga` / `.karana` hold one limb
+  each with its span; a karana is half a tithi, so most of the act hours have a second karana (and often a second yoga)
+  that the row does not name. Outside the noon spans no yoga or karana rule applies. Owner: engine pass. Done: the
+  engine's `muhurta` day row lists every yoga and karana of the day with start and end, and `windows.ts limbSpans`
+  reads the list.
+- **P3: Doc 53 §4.6 lists "Amrita" among the favoured yogas.** Amrita is not one of the 27 yogas (it is a weekday and
+  star combination, Amrita siddhi), so it is left out of `YOGA_FAVOUR_DEFAULT`. Owner: Sachin or the astrologer
+  review. Done: doc 53 says whether Siddha (yoga 21) was meant, or Amrita siddhi becomes its own rule.
+- **P3: The four fixed karanas have no default.** Doc 53 §4.6 says Shakuni, Chatushpada, Naga and Kimstughna apply "by
+  the rule of the act"; no act-by-act rule is written, so they neither gate nor favour. Owner: astrologer review.
+  Done: per-scenario `karanaAvoid` / `karanaFavour` entries for them with the cited rule.
+- **P3: Yoga and karana names are matched by spelling.** The engine spells several names its own way (Soola,
+  Vaidhrithi, Vriyana, Subha, Baalava, VishtiBhadra, Sakuna, Kimstugna); `scenarios.ts SPELLING` maps them to the
+  classical names. A new engine spelling would silently match no rule. Owner: engine pass. Done: the engine returns a
+  stable id per yoga and karana, or a test that fails on an unknown name in day_tables.
+- **P2: The hora-lord functional nature is wired to null.** `LuckyDeps.functionalNatureOf` is in place and tested with
+  a fake; `server.ts` passes `null` until S1's `loadDigest(prisma, kundliId)` is merged. Owner: whoever merges S1 and
+  S2. Done: `functionalNatureOf` reads the digest's D1 planet cards and `personal:hora_benefic` shows on a ready
+  kundli.

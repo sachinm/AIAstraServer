@@ -60,13 +60,23 @@ describe('technique catalogue', () => {
     expect(scenarioRows).toHaveLength(SCENARIOS.length);
   });
 
-  it('every scenario step is marked General or Personal (doc 53 §4.6), and the five limbs row is planned', () => {
+  it('every scenario step is marked General or Personal (doc 53 §4.6), and the five limbs row is built', () => {
     for (const t of TECHNIQUES.filter((x) => x.board === 'lucky')) for (const step of t.algorithm) expect(step, `${t.id}: ${step}`).toMatch(/^(General|Personal)( \(planned, doc 53 §4\.6\))?: /);
     const limbs = techniqueById('lucky.panchang_limbs')!;
-    expect(limbs.status).toBe('planned');
+    expect(limbs.status).toBe('built');
+    expect(limbs.code).toContain('windows.ts dayLimbs, scenarioDay');
+    expect(limbs.agents).toEqual(['lucky.scenario_windows']);
     expect(limbs.algorithm.join(' ')).toContain('Vyatipata');
     expect(limbs.algorithm.join(' ')).toContain('Vishti');
-    expect(techniqueById('lucky.personal_overlay')!.algorithm.filter((s) => s.includes('planned'))).toHaveLength(2);
+    const overlay = techniqueById('lucky.personal_overlay')!;
+    expect(overlay.algorithm.filter((s) => s.includes('planned'))).toHaveLength(1);
+    expect(overlay.algorithm.some((s) => s.startsWith("Personal: the hora lord's nature for this chart"))).toBe(true);
+    for (const sc of SCENARIOS) {
+      const steps = techniqueById(`lucky.${sc.id}`)!.algorithm;
+      expect(steps.some((x) => x.startsWith('General: yoga') && x.includes('Vyatipata')), sc.id).toBe(true);
+      expect(steps.some((x) => x.startsWith('General: karana') && x.includes('Vishti')), sc.id).toBe(true);
+      expect(steps.some((x) => x.startsWith("Personal: the hora lord's functional nature")), sc.id).toBe(true);
+    }
   });
 
   it('the General rows of doc 53 §4.4 and the digest rows are there; replaced ids keep their old id and name the successor', () => {
@@ -80,9 +90,9 @@ describe('technique catalogue', () => {
     }
     for (const id of ['general.transit', 'general.nakshatra', 'general.prashna', 'general.oracle', 'general.validator', 'general.intake', 'general.clarify', 'general.reader']) expect(techniqueById(id)?.status, id).toBe('built');
     expect(TECHNIQUES.filter((t) => t.id.startsWith('digest.')).every((t) => t.category === 'general' && t.board === 'chat')).toBe(true);
-    // built: 13 lucky scenarios + 5 work + 3 lucky shared + 11 general; planned: 4 work + 1 lucky + 8 love layers + 3 love sub-areas + 8 self layers + 4 general + 3 digest
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 3 + 11);
-    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 1 + 8 + 3 + 8 + 4 + 3);
+    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general; planned: 4 work + 8 love layers + 3 love sub-areas + 8 self layers + 4 general + 3 digest
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11);
+    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 8 + 3 + 8 + 4 + 3);
     expect(TECHNIQUES).toHaveLength(63);
   });
 

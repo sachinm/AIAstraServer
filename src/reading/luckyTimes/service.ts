@@ -13,7 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../agents/registry.js';
 import { DAY_TABLE_PLACES, dayTablePlaceKey, standardOffsetHours } from './places.js';
 import { scenarioById, scenarioCatalog, SCENARIOS } from './scenarios.js';
-import { avoidBands, localMinutes, nowState, scenarioDay, toMin, type DayRow, type PersonalDay } from './windows.js';
+import { avoidBands, dayLimbs, localMinutes, nowState, scenarioDay, toMin, type ChartMarks, type DayLimb, type DayRow, type FunctionalNature, type PersonalDay, type Window } from './windows.js';
 
 export const RANGE_BACK_DAYS = 7;
 export const RANGE_AHEAD_DAYS = 14;
@@ -26,6 +26,11 @@ export interface LuckyDeps {
   engine?: EngineFetch | null;
   /** natal fields for the person's kundli (engine `natal_*`); absent → no personal layer pull */
   natalFor?: (userId: string) => Promise<{ kundliId: string; fields: Record<string, unknown> } | null>;
+  /**
+   * The functional nature of each planet for this chart (benefic / malefic / neutral), read from the kundli digest
+   * (doc 53 §4.6, doc 54 §6). Null or absent → no hora-lord mark. Wired to null until the digest reader lands (S1).
+   */
+  functionalNatureOf?: ((kundliId: string) => Promise<Record<string, FunctionalNature> | null>) | null;
   now?: () => Date;
 }
 
@@ -158,11 +163,12 @@ async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, mi
 }
 
 /** The person's tara and chandra bala per day for the months in range (agent `lucky.day_overlay`). */
-async function personalDays(deps: LuckyDeps, userId: string, preset: string, dates: string[]): Promise<Map<string, PersonalDay>> {
+type Natal = { kundliId: string; fields: Record<string, unknown> } | null;
+
+async function personalDays(deps: LuckyDeps, userId: string, preset: string, dates: string[], natal: Natal): Promise<Map<string, PersonalDay>> {
   const out = new Map<string, PersonalDay>();
   const place = DAY_TABLE_PLACES[preset]!;
   const placeKey = dayTablePlaceKey(place);
-  const natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
   if (!natal) return out;
   const months = [...new Set(dates.map(monthOf))];
   for (const m of months) {
@@ -200,7 +206,10 @@ export interface RangeDay {
   personal: { tara_good: boolean | null; moon_good: boolean | null } | null;
   avoid: Array<{ kind: string; from: number; to: number }>;
   good: Array<{ kind: 'abhijit' | 'amrita' | 'brahma'; from: number; to: number }>;
-  layers: Record<string, { verdict: string; windows: Array<{ from: number; to: number; score: number; reasons: string[] }>; dayReasons: string[] }>;
+  /** the day's yoga and karana from the stored row (doc 54 §6), named only in the Why sheet */
+  yoga: DayLimb | null;
+  karana: DayLimb | null;
+  layers: Record<string, { verdict: string; windows: Window[]; dayReasons: string[] }>;
 }
 
 export type RangeResult =
@@ -238,7 +247,11 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   }
 
   const picks = (await deps.prisma.luckyScenarioPick.findMany({ where: { user_id: userId, shown: true } })).filter((p) => scenarioById(p.scenario_id));
-  const personal = await personalDays(deps, userId, preset, [...have]);
+  const natal: Natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
+  const personal = await personalDays(deps, userId, preset, [...have], natal);
+  // the chart's marks: only when the digest gives the functional natures (doc 53 §4.6); never a Node derivation
+  const functional = natal && deps.functionalNatureOf ? await deps.functionalNatureOf(natal.kundliId).catch(() => null) : null;
+  const chart: ChartMarks = { functional };
 
   // the day rows each run read: one muhurta payload per month, with the calc version it was stored with
   const charts = [...new Map(rows.map((r) => [`${r.date.toISOString().slice(0, 7)}|${r.calc_version ?? ''}`, { type: 'muhurta', variant: r.date.toISOString().slice(0, 7), calc_version: r.calc_version ?? null }])).values()];
@@ -270,6 +283,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
           personal: p ? { tara_good: p.tara?.good ?? null, moon_good: p.chandra_bala?.good ?? null } : null,
           avoid: avoidBands(row).map((b) => ({ kind: b.kind, from: Math.round(b.from), to: Math.round(b.to) })),
           good: good.sort((a, b) => a.from - b.from),
+          ...dayLimbs(row),
           layers: {},
         };
       });
@@ -287,7 +301,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
         { userId, task: `${rule.id} ${range.from}..${range.to}`, input: { preset, scenario: rule.id, days: rows.length }, technique: `lucky.${rule.id}`, charts },
         async () => {
           const layers = rows.map((r) => {
-            const sd = scenarioDay(r.payload as unknown as DayRow, rule, personal.get(r.date.toISOString().slice(0, 10)));
+            const sd = scenarioDay(r.payload as unknown as DayRow, rule, personal.get(r.date.toISOString().slice(0, 10)), chart);
             return { verdict: sd.verdict, windows: sd.windows, dayReasons: sd.dayReasons };
           });
           return { value: layers, output: { days: layers.length, good_days: layers.filter((l) => l.verdict === 'good').length, windows: layers.reduce((n, l) => n + l.windows.length, 0) } };
