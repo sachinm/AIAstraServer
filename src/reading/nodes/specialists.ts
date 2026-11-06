@@ -18,7 +18,7 @@ import { callGemini, GeminiHttpError, isTimeoutError, modelThinks, type Thinking
 import type { CacheOwner } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { renderBase, renderSubject, type Analyst, type EvidencePack } from '../packs/selector.js';
-import { readerSuffix, type FullContext } from '../packs/fullPrefix.js';
+import { factsLine, readerSuffix, type FullContext } from '../packs/fullPrefix.js';
 import { FRAMES, horizonRange, type SubjectId } from '../packs/frames.js';
 import { detectTopic } from '../policy/declined.js';
 import { PROMPTS } from '../prompts/generated.js';
@@ -310,9 +310,10 @@ export const FINDING_RESPONSE_SCHEMA_V2 = {
 };
 
 /** The v2 tail (doc 25 §2 "Shared tail"): frame houses, lords and karakas up front, then the output rules. */
-function tailV2(a: { analyst: SpecialistAnalyst; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string }): string {
+function tailV2(a: { analyst: SpecialistAnalyst; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string; facts?: Record<string, string> | null }): string {
   const hz = a.intent.horizon;
   const kf = a.pack.keyFrame;
+  const known = factsLine(a.facts);
   return [
     `TODAY: ${a.asOf}`,
     `ANALYST: ${a.analyst}`,
@@ -326,6 +327,7 @@ function tailV2(a: { analyst: SpecialistAnalyst; subject: SubjectId; pack: Evide
     '- Dates only as they appear in the pack (YYYY-MM-DD). Never compute a house, lord, aspect, dignity, date or strength; read the field. If a field you need is absent, add a caveat naming it and go on.',
     '- culprits and contributors are planet codes (Su Mo Ma Me Ju Ve Sa Ra Ke) that appear in the pack, at most 4 each, strongest first. A planet appears in only one list. form is one sentence (promise reader only; others leave it empty).',
     '- Keep the JSON complete: shorter claims are better than a cut-off answer.',
+    ...(known ? [known] : []),
     `QUESTION: ${a.question}`,
   ].join('\n');
 }
@@ -396,11 +398,14 @@ export async function runSpecialist(args: {
   signal?: AbortSignal;
   /** full cache layout: the user's cached prefix for the day (packs/fullPrefix.ts) */
   full?: FullContext;
+  /** confirmed person_facts (doc 53 §4.4, 48): passed in the user turn as FACTS */
+  facts?: Record<string, string> | null;
 }): Promise<{ finding: Finding; usage: Usage; repaired?: boolean }> {
   const { analyst, pack, intent } = args;
   const model = modelFor('specialist');
   const budget = specialistBudget(model);
   const v2 = readingFindingsV2();
+  const known = factsLine(args.facts);
   const tail = v2 ? tailV2({ ...args, analyst }) : [
     `TODAY: ${args.asOf}`,
     `ANALYST: ${analyst}`,
@@ -408,6 +413,7 @@ export async function runSpecialist(args: {
     `Subject: ${args.subject}. Horizon: ${typeof intent.horizon === 'string' ? intent.horizon : `${intent.horizon.from} to ${intent.horizon.to}`}. Focus: ${intent.focusPoints.join('; ') || 'none'}.`,
     `Return at most ${analyst === 'annual' || analyst === 'prashna' ? 6 : 8} claims and at most 12 windows. Each claim is one sentence of at most 200 characters about this chart and lists 1-4 evidence ids copied exactly from the pack as dot paths (for example detail.houses.10.lord). Each claim weight is 1, 2 or 3. Dates must come from the pack. Keep the JSON complete: shorter claims are better than a cut-off answer.`,
     'Tag every claim with the tradition whose rule you applied (parashara, jaimini, nakshatra, kp_starlord). Give layerScore: your layer as one signed strength from -3 (clearly denied or obstructed) to +3 (clearly promised or supported), 0 when balanced.',
+    ...(known ? [known] : []),
     `QUESTION: ${args.question}`,
   ].join('\n');
   const r = await callGemini({
@@ -419,7 +425,7 @@ export async function runSpecialist(args: {
     // full layout: one cache per user and day for every role; without it the base chart is the cached part
     cachePrefix: !args.full,
     ...(args.full
-      ? { fullCache: { system: args.full.system, prefix: args.full.prefix, suffix: [readerSuffix({ role: analyst, subject: args.subject, pack, intent, question: args.question, asOf: args.asOf, full: args.full })] } }
+      ? { fullCache: { system: args.full.system, prefix: args.full.prefix, suffix: [readerSuffix({ role: analyst, subject: args.subject, pack, intent, question: args.question, asOf: args.asOf, full: args.full, ...(args.facts ? { facts: args.facts } : {}) })] } }
       : {}),
     cacheOwner: args.cacheOwner,
     thinking: SPECIALIST_THINKING,

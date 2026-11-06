@@ -91,6 +91,8 @@ export interface OracleFlowDeps {
   codeFindings?: CodeFinding[];
   /** the technique ids of the query once the tier's readers are known, for the trace (doc 53 §4.3) */
   techniqueIds?: (readers: ReaderId[], tier: number) => string[] | null;
+  /** confirmed person_facts (doc 53 §4.4, 48): passed to each reader as FACTS */
+  facts?: Record<string, string> | null;
   /** Test seams */
   readerImpl?: typeof runReader;
   now?: () => number;
@@ -147,7 +149,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   const errors: OracleFlowResult['errors'] = [];
   let thoughts = '';
 
-  const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna, allowedReaders: d.allowedReaders ?? null });
+  const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna, allowedReaders: d.allowedReaders ?? null, ...(d.facts ? { facts: d.facts } : {}) });
   // the tier (readers.ts tierFor, or the plan-B route's own) and the route are chosen in prepareReaders
   const tier = prep.plan.tier;
   let techniques: string[] | null | undefined;

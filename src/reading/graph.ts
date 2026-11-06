@@ -83,6 +83,8 @@ export interface GraphDeps {
   analystsBySubject?: Partial<Record<string, SpecialistAnalyst[]>>;
   /** Findings of the deterministic readers on the digest (code, already run): they join reconcile beside the analysts' */
   codeFindings?: Finding[];
+  /** confirmed person_facts (doc 53 §4.4, 48): passed to each analyst as FACTS */
+  facts?: Record<string, string> | null;
 }
 
 const State = Annotation.Root({
@@ -177,7 +179,7 @@ export function buildReadingGraph(deps: GraphDeps) {
       const optionalLayer = name === 'annual' || name === 'prashna';
       // findings that read data outside the dossier are not cached: the annual and prashna layers, and a dated transit
       const datedTransit = name === 'transit' && !!askedAt && !!deps.layers?.transitAt;
-      const key = deps.dossierHash && !optionalLayer && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf }) : null;
+      const key = deps.dossierHash && !optionalLayer && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf, ...(deps.facts ? { facts: deps.facts } : {}) }) : null;
       const cached = key ? findingsCache.get(key) : undefined;
       if (cached) {
         const ms = Date.now() - t0;
@@ -190,7 +192,7 @@ export function buildReadingGraph(deps: GraphDeps) {
       const budget = specialistBudget(model);
       let usePack = pack;
       const call = (signal: AbortSignal) =>
-        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: usePack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal, ...(deps.full ? { full: deps.full } : {}) });
+        specialist({ analyst: input.analyst, subject: input.subject as Finding['subject'], pack: usePack!, intent: deps.intent, question: deps.question, system: deps.system, asOf: deps.asOf, cacheOwner: deps.cacheOwner, signal, ...(deps.full ? { full: deps.full } : {}), ...(deps.facts ? { facts: deps.facts } : {}) });
       // one attempt inside the time budget; on time-out the model call is aborted, not left running
       const attempt = async () => {
         const controller = new AbortController();

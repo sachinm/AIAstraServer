@@ -13,10 +13,21 @@
  * TODO(engine pass): the tithi and star group of a day should come from the engine; filed in docs/TODOS.md.
  */
 
+import {
+  getLuckyFixedKaranaAvoid,
+  getLuckyFixedKaranaFavour,
+  getLuckyKaranaAvoid,
+  getLuckyKaranaFavour,
+  getLuckyYogaAvoid,
+  getLuckyYogaFavour,
+  isLuckyAmritaSiddhiEnabled,
+} from '../../config/env.js';
+
 export type Area = 'work' | 'love' | 'money' | 'travel' | 'study' | 'home';
 export type TithiGroup = 'nanda' | 'bhadra' | 'jaya' | 'rikta' | 'purna' | 'amavasya';
 export type StarGroup = 'fixed' | 'moving' | 'quick' | 'soft' | 'fierce' | 'sharp' | 'mixed';
 export type Lord = 'Sun' | 'Moon' | 'Mars' | 'Mercury' | 'Jupiter' | 'Venus' | 'Saturn';
+export type Planet = Lord;
 export type Weekday = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
 
 /** Muhurta Chintamani's tithi groups, by the engine's tithi number (1–15 waxing, 16–30 waning; 30 = new Moon). */
@@ -79,17 +90,44 @@ export const karanaName = (raw: unknown): KaranaName | null => canonical(raw, KA
 
 /**
  * Doc 53 §4.6 defaults (Muhurta Chintamani; B.V. Raman, Muhurta): the nine yogas avoided for any auspicious act, and the
- * favoured ones. Doc 53 also lists "Amrita", which is not one of the 27 yogas (it is a weekday-star combination), so it
- * is not here; filed in docs/TODOS.md.
+ * favoured ones (including Siddha, #21 of the 27 Nitya Yogas). Configurable via LUCKY_YOGA_AVOID / LUCKY_YOGA_FAVOUR.
  */
-export const YOGA_AVOID_DEFAULT: YogaName[] = ['Vishkambha', 'Atiganda', 'Shoola', 'Ganda', 'Vyaghata', 'Vajra', 'Vyatipata', 'Parigha', 'Vaidhriti'];
-export const YOGA_FAVOUR_DEFAULT: YogaName[] = ['Siddhi', 'Shubha', 'Brahma', 'Indra', 'Dhruva', 'Harshana', 'Sukarma', 'Priti', 'Ayushman', 'Saubhagya', 'Shobhana'];
+export const YOGA_AVOID_DEFAULT: YogaName[] = getLuckyYogaAvoid().map(yogaName).filter((x): x is YogaName => x !== null);
+export const YOGA_FAVOUR_DEFAULT: YogaName[] = getLuckyYogaFavour().map(yogaName).filter((x): x is YogaName => x !== null);
 /**
- * Vishti (Bhadra) is avoided for every act; the six moving karanas besides it favour most acts. The four fixed karanas
- * are left without a default until the act-by-act rule is reviewed (doc 53 says "by rule"; filed in docs/TODOS.md).
+ * Vishti (Bhadra) and the three fixed karanas Shakuni, Chatushpada, Naga (LUCKY_FIXED_KARANA_AVOID) are gated out by
+ * default for auspicious acts; the six moving karanas plus Kimstughna (LUCKY_FIXED_KARANA_FAVOUR) are favoured, with
+ * Kimstughna giving +1 on auspicious beginnings (KARANA_BONUS_DEFAULT).
  */
-export const KARANA_AVOID_DEFAULT: KaranaName[] = ['Vishti'];
-export const KARANA_FAVOUR_DEFAULT: KaranaName[] = ['Bava', 'Balava', 'Kaulava', 'Taitila', 'Gara', 'Vanija'];
+export const KARANA_AVOID_DEFAULT: KaranaName[] = [...getLuckyKaranaAvoid(), ...getLuckyFixedKaranaAvoid()]
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+export const KARANA_FAVOUR_DEFAULT: KaranaName[] = [...getLuckyKaranaFavour(), ...getLuckyFixedKaranaFavour()]
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+export const KARANA_BONUS_DEFAULT: KaranaName[] = getLuckyFixedKaranaFavour()
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+
+/**
+ * Classical Amrita Siddhi weekday + star number combinations (Muhurta Chintamani ch. 2; B.V. Raman, Muhurta ch. 4).
+ * Sunday+Hasta(13), Monday+Mrigashira(5), Tuesday+Ashwini(1), Wednesday+Anuradha(17),
+ * Thursday+Pushya(8), Friday+Revati(27), Saturday+Rohini(4).
+ */
+export const AMRITA_SIDDHI_STAR: Record<Weekday, number> = {
+  Sunday: 13,
+  Monday: 5,
+  Tuesday: 1,
+  Wednesday: 17,
+  Thursday: 8,
+  Friday: 27,
+  Saturday: 4,
+};
+
+export function isAmritaSiddhi(weekday: string | undefined | null, starNumber: number | undefined | null): boolean {
+  if (!isLuckyAmritaSiddhiEnabled() || !weekday || !starNumber) return false;
+  return AMRITA_SIDDHI_STAR[weekday as Weekday] === starNumber;
+}
 
 export interface ScenarioRule {
   id: string;
@@ -111,8 +149,10 @@ export interface ScenarioRule {
   yogaFavour: YogaName[];
   /** karanas that gate the act out inside their span */
   karanaAvoid: KaranaName[];
-  /** karanas named as a good limb inside their span (no score: they hold most of every day) */
+  /** karanas named as a good limb inside their span */
   karanaFavour: KaranaName[];
+  /** fixed karanas that add +1 inside their span for auspicious beginnings (default: Kimstughna) */
+  karanaBonus?: KaranaName[];
   /** local hours the act is done in: [from, to) in hours from midnight; 'sunrise' starts at that day's sunrise */
   hours: ['sunrise' | number, number];
   /** brahma muhurta counts as a good window for a first step */
@@ -128,6 +168,7 @@ const CLASSIC = 'Muhurta Chintamani (tithi and star groups, yogas and karanas); 
 
 /** The five-limb defaults every v1 act starts from; an act overrides a list only with a cited reason. */
 const LIMBS = { yogaAvoid: YOGA_AVOID_DEFAULT, yogaFavour: YOGA_FAVOUR_DEFAULT, karanaAvoid: KARANA_AVOID_DEFAULT, karanaFavour: KARANA_FAVOUR_DEFAULT };
+const BEGINNING_LIMBS = { ...LIMBS, karanaBonus: KARANA_BONUS_DEFAULT };
 
 export const SCENARIOS: ScenarioRule[] = [
   {
@@ -173,7 +214,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['quick', 'fixed'], starAvoid: ['sharp'],
     dayFavour: ['Monday', 'Wednesday', 'Thursday'], dayAvoid: [],
     horaFavour: ['Jupiter', 'Mercury', 'Moon'], horaAvoid: ['Saturn'],
-    ...LIMBS,
+    ...BEGINNING_LIMBS,
     hours: ['sunrise', 20], useBrahma: true, floor: 3, source: CLASSIC,
   },
   {
@@ -247,7 +288,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['fixed', 'quick'], starAvoid: [],
     dayFavour: ['Monday', 'Thursday'], dayAvoid: [],
     horaFavour: ['Sun', 'Moon', 'Jupiter'], horaAvoid: [],
-    ...LIMBS,
+    ...BEGINNING_LIMBS,
     hours: ['sunrise', 12], useBrahma: true, floor: 3, source: CLASSIC,
   },
 ];

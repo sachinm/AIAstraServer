@@ -27,6 +27,8 @@ export interface LuckyRouteDeps {
   natalFor?: LuckyDeps['natalFor'];
   /** the chart's functional natures from the digest; null until the digest reader is wired (doc 54 §6) */
   functionalNatureOf?: LuckyDeps['functionalNatureOf'];
+  /** the chart's running dasha lords from the activation calendar (doc 53 §4.6) */
+  runningDashaLordsOf?: LuckyDeps['runningDashaLordsOf'];
   now?: () => Date;
 }
 
@@ -55,7 +57,14 @@ export function registerLuckyRoutes(app: express.Express, deps: LuckyRouteDeps):
   });
 
   if (!(deps.enabled ?? isLuckyEnabled())) return;
-  const svc: LuckyDeps = { prisma: deps.prisma, engine: deps.engine ?? null, natalFor: deps.natalFor, functionalNatureOf: deps.functionalNatureOf ?? null, now: deps.now };
+  const svc: LuckyDeps = {
+    prisma: deps.prisma,
+    engine: deps.engine ?? null,
+    natalFor: deps.natalFor,
+    functionalNatureOf: deps.functionalNatureOf ?? null,
+    ...(deps.runningDashaLordsOf !== undefined ? { runningDashaLordsOf: deps.runningDashaLordsOf } : {}),
+    now: deps.now,
+  };
 
   app.get('/api/lucky/setup', async (req, res) => {
     const userId = await deps.requireUser(req, res);

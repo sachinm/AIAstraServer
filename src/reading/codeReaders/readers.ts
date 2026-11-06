@@ -183,6 +183,10 @@ export function jaimini(pack: EvidencePack): CodeFinding {
     if (a.primary.length > a.obstructed.length) out.push(claim('argala_holds', `House ${h} has argala from ${a.primary.join(', ')}${a.obstructed.length ? `, obstructed only by ${a.obstructed.join(', ')}` : ', unobstructed'}.`, ev, { tradition: 'jaimini', topic: `house ${h}` }));
     else out.push(claim('argala_blocked', `House ${h} has argala from ${a.primary.join(', ')}, obstructed by ${a.obstructed.join(', ')}.`, ev, { tradition: 'jaimini', topic: `house ${h}` }));
   }
+  for (const [key, rp] of Object.entries(d.rasi ?? {})) {
+    const ev = [`digest.rasi.${key}.sign`];
+    out.push(claim('rasi_period_active', `${rp.system === 'chara' ? 'Chara' : 'Narayana'} rasi period ${rp.sign} (${rp.from} to ${rp.to}) activates house ${rp.houses.join(', ')}.`, ev, { tradition: 'jaimini', topic: `house ${rp.houses[0]}`, kind: 'window' }));
+  }
   return finish('jaimini', pack.subject, out);
 }
 

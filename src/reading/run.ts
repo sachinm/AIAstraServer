@@ -499,6 +499,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
         ...(prewarmed ? { prewarmed } : {}),
         ...(uses ? { allowedReaders: uses.readers } : {}),
         ...(codeFindings.length ? { codeFindings: codeFindings.filter((f) => f.subject === first) } : {}),
+        ...(Object.keys(facts).length ? { facts } : {}),
         techniqueIds: (readers, tier) => selectedTechniques(intent, facts, { ...useOpts, tier, readers }),
       });
       answer = out.answer;
@@ -531,6 +532,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
       dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId, ...(full ? { full } : {}),
+      ...(Object.keys(facts).length ? { facts } : {}),
       ...(uses ? { analystsBySubject: Object.fromEntries(subjects.map((s) => [s.id, uses!.bySubject[s.id]?.analysts ?? []])) } : {}),
       ...(codeFindings.length ? { codeFindings: codeFindings.map(toFinding) } : {}),
       layers: opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId })),

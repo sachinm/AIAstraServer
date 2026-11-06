@@ -146,6 +146,7 @@ The admin panel's Techniques and Agents pages read what is registered and tagged
 ## Product rules agents must keep
 
 - Radha (pyjhora, `AIAstra_Radha`) is the only source of astrological data. Node computes nothing astrological.
+- **Externalize configurable selections, rule lists, and thresholds into environment variables (`src/config/env.ts`).** Never hardcode astrological rule lists (favoured/avoided yogas, karanas, fixed karanas, Amrita Siddhi toggle, reference timezone places, prepull horizons, board/digest thresholds, etc.) directly in business logic; read them through typed helpers in `src/config/env.ts` with clean defaults so they can be tuned via environment variables without code changes.
 - English only for now.
 - Declined topics (`declined_topics` table, docs/reading-engine/18) are never facilitated or passed to any agent.
 - Never print secrets.

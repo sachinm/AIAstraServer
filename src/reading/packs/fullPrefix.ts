@@ -245,16 +245,34 @@ export function withFullEvidence(pack: EvidencePack, full: FullContext | undefin
 
 const horizonText = (h: Intent['horizon']): string => (typeof h === 'string' ? h : `${h.from} to ${h.to}`);
 
+/** The person_facts keys the FACTS line never carries: the wizard's own bookkeeping, and the place (the location line says it). */
+const FACTS_NOT_SENT = /^(wizard\.|place\.)/;
+
+/**
+ * The FACTS line of the tail (docs/reading-engine/53 §4.4, 48): what the person has confirmed about themselves, so the
+ * answer speaks to their situation and asks none of it again. Labels and values only (`work.status: between_jobs`);
+ * null when there is nothing to say.
+ */
+export function factsLine(facts: Record<string, string> | null | undefined): string | null {
+  const rows = Object.entries(facts ?? {})
+    .filter(([k, v]) => !FACTS_NOT_SENT.test(k) && v && v !== 'declined')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}: ${v}`);
+  return rows.length ? `FACTS (what the person has told us; speak to this situation and do not ask it again): ${rows.join('; ')}` : null;
+}
+
 /** A reader's whole uncached input. */
-export function readerSuffix(a: { role: (typeof READER_ROLES)[number]; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string; full: FullContext }): string {
+export function readerSuffix(a: { role: (typeof READER_ROLES)[number]; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string; full: FullContext; facts?: Record<string, string> | null }): string {
   const kf = a.pack.keyFrame;
   const extra = extraEvidence(a.full, a.pack, a.role);
+  const known = factsLine(a.facts);
   return [
     `ROLE: ${a.role}`,
     `TODAY: ${a.asOf}`,
     `Subject: ${a.subject} (${FRAMES[a.subject]?.label ?? a.subject}). Frame houses: ${kf.houses.join(', ')}. Frame lords: ${kf.lords.join(', ')}. Karakas: ${kf.karakas.join(', ')}. Horizon: ${horizonText(a.intent.horizon)}. Focus: ${a.intent.focusPoints.join('; ') || 'none'}.`,
     `FRAME: ${JSON.stringify({ frame: a.pack.sections.frame })}`,
     ...(Object.keys(extra).length ? [`EXTRA EVIDENCE: ${JSON.stringify(extra)}`] : []),
+    ...(known ? [known] : []),
     `QUESTION: ${a.question}`,
   ].join('\n');
 }

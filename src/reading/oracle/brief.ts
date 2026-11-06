@@ -75,7 +75,7 @@ export function layerOf(evidenceId: string, tradition?: string): string {
   // layer, a varga is its own layer, the Jaimini points are the Jaimini layer, as the stored tables are counted below
   if (head === 'digest') {
     const [, section, varga] = evidenceId.split('.');
-    if (section === 'point') return 'jaimini';
+    if (section === 'point' || section === 'rasi') return 'jaimini';
     if (section === 'house' && /\.argala(\.|$)/.test(evidenceId)) return 'jaimini';
     return varga && varga !== 'D1' ? `varga_${varga.toLowerCase()}` : 'd1';
   }

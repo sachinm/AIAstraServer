@@ -5,6 +5,9 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
+import { loadDigest as realLoadDigest } from '../digest/load.js';
+import type { DigestView } from '../digest/types.js';
 import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
@@ -17,6 +20,8 @@ export interface CareerDeps {
   prisma: PrismaClient;
   /** tests: inputs without the database or the engine */
   loadInputs?: (kundliId: string, asOf: string, span: { from: string; to: string }) => Promise<TimelineInputs | null>;
+  loadDigest?: (prisma: PrismaClient, kundliId: string) => Promise<DigestView | null>;
+  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
   now?: () => Date;
 }
 
@@ -85,9 +90,13 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
     );
     if (!inputs) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
     map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
+      const [view, activation] = await Promise.all([
+        (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
+        (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
+      ]);
       const build = buildTimelineSpan(inputs, span);
-      const m = careerMap(build, asOf);
-      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length } };
+      const m = careerMap(build, asOf, view ? { view, activation } : undefined);
+      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length } };
     });
     await deps.prisma.areaBuild
       .upsert({

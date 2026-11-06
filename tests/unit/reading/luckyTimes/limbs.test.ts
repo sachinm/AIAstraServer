@@ -125,4 +125,28 @@ describe('scopes and the personal hora mark', () => {
   it('no digest, no hora mark', () => {
     for (const w of scenarioDay(thu, contract, undefined, { functional: null }).windows) expect(w.reasonKeys.some((k) => k.startsWith('personal:hora'))).toBe(false);
   });
+  it('Siddha yoga (#21), Amrita Siddhi weekday+star, fixed karanas (Shakuni/Chatushpada/Naga avoid; Kimstughna +1 on auspicious beginnings) and personal:dasha_lord', () => {
+    const s = scenarioById('work.start_project')!;
+    const siddhaDay = scenarioDay(withLimb(thu, 'yoga', 'Siddha'), s);
+    expect(siddhaDay.windows.some((w) => w.reasonKeys.includes('yoga:Siddha'))).toBe(true);
+    // Shakuni, Chatushpada, Naga gate out the span like Vishti
+    for (const bad of ['Shakuni', 'Chatushpada', 'Naga']) {
+      const gated = scenarioDay(withLimb(thu, 'karana', bad, 0, 24), contract);
+      expect(gated.windows).toHaveLength(0);
+      expect(gated.dayReasons).toContain(`karana_avoid:${bad}`);
+    }
+    // Kimstughna adds +1 on auspicious beginnings (work.start_project)
+    const kim = scenarioDay(withLimb(withLimb(thu, 'yoga', 'Vriddhi'), 'karana', 'Kimstughna', 0, 24), s);
+    const tait = scenarioDay(withLimb(withLimb(thu, 'yoga', 'Vriddhi'), 'karana', 'Taitila', 0, 24), s);
+    const same = kim.windows.find((w) => tait.windows.some((t) => t.from === w.from && t.to === w.to));
+    if (same) {
+      const peer = tait.windows.find((t) => t.from === same.from && t.to === same.to)!;
+      expect(same.score).toBe(peer.score + 1);
+    }
+    // Thursday + Pushya = Amrita Siddhi (+1 general reason); runningLords matching Saturn (Pushya lord) adds personal:dasha_lord (+1 personal reason)
+    const pushyaRow = { ...withLimb(thu, 'yoga', 'Vriddhi'), panchanga_at_noon: { ...(thu.panchanga_at_noon as Record<string, unknown>), yoga: { name: 'Vriddhi', start_hours: 0, end_hours: 24 }, nakshatra: { number: 8, name: 'Pushya', lord: 'Saturn', start_hours: 0, end_hours: 24 } } };
+    const amrita = scenarioDay(pushyaRow, s, undefined, { runningLords: ['Saturn'] });
+    expect(amrita.windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'amrita_siddhi', scope: 'general' });
+    expect(amrita.windows.flatMap((w) => w.reasons)).toContainEqual({ key: 'personal:dasha_lord', scope: 'personal' });
+  });
 });

@@ -38,6 +38,7 @@ export const CODE_READER_RULES = {
   house_class_hard: { id: 'house_class_hard', when: 'a karaka or arudha of the frame sits in a house the engine classes dusthana', polarity: 'obstructs', weight: 1, source: 'BPHS ch. 34 (dusthanas 6, 8, 12); PVR ch. 22' },
   argala_holds: { id: 'argala_holds', when: 'a frame house has more planets in primary argala than obstructing them (engine argala lists)', polarity: 'supports', weight: 1, source: 'Jaimini Upadesa Sutras 1.1.5-9; PVR ch. 21 (argala)' },
   argala_blocked: { id: 'argala_blocked', when: 'a frame house has primary argala and at least as many planets obstructing it', polarity: 'neutral', weight: 1, source: 'Jaimini Upadesa Sutras 1.1.8; PVR ch. 21' },
+  rasi_period_active: { id: 'rasi_period_active', when: 'a Narayana or Chara rasi dasha period inside the horizon activates a frame house or its lord', polarity: 'supports', weight: 1, source: 'Jaimini Upadesa Sutras 2.1; PVR ch. 19 (Narayana and Chara rasi dashas); doc 33 R4' },
 } as const satisfies Record<string, ReadingRule>;
 
 export type CodeReaderRuleId = keyof typeof CODE_READER_RULES;

@@ -29,7 +29,7 @@ export type Confidence = 'confirmed' | 'likely' | 'split';
 export type Vote = 'support' | 'test' | 'neutral';
 export type Side = 'support' | 'test';
 export type Grade = 'strong' | 'moderate' | 'weak';
-export type LayerId = 'promise' | 'affliction' | 'protection' | 'activation' | 'transit' | 'annual';
+export type LayerId = 'promise' | 'affliction' | 'protection' | 'activation' | 'transit' | 'annual' | 'varga' | 'nakshatra';
 
 /**
  * A reference to a planet as the area names it: a planet code ('Mo', 'Ve'), a house lord ('L1', 'L7', read from the
@@ -480,6 +480,75 @@ export function annualLayer(view: DigestView, cfg: AreaConfig, asOf: string): { 
   return { year, rows };
 }
 
+// ---------------------------------------------------------------- varga and nakshatra layers (doc 46 §B.7–§B.8; doc 53 §4.5)
+
+/** Owning divisional charts of the area's primary houses and their D1 lords (doc 46 §B.7). */
+export function vargaLayer(view: DigestView, cfg: AreaConfig): LayerRow[] {
+  const out: LayerRow[] = [];
+  const checked = new Set(cfg.vargaChecks.map((c) => `${c.varga}.h${c.house}`));
+  for (const v of cfg.vargas.filter((x) => x !== 'D1')) {
+    for (const h of cfg.primary) {
+      const theme = `h${h}`;
+      const d1 = view.house('D1', h);
+      const vHouse = view.house(v, h);
+      if (vHouse && !checked.has(`${v}.h${h}`)) {
+        if (isGood(vHouse.lordDignity)) {
+          out.push({ layer: 'varga', side: 'support', weight: 1, kind: 'placed_well', theme, planet: vHouse.lord, evidence: [`${v}.h${h} lord ${vHouse.lord} dignity ${vHouse.lordDignity}`] });
+        } else if (isBad(vHouse.lordDignity)) {
+          out.push({ layer: 'varga', side: 'test', weight: 1, kind: 'weak', theme, planet: vHouse.lord, evidence: [`${v}.h${h} lord ${vHouse.lord} dignity ${vHouse.lordDignity}`] });
+        }
+      }
+      if (d1?.lord) {
+        const vLord = view.planet(v, d1.lord);
+        if (vLord) {
+          if (isGood(vLord.dignity)) {
+            out.push({ layer: 'varga', side: 'support', weight: 1, kind: 'backed', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}`] });
+          } else if (isBad(vLord.dignity)) {
+            out.push({ layer: 'varga', side: 'test', weight: 1, kind: 'weak', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}`] });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+const GOOD_TARA = /sampat|kshema|sadhana|sadhaka|mitra|parama/i;
+const BAD_TARA = /vipat|pratyak|vadha|naidhana/i;
+
+/** Cusp stars of the primary houses, their star lords in D1, and the running main-clock lord's tara (doc 46 §B.8). */
+export function nakshatraLayer(view: DigestView, cfg: AreaConfig, running: ActivationRow[] = []): LayerRow[] {
+  const out: LayerRow[] = [];
+  for (const h of cfg.primary) {
+    const card = view.house('D1', h);
+    const cusp = card?.cuspStar;
+    if (!cusp?.lord) continue;
+    const theme = `h${h}`;
+    const lordCard = view.planet('D1', cusp.lord);
+    if (isGood(lordCard?.dignity)) {
+      out.push({ layer: 'nakshatra', side: 'support', weight: 1, kind: 'helped', theme, planet: cusp.lord, evidence: [`D1.h${h} cusp_star ${cusp.name} lord ${cusp.lord} dignity ${lordCard?.dignity}`] });
+    } else if (isBad(lordCard?.dignity)) {
+      out.push({ layer: 'nakshatra', side: 'test', weight: 1, kind: 'weak', theme, planet: cusp.lord, evidence: [`D1.h${h} cusp_star ${cusp.name} lord ${cusp.lord} dignity ${lordCard?.dignity}`] });
+    }
+  }
+  const starProfile = view.star();
+  if (starProfile?.taras?.length) {
+    const primaryTheme = `h${cfg.primary[0]!}`;
+    for (const r of running.filter((x) => x.family === 'vimshottari' && x.lord && x.level <= 2)) {
+      const pCard = view.planet('D1', r.lord!);
+      if (!pCard?.star) continue;
+      const taraRow = starProfile.taras.find((t) => t.star === pCard.star);
+      if (!taraRow) continue;
+      if (GOOD_TARA.test(taraRow.tara)) {
+        out.push({ layer: 'nakshatra', side: 'support', weight: 1, kind: 'helped', theme: primaryTheme, planet: r.lord, evidence: [`star:${r.lord} in ${pCard.star} tara ${taraRow.tara}`] });
+      } else if (BAD_TARA.test(taraRow.tara)) {
+        out.push({ layer: 'nakshatra', side: 'test', weight: 1, kind: 'weak', theme: primaryTheme, planet: r.lord, until: r.to, evidence: [`star:${r.lord} in ${pCard.star} tara ${taraRow.tara}`] });
+      }
+    }
+  }
+  return out;
+}
+
 const sumSide = (rows: LayerRow[]) => rows.reduce((s, r) => s + (r.side === 'support' ? r.weight : -r.weight), 0);
 const voteOf = (s: number): Vote => (s >= 1 ? 'support' : s <= -1 ? 'test' : 'neutral');
 
@@ -523,7 +592,7 @@ export interface BuiltBoard {
   /** sub-area → strength ahead (sum of graded windows in the next 12 months); the lead when the person set no focus */
   subareaScores: Record<string, number>;
   /** counts for the run summary */
-  counts: { promise: number; affliction: number; protection: number; activation: number; transit: number | null; annual: number };
+  counts: { promise: number; affliction: number; protection: number; activation: number; transit: number | null; annual: number; varga: number; nakshatra: number };
 }
 
 export interface BoardInput {
@@ -676,6 +745,8 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   const promise = promiseLayer(view, cfg);
   const affliction = afflictionLayer(view, cfg, input.running);
   const protection = protectionLayer(view, cfg);
+  const varga = vargaLayer(view, cfg);
+  const nakshatra = nakshatraLayer(view, cfg, input.running);
   const transit = transitLayer(input.transit, cfg, asOf);
   if (transit === null) notes.push('The slow-moving sky is not stored for this chart yet; the board reads the timing clocks and the year chart only.');
   const annual = annualLayer(view, cfg, asOf);
@@ -693,8 +764,8 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   if (missing.length) notes.push(`Not running for this chart today: ${missing.join(', ')}; confidence scales to the families present.`);
   const tone = presentTone(series, nowIdx, votes);
 
-  const supports = lines(cfg, [...promise.filter((r) => r.side === 'support'), ...protection, ...(transit ?? []).filter((r) => r.side === 'support')], 5).map(({ text, evidence }) => ({ text, evidence }));
-  const pressures = lines(cfg, [...affliction, ...(transit ?? []).filter((r) => r.side === 'test')], 5).map(({ text, evidence, until }) => ({ text, until, evidence }));
+  const supports = lines(cfg, [...promise.filter((r) => r.side === 'support'), ...protection, ...varga.filter((r) => r.side === 'support'), ...nakshatra.filter((r) => r.side === 'support'), ...(transit ?? []).filter((r) => r.side === 'support')], 5).map(({ text, evidence }) => ({ text, evidence }));
+  const pressures = lines(cfg, [...affliction, ...varga.filter((r) => r.side === 'test'), ...nakshatra.filter((r) => r.side === 'test'), ...(transit ?? []).filter((r) => r.side === 'test')], 5).map(({ text, evidence, until }) => ({ text, until, evidence }));
 
   const ahead = aheadWindows(view, cfg, graded, asOf);
   const in12 = addMonthsIso(asOf, 12);
@@ -722,6 +793,6 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   return {
     board: { asOf, tone, supports, pressures, ahead, year, back, notes },
     subareaScores,
-    counts: { promise: promise.length, affliction: affliction.length, protection: protection.length, activation: input.activation.length, transit: transit ? transit.length : null, annual: annual.rows.length },
+    counts: { promise: promise.length, affliction: affliction.length, protection: protection.length, activation: input.activation.length, transit: transit ? transit.length : null, annual: annual.rows.length, varga: varga.length, nakshatra: nakshatra.length },
   };
 }

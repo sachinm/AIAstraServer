@@ -10,8 +10,9 @@
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { getLuckyHorizonDays, getLuckyRangeAheadDays } from '../../config/env.js';
 import { withAgentRun } from '../../agents/registry.js';
-import { DAY_TABLE_PLACES, dayTablePlaceKey, standardOffsetHours } from './places.js';
+import { DAY_TABLE_PLACES, dayTablePlaceKey, resolvePlacePreset, standardOffsetHours } from './places.js';
 import { scenarioById, scenarioCatalog, SCENARIOS } from './scenarios.js';
 import { avoidBands, dayLimbs, localMinutes, nowState, scenarioDay, toMin, type ChartMarks, type DayLimb, type DayRow, type FunctionalNature, type PersonalDay, type Window } from './windows.js';
 
@@ -28,9 +29,13 @@ export interface LuckyDeps {
   natalFor?: (userId: string) => Promise<{ kundliId: string; fields: Record<string, unknown> } | null>;
   /**
    * The functional nature of each planet for this chart (benefic / malefic / neutral), read from the kundli digest
-   * (doc 53 §4.6, doc 54 §6). Null or absent → no hora-lord mark. Wired to null until the digest reader lands (S1).
+   * (doc 53 §4.6, doc 54 §6). Null or absent → no hora-lord mark.
    */
   functionalNatureOf?: ((kundliId: string) => Promise<Record<string, FunctionalNature> | null>) | null;
+  /**
+   * The running dasha lords for this chart at `asOf` (read from `kundli_activation`, doc 53 §4.6).
+   */
+  runningDashaLordsOf?: ((kundliId: string, asOf?: string) => Promise<readonly string[] | null>) | null;
   now?: () => Date;
 }
 
@@ -70,8 +75,9 @@ function placeKeyToPreset(placeKey: string): string | null {
 }
 
 export async function setPlace(deps: LuckyDeps, userId: string, preset: string): Promise<boolean> {
-  const p = DAY_TABLE_PLACES[preset];
-  if (!p) return false;
+  const resolved = resolvePlacePreset(preset);
+  if (!resolved) return false;
+  const p = DAY_TABLE_PLACES[resolved]!;
   const place_key = dayTablePlaceKey(p);
   await deps.prisma.luckyPref.upsert({ where: { user_id: userId }, create: { user_id: userId, place_key }, update: { place_key, updated_at: new Date() } });
   return true;
@@ -115,10 +121,10 @@ export async function removePick(deps: LuckyDeps, userId: string, scenario: stri
   return r.count > 0;
 }
 
-/** Clamp a requested range to today −7 … today +14 (dates as YYYY-MM-DD in the place's zone). */
+/** Clamp a requested range to today −7 … today +getLuckyRangeAheadDays() (dates as YYYY-MM-DD in the place's zone). */
 export function clampRange(today: string, from?: string, to?: string): { from: string; to: string } {
   const min = addDays(today, -RANGE_BACK_DAYS);
-  const max = addDays(today, RANGE_AHEAD_DAYS);
+  const max = addDays(today, getLuckyRangeAheadDays());
   const ok = (s?: string) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
   let f = ok(from) ? from! : min;
   let t = ok(to) ? to! : max;
@@ -129,7 +135,7 @@ export function clampRange(today: string, from?: string, to?: string): { from: s
 }
 
 /** Pull the missing months for a place (agent `lucky.day_tables`). Returns the dates written. */
-async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, missing: string[]): Promise<number> {
+async function pullDayTables(deps: LuckyDeps, userId: string | null, preset: string, missing: string[]): Promise<number> {
   if (!deps.engine || missing.length === 0) return 0;
   const place = DAY_TABLE_PLACES[preset]!;
   const placeKey = dayTablePlaceKey(place);
@@ -160,6 +166,50 @@ async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, mi
     }
     return { value: written, output: { written }, charts };
   });
+}
+
+/**
+ * Deterministic 2–4 week universal batch prepull across the 5 reference timezones (`America/New_York`,
+ * `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `Asia/Kolkata`).
+ * Zero AI/LLM: pulls `getLuckyHorizonDays()` (default 28 days) from Radha and stores in `day_tables`.
+ */
+export async function prepullUniversalDayTables(
+  deps: LuckyDeps,
+  todayOverride?: string,
+  presets?: readonly string[],
+): Promise<{ horizonDays: number; places: Array<{ preset: string; placeKey: string; from: string; to: string; stored: number; written: number; missing: number }> }> {
+  const at = (deps.now ?? (() => new Date()))();
+  const horizonDays = getLuckyHorizonDays();
+  const keys = presets ?? Object.keys(DAY_TABLE_PLACES);
+  const places: Array<{ preset: string; placeKey: string; from: string; to: string; stored: number; written: number; missing: number }> = [];
+
+  for (const rawKey of keys) {
+    const preset = resolvePlacePreset(rawKey);
+    if (!preset) continue;
+    const place = DAY_TABLE_PLACES[preset]!;
+    const placeKey = dayTablePlaceKey(place);
+    const { date: localToday } = localMinutes(at, place.tzName);
+    const from = todayOverride ?? localToday;
+    const to = addDays(from, horizonDays);
+    const dates = datesBetween(from, to);
+    const load = () =>
+      deps.prisma.dayTable.findMany({
+        where: { place_key: placeKey, ayanamsa: 'LAHIRI', date: { gte: new Date(`${from}T00:00:00Z`), lte: new Date(`${to}T00:00:00Z`) } },
+        orderBy: { date: 'asc' },
+      });
+    let rows = await load();
+    let have = new Set(rows.map((r) => r.date.toISOString().slice(0, 10)));
+    let missing = dates.filter((d) => !have.has(d));
+    let written = 0;
+    if (missing.length && deps.engine) {
+      written = await pullDayTables(deps, null, preset, missing);
+      rows = await load();
+      have = new Set(rows.map((r) => r.date.toISOString().slice(0, 10)));
+      missing = dates.filter((d) => !have.has(d));
+    }
+    places.push({ preset, placeKey, from, to, stored: rows.length, written, missing: missing.length });
+  }
+  return { horizonDays, places };
 }
 
 /** The person's tara and chandra bala per day for the months in range (agent `lucky.day_overlay`). */
@@ -249,9 +299,12 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   const picks = (await deps.prisma.luckyScenarioPick.findMany({ where: { user_id: userId, shown: true } })).filter((p) => scenarioById(p.scenario_id));
   const natal: Natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
   const personal = await personalDays(deps, userId, preset, [...have], natal);
-  // the chart's marks: only when the digest gives the functional natures (doc 53 §4.6); never a Node derivation
-  const functional = natal && deps.functionalNatureOf ? await deps.functionalNatureOf(natal.kundliId).catch(() => null) : null;
-  const chart: ChartMarks = { functional };
+  // the chart's marks: only when the digest gives the functional natures and running dasha lords (doc 53 §4.6); never a Node derivation
+  const [functional, runningLords] = await Promise.all([
+    natal && deps.functionalNatureOf ? deps.functionalNatureOf(natal.kundliId).catch(() => null) : Promise.resolve(null),
+    natal && deps.runningDashaLordsOf ? deps.runningDashaLordsOf(natal.kundliId, today).catch(() => null) : Promise.resolve(null),
+  ]);
+  const chart: ChartMarks = { functional, runningLords };
 
   // the day rows each run read: one muhurta payload per month, with the calc version it was stored with
   const charts = [...new Map(rows.map((r) => [`${r.date.toISOString().slice(0, 7)}|${r.calc_version ?? ''}`, { type: 'muhurta', variant: r.date.toISOString().slice(0, 7), calc_version: r.calc_version ?? null }])).values()];
