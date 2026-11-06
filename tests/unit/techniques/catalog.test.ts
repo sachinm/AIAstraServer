@@ -69,8 +69,9 @@ describe('technique catalogue', () => {
     expect(limbs.algorithm.join(' ')).toContain('Vyatipata');
     expect(limbs.algorithm.join(' ')).toContain('Vishti');
     const overlay = techniqueById('lucky.personal_overlay')!;
-    expect(overlay.algorithm.filter((s) => s.includes('planned'))).toHaveLength(1);
+    expect(overlay.algorithm.filter((s) => s.includes('planned'))).toHaveLength(0);
     expect(overlay.algorithm.some((s) => s.startsWith("Personal: the hora lord's nature for this chart"))).toBe(true);
+    expect(overlay.algorithm.some((s) => s.includes('runningDashaLordsOf'))).toBe(true);
     for (const sc of SCENARIOS) {
       const steps = techniqueById(`lucky.${sc.id}`)!.algorithm;
       expect(steps.some((x) => x.startsWith('General: yoga') && x.includes('Vyatipata')), sc.id).toBe(true);
@@ -86,10 +87,10 @@ describe('technique catalogue', () => {
       expect(t.special, id).toContain(successor);
     }
     for (const id of ['self.varga', 'self.nakshatra', 'love.varga', 'love.nakshatra']) {
-      expect(techniqueById(id)?.status, id).toBe('planned');
+      expect(techniqueById(id)?.status, id).toBe('built');
     }
     // doc 54 §3 (S3): the Self and Love layers read from the digest, and the love.status sub-areas
-    for (const id of ['self.promise', 'self.affliction', 'self.protection', 'self.activation', 'self.transit', 'self.annual', 'love.promise', 'love.affliction', 'love.protection', 'love.activation', 'love.transit', 'love.annual', 'love.meet', 'love.health', 'love.reconcile']) {
+    for (const id of ['self.promise', 'self.affliction', 'self.protection', 'self.activation', 'self.transit', 'self.annual', 'self.varga', 'self.nakshatra', 'love.promise', 'love.affliction', 'love.protection', 'love.activation', 'love.transit', 'love.annual', 'love.varga', 'love.nakshatra', 'love.meet', 'love.health', 'love.reconcile']) {
       const t = techniqueById(id)!;
       expect(t.status, id).toBe('built');
       expect(t.agents, id).toEqual([id.startsWith('self.') ? 'area.self_board' : 'area.love_board']);
@@ -111,15 +112,14 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/digest\//);
     }
-    // built: 13 lucky scenarios + 5 work + 4 lucky shared + 11 general + 4 deterministic general readers + 3 digest + 6 self layers + 6 love layers + 3 love sub-areas + 3 life;
-    // planned: 4 work + 2 love layers + 2 self layers
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(13 + 5 + 4 + 11 + 4 + 3 + 6 + 6 + 3 + 3);
-    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(4 + 2 + 2);
+    // all 66 techniques are built (0 planned)
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(66);
+    expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(0);
     expect(TECHNIQUES).toHaveLength(66);
   });
 
-  it('the planned work families and the house-state layers are there', () => {
-    for (const id of ['work.annual_family', 'work.conditional_family', 'work.karaka_family', 'work.d10_check']) expect(techniqueById(id)?.status).toBe('planned');
+  it('the work families and the house-state layers are built', () => {
+    for (const id of ['work.annual_family', 'work.conditional_family', 'work.karaka_family', 'work.d10_check']) expect(techniqueById(id)?.status).toBe('built');
     for (const layer of ['promise', 'affliction', 'activation', 'transit', 'annual', 'varga', 'nakshatra']) {
       expect(techniqueById(`love.${layer}`)?.board).toBe('love');
       expect(techniqueById(`self.${layer}`)?.board).toBe('you');

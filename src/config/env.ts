@@ -468,3 +468,149 @@ export function getTurnstileSecret(): string | undefined {
   const s = process.env.TURNSTILE_SECRET_KEY?.trim();
   return s || undefined;
 }
+
+function parseCsvEnv(raw: string | undefined, fallback: readonly string[]): string[] {
+  if (raw === undefined) return [...fallback];
+  const trimmed = raw.trim();
+  if (trimmed === '' || trimmed.toLowerCase() === 'none') return [];
+  return trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * Number of days ahead of universal Panchang / Muhurta day_tables to pre-pull and store for Lucky Times.
+ * Override with LUCKY_HORIZON_DAYS or LUCKY_PREPULL_DAYS (integer 7–60, default 28 = 4 weeks).
+ */
+export function getLuckyHorizonDays(): number {
+  const raw = process.env.LUCKY_HORIZON_DAYS ?? process.env.LUCKY_PREPULL_DAYS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n) && n >= 7 && n <= 60) return n;
+  }
+  return 28;
+}
+
+/**
+ * Default days ahead returned in a single GET /api/lucky/range window when no explicit wider horizon is configured.
+ * Override with LUCKY_RANGE_AHEAD_DAYS (integer 7–60, default 14 = 2 weeks).
+ */
+export function getLuckyRangeAheadDays(): number {
+  const raw = process.env.LUCKY_RANGE_AHEAD_DAYS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n) && n >= 7 && n <= 60) return n;
+  }
+  return 14;
+}
+
+const DEFAULT_LUCKY_YOGA_AVOID = [
+  'Vishkambha',
+  'Atiganda',
+  'Shoola',
+  'Ganda',
+  'Vyaghata',
+  'Vajra',
+  'Vyatipata',
+  'Parigha',
+  'Vaidhriti',
+] as const;
+
+const DEFAULT_LUCKY_YOGA_FAVOUR = [
+  'Siddhi',
+  'Siddha',
+  'Shubha',
+  'Brahma',
+  'Indra',
+  'Dhruva',
+  'Harshana',
+  'Sukarma',
+  'Priti',
+  'Ayushman',
+  'Saubhagya',
+  'Shobhana',
+] as const;
+
+const DEFAULT_LUCKY_KARANA_AVOID = ['Vishti'] as const;
+
+const DEFAULT_LUCKY_KARANA_FAVOUR = ['Bava', 'Balava', 'Kaulava', 'Taitila', 'Gara', 'Vanija'] as const;
+
+const DEFAULT_LUCKY_FIXED_KARANA_AVOID = ['Shakuni', 'Chatushpada', 'Naga'] as const;
+
+const DEFAULT_LUCKY_FIXED_KARANA_FAVOUR = ['Kimstughna'] as const;
+
+/** Avoided Nitya Yogas for Lucky Times (override via comma-separated LUCKY_YOGA_AVOID). */
+export function getLuckyYogaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_YOGA_AVOID, DEFAULT_LUCKY_YOGA_AVOID);
+}
+
+/** Favoured Nitya Yogas for Lucky Times (override via comma-separated LUCKY_YOGA_FAVOUR; includes Siddha #21). */
+export function getLuckyYogaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_YOGA_FAVOUR, DEFAULT_LUCKY_YOGA_FAVOUR);
+}
+
+/** Avoided movable karanas for Lucky Times (override via comma-separated LUCKY_KARANA_AVOID). */
+export function getLuckyKaranaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_KARANA_AVOID, DEFAULT_LUCKY_KARANA_AVOID);
+}
+
+/** Favoured movable karanas for Lucky Times (override via comma-separated LUCKY_KARANA_FAVOUR). */
+export function getLuckyKaranaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_KARANA_FAVOUR, DEFAULT_LUCKY_KARANA_FAVOUR);
+}
+
+/** Fixed (sthira) karanas gated as avoid by default for auspicious acts (override via LUCKY_FIXED_KARANA_AVOID). */
+export function getLuckyFixedKaranaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_FIXED_KARANA_AVOID, DEFAULT_LUCKY_FIXED_KARANA_AVOID);
+}
+
+/** Fixed (sthira) karanas favoured (+1) for auspicious beginnings (override via LUCKY_FIXED_KARANA_FAVOUR). */
+export function getLuckyFixedKaranaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_FIXED_KARANA_FAVOUR, DEFAULT_LUCKY_FIXED_KARANA_FAVOUR);
+}
+
+/** Whether Amrita Siddhi (weekday + nakshatra) scoring is enabled in Lucky Times (LUCKY_AMRITA_SIDDHI_ENABLED, default true). */
+export function isLuckyAmritaSiddhiEnabled(): boolean {
+  const raw = process.env.LUCKY_AMRITA_SIDDHI_ENABLED?.trim().toLowerCase();
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return true;
+}
+
+export interface LuckyReferencePlaceConfig {
+  key: 'pune' | 'newyork' | 'chicago' | 'denver' | 'sanjose';
+  tzAlias: 'in-ist' | 'us-east' | 'us-central' | 'us-mountain' | 'us-west';
+  ianaTz: 'Asia/Kolkata' | 'America/New_York' | 'America/Chicago' | 'America/Denver' | 'America/Los_Angeles';
+  label: string;
+  country: string;
+  region: string;
+  lat: number;
+  lon: number;
+  tz: number;
+}
+
+const DEFAULT_LUCKY_REFERENCE_PLACES: readonly LuckyReferencePlaceConfig[] = [
+  { key: 'pune', tzAlias: 'in-ist', ianaTz: 'Asia/Kolkata', label: 'Pune, IN', country: 'in', region: 'mh', lat: 18.52, lon: 73.857, tz: 5.5 },
+  { key: 'newyork', tzAlias: 'us-east', ianaTz: 'America/New_York', label: 'New York, US', country: 'us', region: 'ny', lat: 40.7128, lon: -74.006, tz: -5 },
+  { key: 'chicago', tzAlias: 'us-central', ianaTz: 'America/Chicago', label: 'Chicago, US', country: 'us', region: 'il', lat: 41.8781, lon: -87.6298, tz: -6 },
+  { key: 'denver', tzAlias: 'us-mountain', ianaTz: 'America/Denver', label: 'Denver, US', country: 'us', region: 'co', lat: 39.7392, lon: -104.9903, tz: -7 },
+  { key: 'sanjose', tzAlias: 'us-west', ianaTz: 'America/Los_Angeles', label: 'San Jose, US', country: 'us', region: 'ca', lat: 37.341, lon: -121.894, tz: -8 },
+] as const;
+
+/**
+ * 5 universal reference timezone places for Lucky Times (4 US timezones + India IST).
+ * Override via JSON array in LUCKY_REFERENCE_PLACES if needed.
+ */
+export function getLuckyReferencePlaces(): readonly LuckyReferencePlaceConfig[] {
+  const raw = process.env.LUCKY_REFERENCE_PLACES?.trim();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as LuckyReferencePlaceConfig[];
+    } catch {
+      // fall back to default 5 reference places
+    }
+  }
+  return DEFAULT_LUCKY_REFERENCE_PLACES;
+}
+

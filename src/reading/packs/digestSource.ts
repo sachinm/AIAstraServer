@@ -21,6 +21,15 @@ export interface DigestPerson {
   karaka: string;
 }
 
+export interface DigestRasiPeriod {
+  system: string;
+  sign: string;
+  lord: string;
+  from: string;
+  to: string;
+  houses: number[];
+}
+
 export interface DigestPackSection {
   version: string;
   /** varga → `h<n>` → card */
@@ -35,6 +44,8 @@ export interface DigestPackSection {
   person: DigestPerson | null;
   /** the vargas the frame names that the digest holds, D1 first */
   vargas: string[];
+  /** Narayana / Chara periods inside the horizon that activate the frame houses, keyed by period id (general.jaimini) */
+  rasi?: Record<string, DigestRasiPeriod>;
 }
 
 /** The vargas the varga-dynamics reader adds for an explain or a whole-life question (doc 53 §4.4). */
@@ -57,6 +68,8 @@ export interface DigestSectionInput {
   points: string[];
   deep: boolean;
   person: DigestPerson | null;
+  /** optional Narayana / Chara rasi periods inside the horizon */
+  rasiPeriods?: Array<{ system?: string; sign: string; lord: string; from: string; to: string }>;
 }
 
 /** The digest rows a question's deterministic readers read: frame houses and planets in D1 and the frame's vargas, the yogas that touch them, the frame's points. */
@@ -92,7 +105,18 @@ export function digestSection(view: DigestView, a: DigestSectionInput): DigestPa
     const card = p.house ? view.house('D1', p.house) : null;
     if (card && !house.D1?.[`h${p.house}`]) (house.D1 ??= {})[`h${p.house}`] = card;
   }
-  return { version: view.version, house, planet, yoga, point, person: a.person, vargas };
+  const rasi: Record<string, DigestRasiPeriod> = {};
+  for (const rp of a.rasiPeriods ?? []) {
+    const matchedHouses = houses.filter((h) => {
+      const c = view.house('D1', h);
+      return c && (c.sign === rp.sign || c.lord === rp.lord);
+    });
+    if (!matchedHouses.length) continue;
+    const sys = rp.system ?? 'narayana';
+    const k = keyOf(`${sys}_${rp.sign}_${rp.from}`);
+    rasi[k] = { system: sys, sign: rp.sign, lord: rp.lord, from: rp.from, to: rp.to, houses: matchedHouses };
+  }
+  return { version: view.version, house, planet, yoga, point, person: a.person, vargas, ...(Object.keys(rasi).length ? { rasi } : {}) };
 }
 
 /** The person a question is about: the one it names, else the person subject's (doc 53 §4.4). */

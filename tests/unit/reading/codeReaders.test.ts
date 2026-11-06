@@ -119,6 +119,26 @@ describe('deterministic readers on a synthetic digest', () => {
     expect(resolvesAll(pack, f.claims.flatMap((c) => c.evidence))).toBe(true);
   });
 
+  it('jaimini cites Narayana/Chara rasi periods when rasiPeriods are present in digestSection', () => {
+    const view = digestView({
+      houses: { D1: { 10: { sign: 'Aries', lord: 'Ma', class: ['kendra'] } } },
+      vargas: ['D1'],
+    });
+    const digest = digestSection(view, {
+      houses: [10],
+      planets: ['Ma'],
+      vargas: [],
+      points: [],
+      deep: false,
+      person: null,
+      rasiPeriods: [{ system: 'narayana', sign: 'Aries', lord: 'Ma', from: '2026-01-01', to: '2027-01-01' }],
+    });
+    const p: EvidencePack = { ...pack, sections: { digest }, keyFrame: { houses: [10], lords: ['Ma'], karakas: [], vargas: [] } };
+    const f = jaimini(p);
+    expect(f.claims.some((c) => c.rule === 'rasi_period_active')).toBe(true);
+    expect(resolvesAll(p, f.claims.flatMap((c) => c.evidence))).toBe(true);
+  });
+
   it('person: only with a person; claims are about the person', () => {
     expect(personReader(pack).claims).toEqual([]);
     const view = digestView({

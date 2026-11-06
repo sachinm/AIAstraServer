@@ -8,6 +8,7 @@ import { callGemini, GeminiHttpError } from '../llm/gemini.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { claimZ, failureReason, parseFindingText, TRUNCATED_CAVEAT, windowZ, type Finding, type SpecialistFailureReason } from '../nodes/specialists.js';
 import { FRAMES, type SubjectId } from '../packs/frames.js';
+import { factsLine } from '../packs/fullPrefix.js';
 import { hashText, type EvidencePack } from '../packs/selector.js';
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
@@ -147,6 +148,8 @@ export function buildReaderRequest(a: {
   focus?: string;
   /** the Oracle's findings text, for the remedy reader only */
   findingsText?: string;
+  /** confirmed person_facts (doc 53 §4.4, 48): passed in the user turn as FACTS */
+  facts?: Record<string, string> | null;
 }): ReaderRequest {
   const def = READERS[a.id];
   const frame = FRAMES[a.subject];
@@ -157,6 +160,7 @@ export function buildReaderRequest(a: {
   const person = a.slice.person ? `Person named: ${a.slice.person.person}, read through house ${a.slice.person.houses.join(' or ')} of the owner's chart.` : '';
   const frameLine = `Subject: ${frame?.label ?? a.subject}. Frame houses: ${a.slice.houses.join(', ')}. Frame lords: ${a.keyFrame?.lords.join(', ') || 'read them from benefic_malefic.house_lords'}. Karakas: ${frame?.karakas.join(', ') ?? ''}. Chara karakas: ${frame?.charaKarakas.join(', ') ?? ''}. Arudhas: ${frame?.arudhas.join(', ') ?? ''}. ${person}`.trim();
   const clarified = a.intent.clarified;
+  const known = factsLine(a.facts);
   const tailParts = [
     PROMPTS[def.promptKey] ?? '',
     frameLine,
@@ -164,6 +168,7 @@ export function buildReaderRequest(a: {
     ...(def.natal ? [] : clarified?.realWant ? [`WHAT THEY REALLY WANT TO KNOW: ${clarified.realWant.line}`] : []),
     ...(a.focus ? [`FOCUS ONLY ON THIS PART, WHICH THE ANSWER MISSED: ${a.focus}`] : []),
     ...(a.findingsText ? [a.findingsText] : []),
+    ...(known ? [known] : []),
     ...(def.natal ? [] : [`QUESTION: ${a.question}`]),
   ];
   const promptSent = tailParts.join('\n');

@@ -3,6 +3,7 @@
  * with its IANA zone so the engine applies daylight saving per date. `sanjose` and `pune` reuse the shared-sky presets.
  * The place key (doc 35's `placeKey`) is built from the standard-time offset so a place has one key all year.
  */
+import { getLuckyReferencePlaces } from '../../config/env.js';
 import { placeKey } from '../transits/ephemerisCache.js';
 import { tzOffsetHours } from '../chartData/place.js';
 
@@ -11,15 +12,26 @@ export interface DayTablePlace {
   lat: number;
   lon: number;
   tzName: string;
+  tzAlias?: string;
 }
 
-export const DAY_TABLE_PLACES: Record<string, DayTablePlace> = {
-  newyork: { name: 'New York, US', lat: 40.7128, lon: -74.006, tzName: 'America/New_York' },
-  chicago: { name: 'Chicago, US', lat: 41.8781, lon: -87.6298, tzName: 'America/Chicago' },
-  denver: { name: 'Denver, US', lat: 39.7392, lon: -104.9903, tzName: 'America/Denver' },
-  sanjose: { name: 'San Jose, US', lat: 37.341, lon: -121.894, tzName: 'America/Los_Angeles' },
-  pune: { name: 'Pune, IN', lat: 18.52, lon: 73.857, tzName: 'Asia/Kolkata' },
-};
+export const DAY_TABLE_PLACES: Record<string, DayTablePlace> = Object.fromEntries(
+  getLuckyReferencePlaces().map((p) => [
+    p.key,
+    { name: p.label, lat: p.lat, lon: p.lon, tzName: p.ianaTz, tzAlias: p.tzAlias },
+  ]),
+);
+
+/** Resolves a preset key ('sanjose'), timezone alias ('us-west'), or IANA zone ('America/Los_Angeles') to the canonical key in DAY_TABLE_PLACES. */
+export function resolvePlacePreset(input: unknown): string | null {
+  if (typeof input !== 'string' || !input.trim()) return null;
+  const k = input.trim().toLowerCase();
+  if (DAY_TABLE_PLACES[k]) return k;
+  for (const [key, p] of Object.entries(DAY_TABLE_PLACES)) {
+    if (p.tzAlias?.toLowerCase() === k || p.tzName.toLowerCase() === k) return key;
+  }
+  return null;
+}
 
 /** The zone's standard-time offset (read in mid-January), used for the request `tz` and the place key. */
 export function standardOffsetHours(tzName: string): number {

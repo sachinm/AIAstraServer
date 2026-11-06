@@ -395,6 +395,9 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   if (input.digest) {
     sections = overlayDigest(sections as Record<string, unknown>, input.digest) as EvidencePack['sections'];
     const person: DigestPerson | null = personFor(input.subject, input.person);
+    const rasiPeriods = (d.dasha.narayana?.periods ?? [])
+      .filter((p) => p.end >= hz.from && p.start <= hz.to)
+      .map((p) => ({ system: 'narayana', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end }));
     // a full-scope pack is the cached evidence, which holds no digest section (fullPrefix.ts CACHED_SECTIONS)
     if (!full) sections.digest = digestSection(input.digest, {
       houses: frameHouses,
@@ -403,6 +406,7 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
       points: [...frame.charaKarakas, ...frame.arudhas],
       deep: intent.questionType === 'why_meaning' || intent.horizon === 'life',
       person,
+      rasiPeriods,
     });
   }
   const approxTokens = Math.ceil(JSON.stringify(sections).length / 3.6);

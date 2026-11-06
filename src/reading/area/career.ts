@@ -18,6 +18,9 @@ import { BAND_ORDER } from '../timeline/converge.js';
 import type { MarkerId } from '../timeline/markers.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf, monthStart } from '../timeline/months.js';
 import type { Band, SystemId } from '../timeline/types.js';
+import type { DigestView } from '../digest/types.js';
+import type { ActivationRow } from '../digest/activation.js';
+import { currentYear, hasClass, isBad, isGood } from './houseLayers.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
 export type Confidence = 'confirmed' | 'likely' | 'split';
@@ -146,11 +149,188 @@ export function securityGrade(c: MonthCell, ends: Set<string>): SecurityGrade {
 const testingAt = (cells: MonthCell[], i: number, min: Band = 'possible') => !!cells[i] && cells[i]!.testing && BAND_MIN(cells[i]!.band, min);
 const supportAt = (cells: MonthCell[], i: number, min: Band = 'moderate') => !!cells[i] && !cells[i]!.testing && BAND_MIN(cells[i]!.band, min);
 
-export function presentState(build: PastBuild, cells: MonthCell[], i: number): PresentState {
+export interface CareerDigestInput {
+  view?: DigestView | null;
+  activation?: ActivationRow[];
+}
+
+export interface D10CheckResult {
+  planet: string;
+  d1Side: Side;
+  d10Side: Side;
+  d9Side: Side;
+  agrees: boolean;
+  split: boolean;
+}
+
+const CAREER_HOUSES = [10, 6, 1, 2, 11];
+const WORK_DUSTHANA = [6, 8, 12];
+const GOOD_CLASS = /kendra|trikona/i;
+const BAD_CLASS = /dusthana/i;
+
+function planetSideInVarga(view: DigestView, varga: string, planet: string): Side {
+  const p = view.planet(varga, planet);
+  if (!p) return 'neutral';
+  let score = 0;
+  if (isGood(p.dignity)) score += 1;
+  else if (isBad(p.dignity)) score -= 1;
+  if (p.house != null) {
+    const hCard = view.house(varga, p.house);
+    if (p.house === 10 || p.house === 1 || p.house === 11 || hasClass(hCard, GOOD_CLASS)) score += 1;
+    else if (WORK_DUSTHANA.includes(p.house) || hasClass(hCard, BAD_CLASS)) score -= 1;
+  }
+  return score >= 1 ? 'support' : score <= -1 ? 'test' : 'neutral';
+}
+
+/**
+ * work.d10_check (doc 43 §8.1, doc 46 §B.7, doc 53 §4.5):
+ * Checks whether D1 and D10 agree on a running period lord's career side, with D9 breaking a tie when one is neutral.
+ * When D1 and D10 directly oppose each other (one support, one test), `split` is true and the vote does not count.
+ */
+export function workD10Check(view: DigestView, planet: string): D10CheckResult {
+  const d1Side = planetSideInVarga(view, 'D1', planet);
+  const d10Side = planetSideInVarga(view, 'D10', planet);
+  const d9Side = planetSideInVarga(view, 'D9', planet);
+  const split = (d1Side === 'support' && d10Side === 'test') || (d1Side === 'test' && d10Side === 'support');
+  const agrees = !split && (d1Side === d10Side ? d1Side !== 'neutral' : d9Side !== 'neutral');
+  return { planet, d1Side, d10Side, d9Side, agrees, split };
+}
+
+/**
+ * work.annual_family (doc 43 §8.1 family 5, doc 46 §B.6, doc 53 §4.5):
+ * Reads the current year's TP/VP chart (D1 and D10), the running Mudda/Patyayini/year dasha lord, and the rajya/karma
+ * sahams to cast the annual family's vote.
+ */
+export function workAnnualVote(view: DigestView, asOf: string): FamilyVote | null {
+  const yr = currentYear(view, asOf);
+  if (!yr) return null;
+  const d10Yr = view.annual(yr.year).find((a) => a.kind === yr.kind && a.varga === 'D10') ?? null;
+  let score = 0;
+  let leadPlanet: string | null = null;
+  for (const h of [10, 1, 6, 2, 11]) {
+    const c = yr.houses.find((x) => x.house === h);
+    if (!c || c.lordHouse == null) continue;
+    if (h === 10 && c.lord) leadPlanet = c.lord;
+    const at = yr.houses.find((x) => x.house === c.lordHouse);
+    if ((c.lordHouse === h || hasClass(at, GOOD_CLASS)) && !isBad(c.lordDignity)) score += h === 10 ? 1.5 : 0.5;
+    else if (c.lordHouse !== h && hasClass(at, BAD_CLASS)) score -= h === 10 ? 1.5 : 0.5;
+  }
+  if (d10Yr) {
+    const h10 = d10Yr.houses.find((x) => x.house === 10);
+    if (h10?.lordHouse != null) {
+      const at10 = d10Yr.houses.find((x) => x.house === h10.lordHouse);
+      if ((h10.lordHouse === 10 || hasClass(at10, GOOD_CLASS)) && !isBad(h10.lordDignity)) score += 1;
+      else if (hasClass(at10, BAD_CLASS)) score -= 1;
+    }
+  }
+  for (const d of yr.dashas) {
+    for (const p of d.periods) {
+      if (p.from <= asOf && asOf < p.to && p.lord) {
+        leadPlanet = leadPlanet ?? p.lord;
+        const side = planetSideInVarga(view, 'D10', p.lord);
+        if (side === 'support') score += 1;
+        else if (side === 'test') score -= 1;
+      }
+    }
+  }
+  for (const s of yr.sahams) {
+    const name = s.name.toLowerCase();
+    if (name !== 'rajya' && name !== 'karma' && name !== 'punya' && name !== 'yasas') continue;
+    if (s.house == null) continue;
+    const at = yr.houses.find((x) => x.house === s.house);
+    if (hasClass(at, GOOD_CLASS)) score += 1;
+    else if (hasClass(at, BAD_CLASS)) score -= 1;
+  }
+  const vote: Side = score >= 1 ? 'support' : score <= -1 ? 'test' : 'neutral';
+  return { family: 'annual', label: "This year's chart", vote, planet: leadPlanet };
+}
+
+/**
+ * work.conditional_family (doc 43 §8.1 family 2, doc 46 §B.4, doc 53 §4.5):
+ * Reads running conditional dasha rows activating career houses and casts the conditional clock vote.
+ */
+export function workConditionalVote(view: DigestView, activation: ActivationRow[], asOf: string, seenPlanets?: Set<string>): FamilyVote | null {
+  const rows = activation.filter((r) => r.family === 'conditional' && r.from <= asOf && asOf < r.to && r.lord);
+  if (!rows.length) return null;
+  let score = 0;
+  let leadPlanet: string | null = null;
+  for (const r of rows) {
+    const p = r.lord!;
+    if (seenPlanets?.has(p)) continue;
+    const check = workD10Check(view, p);
+    if (check.split) continue;
+    leadPlanet = leadPlanet ?? p;
+    const w = r.level === 1 ? 1 : r.level === 2 ? 1.5 : 0.75;
+    const touchesCareer = r.houses.some((h) => CAREER_HOUSES.includes(h));
+    const touchesDusthana = r.houses.some((h) => r.houses.length === 1 && WORK_DUSTHANA.includes(h));
+    if (check.d1Side === 'support' || check.d10Side === 'support' || (touchesCareer && !touchesDusthana)) score += w;
+    else if (check.d1Side === 'test' || check.d10Side === 'test' || touchesDusthana) score -= w;
+  }
+  if (leadPlanet && seenPlanets) seenPlanets.add(leadPlanet);
+  const vote: Side = score >= 0.5 ? 'support' : score <= -0.5 ? 'test' : 'neutral';
+  return { family: 'conditional', label: 'Conditional clock', vote, planet: leadPlanet };
+}
+
+/**
+ * work.karaka_family (doc 43 §8.1 family 4, doc 46 §B.4, doc 53 §4.5):
+ * Reads running karaka dasha rows; AmK or the 10th lord running gives support unless afflicted in D10.
+ */
+export function workKarakaVote(view: DigestView, activation: ActivationRow[], asOf: string, seenPlanets?: Set<string>): FamilyVote | null {
+  const rows = activation.filter((r) => r.family === 'karaka' && r.from <= asOf && asOf < r.to && r.lord);
+  if (!rows.length) return null;
+  const h10Lord = view.house('D1', 10)?.lord ?? null;
+  const amkRow = view.points('D1').find((p) => p.id === 'AmK');
+  const amkPlanet = (amkRow as unknown as { planet?: string } | undefined)?.planet ?? amkRow?.lord ?? null;
+  let score = 0;
+  let leadPlanet: string | null = null;
+  for (const r of rows) {
+    const p = r.lord!;
+    if (seenPlanets?.has(p)) continue;
+    const check = workD10Check(view, p);
+    if (check.split) continue;
+    leadPlanet = leadPlanet ?? p;
+    if ((p === amkPlanet || p === h10Lord) && check.d10Side !== 'test') score += 1.5;
+    else if (check.d10Side === 'test' || check.d1Side === 'test') score -= 1;
+    else if (r.houses.includes(10)) score += 1;
+  }
+  if (leadPlanet && seenPlanets) seenPlanets.add(leadPlanet);
+  const vote: Side = score >= 0.5 ? 'support' : score <= -0.5 ? 'test' : 'neutral';
+  return { family: 'karaka', label: 'Karaka clock', vote, planet: leadPlanet };
+}
+
+export function presentState(build: PastBuild, cells: MonthCell[], i: number, digest?: CareerDigestInput): PresentState {
   const ends = endLords(build);
   const now = cells.slice(Math.max(0, i - 1), i + 2);
   const votes = familyVote(now);
-  const available = FAMILIES.filter((f) => f.systems.some((s) => build.systems.includes(s) && build.activations.some((a) => a.system === s))).length;
+  let extraAvailable = 0;
+  if (digest?.view) {
+    const view = digest.view;
+    const seenPlanets = new Set<string>();
+    const mainVote = votes.find((v) => v.family === 'main');
+    if (mainVote?.planet) {
+      const check = workD10Check(view, mainVote.planet);
+      if (check.split) mainVote.vote = 'neutral';
+      else seenPlanets.add(mainVote.planet);
+    }
+    const asOf = cells[i] ? `${cells[i]!.month}-15` : '2026-10-15';
+    const actRows = digest.activation ?? [];
+    const cond = workConditionalVote(view, actRows, asOf, seenPlanets);
+    if (cond) {
+      votes.push(cond);
+      extraAvailable += 1;
+    }
+    const kar = workKarakaVote(view, actRows, asOf, seenPlanets);
+    if (kar) {
+      votes.push(kar);
+      extraAvailable += 1;
+    }
+    const ann = workAnnualVote(view, asOf);
+    if (ann) {
+      votes.push(ann);
+      extraAvailable += 1;
+    }
+  }
+  const available = FAMILIES.filter((f) => f.systems.some((s) => build.systems.includes(s) && build.activations.some((a) => a.system === s))).length + extraAvailable;
   const tests = votes.filter((v) => v.vote === 'test').length;
   const supports = votes.filter((v) => v.vote === 'support').length;
   const security = cells[i] ? securityGrade(cells[i]!, ends) : 'clear';
@@ -236,13 +416,18 @@ function addDaysEx(iso: string): string {
 
 const SUBAREA_ORDER = ['get_job', 'job_change', 'promotion', 'job_security', 'abroad', 'pay', 'business'];
 
-export function careerMap(build: PastBuild, asOf: string): CareerMap {
-  const notes = [...build.notes, `Phase 1: the ${FAMILIES_NOT_BUILT.join(', ')} families are not built yet; confidence scales to the families available.`];
+export function careerMap(build: PastBuild, asOf: string, digest?: CareerDigestInput): CareerMap {
   const cells = build.grid.cells[PRIMARY];
   const month = monthOf(asOf);
   const i = cells.findIndex((c) => c.month === month);
   if (i < 0) throw new Error(`careerMap: ${month} is not inside the build span`);
-  const present = presentState(build, cells, i);
+  const present = presentState(build, cells, i, digest);
+  const votedIds = new Set(present.votes.map((v) => v.family));
+  const missingFamilies = FAMILIES_NOT_BUILT.filter((f) => !votedIds.has(f));
+  const notes = [
+    ...build.notes,
+    ...(missingFamilies.length ? [`Phase 1: the ${missingFamilies.join(', ')} families are not built yet; confidence scales to the families available.`] : []),
+  ];
   const ends = endLords(build);
 
   const ahead: SubareaWindow[] = [];

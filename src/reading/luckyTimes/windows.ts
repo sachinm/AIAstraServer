@@ -7,7 +7,7 @@
  * day with plain-word reason keys. Node only cuts the engine's windows by the engine's avoid bands and adds the scores
  * the scenario table (scenarios.ts, cited) assigns; it derives no astrological value.
  */
-import { karanaName, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type Weekday, type YogaName } from './scenarios.js';
+import { isAmritaSiddhi, karanaName, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type StarGroup, type TithiGroup, type Weekday, type YogaName } from './scenarios.js';
 
 /** The engine's CLOCK: hours from the local midnight of the row's date (may exceed 24). */
 export interface Clock {
@@ -35,9 +35,12 @@ export interface DayRow {
   varjyam?: Span[];
   muhurtas?: Array<Span & { name?: string; good?: boolean }>;
   horas?: Array<Span & { lord?: string }>;
+  /** Full day yoga and karana spans when provided by the engine (E6), with fallback to panchanga_at_noon. */
+  yogas?: LimbAtNoon[];
+  karanas?: LimbAtNoon[];
   panchanga_at_noon?: {
-    tithi?: { number?: number; start_hours?: number; end_hours?: number };
-    nakshatra?: { number?: number; start_hours?: number; end_hours?: number };
+    tithi?: { number?: number; lord?: string; group?: string; start_hours?: number; end_hours?: number };
+    nakshatra?: { number?: number; lord?: string; group?: string; start_hours?: number; end_hours?: number };
     /** the engine's yoga at noon, with its span in hours from local midnight (start may be negative: began the day before) */
     yoga?: LimbAtNoon;
     /** the engine's karana at noon, with its span */
@@ -48,6 +51,7 @@ export interface DayRow {
 export interface LimbAtNoon {
   number?: number;
   name?: string;
+  lord?: string;
   start_hours?: number;
   end_hours?: number;
 }
@@ -75,10 +79,11 @@ export interface Reason {
 export const scopeOf = (key: string): ReasonScope => (key.startsWith('personal:') ? 'personal' : 'general');
 export const scoped = (keys: string[]): Reason[] => keys.map((key) => ({ key, scope: scopeOf(key) }));
 
-/** The chart's own marks for the day overlay (doc 53 §4.6): the functional nature of each planet for this chart. */
+/** The chart's own marks for the day overlay (doc 53 §4.6): the functional nature of each planet for this chart, plus running dasha lords. */
 export type FunctionalNature = 'benefic' | 'malefic' | 'neutral';
 export interface ChartMarks {
   functional?: Record<string, FunctionalNature> | null;
+  runningLords?: readonly string[] | null;
 }
 
 /** The engine's personal fields for a day (muhurta with natal fields): its own good/bad verdicts are used as given. */
@@ -218,12 +223,26 @@ function spanOf(x: { start_hours?: number; end_hours?: number } | undefined): Ra
 
 const MIN_PIECE = 20;
 
-/** The noon yoga and karana with their spans, as the engine gave them. */
+/** All yoga and karana spans of the day (from `row.yogas`/`row.karanas` when the engine provides them, else `panchanga_at_noon`). */
 function limbSpans(row: DayRow) {
   const at = row.panchanga_at_noon;
+  const toList = <Name extends string>(
+    list: LimbAtNoon[] | undefined,
+    noon: LimbAtNoon | undefined,
+    norm: (raw: unknown) => Name | null,
+  ): Array<{ name: Name; span: Range }> => {
+    const items = Array.isArray(list) && list.length > 0 ? list : noon ? [noon] : [];
+    const out: Array<{ name: Name; span: Range }> = [];
+    for (const item of items) {
+      const name = norm(item?.name);
+      const span = spanOf(item);
+      if (name && span) out.push({ name, span });
+    }
+    return out;
+  };
   return {
-    yoga: { name: yogaName(at?.yoga?.name), span: spanOf(at?.yoga) } as { name: YogaName | null; span: Range | null },
-    karana: { name: karanaName(at?.karana?.name), span: spanOf(at?.karana) } as { name: KaranaName | null; span: Range | null },
+    yogas: toList(row.yogas, at?.yoga, yogaName),
+    karanas: toList(row.karanas, at?.karana, karanaName),
   };
 }
 
@@ -232,12 +251,14 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
   const dayReasons: string[] = [];
   if (rule.dayAvoid.includes(weekday)) return { scenario: rule.id, windows: [], verdict: 'avoid_day', dayReasons: [`weekday_avoid:${weekday}`] };
 
-  const tithiNo = row.panchanga_at_noon?.tithi?.number;
-  const tithiGroup = typeof tithiNo === 'number' ? tithiGroupOf(tithiNo) : null;
-  const tithiSpan = spanOf(row.panchanga_at_noon?.tithi);
-  const starNo = row.panchanga_at_noon?.nakshatra?.number;
-  const starGroup = typeof starNo === 'number' ? starGroupOf(starNo) : null;
-  const starSpan = spanOf(row.panchanga_at_noon?.nakshatra);
+  const tithiObj = row.panchanga_at_noon?.tithi;
+  const tithiNo = tithiObj?.number;
+  const tithiGroup = (tithiObj?.group as TithiGroup | undefined) ?? (typeof tithiNo === 'number' ? tithiGroupOf(tithiNo) : null);
+  const tithiSpan = spanOf(tithiObj);
+  const starObj = row.panchanga_at_noon?.nakshatra;
+  const starNo = starObj?.number;
+  const starGroup = (starObj?.group as StarGroup | undefined) ?? (typeof starNo === 'number' ? starGroupOf(starNo) : null);
+  const starSpan = spanOf(starObj);
 
   const sunrise = toMin(row.sunrise);
   const from = rule.hours[0] === 'sunrise' ? sunrise : rule.hours[0] * 60;
@@ -251,13 +272,13 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
   const goodMuhurtas = (row.muhurtas ?? []).filter((m) => m.good).map(rangeOf).filter((r): r is Range => !!r);
   const pers = personalScore(personal);
   const limbs = limbSpans(row);
-  const yogaAvoided = !!(limbs.yoga.name && limbs.yoga.span && rule.yogaAvoid.includes(limbs.yoga.name));
-  const karanaAvoided = !!(limbs.karana.name && limbs.karana.span && rule.karanaAvoid.includes(limbs.karana.name));
+  const avoidedYogas = limbs.yogas.filter((y) => rule.yogaAvoid.includes(y.name));
+  const avoidedKaranas = limbs.karanas.filter((k) => rule.karanaAvoid.includes(k.name));
   // the general gate: an avoided yoga or karana is cut out of every candidate like an avoid band
-  const gates: Range[] = [];
-  if (yogaAvoided) gates.push(limbs.yoga.span!);
-  if (karanaAvoided) gates.push(limbs.karana.span!);
+  const gates: Range[] = [...avoidedYogas.map((y) => y.span), ...avoidedKaranas.map((k) => k.span)];
   const functional = chart?.functional ?? null;
+  const runningSet = chart?.runningLords?.length ? new Set(chart.runningLords.map((l) => l.toLowerCase())) : null;
+  const amritaSiddhi = isAmritaSiddhi(weekday, starNo);
   const weekdayBoost = rule.dayFavour.includes(weekday) ? 1 : 0;
 
   const candidates: Array<Range & { lord?: string; brahma?: boolean }> = [];
@@ -276,15 +297,17 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
       const half = (piece.to - piece.from) / 2;
       if (weekdayBoost) reasons.push(`weekday:${weekday}`);
       const mid = { from: piece.from, to: piece.to };
+      const inTithi = !!(tithiSpan && overlap(mid, tithiSpan) >= half);
       // tithi: only inside its own span
-      if (tithiGroup && tithiSpan && overlap(mid, tithiSpan) >= (piece.to - piece.from) / 2) {
+      if (tithiGroup && inTithi) {
         if (rule.tithiAvoid.includes(tithiGroup)) continue;
         if (rule.tithiFavour.includes(tithiGroup)) {
           score += 1;
           reasons.push(`tithi:${tithiGroup}`);
         }
       }
-      if (starGroup && starSpan && overlap(mid, starSpan) >= (piece.to - piece.from) / 2) {
+      const inStar = !!(starSpan && overlap(mid, starSpan) >= half);
+      if (starGroup && inStar) {
         if (rule.starFavour.includes(starGroup)) {
           score += 1;
           reasons.push(`star:${starGroup}`);
@@ -293,12 +316,29 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
           reasons.push(`star_avoid:${starGroup}`);
         }
       }
-      if (limbs.yoga.name && limbs.yoga.span && rule.yogaFavour.includes(limbs.yoga.name) && overlap(mid, limbs.yoga.span) >= half) {
+      if (inStar && amritaSiddhi) {
         score += 1;
-        reasons.push(`yoga:${limbs.yoga.name}`);
+        reasons.push('amrita_siddhi');
       }
-      if (limbs.karana.name && limbs.karana.span && rule.karanaFavour.includes(limbs.karana.name) && overlap(mid, limbs.karana.span) >= half) {
-        reasons.push(`karana:${limbs.karana.name}`);
+      for (const y of limbs.yogas) {
+        if (rule.yogaFavour.includes(y.name) && overlap(mid, y.span) >= half) {
+          score += 1;
+          reasons.push(`yoga:${y.name}`);
+        }
+      }
+      for (const k of limbs.karanas) {
+        if (rule.karanaFavour.includes(k.name) && overlap(mid, k.span) >= half) {
+          if (rule.karanaBonus?.includes(k.name)) score += 1;
+          reasons.push(`karana:${k.name}`);
+        }
+      }
+      if (runningSet) {
+        const starLordMatch = inStar && starObj?.lord && runningSet.has(starObj.lord.toLowerCase());
+        const tithiLordMatch = inTithi && tithiObj?.lord && runningSet.has(tithiObj.lord.toLowerCase());
+        if (starLordMatch || tithiLordMatch) {
+          score += 1;
+          reasons.push('personal:dasha_lord');
+        }
       }
       if (c.brahma) {
         score += 2;
@@ -342,8 +382,8 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
   if (tithiGroup && rule.tithiAvoid.includes(tithiGroup) && best.length === 0) dayReasons.push(`tithi_avoid:${tithiGroup}`);
   if (best.length === 0) {
     const act = { from, to };
-    if (yogaAvoided && overlap(act, limbs.yoga.span!) > 0) dayReasons.push(`yoga_avoid:${limbs.yoga.name}`);
-    if (karanaAvoided && overlap(act, limbs.karana.span!) > 0) dayReasons.push(`karana_avoid:${limbs.karana.name}`);
+    for (const y of avoidedYogas) if (overlap(act, y.span) > 0) dayReasons.push(`yoga_avoid:${y.name}`);
+    for (const k of avoidedKaranas) if (overlap(act, k.span) > 0) dayReasons.push(`karana_avoid:${k.name}`);
   }
   return { scenario: rule.id, windows: best, verdict: best.length ? 'good' : dayReasons.length ? 'avoid_day' : 'none', dayReasons };
 }

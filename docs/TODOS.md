@@ -853,10 +853,6 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   `api-bb4f4ff0e20f`, with no baseline from before the change. The seed wait is capped at 4 s. Owner: deploy session.
   Done: Init Duration from an image before `731acc7` compared with one after, and the cap lowered if the seeds take
   more than 500 ms.
-- **P3: The main checkout's generated Prisma client is stale.** `node_modules/.prisma/client` in the main checkout
-  (`C:/Users/Owner/Documents/work/AIAstra_Server`) predates M29 (no `techniqueRegistry`), so `tsc` and tests run there
-  disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
-  generate` run in the main checkout.
 
 - **P3: Check a real selfie upload on staging.** 2026-11-05. `X-Face-Box` was added to the API's CloudFront origin
   request policy `e1684868-b4fe-43b2-94ca-ac52642bd67d` (only the AI Astra API distribution uses it); the preflight
@@ -875,12 +871,6 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   that the row does not name. Outside the noon spans no yoga or karana rule applies. Owner: engine pass. Done: the
   engine's `muhurta` day row lists every yoga and karana of the day with start and end, and `windows.ts limbSpans`
   reads the list.
-- **P3: Doc 53 §4.6 lists "Amrita" among the favoured yogas.** Amrita is not one of the 27 yogas (it is a weekday and
-  star combination, Amrita siddhi), so it is left out of `YOGA_FAVOUR_DEFAULT`. Owner: Sachin or the astrologer
-  review. Done: doc 53 says whether Siddha (yoga 21) was meant, or Amrita siddhi becomes its own rule.
-- **P3: The four fixed karanas have no default.** Doc 53 §4.6 says Shakuni, Chatushpada, Naga and Kimstughna apply "by
-  the rule of the act"; no act-by-act rule is written, so they neither gate nor favour. Owner: astrologer review.
-  Done: per-scenario `karanaAvoid` / `karanaFavour` entries for them with the cited rule.
 - **P3: Yoga and karana names are matched by spelling.** The engine spells several names its own way (Soola,
   Vaidhrithi, Vriyana, Subha, Baalava, VishtiBhadra, Sakuna, Kimstugna); `scenarios.ts SPELLING` maps them to the
   classical names. A new engine spelling would silently match no rule. Owner: engine pass. Done: the engine returns a
@@ -930,9 +920,6 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   When the status is `ready` it is the build time. A separate `digest_started_at` column would be cleaner.
 
 ### Found, not from this branch
-- **`tests/unit/rawSqlAllowList.test.ts` fails on `develop`**: `src/agents/registry.ts`, `src/auth/requestAuth.ts` and
-  `src/techniques/catalog.ts` use raw SQL and are not on its reviewed list (they were not changed for raw SQL here).
-  Done: each is added to `REVIEWED_PLAIN` with its reason, or to `SEALING`.
 - **Migration checksums**: M32 and M33 were recorded in `_prisma_migrations` with the sha256 of the files as written
   (LF). A CRLF checkout changes the checksum `prisma migrate` computes; the same holds for earlier migrations.
 
@@ -944,11 +931,6 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   already ran only within 13 months). Owner: Sachin (product) / reading-dev. Done: either `life` is added to the
   annual selectors (or the any-of "or question type timing" rule of the matcher item above lands), or this is accepted
   and the item deleted.
-- **P2: The analysts' own user turn does not carry FACTS yet.** `run.ts` puts the confirmed `person_facts` in the tail
-  (writer, single call, Oracle) as `FACTS (...)`, but `nodes/specialists.ts runSpecialist` and the oracle readers'
-  `buildReaderRequest` still send no FACTS, though every analyst contract lists it (doc 53 §4.4). Adding it changes the
-  specialist prompts and must join the findings-cache key (`nodes/findingsCache.ts findingCacheKey`) and the readers'
-  `cacheKey`. Owner: reading-dev. Done: FACTS in both, both cache keys include a facts hash, prompt tests updated.
 - **P2: Prewarm does not apply the technique selection.** `oracle/prewarmReaders.ts` calls `prepareReaders` without
   `allowedReaders`, so during clarify it may read a reader the question will not run (only R11 on a life horizon
   today; any reader once selectors narrow). Harmless (an unused memo) but billed. Owner: reading-dev. Done: prewarm
@@ -959,9 +941,5 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   house `sign` (the dossier's varga rows carry sign numbers), the star lord's house, shadbala rupas and `co_lord`, and
   `detail.yogas` (its filter reads a source label digest rows lack). Owner: reading-dev with S1. Done: each is either
   served by the digest in the pack's spelling or confirmed as dossier-only, and this list shrinks to the latter.
-- **P3: The deterministic readers' Narayana and Chara periods wait for the activation calendar.** `general.jaimini`
-  reads points, house classes and argala; the rasi-dasha half of its contract (doc 53 §4.4) needs `kundli_activation`
-  (S1, M33) in the pack. Owner: reading-dev. Done: the digest section carries the horizon's Narayana/Chara rows and the
-  reader cites them.
 - **P3: Deterministic readers are not prewarmed or cached.** They are code over the pack (milliseconds), so they rerun
   per question; noted only so nobody adds a model call there without the cost guard. Owner: reading-dev.

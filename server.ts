@@ -32,7 +32,7 @@ import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
 import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
-import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
+import { engineAtPlace, functionalNatureOf, natalForUser, runningDashaLordsOf } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
 import { seedTechniqueRegistry } from './src/techniques/catalog.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
@@ -310,9 +310,15 @@ registerBillingRoutes(app, { prisma, requireUser, optionalUser });
 registerTimelineRoutes(app, { prisma, requireUser });
 // the assistant on the public pages and the visit log: no sign-in, no account data
 registerAssistantRoutes(app, { prisma });
-// Lucky times (docs/reading-engine/49): mounted when LUCKY_ENABLED=1; analytics events always
-// functionalNatureOf: null until the digest reader (doc 54 S1, loadDigest) is merged and wired here
-registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma), functionalNatureOf: null });
+// Lucky times (docs/reading-engine/49, 53 §4.6): mounted when LUCKY_ENABLED=1; analytics events always
+registerLuckyRoutes(app, {
+  prisma,
+  requireUser,
+  engine: engineAtPlace,
+  natalFor: natalForUser(prisma),
+  functionalNatureOf: functionalNatureOf(prisma),
+  runningDashaLordsOf: runningDashaLordsOf(prisma),
+});
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
 // life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1

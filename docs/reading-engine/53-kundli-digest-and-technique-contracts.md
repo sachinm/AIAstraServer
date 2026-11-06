@@ -217,24 +217,35 @@ selectors (`work.status` from the companion memory); `work.annual_family`, `work
 and `work.d10_check` become built by reading `activation` (the conditional systems from `dasha.applicable`, the karaka
 dasha, the annual set) and the D10 house cards, which closes the families doc 43 §8.1 asked for.
 
-### 4.6 Lucky times: the five limbs, general and personal
+### 4.6 Lucky times: the five limbs, general and personal, and 2–4 week universal prepull
 
 The panchang is five limbs: **vara** (weekday, its lord), **tithi** (the lunar day; nanda/bhadra/jaya/rikta/purna),
 **nakshatra** (the Moon's star), **yoga** (Sun+Moon longitude sum, 27 yogas), **karana** (half tithi, 11 karanas). The
-tool exists to pick a moment whose five limbs favour the act (Muhurta Chintamani; B.V. Raman, *Muhurta*). Today the
-scoring uses three limbs and the hora. Changes:
+tool exists to pick a moment whose five limbs favour the act (Muhurta Chintamani; B.V. Raman, *Muhurta*). Everything in
+Lucky times is 100% deterministic (`engine_pull` + `code`, zero AI/LLM):
+- **Universal 2–4 week prepull across 5 reference timezones (`prepullUniversalDayTables`)**: because the base panchang
+  and muhurta day tables are universal for users in a timezone, `src/config/env.ts` configures 5 reference timezone
+  places (`LUCKY_REFERENCE_PLACES`, `LUCKY_HORIZON_DAYS=28`): US Eastern (`America/New_York`, `us-east` / `newyork`),
+  US Central (`America/Chicago`, `us-central` / `chicago`), US Mountain (`America/Denver`, `us-mountain` / `denver`),
+  US Pacific (`America/Los_Angeles`, `us-west` / `sanjose`), and India IST (`Asia/Kolkata`, `in-ist` / `pune`). Missing
+  days across the 2–4 week horizon are pulled deterministically in one batch and stored in `day_tables`.
 - `lucky.panchang_limbs` (new, code): a day's five limbs with each limb's classical verdict for the act family (general
-  for everyone, from the engine's day table): tithi group, star group, vara lord, **yoga** (the 9 avoided: Vishkambha,
-  Atiganda, Shoola, Ganda, Vyaghata, Vajra, Vyatipata, Parigha, Vaidhriti; the favoured: Siddhi, Shubha, Amrita, Brahma,
-  Indra, Dhruva, Harshana, Sukarma, Priti, Ayushman, Saubhagya, Shobhana), **karana** (Vishti/Bhadra avoided; Bava,
-  Balava, Kaulava, Taitila, Gara, Vanija favoured for most acts; the four fixed karanas by rule); each marked `general`.
+  for everyone, from the engine's day table, configurable via env vars in `src/config/env.ts`): tithi group, star group,
+  vara lord, **Amrita Siddhi** (weekday + nakshatra combination, `amrita_siddhi` +1 general reason, gated by
+  `LUCKY_AMRITA_SIDDHI_ENABLED`), **yoga** (`LUCKY_YOGA_AVOID`: Vishkambha, Atiganda, Shoola, Ganda, Vyaghata, Vajra,
+  Vyatipata, Parigha, Vaidhriti; `LUCKY_YOGA_FAVOUR`: Siddhi, Siddha (#21 of the 27 Nitya Yogas), Shubha, Amrita, Brahma,
+  Indra, Dhruva, Harshana, Sukarma, Priti, Ayushman, Saubhagya, Shobhana), **karana** (`LUCKY_KARANA_AVOID` +
+  `LUCKY_FIXED_KARANA_AVOID`: Vishti/Bhadra and the three fixed karanas Shakuni, Chatushpada, Naga avoided by default;
+  `LUCKY_KARANA_FAVOUR` + `LUCKY_FIXED_KARANA_FAVOUR`: Bava, Balava, Kaulava, Taitila, Gara, Vanija and Kimstughna
+  favoured, with Kimstughna adding +1 on auspicious beginnings); each marked `general`.
 - `lucky.personal_overlay` (revised): the person's **tara** (the day's star counted from the Moon star: janma, sampat,
   vipat, kshema, pratyak, sadhaka, vadha, mitra, parama mitra) and **chandra bala** (the Moon's house from natal Moon),
-  plus two new personal marks from the digest: the hora lord's nature **for this chart** (functional benefic or malefic
-  from `planet` D1) and whether the day's tithi lord or star lord is a running dasha lord (`activation`), each marked
-  `personal`.
+  plus two personal marks from the digest: the hora lord's nature **for this chart** (`functionalNatureOf`, functional
+  benefic or malefic from `planet` D1) and whether the day's tithi lord or star lord is a running dasha lord
+  (`runningDashaLordsOf` from `kundli_activation`, `personal:dasha_lord` +1), each marked `personal`.
 - Every scenario row's algorithm lists its rules in two groups, general and personal, and the Why sheet shows them that
-  way. Scores: general limbs decide the day gate; personal marks move a window by ±1 as now, plus the hora-lord nature.
+  way. Scores: general limbs decide the day gate; personal marks move a window by ±1 as now, plus the hora-lord and
+  dasha-lord marks.
 
 ### 4.7 API and Lambda behaviour
 

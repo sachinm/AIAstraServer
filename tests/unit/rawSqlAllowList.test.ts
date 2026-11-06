@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 /** files that read or write a sealed column: they must import src/lib/pii/rawSql.ts */
 const SEALING = [
+  'src/reading/area/boardService.ts',
   'src/reading/chartData/prashna.ts',
   'src/reading/chartData/store.ts',
   'src/reading/timeline/ledgerStore.ts',
@@ -20,6 +21,9 @@ const SEALING = [
 
 /** files reviewed as touching no sealed column, and why */
 const REVIEWED_PLAIN: Record<string, string> = {
+  'src/agents/registry.ts': 'static agent catalogue metadata seed (agent_registry)',
+  'src/auth/requestAuth.ts': 'session id and expiry lookup in app_sessions',
+  'src/techniques/catalog.ts': 'static technique catalogue metadata seed (technique_registry)',
   'src/services/kundliSyncWorker.ts': 'sweeps select kundli ids by plain status, lock and timestamp columns only',
   'src/assistant/store.ts': 'public-page assistant log: no account, no personal table',
   'src/lib/dbCheck.ts': 'SELECT 1 at boot',
