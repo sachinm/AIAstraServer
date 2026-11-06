@@ -1,12 +1,13 @@
 /**
  * The Lucky times windows engine (docs/reading-engine/49 §4.1). Pure: no I/O, no clock reads.
  *
- * Input is one engine `muhurta` day row as stored in `day_tables.payload` (every time and number is the engine's) plus
- * an optional personal overlay (tara and chandra bala from the engine). Output is, per scenario, the best windows of the
+ * Input is one engine `muhurta` day row as stored in `day_tables.payload` (every time, number and name is the engine's,
+ * the noon yoga and karana included) plus an optional personal overlay (tara and chandra bala from the engine) and the
+ * chart's marks (the functional nature of each planet, from the digest when there is one). Output is, per scenario, the best windows of the
  * day with plain-word reason keys. Node only cuts the engine's windows by the engine's avoid bands and adds the scores
  * the scenario table (scenarios.ts, cited) assigns; it derives no astrological value.
  */
-import { scenarioById, starGroupOf, tithiGroupOf, type Lord, type ScenarioRule, type Weekday } from './scenarios.js';
+import { karanaName, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type Weekday, type YogaName } from './scenarios.js';
 
 /** The engine's CLOCK: hours from the local midnight of the row's date (may exceed 24). */
 export interface Clock {
@@ -37,7 +38,47 @@ export interface DayRow {
   panchanga_at_noon?: {
     tithi?: { number?: number; start_hours?: number; end_hours?: number };
     nakshatra?: { number?: number; start_hours?: number; end_hours?: number };
+    /** the engine's yoga at noon, with its span in hours from local midnight (start may be negative: began the day before) */
+    yoga?: LimbAtNoon;
+    /** the engine's karana at noon, with its span */
+    karana?: LimbAtNoon;
   };
+}
+
+export interface LimbAtNoon {
+  number?: number;
+  name?: string;
+  start_hours?: number;
+  end_hours?: number;
+}
+
+/** A limb as the API shows it (doc 54 §6): the classical spelling of the engine's name, and when it ends (hours). */
+export interface DayLimb {
+  name: string;
+  endHour: number | null;
+}
+
+/** The day's yoga and karana from the stored row, names only (doc 54 §6). Unknown names are left out. */
+export function dayLimbs(row: DayRow): { yoga: DayLimb | null; karana: DayLimb | null } {
+  const at = row.panchanga_at_noon;
+  const limb = (x: LimbAtNoon | undefined, name: string | null): DayLimb | null =>
+    name ? { name, endHour: typeof x?.end_hours === 'number' ? x.end_hours : null } : null;
+  return { yoga: limb(at?.yoga, yogaName(at?.yoga?.name)), karana: limb(at?.karana, karanaName(at?.karana?.name)) };
+}
+
+/** Whose a reason is: the same for everyone at the place (general) or from this person's chart (personal). */
+export type ReasonScope = 'general' | 'personal';
+export interface Reason {
+  key: string;
+  scope: ReasonScope;
+}
+export const scopeOf = (key: string): ReasonScope => (key.startsWith('personal:') ? 'personal' : 'general');
+export const scoped = (keys: string[]): Reason[] => keys.map((key) => ({ key, scope: scopeOf(key) }));
+
+/** The chart's own marks for the day overlay (doc 53 §4.6): the functional nature of each planet for this chart. */
+export type FunctionalNature = 'benefic' | 'malefic' | 'neutral';
+export interface ChartMarks {
+  functional?: Record<string, FunctionalNature> | null;
 }
 
 /** The engine's personal fields for a day (muhurta with natal fields): its own good/bad verdicts are used as given. */
@@ -134,7 +175,10 @@ export interface Window {
   from: number;
   to: number;
   score: number;
-  reasons: string[];
+  /** each reason with its scope (doc 54 §6) */
+  reasons: Reason[];
+  /** the same keys as plain strings, kept for older clients */
+  reasonKeys: string[];
 }
 
 export interface ScenarioDay {
@@ -174,7 +218,16 @@ function spanOf(x: { start_hours?: number; end_hours?: number } | undefined): Ra
 
 const MIN_PIECE = 20;
 
-export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: PersonalDay): ScenarioDay {
+/** The noon yoga and karana with their spans, as the engine gave them. */
+function limbSpans(row: DayRow) {
+  const at = row.panchanga_at_noon;
+  return {
+    yoga: { name: yogaName(at?.yoga?.name), span: spanOf(at?.yoga) } as { name: YogaName | null; span: Range | null },
+    karana: { name: karanaName(at?.karana?.name), span: spanOf(at?.karana) } as { name: KaranaName | null; span: Range | null },
+  };
+}
+
+export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: PersonalDay, chart?: ChartMarks): ScenarioDay {
   const weekday = (row.weekday ?? '') as Weekday;
   const dayReasons: string[] = [];
   if (rule.dayAvoid.includes(weekday)) return { scenario: rule.id, windows: [], verdict: 'avoid_day', dayReasons: [`weekday_avoid:${weekday}`] };
@@ -197,6 +250,14 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
   };
   const goodMuhurtas = (row.muhurtas ?? []).filter((m) => m.good).map(rangeOf).filter((r): r is Range => !!r);
   const pers = personalScore(personal);
+  const limbs = limbSpans(row);
+  const yogaAvoided = !!(limbs.yoga.name && limbs.yoga.span && rule.yogaAvoid.includes(limbs.yoga.name));
+  const karanaAvoided = !!(limbs.karana.name && limbs.karana.span && rule.karanaAvoid.includes(limbs.karana.name));
+  // the general gate: an avoided yoga or karana is cut out of every candidate like an avoid band
+  const gates: Range[] = [];
+  if (yogaAvoided) gates.push(limbs.yoga.span!);
+  if (karanaAvoided) gates.push(limbs.karana.span!);
+  const functional = chart?.functional ?? null;
   const weekdayBoost = rule.dayFavour.includes(weekday) ? 1 : 0;
 
   const candidates: Array<Range & { lord?: string; brahma?: boolean }> = [];
@@ -208,10 +269,11 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
 
   const windows: Window[] = [];
   for (const c of candidates) {
-    for (const piece of cut(c, bands)) {
+    for (const piece of cut(c, [...bands, ...gates])) {
       if (Math.floor(piece.to) - Math.ceil(piece.from) < MIN_PIECE) continue;
       let score = weekdayBoost + pers.score;
       const reasons: string[] = [...pers.reasons];
+      const half = (piece.to - piece.from) / 2;
       if (weekdayBoost) reasons.push(`weekday:${weekday}`);
       const mid = { from: piece.from, to: piece.to };
       // tithi: only inside its own span
@@ -231,6 +293,13 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
           reasons.push(`star_avoid:${starGroup}`);
         }
       }
+      if (limbs.yoga.name && limbs.yoga.span && rule.yogaFavour.includes(limbs.yoga.name) && overlap(mid, limbs.yoga.span) >= half) {
+        score += 1;
+        reasons.push(`yoga:${limbs.yoga.name}`);
+      }
+      if (limbs.karana.name && limbs.karana.span && rule.karanaFavour.includes(limbs.karana.name) && overlap(mid, limbs.karana.span) >= half) {
+        reasons.push(`karana:${limbs.karana.name}`);
+      }
       if (c.brahma) {
         score += 2;
         reasons.push('brahma');
@@ -241,6 +310,15 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
         } else if (rule.horaAvoid.includes(c.lord as Lord)) {
           score -= 3;
           reasons.push(`hora_avoid:${c.lord}`);
+        }
+        // personal: the hora lord's functional nature for this chart (from the digest, when there is one)
+        const nature = functional?.[c.lord];
+        if (nature === 'benefic') {
+          score += 1;
+          reasons.push('personal:hora_benefic');
+        } else if (nature === 'malefic') {
+          score -= 1;
+          reasons.push('personal:hora_malefic');
         }
       }
       if (goods.abhijit && overlap(piece, goods.abhijit) >= 10) {
@@ -256,18 +334,23 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
         score += 1;
         reasons.push('good_muhurta');
       }
-      if (score >= rule.floor) windows.push({ from: Math.ceil(piece.from), to: Math.floor(piece.to), score, reasons });
+      if (score >= rule.floor) windows.push({ from: Math.ceil(piece.from), to: Math.floor(piece.to), score, reasons: scoped(reasons), reasonKeys: reasons });
     }
   }
   windows.sort((a, b) => b.score - a.score || a.from - b.from);
   const best = windows.slice(0, 2).sort((a, b) => a.from - b.from);
   if (tithiGroup && rule.tithiAvoid.includes(tithiGroup) && best.length === 0) dayReasons.push(`tithi_avoid:${tithiGroup}`);
+  if (best.length === 0) {
+    const act = { from, to };
+    if (yogaAvoided && overlap(act, limbs.yoga.span!) > 0) dayReasons.push(`yoga_avoid:${limbs.yoga.name}`);
+    if (karanaAvoided && overlap(act, limbs.karana.span!) > 0) dayReasons.push(`karana_avoid:${limbs.karana.name}`);
+  }
   return { scenario: rule.id, windows: best, verdict: best.length ? 'good' : dayReasons.length ? 'avoid_day' : 'none', dayReasons };
 }
 
-export function scenarioDayById(row: DayRow, scenarioId: string, personal?: PersonalDay): ScenarioDay | null {
+export function scenarioDayById(row: DayRow, scenarioId: string, personal?: PersonalDay, chart?: ChartMarks): ScenarioDay | null {
   const rule = scenarioById(scenarioId);
-  return rule ? scenarioDay(row, rule, personal) : null;
+  return rule ? scenarioDay(row, rule, personal, chart) : null;
 }
 
 export type NowState =

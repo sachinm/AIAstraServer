@@ -306,7 +306,8 @@ registerTimelineRoutes(app, { prisma, requireUser });
 // the assistant on the public pages and the visit log: no sign-in, no account data
 registerAssistantRoutes(app, { prisma });
 // Lucky times (docs/reading-engine/49): mounted when LUCKY_ENABLED=1; analytics events always
-registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma) });
+// functionalNatureOf: null until the digest reader (doc 54 S1, loadDigest) is merged and wired here
+registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma), functionalNatureOf: null });
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
