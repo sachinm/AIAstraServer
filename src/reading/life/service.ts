@@ -6,25 +6,33 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { getLifeHorizonYears } from '../../config/env.js';
 import { activationFor as activationForDb } from '../digest/activation.js';
 import { digestStatusOf as digestStatusOfDb, loadDigest as loadDigestDb } from '../digest/load.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestStatus, DigestView } from '../digest/types.js';
 import { allAreaHouses, LIFE_AREAS } from './areas.js';
-import { composeDashboard, type LifeAreaRow, type PersonFacts } from './compose.js';
+import { composeDashboard, type LifeAreaRow, type LifeMahadashaCharter, type PersonFacts } from './compose.js';
 import { addYears, covers } from './labels.js';
 import { promiseScale } from './promise.js';
 import { loadStoredSky, type SkyView } from './sky.js';
 import { areaTiming } from './timing.js';
 
-export const LIFE_HORIZON_YEARS = 15;
+export const LIFE_HORIZON_YEARS = getLifeHorizonYears();
 export const LIFE_AREA_KEY = 'life';
 const FACT_KEYS = ['work.status', 'love.status', 'family.children'] as const;
 
 export type LifeReading =
   | { status: 'no_kundli' }
   | { status: 'preparing' }
-  | { status: 'ok'; built_at: string; cached: boolean; rule_now: string | null; areas: LifeAreaRow[] };
+  | {
+      status: 'ok';
+      built_at: string;
+      cached: boolean;
+      rule_now: string | null;
+      areas: LifeAreaRow[];
+      charter: LifeMahadashaCharter | null;
+    };
 
 export interface LifeDeps {
   prisma: PrismaClient;
@@ -57,9 +65,9 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
   const asOfDate = new Date(`${today}T00:00:00Z`);
 
   const cached = await prisma.areaBuild.findUnique({ where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: LIFE_AREA_KEY, as_of: asOfDate } } });
-  if (cached?.status === 'ready' && cached.result) {
-    const r = cached.result as unknown as { rule_now: string | null; areas: LifeAreaRow[] };
-    return { status: 'ok', built_at: today, cached: true, rule_now: r.rule_now, areas: r.areas };
+  if (cached?.status === 'ready' && cached.result && 'charter' in (cached.result as Record<string, unknown>)) {
+    const r = cached.result as unknown as { rule_now: string | null; areas: LifeAreaRow[]; charter?: LifeMahadashaCharter | null };
+    return { status: 'ok', built_at: today, cached: true, rule_now: r.rule_now, areas: r.areas, charter: r.charter ?? null };
   }
 
   const st = await (deps.digestStatusOf ? deps.digestStatusOf(kundli.id) : digestStatusOfDb(prisma, kundli.id));
@@ -70,14 +78,15 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
   const view = await (deps.loadDigest ? deps.loadDigest(kundli.id) : loadDigestDb(prisma, kundli.id));
   if (!view) return { status: 'preparing' };
 
-  const horizonEnd = addYears(today, LIFE_HORIZON_YEARS);
+  const horizonYears = getLifeHorizonYears();
+  const horizonEnd = addYears(today, horizonYears);
   const dashboard = await withAgentRun(
     prisma,
     'life.dashboard',
     {
       userId,
       task: `life reading ${today}`,
-      input: { horizon_years: LIFE_HORIZON_YEARS, areas: LIFE_AREAS.length },
+      input: { horizon_years: horizonYears, areas: LIFE_AREAS.length },
       technique: 'life.dashboard',
       kundliId: kundli.id,
       charts: [{ type: 'kundli_digest', variant: view.version }, { type: 'kundli_activation', variant: `${today}_${horizonEnd}` }],
@@ -96,7 +105,7 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
         const timing = areaTiming(view, area, promise, { today, horizonEnd, rows, annual: (y) => view.annual(y), sky });
         return { area, promise, timing };
       });
-      const d = composeDashboard(view, built, running, today, facts);
+      const d = composeDashboard(view, built, running, today, facts, { rows, annual: (y) => view.annual(y), sky });
       const charts: ChartUsed[] = stored ? [{ type: 'transit_snapshot', variant: stored.id.slice(0, 8) }] : [];
       return {
         value: d,
@@ -105,6 +114,8 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
           dated: d.areas.reduce((s, a) => s + a.improves.length, 0),
           strong: d.areas.filter((a) => a.grade === 'strong').length,
           moderate: d.areas.filter((a) => a.grade === 'moderate').length,
+          charter_ads: d.charter?.antardashas.length ?? 0,
+          charter_areas: d.charter?.area_charters.length ?? 0,
           activation_rows: rows.length,
           sky: sky ? 'stored' : 'none',
         },
@@ -120,5 +131,5 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
       update: { status: 'ready', result: dashboard as unknown as object, error: null },
     })
     .catch(() => undefined);
-  return { status: 'ok', built_at: today, cached: false, rule_now: dashboard.rule_now, areas: dashboard.areas };
+  return { status: 'ok', built_at: today, cached: false, rule_now: dashboard.rule_now, areas: dashboard.areas, charter: dashboard.charter };
 }

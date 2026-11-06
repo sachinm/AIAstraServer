@@ -12,12 +12,34 @@
  * (rule 3). Never medical, legal or financial advice.
  */
 import type { ActivationRow } from '../digest/activation.js';
-import type { DigestView } from '../digest/types.js';
+import type { AnnualRow, DigestView } from '../digest/types.js';
 import { LIFE_AREAS, type LifeArea, type LifeAreaId } from './areas.js';
+import {
+  buildMahadashaCharter,
+  type LifeAntardashaAreaNote,
+  type LifeAntardashaRow,
+  type LifeAntardashaTone,
+  type LifeAreaCharter,
+  type LifeCharterRole,
+  type LifeMahadashaBridge,
+  type LifeMahadashaCharter,
+} from './charter.js';
 import { functionalSide, planetName, planetSide } from './labels.js';
 import type { AreaPromise, ScaleLine, Verdict } from './promise.js';
 import { runningOf } from './promise.js';
+import type { SkyView } from './sky.js';
 import type { AreaTiming, Grade, TimingWindow } from './timing.js';
+
+export type {
+  LifeAntardashaAreaNote,
+  LifeAntardashaRow,
+  LifeAntardashaTone,
+  LifeAreaCharter,
+  LifeCharterRole,
+  LifeMahadashaBridge,
+  LifeMahadashaCharter,
+};
+export { buildMahadashaCharter };
 
 export interface LifeAreaRow {
   id: LifeAreaId;
@@ -37,6 +59,7 @@ export interface LifeAreaRow {
 export interface LifeDashboard {
   rule_now: string | null;
   areas: LifeAreaRow[];
+  charter: LifeMahadashaCharter | null;
 }
 
 export interface ComposeArea {
@@ -234,11 +257,24 @@ export function ruleNow(view: DigestView, running: ActivationRow[], today: strin
   return `Until ${until}, this is a stretch to act on what you have ready: ask, apply and finish what is half-done. Keep anything that is not ready for ${next ? longDate(next) : 'a later stretch'}.`;
 }
 
-export function composeDashboard(view: DigestView, areas: ComposeArea[], running: ActivationRow[], today: string, facts: PersonFacts): LifeDashboard {
+export function composeDashboard(
+  view: DigestView,
+  areas: ComposeArea[],
+  running: ActivationRow[],
+  today: string,
+  facts: PersonFacts,
+  charterInput?: { rows?: ActivationRow[]; annual?: (year: number) => AnnualRow[]; sky?: SkyView | null },
+): LifeDashboard {
   const order = new Map(LIFE_AREAS.map((a, i) => [a.id, i]));
   const rows = areas
     .map((a) => composeArea(view, a, running, facts))
     .filter((r): r is LifeAreaRow => r !== null)
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-  return { rule_now: ruleNow(view, running, today, rows), areas: rows };
+  const charter = buildMahadashaCharter(view, areas, {
+    today,
+    rows: charterInput?.rows ?? running,
+    annual: charterInput?.annual ?? ((y) => view.annual(y)),
+    sky: charterInput?.sky ?? null,
+  });
+  return { rule_now: ruleNow(view, running, today, rows), areas: rows, charter };
 }

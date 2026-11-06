@@ -107,6 +107,9 @@ describe('GET /api/life-reading', () => {
     expect(a.json.cached).toBe(false);
     expect(a.json.built_at).toBe('2026-11-05');
     expect(a.json.rule_now).toContain('Until 7 Feb 2027');
+    expect(a.json.charter).toBeTruthy();
+    expect(a.json.charter.antardashas).toHaveLength(2);
+    expect(a.json.charter.evidence.md).toBe('Moon');
     const work = a.json.areas.find((x: any) => x.id === 'work');
     expect(work.issue).toMatch(/Has work felt harder to move lately\?$/); // work.status = yes from the stored facts
     expect(work.improves).toHaveLength(1);
@@ -120,6 +123,7 @@ describe('GET /api/life-reading', () => {
     const b = await get('u1');
     expect(b.json.cached).toBe(true);
     expect(b.json.areas).toEqual(a.json.areas);
+    expect(b.json.charter).toEqual(a.json.charter);
     expect(loadDigest).toHaveBeenCalledTimes(1);
   });
 });

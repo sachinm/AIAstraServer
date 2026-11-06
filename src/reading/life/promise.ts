@@ -137,11 +137,19 @@ export function periodLord(view: DigestView, row: ActivationRow): string | null 
   return view.houses('D1').find((h) => h.sign === row.sign)?.lord ?? null;
 }
 
-/** The side of a period for an area: silent unless it activates one of the area's houses; then its lord's side. */
+/** The side of a period for an area: silent unless it activates one of the area's houses; then its lord's side (with 6/8/12 AD-from-MD friction from dashaCharter). */
 export function periodSide(view: DigestView, row: ActivationRow, houses: number[]): Side | 'silent' {
   if (!row.houses?.some((h) => houses.includes(h))) return 'silent';
   const lord = periodLord(view, row);
-  return lord ? planetSide(view.planet('D1', lord)) : 'neutral';
+  if (!lord) return 'neutral';
+  const base = planetSide(view.planet('D1', lord));
+  if (row.parentLord && row.lord) {
+    const cell = view.planet('D1', row.parentLord)?.dashaCharter?.fruition?.[row.lord];
+    if (cell && (cell.fruitionClass === 'dusthana_reversal_crisis' || cell.isShadAshtaka68)) {
+      return base === 'support' ? 'neutral' : 'test';
+    }
+  }
+  return base;
 }
 
 export function promiseScale(view: DigestView, area: LifeArea, now: NowInputs): AreaPromise {
