@@ -189,6 +189,22 @@ export const AGENTS: AgentDef[] = [
     subModule: 'scenarios',
     description: "Builds one scenario's calendar layer (best windows per day) from stored day rows; no model",
   },
+  {
+    id: 'research.self_dashboard_builder',
+    title: 'Research Self Dashboard QA builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'research_self',
+    description: 'Hydrates synthetic age-bracket (18-60) and persona kundlis in research_* staging tables and builds the 12-house/10-varga Self Dashboard, Nov/Thanksgiving/Dec/New Year weekly & daily zoom-in, and 10-step technical trace; no model',
+  },
+  {
+    id: 'research.technical_verifier',
+    title: 'Independent Technical Verifier Agent',
+    kind: 'code',
+    module: 'area',
+    subModule: 'research_verifier',
+    description: 'Independently audits a hydrated Self Dashboard run against the stored digest, divisional vargas, multi-clock dashas, Ashtakavarga, Nakshatras, and SOUL.md governance across 8 classical dimensions; no model',
+  },
 ];
 
 export function agentById(id: string): AgentDef | undefined {

@@ -1,13 +1,13 @@
 # Volume 03 — Self / You Board (`self.*` / `you` Board) One-Per-Page Illustrations
 
-> **Format**: One illustration per page (`Page 1 of 8` through `Page 8 of 8`), separated by `---`.  
+> **Format**: One illustration per page (`Page 1 of 10` through `Page 10 of 10`), separated by `---`.  
 > **Category / Board**: `self` · `you`  
 > **Houses & Vargas**: Houses `1, 4, 5, 9, 12` with the Moon · Vargas `D1, D9, D20, D24, D12, D4, D7, D60`  
 > **Code References**: [`src/techniques/catalog.ts`](../../src/techniques/catalog.ts) · [`src/reading/area/houseLayers.ts`](../../src/reading/area/houseLayers.ts) · [`src/reading/area/self.ts`](../../src/reading/area/self.ts) · [`src/reading/area/boardService.ts`](../../src/reading/area/boardService.ts)
 
 ---
 
-## Page 1 of 8 — `self.promise`: Natal Promise of Houses 1, 4 and 5 with the Moon
+## Page 1 of 10 — `self.promise`: Natal Promise of Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -53,7 +53,7 @@ flowchart LR
 
 ---
 
-## Page 2 of 8 — `self.affliction`: Afflictions on Houses 1, 4 and 5 with the Moon
+## Page 2 of 10 — `self.affliction`: Afflictions on Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -97,7 +97,7 @@ flowchart LR
 
 ---
 
-## Page 3 of 8 — `self.protection`: What Protects Houses 1, 4 and 5 with the Moon
+## Page 3 of 10 — `self.protection`: What Protects Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -144,7 +144,7 @@ flowchart LR
 
 ---
 
-## Page 4 of 8 — `self.activation`: Activation of Houses 1, 4 and 5 by Every Dasha System
+## Page 4 of 10 — `self.activation`: Activation of Houses 1, 4 and 5 by Every Dasha System
 
 | Field | Value |
 |---|---|
@@ -188,7 +188,7 @@ flowchart LR
 
 ---
 
-## Page 5 of 8 — `self.transit`: Transits Over Houses 1, 4 and 5 with the Moon
+## Page 5 of 10 — `self.transit`: Transits Over Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -232,7 +232,7 @@ flowchart LR
 
 ---
 
-## Page 6 of 8 — `self.annual`: This Year's Chart for Houses 1, 4 and 5 with the Moon
+## Page 6 of 10 — `self.annual`: This Year's Chart for Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -275,7 +275,7 @@ flowchart LR
 
 ---
 
-## Page 7 of 8 — `self.varga`: Owning Divisional Chart of Houses 1, 4 and 5 with the Moon
+## Page 7 of 10 — `self.varga`: Owning Divisional Chart of Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -320,7 +320,7 @@ flowchart LR
 
 ---
 
-## Page 8 of 8 — `self.nakshatra`: Nakshatra Charter of Houses 1, 4 and 5 with the Moon
+## Page 8 of 10 — `self.nakshatra`: Nakshatra Charter of Houses 1, 4 and 5 with the Moon
 
 | Field | Value |
 |---|---|
@@ -361,4 +361,84 @@ flowchart LR
     GATE -->|"HIT (status: cached/skipped)"| OUT
     GATE -->|"MISS"| N1
     N3 --> OUT
+```
+
+---
+
+## Page 9 of 10 — `research.self_dashboard_qa`: Research Self Dashboard Deep-Dive & Nov/Thanksgiving/Dec/New Year Zoom-In
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `research.self_dashboard_qa` — Research Self Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year zoom-in |
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas,yogas,doshas,strength.shadbala}`, `ashtakavarga:sav`, `jaimini:{charakaraka,arudhas,argala}`, `nakshatra:{janma,cusp_nak}`, `divisional:{D1,D9,D10,D20,D24,D12,D2,D4,D7,D60}`, `dasha:{vimshottari,yogini,tithi_ashtottari,narayana,chara,karaka}`, `annual:{tithi_pravesha,varsha,tithi_pravesha_dasha}`, `transit:{transit_contacts,sade_sati}`, `panchang:muhurta` |
+| **Selectors** | `boards: ['you']`, `subjects: ['general_life_direction', 'health_body', 'education_learning', 'spirituality_moksha', 'career_work']`, `houses: [1..12]`, `vargas: ['D1', 'D9', 'D10', 'D20', 'D24', 'D12', 'D2', 'D4', 'D7', 'D60']` |
+| **Reader Pieces** | `reader:house/house_card` · `reader:planet/planet_card` · `reader:yoga/yoga_row` · `reader:point/point_row` · `reader:star/star_profile` · `reader:activation/activation_row` · `reader:annual/annual_row` · `reader:transit/transit_row` |
+| **Agent Piece** | `agent:research.self_dashboard_builder` (`hydrateResearchSubject`, `buildSelfResearchDashboard`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:research_self_dashboard.v1` (feeds `research.technical_verifier`) |
+| **Date-Range Window Cache** | `freshness: 'transit'` (`2h` window) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/research/selfDashboardQa.ts hydrateResearchSubject, buildSelfResearchDashboard` (`docs/admin/09 §4.1; docs/reading-engine/46 §B; 54 §3; 55 §2`) |
+
+```mermaid
+flowchart LR
+    subgraph StagingInputs["Isolated Research Staging & Digest Slicers (Freshness: transit = 2h, Scope: kundli)"]
+        R_DIG["research_digests + research_activations<br/>(house_card, planet_card, yoga_row, point_row, star_profile, annual_row, activation_row, transit_row)"]
+    end
+
+    subgraph CacheGate["Date-Range Window Cache Gate"]
+        GATE{"piece.cache.date_range_window<br/>validityWindow: transit [bucket_2h.from, bucket_2h.to)<br/>scope: kundli"}
+    end
+
+    subgraph Builder["Research Self Dashboard Builder (agent:research.self_dashboard_builder)"]
+        B1["1. Hydrate synthetic age-bracket or profession persona into isolated research_* staging tables"]
+        B2["2. Run production Self board (buildBoard SELF, resolveAreaShades, buildCalmPlaybook)<br/>+ 12-house D1 & 10-varga deep-dive matrix"]
+        B3["3. Zoom in temporally across Nov, Thanksgiving Week, Dec, and New Year (9 weeks + 14-day strip)<br/>+ record 10-step technical trace"]
+        B1 --> B2 --> B3
+    end
+
+    subgraph Output["Staged Self Dashboard Run"]
+        OUT["output:research_self_dashboard.v1<br/>Feeds synthesizer: research.technical_verifier"]
+    end
+
+    R_DIG --> GATE
+    GATE -->|"HIT"| OUT
+    GATE -->|"MISS"| B1
+    B3 --> OUT
+```
+
+---
+
+## Page 10 of 10 — `research.technical_verifier`: Independent Technical Verifier Agent (8-Gate Classical & Governance Audit)
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `research.technical_verifier` — Independent Technical Verifier Agent (8-gate classical & governance audit) |
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | Same 35 chart sources as `research.self_dashboard_qa` + `findings_in` from the 10-step technical trace |
+| **Selectors** | `boards: ['you']`, `subjects: ['general_life_direction', 'health_body', 'education_learning', 'spirituality_moksha']`, `houses: [1, 4, 5, 9, 10, 12]`, `vargas: ['D1', 'D9', 'D10', 'D20', 'D24']` |
+| **Reader Pieces** | `reader:house/house_card` · `reader:planet/planet_card` · `reader:yoga/yoga_row` · `reader:point/point_row` · `reader:star/star_profile` · `reader:activation/activation_row` · `reader:annual/annual_row` · `reader:transit/transit_row` · `reader:findings/findings_in` |
+| **Agent Piece** | `agent:research.technical_verifier` (`verifySelfDashboardRun`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:research_verifier_audit.v1` |
+| **Date-Range Window Cache** | `freshness: 'transit'` (`2h` window) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/research/selfDashboardQa.ts verifySelfDashboardRun` (`docs/admin/09 §4.1.4; SOUL.md; BPHS`) |
+
+```mermaid
+flowchart LR
+    subgraph AuditInputs["Staged Digest + Self Dashboard Run (findings_in)"]
+        IN_RUN["output:research_self_dashboard.v1<br/>(board_data, house_varga_matrix, temporal_data, trace_data, reading_prose)"]
+        IN_DIG["research_digests + research_activations"]
+    end
+
+    subgraph Verifier["8-Gate Independent Classical & Governance Audit (agent:research.technical_verifier)"]
+        G1["Gates 1-4: D1 Lordship Integrity, 10-Varga Agreement,<br/>7-Family Dasha Convergence, SAV & Shadbala Bounds"]
+        G2["Gates 5-8: Yoga/Avastha/Jupiter Protection Floor, Nakshatra & Tara/Chandra Bala,<br/>Nov-New Year Chronology, and SOUL.md Rule 0 & Playbook Compliance"]
+        G1 --> G2
+    end
+
+    subgraph Output["Verifier Audit Receipt"]
+        OUT["output:research_verifier_audit.v1<br/>0-100% accuracy score + pass/warn/fail verdict"]
+    end
+
+    IN_RUN & IN_DIG --> G1
+    G2 --> OUT
 ```
