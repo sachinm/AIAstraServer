@@ -477,3 +477,40 @@ flowchart LR
     LAYERS & FACT --> R1
     R3 --> OUT
 ```
+
+---
+
+## Page 12 of 12 — `research.love_dashboard_qa`: Research Love & Relationships Dashboard Deep-Dive & Nov/Thanksgiving/Dec/New Year Zoom-In
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `research.love_dashboard_qa` — Research Love & Relationships Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year zoom-in |
+| **Category / Board / Status** | `love` · `love` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas,yogas,doshas,strength.shadbala}`, `ashtakavarga:sav`, `jaimini:{charakaraka,arudhas}`, `nakshatra:{janma,cusp_nak}`, `divisional:{D1,D9,D7,D10,D2,D4,D12,D20,D24,D60}`, `dasha:{vimshottari,yogini,tithi_ashtottari,narayana,karaka}`, `annual:{tithi_pravesha,varsha}`, `transit:{transit_contacts,sade_sati}`, `panchang:muhurta` |
+| **Selectors** | `boards: ['love']`, `subjects: ['marriage_relationship', 'children', 'family_home']`, `houses: [7, 5, 11, 2, 4, 8, 12]`, `vargas: ['D1', 'D9', 'D7']` |
+| **Reader Pieces** | `reader:house/house_card` (`D1..D60_h1..12`) · `reader:planet/planet_card` · `reader:yoga/yoga_row` · `reader:point/point_row` · `reader:star/star_profile` · `reader:activation/activation_row` · `reader:annual/annual_row` · `reader:transit/transit_row` |
+| **Agent Piece** | `agent:research.love_dashboard_builder` (`buildLoveResearchDashboard`, `verifyLoveDashboardQaReport`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece / Synthesizer** | `output:research_love_dashboard.v1` · feeds `research.technical_verifier` |
+| **Date-Range Window Cache** | `freshness: 'transit'` (`2h` window) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/research/loveDashboardQa.ts buildLoveResearchDashboard, verifyLoveDashboardQaReport` (`docs/admin/09 §4.1; docs/reading-engine/46 §B; 54 §3; 55 §2`) |
+
+```mermaid
+flowchart LR
+    subgraph StagingInputs["Isolated Research Staging & Digest Slicers (Freshness: transit = 2h)"]
+        R_DIG["research_digests + research_activations<br/>(D1, D9, D7, UL, DK, A7, Vivaha/Preethi Sahams)"]
+    end
+
+    subgraph Builder["Research Love Dashboard Builder (agent:research.love_dashboard_builder)"]
+        L1["1. Run production Love board (buildBoard LOVE, resolveAreaShades, buildCalmPlaybook)<br/>over 7H, 5H, 11H, 2H, 4H, 8H, 12H and D1/D9/D7"]
+        L2["2. Synthesize Covenant & Partnership Charter + Nov/Thanksgiving/Dec/New Year relationship windows"]
+        L3["3. Record 10-step reverse-engineered technical trace and run 8-gate technical verifier"]
+        L1 --> L2 --> L3
+    end
+
+    subgraph Output["Staged Love Dashboard Run"]
+        OUT["output:research_love_dashboard.v1<br/>Feeds synthesizer: research.technical_verifier"]
+    end
+
+    R_DIG --> L1
+    L3 --> OUT
+```

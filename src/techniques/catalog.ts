@@ -59,6 +59,26 @@ const inp = (section: ContractSection, filter: string, layout: LayoutId): Contra
 /** A code technique: no prompt, no user turn, an output type instead of a schema (doc 53 §4.3). */
 const codeContract = (inputs: ContractInput[], output: string, synthesizer?: string): TechniqueContract => ({ inputs, system: 'none', user: [], output, ...(synthesizer ? { synthesizer } : {}) });
 
+/**
+ * Standardized typed filter vocabulary for `house/house_card` reader inputs (`docs/admin/07` §11, `TODOS.md:953`).
+ */
+export const HOUSE_FILTER_VOCABULARY = {
+  workPrimary: 'D1,D10 houses 10,6,1,2,11',
+  workSecurity: 'D1 houses 10,9,5,6,8,12 and their lords',
+  workSubareas: 'D1 houses 2,11 (money), 4 (residence), 7 (business) and their lords',
+  workD10: 'D10 houses 10,6,1,2,11',
+  frameHouses: "D1 and the frame's vargas, the frame's houses",
+  frameCuspStars: "D1, the frame's houses (cusp_star column)",
+  frameSav: "D1, the frame's houses (sav column)",
+  frameArgala: "D1, the frame's houses and the houses the points sit in (argala, class columns)",
+  personHouses: "D1 and the person's varga (D12, D9, D7, D3), the person's house",
+  lifeAreaHouses: 'D1 houses of the area; D9 and the owning varga, primary house',
+  researchAll10Vargas: 'D1,D9,D10,D20,D24,D12,D2,D4,D7,D60 houses 1..12',
+  selfCharacterArc: 'D1,D9,D10 houses 1,4,5,9,10',
+  selfPersonalityJoy: 'D1,D9,D24 houses 1,3,4,5,11,12',
+} as const;
+export type HouseFilterKey = keyof typeof HOUSE_FILTER_VOCABULARY;
+
 /** The user-turn fields every General Reading analyst is sent (doc 53 §4.3, §4.4: FACTS carries the matched person_facts). */
 export const ANALYST_USER_FIELDS = ['TODAY', 'SUBJECT', 'FRAME', 'HORIZON', 'REAL_WANT', 'QUESTION', 'FACTS'];
 const ALL_SUBJECTS: SubjectId[] = [...SUBJECT_IDS];
@@ -605,6 +625,91 @@ const SELF_PLANNED = houseStateLayers({
   subjects: ['general_life_direction', 'health_body', 'education_learning', 'spirituality_moksha'], planets: 'the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK', points: 'AK, SL, AL',
   built: { agent: 'area.self_board', config: 'self.ts SELF', layers: { promise: ['promiseLayer'], affliction: ['afflictionLayer', 'releaseOf'], protection: ['protectionLayer'], activation: ['gradeRow', 'familyVotes', 'aheadWindows'], transit: ['transitLayer'], annual: ['currentYear', 'annualLayer'], varga: ['vargaLayer'], nakshatra: ['nakshatraLayer'] } },
 });
+
+const SELF_EXTRA_BUILT: TechniqueDef[] = [
+  {
+    id: 'self.character_arc',
+    title: 'Character evolution across 3 decades (Last 10 Years -> Who You Are Now -> Next 10 Years)',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [
+      c('natal', 'facts'),
+      c('natal', 'dignities'),
+      c('divisional', 'D1'),
+      c('divisional', 'D9'),
+      c('divisional', 'D10'),
+      c('jaimini', 'charakaraka'),
+      c('dasha', 'vimshottari'),
+      c('dasha', 'narayana'),
+    ],
+    algorithm: [
+      'Compute three 10-year life windows relative to today (asOf) and the person age (Last 10 Years e.g. their 20s if 30, Who You Are Now, and Next 10 Years)',
+      'Anchor the core temperament from D1 Lagna, Lagna lord (Paka Lagna), D9 Navamsa maturation of L1 and Moon, Sun, and Atmakaraka (AK)',
+      'Select the dominant Vimshottari Mahadasha/Antardasha and Narayana Rasi Dasha lords covering each 10-year window from kundli_activation',
+      'Translate the ruling planet nature, D1/D9 dignity, and activated house themes into plain-language traits, growth lessons, and practical shifts with zero chart jargon on the surface',
+    ],
+    source: 'BPHS Ch. 46-51 (Vimshottari Dasha Phala); Sanjay Rath Crux of Vedic Astrology (Lagna, Paka Lagna & D9 Maturation)',
+    code: 'src/reading/area/selfCharacterAndJoy.ts buildSelfCharacterArc; houseLayers.ts buildBoard',
+    agents: ['area.self_board'],
+    accuracy: 'area_checks:self',
+    selectors: {
+      boards: ['you'],
+      subjects: ['general_life_direction', 'education_learning', 'spirituality_moksha'],
+      houses: [1, 4, 5, 9, 10],
+      vargas: ['D1', 'D9', 'D10'],
+    },
+    contract: codeContract(
+      [
+        inp('house', 'D1,D9,D10 houses 1,4,5,9,10', 'house_card'),
+        inp('planet', 'D1,D9,D10 cards of L1, Su, Mo, AK and running MD/AD lords', 'planet_card'),
+        inp('point', 'AK, AmK, AL', 'point_row'),
+        inp('activation', 'vimshottari and rasi periods from -10 years to +10 years', 'activation_row'),
+      ],
+      'self_character_arc.v1',
+    ),
+  },
+  {
+    id: 'self.personality_joy',
+    title: 'Vedic Moon & Mercury personality and what brings joy & fulfillment',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [
+      c('natal', 'facts'),
+      c('natal', 'dignities'),
+      c('natal', 'aspects'),
+      c('divisional', 'D1'),
+      c('divisional', 'D9'),
+      c('divisional', 'D24'),
+      c('nakshatra', 'janma'),
+    ],
+    algorithm: [
+      'Read the Moon (Chandra: Manas) in D1 and D9: sign, house, dignity, Janma Nakshatra (StarProfile.moonStar), benefic/malefic drishti, and the 4th house (Sukha Bhava) to map emotional rhythm and what restores inner peace',
+      'Read Mercury (Budha: Buddhi, play, wit & curiosity) in D1, D9, and D24: sign, house, dignity, and aspects alongside the 5th house (creative joy) and 3rd house (hands-on craft) to map conversational style and intellectual flow',
+      'Synthesize four plain-language joy & fulfillment pillars: Everyday Joy & Flow (Moon + 4H), Mind, Curiosity & Play (Mercury + 5H), Social & Creative Recharge (3H + 11H + Moon/Mercury), and Restorative Sanctuary (D9 Moon + 4H/12H)',
+      'Keep all astrological identifiers inside structured evidence[] while rendering 100% digested plain English on the board',
+    ],
+    source: 'BPHS Ch. 3, 15-16 (Chandra & Budha Karakatvas, 4H Sukha & 5H Buddhi); Taittiriya Brahmana (Janma Nakshatra)',
+    code: 'src/reading/area/selfCharacterAndJoy.ts buildSelfPersonalityAndJoy; houseLayers.ts buildBoard',
+    agents: ['area.self_board'],
+    accuracy: 'area_checks:self',
+    selectors: {
+      boards: ['you'],
+      subjects: ['general_life_direction', 'education_learning', 'health_body'],
+      houses: [1, 3, 4, 5, 11, 12],
+      vargas: ['D1', 'D9', 'D24'],
+    },
+    contract: codeContract(
+      [
+        inp('house', 'D1,D9,D24 houses 1,3,4,5,11,12', 'house_card'),
+        inp('planet', 'D1,D9,D24 cards of Mo, Me, L4, L5, L3, Ju, Ve', 'planet_card'),
+        inp('star', 'Moon star, lagna star and tara table', 'star_profile'),
+      ],
+      'self_personality_joy.v1',
+    ),
+  },
+];
 
 /** The Love sub-areas the companion memory's love.status selects (doc 53 §4.5; doc 46 §B.12): planned rows over the same layers. */
 const LOVE_SUBAREAS: TechniqueDef[] = (
@@ -1226,6 +1331,46 @@ const RESEARCH: TechniqueDef[] = [
     contract: codeContract(RESEARCH_SELF_INPUTS, 'research_self_dashboard.v1', 'research.technical_verifier'),
   },
   {
+    id: 'research.love_dashboard_qa',
+    title: 'Research Love Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year relationship zoom-in',
+    category: 'love',
+    board: 'love',
+    status: 'built',
+    charts: RESEARCH_SELF_CHARTS,
+    algorithm: [
+      'Hydrate synthetic age-bracket or persona kundlis into isolated research_* staging tables and run the production Love board (buildBoard LOVE, resolveAreaShades, buildCalmPlaybook)',
+      'Evaluate 7H/5H/11H/2H/4H/8H/12H across D1, D9 (Navamsa), and D7 (Saptamsa) with Venus, Moon, L7, Darakaraka (DK), Upapada Lagna (UL), and Vivaha/Preethi/Mitra Sahams',
+      'Zoom in temporally across November Lead, Thanksgiving Week (Nov 23-29), December Core, and New Year Transition (Dec 28-Jan 5) for relationship harmony, family boundaries, and reconnection windows',
+      'Record the 10-step technical trace and audit via the 8-gate Independent Technical Verifier Agent',
+    ],
+    source: 'docs/admin/09 §4.1; docs/reading-engine/45 §8.2; 46 §B.12; 54 §3',
+    code: 'src/reading/research/loveDashboardQa.ts buildLoveResearchDashboard; selfDashboardQa.ts hydrateResearchSubject',
+    agents: ['research.love_dashboard_builder'],
+    accuracy: 'staff',
+    selectors: { boards: ['love'], subjects: ['marriage_relationship', 'children'], houses: [2, 4, 5, 7, 8, 11, 12], vargas: ['D1', 'D9', 'D7', 'D30'] },
+    contract: codeContract(RESEARCH_SELF_INPUTS, 'research_love_dashboard.v1', 'research.technical_verifier'),
+  },
+  {
+    id: 'research.work_dashboard_qa',
+    title: 'Research Work Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year career zoom-in',
+    category: 'work',
+    board: 'work',
+    status: 'built',
+    charts: RESEARCH_SELF_CHARTS,
+    algorithm: [
+      'Hydrate synthetic age-bracket or persona kundlis into isolated research_* staging tables and run the Work/Career research board (buildBoard WORK_RESEARCH_CONFIG, resolveAreaShades, buildCalmPlaybook)',
+      'Evaluate 10H/6H/11H/2H/1H/9H/3H across D1, D10 (Dasamsa), D9 (Navamsa), D2 (Hora), and D24 (Siddhamsa) with L10, Sun, Saturn, Mercury, Jupiter, Amatyakaraka (AmK), Arudha Lagna (AL), and Karma/Samartha/Artha Sahams',
+      'Zoom in temporally across November Lead, Thanksgiving Week (Nov 23-29), December Core, and New Year Transition (Dec 28-Jan 5) for Q4 deliverable closure, workload pacing, and Q1 career launch',
+      'Record the 10-step technical trace and audit via the 8-gate Independent Technical Verifier Agent',
+    ],
+    source: 'docs/admin/09 §4.1; docs/reading-engine/42 §B.4; 43 §2-§8; 55 §2',
+    code: 'src/reading/research/workDashboardQa.ts buildWorkResearchDashboard; selfDashboardQa.ts hydrateResearchSubject',
+    agents: ['research.work_dashboard_builder'],
+    accuracy: 'staff',
+    selectors: { boards: ['work'], subjects: ['career_work', 'income_wealth'], houses: [1, 2, 3, 6, 9, 10, 11], vargas: ['D1', 'D10', 'D9', 'D2', 'D24'] },
+    contract: codeContract(RESEARCH_SELF_INPUTS, 'research_work_dashboard.v1', 'research.technical_verifier'),
+  },
+  {
     id: 'research.technical_verifier',
     title: 'Independent Technical Verifier Agent (8-gate classical & governance audit)',
     category: 'self',
@@ -1249,7 +1394,7 @@ const RESEARCH: TechniqueDef[] = [
   },
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH];
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

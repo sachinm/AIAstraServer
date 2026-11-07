@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import {
   buildCustomResearchSubject,
+  buildLoveResearchDashboard,
   buildSelfResearchDashboard,
+  buildWorkResearchDashboard,
   getResearchPresets,
   hydrateResearchBatch,
   synthesizeResearchDigestAndActivations,
@@ -74,6 +76,37 @@ describe('Research Staging & Self Dashboard QA Engine (docs/admin/09)', () => {
       // Zero banned internal engine names
       const proseJson = JSON.stringify(run.readingProse);
       expect(proseJson).not.toMatch(/\b(Radha|pyjhora|AIAstra_Radha|jhora)\b/i);
+
+      // 3-decade Character Evolution & Moon/Mercury Personality/Joy on Self board
+      const charArc = run.boardData.productionBoard.characterArc;
+      const joy = run.boardData.productionBoard.personalityAndJoy;
+      expect(charArc).toBeDefined();
+      expect(charArc!.pastDecade.stage).toBe('past_10y');
+      expect(charArc!.presentNow.stage).toBe('now');
+      expect(charArc!.nextDecade.stage).toBe('next_10y');
+      expect(joy).toBeDefined();
+      expect(joy!.whatFeelsGood.length).toBeGreaterThanOrEqual(4);
+      expect(joy!.emotionalMindStyle.length).toBeGreaterThan(10);
+      expect(joy!.intellectualWitStyle.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('builds Love and Work research dashboards with >= 95% verifier pass across preset subjects', () => {
+    const presets = getResearchPresets().slice(0, 6);
+    for (const subject of presets) {
+      const loveRun = buildLoveResearchDashboard(subject, '2026-11-15');
+      expect(loveRun.boardArea).toBe('love');
+      expect(loveRun.houseVargaMatrix).toHaveLength(12);
+      expect(loveRun.traceData).toHaveLength(10);
+      expect(loveRun.accuracyScore).toBeGreaterThanOrEqual(95);
+      expect(loveRun.verifierVerdict).toBe('pass');
+
+      const workRun = buildWorkResearchDashboard(subject, '2026-11-15');
+      expect(workRun.boardArea).toBe('work');
+      expect(workRun.houseVargaMatrix).toHaveLength(12);
+      expect(workRun.traceData).toHaveLength(10);
+      expect(workRun.accuracyScore).toBeGreaterThanOrEqual(95);
+      expect(workRun.verifierVerdict).toBe('pass');
     }
   });
 
