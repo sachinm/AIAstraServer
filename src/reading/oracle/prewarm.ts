@@ -67,3 +67,68 @@ export async function savePrewarmed(prisma: PrismaClient, userId: string, clarif
   };
   await prisma.readingRun.updateMany({ where: { id: clarifyRunId, user_id: userId }, data: { findings: value as unknown as Prisma.InputJsonValue } });
 }
+
+/**
+ * Cross-Lambda DB reader cache (`reading_findings_cache`, M35, docs/admin/06).
+ * Natal readers (`R01..R06`) default to 7 days TTL; horizon-scoped readers (`R07..R13`) default to 6 hours TTL.
+ * Tolerates a missing table or mock Prisma client without throwing.
+ */
+export async function loadDbReaderCache(prisma: PrismaClient | null | undefined, cacheKey: string): Promise<HeldReader | undefined> {
+  const mem = getReaderMemo(cacheKey);
+  if (mem) return mem;
+  const model = (prisma as unknown as { readingFindingsCache?: { findUnique?: (args: unknown) => Promise<{ payload: unknown; expires_at: Date } | null> } })?.readingFindingsCache;
+  if (!model?.findUnique) return undefined;
+  try {
+    const row = await model.findUnique({ where: { cache_key: cacheKey } });
+    if (!row || row.expires_at.getTime() <= Date.now()) return undefined;
+    const held = row.payload as HeldReader;
+    if (held?.finding) {
+      setReaderMemo(cacheKey, held);
+      return held;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveDbReaderCache(
+  prisma: PrismaClient | null | undefined,
+  entry: {
+    cacheKey: string;
+    kundliId: string;
+    readerId: string;
+    packHash: string;
+    horizonKey: string;
+    promptVersion: string;
+    natal: boolean;
+    held: HeldReader;
+  },
+): Promise<void> {
+  setReaderMemo(entry.cacheKey, entry.held);
+  const model = (prisma as unknown as { readingFindingsCache?: { upsert?: (args: unknown) => Promise<unknown> } })?.readingFindingsCache;
+  if (!model?.upsert) return;
+  const ttlMs = entry.natal ? 7 * 24 * 3_600_000 : MEMO_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttlMs);
+  try {
+    await model.upsert({
+      where: { cache_key: entry.cacheKey },
+      create: {
+        cache_key: entry.cacheKey,
+        kundli_id: entry.kundliId,
+        reader_id: entry.readerId,
+        pack_hash: entry.packHash,
+        horizon_key: entry.horizonKey,
+        prompt_version: entry.promptVersion,
+        payload: entry.held as unknown as Prisma.InputJsonValue,
+        expires_at: expiresAt,
+      },
+      update: {
+        payload: entry.held as unknown as Prisma.InputJsonValue,
+        expires_at: expiresAt,
+      },
+    });
+  } catch {
+    // missing table or read-only replica: in-memory memo already holds the entry
+  }
+}

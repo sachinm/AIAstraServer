@@ -37,7 +37,7 @@ export const CODE_ANALYST_LABEL: Record<CodeAnalyst, string> = {
   person: 'The person in your chart',
 };
 
-export type About = 'self' | 'mother' | 'father' | 'spouse' | 'child' | 'sibling' | 'other';
+export type About = 'self' | 'mother' | 'father' | 'parent' | 'spouse' | 'child' | 'sibling' | 'other';
 export type Kind = 'bond' | 'holds' | 'blocks' | 'gives' | 'window' | 'form' | 'grace';
 
 export interface CodeClaim {
@@ -230,10 +230,43 @@ export const CODE_READERS: Record<CodeAnalyst, (pack: EvidencePack) => CodeFindi
   person: personReader,
 };
 
+const CODE_READER_MEMO_MAX = 256;
+const codeReaderMemo = new Map<string, CodeFinding[]>();
+
+export function clearCodeReaderMemo(): void {
+  codeReaderMemo.clear();
+}
+
 /** Runs the named deterministic readers on one subject's pack. A pack without a digest section gives nothing. */
-export function runCodeReaders(pack: EvidencePack, analysts: readonly CodeAnalyst[]): CodeFinding[] {
-  if (!sectionOf(pack)) return [];
-  return analysts.map((a) => CODE_READERS[a](pack));
+export function runCodeReaders(
+  pack: EvidencePack,
+  analysts: readonly CodeAnalyst[],
+  cacheContext?: { kundliId?: string | null; facts?: Record<string, string> | null; slotPerson?: string | null },
+): CodeFinding[] {
+  const d = sectionOf(pack);
+  if (!d) return [];
+  const key = JSON.stringify({
+    v: d.version,
+    k: cacheContext?.kundliId ?? '',
+    s: pack.subject,
+    a: analysts,
+    p: d.person?.who ?? cacheContext?.slotPerson ?? '',
+    f: cacheContext?.facts ?? {},
+    h: pack.keyFrame.houses,
+    rasi: Object.keys(d.rasi ?? {}),
+    yogas: Object.keys(d.yoga.D1 ?? {}),
+  });
+  const hit = codeReaderMemo.get(key);
+  if (hit && cacheContext?.kundliId) return hit;
+  const out = analysts.map((a) => CODE_READERS[a](pack));
+  if (cacheContext?.kundliId) {
+    if (codeReaderMemo.size >= CODE_READER_MEMO_MAX) {
+      const oldest = codeReaderMemo.keys().next().value;
+      if (oldest !== undefined) codeReaderMemo.delete(oldest);
+    }
+    codeReaderMemo.set(key, out);
+  }
+  return out;
 }
 
 /** The same finding in the shape the oracle brief reads (oracle/runReader.ts ReaderOutput); yogas that hold go to graces. */

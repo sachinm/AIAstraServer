@@ -82,7 +82,7 @@ async function runTopUp(deps: DigestEventDeps, kundliId: string, maxCalls: numbe
   try {
     return await withAgentRun(deps.prisma, 'digest.annual_set', { task: 'annual-top-up', technique: 'digest.annual_set', kundliId, input: { max_calls: maxCalls } }, async () => {
       const r = await (deps.topUp ?? defaultTopUp)(deps.prisma, kundliId, maxCalls);
-      return { value: r, output: { wanted: r.wanted, present: r.present, requested: r.requested, fetched: r.fetched, failed: r.failed, remaining: r.remaining } };
+      return { value: r, output: { wanted: r.wanted, present: r.present, requested: r.requested, fetched: r.fetched, failed: r.failed, remaining: r.remaining, writes: [`kundli_charts:${r.fetched}`] } };
     });
   } catch (err) {
     queueLogError({ event: 'digest_annual_topup_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });
@@ -94,7 +94,7 @@ async function runBuild(deps: DigestEventDeps, kundliId: string, trigger: 'event
   try {
     return await withAgentRun(deps.prisma, 'digest.build', { task: `digest-${trigger}`, technique: 'digest.build', kundliId, input: { trigger, version: DIGEST_VERSION } }, async () => {
       const r = await (deps.build ?? ((p, id) => buildDigest(p, id, { fetch: true })))(deps.prisma, kundliId);
-      return { value: r, output: { status: r.status, rows: r.rows, activation: r.activation, ms: r.ms, error_type: r.error ?? null } };
+      return { value: r, output: { status: r.status, rows: r.rows, activation: r.activation, ms: r.ms, error_type: r.error ?? null, writes: [`kundli_digest:${r.rows}`, `kundli_activation:${r.activation}`] } };
     });
   } catch (err) {
     queueLogError({ event: 'digest_build_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });

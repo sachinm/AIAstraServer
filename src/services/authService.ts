@@ -135,10 +135,17 @@ async function completeLogin(user: { id: string; role: string | null; locked?: b
   if (user.locked || row?.locked_at) {
     return { success: false, code: ACCOUNT_LOCKED_CODE, message: ACCOUNT_LOCKED_MESSAGE };
   }
-  if (row && !row.email_verified_at) {
+  if (row) {
+    const now = new Date();
     await prisma.auth
-      .update({ where: { id: user.id }, data: { email_verified_at: new Date() } })
-      .catch((err) => console.error('mark email verified failed:', (err as Error).message));
+      .update({
+        where: { id: user.id },
+        data: {
+          ...(row.email_verified_at ? {} : { email_verified_at: now }),
+          last_seen_at: now,
+        },
+      })
+      .catch((err) => console.error('mark email verified / last_seen_at failed:', (err as Error).message));
   }
   const profileComplete = row?.profile_complete !== false;
 

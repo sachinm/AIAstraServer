@@ -93,7 +93,8 @@ export function subjectTag(email: string): string {
 
 type Db = Pick<PrismaClient, 'accountEvent'>;
 
-export async function recordAccountEvent(prisma: Db, e: AccountEventInput): Promise<void> {
+export async function recordAccountEvent(prisma: Db | null | undefined, e: AccountEventInput): Promise<void> {
+  if (!prisma || typeof (prisma as { accountEvent?: { create?: unknown } }).accountEvent?.create !== 'function') return;
   try {
     const r = e.request;
     await prisma.accountEvent.create({

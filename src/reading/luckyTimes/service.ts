@@ -19,6 +19,20 @@ import { avoidBands, dayLimbs, localMinutes, nowState, scenarioDay, toMin, type 
 export const RANGE_BACK_DAYS = 7;
 export const RANGE_AHEAD_DAYS = 14;
 
+const LUCKY_RANGE_CACHE_MAX = 100;
+const LUCKY_RANGE_CACHE_TTL_MS = 60_000;
+const luckyRangeCache = new Map<string, { at: number; value: RangeResult }>();
+
+export function clearLuckyRangeCache(userId?: string): void {
+  if (!userId) {
+    luckyRangeCache.clear();
+    return;
+  }
+  for (const k of luckyRangeCache.keys()) {
+    if (k.startsWith(`${userId}|`)) luckyRangeCache.delete(k);
+  }
+}
+
 export type EngineFetch = (type: string, fields: Record<string, unknown>) => Promise<unknown>;
 
 export interface LuckyDeps {
@@ -80,6 +94,7 @@ export async function setPlace(deps: LuckyDeps, userId: string, preset: string):
   const p = DAY_TABLE_PLACES[resolved]!;
   const place_key = dayTablePlaceKey(p);
   await deps.prisma.luckyPref.upsert({ where: { user_id: userId }, create: { user_id: userId, place_key }, update: { place_key, updated_at: new Date() } });
+  clearLuckyRangeCache(userId);
   return true;
 }
 
@@ -90,6 +105,7 @@ export async function addPick(deps: LuckyDeps, userId: string, scenario: string)
   const existing = await deps.prisma.luckyScenarioPick.findUnique({ where: { user_id_scenario_id: { user_id: userId, scenario_id: scenario } } });
   if (existing) return { status: 'exists' };
   const row = await deps.prisma.luckyScenarioPick.create({ data: { user_id: userId, scenario_id: scenario } });
+  clearLuckyRangeCache(userId);
   return { status: 'ok', pick: { scenario: row.scenario_id, shown: row.shown, answers: row.answers } };
 }
 
@@ -113,11 +129,13 @@ export async function patchPick(deps: LuckyDeps, userId: string, scenario: strin
   if (typeof patch.shown === 'boolean') data.shown = patch.shown;
   if (patch.answers !== undefined) data.answers = { ...(existing.answers as object), ...cleanAnswers(patch.answers) };
   const row = await deps.prisma.luckyScenarioPick.update({ where: { id: existing.id }, data });
+  clearLuckyRangeCache(userId);
   return { status: 'ok', pick: { scenario: row.scenario_id, shown: row.shown, answers: row.answers } };
 }
 
 export async function removePick(deps: LuckyDeps, userId: string, scenario: string): Promise<boolean> {
   const r = await deps.prisma.luckyScenarioPick.deleteMany({ where: { user_id: userId, scenario_id: scenario } });
+  clearLuckyRangeCache(userId);
   return r.count > 0;
 }
 
@@ -164,7 +182,7 @@ async function pullDayTables(deps: LuckyDeps, userId: string | null, preset: str
         written += 1;
       }
     }
-    return { value: written, output: { written }, charts };
+    return { value: written, output: { written, writes: [`day_tables:${written}`] }, charts };
   });
 }
 
@@ -236,7 +254,7 @@ async function personalDays(deps: LuckyDeps, userId: string, preset: string, dat
             create: { kundli_id: natal.kundliId, place_key: placeKey, month: new Date(`${m}T00:00:00Z`), source_hash, payload },
             update: { source_hash, payload, fetched_at: new Date() },
           });
-          return { value: saved, output: { days: payload.days.length } };
+          return { value: saved, output: { days: payload.days.length, writes: ['kundli_day_overlays:1'] } };
         });
       } catch {
         row = null;
@@ -297,6 +315,16 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   }
 
   const picks = (await deps.prisma.luckyScenarioPick.findMany({ where: { user_id: userId, shown: true } })).filter((p) => scenarioById(p.scenario_id));
+  const picksSig = picks.map((p) => `${p.scenario_id}:${JSON.stringify(p.answers ?? {})}`).join(',');
+  const cacheKey = `${userId}|${preset}|${range.from}|${range.to}|${today}|${nowMin}|${picksSig}`;
+  if (missing.length === 0) {
+    const hit = luckyRangeCache.get(cacheKey);
+    if (hit && Date.now() - hit.at <= LUCKY_RANGE_CACHE_TTL_MS) {
+      luckyRangeCache.delete(cacheKey);
+      luckyRangeCache.set(cacheKey, hit);
+      return hit.value;
+    }
+  }
   const natal: Natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
   const personal = await personalDays(deps, userId, preset, [...have], natal);
   // the chart's marks: only when the digest gives the functional natures and running dasha lords (doc 53 §4.6); never a Node derivation
@@ -369,7 +397,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   });
 
   const todayRow = rows.find((r) => r.date.toISOString().slice(0, 10) === today);
-  return {
+  const result: RangeResult = {
     status: 'ok',
     place: preset,
     today,
@@ -380,6 +408,16 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
     missing,
     now: todayRow ? nowState(todayRow.payload as unknown as DayRow, nowMin) : null,
   };
+  if (missing.length === 0) {
+    luckyRangeCache.delete(cacheKey);
+    luckyRangeCache.set(cacheKey, { at: Date.now(), value: result });
+    while (luckyRangeCache.size > LUCKY_RANGE_CACHE_MAX) {
+      const oldest = luckyRangeCache.keys().next().value;
+      if (oldest === undefined) break;
+      luckyRangeCache.delete(oldest);
+    }
+  }
+  return result;
 }
 
 export const V1_SCENARIO_IDS = SCENARIOS.map((s) => s.id);

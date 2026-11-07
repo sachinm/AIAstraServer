@@ -52,8 +52,12 @@ export async function prepareReaders(a: {
   const subject = a.pack.subject;
   const route = planBRoute(a.question);
   const realWant = a.intent.clarified?.realWant?.id ?? null;
-  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna), allowed: a.allowedReaders ?? null });
-  const person = personIn(a.question);
+  const slotPerson =
+    a.intent.classification?.slots?.subject_person?.value ??
+    a.intent.classification?.slots?.other_person?.value ??
+    null;
+  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna), allowed: a.allowedReaders ?? null, slotPerson });
+  const person = personIn(a.question, slotPerson);
   const vargas = subjectVargas(subject);
   const types = fetchPlan(plan.ids, { vargas, person });
   const bundle = await loadChartBundle(a.rows, a.kundliId, types, a.asOf);

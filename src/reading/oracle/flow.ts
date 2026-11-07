@@ -301,7 +301,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
       }
       try {
         const r = await streamGemini(
-          { model: oracleModel, node: 'oracle', system, parts, thinking: d.thinking === 'off' ? 'low' : d.thinking, includeThoughts: d.includeThoughts, maxOutputTokens: reservation.maxOutputTokens, temperature: 0.4, timeoutMs: budget.timeoutMs },
+          { model: oracleModel, node: 'oracle', system, parts, cachePrefix: true, cacheOwner: d.cacheOwner, thinking: d.thinking === 'off' ? 'low' : d.thinking, includeThoughts: d.includeThoughts, maxOutputTokens: reservation.maxOutputTokens, temperature: 0.4, timeoutMs: budget.timeoutMs },
           (delta) => d.onDelta?.(scrub(delta)),
           d.onThought
             ? (delta) => {

@@ -179,9 +179,10 @@ export function buildReadingGraph(deps: GraphDeps) {
       const longHorizon = Number(hz.to.slice(0, 4)) - Number(hz.from.slice(0, 4)) > 3;
       const required = name === 'promise' || name === 'dasha' || (name === 'transit' && !longHorizon);
       const optionalLayer = name === 'annual' || name === 'prashna';
-      // findings that read data outside the dossier are not cached: the annual and prashna layers, and a dated transit
+      // findings that read data outside the dossier are not cached unless annual comes from the stored digest pack
       const datedTransit = name === 'transit' && !!askedAt && !!deps.layers?.transitAt;
-      const key = deps.dossierHash && !optionalLayer && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf, ...(deps.facts ? { facts: deps.facts } : {}) }) : null;
+      const digestAnnual = name === 'annual' && !deps.layers?.annual && Boolean(pack?.sections.annual);
+      const key = deps.dossierHash && (!optionalLayer || digestAnnual) && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf, ...(deps.facts ? { facts: deps.facts } : {}) }) : null;
       const cached = key ? findingsCache.get(key) : undefined;
       if (cached) {
         const ms = Date.now() - t0;

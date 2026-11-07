@@ -128,7 +128,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
         const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
         return {
           value: b,
-          output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, ...b.counts },
+          output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, writes: ['area_builds:1'], ...b.counts },
           charts: boardChartsRead(view, transit !== null),
         };
       },

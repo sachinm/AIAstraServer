@@ -61,9 +61,10 @@ export const MAX_CODE_CLAIMS = 8;
  * house, the varga of the relationship and the natural karaka. A label table, as packs/frames.ts and oracle/readers.ts
  * personIn hold the same houses; it computes nothing.
  */
-export const PERSON_SIGNIFIERS: Record<'mother' | 'father' | 'spouse' | 'child' | 'sibling', { houses: number[]; varga: string; karaka: string }> = {
+export const PERSON_SIGNIFIERS: Record<'mother' | 'father' | 'parent' | 'spouse' | 'child' | 'sibling', { houses: number[]; varga: string; karaka: string }> = {
   mother: { houses: [4], varga: 'D12', karaka: 'Mo' },
   father: { houses: [9], varga: 'D12', karaka: 'Su' },
+  parent: { houses: [4, 9], varga: 'D12', karaka: 'Su' },
   spouse: { houses: [7], varga: 'D9', karaka: 'Ve' },
   child: { houses: [5], varga: 'D7', karaka: 'Ju' },
   sibling: { houses: [3, 11], varga: 'D3', karaka: 'Ma' },
