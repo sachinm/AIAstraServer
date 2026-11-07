@@ -26,6 +26,28 @@ export type AccountRef = { id: string; role: string | null; locked?: boolean };
 export const CODE_TTL_MS = 3 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const lastOtpFailures = new Map<string, { at: number; reason: string }>();
+
+function noteOtpFailure(emailRaw: string | null | undefined, reason: string): void {
+  const key = emailRaw?.trim().toLowerCase() || 'anon';
+  lastOtpFailures.delete(key);
+  lastOtpFailures.set(key, { at: Date.now(), reason });
+  while (lastOtpFailures.size > 200) {
+    const oldest = lastOtpFailures.keys().next().value;
+    if (oldest === undefined) break;
+    lastOtpFailures.delete(oldest);
+  }
+}
+
+export function popLastOtpFailure(emailRaw?: string | null): string | null {
+  const key = emailRaw?.trim().toLowerCase() || 'anon';
+  const entry = lastOtpFailures.get(key);
+  if (!entry) return null;
+  lastOtpFailures.delete(key);
+  if (Date.now() - entry.at > 30_000) return null;
+  return entry.reason;
+}
+
 export function isWellFormedEmail(email: string): boolean {
   return EMAIL_RE.test(email);
 }
@@ -83,7 +105,10 @@ async function legacyVerifyLoginCode(
 ): Promise<AccountRef | null> {
   const email = emailRaw.trim();
   const code = normalizeMagicLinkCode(codeRaw);
-  if (!isWellFormedEmail(email) || code.length !== 8) return null;
+  if (!isWellFormedEmail(email) || code.length !== 8) {
+    noteOtpFailure(emailRaw, 'malformed_code');
+    return null;
+  }
 
   const user = await prisma.auth.findFirst({
     where: { email: { equals: email, mode: 'insensitive' } },
@@ -95,11 +120,20 @@ async function legacyVerifyLoginCode(
       magic_link_expires_at: true,
     },
   });
-  if (!user?.magic_link_code_hash || !user.magic_link_expires_at) return null;
-  if (new Date() > user.magic_link_expires_at) return null;
+  if (!user?.magic_link_code_hash || !user.magic_link_expires_at) {
+    noteOtpFailure(emailRaw, 'unknown_or_unset');
+    return null;
+  }
+  if (new Date() > user.magic_link_expires_at) {
+    noteOtpFailure(emailRaw, 'expired_code');
+    return null;
+  }
 
   const match = await comparePassword(code, user.magic_link_code_hash);
-  if (!match) return null;
+  if (!match) {
+    noteOtpFailure(emailRaw, 'wrong_code');
+    return null;
+  }
 
   await prisma.auth.update({
     where: { id: user.id },
@@ -215,10 +249,16 @@ async function cognitoVerifyLoginCode(
 ): Promise<AccountRef | null> {
   const email = emailRaw.trim();
   const code = normalizeCognitoCode(codeRaw);
-  if (!isWellFormedEmail(email) || !COGNITO_CODE_RE.test(code)) return null;
+  if (!isWellFormedEmail(email) || !COGNITO_CODE_RE.test(code)) {
+    noteOtpFailure(emailRaw, 'malformed_code');
+    return null;
+  }
 
   const user = await findAccountByEmail(email);
-  if (!user) return null; // creates nothing: an account row must already exist
+  if (!user) {
+    noteOtpFailure(emailRaw, 'unknown_or_unset');
+    return null; // creates nothing: an account row must already exist
+  }
 
   try {
     const cognito = getCognitoAuth();
@@ -231,7 +271,10 @@ async function cognitoVerifyLoginCode(
     if (hasSession) {
       // Sign-in code. A wrong code keeps the session so the user can retry (Cognito limits attempts).
       const answered = await cognito.answerEmailOtp(user.email, code, stored as string);
-      if (answered.status !== 'ok') return null;
+      if (answered.status !== 'ok') {
+        noteOtpFailure(emailRaw, 'cognito_otp_failed');
+        return null;
+      }
       await clearStoredSession(user.id, stored);
       return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
     }
@@ -239,10 +282,14 @@ async function cognitoVerifyLoginCode(
     // No sign-in session: this is the signup (or first-time, lazily created) confirmation code.
     // ConfirmSignUp fails for confirmed users.
     const confirmed = await cognito.confirmSignUp(user.email, code);
-    if (confirmed.status !== 'confirmed') return null;
+    if (confirmed.status !== 'confirmed') {
+      noteOtpFailure(emailRaw, 'cognito_confirm_failed');
+      return null;
+    }
     return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
   } catch (err) {
     console.error('Cognito login code check failed:', (err as Error).message);
+    noteOtpFailure(emailRaw, 'cognito_error');
     return null;
   }
 }

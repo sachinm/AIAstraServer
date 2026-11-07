@@ -527,6 +527,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
         ...(uses ? { allowedReaders: uses.readers } : {}),
         ...(codeFindings.length ? { codeFindings: codeFindings.filter((f) => f.subject === first) } : {}),
         ...(Object.keys(facts).length ? { facts } : {}),
+        prisma,
         techniqueIds: (readers, tier) => selectedTechniques(intent, facts, { ...useOpts, tier, readers }),
       });
       answer = out.answer;

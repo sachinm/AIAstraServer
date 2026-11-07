@@ -7,6 +7,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { Usage } from '../types.js';
 import type { ReaderResult } from './runReader.js';
+import { clearValidatorCache } from './validator.js';
 
 const MEMO_TTL_MS = 6 * 3_600_000;
 const MEMO_MAX = 500;
@@ -32,6 +33,7 @@ export function setReaderMemo(key: string, value: HeldReader): void {
 /** Test seam. */
 export function clearReaderMemo(): void {
   memo.clear();
+  clearValidatorCache();
 }
 
 export interface PrewarmedSet {

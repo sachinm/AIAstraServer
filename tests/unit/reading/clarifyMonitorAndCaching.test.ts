@@ -132,6 +132,14 @@ describe('AI-first Clarify config, person_facts awareness, and Clarify Monitor',
 
     expect(verdict.diagnosisCode).toBe('optimal');
     expect(verdict.overallScore).toBe(100);
+    expect(verdict.overall_score).toBe(5);
+    expect(verdict.ask_right_score).toBe(5);
+    expect(verdict.phrasing_score).toBe(5);
+    expect(verdict.handoff_score).toBe(5);
+    expect(verdict.would_asking_have_helped).toBe(false);
+    expect(verdict.extra_ask_triggered).toBe(false);
+    expect(verdict.context_handoff_ok).toBe(true);
+    expect(verdict.flags).toEqual([]);
     expect(createRun).toHaveBeenCalledTimes(1);
     expect(updateMany).toHaveBeenCalledWith({
       where: { run_id: 'run-career-1' },

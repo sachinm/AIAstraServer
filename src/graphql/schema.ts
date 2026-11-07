@@ -12,6 +12,7 @@ import { completeProfile, ownProfileFields, referralStats, updateProfile } from 
 import { getClientIp } from '../lib/requestMeta.js';
 import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
 import { forgetUser } from '../auth/requestAuth.js';
+import { popLastOtpFailure } from '../auth/emailCode.js';
 import { assertTurnstileIfConfigured } from '../services/turnstileService.js';
 
 function popLastTurnstileFailure(clientIp?: string | null) {
@@ -1179,11 +1180,13 @@ const resolvers = {
     ) {
       const res = await verifySignupCode(email, code);
       const locked = !res.success && 'code' in res && res.code === 'ACCOUNT_LOCKED';
+      const otpFailure = !res.success && !locked ? popLastOtpFailure(email) : null;
       void recordAccountEvent(context?.prisma, {
         userId: res.success ? res.user : null,
         action: 'sign_up_verify',
         outcome: res.success ? 'ok' : locked ? 'refused' : 'failed',
         note: res.success ? null : subjectTag(email),
+        ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
         request: factsFromFetch(context?.request),
       });
       return res;
@@ -1300,11 +1303,13 @@ const resolvers = {
         });
       }
       const locked = !login.success && 'code' in login && login.code === 'ACCOUNT_LOCKED';
+      const otpFailure = !login.success && !locked && !tf ? popLastOtpFailure(email) : null;
       void recordAccountEvent(context.prisma, {
         userId: login.success ? login.user : null,
         action: 'sign_in',
         outcome: login.success ? 'ok' : locked ? 'refused' : 'failed',
         note: login.success ? null : subjectTag(email),
+        ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
         request: reqFacts,
       });
       return login;
