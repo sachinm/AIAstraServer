@@ -13,22 +13,31 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { getReadingCacheRecycleMs } from '../../config/env.js';
-import { prisma } from '../../lib/prisma.js';
 import { recycleIndividualTechniqueOutputs, setTechniqueOutputUsedHook, sweepTechniqueOutputs } from '../../techniques/outputStore.js';
 import { evictClarifyCacheForIndividual } from '../clarify/planner.js';
+import { evictCodeReaderMemoForIndividual } from '../codeReaders/readers.js';
 import { evictFindingsCacheForIndividual, setSpecialistCacheUsedHook } from '../nodes/findingsCache.js';
 import { evictChartBundleForIndividual } from '../oracle/chartBundle.js';
-import { recycleIndividualReaderCache, setReaderCacheUsedHook, sweepReaderFindingsCache } from '../oracle/prewarm.js';
+import { evictReaderMemoForIndividual, recycleIndividualReaderCache, setReaderCacheUsedHook, sweepReaderFindingsCache } from '../oracle/prewarm.js';
 import { evictValidatorCacheForIndividual } from '../oracle/validator.js';
 import { evictFullContextsForIndividual } from '../packs/fullPrefix.js';
 import {
   deleteIndividualCaches,
   explicitCacheEnabled,
   setCacheOwnerUsedHook,
+  setUserCachesDeletedHook,
   sweepLlmCaches,
   type CacheOwner,
   type SweepResult,
 } from './promptCache.js';
+
+let defaultPrismaPromise: Promise<PrismaClient | null> | undefined;
+async function resolveDefaultPrisma(): Promise<PrismaClient | null> {
+  defaultPrismaPromise ??= import('../../lib/prisma.js')
+    .then((m) => m.prisma)
+    .catch(() => null);
+  return defaultPrismaPromise;
+}
 
 export const SWEEP_TASK = 'llm-cache-sweep';
 const MIN_GAP_MS = 5 * 60_000;
@@ -48,6 +57,7 @@ export interface IndividualCacheRecycleResult {
   chartBundleEvicted: boolean;
   validatorMemoryDeleted: number;
   clarifyMemoryDeleted: number;
+  codeReaderMemoryDeleted: number;
 }
 
 interface PendingRecycleEntry {
@@ -87,7 +97,7 @@ export async function recycleIndividualCaches(
       pendingRecycles.delete(key);
     }
   }
-  const db = opts.prisma !== undefined ? opts.prisma : prisma;
+  const db = opts.prisma !== undefined ? opts.prisma : await resolveDefaultPrisma();
   const now = opts.now ?? new Date();
   const onlyUsed = opts.onlyUsed ?? true;
   const idleMs = opts.idleMs;
@@ -116,6 +126,7 @@ export async function recycleIndividualCaches(
   const chartBundleEvicted = evictChartBundleForIndividual(owner.kundliId ?? null);
   const validatorMemoryDeleted = evictValidatorCacheForIndividual(owner);
   const clarifyMemoryDeleted = evictClarifyCacheForIndividual(owner);
+  const codeReaderMemoryDeleted = evictCodeReaderMemoForIndividual(owner.kundliId ?? null);
 
   return {
     userId: owner.userId ?? null,
@@ -131,6 +142,7 @@ export async function recycleIndividualCaches(
     chartBundleEvicted,
     validatorMemoryDeleted,
     clarifyMemoryDeleted,
+    codeReaderMemoryDeleted,
   };
 }
 
@@ -157,7 +169,7 @@ export function informIndividualCacheUsed(
   const timer = setTimeout(() => {
     pendingRecycles.delete(key);
     void recycleIndividualCaches(normalizedOwner, {
-      prisma: opts.prisma !== undefined ? opts.prisma : prisma,
+      ...(opts.prisma !== undefined ? { prisma: opts.prisma } : {}),
       onlyUsed: true,
     }).catch(() => {});
   }, delayMs);
@@ -170,6 +182,9 @@ export function informIndividualCacheUsed(
     timer,
   });
 }
+
+/** Alias for {@link informIndividualCacheUsed}. */
+export const scheduleIndividualCacheRecycle = informIndividualCacheUsed;
 
 /** Inspects currently scheduled per-individual 45-minute cache recycle tasks (for diagnostics and unit tests). */
 export function getPendingIndividualRecycles(): Array<{
@@ -198,6 +213,19 @@ setCacheOwnerUsedHook((owner) => informIndividualCacheUsed(owner));
 setReaderCacheUsedHook((owner) => informIndividualCacheUsed(owner));
 setSpecialistCacheUsedHook((owner) => informIndividualCacheUsed(owner));
 setTechniqueOutputUsedHook((owner) => informIndividualCacheUsed(owner));
+setUserCachesDeletedHook((userId) => {
+  for (const [k, e] of pendingRecycles.entries()) {
+    if (e.owner.userId === userId) {
+      clearTimeout(e.timer);
+      pendingRecycles.delete(k);
+    }
+  }
+  const owner = { userId, kundliId: null };
+  evictReaderMemoForIndividual(owner, { onlyUsed: false });
+  evictFindingsCacheForIndividual(owner, { onlyUsed: false });
+  evictValidatorCacheForIndividual(owner);
+  evictClarifyCacheForIndividual(owner);
+});
 
 /**
  * An EventBridge scheduled event for the sweeper: `source: aws.events`, `detail-type: Scheduled Event`,
@@ -226,7 +254,7 @@ export async function runScheduledSweep(
   const now = opts.now ?? new Date();
   if (!opts.force && Date.now() - lastRunAt < MIN_GAP_MS) return { skipped: 'ran recently' };
   lastRunAt = Date.now();
-  const db = opts.prisma !== undefined ? opts.prisma : prisma;
+  const db = opts.prisma !== undefined ? opts.prisma : await resolveDefaultPrisma();
   const recycleMs = getReadingCacheRecycleMs();
   try {
     // Run any due per-individual recycle tasks first

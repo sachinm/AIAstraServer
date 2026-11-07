@@ -76,10 +76,16 @@ function geminiKey(): string | null {
 export const cacheStats = { created: 0, adopted: 0, hits: 0, misses: 0, extended: 0, errors: 0 };
 
 let cacheOwnerUsedHook: ((owner: CacheOwner) => void) | null = null;
+let userCachesDeletedHook: ((userId: string) => void) | null = null;
 
 /** Registers a callback invoked whenever a prompt cache is accessed or created for an individual (`userId`/`kundliId`). */
 export function setCacheOwnerUsedHook(fn: ((owner: CacheOwner) => void) | null): void {
   cacheOwnerUsedHook = fn;
+}
+
+/** Registers a callback invoked whenever `deleteUserCaches(userId)` runs (e.g. on logout or profile update). */
+export function setUserCachesDeletedHook(fn: ((userId: string) => void) | null): void {
+  userCachesDeletedHook = fn;
 }
 
 export function clearPromptCache(): void {
@@ -405,6 +411,13 @@ export async function deleteIndividualCaches(
 export async function deleteUserCaches(userId: string): Promise<{ deleted: number; failed: number }> {
   const apiKey = geminiKey();
   if (!userId) return { deleted: 0, failed: 0 };
+  if (userCachesDeletedHook) {
+    try {
+      userCachesDeletedHook(userId);
+    } catch {
+      // never break logout cache cleanup
+    }
+  }
   if (!apiKey) {
     evictPromptCacheMemoryForIndividual({ userId });
     return { deleted: 0, failed: 0 };

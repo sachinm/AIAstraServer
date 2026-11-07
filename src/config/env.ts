@@ -255,6 +255,9 @@ export function getReadingCacheRecycleMinutes(): number {
   return Number.isFinite(n) && n >= 5 && n <= 240 ? Math.round(n) : 45;
 }
 
+/** Alias for {@link getReadingCacheRecycleMinutes}. */
+export const readingCacheRecycleMinutes = getReadingCacheRecycleMinutes;
+
 /** Milliseconds equivalent of {@link getReadingCacheRecycleMinutes}. */
 export function getReadingCacheRecycleMs(): number {
   return getReadingCacheRecycleMinutes() * 60_000;
@@ -778,7 +781,3 @@ export function isPageTimingEnabled(): boolean {
 export function getPageSlowThresholdMs(): number {
   return parseClampedIntEnv('PAGE_SLOW_THRESHOLD_MS', 1000, 100, 60_000);
 }
-
-
-
-
