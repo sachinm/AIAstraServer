@@ -9,7 +9,7 @@ import type { AreaConfig } from './houseLayers.js';
 export const LOVE: AreaConfig = {
   area: 'love',
   houses: [7, 5, 11, 2, 4, 8, 12],
-  primary: [7, 5],
+  primary: [7, 5, 8, 4, 2, 11],
   karakas: ['L7', 'Ve', 'Mo', 'DK'],
   protectPoints: ['UL'],
   vargaChecks: [{ varga: 'D9', house: 7 }],
@@ -21,14 +21,14 @@ export const LOVE: AreaConfig = {
   sahams: { support: ['vivaha', 'preethi', 'mitra'], test: ['santapa', 'paradara'] },
   // doc 46 §B.12 Love rows; separation is never a verdict (doc 45 §8.2) and shows only as strain with a date
   subareas: [
-    { id: 'meet', title: 'Meeting someone', planets: ['L5', 'L7', 'Ve', 'DK'], houses: [7, 5, 11], sides: ['support'] },
-    { id: 'romance', title: 'Romance', planets: ['L5', 'Ve', 'Ma', 'Mo'], houses: [5], sides: ['support'] },
-    { id: 'commitment', title: 'Commitment', planets: ['L7', 'Ve', 'DK', 'L2'], houses: [7, 2], sides: ['support'] },
+    { id: 'meet', title: 'Meeting someone', planets: ['L5', 'L7', 'Ve', 'DK', 'Ju'], houses: [7, 5, 11], sides: ['support'] },
+    { id: 'romance', title: 'Romance', planets: ['L5', 'Ve', 'Ma', 'Mo', 'L7'], houses: [5, 7], sides: ['support'] },
+    { id: 'commitment', title: 'Commitment', planets: ['L7', 'Ve', 'DK', 'L2', 'Ju'], houses: [7, 2, 8], sides: ['support'] },
     { id: 'delay', title: 'Why it is taking time', planets: ['Sa', 'L7', 'Ke'], houses: [7], sides: ['test'] },
-    { id: 'health', title: 'How things are between you', planets: ['L7', 'Ve', 'Mo', 'L4', 'L2'], houses: [7, 4], sides: ['support', 'test'] },
-    { id: 'strain', title: 'Distance or tension', planets: ['L6', 'L2', 'L12', 'Ma', 'Sa', 'Ra'], houses: [], sides: ['test'] },
+    { id: 'health', title: 'How things are between you', planets: ['L7', 'Ve', 'Mo', 'L4', 'L2', 'Ju', 'L5', 'DK'], houses: [7, 4, 5, 2], sides: ['support', 'test'] },
+    { id: 'strain', title: 'Distance or tension', planets: ['L6', 'L2', 'L12', 'Ma', 'Sa', 'Ra', 'Ke'], houses: [7, 8, 12], sides: ['test'] },
     { id: 'reconcile', title: 'Getting back together', planets: ['L7', 'Ve', 'Ju', 'L11'], houses: [7, 11], sides: ['support'] },
-    { id: 'family_accept', title: 'Family and in-laws', planets: ['L2', 'L4', 'L8'], houses: [2, 4], sides: ['support', 'test'] },
+    { id: 'family_accept', title: 'Family and in-laws', planets: ['L2', 'L4', 'L8', 'Ju', 'Mo'], houses: [2, 4, 8], sides: ['support', 'test'] },
     { id: 'friends', title: 'Friendships', planets: ['L11', 'L4', 'Me', 'Ve'], houses: [11], sides: ['support', 'test'] },
   ],
   words: {
@@ -67,8 +67,8 @@ export type LoveStatus = (typeof LOVE_STATUS)[number];
 export const LOVE_FIT: Record<LoveStatus | 'unknown', string[]> = {
   single: ['meet', 'romance', 'delay', 'friends'],
   dating: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
-  committed: ['health', 'commitment', 'strain', 'family_accept', 'friends'],
-  married: ['health', 'strain', 'family_accept', 'friends'],
+  committed: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
+  married: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
   separated: ['reconcile', 'strain', 'meet', 'friends'],
   complicated: ['reconcile', 'health', 'strain', 'friends'],
   unknown: ['friends'],

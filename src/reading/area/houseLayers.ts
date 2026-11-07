@@ -25,13 +25,15 @@ import type { TransitRangePayload } from '../chartData/transitRange.js';
 import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthMid, monthOf, monthStart, monthsBetween } from '../timeline/months.js';
 import {
+  buildLoveBondingAndChemistry,
+  buildLoveRelationshipArc,
   buildSelfCharacterArc,
   buildSelfPersonalityAndJoy,
   type SelfCharacterArc,
   type SelfPersonalityAndJoy,
 } from './selfCharacterAndJoy.js';
 
-export type { SelfCharacterArc, SelfPersonalityAndJoy } from './selfCharacterAndJoy.js';
+export { buildLoveBondingAndChemistry, buildLoveRelationshipArc, type SelfCharacterArc, type SelfPersonalityAndJoy } from './selfCharacterAndJoy.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
 export type Confidence = 'confirmed' | 'likely' | 'split';
@@ -578,6 +580,15 @@ const voteOf = (s: number): Vote => (s >= 1 ? 'support' : s <= -1 ? 'test' : 'ne
 export interface BoardLine {
   text: string;
   evidence: string[];
+  subCategory?: string;
+  from?: string | null;
+  to?: string | null;
+  dateLabel?: string;
+  reading?: string;
+  natalPromise?: string;
+  periodCharter?: string;
+  aspectsAndPlacements?: string[];
+  techniqueId?: string;
 }
 export interface PressureLine extends BoardLine {
   until: string | null;
@@ -632,21 +643,23 @@ export interface BoardInput {
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const PLURAL_THEME = /\b(ideas|feelings|partnerships|friendships|bonds|relationships)\b/i;
+const isPlural = (t: string) => PLURAL_THEME.test(t);
 
 /** Shared plain-words table (doc 45 §3.3): no planet, house or period names. */
 export const KIND_WORDS: Record<RowKind, (t: string) => string> = {
-  placed_well: (t) => `${cap(t)} has firm footing.`,
-  strong: (t) => `${cap(t)} is naturally strong.`,
-  helped: (t) => `${cap(t)} gets steady support.`,
-  reserves: (t) => `${cap(t)} has deep reserves.`,
+  placed_well: (t) => `${cap(t)} ${isPlural(t) ? 'have' : 'has'} firm footing.`,
+  strong: (t) => `${cap(t)} ${isPlural(t) ? 'are' : 'is'} naturally strong.`,
+  helped: (t) => `${cap(t)} ${isPlural(t) ? 'get' : 'gets'} steady support.`,
+  reserves: (t) => `${cap(t)} ${isPlural(t) ? 'have' : 'has'} deep reserves.`,
   yoga: (t) => `A rare strength in your chart lifts ${t}.`,
   guarded: (t) => `Something steady watches over ${t}.`,
   cancelled: () => 'An early weakness turns into strength over time.',
   held_up: (t) => `Good influences hold ${t} up.`,
   backed: (t) => `What stands behind ${t} is itself strong.`,
   deep_bond: () => 'The deeper side of a bond is well supported.',
-  placed_hard: (t) => `${cap(t)} takes more effort than it looks.`,
-  weak: (t) => `${cap(t)} asks for patience.`,
+  placed_hard: (t) => `${cap(t)} ${isPlural(t) ? 'take more effort than they look' : 'takes more effort than it looks'}.`,
+  weak: (t) => `${cap(t)} ${isPlural(t) ? 'ask' : 'asks'} for patience.`,
   overshadowed: (t) => `${cap(t)} can feel overshadowed.`,
   conflict: (t) => `${cap(t)} can feel pulled two ways.`,
   pressed: (t) => `A heavy influence presses on ${t}.`,
@@ -666,8 +679,8 @@ export function lineText(cfg: AreaConfig, r: Pick<LayerRow, 'kind' | 'theme'>): 
   return (cfg.words.kinds?.[r.kind] ?? KIND_WORDS[r.kind])(theme);
 }
 
-function lines<T extends LayerRow>(cfg: AreaConfig, rows: T[], max: number): Array<BoardLine & { until: string | null; weight: number }> {
-  const by = new Map<string, BoardLine & { until: string | null; weight: number }>();
+function lines<T extends LayerRow>(cfg: AreaConfig, rows: T[], max: number): Array<BoardLine & { until: string | null; weight: number; theme: string; layer: LayerId }> {
+  const by = new Map<string, BoardLine & { until: string | null; weight: number; theme: string; layer: LayerId }>();
   for (const r of [...rows].sort((a, b) => b.weight - a.weight)) {
     const text = lineText(cfg, r);
     const prev = by.get(text);
@@ -675,9 +688,67 @@ function lines<T extends LayerRow>(cfg: AreaConfig, rows: T[], max: number): Arr
       prev.weight += r.weight;
       for (const e of r.evidence) if (!prev.evidence.includes(e)) prev.evidence.push(e);
       if (r.until && (!prev.until || r.until > prev.until)) prev.until = r.until;
-    } else by.set(text, { text, evidence: [...r.evidence], until: r.until ?? null, weight: r.weight });
+    } else by.set(text, { text, evidence: [...r.evidence], until: r.until ?? null, weight: r.weight, theme: r.theme, layer: r.layer });
   }
   return [...by.values()].sort((a, b) => b.weight - a.weight).slice(0, max);
+}
+
+function enrichLine(
+  cfg: AreaConfig,
+  item: { text: string; evidence: string[]; until: string | null; theme: string; layer: LayerId },
+  side: Side,
+  asOf: string,
+  ahead: AheadWindow[],
+): BoardLine & { until: string | null } {
+  const themeLabel = cfg.words.themes[item.theme] ?? cfg.words.themes[cfg.karakas[0]!] ?? 'this area';
+  const subMatch = cfg.subareas.find((s) => item.theme.startsWith('h') && s.houses.includes(Number(item.theme.slice(1)))) ?? cfg.subareas[0];
+  const subCategory = subMatch?.id ?? (cfg.area === 'love' ? 'health' : 'identity');
+  const win = ahead.find((w) => w.side === side && w.subarea === subCategory) ?? ahead.find((w) => w.side === side) ?? ahead[0] ?? null;
+  const from = side === 'support' ? (win?.from ?? asOf) : asOf;
+  const to = side === 'support' ? (win?.to ?? null) : item.until;
+  const dateLabel =
+    side === 'support'
+      ? from && to
+        ? `${from} – ${to}`
+        : `Active from ${asOf}`
+      : item.until
+        ? `Now – ${item.until}`
+        : 'Steady discipline across active periods';
+  const techniqueId =
+    side === 'support'
+      ? item.layer === 'protection'
+        ? `${cfg.area}.protection`
+        : `${cfg.area}.promise`
+      : `${cfg.area}.affliction`;
+  const reading =
+    side === 'support'
+      ? `${item.text} Grounded in ${themeLabel}, this structural strength steadies your choices and helps constructive efforts compound across ${dateLabel}.`
+      : `${item.text} Focused on ${themeLabel}, this pressure asks for deliberate pacing, clear agreements, and unhurried recovery across ${dateLabel}.`;
+  const natalPromise =
+    side === 'support'
+      ? `Natal foundation for ${themeLabel} is well anchored across your primary and inner charts.`
+      : `Natal sensitivity in ${themeLabel} matures through patience, realistic boundaries, and consistent follow-through.`;
+  const periodCharter =
+    side === 'support'
+      ? `Active period charter (${dateLabel}) supports constructive initiative in ${subMatch?.title.toLowerCase() ?? themeLabel}.`
+      : item.until
+        ? `Active period charter tests ${themeLabel} until ${item.until}, when the heaviest weight lifts.`
+        : `Standing discipline: pace commitments in ${themeLabel} with steady weekly habits.`;
+
+  return {
+    text: item.text,
+    until: item.until,
+    evidence: item.evidence,
+    subCategory,
+    from,
+    to,
+    dateLabel,
+    reading,
+    natalPromise,
+    periodCharter,
+    aspectsAndPlacements: item.evidence,
+    techniqueId,
+  };
 }
 
 function presentTone(series: Array<{ month: string; side: Vote }>, nowIdx: number, votes: FamilyVote[]): AreaBoardBody['tone'] {
@@ -790,10 +861,23 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   if (missing.length) notes.push(`Not running for this chart today: ${missing.join(', ')}; confidence scales to the families present.`);
   const tone = presentTone(series, nowIdx, votes);
 
-  const supports = lines(cfg, [...promise.filter((r) => r.side === 'support'), ...protection, ...varga.filter((r) => r.side === 'support'), ...nakshatra.filter((r) => r.side === 'support'), ...(transit ?? []).filter((r) => r.side === 'support')], 5).map(({ text, evidence }) => ({ text, evidence }));
-  const pressures = lines(cfg, [...affliction, ...varga.filter((r) => r.side === 'test'), ...nakshatra.filter((r) => r.side === 'test'), ...(transit ?? []).filter((r) => r.side === 'test')], 5).map(({ text, evidence, until }) => ({ text, until, evidence }));
-
   const ahead = aheadWindows(view, cfg, graded, asOf);
+  const supportPool = [...promise.filter((r) => r.side === 'support'), ...protection, ...varga.filter((r) => r.side === 'support'), ...nakshatra.filter((r) => r.side === 'support'), ...(transit ?? []).filter((r) => r.side === 'support')];
+  const strongThemes = new Set<string>();
+  for (const r of supportPool) {
+    if (r.weight >= 2) strongThemes.add(r.theme);
+  }
+  const pressurePool = [
+    ...affliction,
+    ...varga.filter((r) => r.side === 'test' && !(r.kind === 'weak' && !r.until && strongThemes.has(r.theme))),
+    ...nakshatra.filter((r) => r.side === 'test' && !(r.kind === 'weak' && !r.until && strongThemes.has(r.theme))),
+    ...(transit ?? []).filter((r) => r.side === 'test'),
+  ];
+  const supports = lines(cfg, supportPool, 5).map((item) => {
+    const { until: _u, ...rest } = enrichLine(cfg, item, 'support', asOf, ahead);
+    return rest;
+  });
+  const pressures = lines(cfg, pressurePool, 5).map((item) => enrichLine(cfg, item, 'test', asOf, ahead));
   const in12 = addMonthsIso(asOf, 12);
   const subareaScores: Record<string, number> = {};
   for (const w of ahead) if (w.from < in12) subareaScores[w.subarea] = (subareaScores[w.subarea] ?? 0) + GRADE_RANK[w.grade];
