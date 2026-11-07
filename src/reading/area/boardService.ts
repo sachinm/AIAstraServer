@@ -161,7 +161,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
               activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
               (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
               loadAreaFacts(prisma, userId, spec.area, { key: spec.factKey, value: fact }),
-              spec.area === 'self' ? getUserAgeYears(prisma, userId, asOf) : Promise.resolve(null),
+              getUserAgeYears(prisma, userId, asOf),
               loadTechniqueGovernance(prisma),
             ]);
             runningSpan = shortestRunningPeriodSpan(running, nowAt);
