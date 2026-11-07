@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { buildActivationRows } from '../../../../src/reading/digest/activation.js';
+import { buildDigestRows } from '../../../../src/reading/digest/build.js';
+import { digestView } from '../../../../src/reading/digest/load.js';
 import { LIFE_AREAS, lifeArea } from '../../../../src/reading/life/areas.js';
 import { buildMahadashaCharter, selectCharterMahadasha } from '../../../../src/reading/life/charter.js';
 import { promiseScale } from '../../../../src/reading/life/promise.js';
+import { loadFixture } from '../digest/helpers.js';
 import { annualRow, makeView, row } from './fixture.js';
 
 const today = '2026-11-05';
@@ -267,5 +271,65 @@ describe('life.mahadasha_charter (doc 55)', () => {
     });
     const dashaLine = p.lines.find((l) => l.fact.startsWith('activation:vimshottari'))!;
     expect(dashaLine.side).toBe('neutral'); // stepped down from support because Sa is 8th from Ju
+  });
+
+  it('builds a coherent 19-year Saturn Mahadasha charter + 5.2-year Jupiter bridge on the real research kundli fixture', () => {
+    const asOf = '2026-11-06';
+    const fx = loadFixture();
+    const digestRows = buildDigestRows(fx.items, { kundliId: 'fixture-a', calcVersions: fx.calcVersions });
+    const view = digestView('fixture-a', digestRows);
+    const act = buildActivationRows(fx.items, digestRows, { today: asOf });
+    const running = act.filter((r) => r.from <= asOf && r.to > asOf);
+    const areaInputs = LIFE_AREAS.map((area) => ({
+      area,
+      promise: promiseScale(view, area, { today: asOf, running, annual: view.annual(2026), sky: null }),
+    }));
+
+    const charter = buildMahadashaCharter(view, areaInputs, {
+      today: asOf,
+      rows: act.filter((r) => r.level <= 2),
+      annual: (y) => view.annual(y),
+      sky: null,
+    })!;
+
+    expect(charter).not.toBeNull();
+    // Primary charter is the upcoming 19-year Saturn Mahadasha (2032–2051)
+    expect(charter.is_current).toBe(false);
+    expect(charter.from).toBe('2032-01-18');
+    expect(charter.to).toBe('2051-01-18');
+    expect(charter.remaining_years).toBe(19);
+    expect(charter.evidence.md).toBe('Saturn');
+    expect(charter.antardashas).toHaveLength(9);
+
+    // Bridge covers the remaining 5.2 years of the running Jupiter Mahadasha (2026–2032)
+    expect(charter.bridge).not.toBeNull();
+    expect(charter.bridge!.from).toBe(asOf);
+    expect(charter.bridge!.to).toBe('2032-01-18');
+    expect(charter.bridge!.remaining_years).toBeCloseTo(5.2, 1);
+    expect(charter.bridge!.antardashas).toHaveLength(4);
+
+    // Sa-Sa (house_from_md = 1, trikona_manifestation, star_lord_of_md) is marked 'build' (not forced to 'careful')
+    const saSa = charter.antardashas[0]!;
+    expect(saSa.evidence.ad).toBe('Saturn');
+    expect(saSa.evidence.fruition_class).toBe('trikona_manifestation');
+    expect(saSa.tone).toBe('build');
+    expect(saSa.evidence.systems).toContain('Vimshottari');
+
+    // Different Antardashas highlight distinct activated areas rather than repeating the exact same 3 areas
+    const topSets = new Set(charter.antardashas.map((ad) => ad.areas.map((a) => a.id).join(',')));
+    expect(topSets.size).toBeGreaterThanOrEqual(6);
+
+    // Every visible prose string across primary charter and bridge passes BANNED_RE and avoids awkward double-'and'
+    const visible: string[] = [
+      charter.headline,
+      charter.charter_summary,
+      ...charter.area_charters.flatMap((ac) => [ac.label, ac.theme, ac.promise_note, ac.guidance, ac.basis]),
+      ...charter.antardashas.flatMap((ad) => [ad.headline, ad.basis, ...ad.areas.flatMap((n) => [n.label, n.summary, n.timing, n.action])]),
+      charter.bridge!.summary,
+      ...charter.bridge!.antardashas.flatMap((ad) => [ad.headline, ad.basis, ...ad.areas.flatMap((n) => [n.label, n.summary, n.timing, n.action])]),
+    ];
+    for (const s of visible) {
+      expect(s, s).not.toMatch(BANNED_RE);
+    }
   });
 });

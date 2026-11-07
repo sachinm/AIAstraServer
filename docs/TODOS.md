@@ -267,8 +267,8 @@ re-applied by it.
   usage is not kept (under $0.001 per question, doc 23). Status: open. Done: priced from the AWS page and seeded into the guard.
 - **Stored tables lack fields doc 33's curricula use:** star lord per planet (`varga.d1` gives the nakshatra name only), bhava chalit, and
   `near_cusp`. Readers R07 and R08 report these as gaps. Status: open (Radha session). Done: served, and the curricula restored.
-- **The 6/8/12 friction counts between dasha levels have no source.** Doc 26 Pass 3 and doc 33 R8 use them; Node may not count, and
-  `house_counts` was not in the stored rows read 2026-11-01. Status: open. Done: read from `house_counts` once fetched per kundli.
+- **The 6/8/12 friction counts between dasha levels have no source in the oracle R8 reader.** Doc 26 Pass 3 and doc 33 R8 use them; Node may not count, and
+  `house_counts` was not in the stored rows read 2026-11-01. **Updated 2026-11-06:** `buildDigestRows` (`src/reading/digest/build.ts`) now populates `PlanetCard.dashaCharter` from `avasthas.dasha_charter` (including the 9×9 `fruition` map with `houseFromMd`, `fruitionClass`, `isShadAshtaka68`, and `isDwirdwadasha212`), and `src/reading/life/promise.ts` (`periodSide`) and `src/reading/life/charter.ts` (`life.mahadasha_charter`) read it directly. Remaining: wire R8 / doc 26 Pass 3 in the oracle flow to read `dashaCharter.fruition` or `house_counts`. Status: open.
 - **Planet names differ between tables:** `karaka.chara` says `Raagu` where `dignities` says `Rahu`. A reader or the layer count can treat one
   planet as two topics. Status: open (Radha session). Done: one spelling.
 - **G1's catalog fixture has only 5 of the 35 types the readers use**, so `npm run bench:oracle` sends them thin tables. Status: open.
@@ -934,3 +934,10 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   served by the digest in the pack's spelling or confirmed as dossier-only, and this list shrinks to the latter.
 - **P3: Deterministic readers are not prewarmed or cached.** They are code over the pack (milliseconds), so they rerun
   per question; noted only so nobody adds a model call there without the cost guard. Owner: reading-dev.
+
+## Filed 2026-11-06 by the life-mahadasha-charter build (doc 55, branch `feat/life-mahadasha-charter`)
+
+- **Shipped (2026-11-06 — Remaining Largest Mahadasha & Antardasha Life Charter, doc 55):**
+  - `AIAstra_Server`: added `PlanetCard.dashaCharter` in `src/reading/digest/build.ts` (from `avasthas.dasha_charter`), 6/8/12 Antardasha-from-Mahadasha step-down in `src/reading/life/promise.ts` (`periodSide`), `life.mahadasha_charter` technique in `src/reading/life/charter.ts` + `compose.ts` + `service.ts`, registered `life.mahadasha_charter` in `src/techniques/catalog.ts` and `src/agents/registry.ts`, and added unit + research-fixture tests in `tests/unit/reading/life/charter.test.ts`.
+  - `AIAstra_WEB`: added `LifeMahadashaCharter` types in `src/lib/lifeReadingApi.ts`, the Major Chapter Charter section (area charters, chronological Antardasha timeline, and current-chapter bridge) in `src/pages/timeline/LifeReadingDashboard.tsx`, and tests in `src/pages/timeline/LifeReadingDashboard.test.tsx`.
+- **P2: `tests/unit/auth/registrationV2.test.ts` fails 1 test with `Error: no mail` when run outside local-mail test setup.** Same root cause as the `.env` / auth provider test leakage noted under P1 (line 84) and P2 (lines 280, 532); tracked there for the next auth/test-env pass.
