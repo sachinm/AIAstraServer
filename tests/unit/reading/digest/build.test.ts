@@ -71,10 +71,15 @@ describe('buildDigestRows on a research kundli', () => {
     expect(byKey.get('house|D12.h1')!.source[0]!.type).toBe('facts');
   });
 
-  it('D1 planet cards carry the dispositor chain, avasthas, shadbala, nature, and dashaCharter (5-vector + 9x9 fruition)', () => {
+  it('D1 planet cards carry the dispositor chain, starChain, avasthas, avasthaMultipliers, sunProximity, shadbala, nature, and dashaCharter (5-vector + 9x9 fruition)', () => {
     const mo = get<PlanetCard>('planet', 'D1.Mo')!;
     expect(mo.chain[0]).toBe('Mo');
+    expect(mo.starChain?.[0]).toBe('Mo');
     expect(Object.keys(mo.avasthas).length).toBeGreaterThan(0);
+    expect(mo.avasthaMultipliers?.effective).toBeGreaterThan(0);
+    expect(mo.avasthaMultipliers?.ripeness).toBeTruthy();
+    expect(mo.sunProximity?.zone).toBe('standard_combustion');
+    expect(mo.sunProximity?.distanceDeg).toBeCloseTo(8.4175, 2);
     expect(mo.shadbalaRank).not.toBeNull();
     expect(mo.natural).toBeTruthy();
     expect(mo.owns.length).toBeGreaterThan(0);
@@ -84,7 +89,12 @@ describe('buildDigestRows on a research kundli', () => {
     expect(mo.dashaCharter!.fruition.Su?.fruitionClass).toBeTruthy();
     const su = get<PlanetCard>('planet', 'D1.Su')!;
     expect(su.dashaCharter?.housesOwned).toEqual([9]);
+    expect(su.shadbalaRupa).toBeCloseTo(7.67, 2);
+    expect(su.avasthaMultipliers).toMatchObject({ baladi: 0.35, jagradadi: 1, effective: 0.35, ripeness: 'over_ripe_delayed' });
+    const sa = get<PlanetCard>('planet', 'D1.Sa')!;
+    expect(sa.owns).toEqual([2, 3]); // Capricorn (h2) + Aquarius natural_lord (h3) in Sagittarius Lagna
     const ra = get<PlanetCard>('planet', 'D1.Ra')!;
+    expect(ra.owns).toEqual([3]); // Aquarius co-lord (h3)
     expect(ra.shadbalaRank).toBeNull(); // shadbala has the seven grahas only
   });
 
@@ -96,9 +106,12 @@ describe('buildDigestRows on a research kundli', () => {
     expect(ys.some((y) => y.class === 'dosha')).toBe(true);
   });
 
-  it('points: chara karakas, A1..A12 with AL and UL, special points, sphutas', () => {
-    for (const id of ['AK', 'DK', 'A1', 'A12', 'AL', 'UL', 'SL', 'HL', 'GL', 'IL']) expect(get<PointRow>('point', `D1.${id}`), id).toBeDefined();
+  it('points: chara karakas, A1..A12 with AL and UL, special points, sphutas, and Lunar Astro sensitive points (K64M, K64L, KD22, BB)', () => {
+    for (const id of ['AK', 'DK', 'A1', 'A12', 'AL', 'UL', 'SL', 'HL', 'GL', 'IL', 'K64M', 'K64L', 'KD22', 'BB']) expect(get<PointRow>('point', `D1.${id}`), id).toBeDefined();
     expect(get<PointRow>('point', 'D1.AL')).toMatchObject({ ...get<PointRow>('point', 'D1.A1'), id: 'AL' });
+    expect(get<PointRow>('point', 'D1.K64M')).toMatchObject({ id: 'K64M', sign: 'Pisces', house: 4, lord: 'Ju' });
+    expect(get<PointRow>('point', 'D1.K64L')).toMatchObject({ id: 'K64L', sign: 'Sagittarius', house: 1, lord: 'Ju' });
+    expect(get<PointRow>('point', 'D1.KD22')).toMatchObject({ id: 'KD22', sign: 'Scorpio', house: 12, lord: 'Ma' });
     expect(get<PointRow>('point', 'D9.AK')).toBeDefined();
     expect(rows.some((r) => r.section === 'point' && r.key.startsWith('D1.sphuta.'))).toBe(true);
   });
@@ -134,10 +147,11 @@ describe('buildDigestRows on a research kundli', () => {
     expect(tp.dashas).toEqual([{ system: 'tithi_ashtottari', periods: [{ lord: 'Su', from: '2026-01-01', to: '2027-01-01' }] }]);
   });
 
-  it('the star profile comes from the dossier', () => {
-    const s = get<{ moonStar: string; taras: unknown[] }>('star', 'profile')!;
+  it('the star profile comes from the dossier and includes Lunar Astro pendingKarmaHouses from avasthas', () => {
+    const s = get<{ moonStar: string; taras: unknown[]; pendingKarmaHouses?: number[] }>('star', 'profile')!;
     expect(s.moonStar).toBeTruthy();
     expect(s.taras).toHaveLength(27);
+    expect(s.pendingKarmaHouses).toEqual([2, 5, 8, 9, 10]);
   });
 
   it('without the house table in dignities, D1 house cards come from the dossier', () => {

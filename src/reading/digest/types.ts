@@ -73,6 +73,19 @@ export interface DashaCharterDigest {
   fruition: Record<string, AntardashaFruitionCell>;
 }
 
+export interface AvasthaMultipliers {
+  baladi: number | null;
+  jagradadi: number | null;
+  effective: number | null;
+  ripeness: string | null;
+}
+
+export interface SunProximity {
+  distanceDeg: number | null;
+  classicalOrbDeg: number | null;
+  zone: string | null;
+}
+
 export interface PlanetCard {
   varga: string;
   planet: string;
@@ -90,8 +103,11 @@ export interface PlanetCard {
   dispositorHouse: number | null;
   chain: string[];
   avasthas: Record<string, string>;
+  /** Baladi & Jagradadi delivery multipliers and ripeness from avasthas.planets[i] */
+  avasthaMultipliers?: AvasthaMultipliers | null;
   shadbalaRatio: number | null;
   shadbalaRank: number | null;
+  shadbalaRupa?: number | null;
   natural: string | null;
   functional: string | null;
   owns: number[];
@@ -100,6 +116,10 @@ export interface PlanetCard {
   conjunctions: string[];
   /** D1 only: 5-vector Mahadasha charter & 9×9 Antardasha fruition map from avasthas.dasha_charter */
   dashaCharter?: DashaCharterDigest | null;
+  /** D1 only: solar proximity distance, classical orb, and zone from avasthas.proximity_audit.solar_proximity */
+  sunProximity?: SunProximity | null;
+  /** D1 only: Nakshatra dispositor chain from avasthas.lunar_astro.dispositor_chains.nakshatra */
+  starChain?: string[];
 }
 
 export interface YogaRow {
@@ -139,6 +159,8 @@ export interface StarProfile {
   lagnaStar: string | null;
   taras: Array<{ star: string; tara: string }>;
   gandanta: string[];
+  /** Pending karma houses (Saturn house, Saturn-aspected houses, Saturn-star houses, retrograde houses) from avasthas.lunar_astro.pending_karma */
+  pendingKarmaHouses?: number[];
 }
 
 export interface DigestView {

@@ -5,7 +5,7 @@ description: Prepare a career and profession reading or career dashboard for one
 
 # Career reading
 
-The method is `docs/reading-engine/43-career-reading-technique.md`; the module and dashboard are doc 42. Read both first.
+The method is `docs/reading-engine/43-career-reading-technique.md`; the module and dashboard are doc 42 (`src/reading/area/career.ts`, `src/reading/area/houseLayers.ts`, and `src/reading/area/careerService.ts`). It reads directly from the kundli's deterministic `kundli_digest` (`D1`, `D9`, `D10`, `yoga`, `point`, `annual` sections) and `kundli_activation` (42–43 dasha systems across 7 families). For multi-school synthesis and the 4-tier behavioral playbook, see `.agents/skills/multi-school-jyotish-reading/SKILL.md`. Read both first.
 
 ## Steps
 
@@ -15,9 +15,9 @@ The method is `docs/reading-engine/43-career-reading-technique.md`; the module a
    does this year's chart agree? (doc 43 §1). Verdict: promised and open, promised but blocked (name the release date),
    or not promised (no date, say the form it does take).
 3. **Read the layers of doc 43 §3 only:** D10 first; the other vargas for the sub-areas named; the main clock at three
-   levels, Narayana and the conditional dasha `dasha.applicable` says applies; karaka, Chara, Sudasa; Yogini and Tithi
+   levels (weighted by `PlanetCard.dashaCharter.fruition` and `PlanetCard.avasthaMultipliers`), Narayana and the conditional dasha where `dasha.applicable` has `applies === true`; karaka, Chara, Sudasa; Yogini and Tithi
    Ashtottari as confirmers only; the year's Tithi Pravesha chart with its D10, its own dasha, Mudda, Patyayini and the
-   career sahams; the transit overlay (use the `transit-reading` skill).
+   career sahams; the transit overlay (use the `transit-reading` skill). Remember that Scorpio (`Ma/Ke`) and Aquarius (`Sa/Ra`) carry dual lordship (`HouseCard.lord` + `HouseCard.coLord`).
 4. **Count clocks by family, one planet one vote.** A date needs two families and a trigger; a major event needs the
    main clock or Narayana, a slow trigger and an annual chart that does not contradict (doc 42 §A.4).
 5. **Job security:** apply the job-end gate and the layoff, firing and resignation signatures (doc 43 §6). Grade each

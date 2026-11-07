@@ -11,7 +11,7 @@ code and change no existing file; your outputs are new files under
 
 Read first, in the server repo: `docs/reading-engine/46-house-state-engine-and-research-page.md` §B.8, §B.11 and
 §B.12 (the row shapes and the first rows), `docs/reading-engine/43-career-reading-technique.md` §2–§8 (the career
-cards and signatures, already specified), and `src/reading/facts/types.ts` (the field names every rule must use).
+cards and signatures, already specified), and `src/reading/digest/types.ts` (`HouseCard`, `PlanetCard`, `PointRow`, `AnnualRow`, `DashaCharterDigest` — the digest field names every rule must use, alongside legacy `src/reading/facts/types.ts`).
 
 Shape:
 - Charter rows: `{ star, lord, deity, symbol, gana, purushartha, nature, houses: { "1": "...", ... "12": "..." }, sources[] }`

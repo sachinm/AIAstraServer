@@ -828,7 +828,7 @@ function runDomainSpecialistAgents(
           'Jupiter transit Pisces H1 (2010–2011) aspecting natal H5, H7, H9',
         ],
         vargasAndArudhas: [
-          'D10 Dasamsa: Gemini Lagna with Moon in H1 and Sun in Scorpio H6; AL in Gemini H4',
+          'D10 Dasamsa: Sagittarius Lagna with Jupiter in Gemini H7, Mars in Virgo H10, and Mercury in Scorpio H12; D1 AL in Gemini H4',
           'D1 7th House Virgo activated simultaneously by Narayana Virgo MD and Saturn Return',
         ],
         avasthaAndFruitTaste:
@@ -922,7 +922,7 @@ function runDomainSpecialistAgents(
           'Rahu in Virgo (H7) / Ketu in Pisces (H1) eclipse axis (2014–2016) cutting directly across the 1st/7th relationship axis',
         ],
         vargasAndArudhas: [
-          'D9 Navamsa: Libra Lagna with Ketu in H1, Rahu in Aries H7, and Venus+Mars in Sagittarius H3',
+          'D9 Navamsa: Leo Lagna with Sun+Mars+Venus in Virgo H2, Rahu in Cancer H12, and Ketu in Capricorn H6',
           'D1 Upapada Lagna (UL) in Cancer H5 afflicted by Rahu; Darapada (A7) in Gemini H4',
         ],
         avasthaAndFruitTaste:

@@ -32,18 +32,9 @@ export type ActivationRowInput = ActivationRow;
 /** The years after today the calendar runs to */
 export const ACTIVATION_YEARS_AHEAD = 30;
 
-/** Doc 46 §B.4 families by system (the catalogue's dasha names). Conditional: also any system `dasha.applicable` lists. */
+/** Doc 46 §B.4 families by system (the catalogue's dasha names). Conditional systems require `dasha.applicable` (`applies: true`). */
 const FAMILY_BY_SYSTEM: Record<string, ActivationFamily> = {
   vimsottari: 'vimshottari',
-  ashtottari: 'conditional',
-  dwisatpathi: 'conditional',
-  chathuraaseethi_sama: 'conditional',
-  shodasottari: 'conditional',
-  dwadasottari: 'conditional',
-  panchottari: 'conditional',
-  sataatbika: 'conditional',
-  shastihayani: 'conditional',
-  shattrimsa_sama: 'conditional',
   yogini: 'yogini',
   tithi_yogini: 'yogini',
   tithi_ashtottari: 'tithi_ashtottari',
@@ -52,9 +43,38 @@ const FAMILY_BY_SYSTEM: Record<string, ActivationFamily> = {
   naisargika: 'karaka',
 };
 
+/** Engine `dasha.applicable` type names → stored `dasha.<system>` tree names where the two spellings differ. */
+const CONDITIONAL_SYSTEM_ALIASES: Record<string, string[]> = {
+  chathuraaseethi_sama: ['chathuraaseethi_sama', 'chaturshitisama'],
+  chaturshitisama: ['chathuraaseethi_sama', 'chaturshitisama'],
+  sataatbika: ['sataatbika', 'shatabdika'],
+  shatabdika: ['sataatbika', 'shatabdika'],
+  shattrimsa_sama: ['shattrimsa_sama', 'shattrimsatsama'],
+  shattrimsatsama: ['shattrimsa_sama', 'shattrimsatsama'],
+  shodasottari: ['shodasottari', 'shodashottari'],
+  shodashottari: ['shodasottari', 'shodashottari'],
+};
+
+export function applicableConditionalSystems(raw: unknown): Set<string> {
+  const out = new Set<string>();
+  for (const r of Array.isArray(raw) ? raw : []) {
+    if (!isObj(r) || typeof r.type !== 'string') continue;
+    if (r.applies !== true && r.applies !== undefined) continue;
+    const base = r.type.replace(/^dasha\./, '');
+    if (!base) continue;
+    out.add(base);
+    for (const alias of CONDITIONAL_SYSTEM_ALIASES[base] ?? []) out.add(alias);
+  }
+  return out;
+}
+
 export function familyOf(system: string, rasi: boolean, applicable: ReadonlySet<string>): ActivationFamily {
   if (rasi) return 'rasi';
-  return FAMILY_BY_SYSTEM[system] ?? (applicable.has(system) ? 'conditional' : 'other');
+  if (FAMILY_BY_SYSTEM[system]) return FAMILY_BY_SYSTEM[system]!;
+  if (applicable.has(system)) return 'conditional';
+  const aliases = CONDITIONAL_SYSTEM_ALIASES[system];
+  if (aliases?.some((a) => applicable.has(a))) return 'conditional';
+  return 'other';
 }
 
 type Obj = Record<string, unknown>;
@@ -137,11 +157,7 @@ function signIndexOfNode(n: DashaNode): number | null {
  */
 export function buildActivationRows(items: Record<string, unknown>, digestRows: readonly DigestRowInput[], opts: { today: string; yearsAhead?: number }): ActivationRowInput[] {
   const cards = cardsOf(items, digestRows);
-  const applicable = new Set(
-    (Array.isArray(items['dasha.applicable']) ? (items['dasha.applicable'] as unknown[]) : [])
-      .map((r) => (isObj(r) && typeof r.type === 'string' ? r.type.replace(/^dasha\./, '') : null))
-      .filter((s): s is string => Boolean(s))
-  );
+  const applicable = applicableConditionalSystems(items['dasha.applicable']);
   const birth = birthDate(items);
   const horizon = addYears(opts.today, opts.yearsAhead ?? ACTIVATION_YEARS_AHEAD);
   const out: ActivationRowInput[] = [];
@@ -195,11 +211,11 @@ export async function activationFor(
       ...(q.maxLevel
         ? q.shortTo && q.shortMaxLevel && q.shortMaxLevel > q.maxLevel
           ? {
-              OR: [
-                { level: { lte: q.maxLevel } },
-                { level: { lte: q.shortMaxLevel }, from_date: { lte: new Date(`${q.shortTo}T00:00:00Z`) } },
-              ],
-            }
+            OR: [
+              { level: { lte: q.maxLevel } },
+              { level: { lte: q.shortMaxLevel }, from_date: { lte: new Date(`${q.shortTo}T00:00:00Z`) } },
+            ],
+          }
           : { level: { lte: q.maxLevel } }
         : {}),
     },
