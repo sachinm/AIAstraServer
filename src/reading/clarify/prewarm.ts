@@ -13,11 +13,12 @@
 import type { PrismaClient } from '@prisma/client';
 import { readingFlow } from '../config.js';
 import { startPrefetch } from '../data/store.js';
-import { findingCacheKey, findingsCache } from '../nodes/findingsCache.js';
+import { findingCacheKey, findingsCache, loadDbSpecialistFinding, saveDbSpecialistFinding } from '../nodes/findingsCache.js';
 import { runIntake } from '../nodes/intake.js';
 import { runSpecialist, type SpecialistAnalyst } from '../nodes/specialists.js';
 import { buildEvidencePack } from '../packs/selector.js';
 import { fullCacheLayoutActive, fullContextFor, type FullContext } from '../packs/fullPrefix.js';
+import { loadDigest } from '../digest/load.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
 import { modelFor } from '../llm/models.js';
 import { buildSystem } from '../run.js';
@@ -38,12 +39,13 @@ export async function prewarmNatalLayers(prisma: PrismaClient, userId: string, s
   try {
     const data = await startPrefetch(prisma, userId, { asOf: s.asOf });
     if (!data?.dossier) return { ran, cached };
+    const digest = data.kundliId ? await loadDigest(prisma, data.kundliId).catch(() => null) : null;
+    const owner = { userId, kundliId: data.kundliId };
     let full: FullContext | undefined;
     if (fullLayout) {
-      full = fullContextFor(data, s.asOf, await buildSystem(prisma));
+      full = fullContextFor(data, s.asOf, await buildSystem(prisma), digest);
       const ctx = full;
       const models = [...new Set([modelFor('synth'), ...(graph ? [modelFor('specialist')] : [])])];
-      const owner = { userId, kundliId: data.kundliId };
       await prewarmWithCap(Promise.all(models.map((m) => ensurePromptCache(m, ctx.system, ctx.prefix, owner))), FULL_CACHE_PREWARM_CAP_MS);
     }
     if (!layers) return { ran, cached };
@@ -51,7 +53,14 @@ export async function prewarmNatalLayers(prisma: PrismaClient, userId: string, s
     const subject = sub ?? BUCKETS[s.bucket].frames[0]!;
     const intent = (await runIntake(s.question, s.asOf, { mode: 'rules' })).intent;
     const subjIntent = { ...intent, subjects: [{ id: subject, weight: 1 }] };
-    const pack = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject, asOf: s.asOf, intent: subjIntent });
+    const pack = buildEvidencePack({
+      dossier: data.dossier,
+      transits: data.transits,
+      subject,
+      asOf: s.asOf,
+      intent: subjIntent,
+      ...(digest ? { digest } : {}),
+    });
     const system = await buildSystem(prisma);
     const analysts: SpecialistAnalyst[] = ['promise', ...(s.bucket === 'spirituality_direction' ? (['nakshatra'] as const) : [])];
     const call = opts.specialist ?? runSpecialist;
@@ -62,8 +71,22 @@ export async function prewarmNatalLayers(prisma: PrismaClient, userId: string, s
           cached.push(analyst);
           return;
         }
-        const { finding } = await call({ analyst, subject, pack, intent: subjIntent, question: s.question, system, asOf: s.asOf, cacheOwner: { userId, kundliId: data.kundliId }, ...(full ? { full } : {}) });
+        const dbCached = await loadDbSpecialistFinding(prisma, key, owner);
+        if (dbCached) {
+          cached.push(analyst);
+          return;
+        }
+        const { finding } = await call({ analyst, subject, pack, intent: subjIntent, question: s.question, system, asOf: s.asOf, cacheOwner: owner, ...(full ? { full } : {}) });
         findingsCache.set(key, finding);
+        await saveDbSpecialistFinding(prisma, {
+          cacheKey: key,
+          kundliId: data.kundliId ?? null,
+          userId: userId ?? null,
+          analyst,
+          packHash: data.dossierHash ?? '',
+          horizonKey: 'natal',
+          finding,
+        });
         ran.push(analyst);
       })
     );

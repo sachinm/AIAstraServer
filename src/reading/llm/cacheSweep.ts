@@ -13,7 +13,6 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { getReadingCacheRecycleMs } from '../../config/env.js';
-import { sweepPageExecutionLogs } from '../../telemetry/pageTiming.js';
 import { recycleIndividualTechniqueOutputs, setTechniqueOutputUsedHook, sweepTechniqueOutputs } from '../../techniques/outputStore.js';
 import { evictClarifyCacheForIndividual } from '../clarify/planner.js';
 import { evictCodeReaderMemoForIndividual } from '../codeReaders/readers.js';
@@ -282,7 +281,11 @@ export async function runScheduledSweep(
             return 0;
           })
         : Promise.resolve(0),
-      sweepPageExecutionLogs(db, { now }).catch(() => 0),
+      import('../../telemetry/pageTiming.js' as string)
+        .then((m: { sweepPageExecutionLogs?: (p: PrismaClient | null, o: { now: Date }) => Promise<number> }) =>
+          m.sweepPageExecutionLogs ? m.sweepPageExecutionLogs(db, { now }) : 0,
+        )
+        .catch(() => 0),
     ]);
     return { ...llm, readerFindingsDeleted, techniqueOutputsDeleted, pageLogsDeleted, individualsRecycled };
   } catch (err) {

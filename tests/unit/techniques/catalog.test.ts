@@ -10,7 +10,7 @@ beforeEach(() => resetTechniqueSeedState());
 describe('technique catalogue', () => {
   it('ids are unique and look like <category or board>.<name>', () => {
     expect(new Set(TECHNIQUES.map((t) => t.id)).size).toBe(TECHNIQUES.length);
-    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life)\.[a-z0-9_.]+$/);
+    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life|research)\.[a-z0-9_.]+$/);
   });
 
   it('every category, board, status and chart source is valid', () => {
@@ -116,10 +116,14 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/life\//);
     }
-    // all 67 techniques are built (0 planned)
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(67);
+    for (const id of ['research.self_dashboard_qa', 'research.technical_verifier']) {
+      expect(techniqueById(id)?.status, id).toBe('built');
+      expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/research\//);
+    }
+    // all 69 techniques are built (0 planned)
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(69);
     expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(0);
-    expect(TECHNIQUES).toHaveLength(67);
+    expect(TECHNIQUES).toHaveLength(69);
   });
 
   it('the work families and the house-state layers are built', () => {
