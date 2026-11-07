@@ -43,6 +43,8 @@ import { runOracleFlow } from './oracle/flow.js';
 import { prismaJournalWriter, type ReadingJournal } from './oracle/journal.js';
 import { loadPrewarmed } from './oracle/prewarm.js';
 import { inferRealWant } from './clarify/realWant.js';
+import { runClarifyMonitor } from './clarify/monitor.js';
+import type { ClarifyState } from './clarify/machine.js';
 import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import { prashnaSection, transitAtSection } from './layers/sections.js';
 import { currentTrace, failureLabel, withRunTrace } from './metrics/trace.js';
@@ -394,7 +396,11 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   const subjects = intent.subjects.slice(0, 3);
   currentTrace()?.label({ subjects: subjects.length });
   const packs: Record<string, EvidencePack> = {};
-  const named = personIn(question);
+  const slotPerson =
+    intent.classification?.slots?.subject_person?.value ??
+    intent.classification?.slots?.other_person?.value ??
+    null;
+  const named = personIn(question, slotPerson);
   for (const s of subjects) {
     packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent, ...(digest ? { digest, person: named, ...(activation ? { activation } : {}) } : {}) });
   }
@@ -421,7 +427,9 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   // the deterministic readers: code over each subject's digest section, no model; their findings join the brief
   const codeFindings: CodeFinding[] = [];
   if (digest && uses && flow !== 'single') {
-    for (const s of subjects) codeFindings.push(...runCodeReaders(packs[s.id]!, uses.bySubject[s.id]?.deterministic ?? []));
+    for (const s of subjects) {
+      codeFindings.push(...runCodeReaders(packs[s.id]!, uses.bySubject[s.id]?.deterministic ?? [], { kundliId: data.kundliId, facts, slotPerson }));
+    }
     for (const f of codeFindings) if (flow === 'graph') currentTrace()?.observe({ type: 'stage', name: `code:${f.analyst}`, status: 'done', ms: 0, subject: f.subject });
   }
   const tail = tailFor(intent, question, asOf, false, facts);
@@ -652,5 +660,20 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     grounding: { dropped_claims: droppedClaims },
     errors,
   };
+  const clarifyRunId = opts.clarifyRunId ?? intent.clarified?.runId ?? null;
+  let clarifyState: ClarifyState | null = null;
+  if (clarifyRunId) {
+    const rrModel = (prisma as unknown as { readingRun?: { findFirst?: (args: unknown) => Promise<{ intent?: unknown } | null> } }).readingRun;
+    const cRow = await rrModel?.findFirst?.({ where: { id: clarifyRunId, user_id: userId }, select: { intent: true } }).catch(() => null);
+    clarifyState = ((cRow?.intent as { clarify?: ClarifyState } | null)?.clarify) ?? null;
+  }
+  const tablesWritten: Array<{ table: string; count: number }> = [
+    { table: 'reading_runs', count: 1 },
+    { table: 'reading_traces', count: 1 },
+    { table: 'reading_agent_spans', count: Math.max(1, usages.length) },
+    ...(journal && journal.all().length > 0 ? [{ table: 'reading_agent_responses', count: journal.all().length }] : []),
+  ];
+  currentTrace()?.label({ tables_written: tablesWritten });
+  await runClarifyMonitor(prisma, userId, clarifyState, { ...record, kundliId: data.kundliId }, facts).catch(() => null);
   return { answerText: answer || 'No response generated.', requestPayload, responsePayload, record };
 }

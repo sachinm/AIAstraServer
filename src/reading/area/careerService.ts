@@ -96,7 +96,7 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
       ]);
       const build = buildTimelineSpan(inputs, span);
       const m = careerMap(build, asOf, view ? { view, activation } : undefined);
-      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length } };
+      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, writes: ['area_builds:1'] } };
     });
     await deps.prisma.areaBuild
       .upsert({

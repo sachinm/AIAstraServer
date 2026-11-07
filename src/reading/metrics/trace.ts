@@ -159,6 +159,10 @@ export interface TraceLabels {
   subjects?: number | null;
   /** M31: the catalogue technique ids the clarify context selected (src/techniques/contracts.ts techniqueIdsFor) */
   techniques?: string[] | null;
+  /** M35 (docs/admin/06): tables written during this query */
+  tables_written?: Array<{ table: string; count: number }> | null;
+  /** M35 (docs/admin/06): post-reading deterministic Clarify Monitor verdict */
+  clarify_monitor?: unknown;
 }
 
 /** Optional per-call detail for traceModelCall. */
@@ -197,7 +201,7 @@ const M24_SPAN_COLUMNS = ['subject', 'tier'] as const;
 /** Columns added by M29 on spans (registry id, technique, category). */
 const M29_SPAN_COLUMNS = ['agent_id', 'technique_id', 'category'] as const;
 /** Column added by M31 on traces (the techniques a query selected, docs/reading-engine/53 §4.3). */
-const M31_TRACE_COLUMNS = ['techniques'] as const;
+const M31_TRACE_COLUMNS = ['techniques', 'tables_written', 'clarify_monitor'] as const;
 
 const isMissingColumn = (err: unknown): boolean => {
   const e = err as { code?: string; meta?: { code?: string } } | null;
@@ -280,10 +284,16 @@ export function isPermanent(err: unknown): boolean {
   return err instanceof TypeError || codes.some((c) => ['P2021', 'P2022', '42P01', '42703'].includes(c)) || /does not exist/i.test(e?.message ?? '');
 }
 
-const LABEL_KEYS = ['bucket', 'template', 'tier', 'route', 'subjects', 'techniques'] as const;
+const LABEL_KEYS = ['bucket', 'template', 'tier', 'route', 'subjects', 'techniques', 'tables_written', 'clarify_monitor'] as const;
 
 const costOf = (u: Usage, on: string): number | null => (priceFor(u.model, on) ? usageCostUsd(u, on) : null);
 const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;
+
+function rollupAgentKey(name: string, kind: AgentKind): string {
+  if (kind === 'reader') return `reader:${name}`;
+  if (kind === 'specialist') return `specialist:${name.replace(/^specialist:/, '')}`;
+  return agentIdOf(name, kind);
+}
 
 export class RunTrace {
   private buffer: SpanRow[] = [];
@@ -298,6 +308,20 @@ export class RunTrace {
   private labels: TraceLabels = {};
   /** distinct subjects seen on this query's spans: a span without one takes the query's subject when there is only one */
   private subjects = new Set<string>();
+  /** Rollup of child model_call tokens/cost/model per (agent_id, subject) so stage spans carry their model and token totals. */
+  private stageRollup = new Map<
+    string,
+    {
+      model: string;
+      prompt: number;
+      cached: number;
+      output: number;
+      thought: number;
+      usd: number;
+      hasPrice: boolean;
+      ttftMs: number | null;
+    }
+  >();
 
   constructor(
     readonly id: TraceIdentity,
@@ -378,6 +402,29 @@ export class RunTrace {
       else this.totals.usd += usd;
     }
     this.totals.calls += 1;
+    const tags = this.tags(a.agent, kind, a.subject ?? null);
+    const rollupKey = `${rollupAgentKey(a.agent, kind)}|${a.subject ?? ''}`;
+    const prev = this.stageRollup.get(rollupKey) ?? {
+      model: a.model,
+      prompt: 0,
+      cached: 0,
+      output: 0,
+      thought: 0,
+      usd: 0,
+      hasPrice: false,
+      ttftMs: null,
+    };
+    prev.model = a.model || prev.model;
+    prev.prompt += u?.promptTokens ?? 0;
+    prev.cached += u?.cachedTokens ?? 0;
+    prev.output += u?.outputTokens ?? 0;
+    prev.thought += u?.thoughtTokens ?? 0;
+    if (usd !== null) {
+      prev.usd += usd;
+      prev.hasPrice = true;
+    }
+    if (prev.ttftMs === null && a.ttftMs != null) prev.ttftMs = a.ttftMs;
+    this.stageRollup.set(rollupKey, prev);
     this.push({
       id: randomUUID(),
       run_id: this.id.runId,
@@ -399,7 +446,7 @@ export class RunTrace {
       est_cost_usd: usd === null ? null : round6(usd),
       subject: a.subject ?? null,
       tier: this.tierFor(kind, a.tier),
-      ...this.tags(a.agent, kind, a.subject ?? null),
+      ...tags,
     });
   }
 
@@ -408,7 +455,32 @@ export class RunTrace {
     const kind = agentKindOf(name);
     this.noteAgent(name, kind);
     if ((kind === 'reader' || kind === 'specialist') && status !== 'ok' && status !== 'cached') this.failed.add(name);
-    this.push({ id: randomUUID(), run_id: this.id.runId, agent: name, agent_kind: kind, level: 'stage', model: null, status, failure_reason: failureReason, started_at: new Date(startedAt), ended_at: new Date(end), ms: end - startedAt, ttft_ms: null, steps: null, prompt_tokens: 0, cached_tokens: 0, output_tokens: 0, thought_tokens: 0, est_cost_usd: null, subject, tier: this.tierFor(kind, null), ...this.tags(name, kind, subject) });
+    const tags = this.tags(name, kind, subject);
+    const rk = rollupAgentKey(name, kind);
+    const rollup = this.stageRollup.get(`${rk}|${subject ?? ''}`) ?? this.stageRollup.get(`${rk}|`);
+    this.push({
+      id: randomUUID(),
+      run_id: this.id.runId,
+      agent: name,
+      agent_kind: kind,
+      level: 'stage',
+      model: rollup?.model ?? null,
+      status,
+      failure_reason: failureReason,
+      started_at: new Date(startedAt),
+      ended_at: new Date(end),
+      ms: end - startedAt,
+      ttft_ms: rollup?.ttftMs ?? null,
+      steps: null,
+      prompt_tokens: rollup?.prompt ?? 0,
+      cached_tokens: rollup?.cached ?? 0,
+      output_tokens: rollup?.output ?? 0,
+      thought_tokens: rollup?.thought ?? 0,
+      est_cost_usd: rollup?.hasPrice ? round6(rollup.usd) : null,
+      subject,
+      tier: this.tierFor(kind, null),
+      ...tags,
+    });
   }
 
   /** Reads the stage events every flow already emits. */

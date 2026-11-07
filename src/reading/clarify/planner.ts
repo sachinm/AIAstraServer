@@ -16,26 +16,78 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Usage } from '../types.js';
 import { BUCKETS, BUCKET_IDS } from '../buckets/taxonomy.js';
-import { callBedrockJson, clarifyModelConfig } from '../llm/bedrock.js';
+import { callBedrockJson, clarifyModelConfig, extractJsonObject } from '../llm/bedrock.js';
+import { callGemini } from '../llm/gemini.js';
 import { MAX_QUESTIONS, parseHorizonValue, type Ask, type ClarifyState, type PrashnaEligibility } from './machine.js';
 import { detectTopic } from '../policy/declined.js';
 import { CRITERION_ASTROLOGICAL_PURPOSE, getAgentPrompt, renderPromptTemplate } from '../prompts/registry.js';
 
 export const CLARIFY_MODEL_TIMEOUT_MS = 900;
 
+async function callClarifyJson(call: {
+  provider: 'bedrock' | 'gemini';
+  model: string;
+  node: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+  timeoutMs: number;
+}): Promise<{ json: unknown; usage: Usage }> {
+  if (call.provider === 'gemini') {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`clarify gemini timeout after ${call.timeoutMs}ms`)), call.timeoutMs);
+      });
+      const { text, usage } = await Promise.race([
+        callGemini({
+          model: call.model,
+          node: call.node,
+          system: call.system,
+          parts: [call.user],
+          maxOutputTokens: call.maxTokens,
+          timeoutMs: call.timeoutMs,
+          temperature: 0,
+          thinking: 'off',
+        }),
+        timeoutPromise,
+      ]);
+      return { json: extractJsonObject(text), usage };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return callBedrockJson({
+    model: call.model,
+    node: call.node,
+    system: call.system,
+    user: call.user,
+    maxTokens: call.maxTokens,
+    timeoutMs: call.timeoutMs,
+    reasoningEffort: 'low',
+  });
+}
+
 /** Rephrase the rule question for the pending criterion using the DB-versioned Clarify Agent system & user prompts. */
-export async function phraseAsk(s: ClarifyState, ask: Ask, prisma?: PrismaClient | null): Promise<{ ask: Ask; usage: Usage | null }> {
+export async function phraseAsk(
+  s: ClarifyState,
+  ask: Ask,
+  prisma?: PrismaClient | null,
+): Promise<{ ask: Ask; usage: Usage | null; driver?: 'ai' | 'machine_fallback' | 'rules' }> {
   const cfg = clarifyModelConfig();
-  if (cfg.provider === 'off') return { ask, usage: null };
+  if (cfg.provider === 'off') return { ask, usage: null, driver: 'rules' };
   // these two are already as short and plain as they can be; keep the exact wording
-  if (ask.criterion === 'sibling' || ask.criterion === 'location') return { ask, usage: null };
+  if (ask.criterion === 'sibling' || ask.criterion === 'location' || ask.criterion === 'child_age') {
+    return { ask, usage: null, driver: 'rules' };
+  }
   try {
     const system = getAgentPrompt('clarify.system', prisma);
     const userTemplate = getAgentPrompt('clarify.phrase_user', prisma);
     const runningPeriod = s.card?.md ? `Running dasha period: ${s.card.md}-${s.card.ad} until ${s.card.adEnd}.` : '';
+    const knownFacts = s.facts && Object.keys(s.facts).length > 0 ? ` Known profile facts: ${JSON.stringify(s.facts)}.` : '';
     const astrologicalPurpose =
-      CRITERION_ASTROLOGICAL_PURPOSE[ask.criterion] ??
-      'Clarify the specific parameter needed by the Vedic astrology Oracle.';
+      (CRITERION_ASTROLOGICAL_PURPOSE[ask.criterion] ??
+        'Clarify the specific parameter needed by the Vedic astrology Oracle.') + knownFacts;
     const user = renderPromptTemplate(userTemplate, {
       question: s.question.slice(0, 300),
       life_area: BUCKETS[s.bucket].displayName,
@@ -47,24 +99,64 @@ export async function phraseAsk(s: ClarifyState, ask: Ask, prisma?: PrismaClient
       options: ask.chips.map((c) => c.label).join(' | '),
       draft_question: ask.question,
     });
-    const { json, usage } = await callBedrockJson({
+    const { json, usage } = await callClarifyJson({
+      provider: cfg.provider,
       model: cfg.model,
       node: 'clarify.phrase',
       system,
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
-      reasoningEffort: 'low',
     });
     const q = typeof (json as { question?: unknown }).question === 'string' ? (json as { question: string }).question.trim() : '';
     const words = q.split(/\s+/).filter(Boolean).length;
     // model output passes the same gate as user text: any listed topic (remedies, death, harm …) falls back to the rule question
-    if (!q || words > 28 || detectTopic(q) || /\b(rupees|dollars|lakhs|crores)\b/i.test(q)) return { ask, usage };
-    return { ask: { ...ask, question: q }, usage };
+    if (!q || words > 28 || detectTopic(q) || /\b(rupees|dollars|lakhs|crores|pyjhora|radha|jhora)\b/i.test(q)) {
+      return { ask, usage, driver: 'machine_fallback' };
+    }
+    return { ask: { ...ask, question: q }, usage, driver: 'ai' };
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'clarify phrase model failed; using rule question', error: (err as Error).message.slice(0, 200) }));
-    return { ask, usage: null };
+    return { ask, usage: null, driver: 'machine_fallback' };
   }
+}
+
+/**
+ * AI-first Clarify turn planner with `machine.ts` deterministic safety gate & fallback.
+ * When `READING_MODEL_CLARIFY` is active (`gemini:...` or `bedrock:...`), the AI Clarify agent phrases and directs
+ * the clarifying question for the open astrological criterion while respecting known `person_facts` (`s.facts`).
+ * When the AI fails, times out, or is disabled (`off`), `machine.ts` rules run as the instant fallback and record
+ * `driver: 'machine_fallback' | 'rules'` in `s.decisionLog`.
+ */
+export async function planAiClarifyTurn(
+  s: ClarifyState,
+  prisma?: PrismaClient | null,
+): Promise<{ state: ClarifyState; ask: Ask | null; usage: Usage | null; driver: 'ai' | 'machine_fallback' | 'rules' }> {
+  if (s.status !== 'ASKING' || !s.pending) {
+    return { state: s, ask: null, usage: null, driver: s.driver ?? 'rules' };
+  }
+  const { ask, usage, driver = 'rules' } = await phraseAsk(s, s.pending, prisma);
+  const turns = s.turns.map((t, idx) => (idx === s.turns.length - 1 ? { ...t, ask } : t));
+  const decisionLog = (s.decisionLog ?? []).map((entry, idx, arr) => {
+    if (idx === arr.length - 1 && entry.action === 'asked' && entry.criterion === ask.criterion) {
+      const nextDriver: 'ai' | 'rules' | 'machine_fallback' | 'safety_gate' =
+        entry.driver === 'safety_gate' ? 'safety_gate' : driver;
+      return {
+        ...entry,
+        driver: nextDriver,
+        reason: driver === 'ai' ? 'ai_clarify_directed' : driver === 'machine_fallback' ? 'machine_fallback_after_ai' : entry.reason,
+      };
+    }
+    return entry;
+  });
+  const nextState: ClarifyState = {
+    ...s,
+    pending: ask,
+    turns,
+    decisionLog,
+    driver,
+  };
+  return { state: nextState, ask, usage, driver };
 }
 
 /**
@@ -103,14 +195,14 @@ export async function resolveFreeText(
       reply: text.slice(0, 300),
       options,
     });
-    const { json, usage } = await callBedrockJson({
+    const { json, usage } = await callClarifyJson({
+      provider: cfg.provider,
       model: cfg.model,
       node: 'clarify.resolve',
       system,
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
-      reasoningEffort: 'low',
     });
     const v = (json as { value?: unknown }).value;
     if (typeof v !== 'string') return { value: null, usage };
@@ -141,14 +233,14 @@ export async function judgePrashna(
     const user = renderPromptTemplate(userTemplate, {
       question: s.question.slice(0, 300),
     });
-    const { json, usage } = await callBedrockJson({
+    const { json, usage } = await callClarifyJson({
+      provider: cfg.provider,
       model: cfg.model,
       node: 'clarify.prashna',
       system,
       user,
       maxTokens: 100,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
-      reasoningEffort: 'low',
     });
     const v = (json as { eligible?: unknown }).eligible;
     if (typeof v !== 'boolean') return { result: rules, usage };

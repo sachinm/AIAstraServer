@@ -714,8 +714,12 @@ model ReadingTrace {
   route          String?
   subjects       Int?
   /// M31: the catalogue technique ids the clarify context selected for this query (docs/reading-engine/53 §4.3)
-  techniques     Json?
-  started_at     DateTime           @map("started_at") @db.Timestamptz(6)
+  techniques      Json?
+  /// M35 (docs/admin/06): deterministic Clarify Monitor evaluation for this reading
+  clarify_monitor Json?             @map("clarify_monitor")
+  /// M35 (docs/admin/06): tables written during this query ({ table, count })
+  tables_written  Json?             @map("tables_written")
+  started_at      DateTime          @map("started_at") @db.Timestamptz(6)
   ended_at       DateTime?          @map("ended_at") @db.Timestamptz(6)
   user           Auth               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   spans          ReadingAgentSpan[]
@@ -883,6 +887,7 @@ model AdminAction {
   @@index([target_user_id, created_at(sort: Desc)], map: "admin_actions_target")
   @@index([actor_user_id, created_at(sort: Desc)], map: "admin_actions_actor")
   @@index([actor_admin_id, created_at(sort: Desc)], map: "admin_actions_actor_admin")
+  @@index([action, created_at(sort: Desc)], map: "admin_actions_action_created")
   @@index([created_at(sort: Desc)], map: "admin_actions_created")
   @@map("admin_actions")
 }
@@ -1173,8 +1178,26 @@ model AccountEvent {
 
   @@index([user_id, created_at(sort: Desc)], map: "account_events_user")
   @@index([action, created_at(sort: Desc)], map: "account_events_action")
+  @@index([outcome, created_at(sort: Desc)], map: "account_events_outcome_created")
   @@index([ip, created_at(sort: Desc)], map: "account_events_ip")
   @@map("account_events")
+}
+
+/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1–R14).
+model ReadingFindingsCache {
+  cache_key      String   @id @map("cache_key")
+  kundli_id      String   @map("kundli_id")
+  reader_id      String   @map("reader_id")
+  pack_hash      String   @map("pack_hash")
+  horizon_key    String   @map("horizon_key")
+  prompt_version String   @map("prompt_version")
+  payload        Json
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expires_at     DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([kundli_id, expires_at(sort: Desc)], map: "reading_findings_cache_kundli_idx")
+  @@index([expires_at], map: "reading_findings_cache_expires_idx")
+  @@map("reading_findings_cache")
 }
 
 /// M30 (docs/admin/04): one row per signed-in user per local day (REPORT_TZ, default America/Los_Angeles), upserted on

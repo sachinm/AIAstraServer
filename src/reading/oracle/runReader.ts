@@ -31,7 +31,7 @@ const short = (n: number) => z.string().catch('').transform((t) => t.slice(0, n)
 const strings = z.array(z.unknown()).catch([]).transform((xs) => xs.filter((x): x is string => typeof x === 'string'));
 
 const readerClaimZ = claimZ.extend({
-  about: z.enum(['self', 'mother', 'father', 'spouse', 'child', 'sibling', 'other']).catch('self'),
+  about: z.enum(['self', 'mother', 'father', 'parent', 'spouse', 'child', 'sibling', 'other']).catch('self'),
   topic: short(40),
   kind: z.enum(['bond', 'holds', 'blocks', 'gives', 'window', 'form', 'grace']).catch('gives'),
 });
@@ -79,7 +79,7 @@ export const READER_RESPONSE_SCHEMA = {
           polarity: { ...S, enum: ['supports', 'obstructs', 'neutral'] },
           weight: { type: 'INTEGER', minimum: 1, maximum: 3 },
           tradition: { ...S, enum: ['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord', 'prashna'] },
-          about: { ...S, enum: ['self', 'mother', 'father', 'spouse', 'child', 'sibling', 'other'] },
+          about: { ...S, enum: ['self', 'mother', 'father', 'parent', 'spouse', 'child', 'sibling', 'other'] },
           topic: S,
           kind: { ...S, enum: ['bond', 'holds', 'blocks', 'gives', 'window', 'form', 'grace'] },
         },
@@ -183,7 +183,7 @@ export function buildReaderRequest(a: {
     promptSent,
     dataKeys: [...Object.keys(core.sections), ...Object.keys(tables)],
     dataHash,
-    cacheKey: hashText([a.model, PROMPT_VERSION, a.id, dataHash, promptSent].join('|')),
+    cacheKey: hashText([a.model, PROMPT_VERSION, a.id, dataHash, a.slice.person?.person ?? '', promptSent].join('|')),
     sections: { ...core.sections, ...tables },
     promptTokens: approxTokens(system) + approxTokens(core.text) + approxTokens(tablesText) + approxTokens(promptSent),
     frameLine,

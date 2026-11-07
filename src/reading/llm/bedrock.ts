@@ -17,6 +17,7 @@ import { traceModelCall } from '../metrics/trace.js';
 import type { Usage } from '../types.js';
 
 export const DEFAULT_CLARIFY_MODEL = 'openai.gpt-oss-120b-1:0';
+export const DEFAULT_CLARIFY_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 /** Only gpt-oss models accept `reasoning_effort`; other providers reject unknown fields. */
 export const supportsReasoningEffort = (model: string): boolean => /(^|.)openai.gpt-oss/.test(model);
@@ -104,11 +105,18 @@ async function converseJson(call: BedrockJsonCall): Promise<{ json: unknown; usa
   }
 }
 
-/** "bedrock:openai.gpt-oss-20b-1:0" -> provider + model; "off" disables the model step. */
-export function clarifyModelConfig(): { provider: 'bedrock' | 'off'; model: string } {
+/** "gemini:gemini-2.5-flash-lite" | "bedrock:openai.gpt-oss-20b-1:0" -> provider + model; "off" disables the model step. */
+export function clarifyModelConfig(): { provider: 'bedrock' | 'gemini' | 'off'; model: string } {
   const raw = process.env.READING_MODEL_CLARIFY?.trim();
   if (!raw) return { provider: 'off', model: DEFAULT_CLARIFY_MODEL };
-  if (raw === 'off') return { provider: 'off', model: DEFAULT_CLARIFY_MODEL };
+  const lower = raw.toLowerCase();
+  if (lower === 'off' || lower === 'none') return { provider: 'off', model: DEFAULT_CLARIFY_MODEL };
+  if (lower === 'gemini' || lower === 'gemini:auto') return { provider: 'gemini', model: DEFAULT_CLARIFY_GEMINI_MODEL };
+  if (lower.startsWith('gemini:')) {
+    const model = raw.slice('gemini:'.length).trim() || DEFAULT_CLARIFY_GEMINI_MODEL;
+    return { provider: 'gemini', model };
+  }
+  if (lower.startsWith('gemini-')) return { provider: 'gemini', model: raw };
   if (raw.startsWith('bedrock:')) return { provider: 'bedrock', model: raw.slice('bedrock:'.length) || DEFAULT_CLARIFY_MODEL };
   return { provider: 'bedrock', model: raw };
 }

@@ -74,9 +74,20 @@ export const AGENTS: AgentDef[] = [
     kind: 'llm',
     module: 'reading',
     subModule: 'clarify',
-    description: 'Phrases and resolves the clarifying question on a small Bedrock model (clarify/planner.ts)',
+    description: 'Phrases and resolves the clarifying question on Gemini Flash-Lite or Bedrock (clarify/planner.ts)',
     provider: 'bedrock',
-    currentModel: () => `bedrock:${clarifyModelConfig().model}`,
+    currentModel: () => {
+      const cfg = clarifyModelConfig();
+      return cfg.provider === 'gemini' ? cfg.model : `bedrock:${cfg.model}`;
+    },
+  },
+  {
+    id: 'reading.clarify_monitor',
+    title: 'Clarify counterfactual monitor',
+    kind: 'code',
+    module: 'reading',
+    subModule: 'clarify_monitor',
+    description: 'Evaluates post-reading Clarify counterfactuals (ask-right, phrasing, handoff, would-asking-have-helped) deterministically (clarify/monitor.ts)',
   },
   {
     id: 'reading.step',
@@ -226,6 +237,7 @@ type RawCapable = { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => P
  * per row. Logs once and never throws.
  */
 export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
+  if (!prisma) return 0;
   const raw = (prisma as unknown as RawCapable).$executeRawUnsafe;
   if (typeof raw === 'function') {
     try {
@@ -237,6 +249,9 @@ export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
       warned = true;
       return 0;
     }
+  }
+  if (typeof (prisma as unknown as { agentRegistry?: { upsert?: unknown } }).agentRegistry?.upsert !== 'function') {
+    return 0;
   }
   let n = 0;
   for (const a of AGENTS) {
@@ -356,6 +371,9 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
     error = e;
     throw e;
   } finally {
+    if (!prisma || typeof (prisma as unknown as { agentRun?: { create?: unknown } }).agentRun?.create !== 'function') {
+      // Test fakes without agentRun table skip run persistence cleanly.
+    } else {
     const ended = new Date();
     const u = result?.usage ?? {};
     const model = u.model ?? registryRow(def).model ?? null;
@@ -408,6 +426,7 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
     } catch (e) {
       if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
       warned = true;
+    }
     }
   }
 }

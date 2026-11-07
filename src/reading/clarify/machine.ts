@@ -18,6 +18,7 @@ import { FRAMES, horizonRange, type Horizon } from '../packs/frames.js';
 import { humanDate, siblingMention, type SiblingNoun, type SiblingRank } from '../nodes/intake.js';
 import { normalizePlace, normalizeTimeZone, type UserLocation } from '../../services/userLocation.js';
 import { detectTopic } from '../policy/declined.js';
+import { CRITERION_ASTROLOGICAL_PURPOSE } from '../prompts/registry.js';
 
 export type ClarifyMode = 'always' | 'when_missing' | 'never';
 export type ClarifyStatus = 'ASKING' | 'PROPOSED' | 'CONFIRMED' | 'READY' | 'ABANDONED';
@@ -27,6 +28,48 @@ export type ClarifyStatus = 'ASKING' | 'PROPOSED' | 'CONFIRMED' | 'READY' | 'ABA
  * location: where the person lives now, asked once per user for timing questions (a profile fact, not counted in the cap).
  */
 export type Criterion = SlotId | 'bucket' | 'child_age' | 'sibling' | 'location';
+
+export interface ClarifyDecisionEntry {
+  criterion: Criterion;
+  action: 'asked' | 'skipped' | 'defaulted';
+  driver: 'ai' | 'machine_fallback' | 'safety_gate' | 'rules';
+  reason: string;
+  astrologicalPurpose: string;
+  techniquesDependent: string[];
+  turn: number;
+}
+
+/** The catalogue techniques (src/techniques/catalog.ts ids) whose reading depends on each criterion being known. */
+export const CRITERION_TECHNIQUES: Record<Criterion, string[]> = {
+  bucket: ['general.clarify', 'general.intake'],
+  horizon: ['general.clarify', 'general.dasha', 'general.transit'],
+  sub_bucket: ['general.clarify', 'general.reader'],
+  subject_person: ['general.clarify', 'general.person'],
+  other_person: ['general.clarify', 'general.person'],
+  sibling: ['general.clarify', 'general.person'],
+  location: ['general.clarify', 'general.transit', 'general.prashna'],
+  child_age: ['general.clarify'],
+  background: ['general.clarify', 'work.present_tone'],
+  specific_event: ['general.clarify', 'general.transit'],
+};
+
+function makeDecisionEntry(
+  criterion: Criterion,
+  action: ClarifyDecisionEntry['action'],
+  driver: ClarifyDecisionEntry['driver'],
+  reason: string,
+  turn: number,
+): ClarifyDecisionEntry {
+  return {
+    criterion,
+    action,
+    driver,
+    reason,
+    astrologicalPurpose: CRITERION_ASTROLOGICAL_PURPOSE[criterion] ?? 'Clarify the astrological slot required by downstream readers.',
+    techniquesDependent: CRITERION_TECHNIQUES[criterion] ?? ['general.clarify'],
+    turn,
+  };
+}
 
 /** Criteria outside the two-question cap. */
 const UNCAPPED = new Set<Criterion>(['child_age', 'location']);
@@ -98,6 +141,12 @@ export interface ClarifyState {
   prashna?: PrashnaEligibility | null;
   /** when the person confirmed the question (ms): the prashna is cast for this moment */
   confirmedAt?: number;
+  /** confirmed companion memory facts (docs/reading-engine/48) available when Clarify started */
+  facts?: Record<string, string>;
+  /** per-criterion decision log for Admin Clarify Monitor (docs/admin/06) */
+  decisionLog?: ClarifyDecisionEntry[];
+  /** whether the active ask was driven by AI or the deterministic machine fallback */
+  driver?: 'ai' | 'machine_fallback' | 'rules';
   createdAt: number;
   updatedAt: number;
 }
@@ -324,11 +373,35 @@ export interface StartOptions {
   /** ask "Where are you living now?" (timing question, nothing stored, store working) */
   needsLocation?: boolean;
   birthPlace?: string | null;
+  /** confirmed companion facts (person_facts, docs/reading-engine/48) so known facts are never re-asked */
+  facts?: Record<string, string>;
 }
+
+/** person_facts `work.status` (src/profile/facts.ts FACT_CATALOG) -> the classifier's `background` slot; `retired` has none. */
+const WORK_STATUS_TO_BG: Record<string, NonNullable<Slots['background']>> = {
+  yes: { value: 'employed', text: 'working' },
+  between_jobs: { value: 'between_jobs', text: 'between jobs' },
+  own_business: { value: 'self_employed', text: 'running a business' },
+  studying: { value: 'studying', text: 'studying' },
+};
 
 /** CLASSIFIED -> READY | ASKING | PROPOSED. */
 export function startClarify(question: string, asOf: string, c: ClassifierResult, opts: StartOptions): ClarifyState {
   const now = opts.now ?? Date.now();
+  const facts = opts.facts ? { ...opts.facts } : undefined;
+  const slots: Slots = { ...c.slots };
+  const decisionLog: ClarifyDecisionEntry[] = [];
+
+  const knownWork = facts?.['work.status'] ? WORK_STATUS_TO_BG[facts['work.status']] : undefined;
+  if (!slots.background && knownWork) {
+    slots.background = { ...knownWork };
+    decisionLog.push(makeDecisionEntry('background', 'skipped', 'rules', 'known_in_person_facts:work.status', 0));
+  }
+  if (slots.horizon) decisionLog.push(makeDecisionEntry('horizon', 'skipped', 'rules', 'extracted_from_question', 0));
+  if (slots.subject_person) decisionLog.push(makeDecisionEntry('subject_person', 'skipped', 'rules', 'extracted_from_question', 0));
+  if (slots.sub_bucket) decisionLog.push(makeDecisionEntry('sub_bucket', 'skipped', 'rules', 'extracted_from_question', 0));
+  if (opts.location) decisionLog.push(makeDecisionEntry('location', 'skipped', 'rules', 'known_in_profile_location', 0));
+
   const s: ClarifyState = {
     v: 1,
     status: 'READY',
@@ -337,7 +410,7 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
     bucket: c.bucket,
     subBucket: c.subBucket,
     alsoBuckets: c.alsoBuckets,
-    slots: { ...c.slots },
+    slots,
     turns: [],
     pending: null,
     assumed: {},
@@ -354,13 +427,17 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
     location: opts.location ?? null,
     needsLocation: !!opts.needsLocation && !opts.location,
     birthPlace: opts.birthPlace ?? null,
+    ...(facts ? { facts } : {}),
+    decisionLog,
+    driver: 'rules',
     createdAt: now,
     updatedAt: now,
   };
   // policy questions (death timing, lottery numbers, exact amounts …) are answered by the T10 policy template, not clarified
   if (opts.needsChildAge) {
     const ask = childAgeAsk(s);
-    return { ...s, status: 'ASKING', pending: ask, turns: [{ ask, at: now }], updatedAt: now };
+    const log = [...(s.decisionLog ?? []), makeDecisionEntry('child_age', 'asked', 'safety_gate', 'child_age_unconfirmed_gate', 1)];
+    return { ...s, status: 'ASKING', pending: ask, turns: [{ ask, at: now }], decisionLog: log, driver: 'rules', updatedAt: now };
   }
   if (opts.mode === 'never' || (c.unanswerable && c.unanswerable !== 'no_subject')) return finalizeReady(s);
   const open = openCriteria(s, c.confidence, opts.threshold);
@@ -382,32 +459,45 @@ function askNext(s: ClarifyState, open: Criterion[], now: number): ClarifyState 
   }
   if (!next) return propose(applyDefaults(base, open), now);
   const ask = askFor(next, base);
-  return { ...base, status: 'ASKING', pending: ask, turns: [...base.turns, { ask, at: now }], updatedAt: now };
+  const turnNum = base.turns.length + 1;
+  const log = [...(base.decisionLog ?? []), makeDecisionEntry(next, 'asked', base.driver ?? 'rules', 'required_slot_missing', turnNum)];
+  return { ...base, status: 'ASKING', pending: ask, turns: [...base.turns, { ask, at: now }], decisionLog: log, updatedAt: now };
 }
 
 /** Fill what is still open with the bucket's defaults and record each assumption (said back to the user). */
 export function applyDefaults(s: ClarifyState, open: Criterion[]): ClarifyState {
   const slots: Slots = { ...s.slots };
   const assumed: ClarifyState['assumed'] = { ...s.assumed };
+  const log: ClarifyDecisionEntry[] = [...(s.decisionLog ?? [])];
+  const turnNum = s.turns.length;
   for (const c of open) {
     if (c === 'horizon' && !slots.horizon) {
       const h = BUCKETS[s.bucket].defaultHorizon;
       slots.horizon = { value: h, text: 'default' };
       assumed.horizon = horizonLabel(h, s.asOf);
+      log.push(makeDecisionEntry('horizon', 'defaulted', s.driver ?? 'rules', `defaulted_to_${String(h)}`, turnNum));
     }
     if (c === 'subject_person' && !slots.subject_person) {
       slots.subject_person = { value: 'me', text: 'default' };
       assumed.subject_person = 'your own chart';
+      log.push(makeDecisionEntry('subject_person', 'defaulted', s.driver ?? 'rules', 'defaulted_to_me', turnNum));
     }
-    if (c === 'sub_bucket' && !slots.sub_bucket) assumed.sub_bucket = `all of ${BUCKETS[s.bucket].displayName.toLowerCase()}`;
-    if (c === 'bucket') assumed.bucket = BUCKETS[s.bucket].displayName;
+    if (c === 'sub_bucket' && !slots.sub_bucket) {
+      assumed.sub_bucket = `all of ${BUCKETS[s.bucket].displayName.toLowerCase()}`;
+      log.push(makeDecisionEntry('sub_bucket', 'defaulted', s.driver ?? 'rules', 'defaulted_to_all_sub_buckets', turnNum));
+    }
+    if (c === 'bucket') {
+      assumed.bucket = BUCKETS[s.bucket].displayName;
+      log.push(makeDecisionEntry('bucket', 'defaulted', s.driver ?? 'rules', `defaulted_to_${s.bucket}`, turnNum));
+    }
   }
   let sibling = s.sibling ?? null;
   if (open.includes('sibling') && !sibling && s.siblingNoun) {
     sibling = { rank: 'all', noun: s.siblingNoun };
     assumed.sibling = `all your ${plural(s.siblingNoun)}`;
+    log.push(makeDecisionEntry('sibling', 'defaulted', s.driver ?? 'rules', 'defaulted_to_all_siblings', turnNum));
   }
-  return { ...s, slots, assumed, sibling };
+  return { ...s, slots, assumed, sibling, decisionLog: log };
 }
 
 /** Resolve a chip value or free text for the pending criterion. Unresolved free text counts as a turn. */

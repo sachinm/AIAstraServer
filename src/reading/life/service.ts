@@ -119,6 +119,7 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
           charter_areas: d.charter?.area_charters.length ?? 0,
           activation_rows: rows.length,
           sky: sky ? 'stored' : 'none',
+          writes: ['area_builds:1'],
         },
         charts,
       };
