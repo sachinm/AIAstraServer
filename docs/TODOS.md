@@ -935,8 +935,6 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   house `sign` (the dossier's varga rows carry sign numbers), the star lord's house, shadbala rupas and `co_lord`, and
   `detail.yogas` (its filter reads a source label digest rows lack). Owner: reading-dev with S1. Done: each is either
   served by the digest in the pack's spelling or confirmed as dossier-only, and this list shrinks to the latter.
-- **P3: Deterministic readers are not prewarmed or cached.** They are code over the pack (milliseconds), so they rerun
-  per question; noted only so nobody adds a model call there without the cost guard. Owner: reading-dev.
 
 ## Filed 2026-11-06 by the life-mahadasha-charter build (doc 55, branch `feat/life-mahadasha-charter`)
 
@@ -944,3 +942,12 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   - `AIAstra_Server`: added `PlanetCard.dashaCharter` in `src/reading/digest/build.ts` (from `avasthas.dasha_charter`), 6/8/12 Antardasha-from-Mahadasha step-down in `src/reading/life/promise.ts` (`periodSide`), `life.mahadasha_charter` technique in `src/reading/life/charter.ts` + `compose.ts` + `service.ts`, registered `life.mahadasha_charter` in `src/techniques/catalog.ts` and `src/agents/registry.ts`, and added unit + research-fixture tests in `tests/unit/reading/life/charter.test.ts`.
   - `AIAstra_WEB`: added `LifeMahadashaCharter` types in `src/lib/lifeReadingApi.ts`, the Major Chapter Charter section (area charters, chronological Antardasha timeline, and current-chapter bridge) in `src/pages/timeline/LifeReadingDashboard.tsx`, and tests in `src/pages/timeline/LifeReadingDashboard.test.tsx`.
 - **P2: `tests/unit/auth/registrationV2.test.ts` fails 1 test with `Error: no mail` when run outside local-mail test setup.** Same root cause as the `.env` / auth provider test leakage noted under P1 (line 84) and P2 (lines 280, 532); tracked there for the next auth/test-env pass.
+
+## Filed 2026-11-06 by the technique-pieces, sub-agent cache & research-staging builds (docs 56–57, admin 07–09, M37/M38)
+
+- **Shipped on `develop` (`c3bbc64`, `6def6c5`, `54ed7d5`, `0453a74`, `e7530c7`, `6d215e0`):**
+  - **Technique pieces, validity windows & one-per-technique illustrations (`docs/reading-engine/56-*`, `docs/admin/07`, `docs/techniques/01..06-*.md`):** 69 built techniques, 25 registered agents, 24 reader pieces, 49 recipe families, `technique_outputs` date-range validity cache (`M37`), and `scripts/write-technique-pieces-doc.ts`.
+  - **Per-sub-agent digest slicing & 45-minute used-cache recycle (`docs/reading-engine/57-*`, `M38`):** `src/reading/oracle/digestSlices.ts`, `src/techniques/subagentCachePlan.ts`, `src/reading/codeReaders/readers.ts` caching via `withTechniqueOutput`, `informIndividualCacheUsed` / `recycleIndividualCaches` (`READING_CACHE_RECYCLE_MINUTES=45` in `src/reading/llm/cacheSweep.ts`), and `scripts/cache-sweep.ts`.
+  - **Per-request page execution telemetry & Research Lab (`docs/admin/08`, `docs/admin/09`, `M37/M38`):** `src/telemetry/pageTiming.ts`, `src/reading/research/presets.ts`, `src/reading/research/selfDashboardQa.ts`, `src/reading/research/verifier.ts` (20-subject Self dashboard QA engine, Nov–Jan temporal zoom-in, and 8-gate technical verifier), plus Admin `/pages` and `/research-lab` dashboards in `aiadastra_admin`.
+- **P2: Confirm EventBridge 45-minute scheduled rule for `scripts/cache-sweep.ts` / `runScheduledSweep` on staging Lambda.** In-process 45m timers (`informIndividualCacheUsed`) recycle used caches within warm Lambda instances, and `runScheduledSweep` sweeps all 4 layers (`llm_cache_entries` / Gemini `cachedContents`, `reading_findings_cache`, `technique_outputs`, in-memory memos) across instances. Owner: deploy session. Done: EventBridge rule invoking the sweep every 15–45 minutes verified in staging CloudWatch logs (`{"msg":"llm cache sweep",...}`).
+- **P3: Reader piece filter strings are free text (`docs/admin/07` §11).** `house/house_card` currently has 18 distinct filter strings across the 69 built techniques (`D1 houses 1..12`, `D1 all 12 houses`, `D1 houses 1, 2, 6, 7, 10, 11`, etc.). Owner: reading-dev. Done: standardize contract input filter strings into a typed vocabulary so identical house/planet/yoga slices share one filter key.
