@@ -120,6 +120,7 @@ export async function validateAnswer(a: {
   useModel: boolean;
   guard: CostGuard;
   cacheOwner?: CacheOwner;
+  coreText?: string;
 }): Promise<Validation> {
   const t0 = Date.now();
   const rules = validateByRules(a);
@@ -134,7 +135,10 @@ export async function validateAnswer(a: {
     validatorCache.set(cacheKey, cached);
     return done(structuredClone(cached.value));
   }
-  const parts = [`QUESTION: ${a.question}`, ...(clarified ? [`THEY ALSO TOLD THE CLARIFIER: ${clarified}`] : []), `ANSWER: ${a.answer}`];
+  const prefix = a.coreText
+    ? `${a.coreText}\nVALIDATOR CONTEXT: ${clarified ? `THEY TOLD THE CLARIFIER: ${clarified}` : 'none'}`
+    : `VALIDATOR CONTEXT: ${clarified ? `THEY TOLD THE CLARIFIER: ${clarified}` : 'none'}`;
+  const parts = [prefix, `QUESTION: ${a.question}\nANSWER: ${a.answer}`];
   let reservation;
   try {
     reservation = a.guard.reserve({ stage: 'support', node: 'validator', model: a.model, promptTokens: Math.ceil(((PROMPTS['oracle/validator'] ?? '').length + parts.join('\n').length) / 3.6), maxOutputTokens: VALIDATOR_MAX_TOKENS, minOutputTokens: 100 });

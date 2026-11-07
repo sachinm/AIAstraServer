@@ -13,6 +13,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { agentById, withAgentRun, type ChartUsed } from '../agents/registry.js';
+import { openRow, sealParam } from '../lib/pii/rawSql.js';
 import { TECHNIQUES, techniqueById, type TechniqueDef } from './catalog.js';
 import {
   techniqueCacheKey,
@@ -213,7 +214,9 @@ async function readStoredRow(prisma: StoreCapablePrisma, cacheKey: string): Prom
         LIMIT 1`,
       cacheKey,
     );
-    return rows[0] ?? null;
+    if (!rows[0]) return null;
+    const opened = await openRow('technique_outputs', rows[0] as unknown as Record<string, unknown>);
+    return opened as unknown as StoredTechniqueOutputRow;
   }
   return null;
 }
@@ -277,6 +280,7 @@ async function insertStoredRow(
     return;
   }
   if (typeof prisma.$executeRawUnsafe === 'function') {
+    const sealedOutput = await sealParam('technique_outputs', 'output', row.output ?? null, { kundliId: row.kundli_id });
     const conflictClause = replaceExisting
       ? `ON CONFLICT ("cache_key") DO UPDATE SET
            "valid_from" = EXCLUDED."valid_from",
@@ -300,7 +304,7 @@ async function insertStoredRow(
       row.freshness,
       row.valid_from,
       row.valid_to,
-      JSON.stringify(row.output ?? null),
+      JSON.stringify(sealedOutput),
       row.output_schema,
       row.made_by_agent,
       row.made_ms,

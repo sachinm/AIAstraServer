@@ -40,13 +40,18 @@ export interface ClarifyStepResult {
   declined?: DeclinedTopic;
 }
 
-async function headlineCard(prisma: PrismaClient, userId: string, asOf: string): Promise<HeadlineCard | null> {
+async function headlineCard(
+  prisma: PrismaClient,
+  userId: string,
+  asOf: string,
+): Promise<{ card: HeadlineCard | null; kundliId: string | null }> {
   const load = startPrefetch(prisma, userId, { asOf });
   const timeout = new Promise<null>((r) => setTimeout(() => r(null), CARD_BUDGET_MS));
   const data = await Promise.race([load, timeout]);
+  const kundliId = data?.kundliId ?? null;
   const cur = data?.dossier?.dasha?.vimshottari?.current;
-  if (!cur) return null;
-  return { md: cur.md, ad: cur.ad, pd: cur.pd, adEnd: cur.ad_end };
+  if (!cur) return { card: null, kundliId };
+  return { card: { md: cur.md, ad: cur.ad, pd: cur.pd, adEnd: cur.ad_end }, kundliId };
 }
 
 function understandingLine(s: ClarifyState): string {
@@ -60,9 +65,11 @@ async function eventFor(
   prisma?: PrismaClient | null,
   store?: ClarifyStore,
   userId?: string,
+  kundliId?: string | null,
 ): Promise<{ event: ClarifyEvent | null; state: ClarifyState }> {
   if (s.status === 'ASKING' && s.pending) {
-    const planned = await planAiClarifyTurn(s, prisma, userId ? { userId } : undefined);
+    const owner = userId ? { userId, ...(kundliId ? { kundliId } : {}) } : undefined;
+    const planned = await planAiClarifyTurn(s, prisma, owner);
     const ask = planned.ask ?? s.pending;
     if (planned.usage) usage.push(planned.usage);
     if (store && userId && planned.state !== s) {
@@ -132,11 +139,15 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   const needsCard = mode !== 'never' && cls.missing.includes('horizon');
   // the stored current location is read alongside the card (own short budget; a missing table reads as unavailable)
   const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
-  const [card, loc, facts] = await Promise.all([
-    needsCard ? headlineCard(prisma, userId, asOf) : (startPrefetch(prisma, userId, { asOf }), Promise.resolve(null)),
+  const [cardRes, loc, facts] = await Promise.all([
+    needsCard
+      ? headlineCard(prisma, userId, asOf)
+      : (startPrefetch(prisma, userId, { asOf }), Promise.resolve({ card: null, kundliId: null })),
     mode !== 'never' ? lookupLocation(locStore, userId) : Promise.resolve<LocationLookup>({ status: 'unavailable' }),
     mode !== 'never' ? confirmedFacts(prisma, userId).catch(() => ({})) : Promise.resolve<Record<string, string>>({}),
   ]);
+  const card = cardRes.card;
+  const kundliId = cardRes.kundliId;
   // timing is stated in local terms: ask once where the person lives, only when the answer can be kept
   const needsLocation = cls.questionKind === 'timing' && loc.status === 'none' && !locationUnsaved.has(userId);
   const birthPlace = needsLocation ? await birthPlaceFor(prisma, userId) : null;
@@ -159,12 +170,13 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
     'reading.clarify',
     {
       userId,
+      ...(kundliId ? { kundliId } : {}),
       technique: 'general.clarify',
       task: 'clarify-begin',
       input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length },
     },
     async () => {
-      const res = await eventFor(runId, initialState, usage, prisma, store, userId);
+      const res = await eventFor(runId, initialState, usage, prisma, store, userId, kundliId);
       const u = usage[0];
       return {
         value: res,

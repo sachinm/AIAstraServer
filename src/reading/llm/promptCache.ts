@@ -257,14 +257,17 @@ function entryFor(key: string, owner: CacheOwner): Entry {
   }
   if (owner.userId) e.owner.userId = owner.userId;
   if (owner.kundliId) e.owner.kundliId = owner.kundliId;
-  if ((e.owner.userId || e.owner.kundliId) && cacheOwnerUsedHook) {
+  return e;
+}
+
+function notifyCacheOwnerUsed(owner: CacheOwner): void {
+  if ((owner.userId || owner.kundliId) && cacheOwnerUsedHook) {
     try {
-      cacheOwnerUsedHook(e.owner);
+      cacheOwnerUsedHook(owner);
     } catch {
       // never break a cache lookup
     }
   }
-  return e;
 }
 
 const isLive = (e: Entry, now = Date.now()): boolean => !!(e.name && e.expiresAt && e.expiresAt - 60_000 > now);
@@ -296,9 +299,11 @@ export function cacheNameFor(model: string, system: string | undefined, base: st
   if (!explicitCacheEnabled() || !base) return null;
   const key = prefixKey(model, system, base);
   const e = entryFor(key, owner);
+  notifyCacheOwnerUsed(e.owner);
   const now = Date.now();
   if (isLive(e, now)) {
     cacheStats.hits += 1;
+    e.uses += 1;
     const name = e.name!;
     if (!e.extending && e.expiresAt! - now < (ttlSeconds() * 1000) / 2) {
       e.touchedAt = now;
@@ -364,12 +369,13 @@ async function deleteOne(name: string, apiKey: string): Promise<boolean> {
 }
 
 /** Evicts in-memory prompt cache entries belonging to an individual (`userId` and/or `kundliId`). */
-export function evictPromptCacheMemoryForIndividual(owner: CacheOwner, idleBeforeMs?: number): number {
+export function evictPromptCacheMemoryForIndividual(owner: CacheOwner, idleBeforeMs?: number, onlyUsed = false): number {
   if (!owner.userId && !owner.kundliId) return 0;
   let cleared = 0;
   for (const [k, e] of entries.entries()) {
     const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
     if (!match) continue;
+    if (onlyUsed && idleBeforeMs === undefined && e.uses === 0) continue;
     if (idleBeforeMs !== undefined && e.touchedAt && e.touchedAt > idleBeforeMs) continue;
     entries.delete(k);
     cleared += 1;
@@ -380,25 +386,36 @@ export function evictPromptCacheMemoryForIndividual(owner: CacheOwner, idleBefor
 /**
  * Recycles/deletes explicit Gemini prompt caches + `llm_cache_entries` + in-memory entries for one individual (`userId`/`kundliId`).
  * When `opts.idleMs` is set, only entries whose `last_used_at <= now - idleMs` are deleted; when omitted or 0, all live caches
- * for that individual are deleted immediately.
+ * for that individual are deleted immediately (or only used entries when `opts.onlyUsed` is true).
  */
 export async function deleteIndividualCaches(
   owner: CacheOwner,
-  opts: { idleMs?: number; now?: Date } = {},
+  opts: { idleMs?: number; onlyUsed?: boolean; now?: Date } = {},
 ): Promise<{ deleted: number; failed: number; memoryCleared: number }> {
   if (!owner.userId && !owner.kundliId) return { deleted: 0, failed: 0, memoryCleared: 0 };
   const now = opts.now ?? new Date();
   const idleBefore = opts.idleMs && opts.idleMs > 0 ? new Date(now.getTime() - opts.idleMs) : undefined;
+  const onlyUsed = opts.onlyUsed ?? false;
+  const unusedNamesOnInstance = new Set<string>();
+  for (const e of entries.values()) {
+    const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
+    if (match && e.name && e.uses === 0) {
+      unusedNamesOnInstance.add(e.name);
+    }
+  }
   const names = new Set(
-    (await reg('listByIndividual', [] as CacheRow[], (r) => r.listByIndividual(owner, idleBefore))).map((r) => r.name),
+    (await reg('listByIndividual', [] as CacheRow[], (r) => r.listByIndividual(owner, idleBefore)))
+      .map((r) => r.name)
+      .filter((name) => !(onlyUsed && !idleBefore && unusedNamesOnInstance.has(name))),
   );
   for (const e of entries.values()) {
     const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
     if (!match || !e.name) continue;
+    if (onlyUsed && !idleBefore && e.uses === 0) continue;
     if (idleBefore && e.touchedAt && e.touchedAt > idleBefore.getTime()) continue;
     names.add(e.name);
   }
-  const memoryCleared = evictPromptCacheMemoryForIndividual(owner, idleBefore?.getTime());
+  const memoryCleared = evictPromptCacheMemoryForIndividual(owner, idleBefore?.getTime(), onlyUsed);
   const apiKey = geminiKey();
   if (!apiKey || !names.size) return { deleted: 0, failed: 0, memoryCleared };
   let deleted = 0;

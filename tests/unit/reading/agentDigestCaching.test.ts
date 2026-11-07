@@ -12,8 +12,11 @@ import {
 import { clearChartBundles, type ChartRowSource } from '../../../src/reading/oracle/chartBundle.js';
 import { CostGuard } from '../../../src/reading/oracle/costGuard.js';
 import {
+  buildPrashnaPackFromDigest,
+  buildReaderPackFromDigest,
   buildTablesFromDigest,
   contractInputsForSubAgent,
+  getSubAgentDigestSpec,
   sliceDigestForSubAgent,
   SUBAGENT_DIGEST_SPECS,
   type SubAgentId,
@@ -280,6 +283,25 @@ describe('per-sub-agent digest slicing and caching', () => {
     expect(r01Slice.missing).toEqual([]);
     expect(r01Slice.contractInputs.length).toBeGreaterThan(0);
     expect(r01Slice.tables['yogas']).toBeDefined();
+    expect(getSubAgentDigestSpec('R01')?.subAgentId).toBe('R01');
+
+    const r02Pack = buildReaderPackFromDigest('R02', digest, {
+      subject: 'career_work',
+      asOf: G1_AS_OF,
+      activation: FAKE_ACTIVATION,
+    });
+    expect(r02Pack.coreText).toMatch(/^CHART CORE: /);
+    expect(r02Pack.sections['bhava']).toBeDefined();
+    expect(r02Pack.missing).toEqual([]);
+
+    const p1Pack = buildPrashnaPackFromDigest('P1', digest, {
+      subject: 'career_work',
+      asOf: G1_AS_OF,
+      activation: FAKE_ACTIVATION,
+    });
+    expect(p1Pack.coreText).toMatch(/^CHART CORE: /);
+    expect(p1Pack.sections['dasha_vimsottari']).toBeDefined();
+    expect(p1Pack.missing).toEqual([]);
   });
 
   it('slices all reader tables from DigestView + ActivationRow[] with zero raw kundli_data queries', async () => {

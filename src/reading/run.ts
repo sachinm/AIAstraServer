@@ -54,7 +54,7 @@ import { loadDigest } from './digest/load.js';
 import { activationFor, type ActivationRow } from './digest/activation.js';
 import type { DigestView } from './digest/types.js';
 import { personIn } from './oracle/readers.js';
-import { runCodeReaders, toFinding, type CodeFinding } from './codeReaders/readers.js';
+import { runCodeReaders, runCodeReadersCached, toFinding, type CodeFinding } from './codeReaders/readers.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -427,8 +427,24 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   // the deterministic readers: code over each subject's digest section, no model; their findings join the brief
   const codeFindings: CodeFinding[] = [];
   if (digest && uses && flow !== 'single') {
+    const canPersistTechniqueOutputs = Boolean(
+      (prisma as unknown as { techniqueOutput?: unknown; $queryRawUnsafe?: unknown })?.techniqueOutput ||
+        (prisma as unknown as { $queryRawUnsafe?: unknown })?.$queryRawUnsafe,
+    );
     for (const s of subjects) {
-      codeFindings.push(...runCodeReaders(packs[s.id]!, uses.bySubject[s.id]?.deterministic ?? [], { kundliId: data.kundliId, facts, slotPerson }));
+      const det = uses.bySubject[s.id]?.deterministic ?? [];
+      if (canPersistTechniqueOutputs) {
+        const cached = await runCodeReadersCached(prisma, packs[s.id]!, det, {
+          kundliId: data.kundliId,
+          digestVersion: String(digest.version),
+          userId,
+          facts,
+          slotPerson,
+        });
+        codeFindings.push(...cached);
+      } else {
+        codeFindings.push(...runCodeReaders(packs[s.id]!, det, { kundliId: data.kundliId, facts, slotPerson }));
+      }
     }
     for (const f of codeFindings) if (flow === 'graph') currentTrace()?.observe({ type: 'stage', name: `code:${f.analyst}`, status: 'done', ms: 0, subject: f.subject });
   }

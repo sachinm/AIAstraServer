@@ -8,6 +8,7 @@ import { digestStatusOf } from './status.js';
 import { DIGEST_VERSION, type AnnualRow, type DigestSection, type DigestSource, type DigestView, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type YogaRow } from './types.js';
 
 export { digestStatusOf } from './status.js';
+export type { DigestView } from './types.js';
 
 const MEMO_MS = 5 * 60_000;
 const memo = new Map<string, { at: number; view: DigestView }>();

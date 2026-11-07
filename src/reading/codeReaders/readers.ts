@@ -293,7 +293,14 @@ export async function runCodeReadersCached(
   prisma: PrismaClient,
   pack: EvidencePack,
   analysts: readonly CodeAnalyst[],
-  opts: { kundliId: string; digestVersion: string; userId?: string | null; now?: Date },
+  opts: {
+    kundliId: string;
+    digestVersion: string;
+    userId?: string | null;
+    now?: Date;
+    facts?: Record<string, string> | null;
+    slotPerson?: string | null;
+  },
 ): Promise<CodeFinding[]> {
   const d = sectionOf(pack);
   if (!d) return [];
@@ -301,11 +308,11 @@ export async function runCodeReadersCached(
   const packScope = [
     opts.digestVersion,
     pack.subject,
-    d.person?.who ?? '',
+    d.person?.who ?? opts.slotPerson ?? '',
     pack.keyFrame.houses.join(','),
     Object.keys(d.rasi ?? {}).sort().join(','),
   ].join(':');
-  return Promise.all(
+  const out = await Promise.all(
     analysts.map(async (analyst) => {
       const res = await withTechniqueOutput(
         prisma,
@@ -322,6 +329,25 @@ export async function runCodeReadersCached(
       return res.value;
     }),
   );
+  if (opts.kundliId) {
+    const key = JSON.stringify({
+      v: d.version,
+      k: opts.kundliId,
+      s: pack.subject,
+      a: analysts,
+      p: d.person?.who ?? opts.slotPerson ?? '',
+      f: opts.facts ?? {},
+      h: pack.keyFrame.houses,
+      rasi: Object.keys(d.rasi ?? {}),
+      yogas: Object.keys(d.yoga.D1 ?? {}),
+    });
+    if (codeReaderMemo.size >= CODE_READER_MEMO_MAX) {
+      const oldest = codeReaderMemo.keys().next().value;
+      if (oldest !== undefined) codeReaderMemo.delete(oldest);
+    }
+    codeReaderMemo.set(key, out);
+  }
+  return out;
 }
 
 /** The same finding in the shape the oracle brief reads (oracle/runReader.ts ReaderOutput); yogas that hold go to graces. */

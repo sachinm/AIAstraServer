@@ -13,6 +13,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { getReadingCacheRecycleMs } from '../../config/env.js';
+import { sweepPageExecutionLogs } from '../../telemetry/pageTiming.js';
 import { recycleIndividualTechniqueOutputs, setTechniqueOutputUsedHook, sweepTechniqueOutputs } from '../../techniques/outputStore.js';
 import { evictClarifyCacheForIndividual } from '../clarify/planner.js';
 import { evictCodeReaderMemoForIndividual } from '../codeReaders/readers.js';
@@ -104,7 +105,7 @@ export async function recycleIndividualCaches(
   const idleBeforeMs = idleMs && idleMs > 0 ? now.getTime() - idleMs : undefined;
 
   const [llm, reader, techniqueOutputsDeleted] = await Promise.all([
-    deleteIndividualCaches(owner, { ...(idleMs !== undefined ? { idleMs } : {}), now }).catch(() => ({
+    deleteIndividualCaches(owner, { onlyUsed, ...(idleMs !== undefined ? { idleMs } : {}), now }).catch(() => ({
       deleted: 0,
       failed: 1,
       memoryCleared: 0,
@@ -243,6 +244,7 @@ export type ScheduledSweepResult =
   | (SweepResult & {
       readerFindingsDeleted?: number;
       techniqueOutputsDeleted?: number;
+      pageLogsDeleted?: number;
       individualsRecycled?: number;
     })
   | { skipped: string };
@@ -268,7 +270,7 @@ export async function runScheduledSweep(
       }
     }
 
-    const [llm, readerFindingsDeleted, techniqueOutputsDeleted] = await Promise.all([
+    const [llm, readerFindingsDeleted, techniqueOutputsDeleted, pageLogsDeleted] = await Promise.all([
       sweepLlmCaches({ idleMs: recycleMs, now }),
       sweepReaderFindingsCache(db, { idleMs: recycleMs, now }).catch((err: Error) => {
         console.warn(JSON.stringify({ msg: 'reader findings cache sweep failed', error: err.message.slice(0, 200) }));
@@ -280,8 +282,9 @@ export async function runScheduledSweep(
             return 0;
           })
         : Promise.resolve(0),
+      sweepPageExecutionLogs(db, { now }).catch(() => 0),
     ]);
-    return { ...llm, readerFindingsDeleted, techniqueOutputsDeleted, individualsRecycled };
+    return { ...llm, readerFindingsDeleted, techniqueOutputsDeleted, pageLogsDeleted, individualsRecycled };
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'llm cache sweep failed', error: (err as Error).message.slice(0, 200) }));
     return { skipped: 'error' };

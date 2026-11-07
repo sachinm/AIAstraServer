@@ -400,6 +400,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         useModel: readingValidatorModel(),
         guard,
         cacheOwner: d.cacheOwner,
+        coreText: prep.coreText,
       });
       journal.record({ agent: 'validator', agentKind: 'validator', round: 1, model: v.source === 'model' ? modelFor('validator') : null, promptName: 'oracle/validator', digest: { answered: v.answered, source: v.source, flags: v.flags }, highlights: { missing: v.missing }, status: 'ok', source: 'live', usage: v.usage ?? null, ms: v.ms });
       d.emit({ type: 'stage', name: 'validate', status: 'done', ms: v.ms });
