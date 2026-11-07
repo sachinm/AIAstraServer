@@ -1,0 +1,65 @@
+﻿Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "aiastradb", schema "public" at "dpg-d6sdjcp5pdvs73dpa8a0-a.virginia-postgres.render.com:5432"
+
+62 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "aiastradb", schema "public" at "dpg-d6sdjcp5pdvs73dpa8a0-a.virginia-postgres.render.com:5432"
+
+62 migrations found in prisma/migrations
+
+Database schema is up to date!
+
+--- Applied _prisma_migrations (latest 12) ---
+[
+  {
+    "migration_name": "20261106120000_admin_m38_research_staging_and_self_qa",
+    "finished_at": "2026-11-07T05:28:14.361Z"
+  },
+  {
+    "migration_name": "20261106100000_reading_findings_cache_recycle_m38",
+    "finished_at": "2026-11-07T04:47:41.368Z"
+  },
+  {
+    "migration_name": "20261106090000_technique_outputs_m37",
+    "finished_at": "2026-11-07T04:21:37.798Z"
+  },
+  {
+    "migration_name": "20261106090000_page_execution_logs_m37",
+    "finished_at": "2026-11-07T04:24:26.825Z"
+  },
+  {
+    "migration_name": "20261106080000_admin_m36_technique_governance_and_benchmarks",
+    "finished_at": "2026-11-07T03:34:46.211Z"
+  },
+  {
+    "migration_name": "20261106070000_admin_m35_clarify_and_security",
+    "finished_at": "2026-11-07T03:34:45.529Z"
+  },
+  {
+    "migration_name": "20261106060000_reading_m34_deep_varga_chart_types",
+    "finished_at": "2026-11-07T03:34:44.808Z"
+  },
+  {
+    "migration_name": "20261106050000_activation_m33",
+    "finished_at": "2026-11-06T07:27:20.852Z"
+  },
+  {
+    "migration_name": "20261106040000_digest_m32",
+    "finished_at": "2026-11-06T07:27:20.399Z"
+  },
+  {
+    "migration_name": "20261106030000_techniques_m31",
+    "finished_at": "2026-11-07T03:34:44.016Z"
+  },
+  {
+    "migration_name": "20261106020000_activity_m30",
+    "finished_at": "2026-11-05T22:58:46.086Z"
+  },
+  {
+    "migration_name": "20261106010000_techniques_m29",
+    "finished_at": "2026-11-05T22:12:14.374Z"
+  }
+]
