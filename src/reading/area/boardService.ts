@@ -12,13 +12,15 @@ import { loadDigest as realLoadDigest } from '../digest/load.js';
 import type { DigestView } from '../digest/types.js';
 import { asRangePayload, type TransitRangePayload } from '../chartData/transitRange.js';
 import { openRow } from '../../lib/pii/rawSql.js';
+import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addMonthsIso } from '../timeline/months.js';
 import { buildBoard, type AreaBoardBody, type AreaConfig, type BuiltBoard } from './houseLayers.js';
+import { recordTechniqueDecisions, resolveAreaShades } from './shadeResolver.js';
 
 export interface BoardDeps {
   prisma: PrismaClient;
   loadDigest?: (prisma: PrismaClient, kundliId: string) => Promise<DigestView | null>;
-  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
+  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3; shortTo?: string; shortMaxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
   /** the kundli's stored sky overlay covering asOf; null when none is stored (never fetched here) */
   loadTransit?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<TransitRangePayload | null>;
   /** ask the digest sweep to build this kundli */
@@ -120,15 +122,26 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
       spec.agent,
       { userId, task: `${spec.area} ${asOf}`, input: { span_from: span.from, span_to: span.to, version: view.version }, technique: spec.technique, kundliId: kundli.id },
       async () => {
+        const shortTo = addMonthsIso(asOf, getShadeShortHorizonMonths());
         const [activation, running, transit] = await Promise.all([
-          activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2 }),
+          activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2, shortTo, shortMaxLevel: 3 }),
           activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
           (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
         ]);
         const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
+        const receipts = resolveAreaShades({
+          view,
+          cfg: spec.cfg,
+          asOf,
+          built: b,
+          activation,
+          facts: fact ? { [spec.factKey]: fact } : {},
+        });
+        const logged = await recordTechniqueDecisions(prisma, { kundliId: kundli.id, userId }, receipts);
+        const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
         return {
           value: b,
-          output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, writes: ['area_builds:1'], ...b.counts },
+          output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, shades: receipts.length, writes, ...b.counts },
           charts: boardChartsRead(view, transit !== null),
         };
       },

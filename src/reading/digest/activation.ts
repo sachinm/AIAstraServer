@@ -179,11 +179,11 @@ export function buildActivationRows(items: Record<string, unknown>, digestRows: 
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above `maxLevel`. */
+/** The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above `maxLevel` (and `shortMaxLevel` inside `shortTo`). */
 export async function activationFor(
   prisma: PrismaClient,
   kundliId: string,
-  q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3 }
+  q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3; shortTo?: string; shortMaxLevel?: 1 | 2 | 3 }
 ): Promise<ActivationRow[]> {
   const rows = await prisma.kundliActivation.findMany({
     where: {
@@ -192,7 +192,16 @@ export async function activationFor(
       to_date: { gt: new Date(`${q.from}T00:00:00Z`) },
       ...(q.houses?.length ? { houses: { hasSome: q.houses } } : {}),
       ...(q.systems?.length ? { system: { in: q.systems } } : {}),
-      ...(q.maxLevel ? { level: { lte: q.maxLevel } } : {}),
+      ...(q.maxLevel
+        ? q.shortTo && q.shortMaxLevel && q.shortMaxLevel > q.maxLevel
+          ? {
+              OR: [
+                { level: { lte: q.maxLevel } },
+                { level: { lte: q.shortMaxLevel }, from_date: { lte: new Date(`${q.shortTo}T00:00:00Z`) } },
+              ],
+            }
+          : { level: { lte: q.maxLevel } }
+        : {}),
     },
     orderBy: [{ from_date: 'asc' }, { level: 'asc' }, { system: 'asc' }],
   });
