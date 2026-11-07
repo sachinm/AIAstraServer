@@ -23,8 +23,11 @@ import type { DigestView } from '../digest/types.js';
 import { addMonthsIso } from '../timeline/months.js';
 
 export interface SelfCharacterArcStage {
+  id: 'past_10y' | 'now' | 'next_10y';
   stage: 'past_10y' | 'now' | 'next_10y';
+  title: string;
   label: string;
+  ageSpanLabel: string;
   windowLabel: string;
   headline: string;
   summary: string;
@@ -37,10 +40,14 @@ export interface SelfCharacterArc {
   pastDecade: SelfCharacterArcStage;
   presentNow: SelfCharacterArcStage;
   nextDecade: SelfCharacterArcStage;
+  windows: [SelfCharacterArcStage, SelfCharacterArcStage, SelfCharacterArcStage];
 }
 
 export interface SelfPersonalityJoyItem {
+  id: string;
   title: string;
+  whatYouEnjoy: string;
+  whyItFeelsGood: string;
   whyItFits: string;
   evidence: string[];
 }
@@ -51,6 +58,7 @@ export interface SelfPersonalityAndJoy {
   emotionalMindStyle: string;
   intellectualWitStyle: string;
   whatFeelsGood: SelfPersonalityJoyItem[];
+  pillars: SelfPersonalityJoyItem[];
   rechargeRule: string;
   evidence: string[];
 }
@@ -529,46 +537,62 @@ export function buildSelfCharacterArc(
   const nowAgeTag = age !== null ? `Age ${age} (${refYear})` : `${refYear}`;
   const nextAgeTag = age !== null ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
 
+  const pastDecade: SelfCharacterArcStage = {
+    id: 'past_10y',
+    stage: 'past_10y',
+    title: 'Last 10 Years',
+    label: 'Last 10 Years',
+    ageSpanLabel: pastAgeTag,
+    windowLabel: pastAgeTag,
+    headline: pastTheme.pastHeadline,
+    summary: pastTheme.pastSummary,
+    anchorTrait: pastTheme.pastTrait,
+    evidence: [
+      `vimsottari:past_10y:${pastMd?.lord ?? l1Code}/${pastAd?.lord ?? akCode} (${pastFrom}..${asOf})`,
+      `D1.p.${pastMd?.lord ?? l1Code}.h${pastHouse}`,
+    ],
+  };
+
+  const presentNow: SelfCharacterArcStage = {
+    id: 'now',
+    stage: 'now',
+    title: 'Who You Are Now',
+    label: 'Who You Are Now',
+    ageSpanLabel: nowAgeTag,
+    windowLabel: nowAgeTag,
+    headline: nowTheme.nowHeadline,
+    summary: nowTheme.nowSummary,
+    anchorTrait: nowTheme.nowTrait,
+    evidence: [
+      `D1.h1:${h1?.sign ?? 'Aries'} (L1=${l1Code} in H${l1Card?.house ?? 1}, D9=${d9L1Card?.dignity ?? 'friendly'})`,
+      `D1.point.AK=${akCode} (H${akCard?.house ?? 1})`,
+      `vimsottari:now:${nowMd?.lord ?? l1Code}/${nowAd?.lord ?? akCode}`,
+    ],
+  };
+
+  const nextDecade: SelfCharacterArcStage = {
+    id: 'next_10y',
+    stage: 'next_10y',
+    title: 'Next 10 Years',
+    label: 'Next 10 Years',
+    ageSpanLabel: nextAgeTag,
+    windowLabel: nextAgeTag,
+    headline: nextTheme.nextHeadline,
+    summary: nextTheme.nextSummary,
+    anchorTrait: nextTheme.nextTrait,
+    evidence: [
+      `vimsottari:next_10y:${nextMd?.lord ?? akCode}/${nextAd?.lord ?? l1Code} (${asOf}..${nextTo})`,
+      `D9.p.${nextMd?.lord ?? akCode} (${view.planet('D9', nextMd?.lord ?? akCode)?.dignity ?? 'friendly'})`,
+      `D1.p.${nextMd?.lord ?? akCode}.h${nextHouse}`,
+    ],
+  };
+
   return {
     headline: 'How the last ten years shaped you, where your character stands now, and who you are becoming over the next decade',
-    pastDecade: {
-      stage: 'past_10y',
-      label: 'Last 10 Years',
-      windowLabel: pastAgeTag,
-      headline: pastTheme.pastHeadline,
-      summary: pastTheme.pastSummary,
-      anchorTrait: pastTheme.pastTrait,
-      evidence: [
-        `vimsottari:past_10y:${pastMd?.lord ?? l1Code}/${pastAd?.lord ?? akCode} (${pastFrom}..${asOf})`,
-        `D1.p.${pastMd?.lord ?? l1Code}.h${pastHouse}`,
-      ],
-    },
-    presentNow: {
-      stage: 'now',
-      label: 'Who You Are Now',
-      windowLabel: nowAgeTag,
-      headline: nowTheme.nowHeadline,
-      summary: nowTheme.nowSummary,
-      anchorTrait: nowTheme.nowTrait,
-      evidence: [
-        `D1.h1:${h1?.sign ?? 'Aries'} (L1=${l1Code} in H${l1Card?.house ?? 1}, D9=${d9L1Card?.dignity ?? 'friendly'})`,
-        `D1.point.AK=${akCode} (H${akCard?.house ?? 1})`,
-        `vimsottari:now:${nowMd?.lord ?? l1Code}/${nowAd?.lord ?? akCode}`,
-      ],
-    },
-    nextDecade: {
-      stage: 'next_10y',
-      label: 'Next 10 Years',
-      windowLabel: nextAgeTag,
-      headline: nextTheme.nextHeadline,
-      summary: nextTheme.nextSummary,
-      anchorTrait: nextTheme.nextTrait,
-      evidence: [
-        `vimsottari:next_10y:${nextMd?.lord ?? akCode}/${nextAd?.lord ?? l1Code} (${asOf}..${nextTo})`,
-        `D9.p.${nextMd?.lord ?? akCode} (${view.planet('D9', nextMd?.lord ?? akCode)?.dignity ?? 'friendly'})`,
-        `D1.p.${nextMd?.lord ?? akCode}.h${nextHouse}`,
-      ],
-    },
+    pastDecade,
+    presentNow,
+    nextDecade,
+    windows: [pastDecade, presentNow, nextDecade],
   };
 }
 
@@ -595,7 +619,10 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
 
   const joyItems: SelfPersonalityJoyItem[] = [
     {
+      id: 'emotional_core',
       title: moonStyle.joyActivities[0]!.title,
+      whatYouEnjoy: moonStyle.joyActivities[0]!.title,
+      whyItFeelsGood: moonStyle.joyActivities[0]!.whyItFits,
       whyItFits: moonStyle.joyActivities[0]!.whyItFits,
       evidence: [
         `D1.Mo:${moonSign} (H${moD1?.house ?? 4}, ${moD1?.dignity ?? 'friendly'})`,
@@ -604,7 +631,10 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       ],
     },
     {
+      id: 'mental_play',
       title: mercuryStyle.joyActivities[0]!.title,
+      whatYouEnjoy: mercuryStyle.joyActivities[0]!.title,
+      whyItFeelsGood: mercuryStyle.joyActivities[0]!.whyItFits,
       whyItFits: mercuryStyle.joyActivities[0]!.whyItFits,
       evidence: [
         `D1.Me:${mercurySign} (H${meD1?.house ?? 5}, ${meD1?.dignity ?? 'friendly'})`,
@@ -613,7 +643,10 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       ],
     },
     {
+      id: 'social_creative',
       title: moonStyle.joyActivities[1]!.title,
+      whatYouEnjoy: moonStyle.joyActivities[1]!.title,
+      whyItFeelsGood: moonStyle.joyActivities[1]!.whyItFits,
       whyItFits: moonStyle.joyActivities[1]!.whyItFits,
       evidence: [
         `D1.h4:${h4?.sign ?? 'Cancer'} (lord=${h4?.lord ?? 'Mo'}, SAV=${h4?.sav ?? 28})`,
@@ -621,7 +654,10 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       ],
     },
     {
+      id: 'restorative_joy',
       title: mercuryStyle.joyActivities[1]!.title,
+      whatYouEnjoy: mercuryStyle.joyActivities[1]!.title,
+      whyItFeelsGood: mercuryStyle.joyActivities[1]!.whyItFits,
       whyItFits: mercuryStyle.joyActivities[1]!.whyItFits,
       evidence: [
         `D1.h5:${h5?.sign ?? 'Leo'} (lord=${h5?.lord ?? 'Su'}, SAV=${h5?.sav ?? 29})`,
@@ -642,6 +678,7 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
     emotionalMindStyle: moonStyle.moonTone,
     intellectualWitStyle: mercuryStyle.mercuryTone,
     whatFeelsGood: joyItems,
+    pillars: joyItems,
     rechargeRule,
     evidence: [
       `D1.Mo:${moonSign}.H${moD1?.house ?? 4}`,
