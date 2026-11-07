@@ -32,6 +32,10 @@ import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
 import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
+import { registerResearchRoutes } from './src/routes/researchRoutes.js';
+import { pageTimingMiddleware, registerPageTimingRoutes } from './src/telemetry/pageTiming.js';
+import { assertOwnAccount } from './src/graphql/rbac.js';
+import { factsFromExpress, recordAccountEvent } from './src/audit/accountEvents.js';
 import { engineAtPlace, functionalNatureOf, natalForUser, runningDashaLordsOf } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
 import { seedTechniqueRegistry } from './src/techniques/catalog.js';
@@ -115,11 +119,22 @@ app.use(
         ? prodOrigins
         : true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Astra-Authorization', 'X-Amz-Content-Sha256', 'X-Requested-With', 'X-Face-Box'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Astra-Authorization',
+      'X-Astra-Page',
+      'X-Astra-Session',
+      'X-Amz-Content-Sha256',
+      'X-Requested-With',
+      'X-Face-Box',
+    ],
     credentials: true,
     maxAge: 86400,
   })
 );
+
+app.use(pageTimingMiddleware(prisma, optionalUser));
 
 /**
  * Liveness probe. Used by the Lambda Web Adapter readiness check (AWS_LWA_READINESS_CHECK_PATH)
@@ -325,13 +340,29 @@ registerAreaRoutes(app, { prisma, requireUser });
 registerLifeReadingRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
+// page execution timing beacon & progressive dashboard section streaming (docs/admin/08)
+registerPageTimingRoutes(app, { prisma, optionalUser, requireUser });
+// research staging & Self dashboard QA routes (docs/admin/09)
+registerResearchRoutes(app, { prisma, requireUser });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
   try {
     const userId = await requireUser(req, res);
     if (!userId) return;
-    const { question } = req.body as { question?: string; userID?: string };
+    const { question, userID: bodyUserId } = req.body as { question?: string; userID?: string };
+    try {
+      assertOwnAccount(userId, bodyUserId);
+    } catch {
+      await recordAccountEvent(prisma, {
+        userId,
+        action: 'idor_blocked',
+        outcome: 'refused',
+        note: 'cross_account_query_attempt',
+        request: factsFromExpress(req),
+      });
+      return res.status(403).json({ error: 'Forbidden: cross-account access denied' });
+    }
     if (!question) {
       return res.status(400).json({ error: 'question is required' });
     }

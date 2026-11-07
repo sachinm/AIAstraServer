@@ -201,7 +201,7 @@ function overlayBody(o: Record<string, unknown>, p: PlanetCard): Record<string, 
   if (isObj(o.aspected_by) && p.aspectedBy) out.aspected_by = { ...(o.aspected_by as Record<string, unknown>), graha: p.aspectedBy };
   if (typeof o.star_lord === 'string' && p.starLord) out.star_lord = (o.star_lord as string).replace(/^\S+/, p.starLord);
   if ('sign_lord' in o && p.dispositor && p.dispositorHouse !== null && p.dispositorHouse !== undefined) out.sign_lord = `${p.dispositor} (house ${p.dispositorHouse})`;
-  if (isObj(o.shadbala)) out.shadbala = { ...(o.shadbala as Record<string, unknown>), ratio: or(p.shadbalaRatio, (o.shadbala as Record<string, unknown>).ratio), rank: or(p.shadbalaRank, (o.shadbala as Record<string, unknown>).rank) };
+  if (isObj(o.shadbala)) out.shadbala = { ...(o.shadbala as Record<string, unknown>), ...(p.shadbalaRupa != null ? { rupas: p.shadbalaRupa } : {}), ratio: or(p.shadbalaRatio, (o.shadbala as Record<string, unknown>).ratio), rank: or(p.shadbalaRank, (o.shadbala as Record<string, unknown>).rank) };
   // `deg` stays the dossier's: the digest card's degree is not stated as degrees within the sign (doc 54 §2)
   return out;
 }

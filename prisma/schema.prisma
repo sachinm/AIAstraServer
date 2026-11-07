@@ -1348,3 +1348,132 @@ model PageExecutionLog {
   @@map("page_execution_logs")
 }
 
+/// M38 (docs/admin/09): Isolated synthetic/staging kundli profile for Admin Research Lab & Self Dashboard QA.
+/// Never linked to customer `auth` or `kundlis`.
+model ResearchKundli {
+  id              String                 @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  subject_code    String                 @unique(map: "research_kundlis_subject_code_key") @map("subject_code") @db.VarChar(80)
+  /// age_bracket | persona | custom
+  group_kind      String                 @default("age_bracket") @map("group_kind") @db.VarChar(24)
+  label           String                 @db.VarChar(160)
+  age_years       Int                    @map("age_years")
+  profession_code String                 @map("profession_code") @db.VarChar(64)
+  scenario_code   String                 @map("scenario_code") @db.VarChar(64)
+  birth_date      String                 @map("birth_date") @db.VarChar(16)
+  birth_time      String                 @map("birth_time") @db.VarChar(16)
+  place_code      String                 @map("place_code") @db.VarChar(80)
+  place_label     String                 @map("place_label") @db.VarChar(120)
+  coord_n         Float                  @map("coord_n")
+  coord_e         Float                  @map("coord_e")
+  tz_offset       Float                  @map("tz_offset")
+  lagna_sign      String                 @map("lagna_sign") @db.VarChar(24)
+  moon_sign       String                 @map("moon_sign") @db.VarChar(24)
+  moon_star       String                 @map("moon_star") @db.VarChar(32)
+  sun_sign        String                 @map("sun_sign") @db.VarChar(24)
+  ak_planet       String                 @map("ak_planet") @db.VarChar(16)
+  amk_planet      String                 @map("amk_planet") @db.VarChar(16)
+  /// pending | building | ready | failed
+  hydrate_status  String                 @default("ready") @map("hydrate_status") @db.VarChar(16)
+  hydrate_version Int                    @default(1) @map("hydrate_version")
+  hydrated_at     DateTime               @default(now()) @map("hydrated_at") @db.Timestamptz(6)
+  created_at      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at      DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  chart_rows      ResearchChartData[]
+  digest_rows     ResearchDigest[]
+  activation_rows ResearchActivation[]
+  dashboard_runs  ResearchDashboardRun[]
+
+  @@index([group_kind, age_years], map: "research_kundlis_group_age_idx")
+  @@map("research_kundlis")
+}
+
+/// M38 (docs/admin/09): Staging copy of `kundli_data` for synthetic research kundlis.
+model ResearchChartData {
+  id                 String         @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  research_kundli_id String         @map("research_kundli_id")
+  chart_type         String         @map("chart_type") @db.VarChar(64)
+  variant            String         @default("") @db.VarChar(120)
+  calc_version       String         @default("v1") @map("calc_version") @db.VarChar(32)
+  status             String         @default("ready") @db.VarChar(16)
+  chart_blob         Json           @default("{}") @map("chart_blob")
+  computed_at        DateTime       @default(now()) @map("computed_at") @db.Timestamptz(6)
+  kundli             ResearchKundli @relation(fields: [research_kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "research_chart_data_kundli_fkey")
+
+  @@unique([research_kundli_id, chart_type, variant], map: "research_chart_data_kundli_type_var_key")
+  @@index([research_kundli_id], map: "research_chart_data_kundli_idx")
+  @@map("research_chart_data")
+}
+
+/// M38 (docs/admin/09): Staging copy of `kundli_digest` (house, planet, yoga, point, annual, star) for synthetic research kundlis.
+model ResearchDigest {
+  id                 BigInt         @id @default(autoincrement())
+  research_kundli_id String         @map("research_kundli_id")
+  /// house | planet | yoga | point | annual | star
+  section            String         @db.VarChar(16)
+  item_key           String         @map("item_key") @db.VarChar(80)
+  varga              String?        @db.VarChar(12)
+  house_num          Int?           @map("house_num") @db.SmallInt
+  planet             String?        @db.VarChar(16)
+  section_data       Json           @map("section_data")
+  sources            Json           @default("[]")
+  calc_version       String         @default("1") @map("calc_version") @db.VarChar(24)
+  built_at           DateTime       @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli             ResearchKundli @relation(fields: [research_kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "research_digests_kundli_fkey")
+
+  @@unique([research_kundli_id, section, item_key], map: "research_digests_kundli_sec_key")
+  @@index([research_kundli_id, section], map: "research_digests_kundli_sec_idx")
+  @@map("research_digests")
+}
+
+/// M38 (docs/admin/09): Staging copy of `kundli_activation` multi-system dasha periods for synthetic research kundlis.
+model ResearchActivation {
+  id                 BigInt         @id @default(autoincrement())
+  research_kundli_id String         @map("research_kundli_id")
+  system             String         @db.VarChar(32)
+  level              Int            @db.SmallInt
+  lord               String         @db.VarChar(24)
+  path               String         @db.VarChar(80)
+  start_date         DateTime       @map("start_date") @db.Date
+  end_date           DateTime       @map("end_date") @db.Date
+  houses             Int[]          @db.SmallInt
+  planet_factors     Json           @default("{}") @map("planet_factors")
+  built_at           DateTime       @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli             ResearchKundli @relation(fields: [research_kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "research_activations_kundli_fkey")
+
+  @@index([research_kundli_id, start_date, end_date], map: "research_activations_kundli_dates_idx")
+  @@index([research_kundli_id, system, level], map: "research_activations_kundli_sys_idx")
+  @@map("research_activations")
+}
+
+/// M38 (docs/admin/09): Hydrated Self Dashboard QA run with 12-house/10-varga matrix, Nov/Thanksgiving/Dec/New Year zoom-in,
+/// 10-step technical trace (pulled vs excluded + classical rules), plain-English reading, and Independent Technical Verifier audit.
+model ResearchDashboardRun {
+  id                 String         @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  research_kundli_id String         @map("research_kundli_id")
+  subject_code       String         @map("subject_code") @db.VarChar(80)
+  /// self | love | work
+  board_area         String         @default("self") @map("board_area") @db.VarChar(16)
+  as_of              String         @map("as_of") @db.VarChar(16)
+  tone               String         @db.VarChar(32)
+  verdict_pill       String         @map("verdict_pill") @db.VarChar(64)
+  charter_summary    String         @map("charter_summary")
+  board_data         Json           @map("board_data")
+  house_varga_matrix Json           @map("house_varga_matrix")
+  temporal_data      Json           @map("temporal_data")
+  trace_data         Json           @map("trace_data")
+  reading_prose      Json           @map("reading_prose")
+  /// pass | warn | fail
+  verifier_verdict   String         @map("verifier_verdict") @db.VarChar(16)
+  accuracy_score     Float          @map("accuracy_score")
+  verifier_data      Json           @map("verifier_data")
+  duration_ms        Int            @default(0) @map("duration_ms")
+  created_at         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  kundli             ResearchKundli @relation(fields: [research_kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "research_dashboard_runs_kundli_fkey")
+
+  @@index([research_kundli_id, created_at(sort: Desc)], map: "research_dashboard_runs_kundli_idx")
+  @@index([subject_code, created_at(sort: Desc)], map: "research_dashboard_runs_subject_idx")
+  @@index([verifier_verdict, accuracy_score(sort: Desc)], map: "research_dashboard_runs_verdict_idx")
+  @@map("research_dashboard_runs")
+}
+
+

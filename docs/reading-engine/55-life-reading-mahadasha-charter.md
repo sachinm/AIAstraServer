@@ -22,12 +22,12 @@
 ## 2. End Goal
 
 When a user opens **Profile → Timeline** (`GET /api/life-reading`):
-1. The system identifies the individual's **remaining largest Mahadasha** (the running Mahadasha if it has `>= LIFE_CHARTER_MIN_REMAINING_YEARS` [default `10`] years remaining, or the longest Mahadasha in the `LIFE_CHARTER_HORIZON_YEARS` [default `20`] lookahead window with the current Mahadasha's remaining Antardashas included as a bridge).
+1. The system identifies the individual's **remaining largest Mahadasha** (the running Mahadasha if it has `>= LIFE_CHARTER_MIN_REMAINING_YEARS` [default `10`] years remaining, or the first upcoming Mahadasha in `LIFE_CHARTER_HORIZON_YEARS` [default `20`] with `>= minYears` starting within `minYears` of `today`, carrying all pre-primary Mahadashas and their remaining Antardashas as a chronological transition bridge).
 2. It synthesizes a **High-Level Mahadasha Life Charter** (`headline` and `charter_summary`) and guides the reading **per life area** (`area_charters[]` classified as `anchor`, `growth`, or `guarded`), anchored in whether the promise is written in the birth chart (`D1`) and divisional charts (`D9` + the area's owning varga `D2–D30`).
 3. It charts out every **Antardasha** (`antardashas[]`) across those 10–18+ years in sequence, connecting the ~10,000 digest & activation rows to assert for each Antardasha:
    - The **sub-period theme & tone** (`breakthrough`, `build`, `steady_work`, `careful`),
    - The **2–3 activated life areas** with their plain-English charter, timing confirmation (multi-dasha clocks, annual `TP`/`VP` charts, and `double_transit` / slow transits), and concrete action rule,
-   - Full structured `evidence` (MD/AD lords, 9×9 `house_from_md` and `fruition_class`, star-lord/dispositor/co-lord links, agreeing dasha systems, annual chart years, transit houses) kept strictly inside collapsible **Chart details** so zero raw astrology jargon or engine names appear in visible prose.
+   - Full structured `evidence` (MD/AD lords, 9×9 `house_from_md` and `fruition_class`, star-lord/dispositor/co-lord/pending-karma/Khara/Bhrigu-Bindu links, avastha delivery multipliers, agreeing dasha systems, annual chart years, transit houses) kept strictly inside collapsible **Chart details** so zero raw astrology jargon or engine names appear in visible prose.
 
 ---
 
@@ -36,7 +36,7 @@ When a user opens **Profile → Timeline** (`GET /api/life-reading`):
 1. **Environment Config (`src/config/env.ts`)**:
    - `LIFE_HORIZON_YEARS` (default `18`), `LIFE_CHARTER_MIN_REMAINING_YEARS` (default `10`), `LIFE_CHARTER_HORIZON_YEARS` (default `20`), `LIFE_CHARTER_MAX_AREAS_PER_AD` (default `3`).
 2. **Digest Plumbing (`src/reading/digest/types.ts`, `src/reading/digest/build.ts`, `src/reading/life/promise.ts`)**:
-   - `DashaCharterDigest` and `AntardashaFruitionCell` on `D1` `PlanetCard` with `DigestSource` provenance (`avasthas` → `dasha_charter.mahadasha_charters[i]` and `dasha_charter.antardasha_fruition_matrix.<P>`).
+   - `DashaCharterDigest`, `AntardashaFruitionCell`, `AvasthaMultipliers`, `SunProximity`, and `starChain` on `PlanetCard`, Lunar Astro points `D1.K64M`, `D1.K64L`, `D1.KD22`, `D1.BB` on `PointRow`, and `pendingKarmaHouses` on `StarProfile`, each with `DigestSource` provenance (`avasthas` / `avasthas.dN`).
    - `promise.ts` reads `mdCard.dashaCharter?.fruition[ad]` for the 6/8/12 AD-from-MD adjustment.
 3. **Technique Implementation (`src/reading/life/charter.ts`, `labels.ts`, `compose.ts`, `service.ts`)**:
    - `life.mahadasha_charter` registered in `src/techniques/catalog.ts` (with `selectors` and `contract`) and `src/agents/registry.ts`.
@@ -49,29 +49,29 @@ When a user opens **Profile → Timeline** (`GET /api/life-reading`):
 ## 4. Exactly How It Works When Done
 
 ### 4.1 Backend
-- **Mahadasha Selection**:
-  - Reads `vimshottari` `level = 1` rows in `kundli_activation` where `endDate > asOf`.
+- **Mahadasha Selection (`selectCharterMahadasha`)**:
+  - Reads `vimshottari` `level = 1` rows in `kundli_activation` where `to > today` (with a fallback synthesizing contiguous `level = 2` `parentLord` runs when `level = 1` rows are omitted in compact test fixtures).
   - If the current Mahadasha has `>= LIFE_CHARTER_MIN_REMAINING_YEARS` (default `10`) remaining, it is the primary chartered Mahadasha (`is_current = true`, `bridge = null`).
-  - Otherwise, among all Mahadashas intersecting `[asOf, asOf + LIFE_CHARTER_HORIZON_YEARS]`, selects the Mahadasha with the largest duration in the window as the primary charter, and attaches the current Mahadasha's remaining Antardashas (`level = 2`, `endDate > asOf`) as `bridge`.
+  - Otherwise, selects the first upcoming Mahadasha with `>= LIFE_CHARTER_MIN_REMAINING_YEARS` that starts within `minYears` of `today` (or the immediately following Mahadasha if longer than the current remaining span) as the primary charter, and attaches all pre-primary Mahadashas (`bridgeMds`) and their remaining Antardashas (`level = 2`, `to > today`) as the chronological `bridge`.
 - **Per-Area Charter (`area_charters[]`)**:
   - Evaluates each of the 13 `LIFE_AREAS` by combining:
     1. Its `AreaPromise` (`verdict`: `'promised' | 'partial' | 'not_written'`, `d1Pts`, `vargaPts` across `D9` and owning vargas `D2..D30`),
-    2. Direct activation by the Mahadasha lord (`ownHouses`, `placedHouse`, `rasiDrishtiHouses`, `grahaDrishtiHouses`, `dispositorHouse`, `starLordHouse`, and active `YogaRow`s),
+    2. Direct activation by the Mahadasha lord (`ownHouses`, `placedHouse`, `rasiDrishtiHouses`, `grahaDrishtiHouses`, `dispositorHouse`, `starLordHouse`, `pendingKarmaHouses`, and active `YogaRow`s),
     3. Peak and watch Antardasha windows across the Mahadasha span.
 - **Antardasha Timeline (`antardashas[]`)**:
   - For each `vimshottari` `level = 2` sub-period `[from, to]` in the Mahadasha:
-    - Reads the 9×9 `AntardashaFruitionCell` from `mdCard.dashaCharter?.fruition[adLord]`.
+    - Reads the 9×9 `AntardashaFruitionCell` from `mdCard.dashaCharter?.fruition[adLord]` and the AD lord's `avasthaMultipliers.effective`.
     - Scores all 13 life areas for that `[from, to]` slice by joining:
-      1. `adLord` & `mdLord` house ownership, placement, aspects, and yogas in `D1`,
+      1. `adLord` & `mdLord` house ownership, placement, aspects, yogas, and avastha delivery multiplier in `D1`,
       2. `adLord` & area primary house dignity in `D9` and the area's owning varga (`D2..D30`),
       3. Secondary dasha family agreement (`conditional`, `rasi`, `yogini`, `tithi_ashtottari`, `karaka`) overlapping `[from, to]`,
       4. Annual `TP` and `VP` year charts (`annual` rows in `kundli_digest`) overlapping the years of `[from, to]`,
-      5. Transit gates (`double_transit` and slow transits in `SkyView`) when `[from, to]` intersects the transit window.
+      5. Transit gates (`double_transit`, slow transits, and Bhrigu Bindu `D1.BB` / Khara `D1.K64M/K64L/KD22` points in `SkyView`) when `[from, to]` intersects the transit window.
     - Selects the top `LIFE_CHARTER_MAX_AREAS_PER_AD` (default `3`) areas and emits plain-language `headline`, per-area `summary`, `timing`, and `action`, plus `grade`, `basis`, and `evidence`.
 
 ### 4.2 API (`GET /api/life-reading`)
 - Returns `{ status: 'ok', built_at, cached, rule_now, areas, charter }`.
-- Cache key in `kundli_data` (`data_type = 'life_reading'`) bumps `LIFE_CACHE_VERSION` from `'v1'` to `'v2'` so previously cached v1 payloads without `charter` rebuild automatically on next read.
+- Cached in `area_builds` (`area = 'life'`, keyed by `kundli_id` and `as_of`; invalidated whenever `buildDigest` runs). `getLifeReading` in `src/reading/life/service.ts` verifies `'charter' in cached.result` so any pre-charter cached row automatically rebuilds on next read.
 
 ### 4.3 Frontend Experience & UI/UX
 - Renders inside `LifeReadingDashboard.tsx` below "Your life at a glance":

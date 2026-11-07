@@ -84,6 +84,8 @@ export interface LifeAntardashaRow {
     systems: string[];
     annual_years: string[];
     transit_houses: number[];
+    ad_avastha?: string | null;
+    ad_effective_multiplier?: number | null;
   };
 }
 
@@ -113,6 +115,8 @@ export interface LifeMahadashaCharter {
     dispositor: string | null;
     star_lord: string | null;
     avastha: string | null;
+    effective_multiplier?: number | null;
+    ripeness?: string | null;
   };
 }
 
@@ -415,6 +419,11 @@ interface MdTouchMap {
   dispositor: string | null;
   starLord: string | null;
   avastha: string | null;
+  effectiveMultiplier: number | null;
+  ripeness: string | null;
+  pendingKarmaHouses: number[];
+  kharaHouses: number[];
+  bhriguBinduHouse: number | null;
   yogas: Array<{ name: string; houses: number[]; planets: string[]; side: Side }>;
 }
 
@@ -426,6 +435,12 @@ function buildMdTouchMap(view: DigestView, mdLord: string, mdHouses: number[]): 
   const dispositor = card?.dispositor ?? null;
   const starLord = card?.starLord ?? null;
   const avastha = card?.avasthas ? Object.values(card.avasthas).filter(Boolean).join(', ') || null : null;
+  const effectiveMultiplier = card?.avasthaMultipliers?.effective ?? null;
+  const ripeness = card?.avasthaMultipliers?.ripeness ?? null;
+  const pendingKarmaHouses = view.star()?.pendingKarmaHouses ?? [];
+  const d1Points = view.points('D1');
+  const kharaHouses = [...new Set(d1Points.filter((pt) => ['K64M', 'K64L', 'KD22'].includes(pt.id) && pt.house != null).map((pt) => pt.house!))];
+  const bhriguBinduHouse = d1Points.find((pt) => pt.id === 'BB')?.house ?? null;
 
   const houseWeights = new Map<number, number>();
   const addW = (h: number | null | undefined, w: number) => {
@@ -440,6 +455,9 @@ function buildMdTouchMap(view: DigestView, mdLord: string, mdHouses: number[]): 
   for (const h of dc?.housesCoOwned ?? []) addW(h, 1.5);
   for (const h of [...new Set([...(card?.aspectsTo ?? []), ...(dc?.grahaDrishtiHouses ?? [])])]) addW(h, 1);
   for (const h of dc?.rasiDrishtiHouses ?? []) addW(h, 0.75);
+  for (const h of pendingKarmaHouses) {
+    if (houseWeights.has(h)) addW(h, 0.5);
+  }
 
   const yogas: Array<{ name: string; houses: number[]; planets: string[]; side: Side }> = [];
   for (const y of view.yogas()) {
@@ -450,7 +468,7 @@ function buildMdTouchMap(view: DigestView, mdLord: string, mdHouses: number[]): 
     for (const h of y.houses) addW(h, 2);
   }
 
-  return { houseWeights, ownHouses, placedHouse, dispositor, starLord, avastha, yogas };
+  return { houseWeights, ownHouses, placedHouse, dispositor, starLord, avastha, effectiveMultiplier, ripeness, pendingKarmaHouses, kharaHouses, bhriguBinduHouse, yogas };
 }
 
 function joinPhrases(items: string[]): string {
@@ -565,11 +583,16 @@ function scoreAdForArea(
     side = 'support';
   }
 
-  // Base promise points (out of 55) + Vimshottari weight + 9×9 fruition bonus
+  // Base promise points (out of 55) + Vimshottari weight + 9×9 fruition bonus + avastha delivery multiplier
   const promisePts = (LAYER_WEIGHTS.d1 + LAYER_WEIGHTS.varga) * promise.promiseRatio;
   let dashaPts = side === 'test' ? -FAMILY_WEIGHTS.vimshottari : FAMILY_WEIGHTS.vimshottari;
   if (touchesAd && area.houses[0] && adHouses.has(area.houses[0])) dashaPts += 3;
   dashaPts += fBonus.pts;
+  const adEff = adCard?.avasthaMultipliers?.effective ?? null;
+  if (adEff != null) {
+    if (adEff >= 0.85 && side !== 'test') dashaPts += 2;
+    else if (adEff <= 0.12) dashaPts -= 2;
+  }
 
   const systems = [adRow.system];
   const contradicts: string[] = [];
@@ -625,6 +648,9 @@ function scoreAdForArea(
       if (overlaps(sl, win) && area.houses.includes(sl.house) && !transitHouses.includes(sl.house)) {
         transitHouses.push(sl.house);
       }
+    }
+    if (mdTouch.bhriguBinduHouse != null && area.houses.includes(mdTouch.bhriguBinduHouse) && transitHouses.includes(mdTouch.bhriguBinduHouse)) {
+      transitOpen = true;
     }
   }
   const transitPts = transitOpen ? LAYER_WEIGHTS.transit : 0;
@@ -830,6 +856,23 @@ function buildAntardashaTimeline(
     const allSystems = [...new Set(top.flatMap((x) => x.systems))].map(systemName);
     const allAnnuals = [...new Set(top.flatMap((x) => x.annualYears))];
     const allTransits = [...new Set(top.flatMap((x) => x.transitHouses))].sort((a, b) => a - b);
+    const adCardForEv = view.planet('D1', adLord);
+    const adAvastha = adCardForEv?.avasthas ? Object.values(adCardForEv.avasthas).filter(Boolean).join(', ') || null : null;
+    const adEffMult = adCardForEv?.avasthaMultipliers?.effective ?? null;
+    const adLinks = [...fBonus.links];
+    if (adEffMult != null) {
+      if (adEffMult >= 0.85) adLinks.push('high_avastha_delivery');
+      else if (adEffMult <= 0.12) adLinks.push('dormant_avastha_delivery');
+    }
+    if (top.some((x) => mdTouch.pendingKarmaHouses.includes(x.area.houses[0]!))) {
+      adLinks.push('pending_karma_axis');
+    }
+    if (tone === 'careful' && allTransits.some((h) => mdTouch.kharaHouses.includes(h))) {
+      adLinks.push('khara_transit');
+    }
+    if (mdTouch.bhriguBinduHouse != null && allTransits.includes(mdTouch.bhriguBinduHouse)) {
+      adLinks.push('bhrigu_bindu_transit');
+    }
 
     out.push({
       from,
@@ -845,10 +888,12 @@ function buildAntardashaTimeline(
         ad: planetName(adLord),
         house_from_md: cell?.houseFromMd ?? null,
         fruition_class: cell?.fruitionClass ?? null,
-        links: fBonus.links,
+        links: adLinks,
         systems: allSystems,
         annual_years: allAnnuals,
         transit_houses: allTransits,
+        ...(adAvastha ? { ad_avastha: adAvastha } : {}),
+        ...(adEffMult != null ? { ad_effective_multiplier: adEffMult } : {}),
       },
     });
   }
@@ -1046,6 +1091,8 @@ export function buildMahadashaCharter(
       dispositor: mdTouch.dispositor ? planetName(mdTouch.dispositor) : null,
       star_lord: mdTouch.starLord ? planetName(mdTouch.starLord) : null,
       avastha: mdTouch.avastha,
+      ...(mdTouch.effectiveMultiplier != null ? { effective_multiplier: mdTouch.effectiveMultiplier } : {}),
+      ...(mdTouch.ripeness ? { ripeness: mdTouch.ripeness } : {}),
     },
   };
 }

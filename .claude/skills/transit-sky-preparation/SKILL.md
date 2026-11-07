@@ -29,6 +29,7 @@ Design and keys: `docs/reading-engine/35-transit-ephemeris-cache.md`. Code: `src
 |---|---|---|
 | `transit_instants` | place key, UTC instant, factors key, ayanamsa | Daily or monthly snapshot. Current stock: San Jose noon (UTC-7 and UTC-8 keys) 2008 to 2035, Pune monthly 2025 to 2037 |
 | `transit_range_skies` | place key, from, to, planets key, flags key, ayanamsa | Sign stays, stations, eclipses over a span. Current stock: 1975 to 2035 for Ju, Ke, Ra, Sa |
+| `lucky_day_tables` | reference place key (`LUCKY_REFERENCE_PLACES` in `src/config/env.ts`), local date | Universal 2–4 week Lucky Times panchanga/muhurta prepull across the 5 reference timezones (`src/reading/lucky/`), overlaid with the user's natal Moon/Tara deterministically without per-user engine calls |
 
 Place key is two-decimal coordinates plus UTC offset. The instant is a UTC timestamp, so 12:00 at -08:00 and 20:00Z are one row. A bare local time is refused. Factors are sorted and deduplicated.
 
