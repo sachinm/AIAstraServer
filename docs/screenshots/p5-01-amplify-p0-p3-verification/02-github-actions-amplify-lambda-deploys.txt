@@ -1,12 +1,12 @@
-﻿completed	success	Merge branch 'develop' into release-candidate-staging	Deploy API Lambda (OIDC)	release-candidate-staging	push	42411898902	1m42s	2026-11-07T20:36:48Z
+﻿completed	success	Merge branch 'develop' into release-candidate-staging	Deploy API Lambda (OIDC)	release-candidate-staging	push	42414961838	2m0s	2026-11-07T21:15:10Z
+completed	success	Merge branch 'develop' into release-candidate-staging	Deploy API Lambda (OIDC)	release-candidate-staging	push	42411898902	1m42s	2026-11-07T20:36:48Z
 completed	success	Merge branch 'develop' into release-candidate-staging	Deploy API Lambda (OIDC)	release-candidate-staging	push	42405505791	1m49s	2026-11-07T19:17:48Z
 completed	success	Merge branch 'develop' (TODOS update for M37/M38 & docs 56-57/admin 0…	Deploy API Lambda (OIDC)	release-candidate-staging	push	42350324021	1m54s	2026-11-07T07:12:55Z
-completed	success	Merge branch 'develop' into release-candidate-staging (AGENTS/GEMINI …	Deploy API Lambda (OIDC)	release-candidate-staging	push	42348654567	1m38s	2026-11-07T06:49:11Z
+completed	success	Merge branch 'develop' into release-candidate-staging	Deploy web to Amplify (staging)	release-candidate-staging	push	42415008981	1m18s	2026-11-07T21:15:44Z
 completed	success	Merge branch 'develop' into release-candidate-staging	Deploy web to Amplify (staging)	release-candidate-staging	push	42411942500	1m27s	2026-11-07T20:37:21Z
 completed	success	Merge branch 'develop' into release-candidate-staging	Deploy web to Amplify (staging)	release-candidate-staging	push	42403418279	1m19s	2026-11-07T18:52:17Z
 completed	success	Merge branch 'develop' (You/Love boards, Lucky Times, Life Charter UI…	Deploy web to Amplify (staging)	release-candidate-staging	push	42335986365	1m2s	2026-11-07T03:53:09Z
-completed	success	Merge branch 'develop' (code-expiry wording, royal sky, collapsible c…	Deploy web to Amplify (staging)	release-candidate-staging	push	42135016110	1m26s	2026-11-06T00:11:36Z
+completed	success	Merge branch 'develop' into release-candidate-staging	Deploy admin web to Amplify (OIDC)	release-candidate-staging	push	42414976457	1m1s	2026-11-07T21:15:21Z
 completed	success	Merge branch 'develop' into release-candidate-staging	Deploy admin API Lambda (OIDC)	release-candidate-staging	push	42405512370	57s	2026-11-07T19:17:53Z
 completed	success	Merge branch 'develop' into release-candidate-staging	Deploy admin web to Amplify (OIDC)	release-candidate-staging	push	42405512251	1m2s	2026-11-07T19:17:53Z
 completed	success	Merge branch 'develop' (docs/admin/07 & API table) into release-candi…	Deploy admin API Lambda (OIDC)	release-candidate-staging	push	42350248197	59s	2026-11-07T07:11:50Z
-completed	success	Merge branch 'develop' (Page Response Times & Research Lab) into rele…	Deploy admin API Lambda (OIDC)	release-candidate-staging	push	42348955260	50s	2026-11-07T06:53:35Z
