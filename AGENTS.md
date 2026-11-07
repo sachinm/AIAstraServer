@@ -59,14 +59,16 @@ topic folder) and cover, in this order:
 Decide what a staff engineer could decide; ask only for decisions that are Sachin's (production, money, data writes,
 product behaviour). The plan is the thing to review; code follows it.
 
-## Branches and checks
+## Branches, migrations and deploys
 
 - Every feature/fix/docs branch is cut from `develop` and merged back into `develop` with `--no-ff`. `main` gets release
   merges only.
 - Before a merge: `npx tsc --noEmit` and the unit tests for the area (`npx vitest run tests/unit/<area>`).
-- Dev sessions stop at "committed and merged into local `develop`". Pushing, Lambda deploys and Amplify rebuilds go
-  through the deploy session.
-- Migrations are written, never applied, without Sachin's explicit OK. Never run terraform.
+- **Database migrations via Server (Sachin, 2026-11-06):** Gemini agents are authorized to apply additive Prisma migrations (`prisma/migrations/*`) into the database via `AIAstra_Server` using `npx.cmd prisma migrate deploy` (followed by `npx.cmd prisma generate` and `npx.cmd prisma migrate status`). Never run destructive SQL (`DROP`, `TRUNCATE`) or `terraform` without Sachin's explicit OK.
+- **Pushing & deploying `develop` via `release-candidate-staging` and GitHub Actions (Sachin, 2026-11-06):** Once `tsc --noEmit` and unit tests pass on `develop`, Gemini agents are authorized to push `develop` to `origin`, merge `develop` `--no-ff` into `release-candidate-staging`, and push `release-candidate-staging` (authenticated as GitHub user `sachinm`) to trigger the GitHub Actions OIDC workflows that refresh:
+  - **Main API Lambda (`aiastra-server-api`):** `.github/workflows/deploy-api-lambda.yml` in `AIAstra_Server`
+  - **Admin API Lambda (`aiadastra-admin-api`) & Admin Web Amplify (`aiadastra-admin-web` / `d1qhwivm0xxltl`):** `.github/workflows/deploy-admin-api.yml` and `.github/workflows/deploy-admin-web.yml` in `aiadastra_admin`
+  - **Main Web Amplify (`AIAstra_WEB` / `d20sdo476h9w6c`):** `.github/workflows/deploy-staging-amplify.yml` in `AIAstra_WEB`
 
 ## Installs and worktree creation go to Haiku
 
