@@ -18,33 +18,82 @@ import type { Usage } from '../types.js';
 import { BUCKETS, BUCKET_IDS } from '../buckets/taxonomy.js';
 import { callBedrockJson, clarifyModelConfig, extractJsonObject } from '../llm/bedrock.js';
 import { callGemini } from '../llm/gemini.js';
+import type { CacheOwner } from '../llm/promptCache.js';
 import { MAX_QUESTIONS, parseHorizonValue, type Ask, type ClarifyState, type PrashnaEligibility } from './machine.js';
 import { detectTopic } from '../policy/declined.js';
 import { CRITERION_ASTROLOGICAL_PURPOSE, getAgentPrompt, renderPromptTemplate } from '../prompts/registry.js';
 
 export const CLARIFY_MODEL_TIMEOUT_MS = 900;
 
+const CLARIFY_CACHE_MAX = 200;
+const CLARIFY_CACHE_TTL_MS = 45 * 60_000;
+const clarifyCache = new Map<string, { at: number; owner?: CacheOwner; json: unknown; usage: Usage }>();
+
+export function clearClarifyCache(): void {
+  clarifyCache.clear();
+}
+
+/** Evicts in-memory clarify response cache entries belonging to an individual (`userId`/`kundliId`). */
+export function evictClarifyCacheForIndividual(owner: CacheOwner): number {
+  if (!owner.userId && !owner.kundliId) return 0;
+  let deleted = 0;
+  for (const [k, v] of clarifyCache.entries()) {
+    if ((owner.userId && v.owner?.userId === owner.userId) || (owner.kundliId && v.owner?.kundliId === owner.kundliId)) {
+      clarifyCache.delete(k);
+      deleted += 1;
+    }
+  }
+  return deleted;
+}
+
+/** Builds the stable digested chart/fact context prefix for Clarify calls so `parts[0]` is cacheable per individual. */
+export function buildClarifyContextPrefix(s: Pick<ClarifyState, 'asOf' | 'card' | 'facts' | 'birthPlace' | 'location'>): string {
+  const lines = [`CLARIFY CONTEXT AS OF: ${s.asOf}`];
+  if (s.card?.md) {
+    lines.push(`RUNNING DASHA: ${s.card.md}-${s.card.ad ?? '?'}${s.card.pd ? `-${s.card.pd}` : ''} (AD until ${s.card.adEnd ?? '?'})`);
+  }
+  if (s.facts && Object.keys(s.facts).length > 0) {
+    const sorted = Object.entries(s.facts).sort(([a], [b]) => a.localeCompare(b));
+    lines.push(`CONFIRMED PROFILE FACTS: ${JSON.stringify(Object.fromEntries(sorted))}`);
+  }
+  if (s.location?.place) lines.push(`CURRENT LOCATION: ${s.location.place}`);
+  else if (s.birthPlace) lines.push(`BIRTH PLACE: ${s.birthPlace}`);
+  return lines.join('\n');
+}
+
 async function callClarifyJson(call: {
   provider: 'bedrock' | 'gemini';
   model: string;
   node: string;
   system: string;
+  contextPrefix?: string;
   user: string;
   maxTokens: number;
   timeoutMs: number;
+  cacheOwner?: CacheOwner;
 }): Promise<{ json: unknown; usage: Usage }> {
+  const cacheKey = `${call.provider}|${call.model}|${call.node}|${call.system}|${call.contextPrefix ?? ''}|${call.user}`;
+  const cached = clarifyCache.get(cacheKey);
+  if (cached && Date.now() - cached.at <= CLARIFY_CACHE_TTL_MS) {
+    clarifyCache.delete(cacheKey);
+    clarifyCache.set(cacheKey, cached);
+    return { json: structuredClone(cached.json), usage: { ...cached.usage, cachedTokens: cached.usage.promptTokens, ms: 0 } };
+  }
   if (call.provider === 'gemini') {
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       const timeoutPromise = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`clarify gemini timeout after ${call.timeoutMs}ms`)), call.timeoutMs);
       });
+      const parts = call.contextPrefix ? [call.contextPrefix, call.user] : [call.user];
       const { text, usage } = await Promise.race([
         callGemini({
           model: call.model,
           node: call.node,
           system: call.system,
-          parts: [call.user],
+          parts,
+          cachePrefix: Boolean(call.contextPrefix),
+          ...(call.cacheOwner ? { cacheOwner: call.cacheOwner } : {}),
           maxOutputTokens: call.maxTokens,
           timeoutMs: call.timeoutMs,
           temperature: 0,
@@ -52,20 +101,26 @@ async function callClarifyJson(call: {
         }),
         timeoutPromise,
       ]);
-      return { json: extractJsonObject(text), usage };
+      const json = extractJsonObject(text);
+      if (clarifyCache.size >= CLARIFY_CACHE_MAX) clarifyCache.delete(clarifyCache.keys().next().value as string);
+      clarifyCache.set(cacheKey, { at: Date.now(), ...(call.cacheOwner ? { owner: call.cacheOwner } : {}), json: structuredClone(json), usage });
+      return { json, usage };
     } finally {
       if (timer) clearTimeout(timer);
     }
   }
-  return callBedrockJson({
+  const out = await callBedrockJson({
     model: call.model,
     node: call.node,
     system: call.system,
-    user: call.user,
+    user: call.contextPrefix ? `${call.contextPrefix}\n\n${call.user}` : call.user,
     maxTokens: call.maxTokens,
     timeoutMs: call.timeoutMs,
     reasoningEffort: 'low',
   });
+  if (clarifyCache.size >= CLARIFY_CACHE_MAX) clarifyCache.delete(clarifyCache.keys().next().value as string);
+  clarifyCache.set(cacheKey, { at: Date.now(), ...(call.cacheOwner ? { owner: call.cacheOwner } : {}), json: structuredClone(out.json), usage: out.usage });
+  return out;
 }
 
 /** Rephrase the rule question for the pending criterion using the DB-versioned Clarify Agent system & user prompts. */
@@ -73,6 +128,7 @@ export async function phraseAsk(
   s: ClarifyState,
   ask: Ask,
   prisma?: PrismaClient | null,
+  cacheOwner?: CacheOwner,
 ): Promise<{ ask: Ask; usage: Usage | null; driver?: 'ai' | 'machine_fallback' | 'rules' }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { ask, usage: null, driver: 'rules' };
@@ -104,9 +160,11 @@ export async function phraseAsk(
       model: cfg.model,
       node: 'clarify.phrase',
       system,
+      contextPrefix: buildClarifyContextPrefix(s),
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
+      ...(cacheOwner ? { cacheOwner } : {}),
     });
     const q = typeof (json as { question?: unknown }).question === 'string' ? (json as { question: string }).question.trim() : '';
     const words = q.split(/\s+/).filter(Boolean).length;
@@ -131,11 +189,12 @@ export async function phraseAsk(
 export async function planAiClarifyTurn(
   s: ClarifyState,
   prisma?: PrismaClient | null,
+  cacheOwner?: CacheOwner,
 ): Promise<{ state: ClarifyState; ask: Ask | null; usage: Usage | null; driver: 'ai' | 'machine_fallback' | 'rules' }> {
   if (s.status !== 'ASKING' || !s.pending) {
     return { state: s, ask: null, usage: null, driver: s.driver ?? 'rules' };
   }
-  const { ask, usage, driver = 'rules' } = await phraseAsk(s, s.pending, prisma);
+  const { ask, usage, driver = 'rules' } = await phraseAsk(s, s.pending, prisma, cacheOwner);
   const turns = s.turns.map((t, idx) => (idx === s.turns.length - 1 ? { ...t, ask } : t));
   const decisionLog = (s.decisionLog ?? []).map((entry, idx, arr) => {
     if (idx === arr.length - 1 && entry.action === 'asked' && entry.criterion === ask.criterion) {
@@ -168,6 +227,7 @@ export async function resolveFreeText(
   criterion: string,
   text: string,
   prisma?: PrismaClient | null,
+  cacheOwner?: CacheOwner,
 ): Promise<{ value: string | null; usage: Usage | null }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { value: null, usage: null };
@@ -200,9 +260,11 @@ export async function resolveFreeText(
       model: cfg.model,
       node: 'clarify.resolve',
       system,
+      contextPrefix: buildClarifyContextPrefix(s),
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
+      ...(cacheOwner ? { cacheOwner } : {}),
     });
     const v = (json as { value?: unknown }).value;
     if (typeof v !== 'string') return { value: null, usage };
@@ -223,6 +285,7 @@ export async function judgePrashna(
   s: ClarifyState,
   rules: PrashnaEligibility,
   prisma?: PrismaClient | null,
+  cacheOwner?: CacheOwner,
 ): Promise<{ result: PrashnaEligibility; usage: Usage | null }> {
   if (rules.rule !== 'unsure') return { result: rules, usage: null };
   const cfg = clarifyModelConfig();
@@ -238,9 +301,11 @@ export async function judgePrashna(
       model: cfg.model,
       node: 'clarify.prashna',
       system,
+      contextPrefix: buildClarifyContextPrefix(s),
       user,
       maxTokens: 100,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
+      ...(cacheOwner ? { cacheOwner } : {}),
     });
     const v = (json as { eligible?: unknown }).eligible;
     if (typeof v !== 'boolean') return { result: rules, usage };

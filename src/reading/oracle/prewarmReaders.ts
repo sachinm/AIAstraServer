@@ -12,10 +12,14 @@ import { startPrefetch } from '../data/store.js';
 import { modelFor } from '../llm/models.js';
 import { isFastLane } from '../nodes/specialists.js';
 import { buildEvidencePack } from '../packs/selector.js';
+import { horizonRange } from '../packs/frames.js';
+import { loadDigest } from '../digest/load.js';
+import { activationFor } from '../digest/activation.js';
+import { PROMPT_VERSION } from '../prompts/generated.js';
 import { prismaChartRows, type ChartRowSource } from './chartBundle.js';
 import { CostGuard } from './costGuard.js';
 import { prepareReaders, startReaderCache } from './prepare.js';
-import { getReaderMemo, savePrewarmed, setReaderMemo, type HeldReader } from './prewarm.js';
+import { getReaderMemo, loadDbReaderCache, saveDbReaderCache, savePrewarmed, setReaderMemo, type HeldReader } from './prewarm.js';
 import { ReaderFailure, runReader } from './runReader.js';
 import { readerTimeoutMs } from './readers.js';
 import { currentTrace } from '../metrics/trace.js';
@@ -41,10 +45,12 @@ export async function prewarmOracleReaders(prisma: PrismaClient, userId: string,
     const intent = await intentFromState(s, runId);
     if (isFastLane(intent)) return report;
     const subject = intent.subjects[0]!.id;
-    const pack = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject, asOf: s.asOf, intent });
+    const digest = opts.rows ? null : await loadDigest(prisma, data.kundliId).catch(() => null);
+    const activation = digest ? await activationFor(prisma, data.kundliId, horizonRange(intent.horizon, s.asOf)).catch(() => null) : null;
+    const pack = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject, asOf: s.asOf, intent, ...(digest ? { digest, ...(activation ? { activation } : {}) } : {}) });
     const model = modelFor('reader');
     const guard = new CostGuard({ on: s.asOf });
-    const prep = await prepareReaders({ rows: opts.rows ?? prismaChartRows(prisma), kundliId: data.kundliId, intent, question: s.question, asOf: s.asOf, pack, model });
+    const prep = await prepareReaders({ rows: opts.rows ?? prismaChartRows(prisma), kundliId: data.kundliId, intent, question: s.question, asOf: s.asOf, pack, model, ...(digest ? { digest, ...(activation ? { activation } : {}) } : {}) });
     currentTrace()?.label({ tier: prep.plan.tier, route: prep.route?.route ?? null, subjects: 1 });
     const owner = { userId, kundliId: data.kundliId };
     await Promise.race([startReaderCache(prep, model, owner, guard), new Promise((r) => setTimeout(r, CACHE_WAIT_MS))]);
@@ -52,7 +58,7 @@ export async function prewarmOracleReaders(prisma: PrismaClient, userId: string,
     const impl = opts.readerImpl ?? runReader;
     await Promise.all(
       [...prep.requests.values()].map(async (req) => {
-        const hit = getReaderMemo(req.cacheKey);
+        const hit = getReaderMemo(req.cacheKey, owner) ?? (opts.rows ? undefined : await loadDbReaderCache(prisma, req.cacheKey, owner));
         if (hit) {
           report.cached.push(req.id);
           entries.push({ key: req.cacheKey, held: hit });
@@ -62,8 +68,22 @@ export async function prewarmOracleReaders(prisma: PrismaClient, userId: string,
           const out = await impl(req, { model, guard, cacheOwner: owner, timeoutMs: readerTimeoutMs(req.def, model), tier: prep.plan.tier });
           const held = { finding: out.finding, usage: out.usage };
           if (!out.repaired) {
-            setReaderMemo(req.cacheKey, held);
+            setReaderMemo(req.cacheKey, held, owner, false);
             entries.push({ key: req.cacheKey, held });
+            if (!opts.rows) {
+              void saveDbReaderCache(prisma, {
+                cacheKey: req.cacheKey,
+                kundliId: data.kundliId,
+                userId,
+                readerId: req.id,
+                packHash: req.dataHash,
+                horizonKey: req.def.natal ? 'natal' : `${prep.slice.from}..${prep.slice.to}`,
+                promptVersion: PROMPT_VERSION,
+                natal: Boolean(req.def.natal),
+                held,
+                used: false,
+              }).catch(() => {});
+            }
           }
           report.ran.push(req.id);
         } catch (err) {

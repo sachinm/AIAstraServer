@@ -246,6 +246,20 @@ export function getDigestSweepMaxMs(): number {
   return Number.isFinite(n) && n >= 10_000 && n <= 600_000 ? Math.round(n) : 60_000;
 }
 
+/**
+ * Minutes after which used/idle per-individual caches (LLM prompt caches, reading_findings_cache, technique_outputs,
+ * and in-memory memos) are recycled (`READING_CACHE_RECYCLE_MINUTES`, 5–240), default 45 minutes.
+ */
+export function getReadingCacheRecycleMinutes(): number {
+  const n = Number(process.env.READING_CACHE_RECYCLE_MINUTES);
+  return Number.isFinite(n) && n >= 5 && n <= 240 ? Math.round(n) : 45;
+}
+
+/** Milliseconds equivalent of {@link getReadingCacheRecycleMinutes}. */
+export function getReadingCacheRecycleMs(): number {
+  return getReadingCacheRecycleMinutes() * 60_000;
+}
+
 /** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
 export type ChatLlmProvider = 'groq' | 'gemini';
 
@@ -744,6 +758,27 @@ export function getTechniqueCacheVersion(): string {
   const raw = process.env.TECHNIQUE_CACHE_VERSION?.trim();
   return raw ? raw : '1';
 }
+
+// ── Page Response Times & Telemetry (docs/admin/08) ─────────────
+
+/**
+ * Whether page response-time telemetry logging (`page_execution_logs`) is enabled.
+ * Env: `PAGE_TIMING_ENABLED` (`0` | `false` disables; default `true`).
+ */
+export function isPageTimingEnabled(): boolean {
+  const raw = process.env.PAGE_TIMING_ENABLED?.trim().toLowerCase();
+  if (raw === '0' || raw === 'false') return false;
+  return true;
+}
+
+/**
+ * Threshold in milliseconds above which a page execution or request is flagged as slow.
+ * Env: `PAGE_SLOW_THRESHOLD_MS` (default 1000, clamped to 100..60000).
+ */
+export function getPageSlowThresholdMs(): number {
+  return parseClampedIntEnv('PAGE_SLOW_THRESHOLD_MS', 1000, 100, 60_000);
+}
+
 
 
 

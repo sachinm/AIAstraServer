@@ -1248,19 +1248,23 @@ model AccountEvent {
   @@map("account_events")
 }
 
-/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1–R14).
+/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1–R14, P1–P3, specialist:*).
 model ReadingFindingsCache {
-  cache_key      String   @id @map("cache_key")
-  kundli_id      String   @map("kundli_id")
-  reader_id      String   @map("reader_id")
-  pack_hash      String   @map("pack_hash")
-  horizon_key    String   @map("horizon_key")
-  prompt_version String   @map("prompt_version")
+  cache_key      String    @id @map("cache_key")
+  kundli_id      String    @map("kundli_id")
+  user_id        String?   @map("user_id")
+  reader_id      String    @map("reader_id")
+  pack_hash      String    @map("pack_hash")
+  horizon_key    String    @map("horizon_key")
+  prompt_version String    @map("prompt_version")
   payload        Json
-  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  expires_at     DateTime @map("expires_at") @db.Timestamptz(6)
+  created_at     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expires_at     DateTime  @map("expires_at") @db.Timestamptz(6)
+  hit_count      Int       @default(0) @map("hit_count")
+  last_used_at   DateTime? @map("last_used_at") @db.Timestamptz(6)
 
   @@index([kundli_id, expires_at(sort: Desc)], map: "reading_findings_cache_kundli_idx")
+  @@index([kundli_id, last_used_at, created_at], map: "idx_reading_findings_cache_recycle")
   @@index([expires_at], map: "reading_findings_cache_expires_idx")
   @@map("reading_findings_cache")
 }
@@ -1292,7 +1296,6 @@ model TechniqueOutput {
   /// natal | annual | dasha | daily | transit
   freshness      String
   valid_from     DateTime  @map("valid_from") @db.Timestamptz(6)
-  /// null = open-ended (natal: valid until digest_version or contract hash changes)
   valid_to       DateTime? @map("valid_to") @db.Timestamptz(6)
   output         Json
   output_schema  String    @map("output_schema")
@@ -1301,9 +1304,47 @@ model TechniqueOutput {
   created_at     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   hit_count      Int       @default(0) @map("hit_count")
   last_hit_at    DateTime? @map("last_hit_at") @db.Timestamptz(6)
-  kundli         Kundli    @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  kundli         Kundli    @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "technique_outputs_kundli_fkey")
 
   @@index([kundli_id, technique_id], map: "idx_technique_outputs_kundli_technique")
+  @@index([kundli_id, hit_count, last_hit_at, created_at], map: "idx_technique_outputs_recycle")
   @@index([valid_to], map: "idx_technique_outputs_valid_to")
   @@map("technique_outputs")
 }
+
+/// M37 (docs/admin/08): Per-request and per-page execution timing log across server routes, GraphQL operations,
+/// SSE streams and browser page renders/draws. Holds timings, status codes, byte counts and safe route labels only — never PII.
+model PageExecutionLog {
+  id           String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  page         String   @db.VarChar(120)
+  /// server_request | graphql | sse_stream | client_render | section_stream
+  source       String   @db.VarChar(32)
+  /// GET | POST | PUT | PATCH | DELETE | GRAPHQL | SSE | RENDER
+  method       String   @db.VarChar(16)
+  /// Normalized route or operation (e.g. 'Query.me', 'Query.myBiodata', '/api/area/career', 'client:page_load')
+  operation    String   @db.VarChar(160)
+  status_code  Int      @default(200) @map("status_code")
+  duration_ms  Int      @map("duration_ms")
+  ttfb_ms      Int?     @map("ttfb_ms")
+  server_ms    Int?     @map("server_ms")
+  db_ms        Int?     @map("db_ms")
+  render_ms    Int?     @map("render_ms")
+  draw_ms      Int?     @map("draw_ms")
+  body_bytes   Int?     @map("body_bytes")
+  /// hit | miss | partial | bypass | null
+  cache_status String?  @map("cache_status") @db.VarChar(24)
+  user_id      String?  @map("user_id")
+  session_id   String?  @map("session_id") @db.VarChar(64)
+  request_id   String?  @map("request_id") @db.VarChar(64)
+  error_code   String?  @map("error_code") @db.VarChar(80)
+  meta         Json     @default("{}")
+  created_at   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([page, created_at(sort: Desc)], map: "page_execution_logs_page_created_idx")
+  @@index([created_at(sort: Desc)], map: "page_execution_logs_created_idx")
+  @@index([source, created_at(sort: Desc)], map: "page_execution_logs_source_created_idx")
+  @@index([user_id, created_at(sort: Desc)], map: "page_execution_logs_user_created_idx")
+  @@index([duration_ms(sort: Desc)], map: "page_execution_logs_duration_idx")
+  @@map("page_execution_logs")
+}
+

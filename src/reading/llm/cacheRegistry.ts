@@ -34,6 +34,8 @@ export interface CacheRegistry {
   markDeleteError(name: string, error: string): Promise<void>;
   /** Live rows of one user. */
   listByUser(userId: string): Promise<CacheRow[]>;
+  /** Live rows of one individual (matched by `userId` and/or `kundliId`), optionally only those idle since before `idleBefore`. */
+  listByIndividual(owner: { userId?: string | null; kundliId?: string | null }, idleBefore?: Date): Promise<CacheRow[]>;
   /** Live rows idle since before `idleBefore`, or already expired at `now`. */
   listStale(idleBefore: Date, now: Date): Promise<CacheRow[]>;
   /** Names of every row not marked deleted. */
@@ -115,6 +117,18 @@ export function prismaCacheRegistry(prisma: PrismaClient): CacheRegistry {
     async listByUser(userId) {
       return (await t.findMany({ where: { user_id: userId, deleted_at: null } })).map(fromDb);
     },
+    async listByIndividual(owner, idleBefore) {
+      const matchers: Where[] = [];
+      if (owner.userId) matchers.push({ user_id: owner.userId });
+      if (owner.kundliId) matchers.push({ kundli_id: owner.kundliId });
+      if (!matchers.length) return [];
+      const where: Where = {
+        deleted_at: null,
+        OR: matchers,
+        ...(idleBefore ? { last_used_at: { lte: idleBefore } } : {}),
+      };
+      return (await t.findMany({ where })).map(fromDb);
+    },
     async listStale(idleBefore, now) {
       return (await t.findMany({ where: { deleted_at: null, OR: [{ last_used_at: { lt: idleBefore } }, { expires_at: { lte: now } }] } })).map(fromDb);
     },
@@ -151,6 +165,15 @@ export function memoryCacheRegistry(): CacheRegistry & { rows: Map<string, Cache
     },
     async listByUser(userId) {
       return [...rows.values()].filter((r) => live(r) && r.userId === userId);
+    },
+    async listByIndividual(owner, idleBefore) {
+      if (!owner.userId && !owner.kundliId) return [];
+      return [...rows.values()].filter((r) => {
+        if (!live(r)) return false;
+        const matched = (owner.userId && r.userId === owner.userId) || (owner.kundliId && r.kundliId === owner.kundliId);
+        if (!matched) return false;
+        return idleBefore ? r.lastUsedAt <= idleBefore : true;
+      });
     },
     async listStale(idleBefore, now) {
       return [...rows.values()].filter((r) => live(r) && (r.lastUsedAt < idleBefore || r.expiresAt <= now));

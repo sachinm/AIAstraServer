@@ -166,6 +166,23 @@ export interface TechniqueOutputResult<T> {
 }
 
 let storeWarned = false;
+let techniqueOutputUsedHook: ((owner: { userId?: string | null; kundliId?: string | null }) => void) | null = null;
+
+export function setTechniqueOutputUsedHook(
+  fn: ((owner: { userId?: string | null; kundliId?: string | null }) => void) | null,
+): void {
+  techniqueOutputUsedHook = fn;
+}
+
+function notifyTechniqueUsed(userId?: string | null, kundliId?: string | null): void {
+  if ((userId || kundliId) && techniqueOutputUsedHook) {
+    try {
+      techniqueOutputUsedHook({ userId: userId ?? null, kundliId: kundliId ?? null });
+    } catch {
+      // never break technique output store
+    }
+  }
+}
 
 function warnOnce(label: string, err: unknown): void {
   if (storeWarned) return;
@@ -333,6 +350,7 @@ export async function withTechniqueOutput<T>(
         };
         if (windowCovers(storedSpan, input.context.now)) {
           void bumpHit(store, cacheKey, input.context.now);
+          notifyTechniqueUsed(input.userId, input.kundliId);
           const hitWindow: ValidityWindow = {
             freshness: window.freshness,
             scope: window.scope,
@@ -426,6 +444,7 @@ export async function withTechniqueOutput<T>(
         },
         expiredExisting,
       );
+      notifyTechniqueUsed(input.userId, input.kundliId);
     } catch (e) {
       warnOnce('write', e);
     }
@@ -458,18 +477,92 @@ export async function deleteKundliTechniqueOutputs(prisma: PrismaClient, kundliI
   return 0;
 }
 
+/**
+ * Recycles stored technique outputs for a single kundli that have already been used (`hit_count > 0` or `last_hit_at IS NOT NULL`,
+ * when `onlyUsed !== false`) and are idle longer than `idleMs` (or immediately when `idleMs` is 0 / omitted).
+ */
+export async function recycleIndividualTechniqueOutputs(
+  prisma: PrismaClient | null | undefined,
+  owner: { kundliId?: string | null },
+  opts: { onlyUsed?: boolean; idleMs?: number; now?: Date } = {},
+): Promise<number> {
+  if (!prisma || !owner.kundliId) return 0;
+  const store = prisma as StoreCapablePrisma;
+  const now = opts.now ?? new Date();
+  const onlyUsed = opts.onlyUsed ?? true;
+  const idleBefore = opts.idleMs && opts.idleMs > 0 ? new Date(now.getTime() - opts.idleMs) : undefined;
+  try {
+    if (store.techniqueOutput?.deleteMany) {
+      const where: Record<string, unknown> = { kundli_id: owner.kundliId };
+      if (onlyUsed) {
+        where.AND = [
+          { OR: [{ hit_count: { gt: 0 } }, { last_hit_at: { not: null } }] },
+          ...(idleBefore
+            ? [{ OR: [{ last_hit_at: { lte: idleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: idleBefore } }] }] }]
+            : []),
+        ];
+      } else if (idleBefore) {
+        where.AND = [{ OR: [{ last_hit_at: { lte: idleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: idleBefore } }] }] }];
+      }
+      const res = await store.techniqueOutput.deleteMany({ where });
+      return res.count;
+    }
+    if (typeof store.$executeRawUnsafe === 'function') {
+      const cutoff = idleBefore ?? now;
+      return await store.$executeRawUnsafe(
+        onlyUsed
+          ? `DELETE FROM "technique_outputs"
+              WHERE "kundli_id" = $1
+                AND ("hit_count" > 0 OR "last_hit_at" IS NOT NULL)
+                AND COALESCE("last_hit_at", "created_at") <= $2`
+          : `DELETE FROM "technique_outputs"
+              WHERE "kundli_id" = $1
+                AND COALESCE("last_hit_at", "created_at") <= $2`,
+        owner.kundliId,
+        cutoff,
+      );
+    }
+  } catch (e) {
+    warnOnce('recycle', e);
+  }
+  return 0;
+}
+
 const DAY_MS = 24 * 3_600_000;
 
 /**
- * Daily sweep (`cache:sweep`, docs/reading-engine/56 §4.1): deletes expired rows whose `valid_to < now - 1 day`,
- * bounded to `limit` rows per run (default 5,000).
+ * Sweep (`cache:sweep`, docs/reading-engine/56 §4.1): deletes expired rows whose `valid_to < now - 1 day`,
+ * and when `opts.recycleUsedAfterMs` is set, also recycles already-used rows (`hit_count > 0` or `last_hit_at IS NOT NULL`)
+ * idle longer than `recycleUsedAfterMs` (45 minutes), bounded to `limit` rows per run (default 5,000).
  */
-export async function sweepTechniqueOutputs(prisma: PrismaClient, now: Date = new Date(), limit = 5_000): Promise<number> {
+export async function sweepTechniqueOutputs(
+  prisma: PrismaClient,
+  now: Date = new Date(),
+  limit = 5_000,
+  opts: { recycleUsedAfterMs?: number } = {},
+): Promise<number> {
   const store = prisma as StoreCapablePrisma;
   const cutoff = new Date(now.getTime() - DAY_MS);
   const cap = Math.max(1, Math.min(50_000, Math.trunc(limit)));
+  const usedIdleBefore =
+    opts.recycleUsedAfterMs && opts.recycleUsedAfterMs > 0 ? new Date(now.getTime() - opts.recycleUsedAfterMs) : null;
   try {
     if (typeof store.$executeRawUnsafe === 'function') {
+      if (usedIdleBefore) {
+        return await store.$executeRawUnsafe(
+          `DELETE FROM "technique_outputs"
+            WHERE "cache_key" IN (
+              SELECT "cache_key" FROM "technique_outputs"
+               WHERE ("valid_to" IS NOT NULL AND "valid_to" < $1)
+                  OR (("hit_count" > 0 OR "last_hit_at" IS NOT NULL) AND COALESCE("last_hit_at", "created_at") <= $3)
+               ORDER BY COALESCE("valid_to", "last_hit_at", "created_at") ASC
+               LIMIT $2
+            )`,
+          cutoff,
+          cap,
+          usedIdleBefore,
+        );
+      }
       return await store.$executeRawUnsafe(
         `DELETE FROM "technique_outputs"
           WHERE "cache_key" IN (
@@ -484,7 +577,19 @@ export async function sweepTechniqueOutputs(prisma: PrismaClient, now: Date = ne
     }
     if (store.techniqueOutput?.deleteMany) {
       const res = await store.techniqueOutput.deleteMany({
-        where: { valid_to: { not: null, lt: cutoff } },
+        where: usedIdleBefore
+          ? {
+              OR: [
+                { valid_to: { not: null, lt: cutoff } },
+                {
+                  AND: [
+                    { OR: [{ hit_count: { gt: 0 } }, { last_hit_at: { not: null } }] },
+                    { OR: [{ last_hit_at: { lte: usedIdleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: usedIdleBefore } }] }] },
+                  ],
+                },
+              ],
+            }
+          : { valid_to: { not: null, lt: cutoff } },
       });
       return Math.min(res.count, cap);
     }

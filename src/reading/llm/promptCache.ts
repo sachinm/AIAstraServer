@@ -75,6 +75,13 @@ function geminiKey(): string | null {
 
 export const cacheStats = { created: 0, adopted: 0, hits: 0, misses: 0, extended: 0, errors: 0 };
 
+let cacheOwnerUsedHook: ((owner: CacheOwner) => void) | null = null;
+
+/** Registers a callback invoked whenever a prompt cache is accessed or created for an individual (`userId`/`kundliId`). */
+export function setCacheOwnerUsedHook(fn: ((owner: CacheOwner) => void) | null): void {
+  cacheOwnerUsedHook = fn;
+}
+
 export function clearPromptCache(): void {
   entries.clear();
   for (const k of Object.keys(cacheStats) as Array<keyof typeof cacheStats>) cacheStats[k] = 0;
@@ -244,6 +251,13 @@ function entryFor(key: string, owner: CacheOwner): Entry {
   }
   if (owner.userId) e.owner.userId = owner.userId;
   if (owner.kundliId) e.owner.kundliId = owner.kundliId;
+  if ((e.owner.userId || e.owner.kundliId) && cacheOwnerUsedHook) {
+    try {
+      cacheOwnerUsedHook(e.owner);
+    } catch {
+      // never break a cache lookup
+    }
+  }
   return e;
 }
 
@@ -343,12 +357,61 @@ async function deleteOne(name: string, apiKey: string): Promise<boolean> {
   }
 }
 
+/** Evicts in-memory prompt cache entries belonging to an individual (`userId` and/or `kundliId`). */
+export function evictPromptCacheMemoryForIndividual(owner: CacheOwner, idleBeforeMs?: number): number {
+  if (!owner.userId && !owner.kundliId) return 0;
+  let cleared = 0;
+  for (const [k, e] of entries.entries()) {
+    const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
+    if (!match) continue;
+    if (idleBeforeMs !== undefined && e.touchedAt && e.touchedAt > idleBeforeMs) continue;
+    entries.delete(k);
+    cleared += 1;
+  }
+  return cleared;
+}
+
+/**
+ * Recycles/deletes explicit Gemini prompt caches + `llm_cache_entries` + in-memory entries for one individual (`userId`/`kundliId`).
+ * When `opts.idleMs` is set, only entries whose `last_used_at <= now - idleMs` are deleted; when omitted or 0, all live caches
+ * for that individual are deleted immediately.
+ */
+export async function deleteIndividualCaches(
+  owner: CacheOwner,
+  opts: { idleMs?: number; now?: Date } = {},
+): Promise<{ deleted: number; failed: number; memoryCleared: number }> {
+  if (!owner.userId && !owner.kundliId) return { deleted: 0, failed: 0, memoryCleared: 0 };
+  const now = opts.now ?? new Date();
+  const idleBefore = opts.idleMs && opts.idleMs > 0 ? new Date(now.getTime() - opts.idleMs) : undefined;
+  const names = new Set(
+    (await reg('listByIndividual', [] as CacheRow[], (r) => r.listByIndividual(owner, idleBefore))).map((r) => r.name),
+  );
+  for (const e of entries.values()) {
+    const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
+    if (!match || !e.name) continue;
+    if (idleBefore && e.touchedAt && e.touchedAt > idleBefore.getTime()) continue;
+    names.add(e.name);
+  }
+  const memoryCleared = evictPromptCacheMemoryForIndividual(owner, idleBefore?.getTime());
+  const apiKey = geminiKey();
+  if (!apiKey || !names.size) return { deleted: 0, failed: 0, memoryCleared };
+  let deleted = 0;
+  let failed = 0;
+  for (const name of names) (await deleteOne(name, apiKey)) ? (deleted += 1) : (failed += 1);
+  return { deleted, failed, memoryCleared };
+}
+
 /** Logout: delete every live cache of this user (registry rows plus this instance's memory). Never throws. */
 export async function deleteUserCaches(userId: string): Promise<{ deleted: number; failed: number }> {
   const apiKey = geminiKey();
-  if (!apiKey || !userId) return { deleted: 0, failed: 0 };
+  if (!userId) return { deleted: 0, failed: 0 };
+  if (!apiKey) {
+    evictPromptCacheMemoryForIndividual({ userId });
+    return { deleted: 0, failed: 0 };
+  }
   const names = new Set((await reg('listByUser', [] as CacheRow[], (r) => r.listByUser(userId))).map((r) => r.name));
   for (const e of entries.values()) if (e.owner.userId === userId && e.name) names.add(e.name);
+  evictPromptCacheMemoryForIndividual({ userId });
   let deleted = 0;
   let failed = 0;
   for (const name of names) (await deleteOne(name, apiKey)) ? (deleted += 1) : (failed += 1);

@@ -16,6 +16,8 @@ import { modelFor } from '../llm/models.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { isTimeoutError } from '../llm/gemini.js';
 import type { Agreement, Window } from '../nodes/reconcile.js';
+import type { ActivationRow } from '../digest/activation.js';
+import type { DigestView } from '../digest/types.js';
 import type { EvidencePack } from '../packs/selector.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, ReadingEmitter, Usage } from '../types.js';
@@ -96,6 +98,10 @@ export interface OracleFlowDeps {
   facts?: Record<string, string> | null;
   /** Optional Prisma client for cross-Lambda DB reader caching (`reading_findings_cache`). */
   prisma?: PrismaClient | null;
+  /** Ready kundli digest (`DigestView`): slices reader tables directly from the digest when present. */
+  digest?: DigestView | null;
+  /** Activation calendar rows (`kundli_activation`) overlapping the reading horizon. */
+  activation?: readonly ActivationRow[] | null;
   /** Test seams */
   readerImpl?: typeof runReader;
   now?: () => number;
@@ -152,7 +158,21 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
   const errors: OracleFlowResult['errors'] = [];
   let thoughts = '';
 
-  const prep = await prepareReaders({ rows: d.rows, kundliId: d.kundliId, intent: d.intent, question: d.question, asOf: d.asOf, pack: d.pack, model, transitAt: d.transitAt, prashna: d.prashna, allowedReaders: d.allowedReaders ?? null, ...(d.facts ? { facts: d.facts } : {}) });
+  const prep = await prepareReaders({
+    rows: d.rows,
+    kundliId: d.kundliId,
+    intent: d.intent,
+    question: d.question,
+    asOf: d.asOf,
+    pack: d.pack,
+    model,
+    transitAt: d.transitAt,
+    prashna: d.prashna,
+    allowedReaders: d.allowedReaders ?? null,
+    ...(d.facts ? { facts: d.facts } : {}),
+    ...(d.digest !== undefined ? { digest: d.digest } : {}),
+    ...(d.activation !== undefined ? { activation: d.activation } : {}),
+  });
   // the tier (readers.ts tierFor, or the plan-B route's own) and the route are chosen in prepareReaders
   const tier = prep.plan.tier;
   let techniques: string[] | null | undefined;
@@ -223,9 +243,9 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
       d.emit({ type: 'stage', name: input.id, status: 'start', subject: req.subject, label: req.def.label });
       // already read during clarify, on any instance, or earlier on this one
       const pre = d.prewarmed?.entries.get(req.cacheKey);
-      const memo = pre ? undefined : getReaderMemo(req.cacheKey);
-      const dbHeld = !pre && !memo && d.prisma ? await loadDbReaderCache(d.prisma, req.cacheKey) : undefined;
-      if (dbHeld) setReaderMemo(req.cacheKey, dbHeld);
+      const memo = pre ? undefined : getReaderMemo(req.cacheKey, d.cacheOwner);
+      const dbHeld = !pre && !memo && d.prisma ? await loadDbReaderCache(d.prisma, req.cacheKey, d.cacheOwner) : undefined;
+      if (dbHeld) setReaderMemo(req.cacheKey, dbHeld, d.cacheOwner, true);
       const held = pre ?? memo ?? dbHeld;
       if (held) {
         d.emit({ type: 'stage', name: input.id, status: 'done', ms: now() - t0, subject: req.subject, cached: true });
@@ -260,17 +280,19 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         }
         const ms = now() - t0;
         if (!out.repaired) {
-          setReaderMemo(req.cacheKey, { finding: out.finding, usage: out.usage });
+          setReaderMemo(req.cacheKey, { finding: out.finding, usage: out.usage }, d.cacheOwner, true);
           if (d.prisma) {
             void saveDbReaderCache(d.prisma, {
               cacheKey: req.cacheKey,
               kundliId: d.kundliId,
+              userId: d.userId,
               readerId: input.id,
               packHash: req.dataHash,
               horizonKey: req.def.natal ? 'natal' : `${prep.slice.from}..${prep.slice.to}`,
               promptVersion: PROMPT_VERSION,
               natal: Boolean(req.def.natal),
               held: { finding: out.finding, usage: out.usage },
+              used: true,
             }).catch(() => {});
           }
         }
@@ -293,16 +315,41 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
       // the remedy reader reads the grounded findings, so it runs here (off by default)
       if (prep.plan.ids.includes('R14')) {
         const findingsText = `FINDINGS:\n${brief.statements.slice(0, 12).map((x) => `- ${x.text}`).join('\n')}`;
-        const req = buildReaderRequest({ id: 'R14', subject: prep.subject, slice: prep.slice, intent: d.intent, question: d.question, asOf: d.asOf, model, keyFrame: d.pack.keyFrame, findingsText });
+        const req = buildReaderRequest({ id: 'R14', subject: prep.subject, slice: prep.slice, intent: d.intent, question: d.question, asOf: d.asOf, model, keyFrame: d.pack.keyFrame, findingsText, ...(d.facts ? { facts: d.facts } : {}) });
         sections.R14 = req.sections;
-        try {
-          const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: READERS.R14.timeoutMs, tier });
-          journalOk(req, out, now() - t0, 'live', 1);
-          results = [...results, out];
+        const heldR14 = getReaderMemo(req.cacheKey, d.cacheOwner) ?? (d.prisma ? await loadDbReaderCache(d.prisma, req.cacheKey, d.cacheOwner) : undefined);
+        if (heldR14) {
+          journalOk(req, heldR14, now() - t0, 'cache', 1);
+          results = [...results, { id: 'R14', subject: req.subject, finding: heldR14.finding, usage: heldR14.usage, repaired: false }];
           ({ brief, grounded } = makeBrief(results, s.failures, sections));
-          brief = { ...brief, text: `${brief.text}\nWHAT TO DO:\n${out.finding.claims.map((c) => `- ${c.text}`).join('\n')}` };
-        } catch (err) {
-          errors.push({ node: 'R14', message: (err as Error).message.slice(0, 200) });
+          brief = { ...brief, text: `${brief.text}\nWHAT TO DO:\n${heldR14.finding.claims.map((c) => `- ${c.text}`).join('\n')}` };
+        } else {
+          try {
+            const out = await impl(req, { model, guard, cacheOwner: d.cacheOwner, timeoutMs: READERS.R14.timeoutMs, tier });
+            if (!out.repaired) {
+              setReaderMemo(req.cacheKey, { finding: out.finding, usage: out.usage }, d.cacheOwner, true);
+              if (d.prisma) {
+                void saveDbReaderCache(d.prisma, {
+                  cacheKey: req.cacheKey,
+                  kundliId: d.kundliId,
+                  userId: d.userId,
+                  readerId: 'R14',
+                  packHash: req.dataHash,
+                  horizonKey: `${prep.slice.from}..${prep.slice.to}`,
+                  promptVersion: PROMPT_VERSION,
+                  natal: false,
+                  held: { finding: out.finding, usage: out.usage },
+                  used: true,
+                }).catch(() => {});
+              }
+            }
+            journalOk(req, out, now() - t0, 'live', 1);
+            results = [...results, out];
+            ({ brief, grounded } = makeBrief(results, s.failures, sections));
+            brief = { ...brief, text: `${brief.text}\nWHAT TO DO:\n${out.finding.claims.map((c) => `- ${c.text}`).join('\n')}` };
+          } catch (err) {
+            errors.push({ node: 'R14', message: (err as Error).message.slice(0, 200) });
+          }
         }
       }
       lastGrounded = grounded;
@@ -352,6 +399,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         model: modelFor('validator'),
         useModel: readingValidatorModel(),
         guard,
+        cacheOwner: d.cacheOwner,
       });
       journal.record({ agent: 'validator', agentKind: 'validator', round: 1, model: v.source === 'model' ? modelFor('validator') : null, promptName: 'oracle/validator', digest: { answered: v.answered, source: v.source, flags: v.flags }, highlights: { missing: v.missing }, status: 'ok', source: 'live', usage: v.usage ?? null, ms: v.ms });
       d.emit({ type: 'stage', name: 'validate', status: 'done', ms: v.ms });
@@ -397,7 +445,7 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
         const reservation = guard.reserve({ stage: 'oracle', node: 'addendum', model: oracleModel, promptTokens: approxTokens(system) + approxTokens(parts.join('\n')), maxOutputTokens: ADDENDUM_TOKENS });
         const lead = '\n\n';
         d.onDelta?.(lead);
-        const r = await streamGemini({ model: oracleModel, node: 'addendum', system, parts, thinking: 'low', maxOutputTokens: reservation.maxOutputTokens, temperature: 0.4, timeoutMs: ADDENDUM_MS }, (delta) => d.onDelta?.(scrub(delta)));
+        const r = await streamGemini({ model: oracleModel, node: 'addendum', system, parts, cachePrefix: true, cacheOwner: d.cacheOwner, thinking: 'low', maxOutputTokens: reservation.maxOutputTokens, temperature: 0.4, timeoutMs: ADDENDUM_MS }, (delta) => d.onDelta?.(scrub(delta)));
         guard.settle(reservation, r.usage);
         usages.push(r.usage);
         answer = `${s.answer}${lead}${scrub(r.text)}`;

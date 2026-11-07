@@ -527,6 +527,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
         ...(uses ? { allowedReaders: uses.readers } : {}),
         ...(codeFindings.length ? { codeFindings: codeFindings.filter((f) => f.subject === first) } : {}),
         ...(Object.keys(facts).length ? { facts } : {}),
+        ...(digest ? { digest, ...(activation ? { activation } : {}) } : {}),
         prisma,
         techniqueIds: (readers, tier) => selectedTechniques(intent, facts, { ...useOpts, tier, readers }),
       });
@@ -559,7 +560,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     const tGraph = Date.now();
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
-      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId, ...(full ? { full } : {}),
+      dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId, prisma, ...(full ? { full } : {}),
       ...(Object.keys(facts).length ? { facts } : {}),
       ...(uses ? { analystsBySubject: Object.fromEntries(subjects.map((s) => [s.id, uses!.bySubject[s.id]?.analysts ?? []])) } : {}),
       ...(codeFindings.length ? { codeFindings: codeFindings.map(toFinding) } : {}),
@@ -571,7 +572,7 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
         // full layout: the writer prompt and templates are in the cache; the call sends findings, calendar and tail only
         const fullCache = full ? { system: full.system, prefix: full.prefix, suffix: [writerSuffix({ findings: findingsText, calendar, tail: shapeTail })] } : undefined;
         const r = await streamGemini(
-          { model: synthModel, node: 'synthesize', system, parts: [`${findingsText}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], ...(fullCache ? { fullCache, cacheOwner } : {}), thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
+          { model: synthModel, node: 'synthesize', system, parts: [`${findingsText}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], cachePrefix: !full, cacheOwner, ...(fullCache ? { fullCache } : {}), thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );
