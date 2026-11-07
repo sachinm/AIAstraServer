@@ -663,4 +663,51 @@ export function getLifeCharterMaxAreasPerAd(): number {
   return parseClampedIntEnv('LIFE_CHARTER_MAX_AREAS_PER_AD', 3, 1, 6);
 }
 
+// ── Area Board Shade Resolver & Governance Thresholds (docs/reading-engine/55) ─
+
+function parseClampedFloatEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isFinite(n)) return Math.max(min, Math.min(max, n));
+  }
+  return fallback;
+}
+
+/**
+ * Short-horizon window (in months) where Pratyantardasha (`maxLevel: 3`) activations
+ * are included on the You/Love/Work boards (doc 55 §2.1).
+ * Env: `SHADE_SHORT_HORIZON_MONTHS` (default 3, clamped to 1..6).
+ */
+export function getShadeShortHorizonMonths(): number {
+  return parseClampedIntEnv('SHADE_SHORT_HORIZON_MONTHS', 3, 1, 6);
+}
+
+/**
+ * Minimum weighted score for a shade candidate to be selected as the primary shade
+ * of an active board window (doc 55 §2.2).
+ * Env: `SHADE_MIN_WINNING_SCORE` (default 1.5, clamped to 0.5..5.0).
+ */
+export function getShadeMinWinningScore(): number {
+  return parseClampedFloatEnv('SHADE_MIN_WINNING_SCORE', 1.5, 0.5, 5.0);
+}
+
+/**
+ * Score bonus added when a confirmed `person_facts` answer matches a candidate shade's
+ * tie-break criterion (doc 55 §2.4).
+ * Env: `SHADE_FACT_TIE_BREAK_BONUS` (default 1.25, clamped to 0.25..3.0).
+ */
+export function getShadeFactTieBreakBonus(): number {
+  return parseClampedFloatEnv('SHADE_FACT_TIE_BREAK_BONUS', 1.25, 0.25, 3.0);
+}
+
+/**
+ * Minimum agreeing clock families required for a `confirmed` Tier-2 gate verdict (doc 55 §2.2).
+ * Env: `SHADE_CONFIRM_MIN_FAMILIES` (default 3, clamped to 2..5).
+ */
+export function getShadeConfirmMinFamilies(): number {
+  return parseClampedIntEnv('SHADE_CONFIRM_MIN_FAMILIES', 3, 2, 5);
+}
+
+
 

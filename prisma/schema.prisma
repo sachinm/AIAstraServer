@@ -1125,10 +1125,74 @@ model TechniqueRegistry {
   selectors  Json     @default("{}")
   /// M31: what it reads (inputs with section, filter, layout), its system prompt, user fields, output schema and synthesizer
   contract   Json     @default("{}")
+  /// M36 (docs/reading-engine/55): live governance toggle and verification status (verified | calibrating | experimental | disabled)
+  enabled             Boolean  @default(true)
+  verification_status String   @default("verified") @map("verification_status") @db.VarChar(24)
   updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@index([category, board], map: "technique_registry_category")
   @@map("technique_registry")
+}
+
+/// M36 (docs/reading-engine/55): per-window gate breakdown, shade resolution, and behavioral playbook receipt.
+model TechniqueDecisionLog {
+  id                 BigInt   @id @default(autoincrement())
+  kundli_id          String?  @map("kundli_id")
+  user_id            String?  @map("user_id")
+  area               String   @db.VarChar(24)
+  as_of              DateTime @map("as_of") @db.Date
+  technique_id       String   @map("technique_id") @db.VarChar(80)
+  subarea            String   @db.VarChar(60)
+  shade_tag          String   @map("shade_tag") @db.VarChar(80)
+  winning_score      Float    @map("winning_score")
+  runner_up_tag      String?  @map("runner_up_tag") @db.VarChar(80)
+  runner_up_score    Float?   @map("runner_up_score")
+  gates              Json     @default("[]")
+  playbook_tier      String   @map("playbook_tier") @db.VarChar(24)
+  ease_date          String?  @map("ease_date") @db.VarChar(16)
+  tie_broken_by_fact Boolean  @default(false) @map("tie_broken_by_fact")
+  created_at         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([technique_id, created_at(sort: Desc)], map: "technique_decision_logs_tech_created_idx")
+  @@index([kundli_id, area, as_of(sort: Desc)], map: "technique_decision_logs_kundli_area_idx")
+  @@map("technique_decision_logs")
+}
+
+/// M36 (docs/reading-engine/55): AA-rated historical benchmark chart metadata (no personal user data).
+model BenchmarkChart {
+  id            String           @id @db.VarChar(80)
+  label         String           @db.VarChar(120)
+  rodden_rating String           @default("AA") @map("rodden_rating") @db.VarChar(12)
+  birth_date    String           @map("birth_date") @db.VarChar(16)
+  birth_time    String           @map("birth_time") @db.VarChar(16)
+  lat           Float
+  lon           Float
+  tz            Float
+  place_code    String           @map("place_code") @db.VarChar(80)
+  notes         String?
+  created_at    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  events        BenchmarkEvent[]
+
+  @@map("benchmark_charts")
+}
+
+/// M36 (docs/reading-engine/55): Known dated life event on a benchmark chart for technique regression testing.
+model BenchmarkEvent {
+  id               String         @id @db.VarChar(80)
+  chart_id         String         @map("chart_id") @db.VarChar(80)
+  event_date       String         @map("event_date") @db.VarChar(16)
+  area             String         @db.VarChar(24)
+  expected_subarea String         @map("expected_subarea") @db.VarChar(60)
+  expected_shade   String         @map("expected_shade") @db.VarChar(80)
+  expected_side    String         @map("expected_side") @db.VarChar(16)
+  last_passed      Boolean?       @map("last_passed")
+  last_run_at      DateTime?      @map("last_run_at") @db.Timestamptz(6)
+  receipt          Json?
+  created_at       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  chart            BenchmarkChart @relation(fields: [chart_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([chart_id, event_date], map: "benchmark_events_chart_idx")
+  @@map("benchmark_events")
 }
 
 /// M29: a staff verdict on one run (an agent_runs or a reading_agent_spans row). Written only by the admin API.

@@ -12,6 +12,7 @@ import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
 import { careerMap, type CareerMap } from './career.js';
+import { recordTechniqueDecisions, resolveCareerShades } from './shadeResolver.js';
 
 export const WORK_STATUS = ['yes', 'between_jobs', 'own_business', 'studying'] as const;
 export type WorkStatus = (typeof WORK_STATUS)[number];
@@ -96,7 +97,14 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
       ]);
       const build = buildTimelineSpan(inputs, span);
       const m = careerMap(build, asOf, view ? { view, activation } : undefined);
-      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, writes: ['area_builds:1'] } };
+      const receipts = resolveCareerShades({
+        map: m,
+        view,
+        facts: work ? { 'work.status': work } : {},
+      });
+      const logged = await recordTechniqueDecisions(deps.prisma, { kundliId: kundli.id, userId }, receipts);
+      const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
+      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, shades: receipts.length, writes } };
     });
     await deps.prisma.areaBuild
       .upsert({

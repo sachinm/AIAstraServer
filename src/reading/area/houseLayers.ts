@@ -22,6 +22,7 @@
 import type { AnnualRow, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
+import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthMid, monthOf, monthStart, monthsBetween } from '../timeline/months.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
@@ -702,6 +703,7 @@ const GRADE_RANK: Record<Grade, number> = { weak: 1, moderate: 2, strong: 3 };
 
 export function aheadWindows(view: DigestView, cfg: AreaConfig, graded: Graded[], asOf: string): AheadWindow[] {
   const horizon = addMonthsIso(asOf, AHEAD_MONTHS);
+  const shortHorizon = addMonthsIso(asOf, getShadeShortHorizonMonths());
   const turnHorizon = addMonthsIso(asOf, 12 * 30);
   const resolved = cfg.subareas.map((s) => ({ s, planets: new Set(s.planets.map((p) => resolvePlanet(view, p)).filter((p): p is string => !!p)) }));
   const raw: AheadWindow[] = [];
@@ -712,7 +714,7 @@ export function aheadWindows(view: DigestView, cfg: AreaConfig, graded: Graded[]
     if (g.row.level === 1 && !isTurn && g.row.family !== 'rasi') continue;
     if (g.row.level === 1 && g.row.family === 'rasi' && g.row.from > horizon) continue;
     if (g.row.level !== 1 && g.row.from > horizon) continue;
-    if (g.row.level === 3) continue;
+    if (g.row.level === 3 && g.row.from > shortHorizon) continue;
     for (const { s, planets } of resolved) {
       if (!s.sides.includes(g.side)) continue;
       if (s.level1Only ? !isTurn : isTurn) continue;
