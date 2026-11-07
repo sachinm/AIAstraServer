@@ -146,6 +146,18 @@ export function clearFullContexts(): void {
   memo.clear();
 }
 
+/** Evicts memoised full-layout prefixes belonging to a specific kundli or dossier hash (45-minute individual cache recycle). */
+export function evictFullContextsForIndividual(owner: { kundliId?: string | null; dossierHash?: string | null }): number {
+  let removed = 0;
+  for (const [k] of memo.entries()) {
+    if ((owner.kundliId && k.includes(`${owner.kundliId}@`)) || (owner.dossierHash && k.startsWith(`${owner.dossierHash}|`))) {
+      memo.delete(k);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 /**
  * The full prefix for one user and day. `memoKey` (dossier hash, transit snapshot …) lets a warm instance reuse the text
  * instead of rebuilding it per question; the text itself never depends on the key.

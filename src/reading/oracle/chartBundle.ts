@@ -59,6 +59,12 @@ export function clearChartBundles(): void {
   inflight.clear();
 }
 
+/** Evicts the in-process chart bundle for a single kundli (45-minute individual cache recycle). */
+export function evictChartBundleForIndividual(kundliId: string | null | undefined): boolean {
+  if (!kundliId) return false;
+  return cache.delete(kundliId);
+}
+
 /** The row of an annual type whose `valid_from`/`valid_to` (fields Radha gave) hold the date, preferring the default dasha system. */
 function annualRow(rows: ChartRow[], asOf: string): ChartRow | undefined {
   const holds = rows.filter((r) => {

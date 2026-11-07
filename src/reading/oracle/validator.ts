@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { callGemini } from '../llm/gemini.js';
+import type { CacheOwner } from '../llm/promptCache.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
 import { CostRefusedError, type CostGuard } from './costGuard.js';
@@ -88,10 +89,23 @@ const known = (ids: string[]): ReaderId[] => ids.filter((x): x is ReaderId => (L
 
 const VALIDATOR_CACHE_MAX = 200;
 const VALIDATOR_CACHE_TTL_MS = 30 * 60_000;
-const validatorCache = new Map<string, { at: number; value: Omit<Validation, 'ms' | 'usage'> }>();
+const validatorCache = new Map<string, { at: number; owner?: CacheOwner; value: Omit<Validation, 'ms' | 'usage'> }>();
 
 export function clearValidatorCache(): void {
   validatorCache.clear();
+}
+
+/** Evicts in-memory validator cache entries belonging to an individual (`userId` / `kundliId`). */
+export function evictValidatorCacheForIndividual(owner: CacheOwner): number {
+  if (!owner.userId && !owner.kundliId) return 0;
+  let removed = 0;
+  for (const [k, v] of validatorCache.entries()) {
+    if ((owner.userId && v.owner?.userId === owner.userId) || (owner.kundliId && v.owner?.kundliId === owner.kundliId)) {
+      validatorCache.delete(k);
+      removed += 1;
+    }
+  }
+  return removed;
 }
 
 /** Rules, then the model when one is configured and affordable. */
@@ -105,6 +119,7 @@ export async function validateAnswer(a: {
   model: string;
   useModel: boolean;
   guard: CostGuard;
+  cacheOwner?: CacheOwner;
 }): Promise<Validation> {
   const t0 = Date.now();
   const rules = validateByRules(a);
@@ -128,7 +143,7 @@ export async function validateAnswer(a: {
     throw err;
   }
   try {
-    const r = await callGemini({ model: a.model, node: 'validator', system: PROMPTS['oracle/validator'], parts, responseSchema: VALIDATOR_SCHEMA, thinking: 'off', maxOutputTokens: reservation.maxOutputTokens, temperature: 0, timeoutMs: VALIDATOR_TIMEOUT_MS });
+    const r = await callGemini({ model: a.model, node: 'validator', system: PROMPTS['oracle/validator'], parts, responseSchema: VALIDATOR_SCHEMA, cachePrefix: true, ...(a.cacheOwner ? { cacheOwner: a.cacheOwner } : {}), thinking: 'off', maxOutputTokens: reservation.maxOutputTokens, temperature: 0, timeoutMs: VALIDATOR_TIMEOUT_MS });
     a.guard.settle(reservation, r.usage);
     const parsed = verdictZ.safeParse(JSON.parse(r.text));
     if (!parsed.success) return done(rules);
@@ -137,7 +152,7 @@ export async function validateAnswer(a: {
     const merged = fromModel.length ? fromModel : rules.missing;
     const baseResult: Omit<Validation, 'ms' | 'usage'> = { answered: parsed.data.answered && merged.length === 0 && rules.answered, source: 'model', missing: merged, flags: rules.flags };
     validatorCache.delete(cacheKey);
-    validatorCache.set(cacheKey, { at: Date.now(), value: structuredClone(baseResult) });
+    validatorCache.set(cacheKey, { at: Date.now(), ...(a.cacheOwner ? { owner: a.cacheOwner } : {}), value: structuredClone(baseResult) });
     while (validatorCache.size > VALIDATOR_CACHE_MAX) {
       const oldest = validatorCache.keys().next().value;
       if (oldest === undefined) break;

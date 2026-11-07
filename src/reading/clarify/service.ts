@@ -62,7 +62,7 @@ async function eventFor(
   userId?: string,
 ): Promise<{ event: ClarifyEvent | null; state: ClarifyState }> {
   if (s.status === 'ASKING' && s.pending) {
-    const planned = await planAiClarifyTurn(s, prisma);
+    const planned = await planAiClarifyTurn(s, prisma, userId ? { userId } : undefined);
     const ask = planned.ask ?? s.pending;
     if (planned.usage) usage.push(planned.usage);
     if (store && userId && planned.state !== s) {
@@ -222,7 +222,7 @@ export async function answerClarify(
   const last = next.turns[next.turns.length - 1];
   const lastAnswered = next.turns.find((t) => t.answer && t.ask.criterion === s.pending!.criterion && t.answer.value === value.slice(0, 300));
   if (!viaChip && lastAnswered && lastAnswered.answer && !lastAnswered.answer.resolved) {
-    const r = await resolveFreeText(s, s.pending.criterion, value, prisma);
+    const r = await resolveFreeText(s, s.pending.criterion, value, prisma, { userId });
     if (r.usage) usage.push(r.usage);
     if (r.value) next = absorbAnswer(s, r.value, { viaChip: true, threshold: classifierThreshold(), tz });
   }
@@ -284,7 +284,7 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
   let next = s.status === 'CONFIRMED' ? s : confirmClarify(s, edits);
   // prashna eligibility: the rules decided at confirmation; an unsure rule may ask the optional model once
   if (next.status === 'CONFIRMED' && s.status !== 'CONFIRMED' && next.prashna?.rule === 'unsure') {
-    const { result } = await judgePrashna(next, next.prashna);
+    const { result } = await judgePrashna(next, next.prashna, null, { userId });
     next = { ...next, prashna: result };
   }
   await store.save(userId, runId, next);

@@ -36,7 +36,8 @@ import type { TransitChart } from './transits/types.js';
 import { horizonRange } from './packs/frames.js';
 import { modelFor } from './llm/models.js';
 import { safeErrorText } from './llm/gemini.js';
-import { findingsCache, findingCacheKey } from './nodes/findingsCache.js';
+import type { PrismaClient } from '@prisma/client';
+import { findingsCache, findingCacheKey, loadDbSpecialistFinding, saveDbSpecialistFinding } from './nodes/findingsCache.js';
 import { annualApplies, OPTIONAL_LAYERS, prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import type { LayerLoaders } from './layers/loaders.js';
 import { annualSection, prashnaSection, transitAtSection } from './layers/sections.js';
@@ -85,6 +86,8 @@ export interface GraphDeps {
   codeFindings?: Finding[];
   /** confirmed person_facts (doc 53 §4.4, 48): passed to each analyst as FACTS */
   facts?: Record<string, string> | null;
+  /** Optional Prisma client for cross-Lambda specialist findings caching (`reading_findings_cache`). */
+  prisma?: PrismaClient | null;
 }
 
 const State = Annotation.Root({
@@ -183,7 +186,9 @@ export function buildReadingGraph(deps: GraphDeps) {
       const datedTransit = name === 'transit' && !!askedAt && !!deps.layers?.transitAt;
       const digestAnnual = name === 'annual' && !deps.layers?.annual && Boolean(pack?.sections.annual);
       const key = deps.dossierHash && (!optionalLayer || digestAnnual) && !datedTransit ? findingCacheKey({ dossierHash: deps.dossierHash, analyst: name, subject: input.subject, horizon: deps.intent.horizon, asOf: deps.asOf, ...(deps.facts ? { facts: deps.facts } : {}) }) : null;
-      const cached = key ? findingsCache.get(key) : undefined;
+      const memCached = key ? findingsCache.get(key, deps.cacheOwner) : undefined;
+      const dbCached = !memCached && key && deps.prisma ? await loadDbSpecialistFinding(deps.prisma, key, deps.cacheOwner) : undefined;
+      const cached = memCached ?? dbCached;
       if (cached) {
         const ms = Date.now() - t0;
         deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, cached: true });
@@ -279,7 +284,21 @@ export function buildReadingGraph(deps: GraphDeps) {
         }
         const ms = Date.now() - t0;
         // a cut-off (repaired) finding is used for this reading but not cached for the next one
-        if (key && !out.repaired) findingsCache.set(key, out.finding);
+        if (key && !out.repaired) {
+          findingsCache.set(key, out.finding, deps.cacheOwner, true);
+          if (deps.prisma && deps.cacheOwner?.kundliId) {
+            const natal = name === 'promise' || name === 'nakshatra';
+            void saveDbSpecialistFinding(deps.prisma, {
+              cacheKey: key,
+              kundliId: deps.cacheOwner.kundliId,
+              userId: deps.cacheOwner.userId ?? null,
+              analyst: name,
+              packHash: deps.dossierHash ?? '',
+              horizonKey: natal ? 'natal' : `${hz.from}..${hz.to}`,
+              finding: out.finding,
+            }).catch(() => {});
+          }
+        }
         deps.emit({ type: 'stage', name, status: 'done', ms, subject: input.subject, ...(retried ? { retried: true } : {}), ...(optionalLayer ? { retried: false, capped: false } : {}) });
         return { findings: [out.finding], usage: [...spent, out.usage], timings: { [`${name}:${input.subject}`]: ms } };
       } catch (err) {
