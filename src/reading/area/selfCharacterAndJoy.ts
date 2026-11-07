@@ -242,12 +242,20 @@ const HOUSE_CHARACTER_THEMES: Record<
 const SIGN_MIND_STYLE: Record<
   string,
   {
+    moonShort: string;
+    mercuryShort: string;
+    moonSummary: string;
+    mercurySummary: string;
     moonTone: string;
     mercuryTone: string;
     joyActivities: Array<{ title: string; whyItFits: string }>;
   }
 > = {
   Aries: {
+    moonShort: 'Bold emotional directness',
+    mercuryShort: 'quick, decisive instinct',
+    moonSummary: 'direct, action-oriented, and refreshing in your honesty',
+    mercurySummary: 'cuts straight to the core of a problem without hesitation',
     moonTone: 'Your feelings move with directness and honesty—you feel best when you can act on a clean decision rather than sit in ambiguity.',
     mercuryTone: 'Your mind works in quick, decisive flashes; you enjoy getting straight to the core of an idea and testing it in action.',
     joyActivities: [
@@ -256,6 +264,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Taurus: {
+    moonShort: 'Warm emotional steadiness',
+    mercuryShort: 'grounded, practical craft',
+    moonSummary: 'calm, loyal, and soothing to be around',
+    mercurySummary: 'weighs ideas for real-world durability and lasting value',
     moonTone: 'Your heart settles through sensory steadiness—good food, familiar surroundings, music, and unhurried rhythms.',
     mercuryTone: 'Your thinking is deliberate, practical, and grounded; once you learn something thoroughly, you retain it for life.',
     joyActivities: [
@@ -264,6 +276,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Gemini: {
+    moonShort: 'Lively emotional curiosity',
+    mercuryShort: 'agile, observant wit',
+    moonSummary: 'adaptable, perceptive, and quick to connect with others',
+    mercurySummary: 'spots patterns across different subjects and communicates with ease',
     moonTone: 'Your emotional energy lifts through curiosity, variety, and lively exchange with perceptive people.',
     mercuryTone: 'Your intellect is agile and observant—you naturally connect patterns across different fields and enjoy witty conversation.',
     joyActivities: [
@@ -272,6 +288,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Cancer: {
+    moonShort: 'Deep intuitive care',
+    mercuryShort: 'context-rich memory',
+    moonSummary: 'empathetic, protective, and deeply attuned to the people you love',
+    mercurySummary: 'remembers emotional nuance and listens beneath the words',
     moonTone: 'You feel things deeply and intuitively; a calm, safe home environment and trusted bonds mean everything to your peace of mind.',
     mercuryTone: 'Your mind remembers emotional nuance and context, making you a thoughtful listener and perceptive advisor.',
     joyActivities: [
@@ -280,6 +300,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Leo: {
+    moonShort: 'Warm-hearted generosity',
+    mercuryShort: 'clear, big-picture conviction',
+    moonSummary: 'warm, principled, and naturally encouraging',
+    mercurySummary: 'frames ideas with clarity, dignity, and creative confidence',
     moonTone: 'Your heart is warm, loyal, and generous; you feel best when you can take pride in your integrity and creative effort.',
     mercuryTone: 'You think in clear, big-picture arcs and express yourself with warmth and conviction.',
     joyActivities: [
@@ -288,6 +312,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Virgo: {
+    moonShort: 'Thoughtful inner order',
+    mercuryShort: 'perceptive, hands-on precision',
+    moonSummary: 'observant, helpful, and quietly dependable in the details',
+    mercurySummary: 'breaks complex problems into clean, workable steps',
     moonTone: 'Your feelings settle when your environment is orderly, your priorities are clear, and you are being genuinely useful.',
     mercuryTone: 'Your analytical mind is remarkably precise—you spot how systems fit together and take pleasure in clean craftsmanship.',
     joyActivities: [
@@ -296,6 +324,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Libra: {
+    moonShort: 'Graceful emotional balance',
+    mercuryShort: 'fair-minded, tactful insight',
+    moonSummary: 'gracious, fair, and attentive to harmony in every room',
+    mercurySummary: 'weighs both sides of a question with proportion and tact',
     moonTone: 'Your inner state responds strongly to harmony, beauty, and fairness; harsh or chaotic spaces drain you quickly.',
     mercuryTone: 'You weigh multiple perspectives naturally and communicate with tact, balance, and aesthetic sense.',
     joyActivities: [
@@ -304,6 +336,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Scorpio: {
+    moonShort: 'Private emotional depth',
+    mercuryShort: 'investigative, penetrating focus',
+    moonSummary: 'fiercely loyal, private, and impossible to fool with surface talk',
+    mercurySummary: 'digs until it uncovers the real mechanism behind a situation',
     moonTone: 'Your emotional life is private, loyal, and deeply perceptive—you prefer a few real bonds over surface-level socializing.',
     mercuryTone: 'Your mind is investigative and thorough; you enjoy digging until you uncover the real mechanism behind things.',
     joyActivities: [
@@ -312,6 +348,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Sagittarius: {
+    moonShort: 'Open-hearted optimism',
+    mercuryShort: 'purpose-driven perspective',
+    moonSummary: 'candid, forward-looking, and energized by meaning and growth',
+    mercurySummary: 'connects daily decisions to ethics, strategy, and the long view',
     moonTone: 'Your spirit needs room to breathe, learn, and look ahead; optimism returns whenever you connect with a larger purpose.',
     mercuryTone: 'Your thinking links practical facts to philosophy, ethics, and long-range strategy.',
     joyActivities: [
@@ -320,6 +360,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Capricorn: {
+    moonShort: 'Composed emotional self-reliance',
+    mercuryShort: 'methodical, realistic planning',
+    moonSummary: 'steady under pressure, self-reliant, and respectful of real effort',
+    mercurySummary: 'turns ambitious goals into structured, realistic sequences',
     moonTone: 'You find emotional steadiness through self-reliance, clear structure, and knowing your responsibilities are handled.',
     mercuryTone: 'Your mind is methodical, realistic, and structured—you enjoy turning complex goals into step-by-step plans.',
     joyActivities: [
@@ -328,6 +372,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Aquarius: {
+    moonShort: 'Independent emotional poise',
+    mercuryShort: 'original, systems-level thinking',
+    moonSummary: 'independent, humane, and refreshingly unpretentious',
+    mercurySummary: 'sees how whole systems, networks, and communities fit together',
     moonTone: 'You need intellectual breathing room and emotional independence so you can care for others without feeling boxed in.',
     mercuryTone: 'Your mind is original and systems-oriented—you enjoy understanding how networks, technology, or communities work.',
     joyActivities: [
@@ -336,6 +384,10 @@ const SIGN_MIND_STYLE: Record<
     ],
   },
   Pisces: {
+    moonShort: 'Gentle empathetic receptivity',
+    mercuryShort: 'intuitive, holistic synthesis',
+    moonSummary: 'compassionate, imaginative, and sensitive to unspoken moods',
+    mercurySummary: 'grasps the whole picture intuitively before spelling out the steps',
     moonTone: 'Your heart is compassionate, imaginative, and sensitive to subtle moods; quiet beauty and spiritual reflection restore you.',
     mercuryTone: 'Your mind synthesizes intuition and pattern recognition—you often grasp the whole picture before spelling out the steps.',
     joyActivities: [
@@ -367,12 +419,28 @@ function dominantPeriodForSpan(
   )[0]!;
 }
 
-function resolveHouseForPlanet(view: DigestView, planetCode: string | null | undefined, fallbackHouse: number): number {
-  if (!planetCode) return fallbackHouse;
-  const card = view.planet('D1', planetCode);
-  if (card?.house && card.house >= 1 && card.house <= 12) return card.house;
-  if (card?.owns && card.owns.length > 0) return card.owns[0]!;
-  return fallbackHouse;
+function candidateHousesForPlanet(view: DigestView, planetCode: string | null | undefined): number[] {
+  if (!planetCode) return [];
+  const d1 = view.planet('D1', planetCode);
+  const d9 = view.planet('D9', planetCode);
+  const raw = [d1?.house, ...(d1?.owns ?? []), d9?.house];
+  return raw.filter((h): h is number => typeof h === 'number' && h >= 1 && h <= 12);
+}
+
+function pickDistinctHouse(candidates: Array<number | null | undefined>, used: Set<number>, fallbackOrder: number[]): number {
+  for (const h of candidates) {
+    if (typeof h === 'number' && h >= 1 && h <= 12 && !used.has(h)) {
+      used.add(h);
+      return h;
+    }
+  }
+  for (const h of fallbackOrder) {
+    if (!used.has(h)) {
+      used.add(h);
+      return h;
+    }
+  }
+  return fallbackOrder[0] ?? 1;
 }
 
 /**
@@ -407,24 +475,59 @@ export function buildSelfCharacterArc(
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
   const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
 
-  const pastHouse = resolveHouseForPlanet(view, pastMd?.lord ?? pastAd?.lord ?? l1Code, ((l1Card?.house ?? 1) + 9) % 12 + 1);
-  let nowHouse = resolveHouseForPlanet(view, nowMd?.lord ?? l1Code, l1Card?.house ?? 1);
-  if (nowHouse === pastHouse) {
-    nowHouse = resolveHouseForPlanet(view, nowAd?.lord ?? akCode, (nowHouse % 12) + 1);
-  }
-  let nextHouse = resolveHouseForPlanet(view, nextMd?.lord ?? nextAd?.lord ?? akCode, akCard?.house ?? 9);
-  if (nextHouse === nowHouse) {
-    nextHouse = ((nowHouse + 3) % 12) + 1;
-  }
+  const usedHouses = new Set<number>();
+  const pastHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, pastMd?.lord),
+      ...(pastMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, pastAd?.lord),
+      ...(pastAd?.houses ?? []),
+      view.planet('D1', 'Mo')?.house,
+      4,
+    ],
+    usedHouses,
+    [4, 3, 6, 1, 5, 10, 9, 2, 7, 8, 11, 12],
+  );
+  const nowHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nowMd?.lord),
+      ...(nowMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, l1Code),
+      ...candidateHousesForPlanet(view, nowAd?.lord),
+      ...(nowAd?.houses ?? []),
+      akCard?.house,
+      1,
+    ],
+    usedHouses,
+    [1, 10, 5, 9, 4, 2, 11, 3, 7, 6, 8, 12],
+  );
+  const nextHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nextMd?.lord),
+      ...(nextMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, nextAd?.lord),
+      ...(nextAd?.houses ?? []),
+      ...candidateHousesForPlanet(view, akCode),
+      d9L1Card?.house,
+      9,
+    ],
+    usedHouses,
+    [9, 10, 11, 5, 1, 4, 2, 7, 12, 3, 8, 6],
+  );
 
   const pastTheme = HOUSE_CHARACTER_THEMES[pastHouse] ?? HOUSE_CHARACTER_THEMES[1]!;
   const nowTheme = HOUSE_CHARACTER_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[10]!;
   const nextTheme = HOUSE_CHARACTER_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[9]!;
 
-  const age = opts?.ageYears && opts.ageYears >= 18 ? opts.ageYears : null;
-  const pastAgeTag = age ? `Ages ${Math.max(8, age - 10)}–${age} (${refYear - 10}–${refYear})` : `${refYear - 10}–${refYear}`;
-  const nowAgeTag = age ? `Age ${age} (${refYear})` : `${refYear}`;
-  const nextAgeTag = age ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
+  const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
+  const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
+  const pastSpanYears = age !== null ? Math.max(1, age - (pastStartAge ?? 0)) : 10;
+  const pastAgeTag =
+    age !== null
+      ? `Ages ${pastStartAge}–${age} (${refYear - pastSpanYears}–${refYear})`
+      : `${refYear - 10}–${refYear}`;
+  const nowAgeTag = age !== null ? `Age ${age} (${refYear})` : `${refYear}`;
+  const nextAgeTag = age !== null ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
 
   return {
     headline: 'How the last ten years shaped you, where your character stands now, and who you are becoming over the next decade',
@@ -534,9 +637,8 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       : 'Protect quiet solo transitions between work and evening commitments so your mind can fully put down the day.';
 
   return {
-    headline: 'Warm emotional steadiness paired with perceptive, hands-on curiosity',
-    personalitySummary:
-      'People experience you as thoughtful, observant, and genuinely dependable—someone who notices subtle emotional undercurrents while keeping a practical, solution-oriented head.',
+    headline: `${moonStyle.moonShort} paired with ${mercuryStyle.mercuryShort}`,
+    personalitySummary: `People experience you as ${moonStyle.moonSummary}—with a mind that ${mercuryStyle.mercurySummary}.`,
     emotionalMindStyle: moonStyle.moonTone,
     intellectualWitStyle: mercuryStyle.mercuryTone,
     whatFeelsGood: joyItems,

@@ -86,6 +86,22 @@ export async function getFact(prisma: PrismaClient, userId: string, key: string)
   return f?.value ?? null;
 }
 
+async function getUserAgeYears(prisma: PrismaClient, userId: string, asOf: string): Promise<number | null> {
+  try {
+    const authModel = (prisma as unknown as { auth?: { findUnique?: (q: unknown) => Promise<{ date_of_birth?: string | null } | null> } }).auth;
+    if (!authModel?.findUnique) return null;
+    const row = await authModel.findUnique({ where: { id: userId }, select: { date_of_birth: true } });
+    const dob = row?.date_of_birth;
+    if (!dob || !/^\d{4}/.test(dob)) return null;
+    const birthYear = Number(dob.slice(0, 4));
+    const refYear = Number(asOf.slice(0, 4));
+    if (!Number.isFinite(birthYear) || !Number.isFinite(refYear) || refYear <= birthYear) return null;
+    return refYear - birthYear;
+  } catch {
+    return null;
+  }
+}
+
 /** What the person sees: the sub-areas that fit their fact, the lead first. */
 export function shapeBoard(built: BuiltBoard, spec: AreaSpec, fact: string | null): { focus: string | null; board: AreaBoardBody } {
   const usable = fact === DECLINED ? null : fact;
@@ -140,15 +156,16 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
           { userId, task: `${spec.area} ${asOf}`, input: { span_from: span.from, span_to: span.to, version: view.version }, technique: spec.technique, kundliId: kundli.id },
           async () => {
             const shortTo = addMonthsIso(asOf, getShadeShortHorizonMonths());
-            const [activation, running, transit, areaFacts] = await Promise.all([
+            const [activation, running, transit, areaFacts, ageYears] = await Promise.all([
               activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2, shortTo, shortMaxLevel: 3 }),
               activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
               (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
               loadAreaFacts(prisma, userId, spec.area, { key: spec.factKey, value: fact }),
+              spec.area === 'self' ? getUserAgeYears(prisma, userId, asOf) : Promise.resolve(null),
               loadTechniqueGovernance(prisma),
             ]);
             runningSpan = shortestRunningPeriodSpan(running, nowAt);
-            const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
+            const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit, ageYears });
             const receipts = resolveAreaShades({
               view,
               cfg: spec.cfg,

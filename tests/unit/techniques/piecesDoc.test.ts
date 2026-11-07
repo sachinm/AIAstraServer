@@ -18,7 +18,7 @@ describe('technique pieces doc (docs/admin/07)', () => {
   });
 
   it('matches the checked-in file (run npx tsx scripts/write-technique-pieces-doc.ts)', () => {
-    expect(fs.readFileSync(DOC, 'utf8')).toBe(doc);
+    expect(fs.readFileSync(DOC, 'utf8').replace(/\r\n/g, '\n')).toBe(doc);
   });
 
   it('draws the machinery, the agents and one diagram per area', () => {

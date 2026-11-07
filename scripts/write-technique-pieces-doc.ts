@@ -17,7 +17,7 @@ const out = path.join(root, 'docs', 'admin', '07-technique-pieces-and-agents.md'
 const doc = renderPiecesDoc();
 
 if (process.argv.includes('--check')) {
-  const cur = fs.existsSync(out) ? fs.readFileSync(out, 'utf8') : '';
+  const cur = fs.existsSync(out) ? fs.readFileSync(out, 'utf8').replace(/\r\n/g, '\n') : '';
   if (cur !== doc) {
     console.error(`${path.relative(root, out)} is out of date; run npx tsx scripts/write-technique-pieces-doc.ts`);
     process.exit(1);
