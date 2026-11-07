@@ -12,6 +12,8 @@
  *
  * Nothing here derives astrology: it compares engine labels and numbers with the stated rules.
  */
+import type { PrismaClient } from '@prisma/client';
+import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { EvidencePack } from '../packs/selector.js';
 import type { DigestPackSection } from '../packs/digestSource.js';
 import type { Finding } from '../nodes/specialists.js';
@@ -267,6 +269,45 @@ export function runCodeReaders(
     codeReaderMemo.set(key, out);
   }
   return out;
+}
+
+/**
+ * Runs the named deterministic readers through `withTechniqueOutput` (docs/reading-engine/56 §4.1), caching each
+ * natal reader's `CodeFinding` per `(kundliId, digestVersion, subject)` until the digest version changes.
+ */
+export async function runCodeReadersCached(
+  prisma: PrismaClient,
+  pack: EvidencePack,
+  analysts: readonly CodeAnalyst[],
+  opts: { kundliId: string; digestVersion: string; userId?: string | null; now?: Date },
+): Promise<CodeFinding[]> {
+  const d = sectionOf(pack);
+  if (!d) return [];
+  const now = opts.now ?? new Date();
+  const packScope = [
+    opts.digestVersion,
+    pack.subject,
+    d.person?.who ?? '',
+    pack.keyFrame.houses.join(','),
+    Object.keys(d.rasi ?? {}).sort().join(','),
+  ].join(':');
+  return Promise.all(
+    analysts.map(async (analyst) => {
+      const res = await withTechniqueOutput(
+        prisma,
+        {
+          technique: CODE_ANALYST_TECHNIQUE[analyst],
+          kundliId: opts.kundliId,
+          digestVersion: packScope,
+          context: { now },
+          userId: opts.userId ?? null,
+          subject: pack.subject,
+        },
+        async () => CODE_READERS[analyst](pack),
+      );
+      return res.value;
+    }),
+  );
 }
 
 /** The same finding in the shape the oracle brief reads (oracle/runReader.ts ReaderOutput); yogas that hold go to graces. */

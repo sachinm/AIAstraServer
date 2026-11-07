@@ -14,6 +14,7 @@ import { SIGN_NAMES } from '../facts/constants.js';
 import { lordCode } from '../timeline/dashas.js';
 import { VARGA_FACTORS } from '../chartData/catalog.js';
 import { buildActivationRows, type ActivationRowInput } from './activation.js';
+import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
 import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type YogaRow } from './types.js';
 
 type Obj = Record<string, unknown>;
@@ -1243,6 +1244,7 @@ async function doBuild(prisma: PrismaClient, kundliId: string, opts: DigestBuild
     const activation = buildActivationRows(items, rows, { today });
     const builtAt = new Date();
     await writeDigest(prisma, kundliId, rows, activation, builtAt);
+    await deleteKundliTechniqueOutputs(prisma, kundliId).catch(() => 0);
     const ms = Date.now() - t0;
     return { status: 'ready', rows: rows.length, activation: activation.length, ms };
   } catch (err) {

@@ -709,5 +709,41 @@ export function getShadeConfirmMinFamilies(): number {
   return parseClampedIntEnv('SHADE_CONFIRM_MIN_FAMILIES', 3, 2, 5);
 }
 
+// ── Technique pieces and validity windows (docs/reading-engine/56) ─
+
+/**
+ * Length (hours) of the window a technique's output stays valid when it reads transit rows: the shared sky and the
+ * overlay move, so the output is re-made per window. Windows are aligned to the epoch, so every caller in the same
+ * window gets the same cache key. Env: `TECHNIQUE_TRANSIT_WINDOW_HOURS` (default 2, clamped to 1..24).
+ */
+export function getTechniqueTransitWindowHours(): number {
+  return parseClampedIntEnv('TECHNIQUE_TRANSIT_WINDOW_HOURS', 2, 1, 24);
+}
+
+/**
+ * Fallback window (days) for a technique that reads dasha periods when the caller does not pass the end of the running
+ * period. Env: `TECHNIQUE_DASHA_FALLBACK_DAYS` (default 30, clamped to 1..365).
+ */
+export function getTechniqueDashaFallbackDays(): number {
+  return parseClampedIntEnv('TECHNIQUE_DASHA_FALLBACK_DAYS', 30, 1, 365);
+}
+
+/**
+ * Fallback window (days) for a technique that reads the year charts when the caller does not pass the end of the
+ * running year chart. Env: `TECHNIQUE_ANNUAL_FALLBACK_DAYS` (default 90, clamped to 1..366).
+ */
+export function getTechniqueAnnualFallbackDays(): number {
+  return parseClampedIntEnv('TECHNIQUE_ANNUAL_FALLBACK_DAYS', 90, 1, 366);
+}
+
+/**
+ * A version folded into every technique output cache key; bump it to invalidate every stored output after a code change
+ * that the contract does not show. Env: `TECHNIQUE_CACHE_VERSION` (default "1").
+ */
+export function getTechniqueCacheVersion(): string {
+  const raw = process.env.TECHNIQUE_CACHE_VERSION?.trim();
+  return raw ? raw : '1';
+}
+
 
 
