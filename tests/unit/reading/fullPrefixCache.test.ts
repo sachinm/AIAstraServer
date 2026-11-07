@@ -59,6 +59,11 @@ beforeEach(() => {
     READING_CACHE_LAYOUT: 'full',
   });
   delete process.env.READING_FLOW;
+  delete process.env.READING_MODEL_SPECIALIST;
+  delete process.env.READING_MODEL_SYNTH;
+  delete process.env.READING_MODEL_INTAKE;
+  delete process.env.READING_MODEL_READER;
+  delete process.env.READING_MODEL_ORACLE;
   fake.reset();
   clearPromptCache();
   clearFullContexts();

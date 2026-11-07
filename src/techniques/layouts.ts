@@ -18,8 +18,8 @@ export const LAYOUTS = {
   },
   planet_card: {
     id: 'planet_card',
-    columns: ['varga', 'planet', 'sign', 'house', 'degree', 'star', 'dignity', 'retro', 'combust', 'dispositor', 'owns', 'aspects_to', 'aspected_by', 'conjunctions', 'shadbala_rank', 'nature'],
-    description: 'One planet of one varga from the digest `planet` section: place, dignity, state, dispositor, ownership, aspects, conjunctions, strength rank and nature',
+    columns: ['varga', 'planet', 'sign', 'house', 'degree', 'star', 'dignity', 'retro', 'combust', 'dispositor', 'owns', 'aspects_to', 'aspected_by', 'conjunctions', 'shadbala_rank', 'nature', 'avasthas', 'avastha_multipliers', 'dasha_charter', 'sun_proximity', 'star_chain'],
+    description: 'One planet of one varga from the digest `planet` section: place, dignity, state, dispositor and chains, avasthas and delivery multipliers, ownership, aspects, conjunctions, strength rank, nature, and D1 dashaCharter/sunProximity',
   },
   yoga_row: {
     id: 'yoga_row',
@@ -29,17 +29,17 @@ export const LAYOUTS = {
   point_row: {
     id: 'point_row',
     columns: ['point', 'varga', 'sign', 'house', 'lord', 'lord_house'],
-    description: 'One Jaimini point (chara karaka, arudha, special lagna, sphuta) from the digest `point` section with its place and its lord',
+    description: 'One point (chara karaka, bhava/surya/chandra arudha, badhaka, special lagna, sphuta, or Lunar Astro K64M/K64L/KD22/BB) from the digest `point` section with its place and its lord',
   },
   star_profile: {
     id: 'star_profile',
-    columns: ['point', 'star', 'pada', 'star_lord', 'tara', 'gandanta'],
-    description: 'The birth stars from the digest `star` section: Moon star and lagna star with their lords, the tara from the Moon star, gandanta flags',
+    columns: ['point', 'star', 'pada', 'star_lord', 'tara', 'gandanta', 'pending_karma_houses'],
+    description: 'The birth stars from the digest `star` section: Moon star and lagna star with their lords, the tara from the Moon star, gandanta flags, and pending karma houses',
   },
   annual_row: {
     id: 'annual_row',
-    columns: ['year', 'kind', 'varga', 'lagna', 'house', 'lord', 'occupants', 'aspects', 'sahams', 'year_dasha', 'muntha', 'year_lord'],
-    description: 'One year chart (Tithi Pravesha or Varsha) from the digest `annual` section, one row per house, with its sahams and the year dasha periods; muntha and year lord once the engine serves them',
+    columns: ['year', 'kind', 'varga', 'lagna', 'house', 'lord', 'occupants', 'aspects', 'sahams', 'year_dasha', 'muntha', 'year_lord', 'tajaka_yogas'],
+    description: 'One year chart (Tithi Pravesha or Varsha) from the digest `annual` section, one row per house, with its sahams, year dasha periods, and (when annual.tajaka is stored) muntha, year lord and Tajaka yogas',
   },
   activation_row: {
     id: 'activation_row',

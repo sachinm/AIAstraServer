@@ -81,6 +81,11 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Annual (±10 yr) and `kundli_transit_overlays` parity gap on Sachin (`c584c0a3`) and Archisha (`6514751c`) vs. Sumit (`75b0d618`), plus duplicate/misnamed DB accounts.** Audited 2026-11-06 across PostgreSQL:
+  1. **Sumit (`75b0d618-90b7-4db6-bff8-cc7bb0ed561f`)** has 402 ready `kundli_data` rows (including 250 `annual.*` rows across `2016–2035` with `divisional_chart_factor=2,7,9,10`), 893 `kundli_digest` rows (`200` `annual`), 10,260 `kundli_activation` rows, and 11 `kundli_transit_overlays` rows (`1975–2035`).
+  2. **Sachin (`c584c0a3-841b-451b-a2ed-f5709c5fb31d`)** and **Archisha (`6514751c-9b30-45e6-bad6-0a56415e067b`)** have all 152 natal/varga/dasha/strength/avastha rows (702 and 694 `kundli_digest` rows; 12,586 and 8,298 `kundli_activation` rows), but only **12 `annual.*` rows** (`@current` and one single year in D1 only → only `2` `annual` digest rows) and **0 `kundli_transit_overlays` rows** in DB (even though `evals/fixtures/G1/catalog/transit_contacts.*.json` exists on disk for Sachin).
+  3. Two active accounts named `"Sachin Mohan"` (`858f2f20-041c-4c74-8e7e-3fa4f251e19d`, born `1947-01-16 Delhi`, Leo Lagna; `3784ca07-66ba-4319-8b90-4a64073032ac`, born `1985-10-14 Pune`, Aquarius Lagna) store other people's charts under Sachin's display name, and deactivated `archishasinha` (`f3d117b0-6b60-48c9-8552-bd247b2d10aa`) has `01:28` AM (Virgo Lagna) instead of `13:28` PM (Pisces Lagna).
+  - Status: open (digest rebuild with `dashaCharter`, `avasthaMultipliers`, `sunProximity`, `starChain`, `D1.K64M/K64L/KD22`, and `pendingKarmaHouses` completed 2026-11-06 for `c584c0a3`, `75b0d618`, `6514751c`, `858f2f20`, `3784ca07`). Done: run `topUpAnnualSet` and `npm run transits:overlay` for `c584c0a3` and `6514751c`, and relabel `858f2f20` / `3784ca07` with Sachin's OK.
 - **The server auth tests call the real Cognito pool when `.env` says `AUTH_PROVIDER=cognito`.** Found 2026-11-05: with the
   local `.env` (AUTH_PROVIDER and COGNITO_USER_POOL_ID set), `tests/unit/auth/emailOnlySignup.test.ts` and
   `registrationV2.test.ts` sent real code requests and failed with Cognito's "Attempt limit exceeded" (33 failures). They pass
@@ -904,9 +909,7 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   about 10,000 activation rows in batches of 500). Doc 53 §4.1 expects under 10 s on the Lambda; measure there. If it
   is over, raise the batch size for `kundli_activation` or insert with one `unnest` statement.
 - **Doc 53 §4.7 statement timeout of 2 s for digest reads is not set** (`load.ts` reads with the client default).
-- **`conditional` activation rows are written for every conditional system stored**, whether or not `dasha.applicable`
-  says it applies to this chart; doc 46 §B.4 votes only when one applies. The consumer (S3/S4/S5) must check
-  `dasha.applicable` (`applies: true`). Done: either the consumer filters, or the row gains an `applies` flag.
+- **Fixed (2026-11-06):** `conditional` activation rows in `src/reading/digest/activation.ts` now require `applies === true` in `dasha.applicable` (normalized across engine `type` → `DASHA_TREES.system` names), and `PlanetCard.owns` in `src/reading/digest/build.ts` unions both `lord` and `natural_lord` / `dashaCharter` houses (`Ma` owns `[2, 9]` in Pisces Lagna; `Sa` owns `[2, 3]` in Sagittarius Lagna).
 - **`digest_built_at` doubles as the build start while `building`** (the sweep re-runs a build stuck over 10 min).
   When the status is `ready` it is the build time. A separate `digest_started_at` column would be cleaner.
 

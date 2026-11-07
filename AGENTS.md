@@ -131,6 +131,7 @@ The admin panel's Techniques and Agents pages read what is registered and tagged
   both fields fails the catalogue test (`tests/unit/techniques/contracts.test.ts`).
 - **Every `withAgentRun` call** passes `technique` and `kundliId`, and the charts it read (`charts`, or `charts` in the
   result when they are known only after the read).
+- **Every sub-agent slices from `kundli_digest` and recycles used caches after 45 minutes.** Register each sub-agent's digest sections in `src/reading/oracle/digestSlices.ts` (`SUBAGENT_DIGEST_SPECS`) and `src/techniques/subagentCachePlan.ts`, pass `cachePrefix: true` + `cacheOwner: { userId, kundliId }` with the stable individual prefix in `parts[0]`, store reusable outputs in `reading_findings_cache` or `technique_outputs`, and wire consumption hooks into `informIndividualCacheUsed` / `recycleIndividualCaches` (`src/reading/llm/cacheSweep.ts`, 45-minute TTL via `READING_CACHE_RECYCLE_MINUTES`).
 - **General Reading spans** are tagged by `src/reading/metrics/trace.ts` (`agentIdOf`, `techniqueIdOf`, category from the
   subject). A new reading stage or analyst name is added there, with its registry and catalogue rows.
 - **Summaries** (`input` and `output` of a run) hold counts, ids, tones and scores only: never birth data, names, places

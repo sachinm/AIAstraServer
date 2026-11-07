@@ -15,7 +15,7 @@ While raw planetary positions, lagna degrees, and horas shift every ~2 hours (an
 |---|---|---|---|---|
 | **Vol. 01** | [`01-architecture-and-reusable-pieces.md`](./01-architecture-and-reusable-pieces.md) | **Architecture & Digest (`digest.*`)** | 10 Pages | End-to-end system architecture, the 5 classes of reusable Pieces, the Date-Range Window Cache Gate (`piece.cache.date_range_window`), Recipe Families & Freshness Tiers, Error-Correction & Anti-Hallucination Gates, and the 3 Digest techniques (`digest.build`, `digest.annual_set`, `digest.activation`). |
 | **Vol. 02** | [`02-general-reading-illustrations.md`](./02-general-reading-illustrations.md) | **General Reading (`general.*` / `chat`)** | 15 Pages | One-per-page illustrations for all 15 General Reading techniques: Intake, Clarify, 6 Graph Specialist Analysts (`promise`, `dasha`, `annual`, `transit`, `nakshatra`, `prashna`), 4 Deterministic Code Readers (`varga_dynamics`, `strength_yoga`, `jaimini`, `person`), Oracle Readers (`R01–R14, P1–P3`), Oracle Synthesizer (`general.oracle`), and Validator (`general.validator`). |
-| **Vol. 03** | [`03-self-board-illustrations.md`](./03-self-board-illustrations.md) | **Self / You Board (`self.*` / `you`)** | 8 Pages | One-per-page illustrations for all 8 Self house-state layers over Houses `1, 4, 5, 9, 12` and the Moon (`D1, D9, D20, D24, D12, D4, D7, D60`): `self.promise`, `self.affliction`, `self.protection`, `self.activation`, `self.transit`, `self.annual`, `self.varga`, `self.nakshatra`. |
+| **Vol. 03** | [`03-self-board-illustrations.md`](./03-self-board-illustrations.md) | **Self / You Board (`self.*`, `research.*` / `you`)** | 10 Pages | One-per-page illustrations for all 8 Self house-state layers over Houses `1, 4, 5, 9, 12` and the Moon (`D1, D9, D20, D24, D12, D4, D7, D60`): `self.promise`, `self.affliction`, `self.protection`, `self.activation`, `self.transit`, `self.annual`, `self.varga`, `self.nakshatra`, plus the 2 Research Self Dashboard & Technical Verifier techniques (`research.self_dashboard_qa`, `research.technical_verifier`). |
 | **Vol. 04** | [`04-love-board-illustrations.md`](./04-love-board-illustrations.md) | **Love Board (`love.*` / `love`)** | 11 Pages | One-per-page illustrations for all 8 Love house-state layers over Houses `7, 5, 11, 2, 4, 8, 12` (`D1, D9, D7, D30`) plus the 3 companion-memory sub-area techniques (`love.meet`, `love.health`, `love.reconcile`). |
 | **Vol. 05** | [`05-work-board-illustrations.md`](./05-work-board-illustrations.md) | **Work Board (`work.*` / `work`)** | 9 Pages | One-per-page illustrations for all 9 Work techniques over Houses `10, 6, 1, 2, 11` (`D1, D10, D9, D60`): `work.present_tone`, `work.security_grade`, `work.subarea_windows`, `work.horizons`, `work.looking_back`, `work.annual_family`, `work.conditional_family`, `work.karaka_family`, `work.d10_check`. |
 | **Vol. 06** | [`06-lucky-times-and-life-illustrations.md`](./06-lucky-times-and-life-illustrations.md) | **Lucky Times (`lucky.*`) & Life (`life.*`)** | 21 Pages | One-per-page illustrations for all 4 shared Panchang/Muhurta techniques (`lucky.day_tables`, `lucky.panchang_limbs`, `lucky.avoid_bands`, `lucky.personal_overlay`), all 13 scenario techniques (`lucky.work.*`, `lucky.love.*`, `lucky.money.*`, `lucky.travel.*`, `lucky.study.*`, `lucky.home.*`), and all 4 Life Reading / Timeline techniques (`life.promise_scale`, `life.timing_agreement`, `life.mahadasha_charter`, `life.dashboard`). |
@@ -53,7 +53,7 @@ While raw planetary positions, lagna degrees, and horas shift every ~2 hours (an
 
 ---
 
-## Complete Catalogue Index (67 Techniques)
+## Complete Catalogue Index (69 Techniques)
 
 ### 1. Digest Foundation (`digest.*` — Vol. 01)
 - [`digest.build`](./01-architecture-and-reusable-pieces.md#page-8-of-10--digestbuild-kundli-digest-first-time-breakdown) — Kundli digest (the first-time breakdown)
@@ -77,15 +77,17 @@ While raw planetary positions, lagna degrees, and horas shift every ~2 hours (an
 - [`general.oracle`](./02-general-reading-illustrations.md#page-14-of-15--generaloracle-oracle-and-synthesizer) — Oracle and synthesizer
 - [`general.validator`](./02-general-reading-illustrations.md#page-15-of-15--generalvalidator-validator) — Validator
 
-### 3. Self / You Board (`self.*` — Vol. 03)
-- [`self.promise`](./03-self-board-illustrations.md#page-1-of-8--selfpromise-natal-promise-of-houses-1-4-and-5-with-the-moon) — Natal promise of houses 1, 4 and 5 with the Moon
-- [`self.affliction`](./03-self-board-illustrations.md#page-2-of-8--selfaffliction-afflictions-on-houses-1-4-and-5-with-the-moon) — Afflictions on houses 1, 4 and 5 with the Moon
-- [`self.protection`](./03-self-board-illustrations.md#page-3-of-8--selfprotection-what-protects-houses-1-4-and-5-with-the-moon) — What protects houses 1, 4 and 5 with the Moon
-- [`self.activation`](./03-self-board-illustrations.md#page-4-of-8--selfactivation-activation-of-houses-1-4-and-5-by-every-dasha-system) — Activation of houses 1, 4 and 5 with the Moon by every dasha system
-- [`self.transit`](./03-self-board-illustrations.md#page-5-of-8--selftransit-transits-over-houses-1-4-and-5-with-the-moon) — Transits over houses 1, 4 and 5 with the Moon
-- [`self.annual`](./03-self-board-illustrations.md#page-6-of-8--selfannual-this-years-chart-for-houses-1-4-and-5-with-the-moon) — This year's chart for houses 1, 4 and 5 with the Moon
-- [`self.varga`](./03-self-board-illustrations.md#page-7-of-8--selfvarga-owning-divisional-chart-of-houses-1-4-and-5-with-the-moon) — Owning divisional chart of houses 1, 4 and 5 with the Moon
-- [`self.nakshatra`](./03-self-board-illustrations.md#page-8-of-8--selfnakshatra-nakshatra-charter-of-houses-1-4-and-5-with-the-moon) — Nakshatra charter of houses 1, 4 and 5 with the Moon
+### 3. Self / You Board (`self.*` & `research.*` — Vol. 03)
+- [`self.promise`](./03-self-board-illustrations.md#page-1-of-10--selfpromise-natal-promise-of-houses-1-4-and-5-with-the-moon) — Natal promise of houses 1, 4 and 5 with the Moon
+- [`self.affliction`](./03-self-board-illustrations.md#page-2-of-10--selfaffliction-afflictions-on-houses-1-4-and-5-with-the-moon) — Afflictions on houses 1, 4 and 5 with the Moon
+- [`self.protection`](./03-self-board-illustrations.md#page-3-of-10--selfprotection-what-protects-houses-1-4-and-5-with-the-moon) — What protects houses 1, 4 and 5 with the Moon
+- [`self.activation`](./03-self-board-illustrations.md#page-4-of-10--selfactivation-activation-of-houses-1-4-and-5-by-every-dasha-system) — Activation of houses 1, 4 and 5 with the Moon by every dasha system
+- [`self.transit`](./03-self-board-illustrations.md#page-5-of-10--selftransit-transits-over-houses-1-4-and-5-with-the-moon) — Transits over houses 1, 4 and 5 with the Moon
+- [`self.annual`](./03-self-board-illustrations.md#page-6-of-10--selfannual-this-years-chart-for-houses-1-4-and-5-with-the-moon) — This year's chart for houses 1, 4 and 5 with the Moon
+- [`self.varga`](./03-self-board-illustrations.md#page-7-of-10--selfvarga-owning-divisional-chart-of-houses-1-4-and-5-with-the-moon) — Owning divisional chart of houses 1, 4 and 5 with the Moon
+- [`self.nakshatra`](./03-self-board-illustrations.md#page-8-of-10--selfnakshatra-nakshatra-charter-of-houses-1-4-and-5-with-the-moon) — Nakshatra charter of houses 1, 4 and 5 with the Moon
+- [`research.self_dashboard_qa`](./03-self-board-illustrations.md#page-9-of-10--researchself_dashboard_qa-research-self-dashboard-deep-dive--novthanksgivingdecnew-year-zoom-in) — Research Self Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year zoom-in
+- [`research.technical_verifier`](./03-self-board-illustrations.md#page-10-of-10--researchtechnical_verifier-independent-technical-verifier-agent-8-gate-classical--governance-audit) — Independent Technical Verifier Agent (8-gate classical & governance audit)
 
 ### 4. Love Board (`love.*` — Vol. 04)
 - [`love.promise`](./04-love-board-illustrations.md#page-1-of-11--lovepromise-natal-promise-of-house-7) — Natal promise of house 7
