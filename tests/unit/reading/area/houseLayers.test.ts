@@ -5,6 +5,8 @@ import {
   afflictionLayer,
   annualLayer,
   buildBoard,
+  buildLoveBondingAndChemistry,
+  buildLoveRelationshipArc,
   currentYear,
   familyVotes,
   gradeRow,
@@ -293,6 +295,30 @@ describe('the board', () => {
     expect(joyB.headline).toContain('original, systems-level thinking');
     expect(joyB.headline).not.toBe(joyA.headline);
     expect(joyB.personalitySummary).not.toBe(joyA.personalitySummary);
+    expect(joyB.emotionalMindStyle).not.toContain('fiercely loyal, private');
+    expect(joyB.intellectualWitStyle).not.toContain('cuts through appearances');
+
+    // Enriched Master-Detail fields on supports and pressures
+    const sup0 = age30.supports[0]!;
+    expect(sup0.subCategory).toBeTruthy();
+    expect(sup0.dateLabel).toBeTruthy();
+    expect(sup0.reading).toContain(sup0.text);
+    expect(sup0.natalPromise).toBeTruthy();
+    expect(sup0.periodCharter).toBeTruthy();
+    expect(sup0.techniqueId).toMatch(/^self\.(promise|protection)$/);
+
+    // Plural grammar in KIND_WORDS
+    expect(KIND_WORDS.placed_well('your ideas and learning')).toBe('Your ideas and learning have firm footing.');
+    expect(KIND_WORDS.placed_hard('your partnerships')).toBe('Your partnerships take more effort than they look.');
+    expect(KIND_WORDS.placed_well('friendships')).toBe('Friendships have firm footing.');
+
+    // Love relationship arc & partner chemistry builders
+    const loveArc = buildLoveRelationshipArc(view, activation, AS_OF, { ageYears: 46 });
+    expect(loveArc.pastDecade.windowLabel).toBe('Ages 36–46 (2016–2026)');
+    expect(loveArc.presentNow.windowLabel).toBe('Age 46 (2026)');
+    expect(loveArc.nextDecade.windowLabel).toBe('Ages 46–56 (2026–2036)');
+    const loveChem = buildLoveBondingAndChemistry(view);
+    expect(loveChem.whatFeelsGood.length).toBeGreaterThanOrEqual(2);
   });
   it('Looking back picks edges of the last 12 months, both directions, at most three', () => {
     const past = [

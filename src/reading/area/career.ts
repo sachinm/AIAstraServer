@@ -21,6 +21,12 @@ import type { Band, SystemId } from '../timeline/types.js';
 import type { DigestView } from '../digest/types.js';
 import type { ActivationRow } from '../digest/activation.js';
 import { currentYear, hasClass, isBad, isGood } from './houseLayers.js';
+import {
+  buildWorkCharacterArc,
+  buildWorkVocationAndPersonality,
+  type SelfCharacterArc,
+  type SelfPersonalityAndJoy,
+} from './selfCharacterAndJoy.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
 export type Confidence = 'confirmed' | 'likely' | 'split';
@@ -88,6 +94,8 @@ export interface CareerMap {
   security: Array<{ month: string; grade: SecurityGrade }>;
   back: Array<{ month: string; side: 'support' | 'test'; band: Exclude<Band, 'quiet'>; label: string }>;
   notes: string[];
+  characterArc?: SelfCharacterArc;
+  vocationBlueprint?: SelfPersonalityAndJoy;
 }
 
 const PRIMARY: MarkerId = 'career';
@@ -484,5 +492,19 @@ export function careerMap(build: PastBuild, asOf: string, digest?: CareerDigestI
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  return { asOf, month, present, ahead, horizons, security, back: pickBack, notes };
+  const characterArc = digest?.view ? buildWorkCharacterArc(digest.view, digest.activation ?? [], asOf) : undefined;
+  const vocationBlueprint = digest?.view ? buildWorkVocationAndPersonality(digest.view) : undefined;
+
+  return {
+    asOf,
+    month,
+    present,
+    ahead,
+    horizons,
+    security,
+    back: pickBack,
+    notes,
+    ...(characterArc ? { characterArc } : {}),
+    ...(vocationBlueprint ? { vocationBlueprint } : {}),
+  };
 }
