@@ -1,5 +1,5 @@
 /**
- * The technique output store (docs/reading-engine/56 §4.1, M36): stores a technique's digested output for one kundli
+ * The technique output store (docs/reading-engine/56 §4.1, M37): stores a technique's digested output for one kundli
  * over the date range (`[valid_from, valid_to)`) in which its inputs cannot change.
  *
  * When a caller requests the technique inside that validity window:
