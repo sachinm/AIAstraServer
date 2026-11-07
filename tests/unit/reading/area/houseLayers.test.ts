@@ -312,13 +312,17 @@ describe('the board', () => {
     expect(KIND_WORDS.placed_hard('your partnerships')).toBe('Your partnerships take more effort than they look.');
     expect(KIND_WORDS.placed_well('friendships')).toBe('Friendships have firm footing.');
 
-    // Love relationship arc & partner chemistry builders
+    // Love relationship arc & partner chemistry builders vary dynamically across charts
     const loveArc = buildLoveRelationshipArc(view, activation, AS_OF, { ageYears: 46 });
     expect(loveArc.pastDecade.windowLabel).toBe('Ages 36–46 (2016–2026)');
     expect(loveArc.presentNow.windowLabel).toBe('Age 46 (2026)');
     expect(loveArc.nextDecade.windowLabel).toBe('Ages 46–56 (2026–2036)');
-    const loveChem = buildLoveBondingAndChemistry(view);
-    expect(loveChem.whatFeelsGood.length).toBeGreaterThanOrEqual(2);
+    expect(loveArc.pastDecade.headline).not.toBe(loveArc.presentNow.headline);
+    const loveChemA = buildLoveBondingAndChemistry(view);
+    const loveChemB = buildLoveBondingAndChemistry(scorpioAquarius);
+    expect(loveChemA.whatFeelsGood.length).toBeGreaterThanOrEqual(4);
+    expect(loveChemB.headline).not.toBe(loveChemA.headline);
+    expect(loveChemB.personalitySummary).not.toBe(loveChemA.personalitySummary);
   });
   it('Looking back picks edges of the last 12 months, both directions, at most three', () => {
     const past = [

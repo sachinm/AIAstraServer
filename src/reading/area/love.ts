@@ -63,7 +63,7 @@ export const LOVE: AreaConfig = {
 export const LOVE_STATUS = ['single', 'dating', 'committed', 'married', 'separated', 'complicated'] as const;
 export type LoveStatus = (typeof LOVE_STATUS)[number];
 
-/** Which sub-areas suit the person's situation (doc 45 §3.5, doc 48 §4.3). Unknown or declined: friendships only. */
+/** Which sub-areas suit the person's situation (doc 45 §3.5, doc 48 §4.3). Unknown or declined: core relationship & bond sub-areas (excluding situation-specific meet/reconcile/delay) so the Love board never collapses to friendships alone. */
 export const LOVE_FIT: Record<LoveStatus | 'unknown', string[]> = {
   single: ['meet', 'romance', 'delay', 'friends'],
   dating: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
@@ -71,7 +71,7 @@ export const LOVE_FIT: Record<LoveStatus | 'unknown', string[]> = {
   married: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
   separated: ['reconcile', 'strain', 'meet', 'friends'],
   complicated: ['reconcile', 'health', 'strain', 'friends'],
-  unknown: ['friends'],
+  unknown: ['health', 'romance', 'commitment', 'strain', 'family_accept', 'friends'],
 };
 
 /** doc 53 §4.5: love.status selects love.meet vs love.health vs love.reconcile. */

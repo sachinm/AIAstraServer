@@ -903,8 +903,15 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   const characterArc =
     cfg.area === 'self'
       ? buildSelfCharacterArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null })
-      : undefined;
-  const personalityAndJoy = cfg.area === 'self' ? buildSelfPersonalityAndJoy(view) : undefined;
+      : cfg.area === 'love'
+        ? buildLoveRelationshipArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null })
+        : undefined;
+  const personalityAndJoy =
+    cfg.area === 'self'
+      ? buildSelfPersonalityAndJoy(view)
+      : cfg.area === 'love'
+        ? buildLoveBondingAndChemistry(view)
+        : undefined;
 
   return {
     board: {

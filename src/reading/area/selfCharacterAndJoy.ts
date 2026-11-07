@@ -693,8 +693,108 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
   };
 }
 
+const LOVE_STAGE_THEMES: Record<
+  number,
+  {
+    pastHeadline: string;
+    pastSummary: string;
+    pastTrait: string;
+    nowHeadline: string;
+    nowSummary: string;
+    nowTrait: string;
+    nextHeadline: string;
+    nextSummary: string;
+    nextTrait: string;
+  }
+> = {
+  7: {
+    pastHeadline: 'Distinguishing surface chemistry from lasting reciprocity',
+    pastSummary:
+      'Over the past decade close relationships taught you the difference between surface attraction and a bond that genuinely honors mutual respect.',
+    pastTrait: 'Selective relational trust',
+    nowHeadline: 'Reciprocal honesty, clear agreements, and calm devotion',
+    nowSummary:
+      'Today you value straightforward communication and kept promises over guesswork—bringing steadiness, loyalty, and warmth when reciprocity is clear.',
+    nowTrait: 'Principled partnership',
+    nextHeadline: 'Deepening covenant trust and enduring companionship',
+    nextSummary:
+      'Over the next ten years your relationship rhythm settles into deeper mutual respect, shared sanctuary, and long-horizon companionship.',
+    nextTrait: 'Enduring covenant warmth',
+  },
+  5: {
+    pastHeadline: 'Learning what genuinely sparks your heart and affection',
+    pastSummary:
+      'The last ten years clarified how you express affection, teaching you to invest your heart where warmth and curiosity are returned.',
+    pastTrait: 'Wholehearted affection',
+    nowHeadline: 'Warm romantic presence and creative connection',
+    nowSummary:
+      'Right now closeness thrives when you share laughter, curiosity, and unhurried one-on-one time without pretense.',
+    nowTrait: 'Playful devotion',
+    nextHeadline: 'Lasting romantic warmth and shared joy',
+    nextSummary:
+      'In the coming decade your bonds are energized by shared creative projects, family pride, and joyful everyday rituals.',
+    nextTrait: 'Generous heart connection',
+  },
+  4: {
+    pastHeadline: 'Protecting emotional safety and peace at home',
+    pastSummary:
+      'Over the past decade your private life showed you how essential domestic peace and gentle boundaries are to lasting love.',
+    pastTrait: 'Emotional sanctuary',
+    nowHeadline: 'Grounded domestic warmth and protective care',
+    nowSummary:
+      'Today you bond most deeply when home feels calm, predictable, and emotionally safe for both partners.',
+    nowTrait: 'Steady domestic care',
+    nextHeadline: 'Building a deeply settled home and sanctuary together',
+    nextSummary:
+      'Over the next ten years love is anchored by a restorative shared home base and quiet emotional security.',
+    nextTrait: 'Settled domestic harmony',
+  },
+  2: {
+    pastHeadline: 'Weighing promises by consistency and family steadiness',
+    pastSummary:
+      'The last decade taught you that true affection shows up in reliable speech, shared values, and everyday follow-through.',
+    pastTrait: 'Kept promises',
+    nowHeadline: 'Gentle speech, shared values, and dependable care',
+    nowSummary:
+      'Today you bring calm reliability to your closest bonds and look for partners whose actions match their words.',
+    nowTrait: 'Dependable loyalty',
+    nextHeadline: 'Compounding family stability and shared resources',
+    nextSummary:
+      'Across the next decade your relationships benefit from solid shared foundations, family warmth, and quiet trust.',
+    nextTrait: 'Enduring family bond',
+  },
+  8: {
+    pastHeadline: 'Outgrowing guardedness through deep emotional honesty',
+    pastSummary:
+      'Over the past ten years intense relational lessons taught you how to spot unspoken dynamics and protect your emotional core.',
+    pastTrait: 'Perceptive intimacy',
+    nowHeadline: 'Soul-deep candor and resilient loyalty',
+    nowSummary:
+      'Today surface small talk does not move you; you value ride-or-die honesty and emotional courage in love.',
+    nowTrait: 'Unflappable devotion',
+    nextHeadline: 'Turning hard-won vulnerability into calm closeness',
+    nextSummary:
+      'Over the next ten years past caution softens into deep, unshakeable intimacy and mutual emotional freedom.',
+    nextTrait: 'Transformative trust',
+  },
+  11: {
+    pastHeadline: 'Discovering how friendship anchors lasting romance',
+    pastSummary:
+      'The past decade showed you that the strongest partnerships begin with genuine friendship, shared ideals, and mutual encouragement.',
+    pastTrait: 'Kindred friendship',
+    nowHeadline: 'Shared aspirations and supportive companionship',
+    nowSummary:
+      'Today love feels best when you and your partner champion each other’s goals and enjoy a trusted social circle.',
+    nowTrait: 'Collaborative affection',
+    nextHeadline: 'Growing together through shared dreams and community',
+    nextSummary:
+      'In the coming decade your bond expands through shared milestones, supportive friendships, and long-range plans.',
+    nextTrait: 'Shared horizon warmth',
+  },
+};
+
 /**
- * Technique (`love.relationship_arc`):
+ * Technique (`love.character_arc` / `love.promise` + `love.activation`):
  * Builds a 3-decade Vedic relationship & covenant evolution arc (Last 10 Years -> Where Your Heart Stands Now -> Next 10 Years)
  * from 7th Bhava, 5th Bhava, 8th Bhava, Venus (Shukra), Darakaraka (DK), Upapada (UL), and Navamsa (D9).
  */
@@ -717,9 +817,53 @@ export function buildLoveRelationshipArc(
   const dkCode = dkPoint?.lord ?? 'Ve';
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
+  const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
   const nowMd =
     activation.find((r) => r.family === 'vimshottari' && r.level === 1 && r.from <= asOf && asOf < r.to) ?? pastMd;
+  const nowAd =
+    activation.find((r) => r.family === 'vimshottari' && r.level === 2 && r.from <= asOf && asOf < r.to) ?? pastAd;
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
+  const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
+
+  const usedHouses = new Set<number>();
+  const pastHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, pastMd?.lord),
+      ...(pastMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, pastAd?.lord),
+      view.planet('D1', l7Code)?.house,
+      7,
+    ],
+    usedHouses,
+    [7, 5, 4, 8, 2, 11, 12, 1, 9, 3, 10, 6],
+  );
+  const nowHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nowMd?.lord),
+      ...(nowMd?.houses ?? []),
+      veD1?.house,
+      ...candidateHousesForPlanet(view, dkCode),
+      5,
+    ],
+    usedHouses,
+    [5, 7, 4, 2, 11, 8, 1, 9, 12, 3, 10, 6],
+  );
+  const nextHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nextMd?.lord),
+      ...(nextMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, nextAd?.lord),
+      veD9?.house,
+      ulPoint?.house,
+      4,
+    ],
+    usedHouses,
+    [4, 7, 2, 11, 5, 9, 8, 1, 12, 3, 10, 6],
+  );
+
+  const pastTheme = LOVE_STAGE_THEMES[pastHouse] ?? HOUSE_CHARACTER_THEMES[pastHouse] ?? LOVE_STAGE_THEMES[7]!;
+  const nowTheme = LOVE_STAGE_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[nowHouse] ?? LOVE_STAGE_THEMES[5]!;
+  const nextTheme = LOVE_STAGE_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[nextHouse] ?? LOVE_STAGE_THEMES[4]!;
 
   const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
   const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
@@ -738,13 +882,12 @@ export function buildLoveRelationshipArc(
     label: 'Last 10 Years',
     ageSpanLabel: pastAgeTag,
     windowLabel: pastAgeTag,
-    headline: 'Distinguishing chemistry from lasting emotional safety',
-    summary:
-      'Over the past decade close relationships taught you the difference between surface attraction and a bond that genuinely protects your peace of mind.',
-    anchorTrait: 'Selective relational trust',
+    headline: pastTheme.pastHeadline,
+    summary: pastTheme.pastSummary,
+    anchorTrait: pastTheme.pastTrait,
     evidence: [
-      `D1.h7:${h7?.sign ?? 'Libra'} (lord=${l7Code})`,
-      `vimsottari:past_10y:${pastMd?.lord ?? l7Code} (${pastFrom}..${asOf})`,
+      `D1.h7:${h7?.sign ?? 'Libra'} (lord=${l7Code}, H${pastHouse})`,
+      `vimsottari:past_10y:${pastMd?.lord ?? l7Code}/${pastAd?.lord ?? dkCode} (${pastFrom}..${asOf})`,
     ],
   };
 
@@ -755,10 +898,9 @@ export function buildLoveRelationshipArc(
     label: 'Where Your Heart Stands Now',
     ageSpanLabel: nowAgeTag,
     windowLabel: nowAgeTag,
-    headline: 'Reciprocal honesty, clear agreements, and calm devotion',
-    summary:
-      'Today you value straightforward communication and kept promises over guesswork—bringing steadiness, loyalty, and warmth when reciprocity is clear.',
-    anchorTrait: 'Principled partnership',
+    headline: nowTheme.nowHeadline,
+    summary: nowTheme.nowSummary,
+    anchorTrait: nowTheme.nowTrait,
     evidence: [
       `D1.Ve:${veD1?.sign ?? 'Taurus'} (H${veD1?.house ?? 7})`,
       `D9.Ve:${veD9?.sign ?? 'Libra'} (${veD9?.dignity ?? 'friendly'})`,
@@ -774,13 +916,12 @@ export function buildLoveRelationshipArc(
     label: 'Next 10 Years',
     ageSpanLabel: nextAgeTag,
     windowLabel: nextAgeTag,
-    headline: 'Deepening shared sanctuary and enduring companionship',
-    summary:
-      'Over the next ten years your relationship rhythm settles into deeper domestic warmth, mutual respect, and long-horizon companionship.',
-    anchorTrait: 'Enduring covenant warmth',
+    headline: nextTheme.nextHeadline,
+    summary: nextTheme.nextSummary,
+    anchorTrait: nextTheme.nextTrait,
     evidence: [
-      `vimsottari:next_10y:${nextMd?.lord ?? dkCode} (${asOf}..${nextTo})`,
-      `D9.h7:${view.house('D9', 7)?.sign ?? 'Libra'}`,
+      `vimsottari:next_10y:${nextMd?.lord ?? dkCode}/${nextAd?.lord ?? l7Code} (${asOf}..${nextTo})`,
+      `D9.h7:${view.house('D9', 7)?.sign ?? 'Libra'} (H${nextHouse})`,
     ],
   };
 
@@ -794,7 +935,7 @@ export function buildLoveRelationshipArc(
 }
 
 /**
- * Technique (`love.partner_chemistry`):
+ * Technique (`love.partner_chemistry` / `love.promise` + `love.varga`):
  * Builds a deterministic Vedic synthesis of affection, bonding, and partner chemistry from Venus (Shukra),
  * Moon (Chandra), 5th Bhava (romance), 7th Bhava (covenant), and 8th Bhava (emotional depth).
  */
@@ -806,48 +947,72 @@ export function buildLoveBondingAndChemistry(view: DigestView): SelfPersonalityA
   const h7 = view.house('D1', 7);
   const h8 = view.house('D1', 8);
 
+  const venusSign = veD1?.sign ?? h7?.sign ?? 'Taurus';
+  const moonSign = moD1?.sign ?? h5?.sign ?? 'Libra';
+  const venusStyle = SIGN_MIND_STYLE[venusSign] ?? SIGN_MIND_STYLE.Taurus!;
+  const moonStyle = SIGN_MIND_STYLE[moonSign] ?? SIGN_MIND_STYLE.Libra!;
+
   const items: SelfPersonalityJoyItem[] = [
     {
       id: 'covenant_trust',
       title: 'Kept promises & unhurried presence',
       whatYouEnjoy: 'Kept promises & unhurried presence',
-      whyItFeelsGood: 'Consistency between words and actions lets your guard drop and deepens long-term devotion.',
-      whyItFits: 'Consistency between words and actions lets your guard drop and deepens long-term devotion.',
-      evidence: [`D1.h7:${h7?.sign ?? 'Libra'} (lord=${h7?.lord ?? 'Ve'})`, `D9.Ve:${veD9?.sign ?? 'Libra'}`],
+      whyItFeelsGood: venusStyle.joyActivities[0]!.whyItFits,
+      whyItFits: venusStyle.joyActivities[0]!.whyItFits,
+      evidence: [`D1.h7:${h7?.sign ?? 'Libra'} (lord=${h7?.lord ?? 'Ve'})`, `D9.Ve:${veD9?.sign ?? venusSign}`],
     },
     {
       id: 'romantic_spark',
       title: 'Shared laughter, curiosity & creative dates',
       whatYouEnjoy: 'Shared laughter, curiosity & creative dates',
-      whyItFeelsGood: 'Playful one-on-one conversation and shared interests keep affection warm during busy weeks.',
-      whyItFits: 'Playful one-on-one conversation and shared interests keep affection warm during busy weeks.',
-      evidence: [`D1.h5:${h5?.sign ?? 'Leo'} (lord=${h5?.lord ?? 'Su'})`, `D1.Ve:${veD1?.sign ?? 'Taurus'}`],
+      whyItFeelsGood: moonStyle.joyActivities[0]!.whyItFits,
+      whyItFits: moonStyle.joyActivities[0]!.whyItFits,
+      evidence: [`D1.h5:${h5?.sign ?? 'Leo'} (lord=${h5?.lord ?? 'Su'})`, `D1.Ve:${venusSign}`],
+    },
+    {
+      id: 'emotional_safety',
+      title: venusStyle.joyActivities[1]!.title,
+      whatYouEnjoy: venusStyle.joyActivities[1]!.title,
+      whyItFeelsGood: venusStyle.joyActivities[1]!.whyItFits,
+      whyItFits: venusStyle.joyActivities[1]!.whyItFits,
+      evidence: [`D1.Mo:${moonSign} (H${moD1?.house ?? 4})`, `D1.h8.sav:${h8?.sav ?? 27}`],
+    },
+    {
+      id: 'shared_sanctuary',
+      title: moonStyle.joyActivities[1]!.title,
+      whatYouEnjoy: moonStyle.joyActivities[1]!.title,
+      whyItFeelsGood: moonStyle.joyActivities[1]!.whyItFits,
+      whyItFits: moonStyle.joyActivities[1]!.whyItFits,
+      evidence: [`D1.h7.sav:${h7?.sav ?? 28}`, `D9.h7:${view.house('D9', 7)?.sign ?? 'Libra'}`],
     },
   ];
 
+  const h7Sav = h7?.sav ?? 28;
+  const rechargeRule =
+    h7Sav >= 29
+      ? 'Protect unhurried one-on-one evenings without phones or schedules so closeness and conversation stay effortless.'
+      : 'Give each other calm breathing room after demanding workdays before diving into sensitive relationship topics.';
+
   return {
-    headline: 'Deep loyalty and emotional honesty paired with warm, perceptive affection',
-    personalitySummary:
-      'In love you bond through reliability, emotional candor, and shared quiet rituals rather than grand performative gestures.',
-    emotionalMindStyle:
-      'Your heart opens when a partner respects your inner sanctuary and communicates directly without games.',
-    intellectualWitStyle:
-      'Chemistry stays bright when you share intellectual curiosity, dry humor, and mutual encouragement.',
+    headline: `${venusStyle.moonShort} in love paired with ${moonStyle.mercuryShort}`,
+    personalitySummary: `In close relationships you are ${venusStyle.moonSummary}—and you connect best with a partner who ${moonStyle.mercurySummary}.`,
+    emotionalMindStyle: venusStyle.moonTone,
+    intellectualWitStyle: moonStyle.mercuryTone,
     whatFeelsGood: items,
     pillars: items,
-    rechargeRule: 'Protect unhurried one-on-one evenings without phones or schedules to keep closeness effortless.',
+    rechargeRule,
     evidence: [
-      `D1.Ve:${veD1?.sign ?? 'Taurus'}.H${veD1?.house ?? 7}`,
-      `D9.Ve:${veD9?.sign ?? 'Libra'}`,
-      `D1.Mo:${moD1?.sign ?? 'Taurus'}.H${moD1?.house ?? 4}`,
-      `D1.h7.sav:${h7?.sav ?? 28}`,
+      `D1.Ve:${venusSign}.H${veD1?.house ?? 7}`,
+      `D9.Ve:${veD9?.sign ?? venusSign}`,
+      `D1.Mo:${moonSign}.H${moD1?.house ?? 4}`,
+      `D1.h7.sav:${h7Sav}`,
       `D1.h8.sav:${h8?.sav ?? 27}`,
     ],
   };
 }
 
 /**
- * Technique (`work.character_arc`):
+ * Technique (`work.character_arc` / `work.present_tone`):
  * Builds a 3-decade Vedic career & ambition evolution arc (Last 10 Years -> Your Standing Today -> Next 10 Years)
  * from 10th Bhava, Dasamsa (D10), Amatyakaraka (AmK), Saturn (Shani), and active periods.
  */
@@ -868,9 +1033,52 @@ export function buildWorkCharacterArc(
   const amkCode = amkPoint?.lord ?? l10Code;
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
+  const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
   const nowMd =
     activation.find((r) => r.family === 'vimshottari' && r.level === 1 && r.from <= asOf && asOf < r.to) ?? pastMd;
+  const nowAd =
+    activation.find((r) => r.family === 'vimshottari' && r.level === 2 && r.from <= asOf && asOf < r.to) ?? pastAd;
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
+  const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
+
+  const usedHouses = new Set<number>();
+  const pastHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, pastMd?.lord),
+      ...(pastMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, pastAd?.lord),
+      view.planet('D1', l10Code)?.house,
+      6,
+    ],
+    usedHouses,
+    [6, 3, 10, 2, 1, 11, 5, 9, 4, 7, 8, 12],
+  );
+  const nowHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nowMd?.lord),
+      ...(nowMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, l10Code),
+      ...candidateHousesForPlanet(view, amkCode),
+      10,
+    ],
+    usedHouses,
+    [10, 1, 11, 2, 5, 9, 6, 3, 7, 4, 8, 12],
+  );
+  const nextHouse = pickDistinctHouse(
+    [
+      ...candidateHousesForPlanet(view, nextMd?.lord),
+      ...(nextMd?.houses ?? []),
+      ...candidateHousesForPlanet(view, nextAd?.lord),
+      view.planet('D10', d10H10?.lord ?? l10Code)?.house,
+      9,
+    ],
+    usedHouses,
+    [9, 11, 10, 5, 1, 2, 7, 3, 4, 6, 8, 12],
+  );
+
+  const pastTheme = HOUSE_CHARACTER_THEMES[pastHouse] ?? HOUSE_CHARACTER_THEMES[6]!;
+  const nowTheme = HOUSE_CHARACTER_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[10]!;
+  const nextTheme = HOUSE_CHARACTER_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[9]!;
 
   const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
   const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
@@ -889,13 +1097,12 @@ export function buildWorkCharacterArc(
     label: 'Last 10 Years',
     ageSpanLabel: pastAgeTag,
     windowLabel: pastAgeTag,
-    headline: 'Building foundational craft and accountable execution',
-    summary:
-      'Through the past decade you forged hands-on capability, reliable execution, and practical resilience through real accountability.',
-    anchorTrait: 'Self-reliant stamina',
+    headline: pastTheme.pastHeadline,
+    summary: pastTheme.pastSummary,
+    anchorTrait: pastTheme.pastTrait,
     evidence: [
-      `D1.h10:${h10?.sign ?? 'Capricorn'} (lord=${l10Code})`,
-      `vimsottari:past_10y:${pastMd?.lord ?? l10Code} (${pastFrom}..${asOf})`,
+      `D1.h10:${h10?.sign ?? 'Capricorn'} (lord=${l10Code}, H${pastHouse})`,
+      `vimsottari:past_10y:${pastMd?.lord ?? l10Code}/${pastAd?.lord ?? amkCode} (${pastFrom}..${asOf})`,
     ],
   };
 
@@ -906,14 +1113,13 @@ export function buildWorkCharacterArc(
     label: 'Your Standing Today',
     ageSpanLabel: nowAgeTag,
     windowLabel: nowAgeTag,
-    headline: 'Earned authority and strategic focus',
-    summary:
-      'Today you bring calm command, structured judgment, and trusted follow-through to high-stakes work.',
-    anchorTrait: 'Principled execution',
+    headline: nowTheme.nowHeadline,
+    summary: nowTheme.nowSummary,
+    anchorTrait: nowTheme.nowTrait,
     evidence: [
       `D10.h10:${d10H10?.sign ?? 'Capricorn'} (lord=${d10H10?.lord ?? l10Code})`,
       `D1.point.AmK:${amkCode}`,
-      `vimsottari:now:${nowMd?.lord ?? l10Code}`,
+      `vimsottari:now:${nowMd?.lord ?? l10Code}/${nowAd?.lord ?? amkCode}`,
     ],
   };
 
@@ -924,13 +1130,12 @@ export function buildWorkCharacterArc(
     label: 'Next 10 Years',
     ageSpanLabel: nextAgeTag,
     windowLabel: nextAgeTag,
-    headline: 'Stepping into advisory scope and lasting impact',
-    summary:
-      'Across the coming decade your role shifts from carrying every task yourself to setting direction, mentoring talent, and compounding long-term equity.',
-    anchorTrait: 'Strategic stewardship',
+    headline: nextTheme.nextHeadline,
+    summary: nextTheme.nextSummary,
+    anchorTrait: nextTheme.nextTrait,
     evidence: [
-      `vimsottari:next_10y:${nextMd?.lord ?? amkCode} (${asOf}..${nextTo})`,
-      `D10.p.${nextMd?.lord ?? amkCode}`,
+      `vimsottari:next_10y:${nextMd?.lord ?? amkCode}/${nextAd?.lord ?? l10Code} (${asOf}..${nextTo})`,
+      `D10.p.${nextMd?.lord ?? amkCode}.h${nextHouse}`,
     ],
   };
 
@@ -944,15 +1149,21 @@ export function buildWorkCharacterArc(
 }
 
 /**
- * Technique (`work.personality_vocation`):
+ * Technique (`work.personality_vocation` / `work.d10_check`):
  * Builds a deterministic Vedic synthesis of work style, leadership style, and 4 vocation choices from
  * 10th Bhava (D1), Dasamsa (D10), Amatyakaraka (AmK), Saturn, Sun, Mercury, Mars, and Rajya Pada (A10).
  */
 export function buildWorkVocationAndPersonality(view: DigestView): SelfPersonalityAndJoy {
   const h10 = view.house('D1', 10);
   const d10H10 = view.house('D10', 10);
+  const meD1 = view.planet('D1', 'Me');
   const amkPoint = view.points('D1').find((p) => p.id === 'AmK');
   const a10Point = view.points('D1').find((p) => p.id === 'A10');
+
+  const workSign = d10H10?.sign ?? h10?.sign ?? 'Capricorn';
+  const mindSign = meD1?.sign ?? h10?.sign ?? 'Virgo';
+  const workStyle = SIGN_MIND_STYLE[workSign] ?? SIGN_MIND_STYLE.Capricorn!;
+  const mindStyle = SIGN_MIND_STYLE[mindSign] ?? SIGN_MIND_STYLE.Virgo!;
 
   const items: SelfPersonalityJoyItem[] = [
     {
@@ -961,7 +1172,7 @@ export function buildWorkVocationAndPersonality(view: DigestView): SelfPersonali
       whatYouEnjoy: '1. Systems Architecture, Engineering & Technical Product',
       whyItFeelsGood: 'Designing scalable platforms, technical infrastructure, or analytical tools with measurable output.',
       whyItFits: 'Designing scalable platforms, technical infrastructure, or analytical tools with measurable output.',
-      evidence: [`D10.h10:${d10H10?.sign ?? 'Capricorn'}`, 'D1.Me', 'D1.Sa'],
+      evidence: [`D10.h10:${workSign}`, `D1.Me:${mindSign}`, 'D1.Sa'],
     },
     {
       id: 'executive_stewardship',
@@ -989,20 +1200,23 @@ export function buildWorkVocationAndPersonality(view: DigestView): SelfPersonali
     },
   ];
 
+  const h10Sav = h10?.sav ?? 29;
+  const rechargeRule =
+    h10Sav >= 30
+      ? 'Protect deep-work blocks free of fragmented meetings so your strategic judgment and execution stay sharp.'
+      : 'Batch administrative messages into fixed windows so uninterrupted maker time stays protected every morning.';
+
   return {
-    headline: 'Methodical systems thinking paired with calm, accountable authority',
-    personalitySummary:
-      'In work you thrive when given clear ownership of results, autonomy to design the system, and direct accountability for quality.',
-    emotionalMindStyle:
-      'You lead by example and clear standards—setting realistic milestones, protecting team focus, and delivering without fanfare.',
-    intellectualWitStyle:
-      'You diagnose root causes quickly, break complex initiatives into sequential steps, and stay composed when priorities shift.',
+    headline: `${workStyle.moonShort} at work paired with ${mindStyle.mercuryShort}`,
+    personalitySummary: `In your career people rely on you as ${workStyle.moonSummary}—with an execution style that ${mindStyle.mercurySummary}.`,
+    emotionalMindStyle: workStyle.moonTone,
+    intellectualWitStyle: mindStyle.mercuryTone,
     whatFeelsGood: items,
     pillars: items,
-    rechargeRule: 'Protect deep-work blocks free of fragmented meetings so your strategic judgment stays sharp.',
+    rechargeRule,
     evidence: [
       `D1.h10:${h10?.sign ?? 'Capricorn'}`,
-      `D10.h10:${d10H10?.sign ?? 'Capricorn'}`,
+      `D10.h10:${workSign}`,
       `D1.point.AmK:${amkPoint?.lord ?? 'Sa'}`,
       `D1.point.A10:H${a10Point?.house ?? 10}`,
     ],

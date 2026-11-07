@@ -86,7 +86,11 @@ describe('companion memory selects and filters (doc 48, doc 53 §4.5)', () => {
     expect(loveFits('meet', 'single')).toBe(true);
     expect(loveFits('reconcile', 'single')).toBe(false);
     expect(loveFits('friends', null)).toBe(true);
-    expect(loveFits('romance', null)).toBe(false);
+    expect(loveFits('romance', null)).toBe(true);
+    expect(loveFits('health', null)).toBe(true);
+    expect(loveFits('commitment', null)).toBe(true);
+    expect(loveFits('meet', null)).toBe(false);
+    expect(loveFits('reconcile', null)).toBe(false);
   });
   it('every love.status value of the fact catalogue has a fit row and a lead; every fit names a Love sub-area', () => {
     const ids = LOVE.subareas.map((s) => s.id);
@@ -115,7 +119,8 @@ describe('companion memory selects and filters (doc 48, doc 53 §4.5)', () => {
     expect(married.focus).toBe('health');
     expect(married.board.ahead.every((w) => LOVE_FIT.married.includes(w.subarea))).toBe(true);
     const declined = shapeBoard(love, LOVE_SPEC, 'declined');
-    expect(declined.board.ahead.every((w) => w.subarea === 'friends')).toBe(true);
+    expect(declined.board.ahead.every((w) => LOVE_FIT.unknown.includes(w.subarea))).toBe(true);
+    expect(declined.board.ahead.some((w) => w.subarea !== 'friends')).toBe(true);
   });
 });
 
@@ -237,10 +242,7 @@ describe('area routes for You and Love', () => {
       const r = await call('GET', `/api/area/${area}`, 'u1');
       expect(r.status).toBe(200);
       expect(r.json.status).toBe('ok');
-      const expectedKeys =
-        area === 'self'
-          ? ['ahead', 'asOf', 'back', 'characterArc', 'notes', 'personalityAndJoy', 'pressures', 'supports', 'tone', 'year']
-          : ['ahead', 'asOf', 'back', 'notes', 'pressures', 'supports', 'tone', 'year'];
+      const expectedKeys = ['ahead', 'asOf', 'back', 'characterArc', 'notes', 'personalityAndJoy', 'pressures', 'supports', 'tone', 'year'];
       expect(Object.keys(r.json.board).sort()).toEqual(expectedKeys);
       expect(['demanding', 'easing', 'steady', 'closing', 'open']).toContain(r.json.board.tone.tone);
       expect(r.json.checks).toEqual({});
