@@ -8,6 +8,8 @@
  *
  * Pure selection and shaping only: no astrological computation.
  */
+import { techniqueById } from '../../techniques/catalog.js';
+import type { ContractInput } from '../../techniques/contracts.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { AnnualRow, DigestSection, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
 import { CORE_TYPES } from './chartBundle.js';
@@ -27,6 +29,8 @@ export type SubAgentId =
   | 'clarify'
   | 'validator'
   | 'intake'
+  | 'code:varga_dynamics'
+  | 'code:strength_yoga'
   | 'code:jaimini'
   | 'code:avastha'
   | 'code:nakshatra'
@@ -36,6 +40,7 @@ export type SubAgentId =
 
 export interface SubAgentDigestSpec {
   id: SubAgentId;
+  techniqueId?: string;
   sections: readonly DigestSection[];
   vargas: readonly string[];
   tableTypes: readonly string[];
@@ -320,8 +325,29 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
     cachePromptPrefix: false,
     cacheOutput: 'memory',
   },
+  'code:varga_dynamics': {
+    id: 'code:varga_dynamics',
+    techniqueId: 'general.varga_dynamics',
+    sections: ['house', 'planet'],
+    vargas: ['D1', 'D2', 'D4', 'D7', 'D9', 'D10', 'D12', 'D24', 'D30', 'D60'],
+    tableTypes: [],
+    usesActivation: false,
+    cachePromptPrefix: false,
+    cacheOutput: 'technique_outputs',
+  },
+  'code:strength_yoga': {
+    id: 'code:strength_yoga',
+    techniqueId: 'general.strength_yoga',
+    sections: ['house', 'planet', 'yoga'],
+    vargas: ['D1'],
+    tableTypes: [],
+    usesActivation: false,
+    cachePromptPrefix: false,
+    cacheOutput: 'technique_outputs',
+  },
   'code:jaimini': {
     id: 'code:jaimini',
+    techniqueId: 'general.jaimini',
     sections: ['house', 'planet', 'point'],
     vargas: ['D1', 'D9'],
     tableTypes: [],
@@ -331,6 +357,7 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
   'code:avastha': {
     id: 'code:avastha',
+    techniqueId: 'general.strength_yoga',
     sections: ['house', 'planet'],
     vargas: ['D1'],
     tableTypes: [],
@@ -340,6 +367,7 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
   'code:nakshatra': {
     id: 'code:nakshatra',
+    techniqueId: 'general.nakshatra',
     sections: ['house', 'planet', 'star'],
     vargas: ['D1'],
     tableTypes: [],
@@ -349,6 +377,7 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
   'code:varga': {
     id: 'code:varga',
+    techniqueId: 'general.varga_dynamics',
     sections: ['house', 'planet'],
     vargas: ['D1', 'D9', 'D10', 'D16', 'D20', 'D27', 'D40', 'D45', 'D60'],
     tableTypes: [],
@@ -358,6 +387,7 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
   'code:annual': {
     id: 'code:annual',
+    techniqueId: 'general.annual',
     sections: ['house', 'planet', 'annual'],
     vargas: ['D1', 'D9', 'D10'],
     tableTypes: [],
@@ -367,6 +397,7 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
   'code:person': {
     id: 'code:person',
+    techniqueId: 'general.person',
     sections: ['house', 'planet', 'point'],
     vargas: ['D1', 'D3', 'D7', 'D9', 'D12'],
     tableTypes: [],
@@ -375,6 +406,53 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
     cacheOutput: 'technique_outputs',
   },
 };
+
+const DEFAULT_TECHNIQUE_BY_SUBAGENT: Partial<Record<SubAgentId, string>> = {
+  'specialist:promise': 'general.promise',
+  'specialist:dasha': 'general.dasha',
+  'specialist:transit': 'general.transit',
+  'specialist:nakshatra': 'general.nakshatra',
+  'specialist:annual': 'general.annual',
+  'specialist:prashna': 'general.prashna',
+  oracle: 'general.oracle',
+  addendum: 'general.oracle',
+  synthesize: 'general.oracle',
+  clarify: 'general.clarify',
+  validator: 'general.validator',
+  intake: 'general.intake',
+};
+
+/**
+ * Resolves the catalogue `contract.inputs` (`src/techniques/catalog.ts`) for a given `SubAgentId`.
+ */
+export function contractInputsForSubAgent(id: SubAgentId): readonly ContractInput[] {
+  const spec = SUBAGENT_DIGEST_SPECS[id];
+  const techId = spec?.techniqueId ?? DEFAULT_TECHNIQUE_BY_SUBAGENT[id] ?? 'general.reader';
+  return techniqueById(techId)?.contract.inputs ?? [];
+}
+
+/**
+ * Slices `DigestView` + `ActivationRow[]` for one specific `SubAgentId` using its catalogue `contract.inputs` and `SUBAGENT_DIGEST_SPECS[id]`.
+ */
+export function sliceDigestForSubAgent(
+  id: SubAgentId,
+  digest: DigestView,
+  opts: {
+    asOf?: string;
+    activation?: readonly ActivationRow[] | null;
+    person?: PersonFrame | null;
+  } = {},
+): {
+  spec: SubAgentDigestSpec;
+  contractInputs: readonly ContractInput[];
+  tables: Record<string, unknown>;
+  missing: string[];
+} {
+  const spec = SUBAGENT_DIGEST_SPECS[id];
+  const contractInputs = contractInputsForSubAgent(id);
+  const { tables, missing } = buildTablesFromDigest(digest, spec.tableTypes, opts);
+  return { spec, contractInputs, tables, missing };
+}
 
 function vargaPayload(houses: HouseCard[], planets: PlanetCard[]): Record<string, unknown> {
   return {

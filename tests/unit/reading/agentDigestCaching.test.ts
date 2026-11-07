@@ -11,7 +11,13 @@ import {
 } from '../../../src/reading/nodes/findingsCache.js';
 import { clearChartBundles, type ChartRowSource } from '../../../src/reading/oracle/chartBundle.js';
 import { CostGuard } from '../../../src/reading/oracle/costGuard.js';
-import { buildTablesFromDigest, SUBAGENT_DIGEST_SPECS, type SubAgentId } from '../../../src/reading/oracle/digestSlices.js';
+import {
+  buildTablesFromDigest,
+  contractInputsForSubAgent,
+  sliceDigestForSubAgent,
+  SUBAGENT_DIGEST_SPECS,
+  type SubAgentId,
+} from '../../../src/reading/oracle/digestSlices.js';
 import { prepareReaders } from '../../../src/reading/oracle/prepare.js';
 import { clearReaderMemo, getReaderMemo, loadDbReaderCache, saveDbReaderCache } from '../../../src/reading/oracle/prewarm.js';
 import { fetchPlan, READERS, type ReaderId } from '../../../src/reading/oracle/readers.js';
@@ -254,20 +260,26 @@ describe('per-sub-agent digest slicing and caching', () => {
       'P1', 'P2', 'P3',
       'specialist:promise', 'specialist:dasha', 'specialist:transit', 'specialist:nakshatra', 'specialist:annual', 'specialist:prashna',
       'oracle', 'addendum', 'synthesize', 'clarify', 'validator', 'intake',
-      'code:jaimini', 'code:avastha', 'code:nakshatra', 'code:varga', 'code:annual', 'code:person',
+      'code:varga_dynamics', 'code:strength_yoga', 'code:jaimini', 'code:avastha', 'code:nakshatra', 'code:varga', 'code:annual', 'code:person',
     ];
     for (const id of expectedIds) {
       const spec = SUBAGENT_DIGEST_SPECS[id];
       expect(spec, `missing spec for ${id}`).toBeDefined();
       expect(spec.id).toBe(id);
+      expect(contractInputsForSubAgent(id).length, `missing contract.inputs for ${id}`).toBeGreaterThan(0);
     }
     for (const id of Object.keys(READERS) as ReaderId[]) {
       expect(SUBAGENT_DIGEST_SPECS[id].cachePromptPrefix).toBe(true);
       expect(SUBAGENT_DIGEST_SPECS[id].cacheOutput).toBe('reading_findings_cache');
     }
-    for (const id of ['code:jaimini', 'code:avastha', 'code:nakshatra', 'code:varga', 'code:annual', 'code:person'] as SubAgentId[]) {
+    for (const id of ['code:varga_dynamics', 'code:strength_yoga', 'code:jaimini', 'code:avastha', 'code:nakshatra', 'code:varga', 'code:annual', 'code:person'] as SubAgentId[]) {
       expect(SUBAGENT_DIGEST_SPECS[id].cacheOutput).toBe('technique_outputs');
     }
+    const digest = makeFakeDigest('k-slice-single');
+    const r01Slice = sliceDigestForSubAgent('R01', digest, { asOf: G1_AS_OF, activation: FAKE_ACTIVATION });
+    expect(r01Slice.missing).toEqual([]);
+    expect(r01Slice.contractInputs.length).toBeGreaterThan(0);
+    expect(r01Slice.tables['yogas']).toBeDefined();
   });
 
   it('slices all reader tables from DigestView + ActivationRow[] with zero raw kundli_data queries', async () => {

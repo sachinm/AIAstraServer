@@ -239,6 +239,20 @@ export function clearCodeReaderMemo(): void {
   codeReaderMemo.clear();
 }
 
+/** Evicts in-memory deterministic code-reader findings belonging to a kundli (45-minute individual cache recycle). */
+export function evictCodeReaderMemoForIndividual(kundliId: string | null | undefined): number {
+  if (!kundliId) return 0;
+  const needle = `"k":${JSON.stringify(kundliId)}`;
+  let deleted = 0;
+  for (const k of codeReaderMemo.keys()) {
+    if (k.includes(needle)) {
+      codeReaderMemo.delete(k);
+      deleted += 1;
+    }
+  }
+  return deleted;
+}
+
 /** Runs the named deterministic readers on one subject's pack. A pack without a digest section gives nothing. */
 export function runCodeReaders(
   pack: EvidencePack,

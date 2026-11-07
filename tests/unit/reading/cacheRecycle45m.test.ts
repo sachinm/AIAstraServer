@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getReadingCacheRecycleMinutes, getReadingCacheRecycleMs } from '../../../src/config/env.js';
+import { getReadingCacheRecycleMinutes, getReadingCacheRecycleMs, readingCacheRecycleMinutes } from '../../../src/config/env.js';
 import { memoryCacheRegistry } from '../../../src/reading/llm/cacheRegistry.js';
 import {
   clearPendingIndividualRecycles,
@@ -8,10 +8,12 @@ import {
   informIndividualCacheUsed,
   recycleIndividualCaches,
   runScheduledSweep,
+  scheduleIndividualCacheRecycle,
 } from '../../../src/reading/llm/cacheSweep.js';
 import {
   cacheNameFor,
   clearPromptCache,
+  deleteUserCaches,
   setCacheRegistry,
   settlePromptCache,
 } from '../../../src/reading/llm/promptCache.js';
@@ -50,11 +52,14 @@ describe('45-minute per-individual cache recycling of used caches', () => {
 
   it('defaults READING_CACHE_RECYCLE_MINUTES to 45 minutes and honors env overrides', () => {
     expect(getReadingCacheRecycleMinutes()).toBe(45);
+    expect(readingCacheRecycleMinutes()).toBe(45);
     expect(getReadingCacheRecycleMs()).toBe(45 * 60_000);
 
     process.env.READING_CACHE_RECYCLE_MINUTES = '60';
     expect(getReadingCacheRecycleMinutes()).toBe(60);
+    expect(readingCacheRecycleMinutes()).toBe(60);
     expect(getReadingCacheRecycleMs()).toBe(60 * 60_000);
+    expect(scheduleIndividualCacheRecycle).toBe(informIndividualCacheUsed);
   });
 
   it('informs the 45-minute recycle task whenever a cache is used and removes all used caches for that individual', async () => {
@@ -302,5 +307,27 @@ describe('45-minute per-individual cache recycling of used caches', () => {
     }
     expect(getPendingIndividualRecycles()).toHaveLength(0);
     expect(findingsRows.size).toBe(0);
+  });
+
+  it('evicts cross-layer in-memory memos and cancels pending recycles on deleteUserCaches(userId)', async () => {
+    const reg = memoryCacheRegistry();
+    setCacheRegistry(reg);
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 200 })) as typeof fetch;
+
+    const owner = { userId: 'user-logout', kundliId: 'kundli-logout' };
+    informIndividualCacheUsed(owner, { delayMs: 45 * 60_000 });
+    expect(getPendingIndividualRecycles()).toHaveLength(1);
+
+    findingsCache.set(
+      'spec-logout',
+      { analyst: 'promise', subject: 'career_work', verdict: 'strong', layerScore: 2, claims: [], windows: [], keyFacts: [], caveats: [] },
+      owner,
+      true,
+    );
+    expect(findingsCache.get('spec-logout')).toBeDefined();
+
+    await deleteUserCaches('user-logout');
+    expect(getPendingIndividualRecycles()).toHaveLength(0);
+    expect(findingsCache.get('spec-logout')).toBeUndefined();
   });
 });
