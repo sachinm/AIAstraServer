@@ -210,9 +210,13 @@ Inside any 8-part Dwisaptati or 9-part Vimshottari Mahadasha, the sub-periods do
 
 ---
 
-## 9. Exact Codebase Changes Needed in `AIAstra_Server` (`src/reading/`) & `the sidereal ephemeris` to Trigger These Explanations Automatically
+## 9. Exact Codebase Architecture in `AIAstra_Server` (`src/reading/`) & Engine Exporters to Trigger These Explanations Automatically
 
-Right now, these multi-school explanations had to be synthesized manually because the TypeScript pipeline in `src/reading/` has **six specific architectural bottlenecks**. Here is the exact file-by-file engineering blueprint to make the engine generate this depth automatically:
+> **Implementation Status Update (2026-11-06):**
+> - **Deterministic Digest & Activation (`src/reading/digest/build.ts`, `activation.ts`)**: Shipped and live (`d1.2026-11-06`). Extracts all 42–43 dasha systems (including `.l3` 3-level conditional/rasi/nakshatra dashas) into `kundli_activation`, and extracts `PlanetCard.avasthas`, `PlanetCard.avasthaMultipliers`, `PlanetCard.sunProximity`, `PlanetCard.chain`, `PlanetCard.starChain`, `PlanetCard.dashaCharter` (5-vector charter + 9×9 Antardasha fruition matrix), Lunar Astro points (`D1.K64M`, `D1.K64L`, `D1.KD22`, `D1.BB`), and `StarProfile.pendingKarmaHouses` into `kundli_digest`.
+> - **Remaining Largest Mahadasha & Antardasha Life-Charter (`src/reading/life/charter.ts`, `life.mahadasha_charter`)**: Shipped and live (`docs/reading-engine/55-life-reading-mahadasha-charter.md`), wired into `src/reading/life/promise.ts`, `compose.ts`, `service.ts`, and `AIAstra_WEB` `LifeReadingDashboard.tsx`.
+
+Below is the original file-by-file engineering blueprint that guided these modules:
 
 ### 9.1 `src/reading/timeline/dashas.ts` & `src/reading/timeline/config.ts` — Promote Applicable Conditional Dashas (e.g., `dwisatpathi`) to Primary Stack
 - **What is wrong in the code today:**

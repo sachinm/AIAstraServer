@@ -260,8 +260,8 @@ export function afflictionLayer(view: DigestView, cfg: AreaConfig, running: Acti
     }
     const ls = lordState(view, card.lord);
     if (card.lord && isBad(card.lordDignity ?? ls?.dignity) && !cancelled(view, card.lord)) add({ weight: 2, kind: 'weak', theme, planet: card.lord, evidence: [`D1.${card.lord} dignity ${card.lordDignity ?? ls?.dignity}`] });
-    // combustion gives no release (doc 46 §B.3)
-    if (card.lord && ls?.combust) out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme, planet: card.lord, until: null, evidence: [`D1.${card.lord} combust`] });
+    // combustion gives no release (doc 46 §B.3), except cazimi (empowered at heart of Sun)
+    if (card.lord && ls?.combust && ls.sunProximity?.zone !== 'cazimi') out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme, planet: card.lord, until: null, evidence: [`D1.${card.lord} combust`] });
     if (card.lord && ls?.war) add({ weight: 1, kind: 'conflict', theme, planet: card.lord, evidence: [`D1.${card.lord} planetary_war`] });
     for (const o of card.occupants) if (cfg.heavy.includes(o.planet)) add({ weight: 1.5, kind: 'pressed', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet}`] });
     for (const p of card.aspectedGraha) if (cfg.heavy.includes(p) && !card.occupants.some((o) => o.planet === p)) add({ weight: 1, kind: 'pressed', theme, planet: p, evidence: [`${key} aspected_by ${p}`] });
@@ -273,7 +273,7 @@ export function afflictionLayer(view: DigestView, cfg: AreaConfig, running: Acti
     for (const c of pc.conjunctions) if (cfg.heavy.includes(c)) add({ weight: 1.5, kind: 'pressed', theme: ref, planet: c, evidence: [`D1.${p} conjunct ${c}`] });
     for (const a of pc.aspectedBy) if (cfg.heavy.includes(a) && !pc.conjunctions.includes(a)) add({ weight: 1, kind: 'pressed', theme: ref, planet: a, evidence: [`D1.${p} aspected_by ${a}`] });
     if (isBad(pc.dignity) && !cancelled(view, p)) add({ weight: 1, kind: 'weak', theme: ref, planet: p, evidence: [`D1.${p} dignity ${pc.dignity}`] });
-    if (pc.combust) out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme: ref, planet: p, until: null, evidence: [`D1.${p} combust`] });
+    if (pc.combust && pc.sunProximity?.zone !== 'cazimi') out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme: ref, planet: p, until: null, evidence: [`D1.${p} combust`] });
   }
   if (cfg.gandantaMoon && (view.star()?.gandanta ?? []).some((g) => g === 'Mo' || /moon/i.test(g))) {
     out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'deep_feelings', theme: 'Mo', planet: 'Mo', until: null, evidence: ['star gandanta Mo'] });
@@ -389,6 +389,18 @@ export function gradeRow(view: DigestView, cfg: AreaConfig, row: ActivationRow):
   }
   if (!planet) return { row, planet: null, score: 0, side: null, grade: null, evidence: ev };
   const g = gradePlanet(view, cfg, planet);
+  if (row.parentLord && row.lord) {
+    const cell = view.planet('D1', row.parentLord)?.dashaCharter?.fruition?.[row.lord];
+    if (cell) {
+      if (cell.fruitionClass === 'dusthana_reversal_crisis' || cell.isShadAshtaka68) {
+        bonus -= 1;
+        ev.push(`D1.${row.parentLord} charter fruition ${row.lord} 6/8/12`);
+      } else if (cell.isStarLordOfMd || cell.isSignDispositorOfMd) {
+        bonus += 1;
+        ev.push(`D1.${row.parentLord} charter link ${row.lord}`);
+      }
+    }
+  }
   const score = g.score + bonus;
   return { row, planet, score, side: score > 0 ? 'support' : score < 0 ? 'test' : null, grade: gradeOf(score), evidence: [...ev, ...g.evidence] };
 }

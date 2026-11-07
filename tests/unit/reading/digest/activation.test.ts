@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activationFor, buildActivationRows, dashaTrees, familyOf, grahaHouses } from '../../../../src/reading/digest/activation.js';
+import { activationFor, applicableConditionalSystems, buildActivationRows, dashaTrees, familyOf, grahaHouses } from '../../../../src/reading/digest/activation.js';
 import { buildDigestRows } from '../../../../src/reading/digest/build.js';
 import type { HouseCard, PlanetCard } from '../../../../src/reading/digest/types.js';
 import { fakeDigestPrisma, loadFixture } from './helpers.js';
@@ -38,10 +38,11 @@ describe('activation calendar', () => {
     expect(k.houses).toEqual([...new Set([own, lordHouse])].sort((a, b) => a - b));
   });
 
-  it('families follow doc 46 §B.4', () => {
+  it('families follow doc 46 §B.4 and gate conditional dashas by dasha.applicable (applies === true)', () => {
     const none = new Set<string>();
     expect(familyOf('vimsottari', false, none)).toBe('vimshottari');
-    expect(familyOf('ashtottari', false, none)).toBe('conditional');
+    expect(familyOf('ashtottari', false, none)).toBe('other');
+    expect(familyOf('ashtottari', false, new Set(['ashtottari']))).toBe('conditional');
     expect(familyOf('some_new', false, new Set(['some_new']))).toBe('conditional');
     expect(familyOf('yogini', false, none)).toBe('yogini');
     expect(familyOf('tithi_ashtottari', false, none)).toBe('tithi_ashtottari');
@@ -49,6 +50,14 @@ describe('activation calendar', () => {
     expect(familyOf('narayana', true, none)).toBe('rasi');
     expect(familyOf('tara', false, none)).toBe('other');
     expect(act.find((a) => a.system === 'yogini')?.family).toBe('yogini');
+
+    const app = applicableConditionalSystems(fx.items['dasha.applicable']);
+    expect(app.has('chathuraaseethi_sama')).toBe(true);
+    expect(app.has('chaturshitisama')).toBe(true);
+    expect(app.has('ashtottari')).toBe(false);
+    expect(app.has('dwisatpathi')).toBe(false);
+    expect(familyOf('chaturshitisama', false, app)).toBe('conditional');
+    expect(familyOf('dwisatpathi', false, app)).toBe('other');
   });
 
   it('runs to thirty years after today and no further', () => {

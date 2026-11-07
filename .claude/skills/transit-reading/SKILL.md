@@ -13,8 +13,8 @@ Transits trigger what the chart and the dasha promise. They never create it. Eve
 |---|---|---|
 | Planet positions, ingresses, stations, lunations, eclipses | The shared sky (`transit_instants`, `transit_range_skies`). Prepare gaps first with the `transit-sky-preparation` skill | A per-user pull |
 | Where a transit falls in this person's chart | The kundli overlay from the engine (`kundli_transit_overlays`, pulled with `npm run transits:overlay`): `house_from_lagna`, `house_from_moon`, `natal_house`, contacts, double transit, sade sati; with `--step day` a row per day | Counting houses from a sign index in Node or in a script |
-| Dasha periods at three levels, annual charts, D10, Mudda, Patyayini | `kundli_data` rows for the kundli (`dasha.*`, `annual.*`) | Re-deriving dates |
-| The person's promises and verdicts | The stored readings and `kundli_facts` | Re-judging the natal chart in a transit pass |
+| Dasha periods at three levels, annual charts, D10, Mudda, Patyayini | `kundli_activation` (42–43 dasha systems across 7 families) & `kundli_digest` `annual` rows (`TP<year>.D1/D9/D10`, `VP<year>.D1/D9/D10`), built from `kundli_data` (`dasha.*`, `annual.*`) | Re-deriving dates |
+| The person's promises, 5-vector Mahadasha charter & 9×9 fruition matrix | `kundli_digest` (`PlanetCard.dashaCharter`, `avasthaMultipliers`, `D1.K64M/K64L/KD22/BB`), `src/reading/life/charter.ts` (`life.mahadasha_charter`), and `kundli_facts` | Re-judging the natal chart in a transit pass |
 
 If a needed value is missing, say which one and what pull would fill it. Do not invent it and do not compute it.
 
@@ -46,4 +46,4 @@ If a needed value is missing, say which one and what pull would fill it. Do not 
 
 ## Worked example
 
-`C:\Users\Owner\Documents\Readings\Sumit-career-week-by-week-2026-10-to-2028-12.docx`: 118 weeks, Oct 2026 to Dec 2028, built from the stored dasha tables, the 2026 to 2028 annual charts, and the shared San Jose sky. Its day layer (Moon house, tara, tithi, grades, stations, lunations) was counted by a scratch script from the stored sky rows because the daily overlay had not been pulled; regenerate it from the overlay once `npm run transits:overlay` has run for the kundli. The repeatable version belongs in a script under `scripts/` that reads the overlay and the shared sky and writes the week table.
+Reference kundli `75b0d618-90b7-4db6-bff8-cc7bb0ed561f` (`Sumit`, exported as `tests/fixtures/digest/research-a.json`): 118 weeks, Oct 2026 to Dec 2028, built from the stored dasha tables (`kundli_activation`), the 2026 to 2030 annual charts (`kundli_digest` `annual` section), the `kundli_transit_overlays` rows, and the shared San Jose sky (`src/reading/life/sky.ts` `SkyView`). When a daily overlay has not yet been pulled for a kundli, run `npm run transits:overlay -- --kundli <id> --from ... --to ... --step day` rather than counting houses in Node or a script.

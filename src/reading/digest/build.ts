@@ -12,10 +12,10 @@
 import type { PrismaClient, Prisma } from '@prisma/client';
 import { SIGN_NAMES } from '../facts/constants.js';
 import { lordCode } from '../timeline/dashas.js';
-import { VARGA_FACTORS } from '../chartData/catalog.js';
+import { ARUDHA_ARGALA_VARGAS, AVASTHA_VARGAS, VARGA_FACTORS } from '../chartData/catalog.js';
 import { buildActivationRows, type ActivationRowInput } from './activation.js';
 import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
-import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type YogaRow } from './types.js';
+import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -75,7 +75,7 @@ interface Ref {
 }
 
 class Sources {
-  constructor(private readonly calcVersions: Record<string, string | null>) {}
+  constructor(private readonly calcVersions: Record<string, string | null>) { }
   of(ref: Ref, rel = ''): DigestSource {
     const at = ref.key.indexOf('@');
     return {
@@ -322,6 +322,60 @@ const AVASTHA_FIELDS: Array<[string, (v: Obj) => string | null]> = [
   ['shayanadi', (v) => (isObj(v.shayanadi) ? str((v.shayanadi as Obj).state) : null)],
 ];
 
+function readPlanetAvasthas(
+  avRef: Ref | null,
+  p: string,
+  src: Sources,
+  includeChain = false,
+): {
+  avasthas: Record<string, string>;
+  avasthaMultipliers: AvasthaMultipliers | null;
+  chain: string[];
+  dignity: string | null;
+  combust: boolean | null;
+  sources: DigestSource[];
+} {
+  const avasthas: Record<string, string> = {};
+  let avasthaMultipliers: AvasthaMultipliers | null = null;
+  let chain: string[] = [];
+  let dignity: string | null = null;
+  let combust: boolean | null = null;
+  const sources: DigestSource[] = [];
+  if (!avRef || !isObj(avRef.value)) {
+    return { avasthas, avasthaMultipliers, chain, dignity, combust, sources };
+  }
+  const avRows = arr((avRef.value as Obj).planets);
+  const ai = avRows.findIndex((a) => planetCode(a) === p);
+  if (ai >= 0 && isObj(avRows[ai])) {
+    const avObj = avRows[ai] as Obj;
+    for (const [name, read] of AVASTHA_FIELDS) {
+      const v = read(avObj);
+      if (v) avasthas[name] = v;
+    }
+    const balObj = isObj(avObj.baladi) ? (avObj.baladi as Obj) : null;
+    const jagObj = isObj(avObj.jagradadi) ? (avObj.jagradadi as Obj) : null;
+    const balMult = balObj ? num(balObj.multiplier) : null;
+    const jagMult = jagObj ? num(jagObj.multiplier) : null;
+    const effMult = num(avObj.effective_delivery_multiplier);
+    const ripeness = balObj ? str(balObj.ripeness) : null;
+    if (balMult != null || jagMult != null || effMult != null || ripeness != null) {
+      avasthaMultipliers = { baladi: balMult, jagradadi: jagMult, effective: effMult, ripeness };
+    }
+    dignity = str(avObj.dignity);
+    combust = bool(avObj.combust);
+    sources.push(src.of(avRef, `planets[${ai}]`));
+  }
+  if (includeChain) {
+    const chains = arr(resolvePath(avRef.value, 'lunar_astro.dispositor_chains.rasi'));
+    const ci = chains.findIndex((c) => planetCode(c) === p);
+    if (ci >= 0 && isObj(chains[ci])) {
+      chain = arr((chains[ci] as Obj).chain).map(planetCode).filter((c): c is string => Boolean(c));
+      sources.push(src.of(avRef, `lunar_astro.dispositor_chains.rasi[${ci}].chain`));
+    }
+  }
+  return { avasthas, avasthaMultipliers, chain, dignity, combust, sources };
+}
+
 function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
   if (!t.planets) return [];
   const rows = arr(t.planets.value);
@@ -329,8 +383,8 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
   const graha = drishti(t.aspects, 'graha_drishti');
   const facts = t.d1?.facts && isObj(t.d1.facts.value) ? (t.d1.facts.value as Obj) : null;
   const bodies = facts && isObj(facts.bodies) ? (facts.bodies as Obj) : null;
-  const avRows = t.avasthas && isObj(t.avasthas.value) ? arr((t.avasthas.value as Obj).planets) : [];
-  const chains = t.d1 && t.avasthas && isObj(t.avasthas.value) ? arr(resolvePath(t.avasthas.value, 'lunar_astro.dispositor_chains.rasi')) : [];
+  const starChains = t.d1 && t.avasthas && isObj(t.avasthas.value) ? arr(resolvePath(t.avasthas.value, 'lunar_astro.dispositor_chains.nakshatra')) : [];
+  const solarProx = t.d1 && t.avasthas && isObj(t.avasthas.value) ? arr(resolvePath(t.avasthas.value, 'proximity_audit.solar_proximity')) : [];
   const dashaCharterObj = t.d1 && t.avasthas && isObj(t.avasthas.value) && isObj((t.avasthas.value as Obj).dasha_charter) ? ((t.avasthas.value as Obj).dasha_charter as Obj) : null;
   const mdCharters = dashaCharterObj ? arr(dashaCharterObj.mahadasha_charters) : [];
   const adMatrix = dashaCharterObj && isObj(dashaCharterObj.antardasha_fruition_matrix) ? (dashaCharterObj.antardasha_fruition_matrix as Obj) : null;
@@ -356,20 +410,24 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
     const aspectedBy = graha.filter((x) => x.planets.includes(p));
     for (const x of aspectedBy) source.push(src.of(t.aspects!, `graha_drishti[${x.i}].aspected_planets`));
 
-    const avasthas: Record<string, string> = {};
-    const ai = avRows.findIndex((a) => planetCode(a) === p);
-    if (ai >= 0) {
-      for (const [name, read] of AVASTHA_FIELDS) {
-        const v = read(avRows[ai] as Obj);
-        if (v) avasthas[name] = v;
-      }
-      source.push(src.of(t.avasthas!, `planets[${ai}]`));
+    const { avasthas, avasthaMultipliers, chain, sources: avSources } = readPlanetAvasthas(t.avasthas, p, src, Boolean(t.d1));
+    source.push(...avSources);
+    let starChain: string[] = [];
+    const sci = starChains.findIndex((c) => planetCode(c) === p);
+    if (sci >= 0) {
+      starChain = arr((starChains[sci] as Obj).chain).map(planetCode).filter((c): c is string => Boolean(c));
+      source.push(src.of(t.avasthas!, `lunar_astro.dispositor_chains.nakshatra[${sci}].chain`));
     }
-    let chain: string[] = [];
-    const ci = chains.findIndex((c) => planetCode(c) === p);
-    if (ci >= 0) {
-      chain = arr((chains[ci] as Obj).chain).map(planetCode).filter((c): c is string => Boolean(c));
-      source.push(src.of(t.avasthas!, `lunar_astro.dispositor_chains.rasi[${ci}].chain`));
+    let sunProximity: SunProximity | null = null;
+    const spi = solarProx.findIndex((s) => planetCode(s) === p);
+    if (spi >= 0 && isObj(solarProx[spi])) {
+      const spObj = solarProx[spi] as Obj;
+      sunProximity = {
+        distanceDeg: num(spObj.distance_from_sun_deg),
+        classicalOrbDeg: num(spObj.classical_orb_deg),
+        zone: str(spObj.zone),
+      };
+      source.push(src.of(t.avasthas!, `proximity_audit.solar_proximity[${spi}]`));
     }
 
     let dashaCharter: DashaCharterDigest | null = null;
@@ -424,10 +482,12 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
 
     let shadbalaRatio: number | null = null;
     let shadbalaRank: number | null = null;
+    let shadbalaRupa: number | null = null;
     const si = shad.findIndex((s) => planetCode(s) === p);
     if (si >= 0) {
       shadbalaRatio = num((shad[si] as Obj).ratio);
       shadbalaRank = int((shad[si] as Obj).rank);
+      shadbalaRupa = num((shad[si] as Obj).total_rupas);
       source.push(src.of(t.d1!.shadbala!, `planets[${si}]`));
     }
 
@@ -462,12 +522,21 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
       owns = body.owns.map(int).filter((h): h is number => h != null);
       source.push(src.of(t.d1!.facts!, `bodies.${p}.owns`));
     }
-    if (!owns.length && houseRows.length) {
-      // the houses whose engine-stated lord (or the sign's natural lord) is this planet: a join over the house table
+    if (houseRows.length) {
+      // the houses whose engine-stated lord (or the sign's natural Parashari lord for Scorpio/Aquarius) is this planet
       houseRows.forEach((h, j) => {
-        if (isObj(h) && (planetCode(h.lord) === p || planetCode(h.natural_lord) === p) && int(h.house) != null) {
-          owns.push(int(h.house)!);
-          source.push(src.of(t.houses!, `[${j}].lord`));
+        if (!isObj(h) || int(h.house) == null) return;
+        const hNum = int(h.house)!;
+        if (planetCode(h.lord) === p) {
+          if (!owns.includes(hNum)) {
+            owns.push(hNum);
+            source.push(src.of(t.houses!, `[${j}].lord`));
+          }
+        } else if (planetCode(h.natural_lord) === p) {
+          if (!owns.includes(hNum)) {
+            owns.push(hNum);
+            source.push(src.of(t.houses!, `[${j}].natural_lord`));
+          }
         }
       });
     }
@@ -492,15 +561,17 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
         dispositorHouse: int(raw.sign_lord_house),
         chain,
         avasthas,
+        ...(avasthaMultipliers ? { avasthaMultipliers } : {}),
         shadbalaRatio,
         shadbalaRank,
+        ...(shadbalaRupa != null ? { shadbalaRupa } : {}),
         natural,
         functional,
         owns: uniq(owns).sort(byNum),
         aspectsTo: g ? uniq(g.houses).sort(byNum) : [],
         aspectedBy: uniq(aspectedBy.map((x) => x.planet)),
         conjunctions: sign ? [...signOf.entries()].filter(([q, s]) => q !== p && s === sign).map(([q]) => q) : [],
-        ...(t.d1 ? { dashaCharter } : {}),
+        ...(t.d1 ? { dashaCharter, sunProximity, ...(starChain.length ? { starChain } : {}) } : {}),
       },
       source,
     });
@@ -515,10 +586,11 @@ function degreeOf(text: unknown): number | null {
   return Math.round((Number(m[1]) + Number(m[2]) / 60 + Number(m[3]) / 3600) * 10_000) / 10_000;
 }
 
-/** A varga the engine serves only as placement rows (`varga.dN`): planet cards with sign, degree, star and pada; no house. */
+/** A varga the engine serves only as placement rows (`varga.dN`): planet cards with sign, degree, star, pada, and any stored `avasthas.dN`; no house. */
 function placementCards(items: Record<string, unknown>, f: number, src: Sources): Built<PlanetCard>[] {
   const r = ref(items, `varga.d${f}`);
   if (!r) return [];
+  const avRef = ref(items, natalKey('avasthas', f));
   const rows = arr(r.value);
   const signOf = new Map<string, string>();
   const parsed = rows
@@ -533,6 +605,7 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
   return parsed.map(({ i, o, p }) => {
     const sign = signOf.get(p) ?? null;
     const pada = Number(o.pada);
+    const av = readPlanetAvasthas(avRef, p, src);
     return {
       key: `D${f}.${p}`,
       row: {
@@ -544,14 +617,15 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
         star: str(o.nakshatra),
         pada: Number.isInteger(pada) && pada > 0 ? pada : null,
         starLord: planetCode(o.star_lord) ?? planetCode(o.nakshatra_lord),
-        dignity: str(o.dignity),
+        dignity: str(o.dignity) ?? av.dignity,
         retro: bool(o.retro) ?? bool(o.is_retrograde),
-        combust: null,
+        combust: av.combust,
         war: null,
         dispositor: null,
         dispositorHouse: null,
-        chain: [],
-        avasthas: {},
+        chain: av.chain,
+        avasthas: av.avasthas,
+        ...(av.avasthaMultipliers ? { avasthaMultipliers: av.avasthaMultipliers } : {}),
         shadbalaRatio: null,
         shadbalaRank: null,
         natural: null,
@@ -561,7 +635,7 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
         aspectedBy: [],
         conjunctions: sign ? [...signOf.entries()].filter(([q, s]) => q !== p && s === sign).map(([q]) => q) : [],
       },
-      source: [src.of(r, `[${i}]`)],
+      source: [src.of(r, `[${i}]`), ...av.sources],
     };
   });
 }
@@ -734,12 +808,15 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
     });
   }
   const placement = new Map(placementCards(items, f, src).map((b) => [b.row.planet, b]));
+  const avRef = ref(items, natalKey('avasthas', f));
   const planets: Built<PlanetCard>[] = [];
   for (const [p0, pv] of Object.entries(planetsObj)) {
     const p = planetCode(p0);
     if (!p || !isObj(pv)) continue;
     const pl = placement.get(p);
+    const av = pl ? null : readPlanetAvasthas(avRef, p, src);
     const owned = houses.filter((h) => h.row.lord === p);
+    const avMultipliers = pl?.row.avasthaMultipliers ?? av?.avasthaMultipliers ?? null;
     planets.push({
       key: `${varga}.${p}`,
       row: {
@@ -750,15 +827,16 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
         degree: pl?.row.degree ?? null,
         star: pl?.row.star ?? null,
         pada: pl?.row.pada ?? null,
-        starLord: null,
-        dignity: str(pv.dignity),
-        retro: null,
-        combust: null,
+        starLord: pl?.row.starLord ?? null,
+        dignity: str(pv.dignity) ?? pl?.row.dignity ?? av?.dignity ?? null,
+        retro: pl?.row.retro ?? null,
+        combust: pl?.row.combust ?? av?.combust ?? null,
         war: null,
         dispositor: null,
         dispositorHouse: null,
-        chain: [],
-        avasthas: {},
+        chain: pl?.row.chain.length ? pl.row.chain : (av?.chain ?? []),
+        avasthas: pl && Object.keys(pl.row.avasthas).length ? pl.row.avasthas : (av?.avasthas ?? {}),
+        ...(avMultipliers ? { avasthaMultipliers: avMultipliers } : {}),
         shadbalaRatio: null,
         shadbalaRank: null,
         natural: null,
@@ -771,7 +849,7 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
           .map(([q]) => planetCode(q))
           .filter((q): q is string => Boolean(q)),
       },
-      source: [src.of(fx.ref, `vargas.${varga}.planets.${p0}`), ...(pl ? pl.source : []), ...owned.map((h) => h.source[0]!)],
+      source: [src.of(fx.ref, `vargas.${varga}.planets.${p0}`), ...(pl ? pl.source : (av?.sources ?? [])), ...owned.map((h) => h.source[0]!)],
     });
   }
   return { houses, planets };
@@ -945,6 +1023,53 @@ function pointRows(items: Record<string, unknown>, tables: Map<string, ChartTabl
     const id = `sphuta.${str(r.id)}`;
     push({ key: `D1.${id}`, row: { id, varga: 'D1', sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: [src.of(sp!, `[${i}]`), ...l.source] });
   });
+  // Lunar Astro sensitive points (64th Navamsa from Moon & Lagna, 22nd Drekkana, and Bhrigu Bindu fallback) from avasthas.lunar_astro
+  if (d1?.avasthas && isObj(d1.avasthas.value)) {
+    const la = resolvePath(d1.avasthas.value, 'lunar_astro');
+    if (isObj(la)) {
+      const k64 = isObj(la.khara_navamsa_64) ? (la.khara_navamsa_64 as Obj) : null;
+      const k64m = k64 && isObj(k64.from_moon) ? (k64.from_moon as Obj) : null;
+      if (k64m) {
+        const sign = str(k64m.sign);
+        const l = lordOfSign(d1, sign, src);
+        push({
+          key: 'D1.K64M',
+          row: { id: 'K64M', varga: 'D1', sign, house: int(k64m.d1_house), lord: planetCode(k64m.lord) ?? l.lord, lordHouse: l.lordHouse },
+          source: [src.of(d1.avasthas, 'lunar_astro.khara_navamsa_64.from_moon'), ...l.source],
+        });
+      }
+      const k64l = k64 && isObj(k64.from_lagna) ? (k64.from_lagna as Obj) : null;
+      if (k64l) {
+        const sign = str(k64l.sign);
+        const l = lordOfSign(d1, sign, src);
+        push({
+          key: 'D1.K64L',
+          row: { id: 'K64L', varga: 'D1', sign, house: int(k64l.d1_house), lord: planetCode(k64l.lord) ?? l.lord, lordHouse: l.lordHouse },
+          source: [src.of(d1.avasthas, 'lunar_astro.khara_navamsa_64.from_lagna'), ...l.source],
+        });
+      }
+      const kd22 = isObj(la.khara_drekkana_22) ? (la.khara_drekkana_22 as Obj) : null;
+      if (kd22) {
+        const sign = str(kd22.sign);
+        const l = lordOfSign(d1, sign, src);
+        push({
+          key: 'D1.KD22',
+          row: { id: 'KD22', varga: 'D1', sign, house: int(kd22.d1_house), lord: planetCode(kd22.lord) ?? l.lord, lordHouse: l.lordHouse },
+          source: [src.of(d1.avasthas, 'lunar_astro.khara_drekkana_22'), ...l.source],
+        });
+      }
+      const bb = isObj(la.bhrigu_bindu) ? (la.bhrigu_bindu as Obj) : null;
+      if (bb) {
+        const sign = str(bb.sign);
+        const l = lordOfSign(d1, sign, src);
+        push({
+          key: 'D1.BB',
+          row: { id: 'BB', varga: 'D1', sign, house: int(bb.d1_house), lord: l.lord, lordHouse: l.lordHouse },
+          source: [src.of(d1.avasthas, 'lunar_astro.bhrigu_bindu'), ...l.source],
+        });
+      }
+    }
+  }
   return out;
 }
 
@@ -1074,8 +1199,18 @@ function starProfile(items: Record<string, unknown>, planets: Map<string, Built<
     moonStarLord = moon.row.starLord;
     source.push(moon.source[0]!);
   }
-  if (!moonStar && !lagnaStar && !taras.length) return null;
-  return { key: 'profile', row: { moonStar, moonStarLord, lagnaStar, taras, gandanta }, source };
+  const av = ref(items, 'avasthas');
+  const pkRaw = av && isObj(av.value) ? resolvePath(av.value, 'lunar_astro.pending_karma.pending_karma_houses') : null;
+  const pendingKarmaHouses = Array.isArray(pkRaw) ? pkRaw.map(int).filter((h): h is number => h != null) : [];
+  if (pendingKarmaHouses.length && av) {
+    source.push(src.of(av, 'lunar_astro.pending_karma.pending_karma_houses'));
+  }
+  if (!moonStar && !lagnaStar && !taras.length && !pendingKarmaHouses.length) return null;
+  return {
+    key: 'profile',
+    row: { moonStar, moonStarLord, lagnaStar, taras, gandanta, ...(pendingKarmaHouses.length ? { pendingKarmaHouses } : {}) },
+    source,
+  };
 }
 
 /**
@@ -1154,6 +1289,10 @@ export const DIGEST_NATAL_TYPES: readonly string[] = [
   ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `varga.d${f}`),
   ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `dignities.d${f}`),
   ...VARGA_FACTORS.filter((f) => f !== 1).map((f) => `house_counts.d${f}`),
+  ...ARUDHA_ARGALA_VARGAS.filter((f) => f !== 1).map((f) => `aspects.d${f}`),
+  ...ARUDHA_ARGALA_VARGAS.filter((f) => f !== 1).map((f) => `argala.d${f}`),
+  ...ARUDHA_ARGALA_VARGAS.filter((f) => f !== 1).map((f) => `arudhas.d${f}`),
+  ...AVASTHA_VARGAS.map((f) => `avasthas.d${f}`),
 ];
 
 const BATCH = 500;
@@ -1245,6 +1384,9 @@ async function doBuild(prisma: PrismaClient, kundliId: string, opts: DigestBuild
     const builtAt = new Date();
     await writeDigest(prisma, kundliId, rows, activation, builtAt);
     await deleteKundliTechniqueOutputs(prisma, kundliId).catch(() => 0);
+    await (prisma as unknown as { areaBuild?: { deleteMany?: (args: { where: { kundli_id: string } }) => Promise<unknown> } }).areaBuild
+      ?.deleteMany?.({ where: { kundli_id: kundliId } })
+      .catch(() => 0);
     const ms = Date.now() - t0;
     return { status: 'ready', rows: rows.length, activation: activation.length, ms };
   } catch (err) {

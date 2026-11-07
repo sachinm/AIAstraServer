@@ -39,13 +39,17 @@ export function natureSide(nature: string | null | undefined): Side {
   return 'neutral';
 }
 
-/** A planet's side for an area: its functional nature first, then its dignity, then combustion. */
+/** A planet's side for an area: its functional nature first, then its dignity, then combustion (unless cazimi). */
 export function planetSide(card: PlanetCard | null | undefined): Side {
   if (!card) return 'neutral';
   const f = functionalSide(card.functional);
-  if (f !== 'neutral') return f;
+  if (f !== 'neutral') {
+    if (f === 'support' && card.avasthaMultipliers?.baladi === 0.1 && dignitySide(card.dignity) !== 'support') return 'neutral';
+    return f;
+  }
   const d = dignitySide(card.dignity);
   if (d !== 'neutral') return d;
+  if (card.sunProximity?.zone === 'cazimi') return 'support';
   if (card.combust) return 'test';
   return 'neutral';
 }
