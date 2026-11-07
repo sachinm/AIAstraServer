@@ -2,7 +2,7 @@
  * Email-only signup and email-code login (no password at signup, code is the only login path).
  * Prisma, email sending, Turnstile and background jobs are replaced with in-memory fakes.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const fake = vi.hoisted(() => ({
   rows: [] as Array<Record<string, any>>,
@@ -103,10 +103,21 @@ function lastCodeFor(email: string): string {
   return mail.code;
 }
 
+import { setCognitoAuthForTests } from '../../../src/auth/cognitoClient.js';
+
 beforeEach(() => {
+  vi.stubEnv('AUTH_PROVIDER', 'local');
+  vi.stubEnv('COGNITO_USER_POOL_ID', '');
+  vi.stubEnv('COGNITO_CLIENT_ID', '');
+  setCognitoAuthForTests(null);
   fake.rows.length = 0;
   fake.sent.length = 0;
   fake.nextId = 1;
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  setCognitoAuthForTests(null);
 });
 
 describe('signup without a password', () => {

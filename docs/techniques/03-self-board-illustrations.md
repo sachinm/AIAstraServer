@@ -442,3 +442,93 @@ flowchart LR
     IN_RUN & IN_DIG --> G1
     G2 --> OUT
 ```
+
+---
+
+## Page 11 of 12 — `self.character_arc`: Character Evolution Across Three Decades (Last 10 Years · Now · Next 10 Years)
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `self.character_arc` — Character evolution across three decades (Last 10 Years · Now · Next 10 Years) |
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas}`, `divisional:D9`, `jaimini:{charakaraka,arudhas}`, `dasha:{vimshottari,narayana}` |
+| **Selectors** | `boards: ['you']`, `subjects: ['general_life_direction', 'spirituality_moksha', 'health_body']`, `houses: [1, 4, 5, 9, 10, 12]`, `vargas: ['D1', 'D9']` |
+| **Reader Pieces** | `reader:house/house_card` (`D1,D9_h1,4,5,9,10,12`) · `reader:planet/planet_card` · `reader:point/point_row` · `reader:activation/activation_row` |
+| **Agent Piece** | `agent:area.self_board` (`buildSelfCharacterArc`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:self_character_arc.v1` |
+| **Date-Range Window Cache** | `freshness: 'dasha'` (`[runningPeriod.from, runningPeriod.to)` from `kundli_activation`) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/area/selfCharacterAndJoy.ts buildSelfCharacterArc` (`BPHS Ch. 12, 45–51; Jaimini Upadesa Sutras; Sanjay Rath Crux of Vedic Astrology; docs/reading-engine/45 §3.3`) |
+
+```mermaid
+flowchart LR
+    subgraph Inputs["Digest + Activation Slicers (Freshness: dasha, Scope: kundli)"]
+        P_HC["reader:house/house_card<br/>(D1,D9_h1,4,5,9,10,12)"]
+        P_PC["reader:planet/planet_card<br/>(Lagna lord, AK, Sun, Moon & decade MD/AD lords)"]
+        P_ACT["reader:activation/activation_row<br/>(Vimshottari & Narayana periods from -10y to +10y)"]
+    end
+
+    subgraph CacheGate["Date-Range Window Cache Gate"]
+        GATE{"piece.cache.date_range_window<br/>validityWindow: dasha [runningPeriod.from, runningPeriod.to)<br/>scope: kundli"}
+    end
+
+    subgraph ArcBuilder["3-Decade Character Evolution Builder (buildSelfCharacterArc)"]
+        A1["1. Past 10 Years (asOf - 10y .. asOf): dominant Vimshottari MD/AD & Narayana Rasi period<br/>+ lord's D1/D9 house, dignity, and avastha"]
+        A2["2. Who You Are Now (asOf): Lagna (D1.h1), Paka Lagna (L1 house), Atmakaraka (AK),<br/>and active MD/AD lord in D1 & D9"]
+        A3["3. Next 10 Years (asOf .. asOf + 10y): upcoming/continuing Vimshottari MD/AD & Narayana period<br/>+ D9 Navamsa dharma maturation"]
+        A1 --> A2 --> A3
+    end
+
+    subgraph Output["You Board 3-Decade Character Arc"]
+        OUT["output:self_character_arc.v1<br/>Past 10y · Now · Next 10y plain-English character cards with digest evidence"]
+    end
+
+    P_HC & P_PC & P_ACT --> GATE
+    GATE -->|"HIT"| OUT
+    GATE -->|"MISS"| A1
+    A3 --> OUT
+```
+
+---
+
+## Page 12 of 12 — `self.personality_joy`: Purely Vedic Personality & What Brings You Joy (Chandra · Budha · 4th/5th Bhava)
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `self.personality_joy` — Purely Vedic personality & what brings you joy (Chandra · Budha · 4th/5th Bhava) |
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas}`, `nakshatra:{janma,cusp_nak}`, `divisional:{D9,D24}`, `ashtakavarga:sav` |
+| **Selectors** | `boards: ['you']`, `subjects: ['general_life_direction', 'education_learning', 'health_body']`, `houses: [1, 3, 4, 5]`, `vargas: ['D1', 'D9', 'D24']` |
+| **Reader Pieces** | `reader:planet/planet_card` (`Mo & Me in D1, D9, D24`) · `reader:house/house_card` (`D1_h1,3,4,5`) · `reader:star/star_profile` (`Janma star & cusp stars`) |
+| **Agent Piece** | `agent:area.self_board` (`buildSelfPersonalityAndJoy`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:self_personality_joy.v1` |
+| **Date-Range Window Cache** | `freshness: 'natal'` (valid until digest version or contract changes) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/area/selfCharacterAndJoy.ts buildSelfPersonalityAndJoy` (`BPHS Ch. 3, 15, 16; Phaladeepika Ch. 2, 8; Lunar Astro Moon-Mercury synthesis; docs/reading-engine/45 §3.3`) |
+
+```mermaid
+flowchart LR
+    subgraph Inputs["Digest Slicers (Freshness: natal, Scope: kundli)"]
+        P_PC["reader:planet/planet_card<br/>(Moon & Mercury in D1, D9, D24)"]
+        P_HC["reader:house/house_card<br/>(D1_h1,3,4,5 + SAV bindus)"]
+        P_ST["reader:star/star_profile<br/>(Janma Nakshatra & 4th/5th cusp stars)"]
+    end
+
+    subgraph CacheGate["Date-Range Window Cache Gate"]
+        GATE{"piece.cache.date_range_window<br/>validityWindow: natal [open]<br/>scope: kundli"}
+    end
+
+    subgraph JoyBuilder["Vedic Chandra-Budha Personality & Joy Builder (buildSelfPersonalityAndJoy)"]
+        J1["1. Read Chandra (Moon: Manas, emotional temperament, Janma star, D9 Moon, 4th house Sukha Bhava)"]
+        J2["2. Read Budha (Mercury: Buddhi, curiosity, wit, play, D9/D24 Mercury, 5th house creative joy, 3rd house craft)"]
+        J3["3. Synthesize personality summary, 4 concrete joy activities, and personal recharge rule"]
+        J1 --> J2 --> J3
+    end
+
+    subgraph Output["You Board Personality & Joy Profile"]
+        OUT["output:self_personality_joy.v1<br/>Plain-English personality & joy items with Vedic Moon/Mercury evidence"]
+    end
+
+    P_PC & P_HC & P_ST --> GATE
+    GATE -->|"HIT"| OUT
+    GATE -->|"MISS"| J1
+    J3 --> OUT
+```

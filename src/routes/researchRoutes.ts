@@ -9,14 +9,21 @@ import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import {
+  buildLoveResearchDashboard,
   buildSelfResearchDashboard,
+  buildWorkResearchDashboard,
   getResearchPresets,
   hydrateResearchBatch,
+  type ResearchBoardArea,
 } from '../reading/research/selfDashboardQa.js';
 
 export interface ResearchRouteDeps {
   prisma: PrismaClient;
   requireUser: RequireUser;
+}
+
+function parseBoardArea(raw: unknown): ResearchBoardArea {
+  return raw === 'love' ? 'love' : raw === 'work' ? 'work' : 'self';
 }
 
 export function registerResearchRoutes(app: express.Express, deps: ResearchRouteDeps): void {
@@ -39,6 +46,7 @@ export function registerResearchRoutes(app: express.Express, deps: ResearchRoute
       mode?: 'single' | 'age_brackets' | 'personas' | 'all' | 'custom';
       subjectCode?: string;
       asOf?: string;
+      boardArea?: ResearchBoardArea;
       custom?: {
         subjectCode?: string;
         label: string;
@@ -52,11 +60,13 @@ export function registerResearchRoutes(app: express.Express, deps: ResearchRoute
       };
     };
     const mode = body.mode ?? 'single';
+    const boardArea = parseBoardArea(body.boardArea);
     try {
       const out = await hydrateResearchBatch(deps.prisma, {
         mode,
         subjectCode: body.subjectCode,
         asOf: body.asOf,
+        boardArea,
         custom: body.custom,
       });
       res.json(out);
@@ -70,12 +80,44 @@ export function registerResearchRoutes(app: express.Express, deps: ResearchRoute
     if (!userId) return;
     const key = req.params.subjectOrId;
     const asOf = typeof req.query.asOf === 'string' ? req.query.asOf : '2026-11-15';
+    const boardArea = parseBoardArea(req.query.boardArea);
     const presets = getResearchPresets();
     const match = presets.find((p) => p.subjectCode === key) ?? presets[0]!;
-    const detail = buildSelfResearchDashboard(match, asOf);
+    const detail =
+      boardArea === 'love'
+        ? buildLoveResearchDashboard(match, asOf)
+        : boardArea === 'work'
+          ? buildWorkResearchDashboard(match, asOf)
+          : buildSelfResearchDashboard(match, asOf);
     res.json({
       ...detail,
-      runId: `run_${match.subjectCode}_${asOf}`,
+      boardArea,
+      runId: `run_${boardArea}_${match.subjectCode}_${asOf}`,
+      researchKundliId: `rk_${match.subjectCode}`,
+      durationMs: 8,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  app.post('/api/research/subjects/:subjectCode/board-qa', async (req, res) => {
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
+    const key = req.params.subjectCode;
+    const body = (req.body ?? {}) as { asOf?: string; boardArea?: unknown; boardKey?: unknown };
+    const asOf = typeof body.asOf === 'string' ? body.asOf : '2026-11-15';
+    const boardArea = parseBoardArea(body.boardArea ?? body.boardKey);
+    const presets = getResearchPresets();
+    const match = presets.find((p) => p.subjectCode === key) ?? presets[0]!;
+    const detail =
+      boardArea === 'love'
+        ? buildLoveResearchDashboard(match, asOf)
+        : boardArea === 'work'
+          ? buildWorkResearchDashboard(match, asOf)
+          : buildSelfResearchDashboard(match, asOf);
+    res.json({
+      ...detail,
+      boardArea,
+      runId: `run_${boardArea}_${match.subjectCode}_${asOf}`,
       researchKundliId: `rk_${match.subjectCode}`,
       durationMs: 8,
       createdAt: new Date().toISOString(),

@@ -8,10 +8,12 @@ import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { getResearchHorizonWeeks } from '../../config/env.js';
 import { buildBoard, isGood, type Tone } from '../area/houseLayers.js';
 import { SELF } from '../area/self.js';
+import { buildSelfCharacterArc, buildSelfPersonalityAndJoy } from '../area/selfCharacterAndJoy.js';
 import { buildCalmPlaybook, resolveAreaShades } from '../area/shadeResolver.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
 import { addDaysIso } from '../timeline/months.js';
+import { buildLoveResearchDashboard, verifyLoveDashboardQaReport } from './loveDashboardQa.js';
 import {
   buildCustomResearchSubject,
   getResearchPresets,
@@ -22,6 +24,7 @@ import type {
   DailyZoomEntry,
   HolidayMilestoneWindow,
   HouseVargaDeepDiveRow,
+  ResearchBoardArea,
   ResearchDashboardRunDetail,
   ResearchDashboardRunSummary,
   ResearchGroupKind,
@@ -35,9 +38,12 @@ import type {
   WeeklyZoomWindow,
 } from './types.js';
 import { buildTenStepTechnicalTrace, verifySelfDashboardRun } from './verifier.js';
+import { buildWorkResearchDashboard, verifyWorkDashboardQaReport } from './workDashboardQa.js';
 
+export { buildLoveResearchDashboard, verifyLoveDashboardQaReport } from './loveDashboardQa.js';
 export { buildCustomResearchSubject, getResearchPresets, synthesizeResearchDigestAndActivations } from './presets.js';
 export { buildTenStepTechnicalTrace, verifySelfDashboardRun } from './verifier.js';
+export { buildWorkResearchDashboard, verifyWorkDashboardQaReport } from './workDashboardQa.js';
 export * from './types.js';
 
 const HOUSE_DOMAINS: Record<
@@ -629,8 +635,14 @@ export function buildSelfResearchDashboard(
 
   const tone = built.board.tone.tone;
   const charterAnalysis = buildCharterVocationAnalysis(subject, view, tone);
+  const characterArc = buildSelfCharacterArc(view, activationRows, asOf, { ageYears: subject.ageYears });
+  const personalityAndJoy = buildSelfPersonalityAndJoy(view);
   const boardSnapshot: SelfBoardSnapshot = {
-    productionBoard: built.board,
+    productionBoard: {
+      ...built.board,
+      characterArc,
+      personalityAndJoy,
+    },
     shades,
     charterAnalysis,
   };
@@ -703,6 +715,7 @@ export function buildSelfResearchDashboard(
 
   return {
     subjectCode: subject.subjectCode,
+    boardArea: 'self',
     groupKind: subject.groupKind,
     label: subject.label,
     ageYears: subject.ageYears,
@@ -758,34 +771,56 @@ export async function hydrateResearchSubject(
   opts: {
     subject: ResearchPresetSubject;
     asOf?: string;
+    boardArea?: ResearchBoardArea;
   },
 ): Promise<ResearchDashboardRunDetail> {
   const startedAt = Date.now();
   const asOf = opts.asOf ?? '2026-11-15';
+  const boardArea: ResearchBoardArea = opts.boardArea ?? 'self';
   const subject = opts.subject;
   const { view, digestRows, chartRows, activationRows } = synthesizeResearchDigestAndActivations(subject, asOf);
   const charts = researchChartsUsed(view.version);
 
+  const builderAgent =
+    boardArea === 'love'
+      ? 'research.love_dashboard_builder'
+      : boardArea === 'work'
+        ? 'research.work_dashboard_builder'
+        : 'research.self_dashboard_builder';
+  const builderTechnique =
+    boardArea === 'love'
+      ? 'research.love_dashboard_qa'
+      : boardArea === 'work'
+        ? 'research.work_dashboard_qa'
+        : 'research.self_dashboard_qa';
+
   const built = await withAgentRun(
     prisma,
-    'research.self_dashboard_builder',
+    builderAgent,
     {
-      task: `research_self_qa ${subject.subjectCode} ${asOf}`,
-      technique: 'research.self_dashboard_qa',
+      task: `research_${boardArea}_qa ${subject.subjectCode} ${asOf}`,
+      technique: builderTechnique,
       kundliId: subject.subjectCode,
       charts,
       input: {
         subject_code: subject.subjectCode,
+        board_area: boardArea,
         age_years: subject.ageYears,
         as_of: asOf,
         digest_version: view.version,
       },
     },
     async () => {
-      const value = buildSelfResearchDashboard(subject, asOf);
+      const value =
+        boardArea === 'love'
+          ? buildLoveResearchDashboard(subject, asOf)
+          : boardArea === 'work'
+            ? buildWorkResearchDashboard(subject, asOf)
+            : buildSelfResearchDashboard(subject, asOf);
       return {
         value,
         output: {
+          board_area: boardArea,
           tone: value.tone,
           houses_checked: value.houseVargaMatrix.length,
           weeks_generated: value.temporalData.weeklyTimeline.length,
@@ -934,7 +969,7 @@ export async function hydrateResearchSubject(
         data: {
           research_kundli_id: researchKundliId,
           subject_code: subject.subjectCode,
-          board_area: 'self',
+          board_area: boardArea,
           as_of: asOf,
           tone: built.tone,
           verdict_pill: built.verdictPill,
@@ -975,6 +1010,7 @@ export async function hydrateResearchBatch(
     mode: 'single' | 'age_brackets' | 'personas' | 'all' | 'custom';
     subjectCode?: string;
     asOf?: string;
+    boardArea?: ResearchBoardArea;
     custom?: {
       subjectCode?: string;
       label: string;
@@ -996,6 +1032,7 @@ export async function hydrateResearchBatch(
 }> {
   const presets = getResearchPresets();
   const asOf = input.asOf ?? '2026-11-15';
+  const boardArea: ResearchBoardArea = input.boardArea ?? 'self';
   let targets: ResearchPresetSubject[] = [];
 
   if (input.mode === 'custom' && input.custom) {
@@ -1013,13 +1050,14 @@ export async function hydrateResearchBatch(
 
   const details: ResearchDashboardRunDetail[] = [];
   for (const subject of targets) {
-    details.push(await hydrateResearchSubject(prisma, { subject, asOf }));
+    details.push(await hydrateResearchSubject(prisma, { subject, asOf, boardArea }));
   }
 
   const runs: ResearchDashboardRunSummary[] = details.map((d) => ({
     runId: d.runId,
     researchKundliId: d.researchKundliId,
     subjectCode: d.subjectCode,
+    boardArea: d.boardArea ?? boardArea,
     groupKind: d.groupKind,
     label: d.label,
     ageYears: d.ageYears,

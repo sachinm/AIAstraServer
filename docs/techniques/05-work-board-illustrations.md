@@ -405,3 +405,40 @@ flowchart LR
     GATE -->|"MISS"| D1
     D2 --> OUT
 ```
+
+---
+
+## Page 10 of 10 — `research.work_dashboard_qa`: Research Work & Career Dashboard Deep-Dive & Nov/Thanksgiving/Dec/New Year Zoom-In
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `research.work_dashboard_qa` — Research Work & Career Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year zoom-in |
+| **Category / Board / Status** | `work` · `work` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas,yogas,doshas,strength.shadbala}`, `ashtakavarga:sav`, `jaimini:{charakaraka,arudhas}`, `nakshatra:{janma,cusp_nak}`, `divisional:{D1,D9,D10,D2,D24,D4,D7,D12,D20,D60}`, `dasha:{vimshottari,yogini,tithi_ashtottari,narayana,karaka}`, `annual:{tithi_pravesha,varsha}`, `transit:{transit_contacts,sade_sati}`, `panchang:muhurta` |
+| **Selectors** | `boards: ['work']`, `subjects: ['career_work', 'wealth_income', 'business_partnership']`, `houses: [10, 6, 11, 2, 1, 9, 3]`, `vargas: ['D1', 'D10', 'D9', 'D2', 'D24']` |
+| **Reader Pieces** | `reader:house/house_card` (`D1..D60_h1..12`) · `reader:planet/planet_card` · `reader:yoga/yoga_row` · `reader:point/point_row` · `reader:star/star_profile` · `reader:activation/activation_row` · `reader:annual/annual_row` · `reader:transit/transit_row` |
+| **Agent Piece** | `agent:research.work_dashboard_builder` (`buildWorkResearchDashboard`, `verifyWorkDashboardQaReport`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece / Synthesizer** | `output:research_work_dashboard.v1` · feeds `research.technical_verifier` |
+| **Date-Range Window Cache** | `freshness: 'transit'` (`2h` window) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/research/workDashboardQa.ts buildWorkResearchDashboard, verifyWorkDashboardQaReport` (`docs/admin/09 §4.1; docs/reading-engine/43 §8; 46 §B; 54 §3; 55 §2`) |
+
+```mermaid
+flowchart LR
+    subgraph StagingInputs["Isolated Research Staging & Digest Slicers (Freshness: transit = 2h)"]
+        R_DIG["research_digests + research_activations<br/>(D1, D10, D9, D2, D24, AmK, A10, Karma/Samartha/Artha Sahams)"]
+    end
+
+    subgraph Builder["Research Work Dashboard Builder (agent:research.work_dashboard_builder)"]
+        W1["1. Run production Work board (buildBoard WORK_RESEARCH_CONFIG, resolveAreaShades, buildCalmPlaybook)<br/>over 10H, 6H, 11H, 2H, 1H, 9H, 3H and D1/D10/D9/D2/D24"]
+        W2["2. Synthesize Vocation & Execution Charter + Nov/Thanksgiving/Dec/New Year career windows"]
+        W3["3. Record 10-step reverse-engineered technical trace and run 8-gate technical verifier"]
+        W1 --> W2 --> W3
+    end
+
+    subgraph Output["Staged Work Dashboard Run"]
+        OUT["output:research_work_dashboard.v1<br/>Feeds synthesizer: research.technical_verifier"]
+    end
+
+    R_DIG --> W1
+    W3 --> OUT
+```
