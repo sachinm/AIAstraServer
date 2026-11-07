@@ -7,6 +7,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
+import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
 import type { DigestView } from '../digest/types.js';
@@ -102,7 +104,8 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
   const prisma = deps.prisma;
   const kundli = await prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli' };
-  const asOf = (deps.now ?? (() => new Date()))().toISOString().slice(0, 10);
+  const nowAt = (deps.now ?? (() => new Date()))();
+  const asOf = nowAt.toISOString().slice(0, 10);
   const asOfDate = new Date(`${asOf}T00:00:00Z`);
   const fact = await getFact(prisma, userId, spec.factKey);
 
@@ -117,37 +120,59 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
     }
     const activationFor = deps.activationFor ?? realActivationFor;
     const span = activationSpan(asOf);
-    built = await withAgentRun(
+    const yearSpan = runningYearSpan(view, nowAt);
+    const out = await withTechniqueOutput(
       prisma,
-      spec.agent,
-      { userId, task: `${spec.area} ${asOf}`, input: { span_from: span.from, span_to: span.to, version: view.version }, technique: spec.technique, kundliId: kundli.id },
+      {
+        technique: spec.technique,
+        kundliId: kundli.id,
+        digestVersion: view.version,
+        context: { now: nowAt, year: yearSpan },
+        agentId: spec.agent,
+        userId,
+        charts: boardChartsRead(view, false),
+      },
       async () => {
-        const shortTo = addMonthsIso(asOf, getShadeShortHorizonMonths());
-        const [activation, running, transit, areaFacts] = await Promise.all([
-          activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2, shortTo, shortMaxLevel: 3 }),
-          activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
-          (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
-          loadAreaFacts(prisma, userId, spec.area, { key: spec.factKey, value: fact }),
-          loadTechniqueGovernance(prisma),
-        ]);
-        const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
-        const receipts = resolveAreaShades({
-          view,
-          cfg: spec.cfg,
-          asOf,
-          built: b,
-          activation,
-          facts: areaFacts,
-        });
-        const logged = await recordTechniqueDecisions(prisma, { kundliId: kundli.id, userId }, receipts);
-        const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
+        let runningSpan: DateSpan | null = null;
+        const builtBoard = await withAgentRun(
+          prisma,
+          spec.agent,
+          { userId, task: `${spec.area} ${asOf}`, input: { span_from: span.from, span_to: span.to, version: view.version }, technique: spec.technique, kundliId: kundli.id },
+          async () => {
+            const shortTo = addMonthsIso(asOf, getShadeShortHorizonMonths());
+            const [activation, running, transit, areaFacts] = await Promise.all([
+              activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2, shortTo, shortMaxLevel: 3 }),
+              activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
+              (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
+              loadAreaFacts(prisma, userId, spec.area, { key: spec.factKey, value: fact }),
+              loadTechniqueGovernance(prisma),
+            ]);
+            runningSpan = shortestRunningPeriodSpan(running, nowAt);
+            const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
+            const receipts = resolveAreaShades({
+              view,
+              cfg: spec.cfg,
+              asOf,
+              built: b,
+              activation,
+              facts: areaFacts,
+            });
+            const logged = await recordTechniqueDecisions(prisma, { kundliId: kundli.id, userId }, receipts);
+            const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
+            return {
+              value: b,
+              output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, shades: receipts.length, writes, ...b.counts },
+              charts: boardChartsRead(view, transit !== null),
+            };
+          },
+        );
         return {
-          value: b,
-          output: { tone: b.board.tone.tone, confidence: b.board.tone.confidence, supports: b.board.supports.length, pressures: b.board.pressures.length, ahead: b.board.ahead.length, shades: receipts.length, writes, ...b.counts },
-          charts: boardChartsRead(view, transit !== null),
+          value: builtBoard,
+          context: { runningPeriod: runningSpan, year: yearSpan },
         };
       },
     );
+    built = out.value;
     await prisma.areaBuild
       .upsert({
         where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: spec.area, as_of: asOfDate } },
@@ -155,7 +180,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
         update: { status: 'ready', result: built as unknown as object, error: null },
       })
       .catch(() => undefined);
-    fresh = true;
+    fresh = !out.cached;
   }
   const shaped = shapeBoard(built, spec, fact);
   return { status: 'ok', built_at: asOf, cached: !fresh, focus: shaped.focus, ask: fact === null, board: shaped.board };

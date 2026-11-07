@@ -20,6 +20,7 @@ function fakePrisma() {
   const checks: any[] = [];
   const runs: any[] = [];
   const queued: string[] = [];
+  const techniqueOutputs = new Map<string, any>();
   const prisma: any = {
     kundli: {
       findFirst: async ({ where }: any) => (where.user_id === 'u1' || where.user_id === 'u3' ? { id: where.user_id === 'u1' ? 'k1' : 'k3' } : null),
@@ -36,10 +37,26 @@ function fakePrisma() {
       upsert: async ({ create }: any) => checks.push(create),
       findMany: async ({ where }: any) => checks.filter((c) => c.user_id === where.user_id && c.area === where.area),
     },
+    techniqueOutput: {
+      findUnique: async ({ where }: any) => techniqueOutputs.get(where.cache_key) ?? null,
+      upsert: async ({ where, create, update }: any) => {
+        const cur = techniqueOutputs.get(where.cache_key);
+        const next = cur ? { ...cur, ...update } : { ...create, hit_count: 0, last_hit_at: null };
+        techniqueOutputs.set(where.cache_key, next);
+        return next;
+      },
+      updateMany: async ({ where, data }: any) => {
+        const cur = techniqueOutputs.get(where.cache_key);
+        if (!cur) return { count: 0 };
+        cur.hit_count = (cur.hit_count ?? 0) + (data.hit_count?.increment ?? 0);
+        if (data.last_hit_at) cur.last_hit_at = data.last_hit_at;
+        return { count: 1 };
+      },
+    },
     agentRegistry: { upsert: async () => ({}) },
     agentRun: { create: async ({ data }: any) => runs.push(data) },
   };
-  return { prisma, builds, facts, checks, runs, queued };
+  return { prisma, builds, facts, checks, runs, queued, techniqueOutputs };
 }
 
 const view = selfFixture();
@@ -154,6 +171,25 @@ describe('the board services', () => {
     expect(married.cached).toBe(true);
     expect(married.focus).toBe('health');
     expect(married.board.ahead.some((w) => w.subarea === 'meet')).toBe(false);
+  });
+  it('reuses technique_outputs across days inside the dasha validity window when area_builds misses', async () => {
+    const db = fakePrisma();
+    const activationFor = vi.fn(deps(db).activationFor!);
+    const day1 = await getSelfBoard(deps(db, { activationFor, now: () => new Date('2026-11-05T12:00:00Z') }), 'u1');
+    expect(day1.status).toBe('ok');
+    expect(activationFor).toHaveBeenCalledTimes(2);
+    expect(db.techniqueOutputs.size).toBe(1);
+
+    // Next day (2026-11-06): area_builds misses for the new as_of date, but technique_outputs hits within the dasha window!
+    const day2 = await getSelfBoard(deps(db, { activationFor, now: () => new Date('2026-11-06T12:00:00Z') }), 'u1');
+    expect(day2.status).toBe('ok');
+    if (day2.status !== 'ok') return;
+    expect(day2.cached).toBe(true);
+    expect(activationFor).toHaveBeenCalledTimes(2); // skipped activationFor & buildBoard!
+    const cachedRun = db.runs.find((r) => r.status === 'cached');
+    expect(cachedRun).toBeDefined();
+    expect(cachedRun.technique_id).toBe('self.activation');
+    expect((cachedRun.charts_used as Array<{ type: string }>).length).toBeGreaterThan(0);
   });
 });
 

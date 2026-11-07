@@ -5,9 +5,11 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
+import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
-import type { DigestView } from '../digest/types.js';
+import { DIGEST_VERSION, type DigestView } from '../digest/types.js';
 import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
@@ -71,7 +73,8 @@ export function careerChartsRead(inputs: Pick<TimelineInputs, 'items' | 'contact
 export async function getCareer(deps: CareerDeps, userId: string): Promise<CareerResult> {
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli' };
-  const asOf = (deps.now ?? (() => new Date()))().toISOString().slice(0, 10);
+  const nowAt = (deps.now ?? (() => new Date()))();
+  const asOf = nowAt.toISOString().slice(0, 10);
   const work = await getWorkStatus(deps.prisma, userId);
   const asOfDate = new Date(`${asOf}T00:00:00Z`);
 
@@ -80,34 +83,55 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
   let fresh = false;
   if (!map) {
     const span = careerSpan(asOf);
-    const inputs = await withAgentRun(
+    const out = await withTechniqueOutput<CareerMap | null>(
       deps.prisma,
-      'area.career_inputs',
-      { userId, task: `inputs ${span.from}..${span.to}`, input: { span }, technique: 'work.present_tone', kundliId: kundli.id },
+      {
+        technique: 'work.present_tone',
+        kundliId: kundli.id,
+        digestVersion: DIGEST_VERSION,
+        context: { now: nowAt },
+        agentId: 'area.career_map',
+        userId,
+      },
       async () => {
-        const v = deps.loadInputs ? await deps.loadInputs(kundli.id, asOf, span) : await kundliInputs(deps.prisma, kundli.id, asOf, { span });
-        return { value: v, output: v ? { contacts: v.contacts.length, items: Object.keys(v.items).length, notes: v.notes.length } : { missing: true }, charts: v ? careerChartsRead(v) : [] };
+        const inputs = await withAgentRun(
+          deps.prisma,
+          'area.career_inputs',
+          { userId, task: `inputs ${span.from}..${span.to}`, input: { span }, technique: 'work.present_tone', kundliId: kundli.id },
+          async () => {
+            const v = deps.loadInputs ? await deps.loadInputs(kundli.id, asOf, span) : await kundliInputs(deps.prisma, kundli.id, asOf, { span });
+            return { value: v, output: v ? { contacts: v.contacts.length, items: Object.keys(v.items).length, notes: v.notes.length } : { missing: true }, charts: v ? careerChartsRead(v) : [] };
+          },
+        );
+        if (!inputs) return { value: null, skipStore: true };
+        let builtContext: { runningPeriod?: DateSpan | null; year?: DateSpan | null } = {};
+        const builtMap = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
+          const [view, activation, areaFacts] = await Promise.all([
+            (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
+            (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
+            loadAreaFacts(deps.prisma, userId, 'career', { key: 'work.status', value: work }),
+            loadTechniqueGovernance(deps.prisma),
+          ]);
+          builtContext = {
+            runningPeriod: shortestRunningPeriodSpan(activation, nowAt),
+            year: runningYearSpan(view, nowAt),
+          };
+          const build = buildTimelineSpan(inputs, span);
+          const m = careerMap(build, asOf, view ? { view, activation } : undefined);
+          const receipts = resolveCareerShades({
+            map: m,
+            view,
+            facts: areaFacts,
+          });
+          const logged = await recordTechniqueDecisions(deps.prisma, { kundliId: kundli.id, userId }, receipts);
+          const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
+          return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, shades: receipts.length, writes } };
+        });
+        return { value: builtMap, context: builtContext };
       },
     );
-    if (!inputs) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
-    map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
-      const [view, activation, areaFacts] = await Promise.all([
-        (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
-        (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
-        loadAreaFacts(deps.prisma, userId, 'career', { key: 'work.status', value: work }),
-        loadTechniqueGovernance(deps.prisma),
-      ]);
-      const build = buildTimelineSpan(inputs, span);
-      const m = careerMap(build, asOf, view ? { view, activation } : undefined);
-      const receipts = resolveCareerShades({
-        map: m,
-        view,
-        facts: areaFacts,
-      });
-      const logged = await recordTechniqueDecisions(deps.prisma, { kundliId: kundli.id, userId }, receipts);
-      const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
-      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, shades: receipts.length, writes } };
-    });
+    if (!out.value) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
+    map = out.value;
     await deps.prisma.areaBuild
       .upsert({
         where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: 'career', as_of: asOfDate } },
@@ -115,7 +139,7 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
         update: { status: 'ready', result: map as unknown as object, error: null },
       })
       .catch(() => undefined);
-    fresh = true;
+    fresh = !out.cached;
   }
   const shown: CareerMap = { ...map, ahead: map.ahead.filter((w) => fitsStatus(w.subarea, work)) };
   return { status: 'ok', map: shown, work, built_at: asOf, cached: !fresh };

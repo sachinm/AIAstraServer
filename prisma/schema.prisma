@@ -111,7 +111,7 @@ model Kundli {
   place_resolved     String?                @map("place_resolved")
   /// pending | building | ready | failed | unsupported (the engine does not serve the dossier yet)
   facts_status       String                 @default("pending") @map("facts_status")
-  /// pending | building | ready | stale | failed (M32, docs/reading-engine/53 §4.1, 54 §2)
+  /// pending | building | ready | stale | failed (M32, docs/reading-engine/53 Â§4.1, 54 Â§2)
   digest_status      String                 @default("pending") @map("digest_status")
   digest_version     String?                @map("digest_version")
   digest_built_at    DateTime?              @map("digest_built_at") @db.Timestamptz(6)
@@ -129,6 +129,7 @@ model Kundli {
   @@index([user_id], map: "idx_kundlis_user_id")
   @@index([digest_status], map: "idx_kundlis_digest_status")
   areaBuilds         AreaBuild[]
+  techniqueOutputs   TechniqueOutput[]
 
   @@map("kundlis")
 }
@@ -199,7 +200,7 @@ model ChatLog {
   request_payload     Json     @map("request_payload")
   response_payload    Json     @map("response_payload")
   /// True when the answer was delivered via POST /api/chat/ask-stream (SSE). False for GraphQL `ask`.
-  /// Matches the web app when VITE_CHAT_STREAM is enabled (default); not sent from the client—set by the server.
+  /// Matches the web app when VITE_CHAT_STREAM is enabled (default); not sent from the clientâ€”set by the server.
   client_delivery_sse Boolean  @default(false) @map("client_delivery_sse")
   created_at          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   chat                Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -228,7 +229,7 @@ model KundliFacts {
   @@map("kundli_facts")
 }
 
-/// The keyword list of chart data types Radha can serve (reading engine M7, docs/reading-engine/20 §4). Seeded from
+/// The keyword list of chart data types Radha can serve (reading engine M7, docs/reading-engine/20 Â§4). Seeded from
 /// src/reading/chartData/catalog.ts; rows override served/tier/calc_version/enabled.
 model ChartDataType {
   id            String       @id
@@ -277,7 +278,7 @@ model KundliData {
   @@map("kundli_data")
 }
 
-/// The kundli digest (M32, docs/reading-engine/53 §4.1, 54 §2): one row per (kundli, section, key), built by code from
+/// The kundli digest (M32, docs/reading-engine/53 Â§4.1, 54 Â§2): one row per (kundli, section, key), built by code from
 /// the stored engine rows; `source` lists the engine type, variant, calc version and JSON path of every value.
 model KundliDigest {
   id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
@@ -296,7 +297,7 @@ model KundliDigest {
   @@map("kundli_digest")
 }
 
-/// The activation calendar (M33, docs/reading-engine/53 §4.1, 54 §2): one row per stored dasha period, birth to thirty
+/// The activation calendar (M33, docs/reading-engine/53 Â§4.1, 54 Â§2): one row per stored dasha period, birth to thirty
 /// years ahead, with the D1 houses it activates as the engine states them.
 model KundliActivation {
   id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
@@ -493,7 +494,7 @@ model DeclinedTopic {
   @@map("declined_topics")
 }
 
-/// Registry of explicit LLM prompt caches (docs/reading-engine/20 §8, R-7). One live row per cache: every instance looks
+/// Registry of explicit LLM prompt caches (docs/reading-engine/20 Â§8, R-7). One live row per cache: every instance looks
 /// here before creating one (one cache per chart prefix), logout deletes the user's rows' caches, and the sweeper deletes
 /// idle ones and reconciles against the provider's list. No foreign keys: rows are short-lived bookkeeping.
 model LlmCacheEntry {
@@ -529,7 +530,7 @@ model UserCurrentLocation {
   @@map("user_current_location")
 }
 
-/// One cast prashna per question (reading engine M14, migration 20261026170000, docs/reading-engine/27 §4). Coordinates
+/// One cast prashna per question (reading engine M14, migration 20261026170000, docs/reading-engine/27 Â§4). Coordinates
 /// rounded to two decimals; null when only the birth place text was sent. place_source: current | birth.
 /// reading_run_id has no relation on purpose (the cast can precede its reading_runs row). Written by
 /// src/reading/chartData/prashna.ts with raw SQL, which tolerates the table missing.
@@ -552,8 +553,8 @@ model PrashnaCast {
   @@map("prashna_casts")
 }
 
-/// The life-timeline ledger (docs/reading-engine/27 §B.2, migration 20261027100000): real dated life events, facts only.
-/// category is dotted from the marker table (job.start, residence.move …); date_precision: day | month | year;
+/// The life-timeline ledger (docs/reading-engine/27 Â§B.2, migration 20261027100000): real dated life events, facts only.
+/// category is dotted from the marker table (job.start, residence.move â€¦); date_precision: day | month | year;
 /// source: user | import. No relations on purpose: read with raw SQL by src/reading/timeline/store.ts, which treats a
 /// missing table as "no ledger".
 model LifeEvent {
@@ -573,7 +574,7 @@ model LifeEvent {
   @@map("life_events")
 }
 
-/// One life-timeline build per kundli (doc 27 §B.2). status: building | ready | failed; grain: month | week | day.
+/// One life-timeline build per kundli (doc 27 Â§B.2). status: building | ready | failed; grain: month | week | day.
 model TimelineBuild {
   id              String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
   kundli_id       String   @map("kundli_id")
@@ -591,7 +592,7 @@ model TimelineBuild {
   @@map("timeline_builds")
 }
 
-/// The timeline grid (doc 27 §B.2): one row per non-quiet marker window; band high | moderate | possible, testing marks
+/// The timeline grid (doc 27 Â§B.2): one row per non-quiet marker window; band high | moderate | possible, testing marks
 /// an adverse window. how/form/prompt_version stay null until P3.
 model TimelineWindow {
   id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
@@ -615,7 +616,7 @@ model TimelineWindow {
   @@map("timeline_windows")
 }
 
-/// A ledger event matched against a build (doc 27 §A.7): result hit | near | miss.
+/// A ledger event matched against a build (doc 27 Â§A.7): result hit | near | miss.
 model TimelineMatch {
   id        String  @id @default(dbgenerated("(uuid_generate_v4())::text"))
   build_id  String  @map("build_id")
@@ -628,7 +629,7 @@ model TimelineMatch {
   @@map("timeline_matches")
 }
 
-/// Per-kundli calibration of the timing systems (doc 27 §A.7): one current row per (kundli, system, marker).
+/// Per-kundli calibration of the timing systems (doc 27 Â§A.7): one current row per (kundli, system, marker).
 model TimelineCalibration {
   kundli_id   String   @map("kundli_id")
   system      String
@@ -713,7 +714,7 @@ model ReadingTrace {
   tier           Int?
   route          String?
   subjects       Int?
-  /// M31: the catalogue technique ids the clarify context selected for this query (docs/reading-engine/53 §4.3)
+  /// M31: the catalogue technique ids the clarify context selected for this query (docs/reading-engine/53 Â§4.3)
   techniques      Json?
   /// M35 (docs/admin/06): deterministic Clarify Monitor evaluation for this reading
   clarify_monitor Json?             @map("clarify_monitor")
@@ -865,7 +866,7 @@ model AssistantQuestion {
   @@map("assistant_questions")
 }
 
-/// One row per admin write (M23, docs/admin/01 §4.1.7). before/after hold plan, quota, role and lock columns only.
+/// One row per admin write (M23, docs/admin/01 Â§4.1.7). before/after hold plan, quota, role and lock columns only.
 model AdminAction {
   id             String        @id @default(dbgenerated("(uuid_generate_v4())::text"))
   actor_user_id  String?       @map("actor_user_id")
@@ -942,7 +943,7 @@ model LuckyScenarioPick {
   @@map("lucky_scenario_picks")
 }
 
-/// One row per agent (docs/reading-engine/49 §4.1): what it does, where it belongs, which model and what that costs.
+/// One row per agent (docs/reading-engine/49 Â§4.1): what it does, where it belongs, which model and what that costs.
 model AgentRegistry {
   id            String     @id
   title         String
@@ -1005,7 +1006,7 @@ model AgentRun {
   @@map("agent_runs")
 }
 
-/// What the person clicks and chooses (docs/reading-engine/49 §4.1). No free text, no birth data.
+/// What the person clicks and chooses (docs/reading-engine/49 Â§4.1). No free text, no birth data.
 model AnalyticsEvent {
   id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
   user_id    String?  @map("user_id")
@@ -1042,7 +1043,7 @@ model AreaBuild {
   @@map("area_builds")
 }
 
-/// The person's answer to a Looking-back moment (docs/reading-engine/45 §9): calibration data, never shown back as fact.
+/// The person's answer to a Looking-back moment (docs/reading-engine/45 Â§9): calibration data, never shown back as fact.
 model AreaCheck {
   id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
   user_id    String   @map("user_id")
@@ -1058,7 +1059,7 @@ model AreaCheck {
   @@map("area_checks")
 }
 
-/// What the person told us about their situation (docs/reading-engine/48 §4.3), one row per key.
+/// What the person told us about their situation (docs/reading-engine/48 Â§4.3), one row per key.
 model PersonFact {
   user_id      String    @map("user_id")
   key          String
@@ -1073,7 +1074,7 @@ model PersonFact {
   @@map("person_facts")
 }
 
-/// The selfie (docs/reading-engine/52 §4): one current photo per person, the previous kept 30 days.
+/// The selfie (docs/reading-engine/52 Â§4): one current photo per person, the previous kept 30 days.
 model ProfilePhoto {
   user_id     String    @id @map("user_id")
   bytes       Bytes
@@ -1104,7 +1105,7 @@ model ProfilePhotoAttempt {
   @@map("profile_photo_attempts")
 }
 
-/// M29 (docs/admin/03 §4.1): the technique catalogue (src/techniques/catalog.ts), upserted at boot. The admin reads it.
+/// M29 (docs/admin/03 Â§4.1): the technique catalogue (src/techniques/catalog.ts), upserted at boot. The admin reads it.
 model TechniqueRegistry {
   id         String   @id
   title      String
@@ -1121,7 +1122,7 @@ model TechniqueRegistry {
   code_ref   String?  @map("code_ref")
   agents     Json     @default("[]")
   accuracy   String?
-  /// M31 (docs/reading-engine/53 §4.3): when the clarify context selects it (subjects, boards, houses, vargas, questionTypes, horizons, facts, slots)
+  /// M31 (docs/reading-engine/53 Â§4.3): when the clarify context selects it (subjects, boards, houses, vargas, questionTypes, horizons, facts, slots)
   selectors  Json     @default("{}")
   /// M31: what it reads (inputs with section, filter, layout), its system prompt, user fields, output schema and synthesizer
   contract   Json     @default("{}")
@@ -1247,7 +1248,7 @@ model AccountEvent {
   @@map("account_events")
 }
 
-/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1–R14).
+/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1â€“R14).
 model ReadingFindingsCache {
   cache_key      String   @id @map("cache_key")
   kundli_id      String   @map("kundli_id")
@@ -1279,4 +1280,29 @@ model UserActivityDay {
   @@id([user_id, day])
   @@index([day], map: "user_activity_days_day")
   @@map("user_activity_days")
+}
+
+/// M37 (docs/reading-engine/56 Â§4.1): digested technique output stored by its validity date range [valid_from, valid_to)
+/// so a second request inside the window returns the stored output and skips running the agent.
+model TechniqueOutput {
+  cache_key      String    @id @map("cache_key")
+  technique_id   String    @map("technique_id")
+  kundli_id      String    @map("kundli_id")
+  digest_version String    @map("digest_version")
+  /// natal | annual | dasha | daily | transit
+  freshness      String
+  valid_from     DateTime  @map("valid_from") @db.Timestamptz(6)
+  valid_to       DateTime? @map("valid_to") @db.Timestamptz(6)
+  output         Json
+  output_schema  String    @map("output_schema")
+  made_by_agent  String?   @map("made_by_agent")
+  made_ms        Int       @default(0) @map("made_ms")
+  created_at     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  hit_count      Int       @default(0) @map("hit_count")
+  last_hit_at    DateTime? @map("last_hit_at") @db.Timestamptz(6)
+  kundli         Kundli    @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "technique_outputs_kundli_fkey")
+
+  @@index([kundli_id, technique_id], map: "idx_technique_outputs_kundli_technique")
+  @@index([valid_to], map: "idx_technique_outputs_valid_to")
+  @@map("technique_outputs")
 }
