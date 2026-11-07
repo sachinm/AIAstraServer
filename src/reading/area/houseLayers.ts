@@ -627,6 +627,8 @@ export interface BoardInput {
   /** every period running on asOf (for release dates), any houses */
   running: ActivationRow[];
   transit: TransitRangePayload | null;
+  /** optional person age in years on `asOf` for 3-decade age labels on the Self board */
+  ageYears?: number | null;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -814,7 +816,10 @@ export function buildBoard(input: BoardInput): BuiltBoard {
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  const characterArc = cfg.area === 'self' ? buildSelfCharacterArc(view, input.activation, asOf) : undefined;
+  const characterArc =
+    cfg.area === 'self'
+      ? buildSelfCharacterArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null })
+      : undefined;
   const personalityAndJoy = cfg.area === 'self' ? buildSelfPersonalityAndJoy(view) : undefined;
 
   return {

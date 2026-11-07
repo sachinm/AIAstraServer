@@ -231,10 +231,68 @@ describe('the board', () => {
   it('no chart terms on any first-screen string (doc 45 §3.3), for Self and Love, with and without the sky', () => {
     for (const cfg of [SELF, LOVE]) for (const transit of [null, sky()]) {
       const x = buildBoard(input({ cfg, transit })).board;
-      const strings = [...x.supports.map((s) => s.text), ...x.pressures.map((p) => p.text), ...x.ahead.map((w) => w.label), x.year?.note ?? '', ...x.back.map((y) => y.label)];
+      const arcStrings = x.characterArc
+        ? [
+            x.characterArc.headline,
+            x.characterArc.pastDecade.headline,
+            x.characterArc.pastDecade.summary,
+            x.characterArc.pastDecade.anchorTrait,
+            x.characterArc.presentNow.headline,
+            x.characterArc.presentNow.summary,
+            x.characterArc.presentNow.anchorTrait,
+            x.characterArc.nextDecade.headline,
+            x.characterArc.nextDecade.summary,
+            x.characterArc.nextDecade.anchorTrait,
+          ]
+        : [];
+      const joyStrings = x.personalityAndJoy
+        ? [
+            x.personalityAndJoy.headline,
+            x.personalityAndJoy.personalitySummary,
+            x.personalityAndJoy.emotionalMindStyle,
+            x.personalityAndJoy.intellectualWitStyle,
+            x.personalityAndJoy.rechargeRule,
+            ...x.personalityAndJoy.whatFeelsGood.flatMap((it) => [it.title, it.whyItFits]),
+          ]
+        : [];
+      const strings = [
+        ...x.supports.map((s) => s.text),
+        ...x.pressures.map((p) => p.text),
+        ...x.ahead.map((w) => w.label),
+        x.year?.note ?? '',
+        ...x.back.map((y) => y.label),
+        ...arcStrings,
+        ...joyStrings,
+      ];
       for (const s of strings) expect(s, s).not.toMatch(BANNED);
     }
     for (const cfg of [SELF, LOVE]) for (const [kind, f] of Object.entries(KIND_WORDS)) for (const theme of Object.values(cfg.words.themes)) expect(f(theme), kind).not.toMatch(BANNED);
+  });
+  it('builds distinct 3-decade character arc and Moon/Mercury personality & joy across ages and empty activations', () => {
+    const age30 = buildBoard(input({ ageYears: 30 })).board;
+    expect(age30.characterArc?.pastDecade.windowLabel).toBe('Ages 20–30 (2016–2026)');
+    expect(age30.characterArc?.presentNow.windowLabel).toBe('Age 30 (2026)');
+    expect(age30.characterArc?.nextDecade.windowLabel).toBe('Ages 30–40 (2026–2036)');
+
+    const age7NoAct = buildBoard(input({ activation: [], running: [], ageYears: 7 })).board;
+    expect(age7NoAct.characterArc?.pastDecade.windowLabel).toBe('Ages 0–7 (2019–2026)');
+    expect(age7NoAct.characterArc?.presentNow.windowLabel).toBe('Age 7 (2026)');
+    expect(age7NoAct.characterArc?.nextDecade.windowLabel).toBe('Ages 7–17 (2026–2036)');
+    expect(age7NoAct.characterArc?.pastDecade.headline).not.toBe(age7NoAct.characterArc?.presentNow.headline);
+    expect(age7NoAct.characterArc?.presentNow.headline).not.toBe(age7NoAct.characterArc?.nextDecade.headline);
+
+    const scorpioAquarius = fakeDigest({
+      planets: [
+        planet('Mo', { sign: 'Scorpio', house: 8 }),
+        planet('Me', { sign: 'Aquarius', house: 11 }),
+      ],
+    });
+    const joyA = buildBoard(input()).board.personalityAndJoy!;
+    const joyB = buildBoard(input({ view: scorpioAquarius })).board.personalityAndJoy!;
+    expect(joyB.headline).toContain('Private emotional depth');
+    expect(joyB.headline).toContain('original, systems-level thinking');
+    expect(joyB.headline).not.toBe(joyA.headline);
+    expect(joyB.personalitySummary).not.toBe(joyA.personalitySummary);
   });
   it('Looking back picks edges of the last 12 months, both directions, at most three', () => {
     const past = [
@@ -258,13 +316,13 @@ describe('the board', () => {
 
 describe('Node computes nothing astrological (AGENTS.md)', () => {
   it('the board code does no sign or house arithmetic', () => {
-    for (const f of ['houseLayers.ts', 'self.ts', 'love.ts', 'boardService.ts', 'selfService.ts', 'loveService.ts']) {
+    for (const f of ['houseLayers.ts', 'self.ts', 'love.ts', 'boardService.ts', 'selfService.ts', 'loveService.ts', 'selfCharacterAndJoy.ts']) {
       const src = fs.readFileSync(path.resolve(__dirname, '../../../../src/reading/area', f), 'utf8');
       expect(src, f).not.toMatch(/%\s*12|\+\s*6\)|-\s*1\)\s*%|\bsignIndex\b|sign_index\s*[+-]|longitude\s*[+-/]|degree\s*[+-/]/);
     }
   });
   it('never names the engine in a string', () => {
-    for (const f of ['houseLayers.ts', 'self.ts', 'love.ts', 'boardService.ts']) {
+    for (const f of ['houseLayers.ts', 'self.ts', 'love.ts', 'boardService.ts', 'selfCharacterAndJoy.ts']) {
       const src = fs.readFileSync(path.resolve(__dirname, '../../../../src/reading/area', f), 'utf8');
       expect(src, f).not.toMatch(/radha|pyjhora|jhora/i);
     }
