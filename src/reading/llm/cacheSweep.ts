@@ -6,6 +6,8 @@
  * - CLI: `npm run cache:sweep` (scripts/cache-sweep.ts).
  */
 import { explicitCacheEnabled, sweepLlmCaches, type SweepResult } from './promptCache.js';
+import { prisma } from '../../lib/prisma.js';
+import { sweepTechniqueOutputs } from '../../techniques/outputStore.js';
 
 export const SWEEP_TASK = 'llm-cache-sweep';
 const MIN_GAP_MS = 5 * 60_000;
@@ -23,12 +25,21 @@ export function isCacheSweepEvent(body: unknown): boolean {
   return !token || b.detail?.token === token;
 }
 
+export type ScheduledSweepResult = (SweepResult & { techniqueOutputsDeleted?: number }) | { skipped: string };
+
 /** Runs one sweep unless one ran on this instance in the last 5 minutes. Never throws. */
-export async function runScheduledSweep(): Promise<SweepResult | { skipped: string }> {
+export async function runScheduledSweep(): Promise<ScheduledSweepResult> {
   if (Date.now() - lastRunAt < MIN_GAP_MS) return { skipped: 'ran recently' };
   lastRunAt = Date.now();
   try {
-    return await sweepLlmCaches();
+    const [llm, techniqueOutputsDeleted] = await Promise.all([
+      sweepLlmCaches(),
+      sweepTechniqueOutputs(prisma).catch((err: Error) => {
+        console.warn(JSON.stringify({ msg: 'technique outputs sweep failed', error: err.message.slice(0, 200) }));
+        return 0;
+      }),
+    ]);
+    return { ...llm, techniqueOutputsDeleted };
   } catch (err) {
     console.warn(JSON.stringify({ msg: 'llm cache sweep failed', error: (err as Error).message.slice(0, 200) }));
     return { skipped: 'error' };
