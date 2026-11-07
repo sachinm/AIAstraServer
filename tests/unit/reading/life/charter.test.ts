@@ -315,11 +315,24 @@ describe('life.mahadasha_charter (doc 55)', () => {
     expect(saSa.tone).toBe('build');
     expect(saSa.evidence.systems).toContain('Vimshottari');
 
+    // Sa-Ve (house_from_md = 2, dwirdwadasha_2_12 without MD link, functional malefic Ve) is marked 'careful'
+    const saVe = charter.antardashas.find((ad) => ad.evidence.ad === 'Venus')!;
+    expect(saVe).toBeDefined();
+    expect(saVe.evidence.links).toContain('dwirdwadasha_2_12');
+    expect(saVe.tone).toBe('careful');
+
     // Different Antardashas highlight distinct activated areas rather than repeating the exact same 3 areas
     const topSets = new Set(charter.antardashas.map((ad) => ad.areas.map((a) => a.id).join(',')));
     expect(topSets.size).toBeGreaterThanOrEqual(6);
 
-    // Every visible prose string across primary charter and bridge passes BANNED_RE and avoids awkward double-'and'
+    // Promised area charters never claim "partial chart backing" in basis
+    for (const ac of charter.area_charters) {
+      if (ac.verdict === 'promised') {
+        expect(ac.basis).not.toContain('partial chart backing');
+      }
+    }
+
+    // Every visible prose string across primary charter and bridge passes BANNED_RE and avoids unclosed ", along with" splices
     const visible: string[] = [
       charter.headline,
       charter.charter_summary,
@@ -330,6 +343,39 @@ describe('life.mahadasha_charter (doc 55)', () => {
     ];
     for (const s of visible) {
       expect(s, s).not.toMatch(BANNED_RE);
+      expect(s, s).not.toContain(', along with ');
     }
+  });
+
+  it('does not skip an immediately upcoming 16-year Mahadasha in favor of a 19-year Mahadasha starting 18 years later, and bridges intervening short chapters cleanly', () => {
+    const rows = [
+      // Running Rahu MD with 2 years left (2026–2028)
+      row('vimshottari', 'vimshottari', '2010-01-01', '2028-11-05', [10], 'Ra', { level: 1, parentLord: null }),
+      // Immediately next: 16-year Jupiter MD (2028–2044)
+      row('vimshottari', 'vimshottari', '2028-11-05', '2044-11-05', [1, 4], 'Ju', { level: 1, parentLord: null }),
+      // 18 years in the future: 19-year Saturn MD (2044–2063)
+      row('vimshottari', 'vimshottari', '2044-11-05', '2063-11-05', [2], 'Sa', { level: 1, parentLord: null }),
+    ];
+
+    const sel = selectCharterMahadasha(rows, today)!;
+    expect(sel.primary.lord).toBe('Ju');
+    expect(sel.primary.from).toBe('2028-11-05');
+    expect(sel.bridge?.lord).toBe('Ra');
+    expect(sel.bridge?.to).toBe('2028-11-05');
+
+    // When a short 6-year Sun MD sits between 1.5-year Venus MD and 10-year Moon MD, bridge covers both up to Moon MD
+    const shortGapRows = [
+      row('vimshottari', 'vimshottari', '2008-05-05', '2028-05-05', [2, 7], 'Ve', { level: 1, parentLord: null }),
+      row('vimshottari', 'vimshottari', '2026-05-05', '2028-05-05', [2, 7], 'Ke', { parentLord: 'Ve' }),
+      row('vimshottari', 'vimshottari', '2028-05-05', '2034-05-05', [9], 'Su', { level: 1, parentLord: null }),
+      row('vimshottari', 'vimshottari', '2028-05-05', '2034-05-05', [9], 'Su', { parentLord: 'Su' }),
+      row('vimshottari', 'vimshottari', '2034-05-05', '2044-05-05', [4], 'Mo', { level: 1, parentLord: null }),
+      row('vimshottari', 'vimshottari', '2034-05-05', '2044-05-05', [4], 'Mo', { parentLord: 'Mo' }),
+    ];
+    const selGap = selectCharterMahadasha(shortGapRows, today)!;
+    expect(selGap.primary.lord).toBe('Mo');
+    expect(selGap.primary.from).toBe('2034-05-05');
+    expect(selGap.bridge?.to).toBe('2034-05-05');
+    expect(selGap.bridgeMds.map((m) => m.lord)).toEqual(['Ve', 'Su']);
   });
 });

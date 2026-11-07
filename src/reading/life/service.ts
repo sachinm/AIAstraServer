@@ -6,8 +6,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { getLifeHorizonYears } from '../../config/env.js';
-import { activationFor as activationForDb } from '../digest/activation.js';
+import { getLifeCharterHorizonYears, getLifeHorizonYears } from '../../config/env.js';
+import { ACTIVATION_YEARS_AHEAD, activationFor as activationForDb } from '../digest/activation.js';
 import { digestStatusOf as digestStatusOfDb, loadDigest as loadDigestDb } from '../digest/load.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestStatus, DigestView } from '../digest/types.js';
@@ -80,6 +80,7 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
 
   const horizonYears = getLifeHorizonYears();
   const horizonEnd = addYears(today, horizonYears);
+  const activationEnd = addYears(today, Math.max(horizonYears, getLifeCharterHorizonYears(), ACTIVATION_YEARS_AHEAD));
   const dashboard = await withAgentRun(
     prisma,
     'life.dashboard',
@@ -89,10 +90,10 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
       input: { horizon_years: horizonYears, areas: LIFE_AREAS.length },
       technique: 'life.dashboard',
       kundliId: kundli.id,
-      charts: [{ type: 'kundli_digest', variant: view.version }, { type: 'kundli_activation', variant: `${today}_${horizonEnd}` }],
+      charts: [{ type: 'kundli_digest', variant: view.version }, { type: 'kundli_activation', variant: `${today}_${activationEnd}` }],
     },
     async () => {
-      const q = { from: today, to: horizonEnd, houses: allAreaHouses(), maxLevel: 2 as const };
+      const q = { from: today, to: activationEnd, houses: allAreaHouses(), maxLevel: 2 as const };
       const rows = await (deps.activationFor ? deps.activationFor(kundli.id, q) : activationForDb(prisma, kundli.id, q));
       const stored = await (deps.loadSky ? deps.loadSky(kundli.id) : loadStoredSky(prisma, kundli.id));
       const sky = stored?.sky ?? null;

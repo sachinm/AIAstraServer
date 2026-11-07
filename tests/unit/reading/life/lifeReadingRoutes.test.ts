@@ -113,7 +113,7 @@ describe('GET /api/life-reading', () => {
     const work = a.json.areas.find((x: any) => x.id === 'work');
     expect(work.issue).toMatch(/Has work felt harder to move lately\?$/); // work.status = yes from the stored facts
     expect(work.improves).toHaveLength(1);
-    expect(activationFor).toHaveBeenCalledWith('k1', { from: '2026-11-05', to: '2041-11-05', houses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], maxLevel: 2 });
+    expect(activationFor).toHaveBeenCalledWith('k1', { from: '2026-11-05', to: '2056-11-05', houses: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], maxLevel: 2 });
     const run = runs.find((r) => r.agent_id === 'life.dashboard');
     expect(run.technique_id).toBe('life.dashboard');
     expect(run.kundli_id).toBe('k1');

@@ -331,48 +331,81 @@ export function extractMahadashas(rows: ActivationRow[], today: string, horizonE
     }
   }
 
-  return rawList.map((m, idx) => {
-    const isCurrent = m.from <= today && m.to > today ? true : idx === 0 && m.from <= today;
-    const effFrom = m.from < today ? today : m.from;
-    return {
-      lord: m.lord,
-      from: m.from,
-      to: m.to,
-      houses: m.houses,
-      isCurrent,
-      remainingYears: yearsBetween(effFrom, m.to),
-      totalYears: yearsBetween(m.from, m.to),
-    };
-  });
+  return rawList
+    .filter((m) => m.from <= horizonEnd)
+    .map((m, idx) => {
+      const isCurrent = m.from <= today && m.to > today ? true : idx === 0 && m.from <= today;
+      const effFrom = m.from < today ? today : m.from;
+      return {
+        lord: m.lord,
+        from: m.from,
+        to: m.to,
+        houses: m.houses,
+        isCurrent,
+        remainingYears: yearsBetween(effFrom, m.to),
+        totalYears: yearsBetween(m.from, m.to),
+      };
+    });
 }
 
 /**
  * Selects the primary chartered Mahadasha (if the running MD has >= `LIFE_CHARTER_MIN_REMAINING_YEARS` left, or else
- * the largest Mahadasha in the horizon with the running MD as a bridge).
+ * the first upcoming Mahadasha with >= `LIFE_CHARTER_MIN_REMAINING_YEARS` starting within `minYears` of `today`,
+ * carrying any pre-primary Mahadashas as a chronological transition bridge).
  */
 export function selectCharterMahadasha(
   rows: ActivationRow[],
   today: string,
-): { primary: MdCandidate; bridge: MdCandidate | null } | null {
+): { primary: MdCandidate; bridge: MdCandidate | null; bridgeMds: MdCandidate[] } | null {
   const minYears = getLifeCharterMinRemainingYears();
   const horizonEnd = addYears(today, getLifeCharterHorizonYears());
   const mds = extractMahadashas(rows, today, horizonEnd);
   if (!mds.length) return null;
 
-  const current = mds.find((m) => m.isCurrent) ?? mds[0]!;
-  if (current.remainingYears >= minYears || mds.length === 1) {
-    return { primary: current, bridge: null };
+  const currentIdx = mds.findIndex((m) => m.isCurrent);
+  const startIdx = currentIdx >= 0 ? currentIdx : 0;
+  const current = mds[startIdx]!;
+  if (current.remainingYears >= minYears || startIdx >= mds.length - 1) {
+    return { primary: current, bridge: null, bridgeMds: [] };
   }
 
-  // Find the Mahadasha in the horizon with the largest remaining duration
-  const largest = [...mds].sort((a, b) => b.remainingYears - a.remainingYears)[0]!;
-  if (largest.lord === current.lord && largest.from === current.from) {
-    return { primary: current, bridge: null };
+  // Prefer the first upcoming Mahadasha with >= minYears that starts within `minYears` of today
+  let primaryIdx = -1;
+  for (let i = startIdx + 1; i < mds.length; i++) {
+    const cand = mds[i]!;
+    const startsInYears = yearsBetween(today, cand.from);
+    if (cand.remainingYears >= minYears && (i === startIdx + 1 || startsInYears <= minYears)) {
+      primaryIdx = i;
+      break;
+    }
   }
-  return {
-    primary: largest,
-    bridge: current.remainingYears > 0 ? current : null,
+
+  if (primaryIdx < 0) {
+    const next = mds[startIdx + 1]!;
+    if (current.remainingYears >= next.remainingYears) {
+      return { primary: current, bridge: null, bridgeMds: [] };
+    }
+    primaryIdx = startIdx + 1;
+  }
+
+  const primary = mds[primaryIdx]!;
+  const bridgeMds = mds.slice(startIdx, primaryIdx).filter((m) => m.remainingYears > 0);
+  if (!bridgeMds.length) {
+    return { primary, bridge: null, bridgeMds: [] };
+  }
+  const firstBridge = bridgeMds[0]!;
+  const lastBridge = bridgeMds.at(-1)!;
+  const effBridgeFrom = firstBridge.from < today ? today : firstBridge.from;
+  const bridge: MdCandidate = {
+    lord: firstBridge.lord,
+    from: firstBridge.from,
+    to: lastBridge.to,
+    houses: [...new Set(bridgeMds.flatMap((m) => m.houses))],
+    isCurrent: firstBridge.isCurrent,
+    remainingYears: yearsBetween(effBridgeFrom, lastBridge.to),
+    totalYears: yearsBetween(firstBridge.from, lastBridge.to),
   };
+  return { primary, bridge, bridgeMds };
 }
 
 interface MdTouchMap {
@@ -425,7 +458,7 @@ function joinPhrases(items: string[]): string {
   if (items.length === 1) return items[0]!;
   if (items.length === 2) {
     const [a, b] = items as [string, string];
-    return a.includes(' and ') || b.includes(' and ') ? `${a}, along with ${b}` : `${a} and ${b}`;
+    return a.includes(' and ') || b.includes(' and ') ? `${a} as well as ${b}` : `${a} and ${b}`;
   }
   return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)!}`;
 }
@@ -453,15 +486,18 @@ function fruitionBonus(cell: AntardashaFruitionCell | undefined): {
   }
   const cls = cell.fruitionClass ?? '';
   const isCrisis = cls === 'dusthana_reversal_crisis' || cell.isShadAshtaka68;
+  const hasMdLink = Boolean(cell.isStarLordOfMd || cell.isSignDispositorOfMd || cell.isCoLordPartnerOfMd);
   const isSupportive =
     !isCrisis &&
-    (cls === 'trikona_manifestation' || cls === 'kendra_structural' || cls === 'dhana_labha_gain');
-  if (cls === 'trikona_manifestation') pts += 5;
+    (cls === 'trikona_manifestation' ||
+      cls === 'kendra_structural' ||
+      (cls === 'dhana_labha_gain' && (!cell.isDwirdwadasha212 || hasMdLink)));
+  if (isCrisis) pts -= 6;
+  else if (cls === 'trikona_manifestation') pts += 5;
   else if (cls === 'kendra_structural') pts += 4;
   else if (cls === 'dhana_labha_gain') pts += 3;
   else if (cls === 'upachaya_effort') pts += 1;
-  else if (isCrisis) pts -= 6;
-  else if (cell.isDwirdwadasha212) pts -= 2;
+  if (!isCrisis && cell.isDwirdwadasha212) pts -= 2;
   if (cell.isShadAshtaka68) links.push('shad_ashtaka_6_8');
   if (cell.isDwirdwadasha212) links.push('dwirdwadasha_2_12');
   return { pts, links, isCrisis, isSupportive };
@@ -884,8 +920,12 @@ function buildAreaCharters(
           ? `${grade}: backed by birth and deeper charts with confirmed opening windows across this chapter`
           : `${grade}: backed by birth and deeper charts across this chapter`
         : role === 'growth'
-          ? `${grade}: partial chart backing that strengthens during specific sub-periods`
-          : `${grade}: tested in the chart, best handled with steady boundaries`;
+          ? promise.verdict === 'promised'
+            ? `${grade}: backed by birth and deeper charts, building steadily across this chapter`
+            : `${grade}: partial chart backing that strengthens during specific sub-periods`
+          : promise.verdict === 'not_written'
+            ? `${grade}: tested in the chart, best handled with steady boundaries`
+            : `${grade}: tested during this chapter's sub-periods, best handled with steady boundaries`;
 
     const owning = owningVargaOf(view, area);
     const vargas = ['D1', 'D9', ...(owning ? [owning] : [])];
@@ -930,7 +970,7 @@ export function buildMahadashaCharter(
   const sel = selectCharterMahadasha(input.rows, input.today);
   if (!sel) return null;
 
-  const { primary, bridge } = sel;
+  const { primary, bridge, bridgeMds } = sel;
   const mdTouch = buildMdTouchMap(view, primary.lord, primary.houses);
   const { rows: antardashas, scoredByArea } = buildAntardashaTimeline(view, primary, mdTouch, areas, input);
   if (!antardashas.length) return null;
@@ -969,9 +1009,13 @@ export function buildMahadashaCharter(
     `This ${primary.remainingYears}-year chapter unfolds through ${antardashas.length} distinct sub-periods, each shifting which part of your life steps to the front.`;
 
   let bridgeOut: LifeMahadashaBridge | null = null;
-  if (bridge) {
-    const bridgeTouch = buildMdTouchMap(view, bridge.lord, bridge.houses);
-    const { rows: bridgeAds } = buildAntardashaTimeline(view, bridge, bridgeTouch, areas, input);
+  if (bridge && bridgeMds.length) {
+    const bridgeAds: LifeAntardashaRow[] = [];
+    for (const bMd of bridgeMds) {
+      const bridgeTouch = buildMdTouchMap(view, bMd.lord, bMd.houses);
+      const { rows: rowsForMd } = buildAntardashaTimeline(view, bMd, bridgeTouch, areas, input);
+      bridgeAds.push(...rowsForMd);
+    }
     if (bridgeAds.length) {
       const bFrom = bridge.from < input.today ? input.today : bridge.from;
       bridgeOut = {
