@@ -116,14 +116,23 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/life\//);
     }
-    for (const id of ['research.self_dashboard_qa', 'research.technical_verifier']) {
+    for (const id of [
+      'research.self_dashboard_qa',
+      'research.love_dashboard_qa',
+      'research.work_dashboard_qa',
+      'research.technical_verifier',
+    ]) {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/research\//);
     }
-    // all 69 techniques are built (0 planned)
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(69);
+    for (const id of ['self.character_arc', 'self.personality_joy']) {
+      expect(techniqueById(id)?.status, id).toBe('built');
+      expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/area\//);
+    }
+    // all 73 techniques are built (0 planned)
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(73);
     expect(TECHNIQUES.filter((t) => t.status === 'planned')).toHaveLength(0);
-    expect(TECHNIQUES).toHaveLength(69);
+    expect(TECHNIQUES).toHaveLength(73);
   });
 
   it('the work families and the house-state layers are built', () => {

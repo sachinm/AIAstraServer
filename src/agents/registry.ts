@@ -198,6 +198,22 @@ export const AGENTS: AgentDef[] = [
     description: 'Hydrates synthetic age-bracket (18-60) and persona kundlis in research_* staging tables and builds the 12-house/10-varga Self Dashboard, Nov/Thanksgiving/Dec/New Year weekly & daily zoom-in, and 10-step technical trace; no model',
   },
   {
+    id: 'research.love_dashboard_builder',
+    title: 'Research Love Dashboard QA builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'research_love',
+    description: 'Hydrates synthetic age-bracket and persona kundlis in research_* staging tables and builds the 12-house/10-varga Love & Relationships Dashboard, Nov/Thanksgiving/Dec/New Year weekly & daily zoom-in, and 10-step technical trace; no model',
+  },
+  {
+    id: 'research.work_dashboard_builder',
+    title: 'Research Work Dashboard QA builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'research_work',
+    description: 'Hydrates synthetic age-bracket and persona kundlis in research_* staging tables and builds the 12-house/10-varga Work & Career Dashboard, Nov/Thanksgiving/Dec/New Year weekly & daily zoom-in, and 10-step technical trace; no model',
+  },
+  {
     id: 'research.technical_verifier',
     title: 'Independent Technical Verifier Agent',
     kind: 'code',

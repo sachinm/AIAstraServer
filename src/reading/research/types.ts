@@ -8,6 +8,8 @@ import type { CalmPlaybook, TechniqueDecisionReceipt } from '../area/shadeResolv
 
 export type ResearchGroupKind = 'age_bracket' | 'persona' | 'custom';
 
+export type ResearchBoardArea = 'self' | 'love' | 'work';
+
 export type ResearchTimingGrade = 'steady_growth' | 'high_focus' | 'mixed_watch' | 'quiet_recovery';
 
 export interface ResearchSeedPlanet {
@@ -272,6 +274,7 @@ export interface ResearchDashboardRunSummary {
   runId: string;
   researchKundliId: string;
   subjectCode: string;
+  boardArea?: ResearchBoardArea;
   groupKind: ResearchGroupKind;
   label: string;
   ageYears: number;

@@ -24,6 +24,14 @@ import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
 import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthMid, monthOf, monthStart, monthsBetween } from '../timeline/months.js';
+import {
+  buildSelfCharacterArc,
+  buildSelfPersonalityAndJoy,
+  type SelfCharacterArc,
+  type SelfPersonalityAndJoy,
+} from './selfCharacterAndJoy.js';
+
+export type { SelfCharacterArc, SelfPersonalityAndJoy } from './selfCharacterAndJoy.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
 export type Confidence = 'confirmed' | 'likely' | 'split';
@@ -64,7 +72,7 @@ export interface AreaWords {
 }
 
 export interface AreaConfig {
-  area: 'self' | 'love';
+  area: 'self' | 'love' | 'career';
   /** every house the area reads (activation query) */
   houses: number[];
   /** the houses whose promise and afflictions are read */
@@ -598,6 +606,8 @@ export interface AreaBoardBody {
   year: { year: number; note: string } | null;
   back: Array<{ month: string; side: Side; label: string }>;
   notes: string[];
+  characterArc?: SelfCharacterArc;
+  personalityAndJoy?: SelfPersonalityAndJoy;
 }
 
 export interface BuiltBoard {
@@ -804,8 +814,22 @@ export function buildBoard(input: BoardInput): BuiltBoard {
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  const characterArc = cfg.area === 'self' ? buildSelfCharacterArc(view, input.activation, asOf) : undefined;
+  const personalityAndJoy = cfg.area === 'self' ? buildSelfPersonalityAndJoy(view) : undefined;
+
   return {
-    board: { asOf, tone, supports, pressures, ahead, year, back, notes },
+    board: {
+      asOf,
+      tone,
+      supports,
+      pressures,
+      ahead,
+      year,
+      back,
+      notes,
+      ...(characterArc ? { characterArc } : {}),
+      ...(personalityAndJoy ? { personalityAndJoy } : {}),
+    },
     subareaScores,
     counts: { promise: promise.length, affliction: affliction.length, protection: protection.length, activation: input.activation.length, transit: transit ? transit.length : null, annual: annual.rows.length, varga: varga.length, nakshatra: nakshatra.length },
   };

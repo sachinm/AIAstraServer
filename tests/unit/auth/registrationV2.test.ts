@@ -223,6 +223,10 @@ function localCode(email: string): string {
 }
 
 beforeEach(() => {
+  vi.stubEnv('AUTH_PROVIDER', 'local');
+  vi.stubEnv('COGNITO_USER_POOL_ID', '');
+  vi.stubEnv('COGNITO_CLIENT_ID', '');
+  setCognitoAuthForTests(null);
   resetRequestAuthForTests();
   db.rows.length = 0;
   db.kundlis.length = 0;

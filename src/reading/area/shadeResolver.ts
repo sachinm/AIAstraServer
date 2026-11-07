@@ -833,7 +833,7 @@ export function resolveAreaShades(params: {
   const { view, cfg, asOf, built, activation, facts = {} } = params;
   const minConfirmFamilies = getShadeConfirmMinFamilies();
   const minWinScore = getShadeMinWinningScore();
-  const techniqueId = `${cfg.area}.activation`;
+  const techniqueId = cfg.area === 'career' ? 'work.present_tone' : `${cfg.area}.activation`;
   if (!isTechniqueEnabledSync(techniqueId)) return [];
 
   const promiseCount = built.counts.promise + built.counts.protection + built.counts.varga;
