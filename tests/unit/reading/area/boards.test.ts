@@ -237,7 +237,11 @@ describe('area routes for You and Love', () => {
       const r = await call('GET', `/api/area/${area}`, 'u1');
       expect(r.status).toBe(200);
       expect(r.json.status).toBe('ok');
-      expect(Object.keys(r.json.board).sort()).toEqual(['ahead', 'asOf', 'back', 'notes', 'pressures', 'supports', 'tone', 'year']);
+      const expectedKeys =
+        area === 'self'
+          ? ['ahead', 'asOf', 'back', 'characterArc', 'notes', 'personalityAndJoy', 'pressures', 'supports', 'tone', 'year']
+          : ['ahead', 'asOf', 'back', 'notes', 'pressures', 'supports', 'tone', 'year'];
+      expect(Object.keys(r.json.board).sort()).toEqual(expectedKeys);
       expect(['demanding', 'easing', 'steady', 'closing', 'open']).toContain(r.json.board.tone.tone);
       expect(r.json.checks).toEqual({});
     }
