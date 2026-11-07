@@ -32,6 +32,7 @@ import type { ContractSection } from './contracts.js';
 
 export type PieceKind = 'reader' | 'prompt' | 'output' | 'agent';
 export const PIECE_KINDS: readonly PieceKind[] = ['reader', 'prompt', 'output', 'agent'];
+export type PieceId = string;
 
 /** Longest-lived first. */
 export type Freshness = 'natal' | 'annual' | 'dasha' | 'daily' | 'transit' | 'question';
@@ -327,6 +328,10 @@ export interface DateSpan {
 
 export interface ValidityContext {
   now: Date;
+  /** Optional kundli identifier when passed alongside validity context. */
+  kundliId?: string;
+  /** Optional digest version when passed alongside validity context. */
+  digestVersion?: string | number;
   /** the shortest running dasha period the technique reads (kundli_activation from_date/to_date); fallback when absent */
   runningPeriod?: DateSpan | null;
   /** the running year chart (Tithi Pravesha to the next); fallback when absent */

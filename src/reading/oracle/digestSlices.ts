@@ -12,8 +12,10 @@ import { techniqueById } from '../../techniques/catalog.js';
 import type { ContractInput } from '../../techniques/contracts.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { AnnualRow, DigestSection, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
+import { FRAMES, type SubjectId } from '../packs/frames.js';
 import { CORE_TYPES } from './chartBundle.js';
-import type { PersonFrame, ReaderId } from './readers.js';
+import { READERS, subjectVargas, type PersonFrame, type ReaderId, type SliceContext } from './readers.js';
+import { renderCore } from './slices.js';
 
 export type SubAgentId =
   | ReaderId
@@ -40,8 +42,10 @@ export type SubAgentId =
 
 export interface SubAgentDigestSpec {
   id: SubAgentId;
+  subAgentId: SubAgentId;
   techniqueId?: string;
   sections: readonly DigestSection[];
+  digestSections: readonly DigestSection[];
   vargas: readonly string[];
   tableTypes: readonly string[];
   usesActivation: boolean;
@@ -49,7 +53,9 @@ export interface SubAgentDigestSpec {
   cacheOutput: 'reading_findings_cache' | 'technique_outputs' | 'memory' | 'none';
 }
 
-export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
+type RawSubAgentDigestSpec = Omit<SubAgentDigestSpec, 'subAgentId' | 'digestSections'>;
+
+const RAW_SUBAGENT_DIGEST_SPECS: Record<SubAgentId, RawSubAgentDigestSpec> = {
   R01: {
     id: 'R01',
     sections: ['house', 'planet', 'yoga', 'point', 'star'],
@@ -407,6 +413,21 @@ export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = {
   },
 };
 
+export const SUBAGENT_DIGEST_SPECS: Record<SubAgentId, SubAgentDigestSpec> = Object.fromEntries(
+  Object.entries(RAW_SUBAGENT_DIGEST_SPECS).map(([k, v]) => [
+    k,
+    {
+      ...v,
+      subAgentId: v.id,
+      digestSections: v.sections,
+    },
+  ]),
+) as Record<SubAgentId, SubAgentDigestSpec>;
+
+export function getSubAgentDigestSpec(id: SubAgentId): SubAgentDigestSpec | undefined {
+  return SUBAGENT_DIGEST_SPECS[id];
+}
+
 const DEFAULT_TECHNIQUE_BY_SUBAGENT: Partial<Record<SubAgentId, string>> = {
   'specialist:promise': 'general.promise',
   'specialist:dasha': 'general.dasha',
@@ -441,17 +462,143 @@ export function sliceDigestForSubAgent(
     asOf?: string;
     activation?: readonly ActivationRow[] | null;
     person?: PersonFrame | null;
+    prashna?: unknown;
+    transitRows?: unknown;
   } = {},
 ): {
   spec: SubAgentDigestSpec;
   contractInputs: readonly ContractInput[];
   tables: Record<string, unknown>;
+  coreText: string;
   missing: string[];
 } {
   const spec = SUBAGENT_DIGEST_SPECS[id];
   const contractInputs = contractInputsForSubAgent(id);
-  const { tables, missing } = buildTablesFromDigest(digest, spec.tableTypes, opts);
-  return { spec, contractInputs, tables, missing };
+  const { tables, coreText, missing } = buildTablesFromDigest(digest, spec.tableTypes, opts);
+  return { spec, contractInputs, tables, coreText, missing };
+}
+
+/**
+ * Builds the digested pack (`coreText`, `sections`, `tables`, `missing`) for an Oracle reader (`R01..R14`)
+ * directly from `DigestView` + `ActivationRow[]`.
+ */
+export function buildReaderPackFromDigest(
+  id: Exclude<ReaderId, 'P1' | 'P2' | 'P3'>,
+  digest: DigestView,
+  opts: {
+    subject?: SubjectId;
+    asOf?: string;
+    from?: string;
+    to?: string;
+    activation?: readonly ActivationRow[] | null;
+    person?: PersonFrame | null;
+    transits?: unknown;
+    transitAt?: unknown;
+    prashna?: unknown;
+  } = {},
+): {
+  spec: SubAgentDigestSpec;
+  contractInputs: readonly ContractInput[];
+  tables: Record<string, unknown>;
+  coreText: string;
+  sections: Record<string, unknown>;
+  missing: string[];
+} {
+  const subject: SubjectId = opts.subject ?? 'general_life_direction';
+  const vargas = subjectVargas(subject);
+  const def = READERS[id];
+  const wantedTypes = [...new Set([...CORE_TYPES, ...def.types({ vargas, person: opts.person ?? null })])];
+  const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
+  const from = opts.from ?? asOf;
+  const to = opts.to ?? `${Number(asOf.slice(0, 4)) + 2}${asOf.slice(4)}`;
+  const { tables, coreText, missing } = buildTablesFromDigest(digest, wantedTypes, {
+    asOf,
+    activation: opts.activation ?? null,
+    person: opts.person ?? null,
+    prashna: opts.prashna,
+    transitRows: opts.transits,
+  });
+  const sliceCtx: SliceContext = {
+    tables,
+    houses: [...new Set([...(FRAMES[subject]?.houses ?? []), ...(opts.person?.houses ?? [])])],
+    vargas,
+    from,
+    to,
+    transits: opts.transits,
+    transitAt: opts.transitAt,
+    prashna: opts.prashna,
+    person: opts.person ?? null,
+  };
+  const core = renderCore(tables, CORE_TYPES);
+  const readerSlice = def.slice(sliceCtx);
+  return {
+    spec: SUBAGENT_DIGEST_SPECS[id],
+    contractInputs: contractInputsForSubAgent(id),
+    tables,
+    coreText: core.text,
+    sections: { ...core.sections, ...readerSlice },
+    missing,
+  };
+}
+
+/**
+ * Builds the digested pack (`coreText`, `sections`, `tables`, `missing`) for a Prashna reader (`P1..P3`)
+ * directly from `DigestView` + `ActivationRow[]`.
+ */
+export function buildPrashnaPackFromDigest(
+  id: 'P1' | 'P2' | 'P3',
+  digest: DigestView,
+  opts: {
+    subject?: SubjectId;
+    asOf?: string;
+    from?: string;
+    to?: string;
+    activation?: readonly ActivationRow[] | null;
+    transits?: unknown;
+    transitAt?: unknown;
+    prashna?: unknown;
+  } = {},
+): {
+  spec: SubAgentDigestSpec;
+  contractInputs: readonly ContractInput[];
+  tables: Record<string, unknown>;
+  coreText: string;
+  sections: Record<string, unknown>;
+  missing: string[];
+} {
+  const subject: SubjectId = opts.subject ?? 'general_life_direction';
+  const vargas = subjectVargas(subject);
+  const def = READERS[id];
+  const wantedTypes = [...new Set([...CORE_TYPES, ...def.types({ vargas, person: null })])];
+  const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
+  const from = opts.from ?? asOf;
+  const to = opts.to ?? `${Number(asOf.slice(0, 4)) + 1}${asOf.slice(4)}`;
+  const { tables, coreText, missing } = buildTablesFromDigest(digest, wantedTypes, {
+    asOf,
+    activation: opts.activation ?? null,
+    prashna: opts.prashna,
+    transitRows: opts.transits,
+  });
+  const sliceCtx: SliceContext = {
+    tables,
+    houses: [...new Set(FRAMES[subject]?.houses ?? [])],
+    vargas,
+    from,
+    to,
+    transits: opts.transits,
+    transitAt: opts.transitAt,
+    prashna: opts.prashna,
+  };
+  const core = renderCore(tables, CORE_TYPES);
+  const readerSlice = def.slice(sliceCtx);
+  return {
+    spec: SUBAGENT_DIGEST_SPECS[id],
+    contractInputs: contractInputsForSubAgent(id),
+    tables,
+    coreText: core.text,
+    sections: { ...core.sections, ...readerSlice },
+    missing,
+  };
 }
 
 function vargaPayload(houses: HouseCard[], planets: PlanetCard[]): Record<string, unknown> {
@@ -501,8 +648,28 @@ interface PeriodNode {
   children?: PeriodNode[];
 }
 
+function rowStart(r: ActivationRow & { start_at?: string | Date }): string {
+  if (typeof r.from === 'string' && r.from) return r.from;
+  if (r.start_at instanceof Date) return r.start_at.toISOString().slice(0, 10);
+  if (typeof r.start_at === 'string') return r.start_at.slice(0, 10);
+  return '';
+}
+
+function rowEnd(r: ActivationRow & { end_at?: string | Date }): string {
+  if (typeof r.to === 'string' && r.to) return r.to;
+  if (r.end_at instanceof Date) return r.end_at.toISOString().slice(0, 10);
+  if (typeof r.end_at === 'string') return r.end_at.slice(0, 10);
+  return '';
+}
+
 function buildDashaTreeFromActivation(rows: readonly ActivationRow[], system: string): { system: string; periods: PeriodNode[] } | null {
-  const sysRows = rows.filter((r) => r.system === system || (system === 'vimsottari' && r.family === 'vimshottari'));
+  const norm = system === 'vimshottari' ? 'vimsottari' : system;
+  const sysRows = rows.filter(
+    (r) =>
+      r.system === norm ||
+      r.system === system ||
+      (norm === 'vimsottari' && (r.family === 'vimshottari' || r.system === 'vimshottari')),
+  );
   if (!sysRows.length) return null;
 
   const l1 = sysRows.filter((r) => r.level === 1);
@@ -514,24 +681,31 @@ function buildDashaTreeFromActivation(rows: readonly ActivationRow[], system: st
   if (l1.length > 0) {
     const periods: PeriodNode[] = l1.map((m) => {
       const mLabel = labelOf(m);
-      const ads = l2.filter((a) => (a.parentLord ? a.parentLord === mLabel : a.from >= m.from && a.to <= m.to));
+      const mFrom = rowStart(m);
+      const mTo = rowEnd(m);
+      const ads = l2.filter((a) => (a.parentLord ? a.parentLord === mLabel : rowStart(a) >= mFrom && rowEnd(a) <= mTo));
       const children: PeriodNode[] = ads.map((a) => {
         const aLabel = labelOf(a);
+        const aFrom = rowStart(a);
+        const aTo = rowEnd(a);
         const pds = l3.filter(
-          (p) => p.from >= a.from && p.to <= a.to && (!p.parentLord || p.parentLord === aLabel || p.parentLord === `${mLabel}-${aLabel}`),
+          (p) =>
+            rowStart(p) >= aFrom &&
+            rowEnd(p) <= aTo &&
+            (!p.parentLord || p.parentLord === aLabel || p.parentLord === `${mLabel}-${aLabel}`),
         );
         return {
           lord: aLabel,
-          start: a.from,
-          end: a.to,
-          ...(a.houses.length ? { houses: a.houses } : {}),
+          start: aFrom,
+          end: aTo,
+          ...(a.houses?.length ? { houses: a.houses } : {}),
           ...(pds.length
             ? {
                 children: pds.map((p) => ({
                   lord: labelOf(p),
-                  start: p.from,
-                  end: p.to,
-                  ...(p.houses.length ? { houses: p.houses } : {}),
+                  start: rowStart(p),
+                  end: rowEnd(p),
+                  ...(p.houses?.length ? { houses: p.houses } : {}),
                 })),
               }
             : {}),
@@ -539,9 +713,9 @@ function buildDashaTreeFromActivation(rows: readonly ActivationRow[], system: st
       });
       return {
         lord: mLabel,
-        start: m.from,
-        end: m.to,
-        ...(m.houses.length ? { houses: m.houses } : {}),
+        start: mFrom,
+        end: mTo,
+        ...(m.houses?.length ? { houses: m.houses } : {}),
         ...(children.length ? { children } : {}),
       };
     });
@@ -551,9 +725,9 @@ function buildDashaTreeFromActivation(rows: readonly ActivationRow[], system: st
   // Fallback when only level 2/3 rows overlap the queried horizon
   const flat: PeriodNode[] = sysRows.map((r) => ({
     lord: r.parentLord ? `${r.parentLord}-${labelOf(r)}` : labelOf(r),
-    start: r.from,
-    end: r.to,
-    ...(r.houses.length ? { houses: r.houses } : {}),
+    start: rowStart(r),
+    end: rowEnd(r),
+    ...(r.houses?.length ? { houses: r.houses } : {}),
   }));
   return { system, periods: flat };
 }
@@ -583,29 +757,109 @@ function buildAnnualFromDigest(rows: readonly AnnualRow[], kind: 'TP' | 'VP'): R
   };
 }
 
+export interface BuildTablesFromDigestArgs {
+  digest: DigestView;
+  activation?: readonly ActivationRow[] | null;
+  spec?: SubAgentDigestSpec;
+  wantedTypes?: readonly string[];
+  asOf?: string;
+  person?: PersonFrame | null;
+  prashna?: unknown;
+  transitRows?: unknown;
+}
+
+function readHouses(digest: DigestView, varga: string): HouseCard[] {
+  const raw = (digest as unknown as { houses?: unknown }).houses;
+  if (typeof raw === 'function') return digest.houses(varga);
+  if (raw && typeof raw === 'object') return ((raw as Record<string, HouseCard[]>)[varga] ?? []);
+  return [];
+}
+
+function readPlanets(digest: DigestView, varga: string): PlanetCard[] {
+  const raw = (digest as unknown as { planets?: unknown }).planets;
+  if (typeof raw === 'function') return digest.planets(varga);
+  if (raw && typeof raw === 'object') return ((raw as Record<string, PlanetCard[]>)[varga] ?? []);
+  return [];
+}
+
+function readPoints(digest: DigestView, varga?: string) {
+  const raw = (digest as unknown as { points?: unknown }).points;
+  if (typeof raw === 'function') return digest.points(varga);
+  if (Array.isArray(raw)) {
+    return varga ? raw.filter((pt) => (pt as { varga?: string }).varga === varga) : raw;
+  }
+  return [];
+}
+
+function readStar(digest: DigestView) {
+  const raw = (digest as unknown as { star?: unknown }).star;
+  if (typeof raw === 'function') return digest.star();
+  if (raw && typeof raw === 'object') return raw as ReturnType<DigestView['star']>;
+  return null;
+}
+
+function readYogas(digest: DigestView) {
+  const raw = (digest as unknown as { yogas?: unknown }).yogas;
+  if (typeof raw === 'function') return digest.yogas();
+  if (Array.isArray(raw)) return raw as ReturnType<DigestView['yogas']>;
+  return [];
+}
+
+function readAnnual(digest: DigestView, year?: number): AnnualRow[] {
+  const raw = (digest as unknown as { annual?: unknown }).annual;
+  if (typeof raw === 'function') return year ? [...digest.annual(year), ...digest.annual()] : digest.annual();
+  if (Array.isArray(raw)) {
+    const arr = raw as AnnualRow[];
+    return year ? [...arr.filter((r) => r.year === year), ...arr] : arr;
+  }
+  return [];
+}
+
 /**
  * Deterministically materialises `SliceContext.tables` from a ready `DigestView` and optional `ActivationRow[]`.
- * Returns `tables` (by catalogue type id) and `missing` (any requested type not covered by the digest/activation).
+ * Returns `tables` (by catalogue type id), `coreText`, and `missing` (any requested type not covered by the digest/activation).
  */
 export function buildTablesFromDigest(
-  digest: DigestView,
-  wantedTypes: readonly string[],
-  opts: {
+  digestOrArgs: DigestView | BuildTablesFromDigestArgs,
+  wantedTypesArg?: readonly string[],
+  optsArg: {
     asOf?: string;
     activation?: readonly ActivationRow[] | null;
     person?: PersonFrame | null;
+    prashna?: unknown;
+    transitRows?: unknown;
   } = {},
-): { tables: Record<string, unknown>; missing: string[] } {
+): { tables: Record<string, unknown>; coreText: string; missing: string[] } {
+  const isObjCall =
+    digestOrArgs !== null &&
+    typeof digestOrArgs === 'object' &&
+    'digest' in digestOrArgs &&
+    (digestOrArgs as BuildTablesFromDigestArgs).digest !== undefined;
+  const digest = isObjCall ? (digestOrArgs as BuildTablesFromDigestArgs).digest : (digestOrArgs as DigestView);
+  const spec = isObjCall ? (digestOrArgs as BuildTablesFromDigestArgs).spec : undefined;
+  const wantedTypes = isObjCall
+    ? ((digestOrArgs as BuildTablesFromDigestArgs).wantedTypes ?? spec?.tableTypes ?? CORE_TYPES)
+    : (wantedTypesArg ?? CORE_TYPES);
+  const opts = isObjCall
+    ? {
+        asOf: (digestOrArgs as BuildTablesFromDigestArgs).asOf,
+        activation: (digestOrArgs as BuildTablesFromDigestArgs).activation ?? null,
+        person: (digestOrArgs as BuildTablesFromDigestArgs).person ?? null,
+        prashna: (digestOrArgs as BuildTablesFromDigestArgs).prashna,
+        transitRows: (digestOrArgs as BuildTablesFromDigestArgs).transitRows,
+      }
+    : optsArg;
+
   const tables: Record<string, unknown> = {};
-  const d1Houses = digest.houses('D1');
-  const d1Planets = digest.planets('D1');
-  const d1Points = digest.points('D1');
-  const star = digest.star();
-  const yogas = digest.yogas();
+  const d1Houses = readHouses(digest, 'D1');
+  const d1Planets = readPlanets(digest, 'D1');
+  const d1Points = readPoints(digest, 'D1');
+  const star = readStar(digest);
+  const yogas = readYogas(digest);
 
   if (d1Houses.length || d1Planets.length) {
     tables['varga.d1'] = vargaPayload(d1Houses, d1Planets);
-    tables['dignities'] = {
+    const dignitiesPayload = {
       planets: d1Planets.map((p) => ({
         planet: p.planet,
         sign: p.sign,
@@ -616,6 +870,8 @@ export function buildTablesFromDigest(
         war: p.war,
       })),
     };
+    tables['dignities'] = dignitiesPayload;
+    tables['dignities.d1'] = dignitiesPayload;
     tables['benefic_malefic'] = {
       house_lords: Object.fromEntries(d1Houses.map((h) => [String(h.house), h.lord])),
       planets: d1Planets.map((p) => ({
@@ -743,18 +999,34 @@ export function buildTablesFromDigest(
       .map((y) => ({ id: y.id, name: y.name, planets: y.planets, houses: y.houses, class: y.class, present: true })),
   };
 
+  const extraVargas = new Set<string>();
   for (const t of wantedTypes) {
     if (t.startsWith('varga.d') && t !== 'varga.d1') {
-      const vKey = t.replace('varga.', '').toUpperCase();
-      const vHouses = digest.houses(vKey);
-      const vPlanets = digest.planets(vKey);
-      if (vHouses.length || vPlanets.length) {
-        tables[t] = vargaPayload(vHouses, vPlanets);
-      }
-    } else if (t.startsWith('arudhas.d')) {
+      extraVargas.add(t.replace('varga.', '').toUpperCase());
+    }
+  }
+  if (spec?.vargas) {
+    for (const v of spec.vargas) {
+      if (v.toUpperCase() !== 'D1') extraVargas.add(v.toUpperCase());
+    }
+  }
+  if (opts.person?.varga) {
+    extraVargas.add(opts.person.varga.replace('varga.', '').toUpperCase());
+  }
+  for (const vKey of extraVargas) {
+    const t = `varga.${vKey.toLowerCase()}`;
+    const vHouses = readHouses(digest, vKey);
+    const vPlanets = readPlanets(digest, vKey);
+    if (vHouses.length || vPlanets.length) {
+      tables[t] = vargaPayload(vHouses, vPlanets);
+    }
+  }
+
+  for (const t of wantedTypes) {
+    if (t.startsWith('arudhas.d')) {
       const vKey = t.replace('arudhas.', '').toUpperCase();
-      const vPoints = digest.points(vKey);
-      const vHouses = digest.houses(vKey);
+      const vPoints = readPoints(digest, vKey);
+      const vHouses = readHouses(digest, vKey);
       if (vPoints.length || vHouses.some((h) => h.arudha)) {
         tables[t] = {
           padas: vPoints.map((pt) => ({ id: pt.id, sign: pt.sign, house: pt.house, lord: pt.lord, lord_house: pt.lordHouse })),
@@ -767,16 +1039,22 @@ export function buildTablesFromDigest(
   if (opts.activation && opts.activation.length > 0) {
     const systems = new Set(opts.activation.map((r) => r.system));
     tables['dasha.applicable'] = { systems: [...systems] };
+    const dashaTypes = new Set<string>(['dasha.vimsottari', 'dasha.vimshottari']);
     for (const t of wantedTypes) {
-      if (!t.startsWith('dasha.') || t === 'dasha.applicable') continue;
+      if (t.startsWith('dasha.') && t !== 'dasha.applicable') dashaTypes.add(t);
+    }
+    for (const t of dashaTypes) {
       const sys = t.replace('dasha.', '');
       const tree = buildDashaTreeFromActivation(opts.activation, sys);
-      if (tree) tables[t] = tree;
+      if (tree) {
+        tables[t] = tree;
+        if (t === 'dasha.vimsottari') tables['dasha.vimshottari'] = tree;
+      }
     }
   }
 
   const year = opts.asOf ? Number(opts.asOf.slice(0, 4)) : undefined;
-  const annualRows = year ? [...digest.annual(year), ...digest.annual()] : digest.annual();
+  const annualRows = readAnnual(digest, year);
   if (annualRows.length > 0) {
     const tp = buildAnnualFromDigest(annualRows, 'TP');
     const vp = buildAnnualFromDigest(annualRows, 'VP');
@@ -788,6 +1066,14 @@ export function buildTablesFromDigest(
     if (tp?.periods) tables['annual.patyayini'] = { periods: tp.periods };
   }
 
+  if (opts.prashna !== undefined) {
+    tables['prashna'] = opts.prashna;
+  }
+  if (opts.transitRows !== undefined) {
+    tables['transit'] = opts.transitRows;
+  }
+
+  const coreText = renderCore(tables, CORE_TYPES).text;
   const missing = wantedTypes.filter((t) => tables[t] === undefined);
-  return { tables, missing };
+  return { tables, coreText, missing };
 }

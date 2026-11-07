@@ -14,6 +14,7 @@ import {
   cacheNameFor,
   clearPromptCache,
   deleteUserCaches,
+  ensurePromptCache,
   setCacheRegistry,
   settlePromptCache,
 } from '../../../src/reading/llm/promptCache.js';
@@ -329,5 +330,50 @@ describe('45-minute per-individual cache recycling of used caches', () => {
     await deleteUserCaches('user-logout');
     expect(getPendingIndividualRecycles()).toHaveLength(0);
     expect(findingsCache.get('spec-logout')).toBeUndefined();
+  });
+
+  it('does not mark prewarmed prompt caches as used until cacheNameFor consumes them, and preserves unused prewarms under onlyUsed: true', async () => {
+    const reg = memoryCacheRegistry();
+    setCacheRegistry(reg);
+    const deletedUrls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === 'POST' && url.includes('/cachedContents')) {
+        return new Response(
+          JSON.stringify({
+            name: 'cachedContents/prewarm-only-cache',
+            expireTime: new Date(Date.now() + 3600_000).toISOString(),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (init?.method === 'DELETE') {
+        deletedUrls.push(url);
+        return new Response('{}', { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+
+    const ownerPrewarm = { userId: 'user-prewarm-unused', kundliId: 'kundli-prewarm-unused' };
+    const name = await ensurePromptCache('gemini-3.1-flash-lite', 'SYS', 'PREWARM BASE', ownerPrewarm);
+    expect(name).toBe('cachedContents/prewarm-only-cache');
+    // Prewarming alone should not schedule a 45m used-cache recycle
+    expect(getPendingIndividualRecycles()).toHaveLength(0);
+
+    // Recycling with onlyUsed: true preserves the unused prewarmed prompt cache
+    const resUnused = await recycleIndividualCaches(ownerPrewarm, { prisma: null, onlyUsed: true });
+    expect(resUnused.llmDeleted).toBe(0);
+    expect(deletedUrls).toHaveLength(0);
+
+    // Consuming it via cacheNameFor marks it as used and schedules the 45m recycle
+    expect(cacheNameFor('gemini-3.1-flash-lite', 'SYS', 'PREWARM BASE', 'test-key', ownerPrewarm)).toBe(
+      'cachedContents/prewarm-only-cache',
+    );
+    expect(getPendingIndividualRecycles()).toHaveLength(1);
+
+    // Now recycling with onlyUsed: true deletes the used prompt cache
+    const resUsed = await recycleIndividualCaches(ownerPrewarm, { prisma: null, onlyUsed: true });
+    expect(resUsed.llmDeleted).toBe(1);
+    expect(deletedUrls.some((u) => u.includes('cachedContents/prewarm-only-cache'))).toBe(true);
   });
 });

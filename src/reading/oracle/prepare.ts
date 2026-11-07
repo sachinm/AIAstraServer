@@ -25,6 +25,8 @@ export function readerRange(intent: Intent, asOf: string): { from: string; to: s
   return { from: hz.from, to: hz.to > limit ? limit : hz.to };
 }
 
+export type ChartData = Record<string, unknown>;
+
 export interface PreparedReaders {
   subject: SubjectId;
   plan: ReaderPlan;
