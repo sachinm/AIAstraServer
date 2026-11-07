@@ -86,6 +86,14 @@ const VALIDATOR_SCHEMA = {
 
 const known = (ids: string[]): ReaderId[] => ids.filter((x): x is ReaderId => (LOOP_READERS as string[]).includes(x)).slice(0, 2);
 
+const VALIDATOR_CACHE_MAX = 200;
+const VALIDATOR_CACHE_TTL_MS = 30 * 60_000;
+const validatorCache = new Map<string, { at: number; value: Omit<Validation, 'ms' | 'usage'> }>();
+
+export function clearValidatorCache(): void {
+  validatorCache.clear();
+}
+
 /** Rules, then the model when one is configured and affordable. */
 export async function validateAnswer(a: {
   answer: string;
@@ -104,6 +112,13 @@ export async function validateAnswer(a: {
   // an empty or cut-off answer has nothing a check can read
   if (!a.useModel || rules.flags.includes('empty')) return done(rules);
   const clarified = a.intent.clarified?.turns.filter((t) => t.answer).map((t) => `${t.criterion}: ${t.answer}`).join('; ');
+  const cacheKey = `${a.model}|${a.intent.questionType}|${clarified ?? ''}|${a.failedRequired.join(',')}|${a.question}|${a.answer}`;
+  const cached = validatorCache.get(cacheKey);
+  if (cached && Date.now() - cached.at <= VALIDATOR_CACHE_TTL_MS) {
+    validatorCache.delete(cacheKey);
+    validatorCache.set(cacheKey, cached);
+    return done(structuredClone(cached.value));
+  }
   const parts = [`QUESTION: ${a.question}`, ...(clarified ? [`THEY ALSO TOLD THE CLARIFIER: ${clarified}`] : []), `ANSWER: ${a.answer}`];
   let reservation;
   try {
@@ -120,7 +135,15 @@ export async function validateAnswer(a: {
     const fromModel = parsed.data.parts.filter((p) => p.status !== 'answered').map((p) => ({ part: p.part.slice(0, 120), missing: p.missing.slice(0, 160), readers: known(p.readers) }));
     // a part the rules found keeps its readers unless the model named others for it
     const merged = fromModel.length ? fromModel : rules.missing;
-    return done({ answered: parsed.data.answered && merged.length === 0 && rules.answered, source: 'model', missing: merged, flags: rules.flags, usage: r.usage });
+    const baseResult: Omit<Validation, 'ms' | 'usage'> = { answered: parsed.data.answered && merged.length === 0 && rules.answered, source: 'model', missing: merged, flags: rules.flags };
+    validatorCache.delete(cacheKey);
+    validatorCache.set(cacheKey, { at: Date.now(), value: structuredClone(baseResult) });
+    while (validatorCache.size > VALIDATOR_CACHE_MAX) {
+      const oldest = validatorCache.keys().next().value;
+      if (oldest === undefined) break;
+      validatorCache.delete(oldest);
+    }
+    return done({ ...baseResult, usage: r.usage });
   } catch {
     a.guard.settleUnknown(reservation);
     return done({ ...rules, flags: [...rules.flags, 'validator_failed'] });

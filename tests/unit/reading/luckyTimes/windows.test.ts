@@ -59,7 +59,7 @@ describe('scenario windows on San Jose, Nov 2026', () => {
     const r = scenarioDay(day('2026-11-05'), scenarioById('work.sign_contract')!);
     expect(r.verdict).toBe('good');
     expect(r.windows.length).toBeGreaterThan(0);
-    expect(r.windows.flatMap((w) => w.reasons)).toContain('weekday:Thursday');
+    expect(r.windows.flatMap((w) => w.reasonKeys)).toContain('weekday:Thursday');
   });
   it('the contract layer skips Saturday and Tuesday entirely', () => {
     for (const d of fixture.days.filter((x) => x.weekday === 'Saturday' || x.weekday === 'Tuesday')) {
@@ -84,7 +84,7 @@ describe('scenario windows on San Jose, Nov 2026', () => {
     const end = d.panchanga_at_noon!.nakshatra!.end_hours! * 60;
     for (const s of SCENARIOS) {
       for (const w of scenarioDay(d, s).windows) {
-        if (w.reasons.some((r) => r.startsWith('star'))) expect(Math.min(w.to, end) - w.from).toBeGreaterThan(0);
+        if (w.reasonKeys.some((r) => r.startsWith('star'))) expect(Math.min(w.to, end) - w.from).toBeGreaterThan(0);
       }
     }
   });

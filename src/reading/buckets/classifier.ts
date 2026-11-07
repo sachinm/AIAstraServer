@@ -517,8 +517,22 @@ function planetsOf(t: Text): string[] {
 
 // ---- stage 1 --------------------------------------------------------------------------------------------------
 
-/** Rules-only classification. Pure, synchronous, no I/O. */
+const RULES_CACHE_MAX = 500;
+const rulesCache = new Map<string, ClassifierResult>();
+
+export function clearClassifierCache(): void {
+  rulesCache.clear();
+}
+
+/** Rules-only classification. Pure, synchronous, no I/O; memoized in a bounded LRU. */
 export function classifyRules(question: string, asOf: string): ClassifierResult {
+  const cacheKey = `${asOf}|${question.slice(0, MAX_CHARS)}`;
+  const hit = rulesCache.get(cacheKey);
+  if (hit) {
+    rulesCache.delete(cacheKey);
+    rulesCache.set(cacheKey, hit);
+    return structuredClone(hit);
+  }
   const t0 = performance.now();
   const t = textOf(question);
   const kind = questionKindOf(t);
@@ -587,7 +601,7 @@ export function classifyRules(question: string, asOf: string): ClassifierResult 
   if (unanswerable === 'lottery_numbers') policy.push('no_lottery_numbers');
   if (unanswerable === 'exact_amount' && !policy.includes('no_amounts')) policy.push('no_amounts');
 
-  return {
+  const out: ClassifierResult = {
     bucket,
     subBucket: sub?.value ?? null,
     alsoBuckets,
@@ -603,6 +617,13 @@ export function classifyRules(question: string, asOf: string): ClassifierResult 
     source: bucket === 'unknown' ? 'unknown' : 'rules',
     ms: Math.round((performance.now() - t0) * 1000) / 1000,
   };
+  rulesCache.set(cacheKey, structuredClone(out));
+  while (rulesCache.size > RULES_CACHE_MAX) {
+    const oldest = rulesCache.keys().next().value;
+    if (oldest === undefined) break;
+    rulesCache.delete(oldest);
+  }
+  return out;
 }
 
 // ---- stage 2 (model, only when unsure) ---------------------------------------------------------------------

@@ -235,6 +235,17 @@ export function getKundliSyncEventToken(): string | undefined {
   return process.env.KUNDLI_SYNC_EVENT_TOKEN?.trim() || undefined;
 }
 
+/** Shared secret carried in kundli-digest / kundli-digest-sweep events (KUNDLI_DIGEST_EVENT_TOKEN). Required: unset = every digest event refused. */
+export function getKundliDigestEventToken(): string | undefined {
+  return process.env.KUNDLI_DIGEST_EVENT_TOKEN?.trim() || undefined;
+}
+
+/** Elapsed-time budget of one kundli-digest-sweep event (DIGEST_SWEEP_MAX_MS, 10000–600000), default 60 s. */
+export function getDigestSweepMaxMs(): number {
+  const n = Number(process.env.DIGEST_SWEEP_MAX_MS);
+  return Number.isFinite(n) && n >= 10_000 && n <= 600_000 ? Math.round(n) : 60_000;
+}
+
 /** Which backend handles GraphQL `ask` chat: Groq or Google Gemini. */
 export type ChatLlmProvider = 'groq' | 'gemini';
 
@@ -457,3 +468,246 @@ export function getTurnstileSecret(): string | undefined {
   const s = process.env.TURNSTILE_SECRET_KEY?.trim();
   return s || undefined;
 }
+
+function parseCsvEnv(raw: string | undefined, fallback: readonly string[]): string[] {
+  if (raw === undefined) return [...fallback];
+  const trimmed = raw.trim();
+  if (trimmed === '' || trimmed.toLowerCase() === 'none') return [];
+  return trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * Number of days ahead of universal Panchang / Muhurta day_tables to pre-pull and store for Lucky Times.
+ * Override with LUCKY_HORIZON_DAYS or LUCKY_PREPULL_DAYS (integer 7–60, default 28 = 4 weeks).
+ */
+export function getLuckyHorizonDays(): number {
+  const raw = process.env.LUCKY_HORIZON_DAYS ?? process.env.LUCKY_PREPULL_DAYS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n) && n >= 7 && n <= 60) return n;
+  }
+  return 28;
+}
+
+/**
+ * Default days ahead returned in a single GET /api/lucky/range window when no explicit wider horizon is configured.
+ * Override with LUCKY_RANGE_AHEAD_DAYS (integer 7–60, default 14 = 2 weeks).
+ */
+export function getLuckyRangeAheadDays(): number {
+  const raw = process.env.LUCKY_RANGE_AHEAD_DAYS;
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n) && n >= 7 && n <= 60) return n;
+  }
+  return 14;
+}
+
+const DEFAULT_LUCKY_YOGA_AVOID = [
+  'Vishkambha',
+  'Atiganda',
+  'Shoola',
+  'Ganda',
+  'Vyaghata',
+  'Vajra',
+  'Vyatipata',
+  'Parigha',
+  'Vaidhriti',
+] as const;
+
+const DEFAULT_LUCKY_YOGA_FAVOUR = [
+  'Siddhi',
+  'Siddha',
+  'Shubha',
+  'Brahma',
+  'Indra',
+  'Dhruva',
+  'Harshana',
+  'Sukarma',
+  'Priti',
+  'Ayushman',
+  'Saubhagya',
+  'Shobhana',
+] as const;
+
+const DEFAULT_LUCKY_KARANA_AVOID = ['Vishti'] as const;
+
+const DEFAULT_LUCKY_KARANA_FAVOUR = ['Bava', 'Balava', 'Kaulava', 'Taitila', 'Gara', 'Vanija'] as const;
+
+const DEFAULT_LUCKY_FIXED_KARANA_AVOID = ['Shakuni', 'Chatushpada', 'Naga'] as const;
+
+const DEFAULT_LUCKY_FIXED_KARANA_FAVOUR = ['Kimstughna'] as const;
+
+/** Avoided Nitya Yogas for Lucky Times (override via comma-separated LUCKY_YOGA_AVOID). */
+export function getLuckyYogaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_YOGA_AVOID, DEFAULT_LUCKY_YOGA_AVOID);
+}
+
+/** Favoured Nitya Yogas for Lucky Times (override via comma-separated LUCKY_YOGA_FAVOUR; includes Siddha #21). */
+export function getLuckyYogaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_YOGA_FAVOUR, DEFAULT_LUCKY_YOGA_FAVOUR);
+}
+
+/** Avoided movable karanas for Lucky Times (override via comma-separated LUCKY_KARANA_AVOID). */
+export function getLuckyKaranaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_KARANA_AVOID, DEFAULT_LUCKY_KARANA_AVOID);
+}
+
+/** Favoured movable karanas for Lucky Times (override via comma-separated LUCKY_KARANA_FAVOUR). */
+export function getLuckyKaranaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_KARANA_FAVOUR, DEFAULT_LUCKY_KARANA_FAVOUR);
+}
+
+/** Fixed (sthira) karanas gated as avoid by default for auspicious acts (override via LUCKY_FIXED_KARANA_AVOID). */
+export function getLuckyFixedKaranaAvoid(): string[] {
+  return parseCsvEnv(process.env.LUCKY_FIXED_KARANA_AVOID, DEFAULT_LUCKY_FIXED_KARANA_AVOID);
+}
+
+/** Fixed (sthira) karanas favoured (+1) for auspicious beginnings (override via LUCKY_FIXED_KARANA_FAVOUR). */
+export function getLuckyFixedKaranaFavour(): string[] {
+  return parseCsvEnv(process.env.LUCKY_FIXED_KARANA_FAVOUR, DEFAULT_LUCKY_FIXED_KARANA_FAVOUR);
+}
+
+/** Whether Amrita Siddhi (weekday + nakshatra) scoring is enabled in Lucky Times (LUCKY_AMRITA_SIDDHI_ENABLED, default true). */
+export function isLuckyAmritaSiddhiEnabled(): boolean {
+  const raw = process.env.LUCKY_AMRITA_SIDDHI_ENABLED?.trim().toLowerCase();
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  return true;
+}
+
+export interface LuckyReferencePlaceConfig {
+  key: 'pune' | 'newyork' | 'chicago' | 'denver' | 'sanjose';
+  tzAlias: 'in-ist' | 'us-east' | 'us-central' | 'us-mountain' | 'us-west';
+  ianaTz: 'Asia/Kolkata' | 'America/New_York' | 'America/Chicago' | 'America/Denver' | 'America/Los_Angeles';
+  label: string;
+  country: string;
+  region: string;
+  lat: number;
+  lon: number;
+  tz: number;
+}
+
+const DEFAULT_LUCKY_REFERENCE_PLACES: readonly LuckyReferencePlaceConfig[] = [
+  { key: 'pune', tzAlias: 'in-ist', ianaTz: 'Asia/Kolkata', label: 'Pune, IN', country: 'in', region: 'mh', lat: 18.52, lon: 73.857, tz: 5.5 },
+  { key: 'newyork', tzAlias: 'us-east', ianaTz: 'America/New_York', label: 'New York, US', country: 'us', region: 'ny', lat: 40.7128, lon: -74.006, tz: -5 },
+  { key: 'chicago', tzAlias: 'us-central', ianaTz: 'America/Chicago', label: 'Chicago, US', country: 'us', region: 'il', lat: 41.8781, lon: -87.6298, tz: -6 },
+  { key: 'denver', tzAlias: 'us-mountain', ianaTz: 'America/Denver', label: 'Denver, US', country: 'us', region: 'co', lat: 39.7392, lon: -104.9903, tz: -7 },
+  { key: 'sanjose', tzAlias: 'us-west', ianaTz: 'America/Los_Angeles', label: 'San Jose, US', country: 'us', region: 'ca', lat: 37.341, lon: -121.894, tz: -8 },
+] as const;
+
+/**
+ * 5 universal reference timezone places for Lucky Times (4 US timezones + India IST).
+ * Override via JSON array in LUCKY_REFERENCE_PLACES if needed.
+ */
+export function getLuckyReferencePlaces(): readonly LuckyReferencePlaceConfig[] {
+  const raw = process.env.LUCKY_REFERENCE_PLACES?.trim();
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as LuckyReferencePlaceConfig[];
+    } catch {
+      // fall back to default 5 reference places
+    }
+  }
+  return DEFAULT_LUCKY_REFERENCE_PLACES;
+}
+
+// ── Life Reading & Mahadasha Charter Thresholds (docs/reading-engine/34, 54 §4, 55) ─
+
+function parseClampedIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isInteger(n)) return Math.max(min, Math.min(max, n));
+  }
+  return fallback;
+}
+
+/**
+ * Forward horizon (in years) for Life Reading timing windows (`life.timing_agreement`).
+ * Env: `LIFE_HORIZON_YEARS` (default 15, clamped to 5..30).
+ */
+export function getLifeHorizonYears(): number {
+  return parseClampedIntEnv('LIFE_HORIZON_YEARS', 15, 5, 30);
+}
+
+/**
+ * Minimum remaining years in the running Vimshottari Mahadasha for it to serve as the
+ * primary multi-decade Life Charter on its own (`life.mahadasha_charter`, doc 55 §4.1).
+ * When the running Mahadasha has fewer years left than this threshold, the largest
+ * Mahadasha within `getLifeCharterHorizonYears()` is chartered and the running
+ * Mahadasha's remaining Antardashas are included as a transition bridge.
+ * Env: `LIFE_CHARTER_MIN_REMAINING_YEARS` (default 10, clamped to 3..18).
+ */
+export function getLifeCharterMinRemainingYears(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_MIN_REMAINING_YEARS', 10, 3, 18);
+}
+
+/**
+ * Lookahead horizon (in years) used to select the remaining largest Mahadasha (10–20 yr span)
+ * and enumerate its Antardashas (`life.mahadasha_charter`, doc 55 §4.1).
+ * Env: `LIFE_CHARTER_HORIZON_YEARS` (default 20, clamped to 10..30).
+ */
+export function getLifeCharterHorizonYears(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_HORIZON_YEARS', 20, 10, 30);
+}
+
+/**
+ * Maximum number of activated life areas highlighted inside each Antardasha row
+ * of the Mahadasha Charter (`life.mahadasha_charter`, doc 55 §4.1).
+ * Env: `LIFE_CHARTER_MAX_AREAS_PER_AD` (default 3, clamped to 1..6).
+ */
+export function getLifeCharterMaxAreasPerAd(): number {
+  return parseClampedIntEnv('LIFE_CHARTER_MAX_AREAS_PER_AD', 3, 1, 6);
+}
+
+// ── Area Board Shade Resolver & Governance Thresholds (docs/reading-engine/55) ─
+
+function parseClampedFloatEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw != null && raw.trim() !== '') {
+    const n = Number(raw.trim());
+    if (Number.isFinite(n)) return Math.max(min, Math.min(max, n));
+  }
+  return fallback;
+}
+
+/**
+ * Short-horizon window (in months) where Pratyantardasha (`maxLevel: 3`) activations
+ * are included on the You/Love/Work boards (doc 55 §2.1).
+ * Env: `SHADE_SHORT_HORIZON_MONTHS` (default 3, clamped to 1..6).
+ */
+export function getShadeShortHorizonMonths(): number {
+  return parseClampedIntEnv('SHADE_SHORT_HORIZON_MONTHS', 3, 1, 6);
+}
+
+/**
+ * Minimum weighted score for a shade candidate to be selected as the primary shade
+ * of an active board window (doc 55 §2.2).
+ * Env: `SHADE_MIN_WINNING_SCORE` (default 1.5, clamped to 0.5..5.0).
+ */
+export function getShadeMinWinningScore(): number {
+  return parseClampedFloatEnv('SHADE_MIN_WINNING_SCORE', 1.5, 0.5, 5.0);
+}
+
+/**
+ * Score bonus added when a confirmed `person_facts` answer matches a candidate shade's
+ * tie-break criterion (doc 55 §2.4).
+ * Env: `SHADE_FACT_TIE_BREAK_BONUS` (default 1.25, clamped to 0.25..3.0).
+ */
+export function getShadeFactTieBreakBonus(): number {
+  return parseClampedFloatEnv('SHADE_FACT_TIE_BREAK_BONUS', 1.25, 0.25, 3.0);
+}
+
+/**
+ * Minimum agreeing clock families required for a `confirmed` Tier-2 gate verdict (doc 55 §2.2).
+ * Env: `SHADE_CONFIRM_MIN_FAMILIES` (default 3, clamped to 2..5).
+ */
+export function getShadeConfirmMinFamilies(): number {
+  return parseClampedIntEnv('SHADE_CONFIRM_MIN_FAMILIES', 3, 2, 5);
+}
+
+
+

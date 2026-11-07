@@ -7,7 +7,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(__dirname, '../../..');
-const CALL_SITES = ['src/reading/area/careerService.ts', 'src/reading/luckyTimes/service.ts'];
+const CALL_SITES = [
+  'src/reading/area/careerService.ts',
+  'src/reading/area/boardService.ts',
+  'src/reading/luckyTimes/service.ts',
+  'src/reading/digest/event.ts',
+  'src/reading/life/service.ts',
+  'src/reading/clarify/service.ts',
+  'src/reading/clarify/monitor.ts',
+];
 const PERSONAL = /email|name|birth|dob|place|lat|lon|question/i;
 
 /** The keys of every `input: { … }` / `output: { … }` literal (one level; shorthand and `key:` forms). */

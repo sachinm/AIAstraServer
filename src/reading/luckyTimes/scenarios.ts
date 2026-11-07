@@ -6,14 +6,28 @@
  * motion or disha shool wait for the engine pass and are not used here.
  *
  * Sources: Muhurta Chintamani (tithi groups Nanda/Bhadra/Jaya/Rikta/Purna; star groups fixed, moving, quick, soft,
- * fierce, sharp, mixed); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial (hora lords and their acts).
+ * fierce, sharp, mixed; the yogas and karanas avoided and favoured); B.V. Raman, Muhurta (weekdays, yogas, karanas);
+ * Drik Panchang hora tutorial (hora lords and their acts). The yoga and karana of a day are the engine's own names from
+ * the stored day row (`panchanga_at_noon.yoga` / `.karana`, with their end times); Node only matches the name against
+ * the lists below (doc 53 §4.6, doc 54 §6) and never derives a yoga or karana.
  * TODO(engine pass): the tithi and star group of a day should come from the engine; filed in docs/TODOS.md.
  */
+
+import {
+  getLuckyFixedKaranaAvoid,
+  getLuckyFixedKaranaFavour,
+  getLuckyKaranaAvoid,
+  getLuckyKaranaFavour,
+  getLuckyYogaAvoid,
+  getLuckyYogaFavour,
+  isLuckyAmritaSiddhiEnabled,
+} from '../../config/env.js';
 
 export type Area = 'work' | 'love' | 'money' | 'travel' | 'study' | 'home';
 export type TithiGroup = 'nanda' | 'bhadra' | 'jaya' | 'rikta' | 'purna' | 'amavasya';
 export type StarGroup = 'fixed' | 'moving' | 'quick' | 'soft' | 'fierce' | 'sharp' | 'mixed';
 export type Lord = 'Sun' | 'Moon' | 'Mars' | 'Mercury' | 'Jupiter' | 'Venus' | 'Saturn';
+export type Planet = Lord;
 export type Weekday = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
 
 /** Muhurta Chintamani's tithi groups, by the engine's tithi number (1–15 waxing, 16–30 waning; 30 = new Moon). */
@@ -37,6 +51,84 @@ export const STAR_GROUPS: Record<StarGroup, number[]> = {
   mixed: [3, 16], // Krittika, Vishakha
 };
 
+/** The 27 yogas, in the classical spelling used by the rule lists and the reason keys (`yoga:<name>`). */
+export const YOGA_NAMES = [
+  'Vishkambha', 'Priti', 'Ayushman', 'Saubhagya', 'Shobhana', 'Atiganda', 'Sukarma', 'Dhriti', 'Shoola', 'Ganda',
+  'Vriddhi', 'Dhruva', 'Vyaghata', 'Harshana', 'Vajra', 'Siddhi', 'Vyatipata', 'Variyan', 'Parigha', 'Shiva',
+  'Siddha', 'Sadhya', 'Shubha', 'Shukla', 'Brahma', 'Indra', 'Vaidhriti',
+] as const;
+export type YogaName = (typeof YOGA_NAMES)[number];
+
+/** The 11 karanas: seven moving (Vishti among them) and four fixed. */
+export const KARANA_NAMES = ['Bava', 'Balava', 'Kaulava', 'Taitila', 'Gara', 'Vanija', 'Vishti', 'Shakuni', 'Chatushpada', 'Naga', 'Kimstughna'] as const;
+export type KaranaName = (typeof KARANA_NAMES)[number];
+
+/**
+ * The engine's spellings of the same names (seen in day_tables, Nov 2026) mapped to the classical spelling. This is a
+ * spelling table, not an astrological one: the yoga or karana itself is always the engine's.
+ */
+const SPELLING: Record<string, string> = {
+  soubhagya: 'Saubhagya', sobhana: 'Shobhana', dhrithi: 'Dhriti', soola: 'Shoola', sula: 'Shoola', shula: 'Shoola',
+  vriyana: 'Variyan', variyana: 'Variyan', siva: 'Shiva', subha: 'Shubha', sukla: 'Shukla', vaidhrithi: 'Vaidhriti',
+  vaidhrti: 'Vaidhriti', vyatipat: 'Vyatipata', vishkumbha: 'Vishkambha',
+  baalava: 'Balava', vishtibhadra: 'Vishti', bhadra: 'Vishti', sakuna: 'Shakuni', shakuna: 'Shakuni', sakuni: 'Shakuni',
+  kimstugna: 'Kimstughna', kintughna: 'Kimstughna', chatushpad: 'Chatushpada', nagava: 'Naga', taitula: 'Taitila',
+};
+const squash = (x: string) => x.toLowerCase().replace(/[^a-z]/g, '');
+function canonical<T extends string>(raw: unknown, names: readonly T[]): T | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const k = squash(raw);
+  const direct = names.find((n) => squash(n) === k);
+  if (direct) return direct;
+  const alias = SPELLING[k];
+  return alias && (names as readonly string[]).includes(alias) ? (alias as T) : null;
+}
+/** The engine's yoga name in the classical spelling, or null when it is not one of the 27. */
+export const yogaName = (raw: unknown): YogaName | null => canonical(raw, YOGA_NAMES);
+/** The engine's karana name in the classical spelling, or null when it is not one of the 11. */
+export const karanaName = (raw: unknown): KaranaName | null => canonical(raw, KARANA_NAMES);
+
+/**
+ * Doc 53 §4.6 defaults (Muhurta Chintamani; B.V. Raman, Muhurta): the nine yogas avoided for any auspicious act, and the
+ * favoured ones (including Siddha, #21 of the 27 Nitya Yogas). Configurable via LUCKY_YOGA_AVOID / LUCKY_YOGA_FAVOUR.
+ */
+export const YOGA_AVOID_DEFAULT: YogaName[] = getLuckyYogaAvoid().map(yogaName).filter((x): x is YogaName => x !== null);
+export const YOGA_FAVOUR_DEFAULT: YogaName[] = getLuckyYogaFavour().map(yogaName).filter((x): x is YogaName => x !== null);
+/**
+ * Vishti (Bhadra) and the three fixed karanas Shakuni, Chatushpada, Naga (LUCKY_FIXED_KARANA_AVOID) are gated out by
+ * default for auspicious acts; the six moving karanas plus Kimstughna (LUCKY_FIXED_KARANA_FAVOUR) are favoured, with
+ * Kimstughna giving +1 on auspicious beginnings (KARANA_BONUS_DEFAULT).
+ */
+export const KARANA_AVOID_DEFAULT: KaranaName[] = [...getLuckyKaranaAvoid(), ...getLuckyFixedKaranaAvoid()]
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+export const KARANA_FAVOUR_DEFAULT: KaranaName[] = [...getLuckyKaranaFavour(), ...getLuckyFixedKaranaFavour()]
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+export const KARANA_BONUS_DEFAULT: KaranaName[] = getLuckyFixedKaranaFavour()
+  .map(karanaName)
+  .filter((x): x is KaranaName => x !== null);
+
+/**
+ * Classical Amrita Siddhi weekday + star number combinations (Muhurta Chintamani ch. 2; B.V. Raman, Muhurta ch. 4).
+ * Sunday+Hasta(13), Monday+Mrigashira(5), Tuesday+Ashwini(1), Wednesday+Anuradha(17),
+ * Thursday+Pushya(8), Friday+Revati(27), Saturday+Rohini(4).
+ */
+export const AMRITA_SIDDHI_STAR: Record<Weekday, number> = {
+  Sunday: 13,
+  Monday: 5,
+  Tuesday: 1,
+  Wednesday: 17,
+  Thursday: 8,
+  Friday: 27,
+  Saturday: 4,
+};
+
+export function isAmritaSiddhi(weekday: string | undefined | null, starNumber: number | undefined | null): boolean {
+  if (!isLuckyAmritaSiddhiEnabled() || !weekday || !starNumber) return false;
+  return AMRITA_SIDDHI_STAR[weekday as Weekday] === starNumber;
+}
+
 export interface ScenarioRule {
   id: string;
   area: Area;
@@ -51,6 +143,16 @@ export interface ScenarioRule {
   dayAvoid: Weekday[];
   horaFavour: Lord[];
   horaAvoid: Lord[];
+  /** yogas that gate the act out inside their span (doc 53 §4.6) */
+  yogaAvoid: YogaName[];
+  /** yogas that add +1 inside their span */
+  yogaFavour: YogaName[];
+  /** karanas that gate the act out inside their span */
+  karanaAvoid: KaranaName[];
+  /** karanas named as a good limb inside their span */
+  karanaFavour: KaranaName[];
+  /** fixed karanas that add +1 inside their span for auspicious beginnings (default: Kimstughna) */
+  karanaBonus?: KaranaName[];
   /** local hours the act is done in: [from, to) in hours from midnight; 'sunrise' starts at that day's sunrise */
   hours: ['sunrise' | number, number];
   /** brahma muhurta counts as a good window for a first step */
@@ -62,7 +164,11 @@ export interface ScenarioRule {
   v1Note?: string;
 }
 
-const CLASSIC = 'Muhurta Chintamani (tithi and star groups); B.V. Raman, Muhurta (weekdays); Drik Panchang hora tutorial';
+const CLASSIC = 'Muhurta Chintamani (tithi and star groups, yogas and karanas); B.V. Raman, Muhurta (weekdays, yogas, karanas); Drik Panchang hora tutorial';
+
+/** The five-limb defaults every v1 act starts from; an act overrides a list only with a cited reason. */
+const LIMBS = { yogaAvoid: YOGA_AVOID_DEFAULT, yogaFavour: YOGA_FAVOUR_DEFAULT, karanaAvoid: KARANA_AVOID_DEFAULT, karanaFavour: KARANA_FAVOUR_DEFAULT };
+const BEGINNING_LIMBS = { ...LIMBS, karanaBonus: KARANA_BONUS_DEFAULT };
 
 export const SCENARIOS: ScenarioRule[] = [
   {
@@ -71,6 +177,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['fixed'], starAvoid: ['fierce', 'sharp'],
     dayFavour: ['Thursday', 'Wednesday'], dayAvoid: ['Saturday', 'Tuesday'],
     horaFavour: ['Jupiter', 'Mercury'], horaAvoid: ['Saturn', 'Mars'],
+    ...LIMBS,
     hours: ['sunrise', 19], floor: 3, source: CLASSIC,
     v1Note: "Mercury's motion is not yet checked; avoid signing while it moves backward.",
   },
@@ -80,6 +187,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['quick', 'moving'], starAvoid: ['sharp'],
     dayFavour: ['Wednesday', 'Thursday', 'Sunday'], dayAvoid: [],
     horaFavour: ['Mercury', 'Sun', 'Jupiter'], horaAvoid: ['Saturn'],
+    ...LIMBS,
     hours: ['sunrise', 20], floor: 3, source: CLASSIC,
   },
   {
@@ -88,6 +196,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['quick', 'soft'], starAvoid: ['fierce'],
     dayFavour: ['Thursday', 'Sunday', 'Wednesday'], dayAvoid: [],
     horaFavour: ['Sun', 'Jupiter'], horaAvoid: ['Saturn', 'Mars'],
+    ...LIMBS,
     hours: ['sunrise', 18], floor: 3, source: CLASSIC,
   },
   {
@@ -96,6 +205,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['fixed', 'quick'], starAvoid: ['sharp', 'fierce'],
     dayFavour: ['Thursday'], dayAvoid: ['Saturday'],
     horaFavour: ['Jupiter', 'Sun'], horaAvoid: ['Saturn'],
+    ...LIMBS,
     hours: ['sunrise', 18], floor: 3, source: CLASSIC,
   },
   {
@@ -104,6 +214,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['quick', 'fixed'], starAvoid: ['sharp'],
     dayFavour: ['Monday', 'Wednesday', 'Thursday'], dayAvoid: [],
     horaFavour: ['Jupiter', 'Mercury', 'Moon'], horaAvoid: ['Saturn'],
+    ...BEGINNING_LIMBS,
     hours: ['sunrise', 20], useBrahma: true, floor: 3, source: CLASSIC,
   },
   {
@@ -112,6 +223,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['soft', 'fixed'], starAvoid: ['fierce', 'sharp'],
     dayFavour: ['Monday', 'Thursday'], dayAvoid: ['Tuesday'],
     horaFavour: ['Moon', 'Jupiter', 'Venus'], horaAvoid: ['Mars', 'Saturn'],
+    ...LIMBS,
     hours: ['sunrise', 18], floor: 3, source: CLASSIC,
   },
   {
@@ -120,6 +232,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['soft'], starAvoid: ['fierce', 'sharp'],
     dayFavour: ['Friday', 'Wednesday'], dayAvoid: ['Tuesday', 'Saturday'],
     horaFavour: ['Venus', 'Mercury', 'Moon'], horaAvoid: ['Mars', 'Saturn'],
+    ...LIMBS,
     hours: [9, 22], floor: 3, source: CLASSIC,
   },
   {
@@ -128,6 +241,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['soft'], starAvoid: ['sharp'],
     dayFavour: ['Friday'], dayAvoid: [],
     horaFavour: ['Venus', 'Moon'], horaAvoid: ['Mars', 'Saturn'],
+    ...LIMBS,
     hours: [11, 22], floor: 3, source: CLASSIC,
   },
   {
@@ -136,6 +250,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['soft', 'fixed'], starAvoid: ['fierce'],
     dayFavour: ['Monday', 'Friday'], dayAvoid: ['Tuesday'],
     horaFavour: ['Moon', 'Venus'], horaAvoid: ['Mars'],
+    ...LIMBS,
     hours: [9, 22], floor: 3, source: CLASSIC,
   },
   {
@@ -144,6 +259,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['fixed'], starAvoid: ['sharp', 'fierce'],
     dayFavour: ['Thursday', 'Wednesday'], dayAvoid: [],
     horaFavour: ['Jupiter', 'Mercury'], horaAvoid: ['Saturn'],
+    ...LIMBS,
     hours: ['sunrise', 19], floor: 3, source: CLASSIC,
     v1Note: "Mercury's motion is not yet checked.",
   },
@@ -153,6 +269,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['moving', 'quick'], starAvoid: ['sharp'],
     dayFavour: [], dayAvoid: [],
     horaFavour: ['Moon', 'Venus', 'Mercury'], horaAvoid: ['Saturn'],
+    ...LIMBS,
     hours: ['sunrise', 21], floor: 3, source: CLASSIC,
     v1Note: 'The direction rule for each weekday is not yet applied.',
   },
@@ -162,6 +279,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['quick'], starAvoid: ['sharp'],
     dayFavour: ['Wednesday', 'Thursday'], dayAvoid: [],
     horaFavour: ['Mercury', 'Jupiter'], horaAvoid: [],
+    ...LIMBS,
     hours: ['sunrise', 20], floor: 3, source: CLASSIC,
   },
   {
@@ -170,6 +288,7 @@ export const SCENARIOS: ScenarioRule[] = [
     starFavour: ['fixed', 'quick'], starAvoid: [],
     dayFavour: ['Monday', 'Thursday'], dayAvoid: [],
     horaFavour: ['Sun', 'Moon', 'Jupiter'], horaAvoid: [],
+    ...BEGINNING_LIMBS,
     hours: ['sunrise', 12], useBrahma: true, floor: 3, source: CLASSIC,
   },
 ];
@@ -185,9 +304,47 @@ export function tithiGroupOf(n: number): TithiGroup | null {
   return null;
 }
 
+const VALID_TITHI_GROUPS = new Set<TithiGroup>(['nanda', 'bhadra', 'jaya', 'rikta', 'purna', 'amavasya']);
+
+/** Normalizes the engine's tithi.group (or falls back to tithiNumber); tithi 30 is always 'amavasya'. */
+export function normalizeTithiGroup(group: unknown, tithiNumber?: unknown): TithiGroup | null {
+  if (tithiNumber === 30) return 'amavasya';
+  if (typeof group === 'string') {
+    const g = group.trim().toLowerCase() as TithiGroup;
+    if (VALID_TITHI_GROUPS.has(g)) return g;
+  }
+  return typeof tithiNumber === 'number' ? tithiGroupOf(tithiNumber) : null;
+}
+
 export function starGroupOf(n: number): StarGroup | null {
   for (const [g, list] of Object.entries(STAR_GROUPS)) if (list.includes(n)) return g as StarGroup;
   return null;
+}
+
+const STAR_GROUP_BY_NAME: Readonly<Record<string, StarGroup>> = {
+  dhruva: 'fixed',
+  chara: 'moving',
+  kshipra: 'quick',
+  mridu: 'soft',
+  ugra: 'fierce',
+  tikshna: 'sharp',
+  misra: 'mixed',
+  fixed: 'fixed',
+  moving: 'moving',
+  quick: 'quick',
+  soft: 'soft',
+  fierce: 'fierce',
+  sharp: 'sharp',
+  mixed: 'mixed',
+};
+
+/** Normalizes the engine's nakshatra.group (Sanskrit dhruva..tikshna or English fixed..mixed), or falls back to starNumber. */
+export function normalizeStarGroup(group: unknown, starNumber?: unknown): StarGroup | null {
+  if (typeof group === 'string') {
+    const mapped = STAR_GROUP_BY_NAME[group.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return typeof starNumber === 'number' ? starGroupOf(starNumber) : null;
 }
 
 /** The catalog shown in the Add drop-down, grouped by area. */

@@ -1,0 +1,40 @@
+-- Reading engine M34 (docs/reading-engine/53 §7 Wave 3 E1, E2 + deep varga house cards):
+-- - dignities.dN and house_counts.dN on the 11 deep vargas (D5, D6, D8, D11, D16, D27, D40, D45, D81, D108, D144).
+-- - yogas.dN on the 11 core vargas (D2, D3, D4, D7, D9, D10, D12, D20, D24, D30, D60).
+-- - annual.tajaka: Muntha, year/month lords, Tajaka aspects and yogas per solar-return year.
+INSERT INTO "chart_data_types" ("id", "family", "radha_type", "change_class", "tier", "variant_kind", "served", "calc_version", "legacy_column", "sort_order", "label") VALUES
+  ('annual.tajaka', 'annual', 'annual.tajaka', 'annual', 'on_demand', 'year', false, NULL, NULL, 550, 'Tajaka annual Muntha, year/month lords, aspects and yogas'),
+  ('dignities.d5', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 770, 'Planet dignities, house lords and occupants in D5'),
+  ('dignities.d6', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 771, 'Planet dignities, house lords and occupants in D6'),
+  ('dignities.d8', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 772, 'Planet dignities, house lords and occupants in D8'),
+  ('dignities.d11', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 773, 'Planet dignities, house lords and occupants in D11'),
+  ('dignities.d16', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 774, 'Planet dignities, house lords and occupants in D16'),
+  ('dignities.d27', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 775, 'Planet dignities, house lords and occupants in D27'),
+  ('dignities.d40', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 776, 'Planet dignities, house lords and occupants in D40'),
+  ('dignities.d45', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 777, 'Planet dignities, house lords and occupants in D45'),
+  ('dignities.d81', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 778, 'Planet dignities, house lords and occupants in D81'),
+  ('dignities.d108', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 779, 'Planet dignities, house lords and occupants in D108'),
+  ('dignities.d144', 'strength', 'dignities', 'natal', 'on_demand', 'natal', false, NULL, NULL, 780, 'Planet dignities, house lords and occupants in D144'),
+  ('house_counts.d5', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 785, 'House counts in D5'),
+  ('house_counts.d6', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 786, 'House counts in D6'),
+  ('house_counts.d8', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 787, 'House counts in D8'),
+  ('house_counts.d11', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 788, 'House counts in D11'),
+  ('house_counts.d16', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 789, 'House counts in D16'),
+  ('house_counts.d27', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 790, 'House counts in D27'),
+  ('house_counts.d40', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 791, 'House counts in D40'),
+  ('house_counts.d45', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 792, 'House counts in D45'),
+  ('house_counts.d81', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 793, 'House counts in D81'),
+  ('house_counts.d108', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 794, 'House counts in D108'),
+  ('house_counts.d144', 'special', 'house_counts', 'natal', 'on_demand', 'natal', false, NULL, NULL, 795, 'House counts in D144'),
+  ('yogas.d2', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 801, 'Yogas and raja yogas in D2'),
+  ('yogas.d3', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 802, 'Yogas and raja yogas in D3'),
+  ('yogas.d4', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 803, 'Yogas and raja yogas in D4'),
+  ('yogas.d7', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 804, 'Yogas and raja yogas in D7'),
+  ('yogas.d9', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 805, 'Yogas and raja yogas in D9'),
+  ('yogas.d10', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 806, 'Yogas and raja yogas in D10'),
+  ('yogas.d12', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 807, 'Yogas and raja yogas in D12'),
+  ('yogas.d20', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 808, 'Yogas and raja yogas in D20'),
+  ('yogas.d24', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 809, 'Yogas and raja yogas in D24'),
+  ('yogas.d30', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 810, 'Yogas and raja yogas in D30'),
+  ('yogas.d60', 'yoga', 'yogas', 'natal', 'on_demand', 'natal', false, NULL, NULL, 811, 'Yogas and raja yogas in D60')
+ON CONFLICT ("id") DO NOTHING;

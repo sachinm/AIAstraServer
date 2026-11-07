@@ -15,7 +15,7 @@ export type ReaderId = 'R01' | 'R02' | 'R03' | 'R04' | 'R05' | 'R06' | 'R07' | '
 export type Tier = 1 | 2 | 3 | 4 | 5;
 
 export interface PersonFrame {
-  person: 'mother' | 'father' | 'spouse' | 'child' | 'sibling';
+  person: 'mother' | 'father' | 'parent' | 'spouse' | 'child' | 'sibling';
   houses: number[];
   varga: string;
 }
@@ -101,14 +101,35 @@ export function readerTimeoutMs(def: Pick<ReaderDef, 'timeoutMs' | 'maxOutputTok
 const PEOPLE: Array<{ re: RegExp; frame: PersonFrame }> = [
   { re: /\b(mother|mom|mum|amma|maa)\b/i, frame: { person: 'mother', houses: [4], varga: 'varga.d12' } },
   { re: /\b(father|dad|papa|pita)\b/i, frame: { person: 'father', houses: [9], varga: 'varga.d12' } },
+  { re: /\bparents?\b/i, frame: { person: 'parent', houses: [4, 9], varga: 'varga.d12' } },
   { re: /\b(wife|husband|spouse|partner|girlfriend|boyfriend)\b/i, frame: { person: 'spouse', houses: [7], varga: 'varga.d9' } },
   { re: /\b(son|daughter|child|children|kids?)\b/i, frame: { person: 'child', houses: [5], varga: 'varga.d7' } },
   { re: /\b(brother|sister|sibling)\b/i, frame: { person: 'sibling', houses: [3, 11], varga: 'varga.d3' } },
 ];
 
-/** The first person the question names. Read from the owner's chart only (doc 33 §2.14). */
-export function personIn(question: string): PersonFrame | null {
-  return PEOPLE.find((p) => p.re.test(question))?.frame ?? null;
+const SLOT_PERSON_MAP: Record<string, PersonFrame> = {
+  mother: { person: 'mother', houses: [4], varga: 'varga.d12' },
+  father: { person: 'father', houses: [9], varga: 'varga.d12' },
+  parent: { person: 'parent', houses: [4, 9], varga: 'varga.d12' },
+  partner: { person: 'spouse', houses: [7], varga: 'varga.d9' },
+  spouse: { person: 'spouse', houses: [7], varga: 'varga.d9' },
+  child: { person: 'child', houses: [5], varga: 'varga.d7' },
+  son: { person: 'child', houses: [5], varga: 'varga.d7' },
+  daughter: { person: 'child', houses: [5], varga: 'varga.d7' },
+  brother: { person: 'sibling', houses: [3, 11], varga: 'varga.d3' },
+  sister: { person: 'sibling', houses: [3, 11], varga: 'varga.d3' },
+  sibling: { person: 'sibling', houses: [3, 11], varga: 'varga.d3' },
+};
+
+/** The first person the question names, or the Clarify slot (`subject_person` / `other_person`) when confirmed. Read from the owner's chart only (doc 33 §2.14). */
+export function personIn(question: string, slotPerson?: string | null): PersonFrame | null {
+  const fromText = PEOPLE.find((p) => p.re.test(question))?.frame ?? null;
+  if (fromText) return fromText;
+  if (slotPerson) {
+    const mapped = SLOT_PERSON_MAP[slotPerson.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return null;
 }
 
 const WHY_OR_DECIDE = new Set(['why_meaning', 'compare']);
@@ -116,8 +137,12 @@ const SHORT_HORIZON = new Set(['now', '3m']);
 
 /** The tier from the question, by rule (doc 26 Part B, doc 33 §3.1). Fast-lane questions never reach here: they go to one call. */
 export function tierFor(intent: Intent, question: string, realWant?: string | null): Tier {
+  const slotPerson =
+    intent.classification?.slots?.subject_person?.value ??
+    intent.classification?.slots?.other_person?.value ??
+    null;
   if (intent.horizon === 'life' || /\b(life reading|whole life|entire life|my life overall)\b/i.test(question)) return 1;
-  if (WHY_OR_DECIDE.has(intent.questionType) || personIn(question) || (realWant && /^why_|what_can_i_do|is_it_serious/.test(realWant))) return 2;
+  if (WHY_OR_DECIDE.has(intent.questionType) || personIn(question, slotPerson) || (realWant && /^why_|what_can_i_do|is_it_serious/.test(realWant))) return 2;
   if (typeof intent.horizon === 'string' && SHORT_HORIZON.has(intent.horizon)) return 5;
   if (intent.questionType === 'timing') return 4;
   return 3;
@@ -143,17 +168,34 @@ export interface ReaderPlan {
   required: Set<ReaderId>;
 }
 
-/** Which readers run for this question, and which of them hold the join. */
-export function planReaders(a: { intent: Intent; question: string; asOf: string; realWant?: string | null; route?: PlanBRoute | null; prashna?: boolean }): ReaderPlan {
+/** The readers of a tier (doc 33 §3.1), before the question's own additions. */
+export function readersForTier(tier: Tier): ReaderId[] {
+  return [...(BY_TIER[tier] ?? [])];
+}
+
+/**
+ * Which readers run for this question, and which of them hold the join. `allowed` (src/techniques/use.ts) is the set
+ * the selected techniques allow: the tier's readers are intersected with it, and R02, R08 (and R10 for a horizon of
+ * 36 months or less) are kept whatever it says.
+ */
+export function planReaders(a: { intent: Intent; question: string; asOf: string; realWant?: string | null; route?: PlanBRoute | null; prashna?: boolean; allowed?: readonly ReaderId[] | null; slotPerson?: string | null }): ReaderPlan {
   const tier = a.route?.tier ?? tierFor(a.intent, a.question, a.realWant);
-  const ids = new Set<ReaderId>(a.route?.readers ?? BY_TIER[tier]);
-  const person = personIn(a.question);
-  if (person && !a.route) ids.add('R13');
-  if (a.prashna) ids.add('R12');
-  if (readingRemedyReader() && (a.realWant === 'what_can_i_do' || a.route?.route === 'pressure')) ids.add('R14');
+  const hz = horizonRange(a.intent.horizon, a.asOf);
+  const floor = new Set<ReaderId>(['R02', 'R08', ...(hz.months <= 36 ? (['R10'] as ReaderId[]) : [])]);
+  const allowed = a.allowed ? new Set(a.allowed) : null;
+  const ok = (id: ReaderId): boolean => !allowed || allowed.has(id) || floor.has(id);
+  const ids = new Set<ReaderId>((a.route?.readers ?? BY_TIER[tier]).filter(ok));
+  const slotPerson =
+    a.slotPerson ??
+    a.intent.classification?.slots?.subject_person?.value ??
+    a.intent.classification?.slots?.other_person?.value ??
+    null;
+  const person = personIn(a.question, slotPerson);
+  if (person && !a.route && ok('R13')) ids.add('R13');
+  if (a.prashna && ok('R12')) ids.add('R12');
+  if (readingRemedyReader() && (a.realWant === 'what_can_i_do' || a.route?.route === 'pressure') && ok('R14')) ids.add('R14');
   const required = new Set<ReaderId>();
   for (const id of ['R02', 'R08', 'R13', 'P1', 'P2', 'P3'] as ReaderId[]) if (ids.has(id)) required.add(id);
-  const hz = horizonRange(a.intent.horizon, a.asOf);
   if (ids.has('R10') && hz.months <= 36) required.add('R10');
   return { tier, ids: [...ids], required };
 }

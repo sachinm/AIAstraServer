@@ -30,8 +30,9 @@ import { registerTimelineRoutes } from './src/routes/timelineRoutes.js';
 import { registerAssistantRoutes } from './src/routes/assistantRoutes.js';
 import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
+import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
-import { engineAtPlace, natalForUser } from './src/reading/luckyTimes/wiring.js';
+import { engineAtPlace, functionalNatureOf, natalForUser, runningDashaLordsOf } from './src/reading/luckyTimes/wiring.js';
 import { seedAgentRegistry } from './src/agents/registry.js';
 import { seedTechniqueRegistry } from './src/techniques/catalog.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
@@ -40,6 +41,7 @@ import { intentForFocus } from './src/reading/clarify/service.js';
 import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.js';
 import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kundliSyncWorker.js';
+import { handleKundliDigestEvent, parseKundliDigestEvent } from './src/reading/digest/event.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -76,10 +78,13 @@ app.use(express.json());
 app.use(noStoreMiddleware);
 
 // Lambda Web Adapter forwards non-HTTP events (EventBridge schedules) here as POST bodies (AWS_LWA_PASS_THROUGH_PATH).
-// Handled: the LLM cache sweep, and the background chart pull (kundli-sync from this Lambda's own async invoke,
+// Handled: the LLM cache sweep, the kundli digest (kundli-digest, kundli-digest-sweep), and the background chart pull (kundli-sync from this Lambda's own async invoke,
 // kundli-sync-sweep from EventBridge; docs/reading-engine/31). The response is sent only when the work is done, so the
 // invocation lives as long as the pull. Anything else is acknowledged and ignored.
 app.post('/events', async (req, res) => {
+  // the kundli digest (docs/reading-engine/53 §4.7): one kundli, or the sweep; token-guarded like kundli-sync
+  const digest = parseKundliDigestEvent(req.body);
+  if (digest) return res.json(await handleKundliDigestEvent(digest, { prisma }));
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();
@@ -305,10 +310,19 @@ registerBillingRoutes(app, { prisma, requireUser, optionalUser });
 registerTimelineRoutes(app, { prisma, requireUser });
 // the assistant on the public pages and the visit log: no sign-in, no account data
 registerAssistantRoutes(app, { prisma });
-// Lucky times (docs/reading-engine/49): mounted when LUCKY_ENABLED=1; analytics events always
-registerLuckyRoutes(app, { prisma, requireUser, engine: engineAtPlace, natalFor: natalForUser(prisma) });
+// Lucky times (docs/reading-engine/49, 53 §4.6): mounted when LUCKY_ENABLED=1; analytics events always
+registerLuckyRoutes(app, {
+  prisma,
+  requireUser,
+  engine: engineAtPlace,
+  natalFor: natalForUser(prisma),
+  functionalNatureOf: functionalNatureOf(prisma),
+  runningDashaLordsOf: runningDashaLordsOf(prisma),
+});
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
+// life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
+registerLifeReadingRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
 

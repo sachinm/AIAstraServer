@@ -8,6 +8,7 @@ import { callGemini, GeminiHttpError } from '../llm/gemini.js';
 import type { CacheOwner } from '../llm/promptCache.js';
 import { claimZ, failureReason, parseFindingText, TRUNCATED_CAVEAT, windowZ, type Finding, type SpecialistFailureReason } from '../nodes/specialists.js';
 import { FRAMES, type SubjectId } from '../packs/frames.js';
+import { factsLine } from '../packs/fullPrefix.js';
 import { hashText, type EvidencePack } from '../packs/selector.js';
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import type { Intent, Usage } from '../types.js';
@@ -30,7 +31,7 @@ const short = (n: number) => z.string().catch('').transform((t) => t.slice(0, n)
 const strings = z.array(z.unknown()).catch([]).transform((xs) => xs.filter((x): x is string => typeof x === 'string'));
 
 const readerClaimZ = claimZ.extend({
-  about: z.enum(['self', 'mother', 'father', 'spouse', 'child', 'sibling', 'other']).catch('self'),
+  about: z.enum(['self', 'mother', 'father', 'parent', 'spouse', 'child', 'sibling', 'other']).catch('self'),
   topic: short(40),
   kind: z.enum(['bond', 'holds', 'blocks', 'gives', 'window', 'form', 'grace']).catch('gives'),
 });
@@ -78,7 +79,7 @@ export const READER_RESPONSE_SCHEMA = {
           polarity: { ...S, enum: ['supports', 'obstructs', 'neutral'] },
           weight: { type: 'INTEGER', minimum: 1, maximum: 3 },
           tradition: { ...S, enum: ['parashara', 'jaimini', 'nakshatra', 'tajaka', 'kuta', 'kp_starlord', 'prashna'] },
-          about: { ...S, enum: ['self', 'mother', 'father', 'spouse', 'child', 'sibling', 'other'] },
+          about: { ...S, enum: ['self', 'mother', 'father', 'parent', 'spouse', 'child', 'sibling', 'other'] },
           topic: S,
           kind: { ...S, enum: ['bond', 'holds', 'blocks', 'gives', 'window', 'form', 'grace'] },
         },
@@ -147,6 +148,8 @@ export function buildReaderRequest(a: {
   focus?: string;
   /** the Oracle's findings text, for the remedy reader only */
   findingsText?: string;
+  /** confirmed person_facts (doc 53 §4.4, 48): passed in the user turn as FACTS */
+  facts?: Record<string, string> | null;
 }): ReaderRequest {
   const def = READERS[a.id];
   const frame = FRAMES[a.subject];
@@ -157,6 +160,7 @@ export function buildReaderRequest(a: {
   const person = a.slice.person ? `Person named: ${a.slice.person.person}, read through house ${a.slice.person.houses.join(' or ')} of the owner's chart.` : '';
   const frameLine = `Subject: ${frame?.label ?? a.subject}. Frame houses: ${a.slice.houses.join(', ')}. Frame lords: ${a.keyFrame?.lords.join(', ') || 'read them from benefic_malefic.house_lords'}. Karakas: ${frame?.karakas.join(', ') ?? ''}. Chara karakas: ${frame?.charaKarakas.join(', ') ?? ''}. Arudhas: ${frame?.arudhas.join(', ') ?? ''}. ${person}`.trim();
   const clarified = a.intent.clarified;
+  const known = factsLine(a.facts);
   const tailParts = [
     PROMPTS[def.promptKey] ?? '',
     frameLine,
@@ -164,6 +168,7 @@ export function buildReaderRequest(a: {
     ...(def.natal ? [] : clarified?.realWant ? [`WHAT THEY REALLY WANT TO KNOW: ${clarified.realWant.line}`] : []),
     ...(a.focus ? [`FOCUS ONLY ON THIS PART, WHICH THE ANSWER MISSED: ${a.focus}`] : []),
     ...(a.findingsText ? [a.findingsText] : []),
+    ...(known ? [known] : []),
     ...(def.natal ? [] : [`QUESTION: ${a.question}`]),
   ];
   const promptSent = tailParts.join('\n');
@@ -178,7 +183,7 @@ export function buildReaderRequest(a: {
     promptSent,
     dataKeys: [...Object.keys(core.sections), ...Object.keys(tables)],
     dataHash,
-    cacheKey: hashText([a.model, PROMPT_VERSION, a.id, dataHash, promptSent].join('|')),
+    cacheKey: hashText([a.model, PROMPT_VERSION, a.id, dataHash, a.slice.person?.person ?? '', promptSent].join('|')),
     sections: { ...core.sections, ...tables },
     promptTokens: approxTokens(system) + approxTokens(core.text) + approxTokens(tablesText) + approxTokens(promptSent),
     frameLine,
@@ -245,8 +250,9 @@ export async function runReader(req: ReaderRequest, a: { model: string; guard: C
 }
 
 /** The same finding in the shape reconcile reads, for the readers that feed a convergence layer. */
-export function toLayerFinding(r: Pick<ReaderResult, 'id' | 'subject' | 'finding'>): Finding | null {
-  const analyst = READERS[r.id].layer;
+export function toLayerFinding(r: { id: string; subject: SubjectId; finding: ReaderOutput }): Finding | null {
+  // a deterministic reader (codeReaders) has no READERS row and feeds no convergence layer
+  const analyst = (READERS as Partial<Record<string, ReaderDef>>)[r.id]?.layer;
   if (!analyst) return null;
   const f = r.finding;
   return { analyst, subject: r.subject, verdict: f.verdict, layerScore: f.layerScore, status: 'ok', claims: f.claims, windows: f.windows, caveats: f.caveats, keyFacts: [], form: f.form, culprits: f.culprits, contributors: f.contributors };

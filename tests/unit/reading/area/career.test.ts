@@ -127,3 +127,25 @@ describe('sub-areas follow the person (doc 45 rule 13)', () => {
     expect(fitsStatus('promotion', 'yes')).toBe(true);
   });
 });
+
+describe('digest-backed work families (work.d10_check, work.annual_family, work.conditional_family, work.karaka_family)', () => {
+  it('casts annual, conditional and karaka votes and checks D1/D10 agreement when a digest is provided', () => {
+    const cells = ['2026-09', '2026-10', '2026-11'].map((m) => cell(m, { band: 'moderate', sys: { S1: [3, 0, 'Ju'], S4: [2, 0] } }));
+    const view = {
+      house: (v: string, h: number) => (v === 'D1' && h === 10 ? { lord: 'Ju', lordDignity: 'exalted', class: ['kendra'] } : v === 'D10' && h === 10 ? { lord: 'Ju', lordDignity: 'own', class: ['kendra'] } : null),
+      planet: (_v: string, p: string) => (p === 'Ju' || p === 'Me' || p === 'Ve' ? { dignity: 'exalted', house: 10, functional: 'benefic', owns: [10] } : null),
+      points: () => [{ id: 'AmK', varga: 'D1', sign: 'Sg', house: 10, lord: 'Ve', lordHouse: 10 }],
+      annual: () => [{ kind: 'TP' as const, year: 2026, varga: 'D1', lagna: 'Ar', houses: [{ varga: 'D1', house: 10, sign: 'Cp', lord: 'Ju', lordHouse: 10, lordSign: 'Cp', lordDignity: 'exalted', coLord: null, occupants: [], aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: ['kendra'], cuspStar: null, arudha: null }], dashas: [{ system: 'mudda', periods: [{ level: 1, lord: 'Ju', from: '2026-01-01', to: '2026-12-31' }] }], sahams: [{ name: 'rajya', sign: 'Ar', house: 10 }] }],
+    } as any;
+    const activation = [
+      { system: 'shodashottari', family: 'conditional', level: 1, lord: 'Me', sign: null, from: '2026-01-01', to: '2027-01-01', houses: [10] },
+      { system: 'karaka', family: 'karaka', level: 1, lord: 'Ve', sign: null, from: '2026-01-01', to: '2027-01-01', houses: [10] },
+    ] as any;
+    const p = presentState(fakeBuild, cells, 1, { view, activation });
+    expect(p.votes.find((f) => f.family === 'annual')?.vote).toBe('support');
+    expect(p.votes.find((f) => f.family === 'conditional')?.vote).toBe('support');
+    expect(p.votes.find((f) => f.family === 'karaka')?.vote).toBe('support');
+    const fullMap = careerMap(build, G1_AS_OF, { view, activation });
+    expect(fullMap.notes.some((n) => n.includes('not built yet'))).toBe(false);
+  });
+});

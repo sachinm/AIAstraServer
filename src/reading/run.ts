@@ -43,9 +43,18 @@ import { runOracleFlow } from './oracle/flow.js';
 import { prismaJournalWriter, type ReadingJournal } from './oracle/journal.js';
 import { loadPrewarmed } from './oracle/prewarm.js';
 import { inferRealWant } from './clarify/realWant.js';
+import { runClarifyMonitor } from './clarify/monitor.js';
+import type { ClarifyState } from './clarify/machine.js';
 import { prashnaApplies, transitAskedAt } from './nodes/specialists.js';
 import { prashnaSection, transitAtSection } from './layers/sections.js';
 import { currentTrace, failureLabel, withRunTrace } from './metrics/trace.js';
+import { slotsOf, techniquesForQuestion, type TechniqueUse, type TechniqueUseOptions } from '../techniques/use.js';
+import { confirmedFacts, DECLINED } from '../profile/facts.js';
+import { loadDigest } from './digest/load.js';
+import { activationFor, type ActivationRow } from './digest/activation.js';
+import type { DigestView } from './digest/types.js';
+import { personIn } from './oracle/readers.js';
+import { runCodeReaders, toFinding, type CodeFinding } from './codeReaders/readers.js';
 
 export class ReadingUnavailableError extends Error {
   constructor(public reason: 'dossier_missing' | 'disabled', message?: string) {
@@ -74,6 +83,12 @@ export interface RunReadingOptions {
   layers?: LayerLoaders;
   /** Test seam for the oracle flow: replaces the stored-table read */
   chartRows?: import('./oracle/chartBundle.js').ChartRowSource;
+  /** Test seam: the person's confirmed facts (person_facts); default read through Prisma, none with a dataLoader */
+  facts?: Record<string, string>;
+  /** Test seam: the kundli's digest (null = not ready); default loadDigest through Prisma, none with a dataLoader */
+  digest?: DigestView | null;
+  /** Test seam: activation calendar rows for the reading's horizon; default activationFor through Prisma when digest is ready */
+  activation?: readonly ActivationRow[] | null;
 }
 
 /** The dated layers wait at most this long: past it the reading goes on without them. */
@@ -181,8 +196,24 @@ function keyFactsCard(pack: EvidencePack, intent: Intent): string {
   return lines.join('\n');
 }
 
+/** The person_facts keys the FACTS line never carries: the wizard's own bookkeeping, and the place (the location line says it). */
+const FACTS_NOT_SENT = /^(wizard\.|place\.)/;
+
+/**
+ * The FACTS line of the tail (docs/reading-engine/53 §4.4, 48): what the person has confirmed about themselves, so the
+ * answer speaks to their situation and asks none of it again. Labels and values only (`work.status: between_jobs`);
+ * null when there is nothing to say.
+ */
+export function factsLine(facts: Record<string, string> | null | undefined): string | null {
+  const rows = Object.entries(facts ?? {})
+    .filter(([k, v]) => !FACTS_NOT_SENT.test(k) && v && v !== DECLINED)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}: ${v}`);
+  return rows.length ? `FACTS (what the person has told us; speak to this situation and do not ask it again): ${rows.join('; ')}` : null;
+}
+
 /** `shapeByRef`: the full cache layout holds every template, so the tail only names the one to use. */
-function tailFor(intent: Intent, question: string, asOf: string, shapeByRef = false): string {
+export function tailFor(intent: Intent, question: string, asOf: string, shapeByRef = false, facts?: Record<string, string> | null): string {
   // the bucket classifier picks one of the ten templates (docs/reading-engine/09); the older format prompts remain the fallback
   const template = intent.classification?.template;
   const shape = shapeByRef
@@ -194,8 +225,46 @@ function tailFor(intent: Intent, question: string, asOf: string, shapeByRef = fa
   // where the person lives now: the writer may say dates are for this place; nothing astrological changes
   const location = currentLocationLine(intent.currentLocation);
   if (location) parts.push(location);
+  const known = factsLine(facts);
+  if (known) parts.push(known);
   parts.push(`QUESTION: ${question}`);
   return parts.join('\n\n');
+}
+
+/**
+ * The catalogue techniques this question uses (docs/reading-engine/53 §4.3; 54 §5 techniquesForQuestion), for the trace:
+ * the confirmed intent, its slots and the companion memory matched against the selectors, narrowed to what the flow
+ * runs. Labels only; a failure means no label, never a failed reading.
+ */
+export function selectedTechniques(intent: Intent, facts: Record<string, string>, o: TechniqueUseOptions): string[] | null {
+  try {
+    return techniquesForQuestion(intent, facts, o).ids;
+  } catch {
+    return null;
+  }
+}
+
+/** How long a question waits for the digest: past it the dossier path answers (doc 53 §4.7: digest reads time out at 2 s). */
+const DIGEST_WAIT_MS = 1_500;
+
+/** The ready digest of a kundli, or null when it is not ready, fails or takes longer than `ms`. Never throws. */
+async function digestWithin(prisma: PrismaClient, kundliId: string, ms: number): Promise<DigestView | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([loadDigest(prisma, kundliId).catch(() => null), new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)))]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Activation calendar rows overlapping [from, to) within `ms`, or null on failure/timeout. Never throws. */
+async function activationWithin(prisma: PrismaClient, kundliId: string, hz: { from: string; to: string }, ms: number): Promise<ActivationRow[] | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([activationFor(prisma, kundliId, { from: hz.from, to: hz.to }).catch(() => null), new Promise<null>((r) => (timer = setTimeout(() => r(null), ms)))]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function summarizeIntent(intent: Intent) {
@@ -254,6 +323,8 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     : startPrefetch(prisma, userId, { asOf, onFactsMissing: opts.onFactsMissing, onStale: opts.onStale });
   // where the person lives now (M13 table), read alongside intake; a missing table or a slow read just means none
   const locationPromise = opts.dataLoader || opts.intent?.currentLocation ? Promise.resolve(null) : new PrismaUserLocationStore(prisma).get(userId).catch(() => null);
+  // the companion memory (person_facts, doc 48): read alongside intake; it selects techniques and rides in the tail as FACTS
+  const factsPromise: Promise<Record<string, string>> = opts.facts ? Promise.resolve(opts.facts) : opts.dataLoader ? Promise.resolve({}) : confirmedFacts(prisma, userId).catch(() => ({}));
 
   // 2. intake
   emit({ type: 'stage', name: 'intake', status: 'start' });
@@ -265,7 +336,8 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
-  // technique labels for the metrics (docs/admin/01 §4.1.6); `subjects` is narrowed below to what actually fans out
+  // technique labels for the metrics (docs/admin/01 §4.1.6); `subjects` is narrowed below to what actually fans out, and
+  // `techniques` is written once the flow and the digest are known
   currentTrace()?.label({ bucket: intent.classification?.bucket ?? null, template: intent.classification?.template ?? null, subjects: intent.subjects.length });
   emit({ type: 'intent', runId, intent: summarizeIntent(intent), source: intake.source });
 
@@ -300,14 +372,37 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   }
   if (oracleFlow && !intent.clarified) intent.clarified = { turns: [], assumed: {}, exactQuery: null, realWant: inferRealWant(question, intent.classification?.bucket) };
 
+  // the digest (doc 53 §4.2): read once per question when the kundli's status is ready; otherwise, or past the wait, the
+  // dossier path answers as before
+  const tDigest = Date.now();
+  const digest: DigestView | null =
+    opts.digest !== undefined
+      ? opts.digest
+      : opts.dataLoader
+        ? null
+        : await digestWithin(prisma, data.kundliId, DIGEST_WAIT_MS);
+  const activation: readonly ActivationRow[] | null =
+    opts.activation !== undefined
+      ? opts.activation
+      : !digest || opts.dataLoader
+        ? null
+        : await activationWithin(prisma, data.kundliId, horizonRange(intent.horizon, asOf), DIGEST_WAIT_MS);
+  timings.digest = Date.now() - tDigest;
+  const facts = await factsPromise;
+
   // 4. evidence packs
   emit({ type: 'stage', name: 'prepare', status: 'start' });
   const tPack = Date.now();
   const subjects = intent.subjects.slice(0, 3);
   currentTrace()?.label({ subjects: subjects.length });
   const packs: Record<string, EvidencePack> = {};
+  const slotPerson =
+    intent.classification?.slots?.subject_person?.value ??
+    intent.classification?.slots?.other_person?.value ??
+    null;
+  const named = personIn(question, slotPerson);
   for (const s of subjects) {
-    packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent });
+    packs[s.id] = buildEvidencePack({ dossier: data.dossier, transits: data.transits, subject: s.id, asOf, intent, ...(digest ? { digest, person: named, ...(activation ? { activation } : {}) } : {}) });
   }
   const merged = mergeSubjectPacks(subjects.map((s) => packs[s.id]!));
   timings.pack = Date.now() - tPack;
@@ -320,7 +415,24 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   for (const s of subjects) packHashes[s.id] = hashPack(packs[s.id]!);
 
   const flow: ReadingRunRecord['flow'] = oracleFlow ? 'oracle' : flowWanted === 'graph' && !isFastLane(intent) ? 'graph' : 'single';
-  const tail = tailFor(intent, question, asOf);
+  // techniques in use (doc 54 §5): which analysts, readers and deterministic readers run, from the selectors
+  const useOpts: TechniqueUseOptions = { flow, digestReady: !!digest, slots: slotsOf(intent, { otherPerson: !!named }), asOf, question };
+  let uses: TechniqueUse | null = null;
+  try {
+    uses = techniquesForQuestion(intent, facts, useOpts);
+  } catch {
+    uses = null;
+  }
+  currentTrace()?.label({ techniques: uses?.ids ?? null });
+  // the deterministic readers: code over each subject's digest section, no model; their findings join the brief
+  const codeFindings: CodeFinding[] = [];
+  if (digest && uses && flow !== 'single') {
+    for (const s of subjects) {
+      codeFindings.push(...runCodeReaders(packs[s.id]!, uses.bySubject[s.id]?.deterministic ?? [], { kundliId: data.kundliId, facts, slotPerson }));
+    }
+    for (const f of codeFindings) if (flow === 'graph') currentTrace()?.observe({ type: 'stage', name: `code:${f.analyst}`, status: 'done', ms: 0, subject: f.subject });
+  }
+  const tail = tailFor(intent, question, asOf, false, facts);
   // dated edges inside the horizon, read from the pack (no computation); READING_CALENDAR=0 turns it off
   const calendar = readingCalendar() ? calendarBlock(buildCalendar(merged, intent, asOf, { lunations: data.transits?.lunations })) : '';
   const v2 = readingFindingsV2();
@@ -341,13 +453,13 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   // full cache layout: build (or reuse) the day's prefix and start its caches now, without waiting; calls made before a
   // cache is live go out in the base layout
   const full: FullContext | undefined = !oracleFlow && fullCacheLayoutActive()
-    ? fullContextFor(data, asOf, system)
+    ? fullContextFor(data, asOf, system, digest)
     : undefined;
   if (full) {
     const models = new Set([synthModel, ...(flow === 'graph' ? [modelFor('specialist')] : [])]);
     for (const m of models) void ensurePromptCache(m, full.system, full.prefix, cacheOwner).catch(() => null);
   }
-  const shapeTail = full ? tailFor(intent, question, asOf, true) : tail;
+  const shapeTail = full ? tailFor(intent, question, asOf, true, facts) : tail;
 
   let answer = '';
   let finishReason: string | null = null;
@@ -412,6 +524,11 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
         ...(rawAt && askedAt ? { transitAt: transitAtSection({ payload: rawAt, at: askedAt }) } : {}),
         ...(rawPrashna ? { prashna: prashnaSection({ payload: (rawPrashna as { payload: unknown }).payload, frameHouses: packs[first]!.keyFrame.houses, placeSource: (rawPrashna as { placeSource: 'current' | 'birth' }).placeSource, dossier: data.dossier }) } : {}),
         ...(prewarmed ? { prewarmed } : {}),
+        ...(uses ? { allowedReaders: uses.readers } : {}),
+        ...(codeFindings.length ? { codeFindings: codeFindings.filter((f) => f.subject === first) } : {}),
+        ...(Object.keys(facts).length ? { facts } : {}),
+        prisma,
+        techniqueIds: (readers, tier) => selectedTechniques(intent, facts, { ...useOpts, tier, readers }),
       });
       answer = out.answer;
       finishReason = out.finishReason;
@@ -443,6 +560,9 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     const graph = buildReadingGraph({
       intent, question, asOf, system, packs, keyFacts, emit,
       dossier: data.dossier, transits: data.transits, dossierHash: data.dossierHash, cacheOwner, runId, ...(full ? { full } : {}),
+      ...(Object.keys(facts).length ? { facts } : {}),
+      ...(uses ? { analystsBySubject: Object.fromEntries(subjects.map((s) => [s.id, uses!.bySubject[s.id]?.analysts ?? []])) } : {}),
+      ...(codeFindings.length ? { codeFindings: codeFindings.map(toFinding) } : {}),
       layers: opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId })),
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
@@ -541,5 +661,20 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     grounding: { dropped_claims: droppedClaims },
     errors,
   };
+  const clarifyRunId = opts.clarifyRunId ?? intent.clarified?.runId ?? null;
+  let clarifyState: ClarifyState | null = null;
+  if (clarifyRunId) {
+    const rrModel = (prisma as unknown as { readingRun?: { findFirst?: (args: unknown) => Promise<{ intent?: unknown } | null> } }).readingRun;
+    const cRow = await rrModel?.findFirst?.({ where: { id: clarifyRunId, user_id: userId }, select: { intent: true } }).catch(() => null);
+    clarifyState = ((cRow?.intent as { clarify?: ClarifyState } | null)?.clarify) ?? null;
+  }
+  const tablesWritten: Array<{ table: string; count: number }> = [
+    { table: 'reading_runs', count: 1 },
+    { table: 'reading_traces', count: 1 },
+    { table: 'reading_agent_spans', count: Math.max(1, usages.length) },
+    ...(journal && journal.all().length > 0 ? [{ table: 'reading_agent_responses', count: journal.all().length }] : []),
+  ];
+  currentTrace()?.label({ tables_written: tablesWritten });
+  await runClarifyMonitor(prisma, userId, clarifyState, { ...record, kundliId: data.kundliId }, facts).catch(() => null);
   return { answerText: answer || 'No response generated.', requestPayload, responsePayload, record };
 }

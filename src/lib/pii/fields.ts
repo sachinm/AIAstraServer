@@ -77,6 +77,11 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
   },
   KundliFacts: { table: 'kundli_facts', owner: { via: 'kundli_id' }, fields: { dossier: json, natal_points: json } },
   KundliData: { table: 'kundli_data', owner: { via: 'kundli_id' }, fields: { payload: json, error: text, params: json } },
+  // the digest is built from sealed payloads, so it is sealed like them; read by kundli_id only (M32)
+  KundliDigest: { table: 'kundli_digest', owner: { via: 'kundli_id' }, fields: { row: json, source: json } },
+  // activation rows hold only system ids, period lords or signs, dates and house numbers, queried by range and house (GIN):
+  // plain, like timeline_calibration (docs/TODOS.md, digest-core)
+  KundliActivation: { table: 'kundli_activation', owner: { via: 'kundli_id' }, fields: {} },
   KundliTransitOverlay: { table: 'kundli_transit_overlays', owner: { via: 'kundli_id' }, fields: { payload: json } },
   // only rows with a kundli_id belong to a person; global rows (kundli_id null) stay plain
   TransitSnapshot: { table: 'transit_snapshots', owner: { via: 'kundli_id' }, ownerOptional: true, fields: { snapshot: json } },

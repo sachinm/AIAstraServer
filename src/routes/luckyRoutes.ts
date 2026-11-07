@@ -7,7 +7,9 @@
  *   POST   /api/lucky/picks                 { scenario }                    → 201 | 400 unknown | 409 exists
  *   PATCH  /api/lucky/picks/:scenario       { shown?, answers? }            → 200 | 404
  *   DELETE /api/lucky/picks/:scenario                                       → 204 | 404
- *   GET    /api/lucky/range?from&to         days today−7…today+14 with avoid bands and one layer per shown pick → 200 | 409 no place
+ *   GET    /api/lucky/range?from&to         days today−7…today+14 with avoid bands, the day's yoga and karana, and one
+ *                                           layer per shown pick; each window's reasons carry a scope (general |
+ *                                           personal) and the plain keys stay in reasonKeys → 200 | 409 no place
  *   POST   /api/analytics/events            { session, events: [...] }      → 204 | 400 over 50
  */
 import type express from 'express';
@@ -23,6 +25,10 @@ export interface LuckyRouteDeps {
   enabled?: boolean;
   engine?: EngineFetch | null;
   natalFor?: LuckyDeps['natalFor'];
+  /** the chart's functional natures from the digest; null until the digest reader is wired (doc 54 §6) */
+  functionalNatureOf?: LuckyDeps['functionalNatureOf'];
+  /** the chart's running dasha lords from the activation calendar (doc 53 §4.6) */
+  runningDashaLordsOf?: LuckyDeps['runningDashaLordsOf'];
   now?: () => Date;
 }
 
@@ -51,7 +57,14 @@ export function registerLuckyRoutes(app: express.Express, deps: LuckyRouteDeps):
   });
 
   if (!(deps.enabled ?? isLuckyEnabled())) return;
-  const svc: LuckyDeps = { prisma: deps.prisma, engine: deps.engine ?? null, natalFor: deps.natalFor, now: deps.now };
+  const svc: LuckyDeps = {
+    prisma: deps.prisma,
+    engine: deps.engine ?? null,
+    natalFor: deps.natalFor,
+    functionalNatureOf: deps.functionalNatureOf ?? null,
+    ...(deps.runningDashaLordsOf !== undefined ? { runningDashaLordsOf: deps.runningDashaLordsOf } : {}),
+    now: deps.now,
+  };
 
   app.get('/api/lucky/setup', async (req, res) => {
     const userId = await deps.requireUser(req, res);

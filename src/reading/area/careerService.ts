@@ -5,10 +5,14 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
+import { loadDigest as realLoadDigest } from '../digest/load.js';
+import type { DigestView } from '../digest/types.js';
 import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
 import { careerMap, type CareerMap } from './career.js';
+import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resolveCareerShades } from './shadeResolver.js';
 
 export const WORK_STATUS = ['yes', 'between_jobs', 'own_business', 'studying'] as const;
 export type WorkStatus = (typeof WORK_STATUS)[number];
@@ -17,6 +21,8 @@ export interface CareerDeps {
   prisma: PrismaClient;
   /** tests: inputs without the database or the engine */
   loadInputs?: (kundliId: string, asOf: string, span: { from: string; to: string }) => Promise<TimelineInputs | null>;
+  loadDigest?: (prisma: PrismaClient, kundliId: string) => Promise<DigestView | null>;
+  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
   now?: () => Date;
 }
 
@@ -85,9 +91,22 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
     );
     if (!inputs) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
     map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
+      const [view, activation, areaFacts] = await Promise.all([
+        (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
+        (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
+        loadAreaFacts(deps.prisma, userId, 'career', { key: 'work.status', value: work }),
+        loadTechniqueGovernance(deps.prisma),
+      ]);
       const build = buildTimelineSpan(inputs, span);
-      const m = careerMap(build, asOf);
-      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length } };
+      const m = careerMap(build, asOf, view ? { view, activation } : undefined);
+      const receipts = resolveCareerShades({
+        map: m,
+        view,
+        facts: areaFacts,
+      });
+      const logged = await recordTechniqueDecisions(deps.prisma, { kundliId: kundli.id, userId }, receipts);
+      const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];
+      return { value: m, output: { tone: m.present.tone, confidence: m.present.confidence, ahead: m.ahead.length, votes: m.present.votes.length, shades: receipts.length, writes } };
     });
     await deps.prisma.areaBuild
       .upsert({
@@ -102,19 +121,23 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
   return { status: 'ok', map: shown, work, built_at: asOf, cached: !fresh };
 }
 
-export async function recordCheck(prisma: PrismaClient, userId: string, month: unknown, side: unknown, answer: unknown): Promise<boolean> {
+/** The boards whose Looking-back answers are stored in `area_checks` (doc 45 §9; doc 54 §3 adds self and love). */
+export const CHECK_AREAS = ['career', 'self', 'love'] as const;
+export type CheckArea = (typeof CHECK_AREAS)[number];
+
+export async function recordCheck(prisma: PrismaClient, userId: string, month: unknown, side: unknown, answer: unknown, area: CheckArea = 'career'): Promise<boolean> {
   if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) return false;
   if (side !== 'support' && side !== 'test') return false;
   if (!['yes', 'partly', 'no', 'skip'].includes(String(answer))) return false;
   await prisma.areaCheck.upsert({
-    where: { user_id_area_month: { user_id: userId, area: 'career', month } },
-    create: { user_id: userId, area: 'career', month, side, answer: String(answer) },
+    where: { user_id_area_month: { user_id: userId, area, month } },
+    create: { user_id: userId, area, month, side, answer: String(answer) },
     update: { side, answer: String(answer) },
   });
   return true;
 }
 
-export async function checksFor(prisma: PrismaClient, userId: string): Promise<Record<string, string>> {
-  const rows = await prisma.areaCheck.findMany({ where: { user_id: userId, area: 'career' } });
+export async function checksFor(prisma: PrismaClient, userId: string, area: CheckArea = 'career'): Promise<Record<string, string>> {
+  const rows = await prisma.areaCheck.findMany({ where: { user_id: userId, area } });
   return Object.fromEntries(rows.map((r) => [r.month, r.answer]));
 }

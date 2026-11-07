@@ -53,18 +53,41 @@ const GRAPH_ANALYSTS: Array<{ name: string; title: string; description: string }
   { name: 'prashna', title: 'Question chart analyst', description: 'Reads the chart of the question moment when the graph has it' },
 ];
 
+/**
+ * The deterministic readers of the General Reading over the digest (src/reading/codeReaders/readers.ts; doc 53 §4.4
+ * step 5): code, no model. Their spans are `code:<name>` (trace.ts).
+ */
+const CODE_READERS: Array<{ name: string; title: string; description: string }> = [
+  { name: 'varga_dynamics', title: 'Divisional chart agreement', description: "Compares the frame house lords' dignity and the occupants of D1 with the frame's vargas, from the digest; no model" },
+  { name: 'strength_yoga', title: 'Strength and yoga reader', description: "Lists the present yogas and doshas touching the frame, the SAV of the frame houses and the shadbala of the frame lords, from the digest; no model" },
+  { name: 'jaimini', title: 'Jaimini reader', description: "Places the chara karakas and arudhas of the frame by house class and reads the argala on the frame houses, from the digest; no model" },
+  { name: 'person', title: 'Person reader', description: "Reads the person's house in D1 and the relationship varga and the karaka's card, from the digest; no model" },
+];
+
 export const AGENTS: AgentDef[] = [
   ...READING_ROLES.map((r) => ({ id: `reading.${r.role}`, title: r.title, kind: 'llm' as const, module: 'reading', subModule: r.role, description: r.description, role: r.role })),
   ...GRAPH_ANALYSTS.map((a) => ({ id: `reading.analyst.${a.name}`, title: a.title, kind: 'llm' as const, module: 'reading', subModule: 'analyst', description: a.description, role: 'specialist' as const })),
+  ...CODE_READERS.map((a) => ({ id: `reading.code.${a.name}`, title: a.title, kind: 'code' as const, module: 'reading', subModule: 'code_reader', description: a.description })),
   {
     id: 'reading.clarify',
     title: 'Clarify',
     kind: 'llm',
     module: 'reading',
     subModule: 'clarify',
-    description: 'Phrases and resolves the clarifying question on a small Bedrock model (clarify/planner.ts)',
+    description: 'Phrases and resolves the clarifying question on Gemini Flash-Lite or Bedrock (clarify/planner.ts)',
     provider: 'bedrock',
-    currentModel: () => `bedrock:${clarifyModelConfig().model}`,
+    currentModel: () => {
+      const cfg = clarifyModelConfig();
+      return cfg.provider === 'gemini' ? cfg.model : `bedrock:${cfg.model}`;
+    },
+  },
+  {
+    id: 'reading.clarify_monitor',
+    title: 'Clarify counterfactual monitor',
+    kind: 'code',
+    module: 'reading',
+    subModule: 'clarify_monitor',
+    description: 'Evaluates post-reading Clarify counterfactuals (ask-right, phrasing, handoff, would-asking-have-helped) deterministically (clarify/monitor.ts)',
   },
   {
     id: 'reading.step',
@@ -108,6 +131,55 @@ export const AGENTS: AgentDef[] = [
     module: 'area',
     subModule: 'career',
     description: 'Builds the career map from the timeline grid: present tone, windows by sub-area, horizons, security, Looking back',
+  },
+  {
+    id: 'digest.build',
+    title: 'Kundli digest builder',
+    kind: 'code',
+    module: 'digest',
+    subModule: 'build',
+    description: 'Builds the kundli digest (house and planet cards per varga, yogas, points, annual charts, star profile) and the activation calendar from stored engine rows; no model',
+  },
+  {
+    id: 'digest.annual_set',
+    title: 'Annual set puller',
+    kind: 'engine_pull',
+    module: 'digest',
+    subModule: 'annual',
+    engineType: 'annual',
+    description: 'Pulls the missing Tithi Pravesha and Varsha year charts (D1, D9, D10), year dashas and sahams for ten years back and ahead, a capped number per run',
+  },
+  {
+    id: 'digest.activation',
+    title: 'Activation calendar builder',
+    kind: 'code',
+    module: 'digest',
+    subModule: 'activation',
+    description: 'Writes one row per stored dasha period, birth to thirty years ahead, with the D1 houses it activates; runs inside the digest build',
+  },
+  {
+    id: 'area.self_board',
+    title: 'You board builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'self',
+    description: 'Builds the You board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
+  },
+  {
+    id: 'area.love_board',
+    title: 'Love board builder',
+    kind: 'code',
+    module: 'area',
+    subModule: 'love',
+    description: 'Builds the Love board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
+  },
+  {
+    id: 'life.dashboard',
+    title: 'Life reading dashboard',
+    kind: 'code',
+    module: 'life',
+    subModule: 'dashboard',
+    description: 'Builds the life reading (doc 34, doc 55) from the stored digest and activation calendar: the promise scale per area, cross-system timing windows, the rule for now, and the remaining largest Mahadasha (10-18+ yrs) & Antardasha life charter',
   },
   {
     id: 'lucky.scenario_windows',
@@ -165,6 +237,7 @@ type RawCapable = { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => P
  * per row. Logs once and never throws.
  */
 export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
+  if (!prisma) return 0;
   const raw = (prisma as unknown as RawCapable).$executeRawUnsafe;
   if (typeof raw === 'function') {
     try {
@@ -176,6 +249,9 @@ export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
       warned = true;
       return 0;
     }
+  }
+  if (typeof (prisma as unknown as { agentRegistry?: { upsert?: unknown } }).agentRegistry?.upsert !== 'function') {
+    return 0;
   }
   let n = 0;
   for (const a of AGENTS) {
@@ -295,6 +371,9 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
     error = e;
     throw e;
   } finally {
+    if (!prisma || typeof (prisma as unknown as { agentRun?: { create?: unknown } }).agentRun?.create !== 'function') {
+      // Test fakes without agentRun table skip run persistence cleanly.
+    } else {
     const ended = new Date();
     const u = result?.usage ?? {};
     const model = u.model ?? registryRow(def).model ?? null;
@@ -347,6 +426,7 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
     } catch (e) {
       if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
       warned = true;
+    }
     }
   }
 }

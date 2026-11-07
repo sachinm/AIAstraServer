@@ -4,12 +4,19 @@
  *   GET  /api/area/career                  the person's career map for today (built once a day), their work status and
  *                                          Looking-back answers → 200 | 404 no kundli | 202 chart not ready
  *   PUT  /api/profile/work-status          { value: yes|between_jobs|own_business|studying } → 204 | 400
- *   POST /api/area/career/checks           { month: 'YYYY-MM', side: support|test, answer: yes|partly|no|skip } → 204 | 400
+ *   GET  /api/area/self                    the You board (docs/reading-engine/54 §3) → 200 ok | 404 no_kundli | 202 preparing
+ *   GET  /api/area/love                    the Love board, same shape
+ *   POST /api/area/:area/checks            area career|self|love; { month: 'YYYY-MM', side: support|test,
+ *                                          answer: yes|partly|no|skip } → 204 | 400 | 404 unknown area
  */
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
-import { checksFor, getCareer, recordCheck, setWorkStatus, type CareerDeps } from '../reading/area/careerService.js';
+import { CHECK_AREAS, checksFor, getCareer, recordCheck, setWorkStatus, type CareerDeps, type CheckArea } from '../reading/area/careerService.js';
+import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js';
+import { getSelfBoard } from '../reading/area/selfService.js';
+import { getLoveBoard } from '../reading/area/loveService.js';
+import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area/shadeResolver.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -18,6 +25,8 @@ export interface AreaRouteDeps {
   enabled?: boolean;
   loadInputs?: CareerDeps['loadInputs'];
   now?: () => Date;
+  /** tests: the Self and Love boards' digest, activation, sky and queue readers */
+  boards?: Omit<BoardDeps, 'prisma' | 'now'>;
 }
 
 export function isAreaEnabled(): boolean {
@@ -49,12 +58,74 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
     return ok ? res.status(204).end() : res.status(400).json({ error: 'bad_value' });
   });
 
-  app.post('/api/area/career/checks', async (req, res) => {
+  const boardDeps: BoardDeps = { prisma: deps.prisma, now: deps.now, ...(deps.boards ?? {}) };
+  const boardRoute = (area: 'self' | 'love', get: (d: BoardDeps, userId: string) => Promise<AreaBoardResult>) =>
+    app.get(`/api/area/${area}`, async (req, res) => {
+      const userId = await deps.requireUser(req, res);
+      if (!userId) return;
+      try {
+        const r = await get(boardDeps, userId);
+        if (r.status === 'no_kundli') return res.status(404).json({ status: 'no_kundli', error: 'no_kundli' });
+        if (r.status === 'preparing') return res.status(202).json({ status: 'preparing' });
+        return res.json({ ...r, checks: await checksFor(deps.prisma, userId, area) });
+      } catch (e) {
+        console.error(`[area:${area}]`, (e as Error).message);
+        return res.status(500).json({ error: 'area_failed' });
+      }
+    });
+  boardRoute('self', getSelfBoard);
+  boardRoute('love', getLoveBoard);
+
+  app.post('/api/area/:area/checks', async (req, res) => {
+    const area = req.params.area as CheckArea;
+    if (!(CHECK_AREAS as readonly string[]).includes(area)) return res.status(404).json({ error: 'unknown_area' });
     const userId = await deps.requireUser(req, res);
     if (!userId) return;
-    const b = (req.body ?? {}) as { month?: unknown; side?: unknown; answer?: unknown };
-    const ok = await recordCheck(deps.prisma, userId, b.month, b.side, b.answer).catch(() => false);
+    const b = (req.body ?? {}) as { month?: unknown; side?: unknown; answer?: unknown; subarea?: unknown; shadeTag?: unknown };
+    const ok = await recordCheck(deps.prisma, userId, b.month, b.side, b.answer, area).catch(() => false);
+    if (ok && (typeof b.subarea === 'string' || typeof b.shadeTag === 'string')) {
+      await recordWindowOutcomeCheckin(deps.prisma, userId, {
+        area,
+        month: String(b.month),
+        side: b.side === 'test' ? 'test' : 'support',
+        answer: String(b.answer) as 'yes' | 'partly' | 'no' | 'skip',
+        ...(typeof b.subarea === 'string' ? { subarea: b.subarea } : {}),
+        ...(typeof b.shadeTag === 'string' ? { shadeTag: b.shadeTag } : {}),
+      }).catch(() => false);
+    }
     return ok ? res.status(204).end() : res.status(400).json({ error: 'bad_check' });
+  });
+
+  app.post('/api/area/:area/goal', async (req, res) => {
+    const area = req.params.area as CheckArea;
+    if (!(CHECK_AREAS as readonly string[]).includes(area)) return res.status(404).json({ error: 'unknown_area' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
+    const b = (req.body ?? {}) as { subarea?: unknown; shadeTag?: unknown; from?: unknown; to?: unknown };
+    if (
+      typeof b.subarea !== 'string' ||
+      !b.subarea.trim() ||
+      typeof b.shadeTag !== 'string' ||
+      !b.shadeTag.trim() ||
+      typeof b.from !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(b.from) ||
+      typeof b.to !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(b.to)
+    ) {
+      return res.status(400).json({ error: 'bad_goal' });
+    }
+    try {
+      const pinned = await pinActiveGoalWindow(deps.prisma, userId, {
+        area,
+        subarea: b.subarea.trim(),
+        shadeTag: b.shadeTag.trim(),
+        from: b.from,
+        to: b.to,
+      });
+      return res.status(200).json(pinned);
+    } catch {
+      return res.status(500).json({ error: 'goal_pin_failed' });
+    }
   });
   return true;
 }

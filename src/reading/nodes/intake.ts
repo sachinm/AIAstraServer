@@ -162,8 +162,22 @@ export function clarifyTextFor(subjects: SubjectId[], horizon: Horizon, asOf: st
   return `You are asking about ${what} over ${labelForHorizon(horizon, asOf)}; I will read houses ${houses}${vargas ? `, ${vargas}` : ''}, your running dasha and the transits.`;
 }
 
+const RULE_INTAKE_CACHE_MAX = 500;
+const ruleIntakeCache = new Map<string, { intent: Intent; confident: boolean }>();
+
+export function clearIntakeCache(): void {
+  ruleIntakeCache.clear();
+}
+
 export function ruleIntake(question: string, asOf: string): { intent: Intent; confident: boolean } {
   const q = question.trim();
+  const cacheKey = `${asOf}|${q.slice(0, 2000)}`;
+  const hit = ruleIntakeCache.get(cacheKey);
+  if (hit) {
+    ruleIntakeCache.delete(cacheKey);
+    ruleIntakeCache.set(cacheKey, hit);
+    return structuredClone(hit);
+  }
   const scores = new Map<SubjectId, number>();
   for (const [id, re, w] of SUBJECT_CUES) {
     const hits = q.match(new RegExp(re.source, 'gi'))?.length ?? 0;
@@ -230,7 +244,14 @@ export function ruleIntake(question: string, asOf: string): { intent: Intent; co
     followUps: [],
     safety,
   };
-  return { intent, confident: confidence >= 0.75 };
+  const out = { intent, confident: confidence >= 0.75 };
+  ruleIntakeCache.set(cacheKey, structuredClone(out));
+  while (ruleIntakeCache.size > RULE_INTAKE_CACHE_MAX) {
+    const oldest = ruleIntakeCache.keys().next().value;
+    if (oldest === undefined) break;
+    ruleIntakeCache.delete(oldest);
+  }
+  return out;
 }
 
 // ---- LLM intake -----------------------------------------------------------------------------------------

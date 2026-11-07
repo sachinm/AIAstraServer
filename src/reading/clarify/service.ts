@@ -14,12 +14,14 @@ import { birthPlaceFor, PrismaUserLocationStore, type LocationLookup, type UserL
 import type { Intent, Usage } from '../types.js';
 import type { SubjectId } from '../packs/frames.js';
 import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
-import { judgePrashna, phraseAsk, resolveFreeText } from './planner.js';
+import { judgePrashna, phraseAsk, planAiClarifyTurn, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
 import { guidanceFor } from '../coach/content.js';
 import { declinedFor, loadDeclinedTopics, type DeclinedTopic } from '../policy/declined.js';
 import { loadAgentPrompts } from '../prompts/registry.js';
 import { inferRealWant } from './realWant.js';
+import { confirmedFacts } from '../../profile/facts.js';
+import { withAgentRun } from '../../agents/registry.js';
 
 export const CARD_BUDGET_MS = 300;
 
@@ -51,16 +53,45 @@ function understandingLine(s: ClarifyState): string {
   return s.bucket === 'unknown' ? 'I could not tell which area of life this is about.' : `You are asking about ${BUCKETS[s.bucket].displayName.toLowerCase()}.`;
 }
 
-async function eventFor(runId: string, s: ClarifyState, usage: Usage[], prisma?: PrismaClient | null): Promise<ClarifyEvent | null> {
+async function eventFor(
+  runId: string,
+  s: ClarifyState,
+  usage: Usage[],
+  prisma?: PrismaClient | null,
+  store?: ClarifyStore,
+  userId?: string,
+): Promise<{ event: ClarifyEvent | null; state: ClarifyState }> {
   if (s.status === 'ASKING' && s.pending) {
-    const { ask, usage: u } = await phraseAsk(s, s.pending, prisma);
-    if (u) usage.push(u);
+    const planned = await planAiClarifyTurn(s, prisma);
+    const ask = planned.ask ?? s.pending;
+    if (planned.usage) usage.push(planned.usage);
+    if (store && userId && planned.state !== s) {
+      await store.save(userId, runId, planned.state).catch(() => {});
+    }
     // a question with no life area also gets one line on how to ask (coach/content.ts)
     const guide = ask.criterion === 'bucket' ? guidanceFor(s.bucket, s.bucket === 'unknown' ? 'no_subject' : null) : null;
-    return { type: 'clarify', runId, criterion: ask.criterion, question: ask.question, chips: ask.chips, allowFreeText: ask.allowFreeText, turn: s.turns.length, understanding: understandingLine(s), ...(guide ? { guidance: guide.text } : {}) };
+    return {
+      state: planned.state,
+      event: {
+        type: 'clarify',
+        runId,
+        criterion: ask.criterion,
+        question: ask.question,
+        chips: ask.chips,
+        allowFreeText: ask.allowFreeText,
+        turn: planned.state.turns.length,
+        understanding: understandingLine(planned.state),
+        ...(guide ? { guidance: guide.text } : {}),
+      },
+    };
   }
-  if (s.status === 'PROPOSED' && s.exactQuery) return { type: 'propose', runId, exactQuery: s.exactQuery, assumed: assumptionText(s), slots: s.slots };
-  return null;
+  if (s.status === 'PROPOSED' && s.exactQuery) {
+    return {
+      state: s,
+      event: { type: 'propose', runId, exactQuery: s.exactQuery, assumed: assumptionText(s), slots: s.slots },
+    };
+  }
+  return { state: s, event: null };
 }
 
 /**
@@ -101,19 +132,62 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   const needsCard = mode !== 'never' && cls.missing.includes('horizon');
   // the stored current location is read alongside the card (own short budget; a missing table reads as unavailable)
   const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
-  const [card, loc] = await Promise.all([
+  const [card, loc, facts] = await Promise.all([
     needsCard ? headlineCard(prisma, userId, asOf) : (startPrefetch(prisma, userId, { asOf }), Promise.resolve(null)),
     mode !== 'never' ? lookupLocation(locStore, userId) : Promise.resolve<LocationLookup>({ status: 'unavailable' }),
+    mode !== 'never' ? confirmedFacts(prisma, userId).catch(() => ({})) : Promise.resolve<Record<string, string>>({}),
   ]);
   // timing is stated in local terms: ask once where the person lives, only when the answer can be kept
   const needsLocation = cls.questionKind === 'timing' && loc.status === 'none' && !locationUnsaved.has(userId);
   const birthPlace = needsLocation ? await birthPlaceFor(prisma, userId) : null;
   const location = loc.status === 'found' ? loc.location : null;
-  const state = startClarify(question, asOf, cls, { mode, threshold: classifierThreshold(), card, needsChildAge, location, needsLocation, birthPlace });
-  const runId = await store.create(userId, state);
+  const initialState = startClarify(question, asOf, cls, {
+    mode,
+    threshold: classifierThreshold(),
+    card,
+    needsChildAge,
+    location,
+    needsLocation,
+    birthPlace,
+    facts,
+  });
+  const runId = await store.create(userId, initialState);
   const usage: Usage[] = [];
   void loadAgentPrompts(prisma);
-  const event = await eventFor(runId, state, usage, prisma);
+  const { event, state } = await withAgentRun(
+    prisma,
+    'reading.clarify',
+    {
+      userId,
+      technique: 'general.clarify',
+      task: 'clarify-begin',
+      input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length },
+    },
+    async () => {
+      const res = await eventFor(runId, initialState, usage, prisma, store, userId);
+      const u = usage[0];
+      return {
+        value: res,
+        ...(u?.model ? { model: u.model } : {}),
+        ...(u
+          ? {
+              usage: {
+                promptTokens: u.promptTokens,
+                cachedTokens: u.cachedTokens,
+                outputTokens: u.outputTokens,
+                thoughtTokens: u.thoughtTokens,
+              },
+            }
+          : {}),
+        output: {
+          status: res.state.status,
+          turnsCount: res.state.turns.length,
+          pendingCriterion: res.state.pending?.criterion ?? null,
+          driver: res.state.driver ?? 'rules',
+        },
+      };
+    },
+  );
   return { runId, state, event, usage, ms: Date.now() - t0 };
 }
 
@@ -164,8 +238,41 @@ export async function answerClarify(
     const topics = await loadDeclinedTopics(null);
     return { runId, state: next, event: null, usage, ms: Date.now() - t0, declined: topics.find((x) => x.id === 'minors') };
   }
-  const event = await eventFor(runId, next, usage, prisma);
-  return { runId, state: next, event, usage, ms: Date.now() - t0 };
+  const { event, state: finalState } = await withAgentRun(
+    prisma,
+    'reading.clarify',
+    {
+      userId,
+      technique: 'general.clarify',
+      task: 'clarify-answer',
+      input: { bucket: next.bucket, criterion: s.pending.criterion, viaChip: viaChip ? 1 : 0 },
+    },
+    async () => {
+      const res = await eventFor(runId, next, usage, prisma, store, userId);
+      const u = usage[usage.length - 1];
+      return {
+        value: res,
+        ...(u?.model ? { model: u.model } : {}),
+        ...(u
+          ? {
+              usage: {
+                promptTokens: u.promptTokens,
+                cachedTokens: u.cachedTokens,
+                outputTokens: u.outputTokens,
+                thoughtTokens: u.thoughtTokens,
+              },
+            }
+          : {}),
+        output: {
+          status: res.state.status,
+          turnsCount: res.state.turns.length,
+          pendingCriterion: res.state.pending?.criterion ?? null,
+          driver: res.state.driver ?? 'rules',
+        },
+      };
+    },
+  );
+  return { runId, state: finalState, event, usage, ms: Date.now() - t0 };
 }
 
 /** The user confirmed the exact query (or edited it). Returns the intent the reading must use. */
@@ -181,7 +288,10 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
     next = { ...next, prashna: result };
   }
   await store.save(userId, runId, next);
-  if (next.status !== 'CONFIRMED') return { state: next, intent: null, event: await eventFor(runId, next, []) };
+  if (next.status !== 'CONFIRMED') {
+    const { event, state: updatedState } = await eventFor(runId, next, [], null, store, userId);
+    return { state: updatedState, intent: null, event };
+  }
   return { state: next, intent: await intentFromState(next, runId), event: null };
 }
 
@@ -193,7 +303,7 @@ export async function intentFromState(s: ClarifyState, runId?: string): Promise<
   const base = (await runIntake(s.question, s.asOf, { mode: 'rules' })).intent;
   const b = BUCKETS[s.bucket];
   const subFrame = s.subBucket ? b.subBuckets.find((x) => x.id === s.subBucket)?.frame : undefined;
-  const frame = subFrame ?? b.frames[0]!;
+  const frame: SubjectId = subFrame ?? b.frames[0] ?? 'general_life_direction';
   const horizon = s.slots.horizon?.value ?? base.horizon;
   // The person chose one focus: read only that subject now, and keep the other parts of the question for afterwards
   // (answered one after another, each with its own budget). Before, a question naming the focus kept every subject in

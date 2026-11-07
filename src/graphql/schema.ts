@@ -11,6 +11,18 @@ import {
 import { completeProfile, ownProfileFields, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
 import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
+import { forgetUser } from '../auth/requestAuth.js';
+import { popLastOtpFailure } from '../auth/emailCode.js';
+import { assertTurnstileIfConfigured } from '../services/turnstileService.js';
+
+function popLastTurnstileFailure(clientIp?: string | null) {
+  const fn = (
+    assertTurnstileIfConfigured as unknown as {
+      popLastFailure?: (ip?: string | null) => { reason: string; errorCodes: string[] } | null;
+    }
+  ).popLastFailure;
+  return typeof fn === 'function' ? fn(clientIp) : null;
+}
 import { runRagQuery, processKundliUpload } from '../services/kundliService.js';
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { validateAskForUser, persistAskTurn } from '../services/askChatTurn.js';
@@ -1109,7 +1121,28 @@ const resolvers = {
         typeof input.turnstileToken === 'string' ? input.turnstileToken : null;
       const { recaptchaToken: _r, turnstileToken: _t, ...rest } = input;
       const clientIp = getClientIp(context.request);
-      return signup(rest, turnstileToken, clientIp);
+      const res = await signup(rest, turnstileToken, clientIp);
+      const reqFacts = factsFromFetch(context.request);
+      const tf = !res.success ? popLastTurnstileFailure(clientIp) : null;
+      if (tf) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'turnstile_failed',
+          outcome: 'refused',
+          note: tf.reason,
+          after: { error_codes: tf.errorCodes, flow: 'signup' },
+          request: reqFacts,
+        });
+      }
+      const emailStr = typeof rest.email === 'string' ? rest.email : '';
+      void recordAccountEvent(context.prisma, {
+        userId: null,
+        action: 'sign_up',
+        outcome: res.success ? 'ok' : 'code' in res && res.code === 'EMAIL_EXISTS' ? 'refused' : 'failed',
+        note: emailStr ? subjectTag(emailStr) : null,
+        request: reqFacts,
+      });
+      return res;
     },
     async startSignup(
       _parent: unknown,
@@ -1117,13 +1150,46 @@ const resolvers = {
       context: GraphQLContext
     ) {
       const { turnstileToken, ...rest } = input;
-      return startSignup(rest, turnstileToken ?? null, getClientIp(context.request));
+      const clientIp = getClientIp(context.request);
+      const res = await startSignup(rest, turnstileToken ?? null, clientIp);
+      const reqFacts = factsFromFetch(context.request);
+      const tf = !res.success ? popLastTurnstileFailure(clientIp) : null;
+      if (tf) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'turnstile_failed',
+          outcome: 'refused',
+          note: tf.reason,
+          after: { error_codes: tf.errorCodes, flow: 'startSignup' },
+          request: reqFacts,
+        });
+      }
+      void recordAccountEvent(context.prisma, {
+        userId: null,
+        action: 'sign_up_started',
+        outcome: res.success ? 'ok' : 'code' in res && res.code === 'EMAIL_EXISTS' ? 'refused' : 'failed',
+        note: rest.email ? subjectTag(rest.email) : null,
+        request: reqFacts,
+      });
+      return res;
     },
     async verifySignupCode(
       _parent: unknown,
-      { email, code }: { email: string; code: string }
+      { email, code }: { email: string; code: string },
+      context: GraphQLContext
     ) {
-      return verifySignupCode(email, code);
+      const res = await verifySignupCode(email, code);
+      const locked = !res.success && 'code' in res && res.code === 'ACCOUNT_LOCKED';
+      const otpFailure = !res.success && !locked ? popLastOtpFailure(email) : null;
+      void recordAccountEvent(context?.prisma, {
+        userId: res.success ? res.user : null,
+        action: 'sign_up_verify',
+        outcome: res.success ? 'ok' : locked ? 'refused' : 'failed',
+        note: res.success ? null : subjectTag(email),
+        ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
+        request: factsFromFetch(context?.request),
+      });
+      return res;
     },
     async completeProfile(
       _parent: unknown,
@@ -1187,12 +1253,24 @@ const resolvers = {
     ) {
       const clientIp = getClientIp(context.request);
       const sent = await requestMagicLink(email, turnstileToken ?? null, clientIp);
+      const reqFacts = factsFromFetch(context.request);
+      const tf = !sent.success ? popLastTurnstileFailure(clientIp) : null;
+      if (tf) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'turnstile_failed',
+          outcome: 'refused',
+          note: tf.reason,
+          after: { error_codes: tf.errorCodes, flow: 'requestMagicLink' },
+          request: reqFacts,
+        });
+      }
       void recordAccountEvent(context.prisma, {
         userId: null,
         action: 'sign_in_code_requested',
         outcome: sent.success ? 'ok' : 'failed',
         note: subjectTag(email),
-        request: factsFromFetch(context.request),
+        request: reqFacts,
       });
       return sent;
     },
@@ -1212,20 +1290,52 @@ const resolvers = {
     ) {
       const clientIp = getClientIp(context.request);
       const login = await loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
+      const reqFacts = factsFromFetch(context.request);
+      const tf = !login.success ? popLastTurnstileFailure(clientIp) : null;
+      if (tf) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'turnstile_failed',
+          outcome: 'refused',
+          note: tf.reason,
+          after: { error_codes: tf.errorCodes, flow: 'loginWithMagicLink' },
+          request: reqFacts,
+        });
+      }
       const locked = !login.success && 'code' in login && login.code === 'ACCOUNT_LOCKED';
+      const otpFailure = !login.success && !locked && !tf ? popLastOtpFailure(email) : null;
       void recordAccountEvent(context.prisma, {
         userId: login.success ? login.user : null,
         action: 'sign_in',
         outcome: login.success ? 'ok' : locked ? 'refused' : 'failed',
         note: login.success ? null : subjectTag(email),
-        request: factsFromFetch(context.request),
+        ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
+        request: reqFacts,
       });
       return login;
     },
-    logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
-      // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
-      if (context.userId) void deleteUserCaches(context.userId).catch(() => undefined);
-      if (context.userId) void recordAccountEvent(context.prisma, { userId: context.userId, action: 'sign_out', request: factsFromFetch(context.request) });
+    async logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      if (context.userId) {
+        const cur = await context.prisma?.auth
+          ?.findUnique?.({ where: { id: context.userId }, select: { token_version: true } })
+          .catch(() => null);
+        const nextTv = typeof cur?.token_version === 'number' ? cur.token_version + 1 : { increment: 1 };
+        await context.prisma?.auth
+          ?.update?.({
+            where: { id: context.userId },
+            data: { token_version: nextTv as number },
+          })
+          .catch(() => undefined);
+        forgetUser(context.userId);
+        // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
+        void deleteUserCaches(context.userId).catch(() => undefined);
+        void recordAccountEvent(context.prisma, {
+          userId: context.userId,
+          action: 'sign_out',
+          outcome: 'ok',
+          request: factsFromFetch(context.request),
+        });
+      }
       return true;
     },
     async uploadKundli(

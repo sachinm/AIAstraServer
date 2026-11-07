@@ -25,6 +25,7 @@ import { readingCacheLayout, readingFindingsV2 } from '../config.js';
 import { explicitCacheEnabled } from '../llm/promptCache.js';
 import { PROMPTS } from '../prompts/generated.js';
 import type { Dossier } from '../facts/types.js';
+import type { DigestView } from '../digest/types.js';
 import type { TransitChart } from '../transits/types.js';
 import type { Intent } from '../types.js';
 import { FRAMES, type SubjectId } from './frames.js';
@@ -127,7 +128,15 @@ export interface FullContextInput {
   transits: TransitChart | null;
   asOf: string;
   system: string;
+  /**
+   * The kundli's digest when it is ready (docs/reading-engine/53 §4.2): the cached evidence is then rendered from its
+   * rows (packs/digestSource.ts), the same bytes for every question about this kundli on this digest version and day.
+   */
+  digest?: DigestView | null;
 }
+
+/** The part of the memo key that names the digest a prefix was rendered from (none on the dossier path). */
+export const digestKey = (d: DigestView | null | undefined): string => (d ? `${d.kundliId}@${d.version}@${d.builtAt ?? ''}` : '');
 
 const memo = new Map<string, FullContext>();
 const MEMO_MAX = 200;
@@ -143,7 +152,8 @@ export function clearFullContexts(): void {
  */
 export function buildFullContext(input: FullContextInput, memoKey?: string | null): FullContext {
   const v2 = readingFindingsV2();
-  const key = memoKey ? `${memoKey}|${input.asOf}|${v2 ? 2 : 1}|${hashText(input.system)}|${process.env.READING_FULL_BASE ?? ''}` : null;
+  const dk = digestKey(input.digest);
+  const key = memoKey ? `${memoKey}|${input.asOf}|${v2 ? 2 : 1}|${hashText(input.system)}|${process.env.READING_FULL_BASE ?? ''}${dk ? `|${dk}` : ''}` : null;
   const hit = key ? memo.get(key) : undefined;
   if (hit) return hit;
   const pack = buildEvidencePack({
@@ -153,6 +163,7 @@ export function buildFullContext(input: FullContextInput, memoKey?: string | nul
     asOf: input.asOf,
     intent: { horizon: FULL_HORIZON, mentionsPlanets: [], focusPoints: [] },
     fullScope: true,
+    ...(input.digest ? { digest: input.digest } : {}),
   });
   const evidence: Partial<Record<PackSection, unknown>> = {};
   for (const sec of CACHED_SECTIONS) if (pack.sections[sec] !== undefined) evidence[sec] = pack.sections[sec];
@@ -173,8 +184,8 @@ export function buildFullContext(input: FullContextInput, memoKey?: string | nul
 }
 
 /** The day's full context for loaded reading data (memoised on the dossier hash and transit snapshot). */
-export function fullContextFor(data: { dossier: Dossier; transits: TransitChart | null; dossierHash?: string | null; transitSnapshotId?: string | null }, asOf: string, system: string): FullContext {
-  return buildFullContext({ dossier: data.dossier, transits: data.transits, asOf, system }, data.dossierHash ? `${data.dossierHash}|${data.transitSnapshotId ?? ''}` : null);
+export function fullContextFor(data: { dossier: Dossier; transits: TransitChart | null; dossierHash?: string | null; transitSnapshotId?: string | null }, asOf: string, system: string, digest?: DigestView | null): FullContext {
+  return buildFullContext({ dossier: data.dossier, transits: data.transits, asOf, system, ...(digest ? { digest } : {}) }, data.dossierHash ? `${data.dossierHash}|${data.transitSnapshotId ?? ''}` : null);
 }
 
 // ---------------------------------------------------------------- what a call adds (EXTRA EVIDENCE) and grounding
@@ -234,16 +245,34 @@ export function withFullEvidence(pack: EvidencePack, full: FullContext | undefin
 
 const horizonText = (h: Intent['horizon']): string => (typeof h === 'string' ? h : `${h.from} to ${h.to}`);
 
+/** The person_facts keys the FACTS line never carries: the wizard's own bookkeeping, and the place (the location line says it). */
+const FACTS_NOT_SENT = /^(wizard\.|place\.)/;
+
+/**
+ * The FACTS line of the tail (docs/reading-engine/53 §4.4, 48): what the person has confirmed about themselves, so the
+ * answer speaks to their situation and asks none of it again. Labels and values only (`work.status: between_jobs`);
+ * null when there is nothing to say.
+ */
+export function factsLine(facts: Record<string, string> | null | undefined): string | null {
+  const rows = Object.entries(facts ?? {})
+    .filter(([k, v]) => !FACTS_NOT_SENT.test(k) && v && v !== 'declined')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}: ${v}`);
+  return rows.length ? `FACTS (what the person has told us; speak to this situation and do not ask it again): ${rows.join('; ')}` : null;
+}
+
 /** A reader's whole uncached input. */
-export function readerSuffix(a: { role: (typeof READER_ROLES)[number]; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string; full: FullContext }): string {
+export function readerSuffix(a: { role: (typeof READER_ROLES)[number]; subject: SubjectId; pack: EvidencePack; intent: Intent; question: string; asOf: string; full: FullContext; facts?: Record<string, string> | null }): string {
   const kf = a.pack.keyFrame;
   const extra = extraEvidence(a.full, a.pack, a.role);
+  const known = factsLine(a.facts);
   return [
     `ROLE: ${a.role}`,
     `TODAY: ${a.asOf}`,
     `Subject: ${a.subject} (${FRAMES[a.subject]?.label ?? a.subject}). Frame houses: ${kf.houses.join(', ')}. Frame lords: ${kf.lords.join(', ')}. Karakas: ${kf.karakas.join(', ')}. Horizon: ${horizonText(a.intent.horizon)}. Focus: ${a.intent.focusPoints.join('; ') || 'none'}.`,
     `FRAME: ${JSON.stringify({ frame: a.pack.sections.frame })}`,
     ...(Object.keys(extra).length ? [`EXTRA EVIDENCE: ${JSON.stringify(extra)}`] : []),
+    ...(known ? [known] : []),
     `QUESTION: ${a.question}`,
   ].join('\n');
 }

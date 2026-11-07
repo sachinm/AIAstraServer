@@ -10,13 +10,28 @@
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { getLuckyHorizonDays, getLuckyRangeAheadDays } from '../../config/env.js';
 import { withAgentRun } from '../../agents/registry.js';
-import { DAY_TABLE_PLACES, dayTablePlaceKey, standardOffsetHours } from './places.js';
+import { DAY_TABLE_PLACES, dayTablePlaceKey, resolvePlacePreset, standardOffsetHours } from './places.js';
 import { scenarioById, scenarioCatalog, SCENARIOS } from './scenarios.js';
-import { avoidBands, localMinutes, nowState, scenarioDay, toMin, type DayRow, type PersonalDay } from './windows.js';
+import { avoidBands, dayLimbs, localMinutes, nowState, scenarioDay, toMin, type ChartMarks, type DayLimb, type DayRow, type FunctionalNature, type PersonalDay, type Window } from './windows.js';
 
 export const RANGE_BACK_DAYS = 7;
 export const RANGE_AHEAD_DAYS = 14;
+
+const LUCKY_RANGE_CACHE_MAX = 100;
+const LUCKY_RANGE_CACHE_TTL_MS = 60_000;
+const luckyRangeCache = new Map<string, { at: number; value: RangeResult }>();
+
+export function clearLuckyRangeCache(userId?: string): void {
+  if (!userId) {
+    luckyRangeCache.clear();
+    return;
+  }
+  for (const k of luckyRangeCache.keys()) {
+    if (k.startsWith(`${userId}|`)) luckyRangeCache.delete(k);
+  }
+}
 
 export type EngineFetch = (type: string, fields: Record<string, unknown>) => Promise<unknown>;
 
@@ -26,6 +41,15 @@ export interface LuckyDeps {
   engine?: EngineFetch | null;
   /** natal fields for the person's kundli (engine `natal_*`); absent → no personal layer pull */
   natalFor?: (userId: string) => Promise<{ kundliId: string; fields: Record<string, unknown> } | null>;
+  /**
+   * The functional nature of each planet for this chart (benefic / malefic / neutral), read from the kundli digest
+   * (doc 53 §4.6, doc 54 §6). Null or absent → no hora-lord mark.
+   */
+  functionalNatureOf?: ((kundliId: string) => Promise<Record<string, FunctionalNature> | null>) | null;
+  /**
+   * The running dasha lords for this chart at `asOf` (read from `kundli_activation`, doc 53 §4.6).
+   */
+  runningDashaLordsOf?: ((kundliId: string, asOf?: string) => Promise<readonly string[] | null>) | null;
   now?: () => Date;
 }
 
@@ -65,10 +89,12 @@ function placeKeyToPreset(placeKey: string): string | null {
 }
 
 export async function setPlace(deps: LuckyDeps, userId: string, preset: string): Promise<boolean> {
-  const p = DAY_TABLE_PLACES[preset];
-  if (!p) return false;
+  const resolved = resolvePlacePreset(preset);
+  if (!resolved) return false;
+  const p = DAY_TABLE_PLACES[resolved]!;
   const place_key = dayTablePlaceKey(p);
   await deps.prisma.luckyPref.upsert({ where: { user_id: userId }, create: { user_id: userId, place_key }, update: { place_key, updated_at: new Date() } });
+  clearLuckyRangeCache(userId);
   return true;
 }
 
@@ -79,6 +105,7 @@ export async function addPick(deps: LuckyDeps, userId: string, scenario: string)
   const existing = await deps.prisma.luckyScenarioPick.findUnique({ where: { user_id_scenario_id: { user_id: userId, scenario_id: scenario } } });
   if (existing) return { status: 'exists' };
   const row = await deps.prisma.luckyScenarioPick.create({ data: { user_id: userId, scenario_id: scenario } });
+  clearLuckyRangeCache(userId);
   return { status: 'ok', pick: { scenario: row.scenario_id, shown: row.shown, answers: row.answers } };
 }
 
@@ -102,18 +129,20 @@ export async function patchPick(deps: LuckyDeps, userId: string, scenario: strin
   if (typeof patch.shown === 'boolean') data.shown = patch.shown;
   if (patch.answers !== undefined) data.answers = { ...(existing.answers as object), ...cleanAnswers(patch.answers) };
   const row = await deps.prisma.luckyScenarioPick.update({ where: { id: existing.id }, data });
+  clearLuckyRangeCache(userId);
   return { status: 'ok', pick: { scenario: row.scenario_id, shown: row.shown, answers: row.answers } };
 }
 
 export async function removePick(deps: LuckyDeps, userId: string, scenario: string): Promise<boolean> {
   const r = await deps.prisma.luckyScenarioPick.deleteMany({ where: { user_id: userId, scenario_id: scenario } });
+  clearLuckyRangeCache(userId);
   return r.count > 0;
 }
 
-/** Clamp a requested range to today −7 … today +14 (dates as YYYY-MM-DD in the place's zone). */
+/** Clamp a requested range to today −7 … today +getLuckyRangeAheadDays() (dates as YYYY-MM-DD in the place's zone). */
 export function clampRange(today: string, from?: string, to?: string): { from: string; to: string } {
   const min = addDays(today, -RANGE_BACK_DAYS);
-  const max = addDays(today, RANGE_AHEAD_DAYS);
+  const max = addDays(today, getLuckyRangeAheadDays());
   const ok = (s?: string) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
   let f = ok(from) ? from! : min;
   let t = ok(to) ? to! : max;
@@ -124,7 +153,7 @@ export function clampRange(today: string, from?: string, to?: string): { from: s
 }
 
 /** Pull the missing months for a place (agent `lucky.day_tables`). Returns the dates written. */
-async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, missing: string[]): Promise<number> {
+async function pullDayTables(deps: LuckyDeps, userId: string | null, preset: string, missing: string[]): Promise<number> {
   if (!deps.engine || missing.length === 0) return 0;
   const place = DAY_TABLE_PLACES[preset]!;
   const placeKey = dayTablePlaceKey(place);
@@ -153,16 +182,61 @@ async function pullDayTables(deps: LuckyDeps, userId: string, preset: string, mi
         written += 1;
       }
     }
-    return { value: written, output: { written }, charts };
+    return { value: written, output: { written, writes: [`day_tables:${written}`] }, charts };
   });
 }
 
+/**
+ * Deterministic 2–4 week universal batch prepull across the 5 reference timezones (`America/New_York`,
+ * `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `Asia/Kolkata`).
+ * Zero AI/LLM: pulls `getLuckyHorizonDays()` (default 28 days) from Radha and stores in `day_tables`.
+ */
+export async function prepullUniversalDayTables(
+  deps: LuckyDeps,
+  todayOverride?: string,
+  presets?: readonly string[],
+): Promise<{ horizonDays: number; places: Array<{ preset: string; placeKey: string; from: string; to: string; stored: number; written: number; missing: number }> }> {
+  const at = (deps.now ?? (() => new Date()))();
+  const horizonDays = getLuckyHorizonDays();
+  const keys = presets ?? Object.keys(DAY_TABLE_PLACES);
+  const places: Array<{ preset: string; placeKey: string; from: string; to: string; stored: number; written: number; missing: number }> = [];
+
+  for (const rawKey of keys) {
+    const preset = resolvePlacePreset(rawKey);
+    if (!preset) continue;
+    const place = DAY_TABLE_PLACES[preset]!;
+    const placeKey = dayTablePlaceKey(place);
+    const { date: localToday } = localMinutes(at, place.tzName);
+    const from = todayOverride ?? localToday;
+    const to = addDays(from, horizonDays);
+    const dates = datesBetween(from, to);
+    const load = () =>
+      deps.prisma.dayTable.findMany({
+        where: { place_key: placeKey, ayanamsa: 'LAHIRI', date: { gte: new Date(`${from}T00:00:00Z`), lte: new Date(`${to}T00:00:00Z`) } },
+        orderBy: { date: 'asc' },
+      });
+    let rows = await load();
+    let have = new Set(rows.map((r) => r.date.toISOString().slice(0, 10)));
+    let missing = dates.filter((d) => !have.has(d));
+    let written = 0;
+    if (missing.length && deps.engine) {
+      written = await pullDayTables(deps, null, preset, missing);
+      rows = await load();
+      have = new Set(rows.map((r) => r.date.toISOString().slice(0, 10)));
+      missing = dates.filter((d) => !have.has(d));
+    }
+    places.push({ preset, placeKey, from, to, stored: rows.length, written, missing: missing.length });
+  }
+  return { horizonDays, places };
+}
+
 /** The person's tara and chandra bala per day for the months in range (agent `lucky.day_overlay`). */
-async function personalDays(deps: LuckyDeps, userId: string, preset: string, dates: string[]): Promise<Map<string, PersonalDay>> {
+type Natal = { kundliId: string; fields: Record<string, unknown> } | null;
+
+async function personalDays(deps: LuckyDeps, userId: string, preset: string, dates: string[], natal: Natal): Promise<Map<string, PersonalDay>> {
   const out = new Map<string, PersonalDay>();
   const place = DAY_TABLE_PLACES[preset]!;
   const placeKey = dayTablePlaceKey(place);
-  const natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
   if (!natal) return out;
   const months = [...new Set(dates.map(monthOf))];
   for (const m of months) {
@@ -180,7 +254,7 @@ async function personalDays(deps: LuckyDeps, userId: string, preset: string, dat
             create: { kundli_id: natal.kundliId, place_key: placeKey, month: new Date(`${m}T00:00:00Z`), source_hash, payload },
             update: { source_hash, payload, fetched_at: new Date() },
           });
-          return { value: saved, output: { days: payload.days.length } };
+          return { value: saved, output: { days: payload.days.length, writes: ['kundli_day_overlays:1'] } };
         });
       } catch {
         row = null;
@@ -200,7 +274,10 @@ export interface RangeDay {
   personal: { tara_good: boolean | null; moon_good: boolean | null } | null;
   avoid: Array<{ kind: string; from: number; to: number }>;
   good: Array<{ kind: 'abhijit' | 'amrita' | 'brahma'; from: number; to: number }>;
-  layers: Record<string, { verdict: string; windows: Array<{ from: number; to: number; score: number; reasons: string[] }>; dayReasons: string[] }>;
+  /** the day's yoga and karana from the stored row (doc 54 §6), named only in the Why sheet */
+  yoga: DayLimb | null;
+  karana: DayLimb | null;
+  layers: Record<string, { verdict: string; windows: Window[]; dayReasons: string[] }>;
 }
 
 export type RangeResult =
@@ -238,7 +315,24 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   }
 
   const picks = (await deps.prisma.luckyScenarioPick.findMany({ where: { user_id: userId, shown: true } })).filter((p) => scenarioById(p.scenario_id));
-  const personal = await personalDays(deps, userId, preset, [...have]);
+  const picksSig = picks.map((p) => `${p.scenario_id}:${JSON.stringify(p.answers ?? {})}`).join(',');
+  const cacheKey = `${userId}|${preset}|${range.from}|${range.to}|${today}|${nowMin}|${picksSig}`;
+  if (missing.length === 0) {
+    const hit = luckyRangeCache.get(cacheKey);
+    if (hit && Date.now() - hit.at <= LUCKY_RANGE_CACHE_TTL_MS) {
+      luckyRangeCache.delete(cacheKey);
+      luckyRangeCache.set(cacheKey, hit);
+      return hit.value;
+    }
+  }
+  const natal: Natal = deps.natalFor ? await deps.natalFor(userId).catch(() => null) : null;
+  const personal = await personalDays(deps, userId, preset, [...have], natal);
+  // the chart's marks: only when the digest gives the functional natures and running dasha lords (doc 53 §4.6); never a Node derivation
+  const [functional, runningLords] = await Promise.all([
+    natal && deps.functionalNatureOf ? deps.functionalNatureOf(natal.kundliId).catch(() => null) : Promise.resolve(null),
+    natal && deps.runningDashaLordsOf ? deps.runningDashaLordsOf(natal.kundliId, today).catch(() => null) : Promise.resolve(null),
+  ]);
+  const chart: ChartMarks = { functional, runningLords };
 
   // the day rows each run read: one muhurta payload per month, with the calc version it was stored with
   const charts = [...new Map(rows.map((r) => [`${r.date.toISOString().slice(0, 7)}|${r.calc_version ?? ''}`, { type: 'muhurta', variant: r.date.toISOString().slice(0, 7), calc_version: r.calc_version ?? null }])).values()];
@@ -270,6 +364,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
           personal: p ? { tara_good: p.tara?.good ?? null, moon_good: p.chandra_bala?.good ?? null } : null,
           avoid: avoidBands(row).map((b) => ({ kind: b.kind, from: Math.round(b.from), to: Math.round(b.to) })),
           good: good.sort((a, b) => a.from - b.from),
+          ...dayLimbs(row),
           layers: {},
         };
       });
@@ -287,7 +382,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
         { userId, task: `${rule.id} ${range.from}..${range.to}`, input: { preset, scenario: rule.id, days: rows.length }, technique: `lucky.${rule.id}`, charts },
         async () => {
           const layers = rows.map((r) => {
-            const sd = scenarioDay(r.payload as unknown as DayRow, rule, personal.get(r.date.toISOString().slice(0, 10)));
+            const sd = scenarioDay(r.payload as unknown as DayRow, rule, personal.get(r.date.toISOString().slice(0, 10)), chart);
             return { verdict: sd.verdict, windows: sd.windows, dayReasons: sd.dayReasons };
           });
           return { value: layers, output: { days: layers.length, good_days: layers.filter((l) => l.verdict === 'good').length, windows: layers.reduce((n, l) => n + l.windows.length, 0) } };
@@ -302,7 +397,7 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
   });
 
   const todayRow = rows.find((r) => r.date.toISOString().slice(0, 10) === today);
-  return {
+  const result: RangeResult = {
     status: 'ok',
     place: preset,
     today,
@@ -313,6 +408,16 @@ export async function getRange(deps: LuckyDeps, userId: string, q: { from?: stri
     missing,
     now: todayRow ? nowState(todayRow.payload as unknown as DayRow, nowMin) : null,
   };
+  if (missing.length === 0) {
+    luckyRangeCache.delete(cacheKey);
+    luckyRangeCache.set(cacheKey, { at: Date.now(), value: result });
+    while (luckyRangeCache.size > LUCKY_RANGE_CACHE_MAX) {
+      const oldest = luckyRangeCache.keys().next().value;
+      if (oldest === undefined) break;
+      luckyRangeCache.delete(oldest);
+    }
+  }
+  return result;
 }
 
 export const V1_SCENARIO_IDS = SCENARIOS.map((s) => s.id);

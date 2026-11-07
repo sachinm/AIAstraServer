@@ -8,6 +8,8 @@
  */
 import { readingFindingsV2 } from '../config.js';
 import { horizonRange, type Horizon } from '../packs/frames.js';
+import { factsLine } from '../packs/fullPrefix.js';
+import { hashText } from '../packs/selector.js';
 import { PROMPT_VERSION } from '../prompts/generated.js';
 import type { Finding, SpecialistAnalyst } from './specialists.js';
 
@@ -50,9 +52,13 @@ class Lru<V> {
 
 export const findingsCache = new Lru<Finding>();
 
-/** Natal layers (promise, nakshatra) ignore the period; timing layers key on the exact period. */
-export function findingCacheKey(a: { dossierHash: string; analyst: SpecialistAnalyst; subject: string; horizon: Horizon; asOf: string }): string {
+/** Natal layers (promise, nakshatra) ignore the period; timing layers key on the exact period; annual keys on the year + period. */
+export function findingCacheKey(a: { dossierHash: string; analyst: SpecialistAnalyst; subject: string; horizon: Horizon; asOf: string; facts?: Record<string, string> | null }): string {
   const natal = a.analyst === 'promise' || a.analyst === 'nakshatra';
   const hz = horizonRange(a.horizon, a.asOf);
-  return [a.dossierHash, a.analyst, a.subject, natal ? 'natal' : `${hz.from}..${hz.to}`, PROMPT_VERSION, readingFindingsV2() ? 'v2' : 'v1'].join('|');
+  const period = a.analyst === 'annual' ? `annual:${a.asOf.slice(0, 4)}:${hz.from}..${hz.to}` : natal ? 'natal' : `${hz.from}..${hz.to}`;
+  const known = factsLine(a.facts);
+  const base = [a.dossierHash, a.analyst, a.subject, period, PROMPT_VERSION, readingFindingsV2() ? 'v2' : 'v1'];
+  if (known) base.push(hashText(known));
+  return base.join('|');
 }

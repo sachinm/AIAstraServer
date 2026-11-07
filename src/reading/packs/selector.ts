@@ -16,6 +16,9 @@ import { withContacts } from './contacts.js';
 import { FRAMES, horizonRange, type SubjectFrame, type SubjectId } from './frames.js';
 import { selectTransits, type SelectedTransitRow, type TransitSection } from './transitTable.js';
 import { piiHash } from '../../lib/pii/hash.js';
+import type { DigestView } from '../digest/types.js';
+import type { ActivationRow } from '../digest/activation.js';
+import { digestSection, overlayDigest, personFor, type DigestPerson } from './digestSource.js';
 
 const TRANSIT_LEGEND = 'influences_houses = houses occupied or aspected from house_from_lagna (sorted numerically ascending, NOT in 5th/7th/9th aspect order — count forward from house_from_lagna to label 5th, 7th, 9th, 3rd, 10th, 4th, or 8th aspect); sav/bav = ashtakavarga bindus of the sign / of the planet in that sign; over_natal = natal planets in that sign (including Ke/Ra nodal reversal); over_natal_owns = houses the natal planet under the transit rules';
 
@@ -23,16 +26,22 @@ const TRANSIT_LEGEND = 'influences_houses = houses occupied or aspected from hou
  * `base` is subject-independent (birth, D-1 skeleton, relations, janma/lagna nakshatra): the same bytes for every
  * question a user asks, so it is the cacheable prefix. Everything after it depends on subject and horizon.
  */
-export type PackSection = 'base' | 'frame' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits' | 'transit_at' | 'annual' | 'prashna';
+export type PackSection = 'base' | 'frame' | 'detail' | 'varga' | 'arudha' | 'dasha' | 'transits' | 'transit_at' | 'annual' | 'prashna' | 'digest';
 /**
  * Stable-prefix order (per-user stable first, subject/horizon-dependent last). The last three are added by the graph
  * when their data exists (doc 28 §5): `transit_at` (the sky at an asked date), `annual` (Tithi Pravesh year chart and
  * its dasha) and `prashna` (the chart of the question moment). buildEvidencePack never writes them.
  */
-export const SECTION_ORDER: PackSection[] = ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits', 'transit_at', 'annual', 'prashna'];
+export const SECTION_ORDER: PackSection[] = ['base', 'frame', 'detail', 'varga', 'arudha', 'dasha', 'transits', 'transit_at', 'annual', 'prashna', 'digest'];
 
 /** Sections only the graph adds, from data fetched for the question (never from the dossier). */
 export const GRAPH_SECTIONS: ReadonlySet<PackSection> = new Set<PackSection>(['transit_at', 'annual', 'prashna']);
+/**
+ * Sections a pack has only when their source has them: the graph's, and `digest` (the digest rows the deterministic
+ * readers read and cite, doc 54 §5). No model analyst is sent `digest` (ANALYST_SECTIONS), so the pack hashes and the
+ * prompts of the dossier path do not change.
+ */
+export const OPTIONAL_SECTIONS: ReadonlySet<PackSection> = new Set<PackSection>([...GRAPH_SECTIONS, 'digest']);
 
 export type Analyst = 'promise' | 'dasha' | 'transit' | 'nakshatra' | 'annual' | 'prashna' | 'single';
 /** Which sections each analyst receives (03-chart-facts-dossier.md §3). `single` is the Phase 1 one-call path. */
@@ -146,9 +155,19 @@ function aggregateToAd(periods: DashaPeriod[]): DashaPeriod[] {
 export interface BuildPackInput {
   dossier: Dossier;
   transits: TransitChart | null;
-  intent: Pick<Intent, 'horizon' | 'mentionsPlanets' | 'focusPoints'>;
+  intent: Pick<Intent, 'horizon' | 'mentionsPlanets' | 'focusPoints'> & Partial<Pick<Intent, 'questionType'>>;
   subject: SubjectId;
   asOf: string;
+  /**
+   * The kundli's digest when its status is ready (docs/reading-engine/53 §4.2): base, detail, varga and arudha are then
+   * read from its rows, field by field, with the dossier's value where the digest has none, and the pack gains a
+   * `digest` section for the deterministic readers. Absent or null: the dossier path, unchanged.
+   */
+  digest?: DigestView | null;
+  /** the person the question names (oracle/readers.ts personIn), for the digest section's person rows */
+  person?: { person: string } | null;
+  /** activation calendar rows inside the horizon (kundli_activation, doc 53 §4.4) */
+  activation?: readonly ActivationRow[] | null;
   /**
    * Full scope (the `full` cache layout, packs/fullPrefix.ts): every house, varga, arudha, special lagna and yoga, all
    * planets as karakas, and every Vimshottari antardasha of the life next to the horizon's periods. The sections keep the
@@ -375,7 +394,40 @@ export function buildEvidencePack(input: BuildPackInput): EvidencePack {
   transits = withContacts(transits, input.transits, hz, missing);
 
   const baseOut = readingFullBase() ? { ...base, ...fullBaseExtras(d) } : base;
-  const sections: EvidencePack['sections'] = { base: baseOut, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
+  let sections: EvidencePack['sections'] = { base: baseOut, frame: frameSection, detail, varga, arudha, dasha, ...(transits ? { transits } : {}) };
+  if (input.digest) {
+    const asOfYear = Number(asOf.slice(0, 4));
+    const years = Number.isInteger(asOfYear) && asOfYear > 0 ? [asOfYear - 1, asOfYear, asOfYear + 1] : [];
+    sections = overlayDigest(sections as Record<string, unknown>, input.digest, {
+      activation: input.activation,
+      years,
+      houses: frameHouses,
+      asOf,
+      fullScope: full,
+    }) as EvidencePack['sections'];
+    const person: DigestPerson | null = personFor(input.subject, input.person);
+    const charaPeriods = ((d.dasha as { chara?: { periods?: Array<{ md_sign_name: string; ad_sign_name: string; md_lord: string; start: string; end: string }> } }).chara?.periods ?? []);
+    const rasiPeriods = [
+      ...(d.dasha.narayana?.periods ?? [])
+        .filter((p) => p.end >= hz.from && p.start <= hz.to)
+        .map((p) => ({ system: 'narayana', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end })),
+      ...charaPeriods
+        .filter((p) => p.end >= hz.from && p.start <= hz.to)
+        .map((p) => ({ system: 'chara', sign: p.ad_sign_name || p.md_sign_name, lord: p.md_lord, from: p.start, to: p.end })),
+    ];
+    // a full-scope pack is the cached evidence, which holds no digest section (fullPrefix.ts CACHED_SECTIONS)
+    if (!full) sections.digest = digestSection(input.digest, {
+      houses: frameHouses,
+      planets: [...new Set([...lordCodes, ...karakaCodes])],
+      vargas: frame.vargas,
+      points: [...frame.charaKarakas, ...frame.arudhas],
+      deep: intent.questionType === 'why_meaning' || intent.horizon === 'life',
+      person,
+      rasiPeriods,
+      activation: input.activation,
+      years,
+    });
+  }
   const approxTokens = Math.ceil(JSON.stringify(sections).length / 3.6);
   return {
     subject: input.subject,
@@ -418,8 +470,9 @@ export function mergeSubjectPacks(packs: EvidencePack[]): EvidencePack {
       merged[sec] = first.sections[sec];
       continue;
     }
-    // the graph-only sections (transit_at, annual, prashna) are never in a pack built here; keep the merged bytes unchanged
-    if (GRAPH_SECTIONS.has(sec) && packs.every((p) => p.sections[sec] === undefined)) continue;
+    // the graph-only sections (transit_at, annual, prashna) are never in a pack built here, and `digest` only on the
+    // digest path; keep the merged bytes unchanged
+    if (OPTIONAL_SECTIONS.has(sec) && packs.every((p) => p.sections[sec] === undefined)) continue;
     const bySubject: Record<string, unknown> = {};
     for (const p of packs) bySubject[p.subject] = p.sections[sec];
     merged[sec] = bySubject;

@@ -14,9 +14,20 @@ import type { Finding } from '../nodes/specialists.js';
 import type { ClarifiedContext, Intent } from '../types.js';
 import { READERS, type ReaderId } from './readers.js';
 import { toLayerFinding, type ReaderOutput } from './runReader.js';
+import { CODE_ANALYST_LABEL, type CodeAnalyst } from '../codeReaders/readers.js';
+
+/** A deterministic reader over the digest, as it appears beside the model readers (codeReaders/readers.ts). */
+export type CodeReaderId = `code:${CodeAnalyst}`;
+export type BriefReaderId = ReaderId | CodeReaderId;
+
+/** What the brief calls a reader. */
+export function readerLabel(id: BriefReaderId): string {
+  if (id.startsWith('code:')) return CODE_ANALYST_LABEL[id.slice(5) as CodeAnalyst] ?? id;
+  return READERS[id as ReaderId]?.label ?? id;
+}
 
 export interface GroundedReader {
-  id: ReaderId;
+  id: BriefReaderId;
   subject: SubjectId;
   finding: ReaderOutput;
   droppedClaims: number;
@@ -36,7 +47,7 @@ const has = (sections: Record<string, unknown>, id: string): boolean => {
 const read = (sections: Record<string, unknown>, id: string): unknown => resolveEvidence({ sections } as unknown as EvidencePack, id);
 
 /** The gate: a claim with no evidence id that resolves in what this reader saw is dropped, and so is a quote whose value differs. */
-export function groundReader(id: ReaderId, subject: SubjectId, f: ReaderOutput, sections: Record<string, unknown>): GroundedReader {
+export function groundReader(id: BriefReaderId, subject: SubjectId, f: ReaderOutput, sections: Record<string, unknown>): GroundedReader {
   const valid = (ids: string[]) => ids.filter((x) => has(sections, x));
   const claims = f.claims.map((c) => ({ ...c, evidence: valid(c.evidence) })).filter((c) => c.evidence.length > 0);
   const quotes = f.quotes.filter((q) => has(sections, q.id) && String(read(sections, q.id)) === String(q.value));
@@ -60,6 +71,14 @@ export function groundReader(id: ReaderId, subject: SubjectId, f: ReaderOutput, 
 export function layerOf(evidenceId: string, tradition?: string): string {
   const head = evidenceId.split('.')[0] ?? '';
   if (tradition === 'nakshatra') return 'nakshatra';
+  // digest rows (packs/digestSource.ts): digest.<section>.<varga>.<key>; D1 houses, planets and yogas are the natal
+  // layer, a varga is its own layer, the Jaimini points are the Jaimini layer, as the stored tables are counted below
+  if (head === 'digest') {
+    const [, section, varga] = evidenceId.split('.');
+    if (section === 'point' || section === 'rasi') return 'jaimini';
+    if (section === 'house' && /\.argala(\.|$)/.test(evidenceId)) return 'jaimini';
+    return varga && varga !== 'D1' ? `varga_${varga.toLowerCase()}` : 'd1';
+  }
   if (/^varga_d1$|^dignities$|^benefic_malefic$|^relations$|^aspects$|^bhava$|^strength_|^ashtakavarga$|^yogas$|^doshas$|^sphutas$/.test(head)) return 'd1';
   if (/^arudhas|^argala|^karaka_chara$/.test(head)) return 'jaimini';
   if (head.startsWith('varga_')) return head;
@@ -194,11 +213,11 @@ export function buildBrief(a: {
     ),
     ...line(
       'HOW EACH LAYER WAS READ',
-      a.readers.filter((r) => r.finding.digest).map((r) => `${READERS[r.id].label}: ${r.finding.verdict}, ${r.finding.digest}`)
+      a.readers.filter((r) => r.finding.digest).map((r) => `${readerLabel(r.id)}: ${r.finding.verdict}, ${r.finding.digest}`)
     ),
     ...line(
       'DISAGREEMENTS',
-      a.readers.filter((r) => r.finding.disagree).map((r) => `${READERS[r.id].label}: ${r.finding.disagree}`)
+      a.readers.filter((r) => r.finding.disagree).map((r) => `${readerLabel(r.id)}: ${r.finding.disagree}`)
     ),
     ...line('GAPS', [...new Set([...a.readers.flatMap((r) => r.finding.gaps.map((g) => g.need)), ...a.missingTypes])]),
     ...line(

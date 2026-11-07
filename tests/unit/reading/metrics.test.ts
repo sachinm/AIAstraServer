@@ -153,17 +153,45 @@ describe('labels, subject and tier (docs/admin/01 §4.1.6)', () => {
     const m = memStore();
     const t = new RunTrace(id, m.store);
     t.label({ bucket: 'career', template: 'T3', subjects: 2 });
-    t.label({ subjects: 1, tier: 3, route: null });
+    t.label({ subjects: 1, tier: 3, route: null, techniques: ['general.promise', 'general.oracle'] });
     await t.finish({ status: 'done' });
     expect(m.log).toEqual(['start', 'finish']);
-    expect(m.finished[0]).toMatchObject({ bucket: 'career', template: 'T3', subjects: 1, tier: 3, route: null, model_calls: 0 });
+    expect(m.finished[0]).toMatchObject({ bucket: 'career', template: 'T3', subjects: 1, tier: 3, route: null, techniques: ['general.promise', 'general.oracle'], model_calls: 0 });
   });
 
   it('a trace that never labelled writes no label column', async () => {
     const m = memStore();
     const t = new RunTrace(id, m.store);
     await t.finish({ status: 'done' });
-    for (const k of ['bucket', 'template', 'tier', 'route', 'subjects']) expect(m.finished[0]).not.toHaveProperty(k);
+    for (const k of ['bucket', 'template', 'tier', 'route', 'subjects', 'techniques']) expect(m.finished[0]).not.toHaveProperty(k);
+  });
+
+  it('without the M31 techniques column the trace keeps its M24 labels and drops only techniques', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const finished: Record<string, unknown>[] = [];
+    const missing = () => Object.assign(new Error('The column techniques does not exist in the current database.'), { code: 'P2022' });
+    const db = {
+      readingTrace: {
+        create: async () => undefined,
+        updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+          if ('techniques' in data) throw missing();
+          finished.push(data);
+        },
+      },
+      readingAgentSpan: { createMany: async () => undefined },
+    } as unknown as PrismaClient;
+    const t = new RunTrace(id, prismaTraceStore(db));
+    t.label({ bucket: 'career', tier: 3, techniques: ['general.promise'] });
+    await t.finish({ status: 'done' });
+    expect(finished[0]).toMatchObject({ status: 'done', bucket: 'career', tier: 3 });
+    expect(finished[0]).not.toHaveProperty('techniques');
+    // the next trace skips the column straight away
+    const t2 = new RunTrace(id, prismaTraceStore(db));
+    t2.label({ bucket: 'love', techniques: ['general.promise'] });
+    await t2.finish({ status: 'done' });
+    expect(finished).toHaveLength(2);
+    expect(finished[1]).toMatchObject({ bucket: 'love' });
+    expect(finished[1]).not.toHaveProperty('techniques');
   });
 
   it('stage spans carry their subject; reader and oracle spans carry the tier, others do not', async () => {

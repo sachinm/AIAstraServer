@@ -267,8 +267,8 @@ re-applied by it.
   usage is not kept (under $0.001 per question, doc 23). Status: open. Done: priced from the AWS page and seeded into the guard.
 - **Stored tables lack fields doc 33's curricula use:** star lord per planet (`varga.d1` gives the nakshatra name only), bhava chalit, and
   `near_cusp`. Readers R07 and R08 report these as gaps. Status: open (Radha session). Done: served, and the curricula restored.
-- **The 6/8/12 friction counts between dasha levels have no source.** Doc 26 Pass 3 and doc 33 R8 use them; Node may not count, and
-  `house_counts` was not in the stored rows read 2026-11-01. Status: open. Done: read from `house_counts` once fetched per kundli.
+- **The 6/8/12 friction counts between dasha levels have no source in the oracle R8 reader.** Doc 26 Pass 3 and doc 33 R8 use them; Node may not count, and
+  `house_counts` was not in the stored rows read 2026-11-01. **Updated 2026-11-06:** `buildDigestRows` (`src/reading/digest/build.ts`) now populates `PlanetCard.dashaCharter` from `avasthas.dasha_charter` (including the 9×9 `fruition` map with `houseFromMd`, `fruitionClass`, `isShadAshtaka68`, and `isDwirdwadasha212`), and `src/reading/life/promise.ts` (`periodSide`) and `src/reading/life/charter.ts` (`life.mahadasha_charter`) read it directly. Remaining: wire R8 / doc 26 Pass 3 in the oracle flow to read `dashaCharter.fruition` or `house_counts`. Status: open.
 - **Planet names differ between tables:** `karaka.chara` says `Raagu` where `dignities` says `Rahu`. A reader or the layer count can treat one
   planet as two topics. Status: open (Radha session). Done: one spelling.
 - **G1's catalog fixture has only 5 of the 35 types the readers use**, so `npm run bench:oracle` sends them thin tables. Status: open.
@@ -797,6 +797,32 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   check header may never arrive and every upload could fail with no_face. The shared policy was left unchanged. Owner:
   deploy. Done: `X-Face-Box` added to the origin request policy, then a selfie upload checked on staging.
 
+## Filed 2026-11-05 by the technique-contracts build (docs/reading-engine/53 step 0, branch `feat/technique-contracts`)
+
+- **P2: The selector matcher is all-of; two doc 53 rows want any-of.** `src/techniques/contracts.ts selectorsMatch`
+  requires every declared selector. Doc 53 §4.4 selects `general.annual_set` on "horizon within 24 months **or** question
+  type timing" and `general.person` on "slot other_person **or** a person subject". The catalogue declares the first
+  half of each (annual: horizons now/3m/6m/1y/custom; person: subjects children, siblings, marriage_relationship) and
+  says so in `special`. **2026-11-06:** the person half is now an any-of rule in `src/techniques/use.ts` (the slot
+  other_person selects `general.person` on any subject); the annual half stays. Owner: reading-dev. Done: the matcher
+  gains an any-of group (or the row is split) and the annual selector says the whole rule.
+- **P2: Analyst contracts name the v2 prompts and `findings.v2`, which only run under `READING_FINDINGS=v2`.**
+  `src/reading/nodes/specialists.ts` picks `prompts/v2/<analyst>.md` and the v2 schema only when `readingFindingsV2()`
+  is on; otherwise `prompts/<analyst>.md` and the v1 schema run. The catalogue rows general.promise / dasha / transit /
+  nakshatra state the v2 path (`src/techniques/catalog.ts`). Owner: reading-dev. Done: the v2 flag is the default on
+  staging (or the contract records both paths).
+- **P2: Lucky scenario rows are not told apart by selectors.** All 13 `lucky.<area>.<act>` rows carry
+  `{ boards: ['lucky'] }`: the act the person taps picks the scenario, which no clarify slot or fact expresses. The
+  contracts test leaves them out of the "no two built rows share output, selectors and inputs" check. Owner: lucky.
+  Done: a `scenario` selector (or the act as a slot) once the Lucky times board sends it.
+- **P3: `general.clarify`'s system prompt lives in the database.** The clarify agent reads `clarify.system` from
+  `system_prompts` (`src/reading/clarify/planner.ts getAgentPrompt`), so its contract says `db:clarify.system`;
+  `contractProblems` accepts any `db:` name without checking it exists. Owner: reading-dev. Done: the check reads
+  `BUILTIN_AGENT_PROMPTS` keys.
+- **P3: `digest.*` rows select on every board.** They are the gate before every reading and board (doc 53 §4.7), so
+  their selectors list all five boards; `run.ts` writes only built rows on the trace, so they do not show on traces
+  until built. Owner: reading-dev. Done: the digest status gate lands (doc 53 step 1) and the rows become built.
+
 ## Filed 2026-11-05 by the activity and day review build (docs/admin/04)
 
 - **P2: Board function runs are not grouped by the request that caused them (G2).** A Lucky times load writes 1 + N
@@ -827,13 +853,91 @@ Built phases B0 and B1 of `docs/privacy/02`. Nothing is pushed, merged or deploy
   `api-bb4f4ff0e20f`, with no baseline from before the change. The seed wait is capped at 4 s. Owner: deploy session.
   Done: Init Duration from an image before `731acc7` compared with one after, and the cap lowered if the seeds take
   more than 500 ms.
-- **P3: The main checkout's generated Prisma client is stale.** `node_modules/.prisma/client` in the main checkout
-  (`C:/Users/Owner/Documents/work/AIAstra_Server`) predates M29 (no `techniqueRegistry`), so `tsc` and tests run there
-  disagree with the worktrees. Owner: whoever next installs there (a Haiku sub-agent, per AGENTS.md). Done: `npx prisma
-  generate` run in the main checkout.
 
 - **P3: Check a real selfie upload on staging.** 2026-11-05. `X-Face-Box` was added to the API's CloudFront origin
   request policy `e1684868-b4fe-43b2-94ca-ac52642bd67d` (only the AI Astra API distribution uses it); the preflight
   allows it and an unauthenticated upload still returns 401, but nobody has proved the header reaches the origin.
   Owner: Sachin (needs a signed-in session). Done: a selfie uploads on vedic-astrology.app without a `no_face` error.
   Status of the earlier P2 above: header added, this is its check.
+
+## Filed 2026-11-05 by the Lucky five limbs build (doc 54 S2, branch `feat/lucky-five-limbs`)
+
+- **P2: Ship the web Why sheet before (or with) the server.** `GET /api/lucky/range` windows now carry
+  `reasons: [{ key, scope }]` and the old strings move to `reasonKeys` (doc 54 §6). The web build on the same branch
+  reads both shapes; the web build live today reads `reasons` as strings and would call `.startsWith` on an object.
+  Owner: deploy session. Done: web `feat/lucky-five-limbs` live on Amplify before the server image that carries it.
+- **P3: Yoga and karana names are matched by spelling.** The engine spells several names its own way (Soola,
+  Vaidhrithi, Vriyana, Subha, Baalava, VishtiBhadra, Sakuna, Kimstugna); `scenarios.ts SPELLING` maps them to the
+  classical names. A new engine spelling would silently match no rule. Owner: engine pass. Done: the engine returns a
+  stable id per yoga and karana, or a test that fails on an unknown name in day_tables.
+
+## Filed 2026-11-06 by the digest-core build (doc 54 S1, doc 53 steps 1–3, branch `feat/digest-core`)
+
+M32 and M33 are applied to the shared database; the 24 research kundlis are digested (`ready`, 15,700 digest rows,
+231,879 activation rows). Open items:
+
+### P1: blocks or risks a release
+- **Deploy wiring for the digest (deploy session).** The Lambda needs `KUNDLI_DIGEST_EVENT_TOKEN` (without it every
+  digest event is refused, by design), optionally `DIGEST_SWEEP_MAX_MS` (default 60 s) and `DIGEST_ANNUAL_MAX_CALLS`
+  (default 40), and an EventBridge rule `kundli-digest-sweep` every 15 min sending `{ "source": "kundli-digest-sweep",
+  "token": … }` to `/events`. Until then new kundlis stay `pending` (boards fall back as doc 53 §4.7 says). Done: the
+  rule fires and a new sign-up's kundli reaches `ready` within one sweep.
+- **The annual set was not proven against the engine locally.** `ensureAnnualSet` for kundli `3784ca07…` with a cap of 6
+  reached ensureChartData and the engine client, which failed with "Could not load credentials from any providers"
+  (transport `lambda`; no local credentials can invoke the engine, see memory `aws-working-commands`). Six
+  `kundli_data` rows (annual 2026 D9/D10 and nearby keys of that kundli) are now `failed`; ensureChartData retries
+  failed rows after 60 s, so the first sweep on the Lambda refills them. Done: one sweep on the Lambda logs
+  `digest_sweep_done` with a top-up whose `fetched > 0`, and that kundli's `annual` section grows.
+
+### P2: real, can wait
+- **Four research kundlis hold old-shape rows** (`1ae7437b`, `6589af09`, `be89e63f`, `f3d117b0`): `dignities` at calc
+  version 1 (planets only, no house table), no `dignities.dN` / `aspects.dN` / `house_counts` / `avasthas` / `.l3` trees,
+  and annual year rows at calc version 1 (lagna and planets only). Their digest is partial (about 405 rows instead of
+  about 690; D1 house cards come from the dossier, D2–D60 from the dossier's vargas, annual rows have no house cards).
+  A `kundli-digest` event runs `buildDigest` with `fetch` for natal types and would refresh them; year rows are never
+  re-fetched for a calc-version change (store.ts `needsFetch`: "a year=<y> row … is never re-fetched"), so those need
+  a deliberate refresh. Done: the four reach about 690 rows with annual house cards.
+- **Star names differ between payloads**: `dignities` writes Tamil names (`Uthiram`), the dossier Sanskrit (`Uttara
+  Phalguni`), `varga.dN` abbreviations (`UPha`). The digest keeps each as written; a consumer must not join star names
+  across sections. Done: the engine writes one naming, or the digest gains a label table from the engine.
+- **Digest build time**: 5–22 s per research kundli from this machine to the shared database (most of it inserting
+  about 10,000 activation rows in batches of 500). Doc 53 §4.1 expects under 10 s on the Lambda; measure there. If it
+  is over, raise the batch size for `kundli_activation` or insert with one `unnest` statement.
+- **Doc 53 §4.7 statement timeout of 2 s for digest reads is not set** (`load.ts` reads with the client default).
+- **`conditional` activation rows are written for every conditional system stored**, whether or not `dasha.applicable`
+  says it applies to this chart; doc 46 §B.4 votes only when one applies. The consumer (S3/S4/S5) must check
+  `dasha.applicable` (`applies: true`). Done: either the consumer filters, or the row gains an `applies` flag.
+- **`digest_built_at` doubles as the build start while `building`** (the sweep re-runs a build stuck over 10 min).
+  When the status is `ready` it is the build time. A separate `digest_started_at` column would be cleaner.
+
+### Found, not from this branch
+- **Migration checksums**: M32 and M33 were recorded in `_prisma_migrations` with the sha256 of the files as written
+  (LF). A CRLF checkout changes the checksum `prisma migrate` computes; the same holds for earlier migrations.
+
+## Filed 2026-11-06 by the techniques-in-use build (doc 54 §5 S5, branch `feat/techniques-in-use`)
+
+- **P2: The life horizon no longer runs the year-chart reader R11 in the oracle flow.** `general.annual` selects
+  horizons now/3m/6m/1y/custom (doc 53 §4.4), and `src/techniques/use.ts READER_TECHNIQUE` ties R11 to it, so a tier-1
+  life reading (horizon `life`) drops R11 from `BY_TIER[1]`. Everything else selects as before (the graph's annual layer
+  already ran only within 13 months). Owner: Sachin (product) / reading-dev. Done: either `life` is added to the
+  annual selectors (or the any-of "or question type timing" rule of the matcher item above lands), or this is accepted
+  and the item deleted.
+- **P2: Prewarm does not apply the technique selection.** `oracle/prewarmReaders.ts` calls `prepareReaders` without
+  `allowedReaders`, so during clarify it may read a reader the question will not run (only R11 on a life horizon
+  today; any reader once selectors narrow). Harmless (an unused memo) but billed. Owner: reading-dev. Done: prewarm
+  computes `techniquesForQuestion` with the facts it has and passes `allowedReaders`.
+- **P2: Digest fields with no dossier equivalent are kept from the dossier on the digest path.** `packs/digestSource.ts`
+  keeps the dossier's values for body `deg` (the digest card's `degree` is not stated as degrees within the sign in doc
+  54 §2), `conj` (the digest's conjunctions include an 8° rule the dossier's do not), the varga lagna sign and the varga
+  house `sign` (the dossier's varga rows carry sign numbers), the star lord's house, shadbala rupas and `co_lord`, and
+  `detail.yogas` (its filter reads a source label digest rows lack). Owner: reading-dev with S1. Done: each is either
+  served by the digest in the pack's spelling or confirmed as dossier-only, and this list shrinks to the latter.
+- **P3: Deterministic readers are not prewarmed or cached.** They are code over the pack (milliseconds), so they rerun
+  per question; noted only so nobody adds a model call there without the cost guard. Owner: reading-dev.
+
+## Filed 2026-11-06 by the life-mahadasha-charter build (doc 55, branch `feat/life-mahadasha-charter`)
+
+- **Shipped (2026-11-06 — Remaining Largest Mahadasha & Antardasha Life Charter, doc 55):**
+  - `AIAstra_Server`: added `PlanetCard.dashaCharter` in `src/reading/digest/build.ts` (from `avasthas.dasha_charter`), 6/8/12 Antardasha-from-Mahadasha step-down in `src/reading/life/promise.ts` (`periodSide`), `life.mahadasha_charter` technique in `src/reading/life/charter.ts` + `compose.ts` + `service.ts`, registered `life.mahadasha_charter` in `src/techniques/catalog.ts` and `src/agents/registry.ts`, and added unit + research-fixture tests in `tests/unit/reading/life/charter.test.ts`.
+  - `AIAstra_WEB`: added `LifeMahadashaCharter` types in `src/lib/lifeReadingApi.ts`, the Major Chapter Charter section (area charters, chronological Antardasha timeline, and current-chapter bridge) in `src/pages/timeline/LifeReadingDashboard.tsx`, and tests in `src/pages/timeline/LifeReadingDashboard.test.tsx`.
+- **P2: `tests/unit/auth/registrationV2.test.ts` fails 1 test with `Error: no mail` when run outside local-mail test setup.** Same root cause as the `.env` / auth provider test leakage noted under P1 (line 84) and P2 (lines 280, 532); tracked there for the next auth/test-env pass.

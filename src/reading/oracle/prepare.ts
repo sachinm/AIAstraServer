@@ -44,12 +44,20 @@ export async function prepareReaders(a: {
   model: string;
   transitAt?: unknown;
   prashna?: unknown;
+  /** the readers the selected techniques allow (src/techniques/use.ts); absent = every reader of the tier */
+  allowedReaders?: readonly ReaderId[] | null;
+  /** confirmed person_facts (doc 53 §4.4, 48): passed to each reader as FACTS */
+  facts?: Record<string, string> | null;
 }): Promise<PreparedReaders> {
   const subject = a.pack.subject;
   const route = planBRoute(a.question);
   const realWant = a.intent.clarified?.realWant?.id ?? null;
-  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna) });
-  const person = personIn(a.question);
+  const slotPerson =
+    a.intent.classification?.slots?.subject_person?.value ??
+    a.intent.classification?.slots?.other_person?.value ??
+    null;
+  const plan = planReaders({ intent: a.intent, question: a.question, asOf: a.asOf, realWant, route, prashna: Boolean(a.prashna), allowed: a.allowedReaders ?? null, slotPerson });
+  const person = personIn(a.question, slotPerson);
   const vargas = subjectVargas(subject);
   const types = fetchPlan(plan.ids, { vargas, person });
   const bundle = await loadChartBundle(a.rows, a.kundliId, types, a.asOf);
@@ -69,7 +77,7 @@ export async function prepareReaders(a: {
   for (const id of plan.ids) {
     // the remedy reader reads findings, so its request is built once they exist
     if (id === 'R14') continue;
-    requests.set(id, buildReaderRequest({ id, subject, slice, intent: a.intent, question: a.question, asOf: a.asOf, model: a.model, keyFrame: a.pack.keyFrame }));
+    requests.set(id, buildReaderRequest({ id, subject, slice, intent: a.intent, question: a.question, asOf: a.asOf, model: a.model, keyFrame: a.pack.keyFrame, ...(a.facts ? { facts: a.facts } : {}) }));
   }
   const coreText = renderCore(bundle.tables, CORE_TYPES).text;
   const system = [...requests.values()][0]?.system ?? '';

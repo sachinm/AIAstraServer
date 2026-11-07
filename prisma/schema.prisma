@@ -111,7 +111,14 @@ model Kundli {
   place_resolved     String?                @map("place_resolved")
   /// pending | building | ready | failed | unsupported (the engine does not serve the dossier yet)
   facts_status       String                 @default("pending") @map("facts_status")
+  /// pending | building | ready | stale | failed (M32, docs/reading-engine/53 §4.1, 54 §2)
+  digest_status      String                 @default("pending") @map("digest_status")
+  digest_version     String?                @map("digest_version")
+  digest_built_at    DateTime?              @map("digest_built_at") @db.Timestamptz(6)
+  digest_error       String?                @map("digest_error")
   facts              KundliFacts[]
+  digestRows         KundliDigest[]
+  activations        KundliActivation[]
   transitCharts      TransitSnapshot[]
   transitOverlays    KundliTransitOverlay[]
   dayOverlays        KundliDayOverlay[]
@@ -120,6 +127,7 @@ model Kundli {
   content            UserGeneratedContent[]
 
   @@index([user_id], map: "idx_kundlis_user_id")
+  @@index([digest_status], map: "idx_kundlis_digest_status")
   areaBuilds         AreaBuild[]
 
   @@map("kundlis")
@@ -267,6 +275,47 @@ model KundliData {
   @@unique([kundli_id, data_type, variant, ayanamsa], name: "kundli_data_key", map: "kundli_data_key")
   @@index([data_type, status], map: "idx_kundli_data_type_status")
   @@map("kundli_data")
+}
+
+/// The kundli digest (M32, docs/reading-engine/53 §4.1, 54 §2): one row per (kundli, section, key), built by code from
+/// the stored engine rows; `source` lists the engine type, variant, calc version and JSON path of every value.
+model KundliDigest {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id      String   @map("kundli_id")
+  /// house | planet | yoga | point | annual | star
+  section        String
+  key            String
+  row            Json
+  source         Json     @default("[]")
+  digest_version String   @map("digest_version")
+  built_at       DateTime @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([kundli_id, section, key], name: "kundli_digest_key", map: "kundli_digest_key")
+  @@index([kundli_id, section], map: "idx_kundli_digest_section")
+  @@map("kundli_digest")
+}
+
+/// The activation calendar (M33, docs/reading-engine/53 §4.1, 54 §2): one row per stored dasha period, birth to thirty
+/// years ahead, with the D1 houses it activates as the engine states them.
+model KundliActivation {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id      String   @map("kundli_id")
+  system         String
+  family         String
+  level          Int
+  lord           String?
+  sign           String?
+  from_date      DateTime @map("from_date") @db.Date
+  to_date        DateTime @map("to_date") @db.Date
+  houses         Int[]    @default([])
+  parent_lord    String?  @map("parent_lord")
+  digest_version String   @map("digest_version")
+  kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([kundli_id, from_date, to_date], map: "idx_kundli_activation_range")
+  @@index([houses], map: "idx_kundli_activation_houses", type: Gin)
+  @@map("kundli_activation")
 }
 
 /// Global transit snapshots, one row per date range (reading engine M3).
@@ -664,7 +713,13 @@ model ReadingTrace {
   tier           Int?
   route          String?
   subjects       Int?
-  started_at     DateTime           @map("started_at") @db.Timestamptz(6)
+  /// M31: the catalogue technique ids the clarify context selected for this query (docs/reading-engine/53 §4.3)
+  techniques      Json?
+  /// M35 (docs/admin/06): deterministic Clarify Monitor evaluation for this reading
+  clarify_monitor Json?             @map("clarify_monitor")
+  /// M35 (docs/admin/06): tables written during this query ({ table, count })
+  tables_written  Json?             @map("tables_written")
+  started_at      DateTime          @map("started_at") @db.Timestamptz(6)
   ended_at       DateTime?          @map("ended_at") @db.Timestamptz(6)
   user           Auth               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   spans          ReadingAgentSpan[]
@@ -832,6 +887,7 @@ model AdminAction {
   @@index([target_user_id, created_at(sort: Desc)], map: "admin_actions_target")
   @@index([actor_user_id, created_at(sort: Desc)], map: "admin_actions_actor")
   @@index([actor_admin_id, created_at(sort: Desc)], map: "admin_actions_actor_admin")
+  @@index([action, created_at(sort: Desc)], map: "admin_actions_action_created")
   @@index([created_at(sort: Desc)], map: "admin_actions_created")
   @@map("admin_actions")
 }
@@ -1065,10 +1121,78 @@ model TechniqueRegistry {
   code_ref   String?  @map("code_ref")
   agents     Json     @default("[]")
   accuracy   String?
+  /// M31 (docs/reading-engine/53 §4.3): when the clarify context selects it (subjects, boards, houses, vargas, questionTypes, horizons, facts, slots)
+  selectors  Json     @default("{}")
+  /// M31: what it reads (inputs with section, filter, layout), its system prompt, user fields, output schema and synthesizer
+  contract   Json     @default("{}")
+  /// M36 (docs/reading-engine/55): live governance toggle and verification status (verified | calibrating | experimental | disabled)
+  enabled             Boolean  @default(true)
+  verification_status String   @default("verified") @map("verification_status") @db.VarChar(24)
   updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@index([category, board], map: "technique_registry_category")
   @@map("technique_registry")
+}
+
+/// M36 (docs/reading-engine/55): per-window gate breakdown, shade resolution, and behavioral playbook receipt.
+model TechniqueDecisionLog {
+  id                 BigInt   @id @default(autoincrement())
+  kundli_id          String?  @map("kundli_id")
+  user_id            String?  @map("user_id")
+  area               String   @db.VarChar(24)
+  as_of              DateTime @map("as_of") @db.Date
+  technique_id       String   @map("technique_id") @db.VarChar(80)
+  subarea            String   @db.VarChar(60)
+  shade_tag          String   @map("shade_tag") @db.VarChar(80)
+  winning_score      Float    @map("winning_score")
+  runner_up_tag      String?  @map("runner_up_tag") @db.VarChar(80)
+  runner_up_score    Float?   @map("runner_up_score")
+  gates              Json     @default("[]")
+  playbook_tier      String   @map("playbook_tier") @db.VarChar(24)
+  ease_date          String?  @map("ease_date") @db.VarChar(16)
+  tie_broken_by_fact Boolean  @default(false) @map("tie_broken_by_fact")
+  created_at         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([technique_id, created_at(sort: Desc)], map: "technique_decision_logs_tech_created_idx")
+  @@index([kundli_id, area, as_of(sort: Desc)], map: "technique_decision_logs_kundli_area_idx")
+  @@map("technique_decision_logs")
+}
+
+/// M36 (docs/reading-engine/55): AA-rated historical benchmark chart metadata (no personal user data).
+model BenchmarkChart {
+  id            String           @id @db.VarChar(80)
+  label         String           @db.VarChar(120)
+  rodden_rating String           @default("AA") @map("rodden_rating") @db.VarChar(12)
+  birth_date    String           @map("birth_date") @db.VarChar(16)
+  birth_time    String           @map("birth_time") @db.VarChar(16)
+  lat           Float
+  lon           Float
+  tz            Float
+  place_code    String           @map("place_code") @db.VarChar(80)
+  notes         String?
+  created_at    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  events        BenchmarkEvent[]
+
+  @@map("benchmark_charts")
+}
+
+/// M36 (docs/reading-engine/55): Known dated life event on a benchmark chart for technique regression testing.
+model BenchmarkEvent {
+  id               String         @id @db.VarChar(80)
+  chart_id         String         @map("chart_id") @db.VarChar(80)
+  event_date       String         @map("event_date") @db.VarChar(16)
+  area             String         @db.VarChar(24)
+  expected_subarea String         @map("expected_subarea") @db.VarChar(60)
+  expected_shade   String         @map("expected_shade") @db.VarChar(80)
+  expected_side    String         @map("expected_side") @db.VarChar(16)
+  last_passed      Boolean?       @map("last_passed")
+  last_run_at      DateTime?      @map("last_run_at") @db.Timestamptz(6)
+  receipt          Json?
+  created_at       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  chart            BenchmarkChart @relation(fields: [chart_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([chart_id, event_date], map: "benchmark_events_chart_idx")
+  @@map("benchmark_events")
 }
 
 /// M29: a staff verdict on one run (an agent_runs or a reading_agent_spans row). Written only by the admin API.
@@ -1118,8 +1242,26 @@ model AccountEvent {
 
   @@index([user_id, created_at(sort: Desc)], map: "account_events_user")
   @@index([action, created_at(sort: Desc)], map: "account_events_action")
+  @@index([outcome, created_at(sort: Desc)], map: "account_events_outcome_created")
   @@index([ip, created_at(sort: Desc)], map: "account_events_ip")
   @@map("account_events")
+}
+
+/// M35 (docs/admin/06): Cross-Lambda cache of validated Oracle reader findings (R1–R14).
+model ReadingFindingsCache {
+  cache_key      String   @id @map("cache_key")
+  kundli_id      String   @map("kundli_id")
+  reader_id      String   @map("reader_id")
+  pack_hash      String   @map("pack_hash")
+  horizon_key    String   @map("horizon_key")
+  prompt_version String   @map("prompt_version")
+  payload        Json
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expires_at     DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([kundli_id, expires_at(sort: Desc)], map: "reading_findings_cache_kundli_idx")
+  @@index([expires_at], map: "reading_findings_cache_expires_idx")
+  @@map("reading_findings_cache")
 }
 
 /// M30 (docs/admin/04): one row per signed-in user per local day (REPORT_TZ, default America/Los_Angeles), upserted on
