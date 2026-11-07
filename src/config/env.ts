@@ -781,3 +781,50 @@ export function isPageTimingEnabled(): boolean {
 export function getPageSlowThresholdMs(): number {
   return parseClampedIntEnv('PAGE_SLOW_THRESHOLD_MS', 1000, 100, 60_000);
 }
+
+// ── Research Staging & Self Dashboard QA Thresholds (docs/admin/09) ─────────
+
+const DEFAULT_RESEARCH_AGE_BRACKETS = [18, 20, 24, 28, 30, 32, 36, 40, 48, 56] as const;
+
+/**
+ * Age brackets (years old, >= 18) used to generate and test random birth charts in the Admin Research Lab.
+ * Env: `RESEARCH_AGE_BRACKETS` (CSV of integers >= 18, default `18,20,24,28,30,32,36,40,48,56`).
+ */
+export function getResearchAgeBrackets(): number[] {
+  const raw = process.env.RESEARCH_AGE_BRACKETS?.trim();
+  if (raw) {
+    const parsed = raw
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n >= 18 && n <= 100);
+    if (parsed.length > 0) return parsed;
+  }
+  return [...DEFAULT_RESEARCH_AGE_BRACKETS];
+}
+
+/**
+ * Total weeks of weekly/daily zoom-in generated around the reference date (default 9 weeks covering Nov–New Year).
+ * Env: `RESEARCH_HORIZON_WEEKS` (default 9, clamped to 4..16).
+ */
+export function getResearchHorizonWeeks(): number {
+  return parseClampedIntEnv('RESEARCH_HORIZON_WEEKS', 9, 4, 16);
+}
+
+/**
+ * Minimum accuracy score (0..100) required for the Independent Technical Verifier Agent (`research.technical_verifier`)
+ * to mark a Self Dashboard QA run as `pass`.
+ * Env: `RESEARCH_VERIFIER_PASS_SCORE` (default 95, clamped to 70..100).
+ */
+export function getResearchVerifierPassScore(): number {
+  return parseClampedIntEnv('RESEARCH_VERIFIER_PASS_SCORE', 95, 70, 100);
+}
+
+
+/**
+ * Retention window in days for `page_execution_logs` before periodic sweep deletes old rows.
+ * Env: `PAGE_TIMING_RETENTION_DAYS` (default 30, clamped to 1..365).
+ */
+export function getPageTimingRetentionDays(): number {
+  return parseClampedIntEnv('PAGE_TIMING_RETENTION_DAYS', 30, 1, 365);
+}
+

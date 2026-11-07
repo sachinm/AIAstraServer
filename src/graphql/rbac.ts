@@ -54,3 +54,20 @@ export function requireRoles(
     throw new Error('Forbidden');
   }
 }
+
+/**
+ * Enforces strict account-ownership isolation: if a request or resolver supplies a target userId
+ * that does not match the authenticated user's id, throws `Forbidden: cross-account access denied`.
+ */
+export function assertOwnAccount(
+  authenticatedUserId: string | null | undefined,
+  targetUserId?: string | null
+): asserts authenticatedUserId is string {
+  if (!authenticatedUserId) {
+    throw new Error('Not authenticated');
+  }
+  if (targetUserId != null && targetUserId.trim() !== '' && targetUserId.trim() !== authenticatedUserId) {
+    throw new Error('Forbidden: cross-account access denied');
+  }
+}
+

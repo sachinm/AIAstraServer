@@ -110,6 +110,26 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
     owner: { via: 'user_id' },
     fields: { question: text, subject: text, prompt_sent: text, digest: json, highlights: json, failure_reason: text },
   },
+  ReadingFindingsCache: {
+    table: 'reading_findings_cache',
+    owner: { via: 'kundli_id' },
+    fields: { payload: json },
+  },
+  AreaBuild: {
+    table: 'area_builds',
+    owner: { via: 'user_id' },
+    fields: { result: json, error: text },
+  },
+  PersonFact: {
+    table: 'person_facts',
+    owner: { via: 'user_id' },
+    fields: { value: text },
+  },
+  TechniqueOutput: {
+    table: 'technique_outputs',
+    owner: { via: 'kundli_id' },
+    fields: { output: json },
+  },
   ReadingTrace: { table: 'reading_traces', owner: { via: 'user_id' }, fields: { question: text, error: text } },
   PrashnaCast: { table: 'prashna_casts', owner: { via: 'user_id' }, fields: { payload: json, place_resolved: text, coords: pendingText } },
   // sealed JSON {category, date, date_precision, place, attributes}; the plain columns are dropped in M28
@@ -143,4 +163,5 @@ export function sealedColumn(model: string, field: string): SealedColumn | null 
 }
 
 /** Plain on purpose, and kept so by tests (docs/privacy/02 §4.1.3): admin audit rows and metric spans. */
-export const PLAIN_BY_CONSTRUCTION = ['AdminAction', 'ReadingAgentSpan'] as const;
+export const PLAIN_BY_CONSTRUCTION = ['AdminAction', 'ReadingAgentSpan', 'PageExecutionLog'] as const;
+

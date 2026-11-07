@@ -506,20 +506,18 @@ const resolvers = {
       });
       if (!user) return null;
       const locked = context.locked === true || Boolean(user.locked_at);
-      const latestKundli = await db.kundli.findFirst({
-        where: { user_id: userId },
-        orderBy: { created_at: 'desc' },
-        select: { queue_status: true },
-      });
       const gateState = await ensureUserGateReady(db, userId);
       // a locked account gets no chart builds (docs/admin/01 §4.1.1)
       if (!locked && user.profile_complete !== false && gateState.queue_status !== 'completed') {
         await resumeChartBuild(db, userId);
       }
-      const chart = await getChartStatus(db, userId).catch((err) => {
-        console.error('getChartStatus failed:', (err as Error).message);
-        return null;
-      });
+      const [chart, plan] = await Promise.all([
+        getChartStatus(db, userId).catch((err) => {
+          console.error('getChartStatus failed:', (err as Error).message);
+          return null;
+        }),
+        questionGate(db).getStatus(userId),
+      ]);
       return {
         id: user.id,
         username: user.username,
@@ -535,7 +533,7 @@ const resolvers = {
         chart,
         ...ownProfileFields(user),
         language: user.language ?? 'en',
-        plan: await questionGate(db).getStatus(userId),
+        plan,
       };
     },
     async ask(
@@ -591,11 +589,6 @@ const resolvers = {
         select: { id: true, is_active: true, kundli_added: true },
       });
       if (!user) return null;
-      const latestKundli = await db.kundli.findFirst({
-        where: { user_id: userId },
-        orderBy: { created_at: 'desc' },
-        select: { queue_status: true },
-      });
       const gateState = await ensureUserGateReady(db, userId);
       if (gateState.queue_status !== 'completed') await resumeChartBuild(db, userId);
       return {

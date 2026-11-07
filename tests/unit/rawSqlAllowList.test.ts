@@ -17,12 +17,15 @@ const SEALING = [
   'src/reading/timeline/store.ts',
   'src/reading/transits/ephemerisCache.ts',
   'src/services/userLocation.ts',
+  'src/techniques/outputStore.ts',
 ];
 
 /** files reviewed as touching no sealed column, and why */
 const REVIEWED_PLAIN: Record<string, string> = {
   'src/agents/registry.ts': 'static agent catalogue metadata seed (agent_registry)',
   'src/auth/requestAuth.ts': 'session id and expiry lookup in app_sessions',
+  'src/reading/oracle/prewarm.ts': 'fallback DELETE on reading_findings_cache by plain kundli_id, user_id and timestamp columns only',
+  'src/reading/run.ts': 'boolean capability check for techniqueOutput delegate; executes no raw SQL',
   'src/techniques/catalog.ts': 'static technique catalogue metadata seed (technique_registry)',
   'src/services/kundliSyncWorker.ts': 'sweeps select kundli ids by plain status, lock and timestamp columns only',
   'src/assistant/store.ts': 'public-page assistant log: no account, no personal table',
