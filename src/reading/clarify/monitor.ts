@@ -45,6 +45,19 @@ export interface ClarifyMonitorVerdict {
   overallScore: number;
   targetAgentId: string;
   diagnosisCode: string;
+  // Cross-repo Admin contract fields (reading_traces.clarify_monitor, 0..5 rubric + snake_case)
+  overall_score: number;
+  ask_right_score: number;
+  phrasing_score: number;
+  handoff_score: number;
+  would_asking_have_helped: boolean;
+  extra_ask_triggered: boolean;
+  context_handoff_ok: boolean;
+  turn_count: number;
+  planner_source: 'ai' | 'machine_fallback' | 'rules';
+  reason_code: string;
+  subject_person: string | null;
+  flags: string[];
 }
 
 const BUCKET_TARGET_AGENT: Record<string, string> = {
@@ -115,8 +128,8 @@ export function evaluateClarifyMonitor(
   const contextHandoffOk: 0 | 1 = handoffFailures === 0 ? 1 : 0;
 
   // 3. Counterfactual: did an unasked/defaulted slot coincide with downstream split agreement or dropped claims?
-  const agr = record.agreement as { level?: string } | null | undefined;
-  const splitAgreement = agr?.level === 'split';
+  const agr = record.agreement as { overall?: string; level?: string } | null | undefined;
+  const splitAgreement = agr?.overall === 'split' || agr?.level === 'split';
   const hasDroppedClaims = (record.droppedClaims ?? 0) > 0;
   const findingsList = Array.isArray(record.findings) ? record.findings : null;
   const required = BUCKETS[bucket as keyof typeof BUCKETS]?.requiredSlots ?? [];
@@ -180,6 +193,19 @@ export function evaluateClarifyMonitor(
           ? 'extra_ask_known_fact'
           : 'optimal';
 
+  const flags: string[] = [];
+  if (extraAskTriggered === 1) flags.push('re_asked_confirmed_fact');
+  if (wouldAskingHaveHelped === 1) flags.push(`unasked_${missedCriterion}`);
+  if (handoffFailures > 0) flags.push('context_handoff_mismatch');
+  if (phrasingPenalty > 0) flags.push('phrasing_jargon_or_length');
+
+  const toFiveScale = (pct: number) => Math.round((pct / 20) * 10) / 10;
+  const rawPerson =
+    state?.slots.subject_person?.value ??
+    record.intent.classification?.slots?.subject_person?.value ??
+    null;
+  const subjectPerson = typeof rawPerson === 'string' && rawPerson.trim() ? rawPerson.trim() : null;
+
   return {
     runId: record.runId,
     clarifyRunId,
@@ -197,6 +223,18 @@ export function evaluateClarifyMonitor(
     overallScore,
     targetAgentId: handoffTargetAgent,
     diagnosisCode,
+    overall_score: toFiveScale(overallScore),
+    ask_right_score: toFiveScale(askRightScore),
+    phrasing_score: toFiveScale(phrasingScore),
+    handoff_score: toFiveScale(handoffScore),
+    would_asking_have_helped: wouldAskingHaveHelped === 1,
+    extra_ask_triggered: extraAskTriggered === 1,
+    context_handoff_ok: contextHandoffOk === 1,
+    turn_count: turnsCount,
+    planner_source: driver,
+    reason_code: diagnosisCode,
+    subject_person: subjectPerson,
+    flags,
   };
 }
 
@@ -212,8 +250,11 @@ export async function runClarifyMonitor(
   facts: Record<string, string> = {},
 ): Promise<ClarifyMonitorVerdict> {
   const verdict = evaluateClarifyMonitor(state, record, facts);
-  currentTrace()?.label({ clarify_monitor: verdict });
-  if (!prisma) return verdict;
+  const activeTrace = currentTrace();
+  if (activeTrace) {
+    activeTrace.label({ clarify_monitor: verdict });
+  }
+  if (!prisma || process.env.READING_METRICS?.trim() === '0') return verdict;
 
   await withAgentRun(
     prisma,
@@ -247,14 +288,16 @@ export async function runClarifyMonitor(
     }),
   ).catch(() => {});
 
-  const traceModel = (prisma as unknown as { readingTrace?: { updateMany?: (args: unknown) => Promise<unknown> } }).readingTrace;
-  if (traceModel?.updateMany) {
-    await traceModel
-      .updateMany({
-        where: { run_id: record.runId },
-        data: { clarify_monitor: verdict as unknown as object },
-      })
-      .catch(() => {});
+  if (!activeTrace) {
+    const traceModel = (prisma as unknown as { readingTrace?: { updateMany?: (args: unknown) => Promise<unknown> } }).readingTrace;
+    if (traceModel?.updateMany) {
+      await traceModel
+        .updateMany({
+          where: { run_id: record.runId },
+          data: { clarify_monitor: verdict as unknown as object },
+        })
+        .catch(() => {});
+    }
   }
 
   return verdict;

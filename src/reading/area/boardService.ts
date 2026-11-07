@@ -15,7 +15,7 @@ import { openRow } from '../../lib/pii/rawSql.js';
 import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addMonthsIso } from '../timeline/months.js';
 import { buildBoard, type AreaBoardBody, type AreaConfig, type BuiltBoard } from './houseLayers.js';
-import { recordTechniqueDecisions, resolveAreaShades } from './shadeResolver.js';
+import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resolveAreaShades } from './shadeResolver.js';
 
 export interface BoardDeps {
   prisma: PrismaClient;
@@ -123,10 +123,12 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
       { userId, task: `${spec.area} ${asOf}`, input: { span_from: span.from, span_to: span.to, version: view.version }, technique: spec.technique, kundliId: kundli.id },
       async () => {
         const shortTo = addMonthsIso(asOf, getShadeShortHorizonMonths());
-        const [activation, running, transit] = await Promise.all([
+        const [activation, running, transit, areaFacts] = await Promise.all([
           activationFor(prisma, kundli.id, { ...span, houses: spec.cfg.houses, maxLevel: 2, shortTo, shortMaxLevel: 3 }),
           activationFor(prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }),
           (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf),
+          loadAreaFacts(prisma, userId, spec.area, { key: spec.factKey, value: fact }),
+          loadTechniqueGovernance(prisma),
         ]);
         const b = buildBoard({ view, cfg: spec.cfg, asOf, activation, running, transit });
         const receipts = resolveAreaShades({
@@ -135,7 +137,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
           asOf,
           built: b,
           activation,
-          facts: fact ? { [spec.factKey]: fact } : {},
+          facts: areaFacts,
         });
         const logged = await recordTechniqueDecisions(prisma, { kundliId: kundli.id, userId }, receipts);
         const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];

@@ -14,6 +14,7 @@ import {
   resolveAreaShades,
   resolveCareerShades,
   runBenchmarkSuite,
+  seedBenchmarkSuiteToDb,
   SHADE_CATALOG,
 } from '../../../src/reading/area/shadeResolver.js';
 import { buildBoard, runningOn } from '../../../src/reading/area/houseLayers.js';
@@ -295,6 +296,51 @@ describe('Phase B: Short-Horizon PD (maxLevel: 3), 3-Tier Shade Resolver, Calm P
     expect(isTechniqueEnabledSync('work.present_tone', gov)).toBe(true);
     expect(isTechniqueEnabledSync('love.activation', gov)).toBe(false);
     expect(isTechniqueEnabledSync('self.activation', gov)).toBe(true);
+
+    // When love.activation is disabled in governanceCache, resolveAreaShades skips it
+    const view = selfFixture();
+    const actRows = selfActivation();
+    const builtLove = buildBoard({
+      view,
+      cfg: LOVE,
+      asOf: '2026-11-05',
+      activation: actRows,
+      running: runningOn(actRows, '2026-11-05'),
+      transit: null,
+    });
+    expect(
+      resolveAreaShades({
+        view,
+        cfg: LOVE,
+        asOf: '2026-11-05',
+        built: builtLove,
+        activation: actRows,
+      }),
+    ).toEqual([]);
+  });
+
+  it('seeds the 10 AA benchmark charts and events via seedBenchmarkSuiteToDb', async () => {
+    const upsertedCharts: string[] = [];
+    const upsertedEvents: string[] = [];
+    const fakePrisma = {
+      benchmarkChart: {
+        upsert: vi.fn(async ({ where }: { where: { id: string } }) => {
+          upsertedCharts.push(where.id);
+          return {};
+        }),
+      },
+      benchmarkEvent: {
+        upsert: vi.fn(async ({ where }: { where: { id: string } }) => {
+          upsertedEvents.push(where.id);
+          return {};
+        }),
+      },
+    } as unknown as Parameters<typeof seedBenchmarkSuiteToDb>[0];
+
+    const res = await seedBenchmarkSuiteToDb(fakePrisma);
+    expect(res).toEqual({ charts: 10, events: 10 });
+    expect(upsertedCharts).toHaveLength(10);
+    expect(upsertedEvents).toHaveLength(10);
   });
 
   it('passes all 10 AA-rated Celebrity Benchmark regression cases and keeps all user-facing strings clean', () => {

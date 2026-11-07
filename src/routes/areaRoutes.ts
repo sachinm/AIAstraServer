@@ -16,6 +16,7 @@ import { CHECK_AREAS, checksFor, getCareer, recordCheck, setWorkStatus, type Car
 import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js';
 import { getSelfBoard } from '../reading/area/selfService.js';
 import { getLoveBoard } from '../reading/area/loveService.js';
+import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area/shadeResolver.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -80,9 +81,51 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
     if (!(CHECK_AREAS as readonly string[]).includes(area)) return res.status(404).json({ error: 'unknown_area' });
     const userId = await deps.requireUser(req, res);
     if (!userId) return;
-    const b = (req.body ?? {}) as { month?: unknown; side?: unknown; answer?: unknown };
+    const b = (req.body ?? {}) as { month?: unknown; side?: unknown; answer?: unknown; subarea?: unknown; shadeTag?: unknown };
     const ok = await recordCheck(deps.prisma, userId, b.month, b.side, b.answer, area).catch(() => false);
+    if (ok && (typeof b.subarea === 'string' || typeof b.shadeTag === 'string')) {
+      await recordWindowOutcomeCheckin(deps.prisma, userId, {
+        area,
+        month: String(b.month),
+        side: b.side === 'test' ? 'test' : 'support',
+        answer: String(b.answer) as 'yes' | 'partly' | 'no' | 'skip',
+        ...(typeof b.subarea === 'string' ? { subarea: b.subarea } : {}),
+        ...(typeof b.shadeTag === 'string' ? { shadeTag: b.shadeTag } : {}),
+      }).catch(() => false);
+    }
     return ok ? res.status(204).end() : res.status(400).json({ error: 'bad_check' });
+  });
+
+  app.post('/api/area/:area/goal', async (req, res) => {
+    const area = req.params.area as CheckArea;
+    if (!(CHECK_AREAS as readonly string[]).includes(area)) return res.status(404).json({ error: 'unknown_area' });
+    const userId = await deps.requireUser(req, res);
+    if (!userId) return;
+    const b = (req.body ?? {}) as { subarea?: unknown; shadeTag?: unknown; from?: unknown; to?: unknown };
+    if (
+      typeof b.subarea !== 'string' ||
+      !b.subarea.trim() ||
+      typeof b.shadeTag !== 'string' ||
+      !b.shadeTag.trim() ||
+      typeof b.from !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(b.from) ||
+      typeof b.to !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(b.to)
+    ) {
+      return res.status(400).json({ error: 'bad_goal' });
+    }
+    try {
+      const pinned = await pinActiveGoalWindow(deps.prisma, userId, {
+        area,
+        subarea: b.subarea.trim(),
+        shadeTag: b.shadeTag.trim(),
+        from: b.from,
+        to: b.to,
+      });
+      return res.status(200).json(pinned);
+    } catch {
+      return res.status(500).json({ error: 'goal_pin_failed' });
+    }
   });
   return true;
 }

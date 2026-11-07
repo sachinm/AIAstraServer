@@ -12,7 +12,7 @@ import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
 import { careerMap, type CareerMap } from './career.js';
-import { recordTechniqueDecisions, resolveCareerShades } from './shadeResolver.js';
+import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resolveCareerShades } from './shadeResolver.js';
 
 export const WORK_STATUS = ['yes', 'between_jobs', 'own_business', 'studying'] as const;
 export type WorkStatus = (typeof WORK_STATUS)[number];
@@ -91,16 +91,18 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
     );
     if (!inputs) return { status: 'no_data', notes: ['the chart facts are not ready yet'] };
     map = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
-      const [view, activation] = await Promise.all([
+      const [view, activation, areaFacts] = await Promise.all([
         (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
         (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
+        loadAreaFacts(deps.prisma, userId, 'career', { key: 'work.status', value: work }),
+        loadTechniqueGovernance(deps.prisma),
       ]);
       const build = buildTimelineSpan(inputs, span);
       const m = careerMap(build, asOf, view ? { view, activation } : undefined);
       const receipts = resolveCareerShades({
         map: m,
         view,
-        facts: work ? { 'work.status': work } : {},
+        facts: areaFacts,
       });
       const logged = await recordTechniqueDecisions(deps.prisma, { kundliId: kundli.id, userId }, receipts);
       const writes = logged > 0 ? ['area_builds:1', `technique_decision_logs:${logged}`] : ['area_builds:1'];

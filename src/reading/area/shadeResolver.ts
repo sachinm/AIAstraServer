@@ -584,9 +584,61 @@ export async function loadTechniqueGovernance(
 }
 
 export function isTechniqueEnabledSync(id: string, gov?: Map<string, GovernanceEntry> | null): boolean {
-  if (!gov) return true;
-  const entry = gov.get(id);
+  const activeGov = gov ?? governanceCache?.map ?? null;
+  if (!activeGov) return true;
+  const entry = activeGov.get(id);
   return entry ? entry.enabled : true;
+}
+
+const AREA_EXTRA_FACT_KEYS: Record<'self' | 'love' | 'career', readonly string[]> = {
+  self: ['self.mind_shade', 'goal.self'],
+  love: ['love.strain_shade', 'goal.love'],
+  career: ['work.goal_shade', 'work.change_shade', 'work.pressure_shade', 'goal.career'],
+};
+
+/**
+ * Loads Companion Pulse tie-breaker and active-goal facts for an area (`self`, `love`, `career`),
+ * merging any primary fact (`self.focus`, `love.status`, `work.status`) already fetched.
+ */
+export async function loadAreaFacts(
+  prisma: PrismaClient | null | undefined,
+  userId: string,
+  area: 'self' | 'love' | 'career',
+  primaryFact?: { key: string; value: string | null },
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (primaryFact?.value && primaryFact.value !== 'declined') {
+    out[primaryFact.key] = primaryFact.value;
+  }
+  const pf = (
+    prisma as unknown as {
+      personFact?: {
+        findMany?: (args: unknown) => Promise<Array<{ key: string; value: string }>>;
+        findUnique?: (args: unknown) => Promise<{ value?: string } | null>;
+      };
+    } | null
+  )?.personFact;
+  if (!pf) return out;
+  const keys = AREA_EXTRA_FACT_KEYS[area];
+  try {
+    if (typeof pf.findMany === 'function') {
+      const rows = await pf.findMany({
+        where: { user_id: userId, key: { in: [...keys] } },
+        select: { key: true, value: true },
+      });
+      for (const r of rows) {
+        if (r?.key && r?.value && r.value !== 'declined') out[r.key] = r.value;
+      }
+    } else if (typeof pf.findUnique === 'function') {
+      for (const key of keys) {
+        const row = await pf.findUnique({ where: { user_id_key: { user_id: userId, key } } });
+        if (row?.value && row.value !== 'declined') out[key] = row.value;
+      }
+    }
+  } catch {
+    // Best-effort fact lookup
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- Calm-Style Behavioral Playbooks (SOUL.md)
@@ -782,6 +834,7 @@ export function resolveAreaShades(params: {
   const minConfirmFamilies = getShadeConfirmMinFamilies();
   const minWinScore = getShadeMinWinningScore();
   const techniqueId = `${cfg.area}.activation`;
+  if (!isTechniqueEnabledSync(techniqueId)) return [];
 
   const promiseCount = built.counts.promise + built.counts.protection + built.counts.varga;
   const afflictionCount = built.counts.affliction;
@@ -899,6 +952,7 @@ export function resolveCareerShades(params: {
   facts?: Record<string, string>;
 }): TechniqueDecisionReceipt[] {
   const { map, view = null, facts = {} } = params;
+  if (!isTechniqueEnabledSync('work.present_tone')) return [];
   const minConfirmFamilies = getShadeConfirmMinFamilies();
   const minWinScore = getShadeMinWinningScore();
   const easeDate = map.present.ease_date;
@@ -1195,4 +1249,70 @@ export function runBenchmarkSuite(): {
     passRate: cases.length ? Math.round((passed / cases.length) * 100) : 100,
     cases,
   };
+}
+
+/**
+ * Seeds the 10 AA benchmark charts and evaluated events into `benchmark_charts` and `benchmark_events`.
+ * Best-effort and idempotent; never throws if M36 is not yet migrated.
+ */
+export async function seedBenchmarkSuiteToDb(
+  prisma: PrismaClient | null | undefined,
+): Promise<{ charts: number; events: number }> {
+  if (!prisma) return { charts: 0, events: 0 };
+  const suite = runBenchmarkSuite();
+  const caseByEventId = new Map(suite.cases.map((c) => [c.eventId, c]));
+  const chartModel = (prisma as unknown as { benchmarkChart?: { upsert?: (args: unknown) => Promise<unknown> } }).benchmarkChart;
+  const eventModel = (prisma as unknown as { benchmarkEvent?: { upsert?: (args: unknown) => Promise<unknown> } }).benchmarkEvent;
+  if (!chartModel?.upsert || !eventModel?.upsert) return { charts: 0, events: 0 };
+  let charts = 0;
+  let events = 0;
+  try {
+    for (const c of BENCHMARK_CHARTS) {
+      await chartModel.upsert({
+        where: { id: c.id },
+        create: {
+          id: c.id,
+          label: c.label,
+          rodden_rating: c.roddenRating,
+          birth_date: c.birthDate,
+          birth_time: c.birthTime,
+          lat: c.lat,
+          lon: c.lon,
+          tz: c.tz,
+          place_code: c.placeCode,
+          notes: c.notes,
+        },
+        update: { label: c.label, notes: c.notes },
+      });
+      charts += 1;
+    }
+    const now = new Date();
+    for (const ev of BENCHMARK_EVENTS) {
+      const evaluated = caseByEventId.get(ev.id);
+      await eventModel.upsert({
+        where: { id: ev.id },
+        create: {
+          id: ev.id,
+          chart_id: ev.chartId,
+          event_date: ev.eventDate,
+          area: ev.area,
+          expected_subarea: ev.expectedSubarea,
+          expected_shade: ev.expectedShade,
+          expected_side: ev.expectedSide,
+          last_passed: evaluated?.passed ?? true,
+          last_run_at: now,
+          receipt: (evaluated ?? null) as unknown as object,
+        },
+        update: {
+          last_passed: evaluated?.passed ?? true,
+          last_run_at: now,
+          receipt: (evaluated ?? null) as unknown as object,
+        },
+      });
+      events += 1;
+    }
+  } catch {
+    // Graceful degradation if M36 table is not yet applied
+  }
+  return { charts, events };
 }

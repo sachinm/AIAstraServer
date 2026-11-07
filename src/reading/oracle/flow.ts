@@ -23,8 +23,9 @@ import { buildBrief, groundReader, type GroundedReader, type OracleBrief } from 
 import type { ChartRowSource } from './chartBundle.js';
 import { CostGuard, CostRefusedError } from './costGuard.js';
 import { ReadingJournal } from './journal.js';
+import type { PrismaClient } from '@prisma/client';
 import { prepareReaders, startReaderCache } from './prepare.js';
-import { getReaderMemo, setReaderMemo, type PrewarmedSet } from './prewarm.js';
+import { getReaderMemo, loadDbReaderCache, saveDbReaderCache, setReaderMemo, type PrewarmedSet } from './prewarm.js';
 import { joinDeadlineMs, LOOP_READERS, READERS, readerTimeoutMs, type ReaderId } from './readers.js';
 import { buildReaderRequest, ReaderFailure, runReader, type ReaderRequest, type ReaderResult } from './runReader.js';
 import { approxTokens } from './slices.js';
@@ -93,6 +94,8 @@ export interface OracleFlowDeps {
   techniqueIds?: (readers: ReaderId[], tier: number) => string[] | null;
   /** confirmed person_facts (doc 53 §4.4, 48): passed to each reader as FACTS */
   facts?: Record<string, string> | null;
+  /** Optional Prisma client for cross-Lambda DB reader caching (`reading_findings_cache`). */
+  prisma?: PrismaClient | null;
   /** Test seams */
   readerImpl?: typeof runReader;
   now?: () => number;
@@ -221,7 +224,9 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
       // already read during clarify, on any instance, or earlier on this one
       const pre = d.prewarmed?.entries.get(req.cacheKey);
       const memo = pre ? undefined : getReaderMemo(req.cacheKey);
-      const held = pre ?? memo;
+      const dbHeld = !pre && !memo && d.prisma ? await loadDbReaderCache(d.prisma, req.cacheKey) : undefined;
+      if (dbHeld) setReaderMemo(req.cacheKey, dbHeld);
+      const held = pre ?? memo ?? dbHeld;
       if (held) {
         d.emit({ type: 'stage', name: input.id, status: 'done', ms: now() - t0, subject: req.subject, cached: true });
         journalOk(req, held, now() - t0, pre ? 'prewarm' : 'cache', 1);
@@ -254,7 +259,21 @@ export async function runOracleFlow(d: OracleFlowDeps): Promise<OracleFlowResult
           out = await attempt(req);
         }
         const ms = now() - t0;
-        if (!out.repaired) setReaderMemo(req.cacheKey, { finding: out.finding, usage: out.usage });
+        if (!out.repaired) {
+          setReaderMemo(req.cacheKey, { finding: out.finding, usage: out.usage });
+          if (d.prisma) {
+            void saveDbReaderCache(d.prisma, {
+              cacheKey: req.cacheKey,
+              kundliId: d.kundliId,
+              readerId: input.id,
+              packHash: req.dataHash,
+              horizonKey: req.def.natal ? 'natal' : `${prep.slice.from}..${prep.slice.to}`,
+              promptVersion: PROMPT_VERSION,
+              natal: Boolean(req.def.natal),
+              held: { finding: out.finding, usage: out.usage },
+            }).catch(() => {});
+          }
+        }
         journalOk(req, out, ms, 'live', 1);
         d.emit({ type: 'stage', name: input.id, status: 'done', ms, subject: req.subject, ...(retried ? { retried: true } : {}) });
         return { results: [out], usage: [...spent, out.usage], timings: { [input.id]: ms } };
