@@ -153,6 +153,7 @@ const longDate = (iso: string): string => `${Number(iso.slice(8, 10))} ${MONTHS[
 
 const SYSTEM_WORDS: Record<string, string> = {
   vimshottari: 'Vimshottari',
+  vimsottari: 'Vimshottari',
   yogini: 'Yogini',
   tithi_ashtottari: 'Tithi Ashtottari',
   narayana: 'Narayana',
@@ -419,8 +420,23 @@ function buildMdTouchMap(view: DigestView, mdLord: string, mdHouses: number[]): 
   return { houseWeights, ownHouses, placedHouse, dispositor, starLord, avastha, yogas };
 }
 
-function fruitionBonus(cell: AntardashaFruitionCell | undefined): { pts: number; links: string[]; isCrisis: boolean } {
-  if (!cell) return { pts: 0, links: [], isCrisis: false };
+function joinPhrases(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0]!;
+  if (items.length === 2) {
+    const [a, b] = items as [string, string];
+    return a.includes(' and ') || b.includes(' and ') ? `${a}, along with ${b}` : `${a} and ${b}`;
+  }
+  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)!}`;
+}
+
+function fruitionBonus(cell: AntardashaFruitionCell | undefined): {
+  pts: number;
+  links: string[];
+  isCrisis: boolean;
+  isSupportive: boolean;
+} {
+  if (!cell) return { pts: 0, links: [], isCrisis: false, isSupportive: false };
   const links: string[] = [];
   let pts = 0;
   if (cell.isStarLordOfMd) {
@@ -437,6 +453,9 @@ function fruitionBonus(cell: AntardashaFruitionCell | undefined): { pts: number;
   }
   const cls = cell.fruitionClass ?? '';
   const isCrisis = cls === 'dusthana_reversal_crisis' || cell.isShadAshtaka68;
+  const isSupportive =
+    !isCrisis &&
+    (cls === 'trikona_manifestation' || cls === 'kendra_structural' || cls === 'dhana_labha_gain');
   if (cls === 'trikona_manifestation') pts += 5;
   else if (cls === 'kendra_structural') pts += 4;
   else if (cls === 'dhana_labha_gain') pts += 3;
@@ -445,13 +464,15 @@ function fruitionBonus(cell: AntardashaFruitionCell | undefined): { pts: number;
   else if (cell.isDwirdwadasha212) pts -= 2;
   if (cell.isShadAshtaka68) links.push('shad_ashtaka_6_8');
   if (cell.isDwirdwadasha212) links.push('dwirdwadasha_2_12');
-  return { pts, links, isCrisis };
+  return { pts, links, isCrisis, isSupportive };
 }
 
 interface ScoredAdArea {
   area: LifeArea;
   promise: AreaPromise;
   score: number;
+  rankScore: number;
+  touchesAd: boolean;
   side: Side;
   systems: string[];
   contradicts: string[];
@@ -470,19 +491,24 @@ function scoreAdForArea(
   adRow: ActivationRow,
   win: { from: string; to: string },
   mdTouch: MdTouchMap,
-  fBonus: { pts: number; isCrisis: boolean },
+  fBonus: { pts: number; isCrisis: boolean; isSupportive: boolean },
   inSpanRows: ActivationRow[],
   annualFn: (year: number) => AnnualRow[],
   sky: SkyView | null,
 ): ScoredAdArea | null {
   const adLord = adRow.lord ?? mdLord;
   const adCard = view.planet('D1', adLord);
-  const adHouses = new Set<number>([
-    ...(adRow.houses ?? []),
+  const cardOwnedOrPlaced = [
     ...(adCard?.owns ?? []),
     ...(adCard?.dashaCharter?.housesOwned ?? []),
     ...(adCard?.house ? [adCard.house] : []),
+  ];
+  const adCoreHouses = new Set<number>(cardOwnedOrPlaced.length ? cardOwnedOrPlaced : (adRow.houses ?? []));
+  const adHouses = new Set<number>([
+    ...adCoreHouses,
+    ...(adRow.houses ?? []),
     ...(adCard?.aspectsTo ?? []),
+    ...(adCard?.dashaCharter?.grahaDrishtiHouses ?? []),
   ]);
   const touchesAd = area.houses.some((h) => adHouses.has(h));
   const touchesMd = area.houses.some((h) => (mdTouch.houseWeights.get(h) ?? 0) >= 2);
@@ -497,7 +523,9 @@ function scoreAdForArea(
   let side: Side = adD1Side;
   if (fBonus.isCrisis) {
     side = side === 'support' ? 'neutral' : 'test';
-  } else if (side === 'neutral' && (adD9Side === 'support' || adOwnSide === 'support')) {
+  } else if (side === 'test' && fBonus.isSupportive) {
+    side = fBonus.pts >= 4 || adD9Side === 'support' || adOwnSide === 'support' ? 'support' : 'neutral';
+  } else if (side === 'neutral' && (fBonus.isSupportive || adD9Side === 'support' || adOwnSide === 'support')) {
     side = 'support';
   }
 
@@ -521,6 +549,9 @@ function scoreAdForArea(
       contradicts.push(sides[0]!.r.system);
       dashaPts -= FAMILY_WEIGHTS[fam];
     }
+  }
+  if (adD1Side === 'test' && !fBonus.isCrisis && contradicts.length > 0 && systems.length === 1) {
+    side = fBonus.pts >= 5 ? 'neutral' : 'test';
   }
 
   // Annual charts (TP / VP) overlapping [win.from, win.to]
@@ -563,10 +594,29 @@ function scoreAdForArea(
   const transitPts = transitOpen ? LAYER_WEIGHTS.transit : 0;
   const rawScore = Math.round(Math.max(5, Math.min(100, promisePts + Math.max(0, dashaPts) + annualPts + transitPts)));
 
+  const corePrimaryHit = touchesAd && adCoreHouses.has(primary);
+  const adPrimaryHit = touchesAd && adHouses.has(primary);
+  const coreHits = area.houses.filter((h) => adCoreHouses.has(h)).length;
+  const adHits = area.houses.filter((h) => adHouses.has(h)).length;
+  const mdOverlapHits = area.houses.filter((h) => adHouses.has(h) && (mdTouch.houseWeights.get(h) ?? 0) >= 2).length;
+  const rankScore =
+    (touchesAd ? 100 : 0) +
+    (corePrimaryHit ? 45 : adPrimaryHit ? 25 : 0) +
+    coreHits * 12 +
+    adHits * 5 +
+    mdOverlapHits * 6 +
+    (systems.length - 1) * 8 -
+    contradicts.length * 6 +
+    annualPts * 1.5 +
+    transitPts * 1.5 +
+    promisePts * 0.35;
+
   return {
     area,
     promise,
     score: rawScore,
+    rankScore,
+    touchesAd,
     side,
     systems,
     contradicts,
@@ -580,14 +630,14 @@ function scoreAdForArea(
 
 function buildAdHeadline(tone: LifeAntardashaTone, topAreas: ScoredAdArea[], from: string, to: string): string {
   const names = topAreas.slice(0, 2).map((x) => x.area.words);
-  const focus = names.length === 2 ? `${names[0]} and ${names[1]}` : names[0] ?? 'your main priorities';
+  const focus = names.length ? joinPhrases(names) : 'your main priorities';
   switch (tone) {
     case 'breakthrough':
       return `From ${longDate(from)} to ${longDate(to)}, doors open around ${focus} as your birth promise and multiple timing clocks align.`;
     case 'build':
       return `From ${longDate(from)} to ${longDate(to)}, steady forward movement builds around ${focus} when you act on prepared plans.`;
     case 'careful':
-      return `From ${longDate(from)} to ${longDate(to)}, ${focus} asks for patience, clear boundaries, and careful preparation before big moves.`;
+      return `From ${longDate(from)} to ${longDate(to)}, this stretch around ${focus} calls for patience, clear boundaries, and careful preparation before big moves.`;
     case 'steady_work':
       return `From ${longDate(from)} to ${longDate(to)}, consistent effort around ${focus} lays the groundwork for the stronger windows ahead.`;
   }
@@ -595,7 +645,7 @@ function buildAdHeadline(tone: LifeAntardashaTone, topAreas: ScoredAdArea[], fro
 
 function buildAdAreaNote(s: ScoredAdArea, tone: LifeAntardashaTone, from: string, to: string): LifeAntardashaAreaNote {
   const { area, promise, side, systems, annualConfirms, transitOpen } = s;
-  const isSupport = side === 'support' && tone !== 'careful';
+  const isSupport = side !== 'test' && tone !== 'careful';
 
   let summary: string;
   if (isSupport && promise.verdict === 'promised') {
@@ -686,10 +736,15 @@ function buildAntardashaTimeline(
     // Fallback if no area met the house filter: score the top promised areas
     if (!scored.length) {
       for (const { area, promise } of areas.slice(0, maxAreas)) {
+        const fallbackScore = Math.round(
+          (LAYER_WEIGHTS.d1 + LAYER_WEIGHTS.varga) * promise.promiseRatio + FAMILY_WEIGHTS.vimshottari,
+        );
         scored.push({
           area,
           promise,
-          score: Math.round((LAYER_WEIGHTS.d1 + LAYER_WEIGHTS.varga) * promise.promiseRatio + FAMILY_WEIGHTS.vimshottari),
+          score: fallbackScore,
+          rankScore: fallbackScore,
+          touchesAd: false,
           side: planetSide(view.planet('D1', adLord)),
           systems: ['vimshottari'],
           contradicts: [],
@@ -702,19 +757,21 @@ function buildAntardashaTimeline(
       }
     }
 
-    scored.sort((a, b) => b.score - a.score);
+    scored.sort((a, b) => b.rankScore - a.rankScore || b.score - a.score);
     const top = scored.slice(0, maxAreas);
-    const best = top[0]!;
+    const best = [...top].sort((a, b) => b.score - a.score)[0]!;
     const anySupport = top.some((x) => x.side === 'support');
     const allTest = top.every((x) => x.side === 'test');
 
     let tone: LifeAntardashaTone;
-    if (fBonus.isCrisis || allTest) {
+    if (fBonus.isCrisis || (allTest && !fBonus.isSupportive)) {
       tone = 'careful';
     } else if (best.score >= 70 && anySupport && best.promise.verdict === 'promised') {
       tone = 'breakthrough';
     } else if (best.score >= 55 && anySupport) {
       tone = 'build';
+    } else if (allTest) {
+      tone = 'careful';
     } else {
       tone = 'steady_work';
     }
@@ -802,11 +859,13 @@ function buildAreaCharters(
 
     let theme: string;
     if (role === 'anchor') {
-      theme = `${area.label} is one of the defining pillars of this long chapter, with strong backing to build lasting results.`;
+      theme = `Around ${area.words}, this long chapter forms a defining pillar, with strong backing to build lasting results.`;
     } else if (role === 'growth') {
-      theme = `${area.label} develops step by step across this chapter, rewarding patient preparation during the opening windows.`;
+      theme = peak
+        ? `Around ${area.words}, progress builds step by step across this chapter, rewarding patient preparation during the opening windows.`
+        : `Around ${area.words}, progress builds step by step across this chapter through steady, consistent effort.`;
     } else {
-      theme = `${area.label} calls for steady boundaries and realistic pacing during this chapter so small strains do not compound.`;
+      theme = `Around ${area.words}, this chapter calls for steady boundaries and realistic pacing so small strains do not compound.`;
     }
 
     let promiseNote: string;
@@ -821,7 +880,9 @@ function buildAreaCharters(
     const grade = gradeOf(maxAdScore);
     const basis =
       role === 'anchor'
-        ? `${grade}: backed by birth and deeper charts with confirmed opening windows across this chapter`
+        ? peak
+          ? `${grade}: backed by birth and deeper charts with confirmed opening windows across this chapter`
+          : `${grade}: backed by birth and deeper charts across this chapter`
         : role === 'growth'
           ? `${grade}: partial chart backing that strengthens during specific sub-periods`
           : `${grade}: tested in the chart, best handled with steady boundaries`;
@@ -880,7 +941,7 @@ export function buildMahadashaCharter(
   const guarded = areaCharters.filter((a) => a.role === 'guarded').map((a) => a.label.toLowerCase());
 
   const focusList = (anchors.length ? anchors : growth).slice(0, 2);
-  const focusText = focusList.length === 2 ? `${focusList[0]} and ${focusList[1]}` : focusList[0] ?? 'your core life priorities';
+  const focusText = focusList.length ? joinPhrases(focusList) : 'your core life priorities';
   const effFrom = primary.from < input.today ? input.today : primary.from;
 
   const headline = primary.isCurrent
@@ -890,17 +951,17 @@ export function buildMahadashaCharter(
   const summaryParts: string[] = [];
   if (anchors.length) {
     summaryParts.push(
-      `Across these years, your birth and deeper charts carry their strongest promise in ${anchors.slice(0, 3).join(', ')}.`,
+      `Across these years, your birth and deeper charts carry their strongest promise in ${joinPhrases(anchors.slice(0, 3))}.`,
     );
   }
   if (growth.length) {
     summaryParts.push(
-      `Steady, cumulative progress builds in ${growth.slice(0, 2).join(' and ')} when you pace your moves to the stronger sub-periods.`,
+      `Steady, cumulative progress builds in ${joinPhrases(growth.slice(0, 2))} when you pace your moves to the stronger sub-periods.`,
     );
   }
   if (guarded.length) {
     summaryParts.push(
-      `Keep extra patience and clear boundaries around ${guarded.slice(0, 2).join(' and ')}, especially during the careful sub-periods marked below.`,
+      `Keep extra patience and clear boundaries around ${joinPhrases(guarded.slice(0, 2))}, especially during the careful sub-periods marked below.`,
     );
   }
   const charterSummary =
