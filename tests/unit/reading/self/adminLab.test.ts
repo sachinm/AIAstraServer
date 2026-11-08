@@ -120,7 +120,7 @@ describe('admin lab: the served shape (docs/admin/10 §5 mirror test)', () => {
   it('the dossier records step timings, unread rows, clock applicability and the run scope', async () => {
     const j = await (await post({ userId: 'u1', technique: 'body', force: true })).json();
     expect(j.dossier.audit.steps).toEqual(expect.objectContaining({ loadMs: expect.any(Number), panelsMs: expect.any(Number), purviewMs: expect.any(Number), cardsMs: expect.any(Number), auditMs: expect.any(Number) }));
-    expect(j.dossier.audit.unreadRows).toBe(0);
+    expect(j.dossier.audit.unresolvedKeys).toBe(0);
     expect(j.dossier.audit.scope).toBe('body');
     expect(j.dossier.clocks.applicable).toBe(true);
     const list = await (await fetch(`${base}/api/admin-lab/dossiers?userId=u1`, { headers: { 'x-admin-lab-token': 'lab-secret' } })).json();
