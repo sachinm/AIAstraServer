@@ -16,6 +16,8 @@ re-applied by it.
 
 ## P0: wrong readings or data
 
+- **12-person multi-age-group (`20s`–`70s`) live benchmark & 4-school review (`Self`, `Love`, `Work`).** Twenty-three of the 24 `ready` kundlis in PostgreSQL were built on `2026-11-06` before `PointRow.planet` (`AK.planet`, `AmK.planet`, `DK.planet`) and the `dasha.applicable` filter on `kundli_activation` were added (code backfills are now in `loadDigest` and `defaultSystemsPresent`, and all `love.reading.*` + `work.reading.*` panels are built and wired). Next session: run `buildDigest(prisma, kundliId)` for the 12-person cohort and execute the multi-age benchmark + independent review per [`docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md`](handoff/2026-11-08-techniques-lab-self-love-work-handoff.md) under the $1.00 spend cap. Status: open (handoff ready). Done: 12-person cohort benchmarked across `self`, `love`, and `work` with `>=95%` verifier pass.
+
 - **The live API refuses https://vedic-astrology.app (CORS).** An OPTIONS preflight to `/graphql` and `/api/billing/plans` on
   `dzsm2dbswvuqy.cloudfront.net` returns 204 with no `Access-Control-Allow-Origin` for this origin, and does return one for
   release-candidate-staging. The live `/pricing` page shows "Could not load the plans", with a CORS error in the console.

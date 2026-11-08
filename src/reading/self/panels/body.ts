@@ -106,7 +106,8 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
   const h3 = houseFrame(view, 'D1', 3, g);
   if (h3) {
     const l3Card = h3.lord ? view.planet('D1', h3.lord) : null;
-    const handsText = `Your hands, arms, shoulders, collarbone, lower neck, and peripheral nerve pathways are shaped by the 3rd house (${h3.sign ?? 'earth/endurance'}), whose ruler sits in ${HOUSE_SELF[h3.lordHouse ?? 6] ?? 'daily service and effort'}${l3Card ? ` (${dignityWords(l3Card.dignity) ?? 'active'})` : ''}: long hours of fine motor and keyboard/technical output channel intense energy through the hands, wrists, shoulders, and cervical spine.`;
+    const h3Occ = h3.occupants.map((o) => PLANET_FACULTY[o.planet] ?? o.planet).join(' and ');
+    const handsText = `Your hands, arms, shoulders, collarbone, lower neck, and peripheral nerve pathways are shaped by the 3rd house (${h3.sign ?? 'initiative'}), whose ruler sits in ${HOUSE_SELF[h3.lordHouse ?? 3] ?? 'daily effort'}${l3Card ? ` (${dignityWords(l3Card.dignity) ?? 'active'})` : ''}${h3Occ ? ` with ${h3Occ}` : ''}: sustained manual or mental effort channels directly through the hands, wrists, shoulders, and upper spine.`;
     claims.push({
       id: 'body.hands_neck_nerves',
       text: handsText,

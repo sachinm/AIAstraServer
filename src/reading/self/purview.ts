@@ -70,9 +70,9 @@ export function runPurview({ board = 'self', view, activation, asOf, clock, bodi
       const ruleName = board === 'love' ? 'purview.seventh_lord_standing' : board === 'work' ? 'purview.tenth_lord_standing' : 'purview.lagna_lord_standing';
       const targetClaims =
         board === 'love'
-          ? ['partner.lord_house', 'heart.lord_house', 'diagnosis.direction'].filter(has)
+          ? ['partner.seventh_lord', 'heart.romance', 'diagnosis.direction'].filter(has)
           : board === 'work'
-            ? ['vocation.lord_house', 'standing.arudha', 'diagnosis.direction'].filter(has)
+            ? ['vocation.tenth_lord', 'standing.arudha', 'diagnosis.direction'].filter(has)
             : ['lagna.lord_house', 'diagnosis.direction', 'body.footing'].filter(has);
       out.push({
         rule: ruleName,
@@ -211,7 +211,18 @@ export function runPurview({ board = 'self', view, activation, asOf, clock, bodi
       rule: 'purview.special_lagnas_argala',
       source: 'BPHS & Jaimini (Arudha Lagna AL, Upapada UL, Rajyapada A10, Sree Lagna SL, Hora Lagna HL, Mandi MD, Gulika GK & Argala)',
       action: 'annotate',
-      affects: ['lagna.seen', 'body.special_points_argala', 'body.footing', 'partner.upapada', 'heart.padas', 'standing.arudha', 'standing.rajyapada', 'standing.power_lagnas'].filter(has),
+      affects: [
+        'lagna.seen',
+        'body.special_points_argala',
+        'body.footing',
+        'partner.upapada',
+        'partner.darapada',
+        'heart.arudha_pull',
+        'bond.support_argala',
+        'standing.arudha',
+        'standing.rajyapada',
+        'standing.special_lagnas',
+      ].filter(has),
       rows: spRows,
       text: `Special Lagnas and Upagrahas active: AL=${alPt?.sign ?? '?'}(H${alPt?.house ?? '?'}), UL=${ulPt?.sign ?? '?'}(H${ulPt?.house ?? '?'}), A10=${a10Pt?.sign ?? '?'}(H${a10Pt?.house ?? '?'}), SL=${slPt?.sign ?? '?'}(H${slPt?.house ?? '?'}), HL=${hlPt?.sign ?? '?'}(H${hlPt?.house ?? '?'}), MD=${mdPt?.sign ?? '?'}(H${mdPt?.house ?? '?'}), GK=${gkPt?.sign ?? '?'}(H${gkPt?.house ?? '?'}).`,
     });

@@ -10,7 +10,7 @@ import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import { SELF_CONFIRM_PREFIX } from '../../profile/facts.js';
-import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
+import { activationFor as realActivationFor, applicableConditionalSystems, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
 import type { DigestView } from '../digest/types.js';
 import { defaultQueueDigest } from '../area/boardService.js';
@@ -76,7 +76,7 @@ export const SELF_PANEL_AGENT = 'self.reading_panel';
 export const LOVE_PANEL_AGENT = 'love.reading_panel';
 export const WORK_PANEL_AGENT = 'work.reading_panel';
 /** Bump when panel code or words change: it is part of every stored output's key, so old wording is never served. */
-export const SELF_READING_VERSION = 's2.2026-11-08c';
+export const SELF_READING_VERSION = 's2.2026-11-08d';
 
 /** Titles and freshness of every panel (docs/reading-engine/61 §2). */
 export const PANEL_META: Record<Exclude<SelfPanelId, 'diagnosis'>, { title: string; window: 'natal' | 'dasha' | 'annual' }> = {
@@ -169,8 +169,17 @@ export type SelfReadingResult =
   | { status: 'ok'; built_at: string; cached: boolean; reading: SelfReading };
 
 export async function defaultSystemsPresent(prisma: PrismaClient, kundliId: string): Promise<SystemPresence[]> {
-  const rows = await prisma.kundliActivation.groupBy({ by: ['system', 'family'], where: { kundli_id: kundliId, level: 1 } });
-  return rows.map((r) => ({ system: r.system, family: r.family }));
+  const [rows, appRow] = await Promise.all([
+    prisma.kundliActivation.groupBy({ by: ['system', 'family'], where: { kundli_id: kundliId, level: 1 } }),
+    prisma.kundliData
+      ?.findFirst?.({ where: { kundli_id: kundliId, data_type: 'dasha.applicable' }, select: { payload: true } })
+      .catch(() => null),
+  ]);
+  const applicable = appRow?.payload !== undefined ? applicableConditionalSystems(appRow.payload) : null;
+  return rows.map((r: { system: string; family: string }) => ({
+    system: r.system,
+    family: r.family === 'conditional' && applicable && !applicable.has(r.system) ? 'other' : r.family,
+  }));
 }
 
 const span = (from: string, to: string): DateSpan => ({ from: new Date(`${from}T00:00:00Z`), to: new Date(`${to}T00:00:00Z`) });

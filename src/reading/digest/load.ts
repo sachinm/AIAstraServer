@@ -55,6 +55,27 @@ export function digestView(kundliId: string, rows: readonly StoredDigestRow[], m
   };
 }
 
+const CHARA_KARAKA_ORDER = ['AK', 'AmK', 'BK', 'MK', 'PK', 'GK', 'DK'] as const;
+const CHARA_PLANETS = new Set(['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa']);
+
+function backfillLegacyCharaPlanets(rows: StoredDigestRow[]): StoredDigestRow[] {
+  const d1Planets = rows
+    .filter((r) => r.section === 'planet' && r.key.startsWith('D1.'))
+    .map((r) => r.row as PlanetCard)
+    .filter((pl) => pl && CHARA_PLANETS.has(pl.planet) && typeof pl.degree === 'number')
+    .sort((a, b) => (b.degree ?? 0) - (a.degree ?? 0));
+  if (d1Planets.length === 0) return rows;
+  return rows.map((r) => {
+    if (r.section !== 'point') return r;
+    const p = r.row as PointRow;
+    if (!p || p.planet || !(CHARA_KARAKA_ORDER as readonly string[]).includes(p.id)) return r;
+    const idx = (CHARA_KARAKA_ORDER as readonly string[]).indexOf(p.id);
+    const byRank = d1Planets[idx]?.planet;
+    if (!byRank) return r;
+    return { ...r, row: { ...p, planet: byRank } };
+  });
+}
+
 /** The ready digest of a kundli, or null (not built, building, stale, failed, or another rule set). */
 export async function loadDigest(prisma: PrismaClient, kundliId: string, now: number = Date.now()): Promise<DigestView | null> {
   const k = await prisma.kundli.findUnique({ where: { id: kundliId }, select: { digest_status: true, digest_version: true, digest_built_at: true } });
@@ -63,7 +84,8 @@ export async function loadDigest(prisma: PrismaClient, kundliId: string, now: nu
   const memoKey = `${kundliId}|${builtAt}`;
   const hit = memo.get(memoKey);
   if (hit && now - hit.at < MEMO_MS) return hit.view;
-  const rows = await prisma.kundliDigest.findMany({ where: { kundli_id: kundliId }, select: { section: true, key: true, row: true, source: true } });
+  const rawRows = await prisma.kundliDigest.findMany({ where: { kundli_id: kundliId }, select: { section: true, key: true, row: true, source: true } });
+  const rows = backfillLegacyCharaPlanets(rawRows);
   const view = digestView(kundliId, rows, { status: 'ready', version: k.digest_version, builtAt });
   for (const key of memo.keys()) if (key.startsWith(`${kundliId}|`) || now - memo.get(key)!.at >= MEMO_MS) memo.delete(key);
   memo.set(memoKey, { at: now, view });

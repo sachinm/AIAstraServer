@@ -109,15 +109,23 @@ export function activeTpAshtottariPeriod(
 }
 
 export function yearPanel({ view, asOf }: PanelInput): PanelBody {
-  const yearRange = (r: { from: string; to: string } | null) => r ?? 'always' as const;
+  const yearRange = (r: { from: string; to: string } | null) => r ?? ('always' as const);
   const g = gaps();
   const claims: SelfClaim[] = [];
   const m = runningMudda(view, asOf);
-  if (!m) { g.add(`annual:VP covering ${asOf} missing`); return body('', [], g); }
+  if (!m) {
+    g.add(`annual:VP covering ${asOf} missing`);
+    return body('', [], g);
+  }
   const year = m.row.year;
   const tp = runningTp(view, asOf, year);
   const tpYear = tp?.year ?? year;
   const l1 = view.house('D1', 1)?.lord ?? null;
+  const mudda = m.row.dashas.find((d) => d.system === 'mudda');
+  const span = mudda?.periods.length
+    ? { from: mudda.periods.map((p) => p.from).sort()[0]!, to: mudda.periods.map((p) => p.to).sort().at(-1)! }
+    : null;
+  const ta = activeTpAshtottariPeriod(tp, asOf, span);
   let lead = '';
   if (!tp) g.add(`annual:TP${tpYear}.D1 missing`);
   else {
@@ -133,9 +141,16 @@ export function yearPanel({ view, asOf }: PanelInput): PanelBody {
     const y1 = tp.houses.find((h) => h.house === 1);
     if (y1?.lordHouse) claims.push({ id: 'year.self_lord', text: `This year your self is steered from ${HOUSE_SELF[y1.lordHouse]}.`, detail: `TP${tpYear} h1 ${y1.sign}, lord ${pname(y1.lord)} in year h${y1.lordHouse} (${y1.lordDignity ?? '?'})`, certainty: 'fact', evidence: [`annual:TP${tpYear}.D1`] });
   }
-  const mudda = m.row.dashas.find((d) => d.system === 'mudda');
-  const span = mudda?.periods.length ? { from: mudda.periods.map((p) => p.from).sort()[0]!, to: mudda.periods.map((p) => p.to).sort().at(-1)! } : null;
   for (const c of claims) c.range = yearRange(span);
-  if (PLANET_FACULTY[m.lord]) claims.push({ id: 'year.short_clock', range: { from: m.from, to: m.to }, text: `Until ${longDate(m.to)} the year's short clock runs through ${PLANET_FACULTY[m.lord]}.`, detail: `VP${year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}`, certainty: 'fact', evidence: [`annual:VP${year}.D1`] });
+  if (PLANET_FACULTY[m.lord]) {
+    claims.push({
+      id: 'year.short_clock',
+      range: { from: m.from, to: m.to },
+      text: `Until ${longDate(m.to)} the year's short clock runs through ${PLANET_FACULTY[m.lord]}.`,
+      detail: `VP${year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}${ta ? `; TP${tpYear} tithi_ashtottari ${pname(ta.lord)} ${ta.from} → ${ta.to}` : ''}`,
+      certainty: 'fact',
+      evidence: [`annual:VP${year}.D1`],
+    });
+  }
   return body(lead || (claims[0]?.text ?? ''), claims, g);
 }
