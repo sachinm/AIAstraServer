@@ -50,6 +50,7 @@ import {
   LOVE_PANEL_IDS,
   WORK_PANEL_IDS,
   type BoardPanelId,
+  type CodeAudit,
   type ConfirmAnswer,
   type LovePanelId,
   type PanelBody,
@@ -64,9 +65,9 @@ import {
 import { diagnosisPanel, type PanelBodies } from './panels/diagnosis.js';
 import { BODY_NOTE, CONFIRM_BY_HOUSE, longDate } from './words.js';
 import { bodyPanel } from './panels/body.js';
-import { applyPurview, runPurview } from './purview.js';
+import { applyPurview, mergePurviewEntries, runPurview } from './purview.js';
 import { buildCard } from './card.js';
-import { auditCards } from './audit.js';
+import { auditCards, mergeAudits } from './audit.js';
 import { buildDossier, collectData, writeDossier, type DossierInput } from './dossier.js';
 import { runSelfOracle, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
 import { defaultLoadTransit } from '../area/boardService.js';
@@ -435,7 +436,14 @@ export async function getBoardReading(
   );
   const vetoed = applyPurview(bodies, purview.entries);
   const diagnosis = wanted('diagnosis') ? await runPanel('diagnosis', DIAGNOSIS_TITLE, 'dasha', () => buildDiagnosis(bodies)) : null;
-  if (diagnosis?.body) bodies.diagnosis = diagnosis.body;
+  if (diagnosis?.body) {
+    bodies.diagnosis = diagnosis.body;
+    // BG-12: a second purview pass over the diagnosis, so its rules on `diagnosis.*` claims apply
+    const second = runPurview({ board, view, activation, asOf, clock, bodies: { diagnosis: diagnosis.body }, skyStored, sky });
+    purview.entries = mergePurviewEntries(purview.entries, second.entries);
+    const vetoedDiagnosis = applyPurview({ diagnosis: diagnosis.body }, second.entries);
+    if (vetoedDiagnosis.diagnosis?.length) vetoed.diagnosis = vetoedDiagnosis.diagnosis;
+  }
 
   // cards, shaped by the person's answers
   const cardCtx = { running: { l1: run.l1, l2: run.l2 }, year: yearSpan ? { from: iso(yearSpan.from), to: iso(yearSpan.to) } : null };
@@ -471,13 +479,15 @@ export async function getBoardReading(
   for (const v of Object.values(vetoed).flat()) if (v) allClaims.set(v.claimId, []);
   const { data } = collectData({ view, activation, panels: shaped, purview: purview.entries });
   const boundaries = new Set<string>([...activation.flatMap((r) => [r.from, r.to]), ...view.annual().flatMap((a) => a.dashas.flatMap((d) => d.periods.flatMap((pp) => [pp.from, pp.to])))]);
+  const vetoedIds = new Set(Object.values(vetoed).flat().map((v) => v!.claimId));
+  const resolvedKeys = new Set(Object.keys(data));
   const cardsMs = lap();
   const audited = await withAgentRun(
     prisma,
     panelAgent,
     { userId, task: `${prefix}.audit ${asOf}`, technique: `${prefix}.audit`, kundliId: kundli.id, input: { panels: shaped.length, claims: allClaims.size } },
     async () => {
-      const a = auditCards({ panels: shaped, claims: allClaims, vetoed: new Set(Object.values(vetoed).flat().map((v) => v!.claimId)), resolvedKeys: new Set(Object.keys(data)), boundaries });
+      const a = auditCards({ panels: shaped, claims: allClaims, vetoed: vetoedIds, resolvedKeys, boundaries });
       return { value: a, output: { verdict: a.audit.verdict, checked: a.audit.checked, failures: a.audit.failures.length }, charts: [{ type: 'digest.house', variant: view.version }] };
     },
   );
@@ -518,6 +528,7 @@ export async function getBoardReading(
   const oracleTotalMs = lap();
 
   // Apply AI-determined validUntil and AI-synthesized panel lines when oracle ran
+  const aiAudits: CodeAudit[] = [];
   if (oracle.status === 'ok') {
     panels = panels.map((p) => {
       const aiValid = oracle.validUntil?.[p.id];
@@ -533,7 +544,13 @@ export async function getBoardReading(
           detail: al.detail ?? 'AI multi-chart synthesis',
         }))
         .filter((al) => al.claimIds.length > 0 && !p.lines.some((existing) => existing.text === al.text));
-      const allLines = mergedAiLines.length ? [...p.lines, ...mergedAiLines] : p.lines;
+      // BG-12: the code auditor runs again over the oracle's lines; a line that fails is dropped and recorded
+      const aiAudit = mergedAiLines.length
+        ? auditCards({ panels: [{ ...p, lines: mergedAiLines }], claims: allClaims, vetoed: vetoedIds, resolvedKeys, boundaries })
+        : null;
+      if (aiAudit) aiAudits.push(aiAudit.audit);
+      const keptAiLines = aiAudit ? aiAudit.panels[0]!.lines : mergedAiLines;
+      const allLines = keptAiLines.length ? [...p.lines, ...keptAiLines] : p.lines;
       let headerRange = p.headerRange;
       if (headerRange !== 'always' && p.id !== 'chapters') {
         let from = headerRange.from;
@@ -554,6 +571,8 @@ export async function getBoardReading(
       };
     });
   }
+
+  const finalAudit: CodeAudit = aiAudits.length ? mergeAudits([audited.audit, ...aiAudits]) : audited.audit;
 
   const aiOverallValidTo =
     oracle.validUntil?.overall && oracle.validUntil.overall !== 'always'
@@ -587,7 +606,7 @@ export async function getBoardReading(
       panels,
       purview: purview.entries,
       gaps: [...new Set(gapsAll)],
-      audit: audited.audit,
+      audit: finalAudit,
       steps: {
         loadMs,
         panelsMs,
@@ -640,6 +659,7 @@ export async function getBoardReading(
     reading: {
       ...baseReading,
       panels,
+      audit: finalAudit,
       dossierId,
       builtLine: `Built ${longDate(asOf)}${validTo ? `, next check ${longDate(validTo)}` : ''}`,
       validUntil: validTo ?? 'always',

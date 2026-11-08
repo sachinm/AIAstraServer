@@ -61,3 +61,9 @@ export function auditCards(input: AuditInput): { audit: CodeAudit; panels: SelfP
   });
   return { audit: { verdict: failures.length ? 'fail' : 'pass', checked, failures }, panels };
 }
+
+/** One verdict over several audit passes (BG-12: the build's cards, then the oracle's lines): checks add up, failures join. */
+export function mergeAudits(audits: CodeAudit[]): CodeAudit {
+  const failures = audits.flatMap((a) => a.failures);
+  return { verdict: failures.length ? 'fail' : 'pass', checked: audits.reduce((n, a) => n + a.checked, 0), failures };
+}
