@@ -157,3 +157,55 @@ export const CONFIRM_BY_HOUSE: Array<{ houses: number[]; text: string }> = [
   { houses: [9], text: 'Has a teacher, a belief or your father been on your mind lately?' },
   { houses: [1], text: 'Does it feel like a new chapter of your life has started?' },
 ];
+
+// ── Card words (docs/reading-engine/61): short forms that keep a line within 22 words ─
+
+/** One word or two per house, for card lines. */
+export const HOUSE_WORD: Record<number, string> = {
+  1: 'self', 2: 'money', 3: 'effort', 4: 'home', 5: 'ideas', 6: 'service', 7: 'partnership', 8: 'change', 9: 'belief', 10: 'work', 11: 'gains', 12: 'letting go',
+};
+
+/** The faculty, short, for card lines. */
+export const PLANET_SHORT: Record<string, string> = {
+  Su: 'your authority', Mo: 'your feelings', Ma: 'your drive', Me: 'your thinking', Ju: 'your judgement', Ve: 'your pleasures', Sa: 'your discipline', Ra: 'your hunger for the new', Ke: 'your detachment',
+};
+
+/** The engine's ripeness labels, short (after "it"). */
+export const RIPENESS_SHORT: Record<string, string> = {
+  fully_ripe_sweet: 'gives fully',
+  half_ripe: 'gives about half',
+  unripe_sour: 'gives early and raw',
+  over_ripe_delayed: 'gives late',
+  dried_seed_externalized: 'gives mostly to others',
+};
+
+export function housesWord(houses: readonly number[], max = 4): string {
+  return joinWords([...new Set(houses)].sort((a, b) => a - b).slice(0, max).map((h) => HOUSE_WORD[h]).filter((x): x is string => !!x));
+}
+
+/** 2019-02-16 → "Feb 2019" */
+export function monthYear(iso: string): string {
+  const [y, m] = iso.slice(0, 10).split('-').map(Number);
+  return `${MONTHS[(m ?? 1) - 1]} ${y}`;
+}
+
+export const wordCount = (s: string): number => s.trim().split(/\s+/).filter(Boolean).length;
+export const MAX_LINE_WORDS = 22;
+
+/**
+ * The body panel's shapes of pressure, by the planet on the D30 first house (docs/reading-engine/61 §3): only the four
+ * classical shapes (heat, dryness, heaviness, fluids), after the dosha natures BPHS gives the planets. FOR SACHIN'S
+ * REVIEW before it is shown widely; the model layer may not add body words outside this table.
+ */
+export const BODY_SHAPE: Record<string, string> = {
+  Su: 'heat', Ma: 'heat', Ke: 'heat', Sa: 'dryness', Ra: 'dryness', Ju: 'heaviness', Mo: 'fluids', Ve: 'fluids',
+};
+export const BODY_NOTE = 'What the chart and the sky put on the body. Not medical advice; nothing here names a condition.';
+
+/** Words no card line may carry (doc 45 §3.3, doc 61 §4): chart terms, body and medical words, lifetime claims. */
+export const BANNED_LINE_WORDS: RegExp[] = [
+  /\b(house|lord|dasha|mahadasha|antardasha|nakshatra|varga|lagna|rahu|ketu|saturn|jupiter|venus|mercury|mars|sun|moon)\b/i,
+  /\b(illness|disease|diagnosis|symptom|medication|medicine|surgery|doctor|hospital|liver|heart|lung|kidney|stomach|brain|cancer)\b/i,
+  /\b(you will always|for life|forever|never will)\b/i,
+  /\b(guaranteed|certain|doomed|cursed|possessed|storm|disaster)\b/i,
+];

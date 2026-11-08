@@ -4,7 +4,7 @@
  * planets in that sign, the D9 1st house card, the Sun, Jupiter (judgement and faith) and the D1 9th and 12th house cards (doc 59 §6.2). The AK claims are withheld
  * with a gap when the AK planet is not stored.
  */
-import { faculties, HOUSE_SELF, PLANET_FACULTY } from '../words.js';
+import { faculties, HOUSE_SELF, HOUSE_SHORT, joinWords, PLANET_FACULTY, PLANET_SHORT } from '../words.js';
 import { gaps, houseFrame, planetChain, pointOf } from '../slices.js';
 import type { PanelBody, SelfClaim } from '../types.js';
 import { body, cardDetail, pname, stateWords, type PanelInput } from './common.js';
@@ -19,6 +19,7 @@ export function atmaPanel({ view }: PanelInput): PanelBody {
   if (ak && PLANET_FACULTY[ak.planet]) {
     claims.push({
       id: 'atma.ak',
+      line: `Your soul's lesson runs through ${PLANET_SHORT[ak.planet]}, lived in ${HOUSE_SHORT[ak.d1.house!]}.`,
       text: `What your soul is here to learn runs through ${PLANET_FACULTY[ak.planet]}, lived in ${HOUSE_SELF[ak.d1.house!]}.`,
       detail: `Atmakaraka ${pname(ak.planet)}: ${cardDetail(ak.d1)}; shadbala rank ${ak.d1.shadbalaRank ?? '?'}`,
       certainty: 'fact',
@@ -32,6 +33,7 @@ export function atmaPanel({ view }: PanelInput): PanelBody {
       const with_ = view.planets('D9').filter((p) => p.sign === kk.sign && p.planet !== ak.planet).map((p) => p.planet);
       claims.push({
         id: 'atma.karakamsa',
+        line: `Inside, what you most want lies in ${HOUSE_SHORT[kk.house]}${with_.length ? `, beside ${joinWords(with_.map((p) => PLANET_SHORT[p]).filter((x): x is string => !!x))}` : ''}.`,
         text: `In the chart of your inner self it sits in ${HOUSE_SELF[kk.house]}${with_.length ? `, alongside ${faculties(with_)}` : ''}.`,
         detail: `Karakamsa ${kk.sign} (D9 AK), h${kk.house} from the D9 lagna ${d9h1?.sign ?? '?'}; D9 planets there: ${with_.map(pname).join(', ') || 'none'}`,
         certainty: 'fact',

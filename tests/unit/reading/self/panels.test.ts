@@ -172,7 +172,7 @@ describe('panels', () => {
 describe('diagnosis, confirm question and answers', () => {
   const bodies = { lagna: lagnaPanel(input), struggle: strugglePanel(input), yogas: yogasPanel(input), chapters: chaptersPanel(input) };
   const diag = diagnosisPanel(bodies);
-  const asPanel = (id: SelfPanel['id'], b: ReturnType<typeof lagnaPanel>): SelfPanel => ({ id, technique: `self.reading.${id}`, title: id, lead: b.lead, status: 'ok', claims: b.claims, ...(b.chapters ? { chapters: b.chapters } : {}), cached: false, ms: 0 });
+  const asPanel = (id: SelfPanel['id'], b: ReturnType<typeof lagnaPanel>): SelfPanel => ({ id, technique: `self.reading.${id}`, title: id, lead: b.lead, status: 'ok', claims: b.claims, ...(b.chapters ? { chapters: b.chapters } : {}), cached: false, ms: 0, headerRange: 'always', lines: [] });
   const panels: SelfPanel[] = [asPanel('diagnosis', diag), asPanel('chapters', bodies.chapters), asPanel('struggle', bodies.struggle)];
   it('diagnosis: three sentences built from other claims, adding no fact', () => {
     expect(diag.claims.map((c) => c.id)).toEqual(['diagnosis.direction', 'diagnosis.tension', 'diagnosis.now']);

@@ -10,13 +10,17 @@ const reading: SelfReading = {
   digestVersion: 'd',
   clock: { system: 'dwisatpathi', label: 'Dwisaptati Sama', reason: 'preferred', confirming: [{ system: 'vimsottari', label: 'Vimshottari' }], choices: [] },
   panels: [
-    { id: 'lagna', technique: 'self.reading.lagna', title: 'Who you are', lead: '', status: 'ok', cached: false, ms: 1, claims: [
+    { id: 'lagna', technique: 'self.reading.lagna', title: 'Who you are', lead: '', status: 'ok', cached: false, ms: 1, headerRange: 'always', lines: [], claims: [
       { id: 'lagna.lord_house', text: 'kept', detail: 'd', certainty: 'fact', evidence: ['planet:D1.Ju'] },
       { id: 'lagna.seen', text: 'gone', detail: 'd', certainty: 'fact', evidence: ['point:D1.AL'], withheld: 'You told us this did not fit.' },
     ] },
   ],
   question: null,
   gaps: [],
+  purview: [],
+  audit: { verdict: 'pass', checked: 0, failures: [] },
+  dossierId: null,
+  builtLine: '',
 };
 
 afterEach(() => { delete process.env.SELF_READING_MODEL; });

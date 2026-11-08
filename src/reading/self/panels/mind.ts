@@ -17,6 +17,7 @@ export function mindPanel({ view }: PanelInput): PanelBody {
     const lifted = /debil/i.test(mo.d1.dignity ?? '') && hasCancellation(view, 'Mo');
     claims.push({
       id: 'mind.moon_place',
+      line: `Your feelings are tied to ${HOUSE_SHORT[mo.d1.house!]}${dw === 'at its weakest' ? `; fragile by birth${lifted ? ', lifted over time' : ''}` : ''}.`,
       text: `Your feelings are tied to ${HOUSE_SELF[mo.d1.house!]}.${dw ? ` By birth they run ${dw === 'at its weakest' ? 'at their most fragile' : dw === 'at its strongest' ? 'at their strongest' : 'steady'}${lifted ? ', and a cancellation in your chart lifts this over time' : ''}.` : ''}`,
       detail: `Moon: ${cardDetail(mo.d1)}${mo.d9 ? `; D9 ${mo.d9.sign} h${mo.d9.house} ${mo.d9.dignity ?? ''}` : ''}${lifted ? '; neecha bhanga row present' : ''}`,
       certainty: 'fact',
@@ -58,7 +59,8 @@ export function mindPanel({ view }: PanelInput): PanelBody {
   const h4 = houseFrame(view, 'D1', 4, g);
   if (h4?.lordHouse) {
     const support = h4.sav != null && mean != null ? (h4.sav > mean ? ' Your chart gives it more support than most of your life.' : h4.sav < mean ? ' Your chart gives it less support than most of your life.' : '') : '';
-    claims.push({ id: 'mind.peace', text: `Your peace of mind depends on ${HOUSE_SELF[h4.lordHouse]}.${support}`, detail: `D1 h4 ${h4.sign}, lord ${pname(h4.lord)} in h${h4.lordHouse} (${h4.lordDignity ?? '?'}); SAV ${h4.sav ?? '?'} (chart mean ${mean?.toFixed(1) ?? '?'})`, certainty: 'fact', evidence: ['house:D1.h4'] });
+    const supportShort = h4.sav != null && mean != null ? (h4.sav > mean ? '; the chart supports it well' : h4.sav < mean ? '; the chart gives it little support' : '') : '';
+    claims.push({ id: 'mind.peace', line: `Your peace of mind depends on ${HOUSE_SHORT[h4.lordHouse]}${supportShort}.`, text: `Your peace of mind depends on ${HOUSE_SELF[h4.lordHouse]}.${support}`, detail: `D1 h4 ${h4.sign}, lord ${pname(h4.lord)} in h${h4.lordHouse} (${h4.lordDignity ?? '?'}); SAV ${h4.sav ?? '?'} (chart mean ${mean?.toFixed(1) ?? '?'})`, certainty: 'fact', evidence: ['house:D1.h4'] });
   }
   const h5 = houseFrame(view, 'D1', 5, g);
   if (h5?.lordHouse) {

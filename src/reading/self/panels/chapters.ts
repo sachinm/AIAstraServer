@@ -7,9 +7,9 @@
  */
 import { getSelfChapterBoundaryMonths, getSelfChapterConfirmMin } from '../../../config/env.js';
 import type { ActivationRow } from '../../digest/activation.js';
-import { clockLabel, FRUITION_WORDS, HOUSE_SHORT, housesShort, longDate, PLANET_FACULTY } from '../words.js';
+import { clockLabel, FRUITION_WORDS, HOUSE_SHORT, housesShort, housesWord, longDate, monthYear, PLANET_FACULTY, PLANET_SHORT } from '../words.js';
 import { activationKey, gaps, mainStarts, mdSpine } from '../slices.js';
-import type { ChapterConfirmation, PanelBody, SelfChapter } from '../types.js';
+import type { ChapterConfirmation, PanelBody, SelfChapter, SelfClaim } from '../types.js';
 import { body, cardDetail, pname, type PanelInput } from './common.js';
 
 const ordinal = (n: number | null): string => n == null ? "?" : `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
@@ -101,14 +101,25 @@ export function chaptersPanel({ view, activation, asOf, clock }: PanelInput): Pa
   if (spine.next) chapters.push(make('next', spine.next));
   else g.add(`activation:${clock.system} next level 1 missing`);
 
-  const claims = chapters.map((c) => ({
+  const whoOf = (c: SelfChapter) => (PLANET_SHORT[c.lord] ? PLANET_SHORT[c.lord] : `the ${c.lordLabel} period`);
+  const lineOf = (c: SelfChapter): string =>
+    c.certainty === 'split' || !c.text
+      ? `${monthYear(c.from)} – ${monthYear(c.to)}: your other clocks do not mark this turn.`
+      : c.kind === 'previous'
+        ? `From ${monthYear(c.from)} to ${monthYear(c.to)} ${whoOf(c)} shaped you, through ${housesWord(c.houses)}.`
+        : c.kind === 'running'
+          ? `From ${monthYear(c.from)} to ${monthYear(c.to)} ${whoOf(c)} leads, through ${housesWord(c.houses)}.`
+          : `From ${monthYear(c.from)} ${whoOf(c)} leads, through ${housesWord(c.houses)}.`;
+  const claims: SelfClaim[] = chapters.map((c) => ({
     id: `chapters.${c.kind}`,
     text: c.text ?? `${longDate(c.from)} – ${longDate(c.to)}: your other clocks do not mark a turn here.`,
+    line: lineOf(c),
+    range: { from: c.from, to: c.to },
     detail: c.detail,
     certainty: c.certainty,
     evidence: c.evidence,
   }));
-  if (running.sub) claims.splice(chapters.indexOf(running) + 1, 0, { id: 'chapters.sub', text: running.sub.text, detail: running.sub.detail, certainty: running.certainty, evidence: running.evidence.slice(-1) });
+  if (running.sub) claims.splice(chapters.indexOf(running) + 1, 0, { id: 'chapters.sub', text: running.sub.text, line: `Until ${longDate(running.sub.to)} the pressure is on ${housesWord(running.sub.houses)}.`, range: { from: running.sub.from, to: running.sub.to }, detail: running.sub.detail, certainty: running.certainty, evidence: running.evidence.slice(-1) });
   const lead = `You are in the chapter of ${housesShort(spine.running.houses)}, until ${longDate(spine.running.to)}.`;
   return body(lead, claims, g, { chapters });
 }

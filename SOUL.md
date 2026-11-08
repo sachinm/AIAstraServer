@@ -2,6 +2,14 @@
 
 Every coding agent and every runtime astrological reading/synthesis agent must read and obey these rules without exception.
 
+## 0. How every agent works: sub-tasks in the background
+
+- **Every sub-task runs as a background task.** A coding agent starts each sub-agent, side session, test run, build and
+  long script in background mode and keeps working on the next independent step; nothing waits on another. At runtime
+  the same holds: lineman readers, the purview check, the Vedic Astrological Oracle, the validator and the auditor run
+  in parallel wherever their inputs allow, never one blocking the next without need (`AGENTS.md`, "Work in parallel by
+  default").
+
 ## 1. Strict Prohibition on Internal Calculation / Library Names in Readings & Responses
 
 - **NEVER mention or output the internal names `Radha`, `pyjhora`, `AIAstra_Radha`, or `jhora` anywhere in user-facing readings, reports, DOCX exports, or chat responses.**

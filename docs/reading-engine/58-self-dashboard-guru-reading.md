@@ -339,6 +339,10 @@ The confirm question is a read-time step of the service, not a stored technique.
 
 ### 8.1 After docs 59 and 60 (2026-11-07 evening): the order from here
 
+**Status 2026-11-08:** steps 11 (dossier, M40), 12 (purview) and the code auditor of 13 are built, with doc 61's cards and
+body panel and admin doc 10's lab endpoints; the worked example is in [doc 62](62-self-card-contract.md). Scenario files
+S1–S8 are drafted under `scenarios/self/`; their hydration, the bundle (14) and the model steps (15) are next.
+
 Steps 1–6 and 8–10 above are built on this branch, with doc 59's page shape and cuts. Step 7 (the model layer) is
 written and stays off. Doc 60 §10 sets the order from here; every step is code first and costs nothing until step 15:
 

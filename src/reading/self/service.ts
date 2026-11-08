@@ -27,14 +27,33 @@ import { yearPanel, runningMudda } from './panels/year.js';
 import { runningChain } from './slices.js';
 import { SELF_PANEL_IDS, type ConfirmAnswer, type PanelBody, type SelfClaim, type SelfPanel, type SelfPanelId, type SelfQuestion, type SelfReading } from './types.js';
 import { diagnosisPanel, type PanelBodies } from './panels/diagnosis.js';
-import { CONFIRM_BY_HOUSE } from './words.js';
+import { BODY_NOTE, CONFIRM_BY_HOUSE, longDate } from './words.js';
+import { bodyPanel } from './panels/body.js';
+import { applyPurview, runPurview } from './purview.js';
+import { buildCard } from './card.js';
+import { auditCards } from './audit.js';
+import { buildDossier, collectData, writeDossier, type DossierInput } from './dossier.js';
+import { defaultLoadTransit } from '../area/boardService.js';
+import type { TransitRangePayload } from '../chartData/transitRange.js';
 
 export const SELF_PANEL_AGENT = 'self.reading_panel';
 /** Bump when panel code or words change: it is part of every stored output's key, so old wording is never served. */
-export const SELF_READING_VERSION = 's1.2026-11-07f';
+export const SELF_READING_VERSION = 's2.2026-11-08b';
+
+/** Titles and freshness of every panel (docs/reading-engine/61 §2). */
+export const PANEL_META: Record<Exclude<SelfPanelId, 'diagnosis'>, { title: string; window: 'natal' | 'dasha' | 'annual' }> = {
+  chapters: { title: 'Your chapters', window: 'dasha' },
+  lagna: { title: 'Who you are', window: 'natal' },
+  mind: { title: 'Your mind', window: 'natal' },
+  body: { title: 'Your body', window: 'dasha' },
+  atma: { title: "Your soul's aim", window: 'natal' },
+  yogas: { title: 'Gifts and knots', window: 'natal' },
+  struggle: { title: 'What you struggle with', window: 'dasha' },
+  year: { title: 'This year', window: 'annual' },
+};
 
 /** The part, spine, struggle and year panels; the diagnosis is built after them from their claims. */
-export const PANELS: Record<Exclude<SelfPanelId, 'diagnosis'>, { title: string; run: (i: PanelInput) => PanelBody; window: 'natal' | 'dasha' | 'annual' }> = {
+export const PANELS: Record<Exclude<SelfPanelId, 'diagnosis' | 'body'>, { title: string; run: (i: PanelInput) => PanelBody; window: 'natal' | 'dasha' | 'annual' }> = {
   lagna: { title: 'Who you are', run: lagnaPanel, window: 'natal' },
   mind: { title: 'Your mind', run: mindPanel, window: 'natal' },
   atma: { title: "Your soul's aim", run: atmaPanel, window: 'natal' },
@@ -44,7 +63,7 @@ export const PANELS: Record<Exclude<SelfPanelId, 'diagnosis'>, { title: string; 
   year: { title: 'This year', run: yearPanel, window: 'annual' },
 };
 export const PANEL_ORDER: SelfPanelId[] = [...SELF_PANEL_IDS];
-const DIAGNOSIS_TITLE = 'Who you are, in short';
+const DIAGNOSIS_TITLE = 'In short';
 const OPTIONS: SelfQuestion['options'] = [
   { value: 'yes', label: 'Yes' },
   { value: 'partly', label: 'Partly' },
@@ -58,6 +77,8 @@ export interface SelfDeps {
   activationFor?: typeof realActivationFor;
   systemsPresent?: (prisma: PrismaClient, kundliId: string) => Promise<SystemPresence[]>;
   queueDigest?: (prisma: PrismaClient, kundliId: string) => Promise<void>;
+  /** the stored sky overlay covering today; null when none is stored (never fetched here) */
+  loadTransit?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<TransitRangePayload | null>;
   now?: () => Date;
 }
 
@@ -96,7 +117,7 @@ export async function confirmAnswers(prisma: PrismaClient, userId: string): Prom
 export function pickQuestion(panels: SelfPanel[], answers: Record<string, ConfirmAnswer>): SelfQuestion | null {
   const tension = panels.find((p) => p.id === 'diagnosis')?.claims.find((c) => c.id === 'diagnosis.tension');
   if (tension && !answers[tension.id]) {
-    const said = tension.text.replace(/^The (tension|knot) in it: /, '');
+    const said = (tension.line ?? tension.text).replace(/^The (tension|knot) in it: /, '');
     return { claimId: tension.id, panel: 'diagnosis', text: `Does this ring true for you right now? ${said[0]!.toUpperCase()}${said.slice(1)}`, options: OPTIONS };
   }
   const ch = panels.find((p) => p.id === 'chapters');
@@ -124,7 +145,16 @@ export function withheldSources(panels: SelfPanel[], answers: Record<string, Con
   return out;
 }
 
-export async function getSelfReading(deps: SelfDeps, userId: string): Promise<SelfReadingResult> {
+export interface SelfReadingOptions {
+  /** why this build runs (docs/reading-engine/60 §6); a lab run is 'manual' and always writes its dossier */
+  trigger?: DossierInput['trigger'];
+  /** skip the stored outputs and make every panel (lab) */
+  force?: boolean;
+  /** run one technique only (lab); the diagnosis brings its four inputs */
+  only?: SelfPanelId;
+}
+
+export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfReadingOptions = {}): Promise<SelfReadingResult> {
   const prisma = deps.prisma;
   const kundli = await prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true, preferred_dasha: true } });
   if (!kundli) return { status: 'no_kundli' };
@@ -153,14 +183,31 @@ export async function getSelfReading(deps: SelfDeps, userId: string): Promise<Se
     const r = id === 'struggle' ? run.l3 ?? run.l2 ?? run.l1 : run.l2 ?? run.l1;
     return r ? span(r.from, r.to) : null;
   };
-  const answers = await confirmAnswers(prisma, userId);
+  const [answers, sky] = await Promise.all([confirmAnswers(prisma, userId), (deps.loadTransit ?? defaultLoadTransit)(prisma, kundli.id, asOf).catch(() => null)]);
+  const skyStored = sky !== null;
   const gapsAll: string[] = [];
 
   const runPanel = async (id: SelfPanelId, title: string, window: 'natal' | 'dasha' | 'annual', make: () => PanelBody): Promise<{ panel: SelfPanel; body: PanelBody | null }> => {
       const def = { title, window, run: make };
       const technique = `self.reading.${id}`;
       try {
-        const out = await withTechniqueOutput<PanelBody & { ms: number }>(
+        const made = async () => {
+          const value = await withAgentRun(
+            prisma,
+            SELF_PANEL_AGENT,
+            { userId, task: `${technique} ${asOf}`, technique, kundliId: kundli.id, input: { panel: id, clock: clock.system, version: view.version, trigger: opts.trigger ?? 'request' } },
+            async () => {
+              const t0 = performance.now();
+              const b = def.run();
+              const ms = Math.round((performance.now() - t0) * 100) / 100;
+              return { value: { ...b, ms }, output: { claims: b.claims.length, gaps: b.gaps.length, chapters: b.chapters?.length ?? 0 }, charts: charts(view, id, clock.system) };
+            },
+          );
+          return { value, summary: { claims: value.claims.length, gaps: value.gaps.length } };
+        };
+        const out = opts.force
+          ? { value: (await made()).value, cached: false }
+          : await withTechniqueOutput<PanelBody & { ms: number }>(
           prisma,
           {
             technique,
@@ -171,46 +218,94 @@ export async function getSelfReading(deps: SelfDeps, userId: string): Promise<Se
             userId,
             charts: charts(view, id, clock.system),
           },
-          async () => {
-            const value = await withAgentRun(
-              prisma,
-              SELF_PANEL_AGENT,
-              { userId, task: `${technique} ${asOf}`, technique, kundliId: kundli.id, input: { panel: id, clock: clock.system, version: view.version } },
-              async () => {
-                const t0 = performance.now();
-                const b = def.run();
-                const ms = Math.round((performance.now() - t0) * 100) / 100;
-                return { value: { ...b, ms }, output: { claims: b.claims.length, gaps: b.gaps.length, chapters: b.chapters?.length ?? 0 }, charts: charts(view, id, clock.system) };
-              },
-            );
-            return { value, summary: { claims: value.claims.length, gaps: value.gaps.length } };
-          },
+          made,
         );
         const b = out.value;
         gapsAll.push(...b.gaps.map((g) => `${id}: ${g}`));
         const status: SelfPanel['status'] = b.claims.length === 0 ? 'withheld' : b.gaps.length ? 'partial' : 'ok';
-        return { body: b, panel: { id, technique, title: def.title, lead: b.lead, status, claims: b.claims, ...(b.chapters ? { chapters: b.chapters } : {}), cached: out.cached, ms: out.cached ? 0 : b.ms } };
+        return { body: b, panel: { id, technique, title: def.title, lead: b.lead, status, claims: b.claims, ...(b.chapters ? { chapters: b.chapters } : {}), cached: out.cached, ms: out.cached ? 0 : b.ms, headerRange: 'always', lines: [] } };
       } catch (e) {
         console.error(`[self] ${technique} failed:`, (e as Error).message);
-        return { body: null, panel: { id, technique, title: def.title, lead: '', status: 'failed', claims: [], cached: false, ms: 0 } };
+        return { body: null, panel: { id, technique, title: def.title, lead: '', status: 'failed', claims: [], cached: false, ms: 0, headerRange: 'always', lines: [] } };
       }
   };
 
-  const partIds = Object.keys(PANELS) as Array<keyof typeof PANELS>;
-  const parts = await Promise.all(partIds.map((id) => runPanel(id, PANELS[id].title, PANELS[id].window, () => PANELS[id].run(input))));
+  // the parts; a lab run of one technique runs only that panel (and the diagnosis's inputs when it is the diagnosis)
+  const sensitive = isSensitive(activation, clock.system, asOf);
+  const runners: Record<Exclude<SelfPanelId, 'diagnosis'>, () => PanelBody> = {
+    ...(Object.fromEntries((Object.keys(PANELS) as Array<keyof typeof PANELS>).map((id) => [id, () => PANELS[id].run(input)])) as Record<keyof typeof PANELS, () => PanelBody>),
+    body: () => bodyPanel(input, { sensitive, skyStored }),
+  };
+  const DIAG_INPUTS: SelfPanelId[] = ['lagna', 'struggle', 'yogas', 'chapters'];
+  const wanted = (id: SelfPanelId) => !opts.only || opts.only === id || (opts.only === 'diagnosis' && DIAG_INPUTS.includes(id));
+  const partIds = (Object.keys(runners) as Array<keyof typeof runners>).filter(wanted);
+  const parts = await Promise.all(partIds.map((id) => runPanel(id, PANEL_META[id].title, PANEL_META[id].window, runners[id])));
   const bodies: PanelBodies = {};
-  for (const r of parts) if (r.body) bodies[r.panel.id] = r.body;
-  const diagnosis = await runPanel('diagnosis', DIAGNOSIS_TITLE, 'dasha', () => diagnosisPanel(bodies));
-  const byId = new Map([diagnosis, ...parts].map((r) => [r.panel.id, r.panel] as const));
+  for (const r of parts) if (r.body) bodies[r.panel.id] = { ...r.body, claims: [...r.body.claims] };
+
+  // the whole-chart purview over the parts, then the diagnosis from what survives it
+  const purview = runPurview({ view, activation, asOf, clock, bodies, skyStored });
+  const vetoed = applyPurview(bodies, purview.entries);
+  const diagnosis = wanted('diagnosis') ? await runPanel('diagnosis', DIAGNOSIS_TITLE, 'dasha', () => diagnosisPanel(bodies)) : null;
+  if (diagnosis?.body) bodies.diagnosis = diagnosis.body;
+
+  // cards, shaped by the person's answers
+  const cardCtx = { running: { l1: run.l1, l2: run.l2 }, year: yearSpan ? { from: iso(yearSpan.from), to: iso(yearSpan.to) } : null };
+  const byId = new Map([...(diagnosis ? [diagnosis] : []), ...parts].map((r) => [r.panel.id, r.panel] as const));
   const ordered = PANEL_ORDER.map((id) => byId.get(id)).filter((p): p is SelfPanel => !!p);
-  const also = withheldSources(ordered, answers);
-  const panels: SelfPanel[] = ordered.map((p) => ({ ...p, claims: shapeClaims(p.claims, answers, also) }));
+  const withPurview = ordered.map((p) => ({ ...p, claims: bodies[p.id]?.claims ?? p.claims }));
+  const also = withheldSources(withPurview, answers);
+  const shaped: SelfPanel[] = withPurview.map((p) => {
+    const claims = shapeClaims(p.claims, answers, also);
+    const card = buildCard(p.id, { lead: p.lead, claims, gaps: [], chapters: p.chapters }, cardCtx);
+    gapsAll.push(...card.gaps);
+    const status: SelfPanel['status'] = p.status === 'failed' ? 'failed' : card.lines.length === 0 ? 'withheld' : p.status;
+    return { ...p, claims, status, headerRange: card.headerRange, lines: card.lines, ...(p.id === 'body' ? { note: BODY_NOTE } : {}), ...(vetoed[p.id]?.length ? { vetoed: vetoed[p.id] } : {}) };
+  });
+
+  // the code auditor over the cards, against the rows the dossier resolves
+  const allClaims = new Map<string, string[]>();
+  for (const p of shaped) for (const c of p.claims) allClaims.set(c.id, c.evidence);
+  for (const v of Object.values(vetoed).flat()) if (v) allClaims.set(v.claimId, []);
+  const { data } = collectData({ view, activation, panels: shaped, purview: purview.entries });
+  const boundaries = new Set<string>([...activation.flatMap((r) => [r.from, r.to]), ...view.annual().flatMap((a) => a.dashas.flatMap((d) => d.periods.flatMap((pp) => [pp.from, pp.to])))]);
+  const audited = auditCards({ panels: shaped, claims: allClaims, vetoed: new Set(Object.values(vetoed).flat().map((v) => v!.claimId)), resolvedKeys: new Set(Object.keys(data)), boundaries });
+  const panels = audited.panels.map((p) => (p.lines.length === 0 && p.status !== 'failed' ? { ...p, status: 'withheld' as const } : p));
+
+  const validTo = (run.l2 ?? run.l1)?.to ?? null;
+  const fresh = panels.some((p) => !p.cached);
+  let dossierId: string | null = null;
+  if (fresh || opts.trigger === 'manual') {
+    const dIn: DossierInput = { kundliId: kundli.id, board: 'self', trigger: opts.trigger ?? 'request', view, activation, asOf, validTo, clock, codeVersion: SELF_READING_VERSION, panels, purview: purview.entries, gaps: [...new Set(gapsAll)], audit: audited.audit };
+    dossierId = await writeDossier(prisma, dIn, buildDossier(dIn));
+  } else {
+    dossierId = (await prisma.readingDossier?.findFirst?.({ where: { kundli_id: kundli.id, board: 'self' }, orderBy: { created_at: 'desc' }, select: { id: true } }).catch(() => null))?.id ?? null;
+  }
   return {
     status: 'ok',
     built_at: asOf,
     cached: panels.every((p) => p.cached),
-    reading: { asOf, digestVersion: view.version, clock, panels, question: pickQuestion(panels, answers), gaps: [...new Set(gapsAll)] },
+    reading: {
+      asOf,
+      digestVersion: view.version,
+      clock,
+      panels,
+      question: pickQuestion(panels, answers),
+      gaps: [...new Set(gapsAll)],
+      purview: purview.entries,
+      audit: audited.audit,
+      dossierId,
+      builtLine: `Built ${longDate(asOf)}${validTo ? `, next check ${longDate(validTo)}` : ''}`,
+    },
   };
+}
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** A sensitive passage is running (docs/reading-engine/60 §4, 61 §4): the sub-period lord is Ketu, or Saturn over 8 and 12. */
+export function isSensitive(activation: readonly ActivationRow[], system: string, asOf: string): boolean {
+  const l2 = runningChain(activation, system, asOf).l2;
+  return !!l2 && (l2.lord === 'Ke' || (l2.lord === 'Sa' && l2.houses.includes(8) && l2.houses.includes(12)));
 }
 
 /** Sets or clears the kundli's reading clock; refuses a system with no stored periods. */

@@ -10,6 +10,11 @@ Never let one task block the rest of the plan.
    `prisma generate`, installs, git on large trees, scripts) runs with the agent's background/"run in background"
    option. While it runs, keep working on the next thing that does not need its result; read its output when it
    finishes. Do not sit waiting on a foreground command.
+00. **Every sub-task runs as a background task (Sachin, 2026-11-07).** Every sub-agent, side session, research
+   sweep, doc draft, web or server slice, test run and long script is started in background mode, so nothing blocks the
+   task before or after it. The agent that starts it keeps working on the next independent step and reads the result
+   when the notification arrives; it never waits in the foreground for a sub-task, and never polls or sleeps on one.
+   Sub-agents run on Opus 5.5 at medium effort with fast mode unless Sachin names another model.
 
 Do not work through a plan one item at a time when its items are independent.
 

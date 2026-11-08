@@ -84,10 +84,12 @@ describe('GET /api/self/reading', () => {
     const r1 = await (await get('u1')).json();
     expect(r1.status).toBe('ok');
     expect(r1.reading.clock).toMatchObject({ system: 'dwisatpathi', reason: 'preferred' });
-    expect(r1.reading.panels.map((p: any) => p.technique)).toEqual(['diagnosis', 'chapters', 'lagna', 'mind', 'atma', 'yogas', 'struggle', 'year'].map((x) => `self.reading.${x}`));
-    expect(r1.reading.panels.every((p: any) => p.status === 'ok' && !p.cached)).toBe(true);
-    expect(f.outputs.size).toBe(8);
-    expect(f.runs.filter((r) => r.agent_id === 'self.reading_panel' || r.agentId === 'self.reading_panel').length).toBeGreaterThanOrEqual(8);
+    expect(r1.reading.panels.map((p: any) => p.technique)).toEqual(['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year'].map((x) => `self.reading.${x}`));
+    expect(r1.reading.panels.every((p: any) => p.status !== 'failed' && p.status !== 'withheld' && !p.cached)).toBe(true);
+    expect(r1.reading.audit.verdict).toBe('pass');
+    expect(r1.reading.panels.find((p: any) => p.id === 'body').status).toBe('partial');
+    expect(f.outputs.size).toBe(9);
+    expect(f.runs.filter((r) => r.agent_id === 'self.reading_panel' || r.agentId === 'self.reading_panel').length).toBeGreaterThanOrEqual(9);
     const r2 = await (await get('u1')).json();
     expect(r2.cached).toBe(true);
     expect(r2.reading.panels.every((p: any) => p.cached && p.ms === 0)).toBe(true);

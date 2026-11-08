@@ -3,9 +3,40 @@
  * (AIAstra_WEB/src/lib/selfReadingApi.ts). Each panel is one technique, `self.reading.<id>`.
  */
 
-export type SelfPanelId = 'diagnosis' | 'chapters' | 'lagna' | 'mind' | 'atma' | 'yogas' | 'struggle' | 'year';
-/** display order (docs/reading-engine/59 §1): diagnosis, the chapters spine, the parts, struggle, this year */
-export const SELF_PANEL_IDS: readonly SelfPanelId[] = ['diagnosis', 'chapters', 'lagna', 'mind', 'atma', 'yogas', 'struggle', 'year'];
+export type SelfPanelId = 'diagnosis' | 'chapters' | 'lagna' | 'mind' | 'body' | 'atma' | 'yogas' | 'struggle' | 'year';
+/** display order (docs/reading-engine/61 §4): In short, chapters, who you are, mind, body, soul, gifts and knots, struggle, this year */
+export const SELF_PANEL_IDS: readonly SelfPanelId[] = ['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year'];
+
+/** docs/reading-engine/62: a card line's validity range and certainty */
+export type LineRange = { from: string; to: string } | 'always';
+export type LineCertainty = 'fact' | 'strong' | 'moderate' | 'possible';
+export interface SelfLine {
+  id: string;
+  /** at most 22 words, plain */
+  text: string;
+  range: LineRange;
+  claimIds: string[];
+  certainty: LineCertainty;
+  detail: string;
+}
+export interface PurviewEntry {
+  rule: string;
+  source: string;
+  action: 'override' | 'veto' | 'annotate';
+  affects: string[];
+  rows: string[];
+  text: string;
+}
+export interface AuditFailure {
+  lineId: string;
+  check: string;
+  text: string;
+}
+export interface CodeAudit {
+  verdict: 'pass' | 'fail';
+  checked: number;
+  failures: AuditFailure[];
+}
 export type Certainty = 'fact' | 'confirmed' | 'likely' | 'split';
 export type ConfirmAnswer = 'yes' | 'partly' | 'no' | 'skip';
 
@@ -21,6 +52,10 @@ export interface SelfClaim {
   evidence: string[];
   /** set at read time when the person said it did not fit */
   withheld?: string;
+  /** a card line of at most 22 words, when `text` is longer (docs/reading-engine/61 §1) */
+  line?: string;
+  /** the range this claim is true for; 'always' for natal facts (default) */
+  range?: LineRange;
 }
 
 export interface SelfSubChapter {
@@ -68,6 +103,11 @@ export interface SelfPanel {
   chapters?: SelfChapter[];
   cached: boolean;
   ms: number;
+  /** docs/reading-engine/62: the card */
+  headerRange: LineRange;
+  lines: SelfLine[];
+  note?: string;
+  vetoed?: Array<{ claimId: string; rule: string; text: string }>;
 }
 
 export interface SelfClockChoice {
@@ -98,6 +138,10 @@ export interface SelfReading {
   question: SelfQuestion | null;
   /** staff only: fields a panel needed and did not find */
   gaps: string[];
+  purview: PurviewEntry[];
+  audit: CodeAudit;
+  dossierId: string | null;
+  builtLine: string;
 }
 
 /** What a panel function returns before the service adds cache state and timing. */

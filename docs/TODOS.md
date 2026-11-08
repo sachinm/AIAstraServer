@@ -1057,3 +1057,34 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
   - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
   - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
   - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
+
+## Filed 2026-11-08 by the You reading research-grade build (docs 60–62, branch `feat/self-dashboard-guru-reading`)
+
+- **Built:** `self.reading.purview` (whole-chart check: lagna lord standing, cancellations, combustion and retrograde,
+  functional nature, vargottama, gandanta, dasha applicability, MD–AD 6/8 and 2/12, stored sky, sensitive core),
+  `self.reading.body` (facts only), the doc 61 card (1–3 lines of at most 22 words, per-line ranges, header ranges),
+  `self.reading.audit` (code auditor; a failing line leaves the card), `reading_dossiers` (M40, sealed) written once per
+  build content, and `/api/admin-lab/*` behind `ADMIN_LAB=1` and `ADMIN_LAB_TOKEN` (header `x-admin-lab-token`).
+- **P2: The request still builds.** Doc 60 §6 says a person's request never builds (it reads the stored reading or
+  queues a build on the four triggers). Today a request runs the panels through the stored outputs, so an unchanged
+  open makes nothing, but a window boundary is crossed on a request. Owner: reading-dev. Done: a build sweep on the
+  `dasha_boundary` / `annual` / `confirm` / `digest` triggers and requests that only read.
+- **P2: No bundle yet (doc 60 phase C).** The build reads the digest (memoised 60 s), two activation queries, the facts
+  and the sky overlay; agents do not exist yet on this path. Done: `board.bundle` in `technique_outputs` read once.
+- **P2: Scenario hydration cannot take chart specs.** `buildCustomResearchSubject` (`src/reading/research/presets.ts`)
+  takes birth data and a profession template, not placements, yogas or periods, and `ResearchGroupKind` has no
+  `self_scenario`. S2–S8 (`docs/reading-engine/scenarios/self/`) are chart specifications with approximate dates;
+  the stored dates win once hydrated. Owner: reading-dev. Done: hydration from a chart spec or hand-built subjects.
+- **P3: S2's "Moon override" was undefined in doc 60 §4;** the scenario uses a Kemadruma row cancelled by a kendra Moon.
+  The purview has no Kemadruma-cancellation rule yet (the engine row decides). Owner: Sachin / reading-dev.
+- **P3: The global banned list of doc 60 §5** must carry the engine names; the per-scenario lists leave them out so the
+  files do not contain them. `BANNED_LINE_WORDS` in `src/reading/self/words.ts` is the code list; add the names there
+  through an env or a non-literal pattern.
+- **P3: Doc 45 vs doc 61 on chart words in cards:** doc 61's examples name planets ("Saturn crosses your Moon"); doc
+  45 §3.3 bans them. The build and the scenarios follow doc 45 (`BANNED_LINE_WORDS`). Owner: Sachin.
+- **P3: `BODY_WORDS` (`BODY_SHAPE` in words.ts) needs Sachin's review** before the body panel is shown widely: planet to
+  one of four shapes after the BPHS dosha natures.
+- **P3: Web chapter cards still say "Likely"** from the older chapter certainty set beside the card certainty words
+  (web worktree finding). The 22-word limit is not checked on the web side (the server auditor enforces it).
+- **Deploy note:** M40 is applied to the shared database; `ADMIN_LAB` and `ADMIN_LAB_TOKEN` are new env vars (deploy
+  session; off by default).
