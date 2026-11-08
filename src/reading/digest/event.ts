@@ -1,7 +1,7 @@
 /**
  * The digest events (docs/reading-engine/53 §4.7, 54 §2), handled by `POST /events` like `kundli-sync`:
  *   { source: 'kundli-digest', kundliId, token }      build (or rebuild) one kundli's digest, after an annual top-up
- *   { source: 'kundli-digest-sweep', token }          EventBridge rule (15 min): up to 20 kundlis whose dossier is ready
+ *   { source: 'kundli-digest-sweep', token }          EventBridge rule (every 5 min): up to 20 kundlis whose dossier is ready
  *                                                     and whose digest is pending, stale, failed, of another version or
  *                                                     stuck building, one after another within DIGEST_SWEEP_MAX_MS
  *                                                     (default 60 s), then annual-set top-ups with the time left

@@ -1,6 +1,6 @@
 # BUILD-GAPS.MD — Prioritized Build Gaps & Astrological / UI Queue
 
-**Last Updated**: `2026-11-08T07:57:00-08:00`
+**Last Updated**: `2026-11-08` (Claude Opus 5.5 BUILD-GAPS session, branch `feat/build-gaps-p2`)
 **Related Handover Docs**:
 - [`docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md`](./docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md)
 - [`docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md`](./docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md)
@@ -16,8 +16,15 @@
 | `BG-03` parallel family readers | **DONE** — `runSelfOracle` runs the uncached `family.*` readers with `Promise.all`, merging results in `activeFamilyIds` order. Server tsc 0. Not yet measured live. | `AIAstra_Server` `develop` (this commit) |
 | `BG-02` 3-panel layout + all-user stored builds | **NOT STARTED** — spec + 7 test guards below | — |
 | `BG-04`/`BG-05` cohort refresh + benchmark | **NOT STARTED** | — |
-| `BG-06`–`BG-12` | **NOT STARTED** | — |
-| `BG-13` (new) | **OPEN, already on develop before this session's change** — `tests/unit/reading/oracle/units.test.ts:21` fails: `src/reading/prompts/oracle/self.md` contains an engine name matching `/radha|pyjhora|jhora/i`. Reword the prompt (for example "never name the calculation engine"), then run `node scripts/embed-prompts.mjs`. | `src/reading/prompts/oracle/self.md` |
+| `BG-06` lagna | **PARTLY DONE** — `lagna.seen_fit`: the lagna-to-AL fit, worded from the engine's class label on the AL's house. **Kept per doc 59 §4.1:** the Moon lagna stays and the Paka lagna stays out (doc 59 dropped it as the lagna lord's house named twice; BG-06's spec contradicted the reviewed design). 11th/12th from AL needs an engine nth-from table (TODOS 2026-11-08). | `feat/build-gaps-p2` |
+| `BG-07` mind | **PARTLY DONE** — `mind.moon_support` (Sunapha / Anapha / Durudhara / Kemadruma from the engine's yoga rows), `mind.home_seen` (A4), `mind.ideas_seen` (A5). Paksha Bala, D24 and K64M wait on engine/digest fields (TODOS). | `feat/build-gaps-p2` |
+| `BG-08` atma | **BLOCKED (engine)** — Ishta / Dharma / Palana Devata need counting from the karakamsa and AmK in D9, which Node may not do; D20 not in the default chart list (TODOS). | — |
+| `BG-09` yogas | **DONE** — rows ranked within gifts and knots by the mean stored `avasthaMultipliers.effective` of their planets, ×1.5 when a planet runs the main or sub period; weight in the detail, "It is in play now." on running rows. | `feat/build-gaps-p2` |
+| `BG-10` love | **PARTLY DONE** — manglik exceptions carried from the engine (`YogaRow.details`) and worded as eased, manglik regex fixed, `heart.venus_mood` (Lajjitadi). UL vs A7 needs an engine count (TODOS). | `feat/build-gaps-p2` |
+| `BG-11` work | **PARTLY DONE** — `ground.service_or_business` (D10 h6 vs h7 by engine labels and occupants), `gain.sav_balance` (SAV h10:h11:h12). Houses from Saturn and from AL/A10 need engine nth-from tables (TODOS). | `feat/build-gaps-p2` |
+| `BG-12` pipeline | **DONE** — a second purview pass over the diagnosis (rules on `diagnosis.*` now land), and the code auditor re-runs over the Oracle's merged lines (`mergeAudits`). | `feat/build-gaps-p2` |
+| `BG-13` | **DONE** — `oracle/self.md` no longer names the engine; `units.test.ts` green. | `feat/build-gaps-p2` |
+| `BG-14` (new, Sachin 2026-11-08) | **DONE (server)** — dashboards are AI synthesis, not word scans: the phrase bans are gone (engine names are redacted, never a reason to drop a line); dates are grounded when they fall in any stored window (activation at every level, year-chart dashas, the transit range and its spans), and a date outside them is kept and listed in `audit.dateGaps`; each panel carries `plan` (summary, dated steps, calendar) from the Oracle's `PANEL_PLAN` / `PANEL_CALENDAR` blocks; Oracle output cap 8000 (`SELF_ORACLE_MAX_OUTPUT_TOKENS`). Web rendering and day-table windows are in TODOS. Not run live (no paid call without Sachin's yes). | `feat/build-gaps-p2` |
 
 > Note on the BG-01 line reference below: `dossier.ts:154-166` was wrong. Use `labAdapter.ts` as above.
 

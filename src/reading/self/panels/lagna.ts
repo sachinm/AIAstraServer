@@ -1,13 +1,22 @@
 /**
  * `self.reading.lagna` — Who you are (docs/reading-engine/58 §4.1). Reads the D1 1st house card, the lagna lord's D1 and
  * D9 cards, the occupants and graha aspects on the 1st split by the engine's functional nature, the cusp star, the AL
- * point, the Moon lagna (the D1 house the Moon occupies, read as a frame) and the D9 1st house (doc 59 §6.1).
+ * point and how its house is labelled (BG-06: lagna-to-AL), the Moon lagna (the D1 house the Moon occupies, read as a
+ * frame) and the D9 1st house (doc 59 §6.1). The Paka lagna stays out (doc 59 §4.1: it is the lagna lord's house again).
  * Every claim is a natal fact.
  */
 import { faculties, HOUSE_SELF, HOUSE_SHORT, PLANET_FACULTY } from '../words.js';
 import { gaps, houseFrame, planetChain, pointOf } from '../slices.js';
 import type { PanelBody, SelfClaim } from '../types.js';
 import { body, cap, cardDetail, pname, stateWords, type PanelInput } from './common.js';
+
+/** How the image others hold (AL) sits with the self, from the engine's labels on the AL's house: angles and trines line up, dusthanas pull apart. */
+export function alSelfFit(cls: readonly string[]): string | null {
+  if (cls.includes('dusthana')) return 'How others see you and who you are pull apart; your image takes effort to keep.';
+  if (cls.includes('kendra') || cls.includes('trikona')) return 'How others see you lines up with who you are; your image works for you.';
+  if (cls.length) return 'How others see you sits a step away from who you are; your image needs tending.';
+  return null;
+}
 
 export function lagnaPanel({ view }: PanelInput): PanelBody {
   const g = gaps();
@@ -72,6 +81,18 @@ export function lagnaPanel({ view }: PanelInput): PanelBody {
       certainty: 'fact',
       evidence: ['point:D1.AL'],
     });
+    // BG-06: the lagna-to-AL relation, read only from the engine's class labels for the house the AL falls in
+    const alCls = view.house('D1', al.house)?.class ?? [];
+    const fit = alSelfFit(alCls);
+    if (fit) {
+      claims.push({
+        id: 'lagna.seen_fit',
+        text: fit,
+        detail: `AL in D1 h${al.house} from the lagna; that house is ${alCls.join(', ') || 'unlabelled'} by the engine`,
+        certainty: 'fact',
+        evidence: ['point:D1.AL', `house:D1.h${al.house}`],
+      });
+    }
   }
   const mo = view.planet('D1', 'Mo');
   if (mo?.house) {

@@ -50,6 +50,8 @@ import {
   LOVE_PANEL_IDS,
   WORK_PANEL_IDS,
   type BoardPanelId,
+  type AuditFailure,
+  type CodeAudit,
   type ConfirmAnswer,
   type LovePanelId,
   type PanelBody,
@@ -64,9 +66,9 @@ import {
 import { diagnosisPanel, type PanelBodies } from './panels/diagnosis.js';
 import { BODY_NOTE, CONFIRM_BY_HOUSE, longDate } from './words.js';
 import { bodyPanel } from './panels/body.js';
-import { applyPurview, runPurview } from './purview.js';
+import { applyPurview, mergePurviewEntries, runPurview } from './purview.js';
 import { buildCard } from './card.js';
-import { auditCards } from './audit.js';
+import { auditCards, inStoredWindow, mergeAudits } from './audit.js';
 import { buildDossier, collectData, writeDossier, type DossierInput } from './dossier.js';
 import { runSelfOracle, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
 import { defaultLoadTransit } from '../area/boardService.js';
@@ -435,7 +437,14 @@ export async function getBoardReading(
   );
   const vetoed = applyPurview(bodies, purview.entries);
   const diagnosis = wanted('diagnosis') ? await runPanel('diagnosis', DIAGNOSIS_TITLE, 'dasha', () => buildDiagnosis(bodies)) : null;
-  if (diagnosis?.body) bodies.diagnosis = diagnosis.body;
+  if (diagnosis?.body) {
+    bodies.diagnosis = diagnosis.body;
+    // BG-12: a second purview pass over the diagnosis, so its rules on `diagnosis.*` claims apply
+    const second = runPurview({ board, view, activation, asOf, clock, bodies: { diagnosis: diagnosis.body }, skyStored, sky });
+    purview.entries = mergePurviewEntries(purview.entries, second.entries);
+    const vetoedDiagnosis = applyPurview({ diagnosis: diagnosis.body }, second.entries);
+    if (vetoedDiagnosis.diagnosis?.length) vetoed.diagnosis = vetoedDiagnosis.diagnosis;
+  }
 
   // cards, shaped by the person's answers
   const cardCtx = { running: { l1: run.l1, l2: run.l2 }, year: yearSpan ? { from: iso(yearSpan.from), to: iso(yearSpan.to) } : null };
@@ -471,13 +480,16 @@ export async function getBoardReading(
   for (const v of Object.values(vetoed).flat()) if (v) allClaims.set(v.claimId, []);
   const { data } = collectData({ view, activation, panels: shaped, purview: purview.entries });
   const boundaries = new Set<string>([...activation.flatMap((r) => [r.from, r.to]), ...view.annual().flatMap((a) => a.dashas.flatMap((d) => d.periods.flatMap((pp) => [pp.from, pp.to])))]);
+  const windows = storedWindows(activation, view, sky);
+  const vetoedIds = new Set(Object.values(vetoed).flat().map((v) => v!.claimId));
+  const resolvedKeys = new Set(Object.keys(data));
   const cardsMs = lap();
   const audited = await withAgentRun(
     prisma,
     panelAgent,
     { userId, task: `${prefix}.audit ${asOf}`, technique: `${prefix}.audit`, kundliId: kundli.id, input: { panels: shaped.length, claims: allClaims.size } },
     async () => {
-      const a = auditCards({ panels: shaped, claims: allClaims, vetoed: new Set(Object.values(vetoed).flat().map((v) => v!.claimId)), resolvedKeys: new Set(Object.keys(data)), boundaries });
+      const a = auditCards({ panels: shaped, claims: allClaims, vetoed: vetoedIds, resolvedKeys, boundaries, windows });
       return { value: a, output: { verdict: a.audit.verdict, checked: a.audit.checked, failures: a.audit.failures.length }, charts: [{ type: 'digest.house', variant: view.version }] };
     },
   );
@@ -518,6 +530,8 @@ export async function getBoardReading(
   const oracleTotalMs = lap();
 
   // Apply AI-determined validUntil and AI-synthesized panel lines when oracle ran
+  const aiAudits: CodeAudit[] = [];
+  const planGaps: AuditFailure[] = [];
   if (oracle.status === 'ok') {
     panels = panels.map((p) => {
       const aiValid = oracle.validUntil?.[p.id];
@@ -533,7 +547,13 @@ export async function getBoardReading(
           detail: al.detail ?? 'AI multi-chart synthesis',
         }))
         .filter((al) => al.claimIds.length > 0 && !p.lines.some((existing) => existing.text === al.text));
-      const allLines = mergedAiLines.length ? [...p.lines, ...mergedAiLines] : p.lines;
+      // BG-12: the code auditor runs again over the oracle's lines; a line that fails is dropped and recorded
+      const aiAudit = mergedAiLines.length
+        ? auditCards({ panels: [{ ...p, lines: mergedAiLines }], claims: allClaims, vetoed: vetoedIds, resolvedKeys, boundaries, windows })
+        : null;
+      if (aiAudit) aiAudits.push(aiAudit.audit);
+      const keptAiLines = aiAudit ? aiAudit.panels[0]!.lines : mergedAiLines;
+      const allLines = keptAiLines.length ? [...p.lines, ...keptAiLines] : p.lines;
       let headerRange = p.headerRange;
       if (headerRange !== 'always' && p.id !== 'chapters') {
         let from = headerRange.from;
@@ -546,14 +566,29 @@ export async function getBoardReading(
         }
         headerRange = { from, to };
       }
+      // BG-14: the Oracle's plan; a calendar date no stored window holds is kept, flagged and listed as a date gap
+      const rawPlan = oracle.panelPlans?.[p.id];
+      const plan = rawPlan
+        ? {
+            ...rawPlan,
+            calendar: rawPlan.calendar.map((c) => {
+              const inWindow = inStoredWindow(c.from, boundaries, windows) && inStoredWindow(c.to, boundaries, windows);
+              if (!inWindow) planGaps.push({ lineId: `${p.id}.calendar`, check: 'date', text: `${c.from}..${c.to} (${c.label}) is outside every stored window` });
+              return { ...c, inWindow };
+            }),
+          }
+        : null;
       return {
         ...p,
         headerRange,
         ...(aiValid ? { validUntil: aiValid } : {}),
         lines: allLines,
+        ...(plan && (plan.summary || plan.steps.length || plan.calendar.length) ? { plan } : {}),
       };
     });
   }
+
+  const finalAudit: CodeAudit = aiAudits.length || planGaps.length ? mergeAudits([audited.audit, ...aiAudits, { verdict: 'pass', checked: 0, failures: [], dateGaps: planGaps }]) : audited.audit;
 
   const aiOverallValidTo =
     oracle.validUntil?.overall && oracle.validUntil.overall !== 'always'
@@ -587,7 +622,7 @@ export async function getBoardReading(
       panels,
       purview: purview.entries,
       gaps: [...new Set(gapsAll)],
-      audit: audited.audit,
+      audit: finalAudit,
       steps: {
         loadMs,
         panelsMs,
@@ -640,6 +675,7 @@ export async function getBoardReading(
     reading: {
       ...baseReading,
       panels,
+      audit: finalAudit,
       dossierId,
       builtLine: `Built ${longDate(asOf)}${validTo ? `, next check ${longDate(validTo)}` : ''}`,
       validUntil: validTo ?? 'always',
@@ -649,6 +685,21 @@ export async function getBoardReading(
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * BG-14: every stored engine window a dated line or calendar entry may fall in: the activation periods at every level
+ * (main, sub, pratyantar), the year charts' dasha periods, and the stored transit range with its Sade Sati and dhaiya
+ * spans. Selection only: every date is the engine's.
+ */
+export function storedWindows(activation: readonly ActivationRow[], view: DigestView, sky?: TransitRangePayload | null): Array<{ from: string; to: string }> {
+  const out: Array<{ from: string; to: string }> = activation.map((r) => ({ from: r.from, to: r.to }));
+  for (const a of view.annual()) for (const d of a.dashas) for (const p of d.periods) out.push({ from: p.from, to: p.to });
+  if (sky) {
+    out.push({ from: sky.from, to: sky.to });
+    for (const sp of [...sky.sade_sati, ...sky.dhaiya]) out.push({ from: sp.from, to: sp.to });
+  }
+  return out.filter((w) => w.from && w.to && w.from <= w.to);
+}
 
 /** A sensitive passage is running (docs/reading-engine/60 §4, 61 §4): the sub-period lord is Ketu, or Saturn over 8 and 12. */
 export function isSensitive(activation: readonly ActivationRow[], system: string, asOf: string): boolean {

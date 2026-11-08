@@ -15,9 +15,9 @@ import { strugglePanel } from '../../../../src/reading/self/panels/struggle.js';
 import { chaptersPanel } from '../../../../src/reading/self/panels/chapters.js';
 import { bodyPanel } from '../../../../src/reading/self/panels/body.js';
 import { diagnosisPanel } from '../../../../src/reading/self/panels/diagnosis.js';
-import { applyPurview, runPurview } from '../../../../src/reading/self/purview.js';
+import { applyPurview, mergePurviewEntries, runPurview } from '../../../../src/reading/self/purview.js';
 import { buildCard, headerRangeOf } from '../../../../src/reading/self/card.js';
-import { auditCards } from '../../../../src/reading/self/audit.js';
+import { auditCards, mergeAudits } from '../../../../src/reading/self/audit.js';
 import { collectData, resolveKey, stripBirthFields } from '../../../../src/reading/self/dossier.js';
 import { runningChain } from '../../../../src/reading/self/slices.js';
 import { isSensitive } from '../../../../src/reading/self/service.js';
@@ -125,10 +125,24 @@ describe('code auditor (self.reading.audit)', () => {
   it('passes a grounded line with a stored date', () => {
     expect(auditCards({ ...base, panels: [panel([line('Your judgement gives mostly to others until 1 Jan 2027.')])] }).audit).toMatchObject({ verdict: 'pass', checked: 1 });
   });
-  it('fails and removes a line with an invented date, a banned word, a vetoed or unknown claim, or too many words', () => {
+  it('BG-14: keeps a line whose date no stored window holds and lists the date as a gap', () => {
+    const r = auditCards({ ...base, panels: [panel([line('Until 3 Mar 2027 it eases.')])] });
+    expect(r.audit.verdict).toBe('pass');
+    expect(r.panels[0]!.lines).toHaveLength(1);
+    expect(r.audit.dateGaps?.[0]).toMatchObject({ lineId: 'struggle.1', check: 'date' });
+  });
+  it('BG-14: accepts a prospective date inside a stored window', () => {
+    const r = auditCards({ ...base, windows: [{ from: '2027-02-01', to: '2027-06-30' }], panels: [panel([line('Until 3 Mar 2027 it eases; Apr 2027 is the month to act.')])] });
+    expect(r.audit).toMatchObject({ verdict: 'pass', checked: 1 });
+    expect(r.audit.dateGaps).toBeUndefined();
+  });
+  it('BG-14: redacts an engine name instead of dropping the line, and has no phrase ban', () => {
+    const r = auditCards({ ...base, panels: [panel([line('Calculated by pyjhora engine.'), { ...line('This is guaranteed to last forever.'), id: 'struggle.2' }])] });
+    expect(r.audit.verdict).toBe('pass');
+    expect(r.panels[0]!.lines.map((l) => l.text)).toEqual(['Calculated by traditional calculations engine.', 'This is guaranteed to last forever.']);
+  });
+  it('fails and removes a line with a vetoed or unknown claim, or too many words', () => {
     const cases: Array<[string, string[]]> = [
-      ['Until 3 Mar 2027 it eases.', ['c1']],
-      ['Calculated by pyjhora engine.', ['c1']],
       ['A line.', ['nope']],
       [Array.from({ length: 501 }, () => 'word').join(' '), ['c1']],
     ];
@@ -139,6 +153,30 @@ describe('code auditor (self.reading.audit)', () => {
     }
     const v = auditCards({ ...base, vetoed: new Set(['c1']), panels: [panel([line('A line.')])] });
     expect(v.audit.failures[0]!.check).toBe('veto');
+  });
+});
+
+describe('BG-12: purview over the diagnosis, audit over the oracle lines', () => {
+  it('a second purview pass reaches the diagnosis claims and folds into the first pass', () => {
+    const bodies = fresh() as ReturnType<typeof fresh> & { diagnosis?: ReturnType<typeof diagnosisPanel> };
+    const first = runPurview({ view, activation: FIX.activation, asOf: ASOF, clock, bodies, skyStored: false });
+    applyPurview(bodies, first.entries);
+    expect(first.entries.some((e) => e.affects.some((a) => a.startsWith('diagnosis.')))).toBe(false);
+    const diagnosis = diagnosisPanel(bodies);
+    const second = runPurview({ view, activation: FIX.activation, asOf: ASOF, clock, bodies: { diagnosis }, skyStored: false });
+    const merged = mergePurviewEntries(first.entries, second.entries);
+    const standing = merged.find((e) => e.rule === 'purview.lagna_lord_standing')!;
+    expect(standing.affects).toEqual(expect.arrayContaining(['lagna.lord_house', 'diagnosis.direction']));
+    expect(merged.filter((e) => e.rule === 'purview.lagna_lord_standing')).toHaveLength(1);
+    expect(merged.every((e) => first.entries.some((f) => f.rule === e.rule) || e.affects.length > 0)).toBe(true);
+    applyPurview({ diagnosis }, second.entries);
+    expect(diagnosis.claims.find((c) => c.id === 'diagnosis.direction')!.detail).toContain('whole-chart check');
+  });
+  it('merges audit passes into one verdict', () => {
+    const pass = { verdict: 'pass' as const, checked: 3, failures: [] };
+    const fail = { verdict: 'fail' as const, checked: 2, failures: [{ lineId: 'x.ai.1', check: 'date', text: 'bad' }] };
+    expect(mergeAudits([pass, pass])).toEqual({ verdict: 'pass', checked: 6, failures: [] });
+    expect(mergeAudits([pass, fail])).toMatchObject({ verdict: 'fail', checked: 5, failures: [{ lineId: 'x.ai.1' }] });
   });
 });
 

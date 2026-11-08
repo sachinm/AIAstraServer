@@ -13,8 +13,8 @@ import { MAX_LINE_WORDS, wordCount } from './words.js';
 const PRIORITY: Partial<Record<BoardPanelId, string[]>> = {
   diagnosis: ['diagnosis.direction', 'diagnosis.tension', 'diagnosis.now'],
   chapters: ['chapters.previous', 'chapters.running', 'chapters.next'],
-  lagna: ['lagna.lord_house', 'lagna.lord_state', 'lagna.seen', 'lagna.on_self', 'lagna.moon_lagna', 'lagna.inner', 'lagna.star'],
-  mind: ['mind.moon_place', 'mind.thinking', 'mind.peace', 'mind.courage', 'mind.intellect', 'mind.moon_star'],
+  lagna: ['lagna.lord_house', 'lagna.lord_state', 'lagna.seen', 'lagna.seen_fit', 'lagna.on_self', 'lagna.moon_lagna', 'lagna.inner', 'lagna.star'],
+  mind: ['mind.moon_place', 'mind.thinking', 'mind.peace', 'mind.courage', 'mind.intellect', 'mind.moon_star', 'mind.moon_support', 'mind.home_seen', 'mind.ideas_seen'],
   body: [
     'body.footing',
     'body.head_brain_mind',

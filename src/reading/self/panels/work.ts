@@ -13,7 +13,7 @@
  * zero chart jargon in `text`/`line`/`lead`, and every `evidence` key guaranteed to resolve in `collectData`.
  */
 import type { ActivationRow } from '../../digest/activation.js';
-import type { PlanetCard } from '../../digest/types.js';
+import type { HouseCard, PlanetCard } from '../../digest/types.js';
 import {
   clockLabel,
   dignityWords,
@@ -42,6 +42,61 @@ export const WORK_HOUSES: readonly number[] = [10, 6, 11, 2, 9, 3, 5, 7];
 const HEAVY_RIPENESS = new Set(['unripe_sour', 'dried_seed_externalized']);
 const MAX_STRUGGLE_CLAIMS = 6;
 const lower = (s: string): string => (s ? s[0]!.toLowerCase() + s.slice(1) : s);
+
+/**
+ * BG-11: service (D10 6th) against business (D10 7th), read only from the engine's labels on the two cards: the lord's
+ * dignity and the occupants. The only comparison is the occupant count; dignities are worded, never ranked.
+ */
+export function serviceOrBusinessClaim(h6: HouseCard | null, h7: HouseCard | null): SelfClaim | null {
+  if (!h6 || !h7) return null;
+  const n6 = h6.occupants.length;
+  const n7 = h7.occupants.length;
+  const lean = n6 > n7 ? 'service' : n7 > n6 ? 'business' : 'even';
+  const lordWords = (h: HouseCard) => {
+    const dw = dignityWords(h.lordDignity);
+    return dw ? `what steers it is ${dw}` : null;
+  };
+  const sideWords = (h: HouseCard, n: number) =>
+    [n ? `${n === 1 ? 'one force' : `${n} forces`} at work there` : 'nothing sitting there', lordWords(h)].filter(Boolean).join(', ');
+  const line =
+    lean === 'service'
+      ? 'Your career leans toward working within a team or an organisation.'
+      : lean === 'business'
+        ? 'Your career leans toward deals, clients and work of your own.'
+        : 'Your career holds working for others and working for yourself in balance.';
+  const occ = (h: HouseCard) => h.occupants.map((o) => `${pname(o.planet)}${o.dignity ? ` (${o.dignity})` : ''}`).join(', ') || 'none';
+  return {
+    id: 'ground.service_or_business',
+    line,
+    text: `${line} Working for others has ${sideWords(h6, n6)}; deals and partnerships of your own have ${sideWords(h7, n7)}.`,
+    detail: `D10 h6 ${h6.sign ?? '?'} lord ${pname(h6.lord)} in D10 h${h6.lordHouse ?? '?'} (${h6.lordDignity ?? '?'}), occupants [${occ(h6)}]; D10 h7 ${h7.sign ?? '?'} lord ${pname(h7.lord)} in D10 h${h7.lordHouse ?? '?'} (${h7.lordDignity ?? '?'}), occupants [${occ(h7)}]; lean by occupant count: ${lean}`,
+    certainty: 'fact',
+    evidence: ['house:D10.h6', 'house:D10.h7'],
+  };
+}
+
+/** BG-11: the stored SAV bindus of D1 houses 10, 11 and 12 compared as numbers (earning and gains against what drains away). */
+export function savBalanceClaim(h10: HouseCard | null, h11: HouseCard | null, h12: HouseCard | null): SelfClaim | null {
+  if (h10?.sav == null || h11?.sav == null || h12?.sav == null) return null;
+  const [a, b, c] = [h10.sav, h11.sav, h12.sav];
+  const both = a > c && b > c;
+  const neither = a <= c && b <= c;
+  const line = both
+    ? 'What you earn and build outweighs what slips away.'
+    : neither
+      ? 'What slips away can match what you earn, so guard your outflow.'
+      : b > c
+        ? 'Your gains outweigh your losses, though work itself takes more effort to build.'
+        : 'Your work is well supported, though gains leak away unless you guard them.';
+  return {
+    id: 'gain.sav_balance',
+    line,
+    text: `${line}${both && b > a ? ' Gains come a little more easily than standing.' : ''}`,
+    detail: `SAV H10:H11:H12 = ${a}:${b}:${c}`,
+    certainty: 'fact',
+    evidence: ['house:D1.h10', 'house:D1.h11', 'house:D1.h12'],
+  };
+}
 
 export function vocationPanel({ view }: PanelInput): PanelBody {
   const g = gaps();
@@ -241,6 +296,7 @@ export function groundPanel({ view }: PanelInput): PanelBody {
   const h12 = houseFrame(view, 'D1', 12, g);
   const d10h6 = houseFrame(view, 'D10', 6, g);
   const d10h3 = houseFrame(view, 'D10', 3, g);
+  const d10h7 = houseFrame(view, 'D10', 7, g);
   const l6 = planetChain(view, h6?.lord ?? null, g);
   const l3 = planetChain(view, h3?.lord ?? null, g);
   const sa = planetChain(view, 'Sa', g);
@@ -261,6 +317,10 @@ export function groundPanel({ view }: PanelInput): PanelBody {
       evidence: ['house:D1.h6', ...l6.evidence, ...(d10h6 ? ['house:D10.h6'] : [])],
     });
   }
+
+  const sob = serviceOrBusinessClaim(d10h6, d10h7);
+  if (sob) claims.push(sob);
+  else g.add('ground.service_or_business withheld: D10 h6/h7 cards missing');
 
   if (h3 && l3 && l3.d1.house != null) {
     claims.push({
@@ -309,6 +369,7 @@ export function gainPanel({ view }: PanelInput): PanelBody {
   const h10 = houseFrame(view, 'D1', 10, g);
   const d2h1 = view.house('D2', 1);
   const d10h11 = houseFrame(view, 'D10', 11, g);
+  const h12 = houseFrame(view, 'D1', 12, g);
   const l11 = planetChain(view, h11?.lord ?? null, g);
   const l2 = planetChain(view, h2?.lord ?? null, g);
   const a11 = pointOf(view, 'D1', 'A11', g);
@@ -352,6 +413,9 @@ export function gainPanel({ view }: PanelInput): PanelBody {
       evidence: ['point:D1.A11', ...(il ? ['point:D1.IL'] : [])],
     });
   }
+
+  const sav = savBalanceClaim(h10, h11, h12);
+  if (sav) claims.push(sav);
 
   const workLords = [h10?.lord, h11?.lord, h2?.lord].filter((x): x is string => !!x);
   const wealthYogas = yogasTouching(view, workLords, [2, 10, 11]).filter((y) => yogaClassWords(y.class).kind === 'gift');

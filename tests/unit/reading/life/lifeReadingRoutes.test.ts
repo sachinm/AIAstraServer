@@ -6,6 +6,10 @@ import type { DigestStatus } from '../../../../src/reading/digest/types.js';
 import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 import { makeView, row } from './fixture.js';
 
+// the immediate digest trigger (a self-invoke on Lambda): spied, never run
+const queueDigestBuild = vi.fn(async () => 'skipped' as const);
+vi.mock('../../../../src/reading/digest/event.js', async (orig) => ({ ...(await orig<typeof import('../../../../src/reading/digest/event.js')>()), queueDigestBuild: (...a: unknown[]) => (queueDigestBuild as any)(...a) }));
+
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const builds: any[] = [];
 const runs: any[] = [];
@@ -89,6 +93,7 @@ describe('GET /api/life-reading', () => {
   });
 
   it('preparing while the digest is not ready, and queues it unless it is queued or building', async () => {
+    queueDigestBuild.mockClear();
     const pending = await get('u3');
     expect(pending.status).toBe(202);
     expect(pending.json).toEqual({ status: 'preparing' });
@@ -98,6 +103,8 @@ describe('GET /api/life-reading', () => {
     expect((await get('u5')).json).toEqual({ status: 'preparing' });
     expect(kundliUpdates).toEqual([{ where: { id: 'k5' }, data: { digest_status: 'pending' } }]);
     expect(loadDigest).not.toHaveBeenCalled();
+    // a pending or failed digest is started now, not left for the sweep; a building one is left alone
+    expect(queueDigestBuild.mock.calls.map((c: any[]) => c[1])).toEqual(['k3', 'k5']);
   });
 
   it('builds once a day from the digest, tags the run, then serves the stored build', async () => {

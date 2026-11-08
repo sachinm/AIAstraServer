@@ -10,6 +10,7 @@ import { getLifeCharterHorizonYears, getLifeHorizonYears } from '../../config/en
 import { ACTIVATION_YEARS_AHEAD, activationFor as activationForDb } from '../digest/activation.js';
 import { digestStatusOf as digestStatusOfDb, loadDigest as loadDigestDb } from '../digest/load.js';
 import type { ActivationRow } from '../digest/activation.js';
+import { queueDigestBuild } from '../digest/event.js';
 import type { DigestStatus, DigestView } from '../digest/types.js';
 import { allAreaHouses, LIFE_AREAS } from './areas.js';
 import { composeDashboard, type LifeAreaRow, type LifeMahadashaCharter, type PersonFacts } from './compose.js';
@@ -51,10 +52,14 @@ async function readFacts(prisma: PrismaClient, userId: string): Promise<PersonFa
   return out;
 }
 
-/** Queue the digest unless it is already queued or building (the digest sweep builds 'pending' kundlis). */
+/**
+ * Queue the digest and start it now unless it is building or ready: mark it pending, then an async self-invoke on
+ * Lambda (in process off it). A kundli already pending is started too; the digest sweep remains the safety net.
+ */
 async function queueDigest(prisma: PrismaClient, kundliId: string, status: DigestStatus): Promise<void> {
-  if (status === 'building' || status === 'pending' || status === 'ready') return;
-  await prisma.kundli.update({ where: { id: kundliId }, data: { digest_status: 'pending' } }).catch(() => undefined);
+  if (status === 'building' || status === 'ready') return;
+  if (status !== 'pending') await prisma.kundli.update({ where: { id: kundliId }, data: { digest_status: 'pending' } }).catch(() => undefined);
+  await queueDigestBuild(prisma, kundliId).catch(() => undefined);
 }
 
 export async function getLifeReading(deps: LifeDeps, userId: string): Promise<LifeReading> {

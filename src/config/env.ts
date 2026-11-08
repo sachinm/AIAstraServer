@@ -885,3 +885,12 @@ export function getSelfReadingMaxSpendUsd(): number {
   if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);
   return 1.0;
 }
+
+/**
+ * BUILD-GAPS BG-14: output cap for the board Oracle (`oracle/self`), which now writes card lines, a plan and a calendar
+ * per panel. Override with SELF_ORACLE_MAX_OUTPUT_TOKENS (integer, 1000–32000). Default 8000 (was a fixed 4500).
+ */
+export function getSelfOracleMaxOutputTokens(): number {
+  const n = Number(process.env.SELF_ORACLE_MAX_OUTPUT_TOKENS ?? '');
+  return Number.isFinite(n) && n >= 1000 && n <= 32000 ? Math.floor(n) : 8000;
+}

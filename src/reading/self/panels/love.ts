@@ -13,7 +13,7 @@
  * zero chart jargon in `text`/`line`/`lead`, and every `evidence` key guaranteed to resolve in `collectData`.
  */
 import type { ActivationRow } from '../../digest/activation.js';
-import type { PlanetCard } from '../../digest/types.js';
+import type { PlanetCard, YogaRow } from '../../digest/types.js';
 import {
   clockLabel,
   dignityWords,
@@ -43,6 +43,58 @@ const HEAVY_RIPENESS = new Set(['unripe_sour', 'dried_seed_externalized']);
 const MAX_STRUGGLE_CLAIMS = 6;
 const lower = (s: string): string => (s ? s[0]!.toLowerCase() + s.slice(1) : s);
 
+/** Plain words for the engine's Lajjitadi states (avasthas.planets[i].lajjitadi), as it names them. */
+export const LAJJITADI_WORDS: Record<string, string> = {
+  lajjita: 'held back and a little shy',
+  garvita: 'proud and lifted',
+  kshudhita: 'hungry, wanting more than it gets',
+  trishita: 'thirsty, longing for warmth',
+  mudita: 'delighted and at ease',
+  kshobhita: 'stirred up and easily unsettled',
+};
+
+/** The worded Lajjitadi states of one card, in the engine's order; unknown names are skipped. */
+export function lajjitadiWords(card: PlanetCard | null | undefined): { states: string[]; words: string[] } {
+  const states = (card?.avasthas?.lajjitadi ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => LAJJITADI_WORDS[x]);
+  return { states, words: states.map((x) => LAJJITADI_WORDS[x]!) };
+}
+
+const joinWords = (w: string[]): string => (w.length <= 1 ? (w[0] ?? '') : `${w.slice(0, -1).join('; ')}; and ${w[w.length - 1]}`);
+
+/** The manglik (Kuja) dosha row, by the engine's id or name. */
+export const isManglik = (y: YogaRow): boolean => /manglik|mangal|kuja/i.test(`${y.id} ${y.name}`);
+
+/** A love dosha row as a claim: a softened knot when the engine lists exceptions for it, else a plain knot. */
+export function loveDoshaClaim(d: YogaRow): SelfClaim {
+  const ex = d.details?.exceptions ?? [];
+  const ref = [
+    d.details?.fromMoon != null ? `from Moon: ${d.details.fromMoon ? 'yes' : 'no'}` : '',
+    d.details?.fromVenus != null ? `from Venus: ${d.details.fromVenus ? 'yes' : 'no'}` : '',
+  ].filter(Boolean);
+  const base = `${d.name} (${d.class}): planets [${d.planets.map(pname).join(', ')}], houses [${d.houses.join(', ')}]${ref.length ? `; ${ref.join(', ')}` : ''}`;
+  if (d.details?.hasExceptions && ex.length) {
+    return {
+      id: `struggle.dosha_${d.id}`,
+      line: 'A known strain on partnership is eased by the rest of your chart.',
+      text: 'A known strain on partnership shows in your chart, but other placements ease it, so it asks for less than it first seems.',
+      detail: `${base}; softened by ${ex.length} classical exception${ex.length === 1 ? '' : 's'}: ${ex.map((e) => e.text).join(' | ')}`,
+      certainty: 'fact',
+      evidence: [`yoga:D1.${d.id}`],
+    };
+  }
+  return {
+    id: `struggle.dosha_${d.id}`,
+    line: 'A knot in your chart asks for patience in partnership.',
+    text: `A knot in your chart touches ${housesShort(d.houses.length ? d.houses : [7])} and asks for steady patience in love.`,
+    detail: base,
+    certainty: 'fact',
+    evidence: [`yoga:D1.${d.id}`],
+  };
+}
+
 export function heartPanel({ view }: PanelInput): PanelBody {
   const g = gaps();
   const claims: SelfClaim[] = [];
@@ -68,6 +120,25 @@ export function heartPanel({ view }: PanelInput): PanelBody {
       certainty: 'fact',
       evidence: ve.evidence,
     });
+  }
+
+  if (ve) {
+    const outer = lajjitadiWords(ve.d1);
+    const inner = lajjitadiWords(ve.d9);
+    if (outer.words.length || inner.words.length) {
+      const first = outer.words.length ? outer : inner;
+      const deeper = outer.words.length && inner.words.length && inner.states.join() !== outer.states.join()
+        ? ` Deeper down, it is ${joinWords(inner.words)}.`
+        : '';
+      claims.push({
+        id: 'heart.venus_mood',
+        line: `The part of you that gives affection is ${first.words[0]}.`,
+        text: `The part of you that gives and wants affection is ${joinWords(first.words)}.${deeper}`,
+        detail: `Venus Lajjitadi avastha: D1 ${outer.states.join(', ') || 'n/a'}${ve.d9 ? `; D9 ${inner.states.join(', ') || 'n/a'}` : ''}`,
+        certainty: 'fact',
+        evidence: [...(outer.words.length ? ['planet:D1.Ve'] : []), ...(inner.words.length && ve.d9 ? ['planet:D9.Ve'] : [])],
+      });
+    }
   }
 
   if (h5 && l5 && l5.d1.house != null) {
@@ -654,19 +725,14 @@ export function loveStrugglePanel({ view, activation, asOf, clock }: PanelInput)
     });
   }
 
-  const loveDoshas = yogasTouching(view, [l7, 'Ve', 'Ma', dk].filter((x): x is string => !!x), [7, 2, 4, 8, 12]).filter(
-    (y) => yogaClassWords(y.class).kind === 'knot' || /mangal|kuja|kalathra|upapada/i.test(y.name),
+  const touching = yogasTouching(view, [l7, 'Ve', 'Ma', dk].filter((x): x is string => !!x), [7, 2, 4, 8, 12]).filter(
+    (y) => yogaClassWords(y.class).kind === 'knot' || /manglik|mangal|kuja|kalathra|upapada/i.test(`${y.id} ${y.name}`),
   );
+  // The manglik row is read by id even when its planets and houses touch nothing above (BG-10).
+  const manglik = view.yogas().filter((y) => y.class === 'dosha' && isManglik(y));
+  const loveDoshas = [...manglik, ...touching].filter((y, i, all) => all.findIndex((x) => x.id === y.id) === i);
   for (const d of loveDoshas.slice(0, 2)) {
-    out.push({
-      id: `struggle.dosha_${d.id}`,
-      planet: d.planets[0] ?? l7,
-      line: 'A knot in your chart asks for patience in partnership.',
-      text: `A knot in your chart touches ${housesShort(d.houses.length ? d.houses : [7])} and asks for steady patience in love.`,
-      detail: `${d.name} (${d.class}): planets [${d.planets.map(pname).join(', ')}], houses [${d.houses.join(', ')}]`,
-      certainty: 'fact',
-      evidence: [`yoga:D1.${d.id}`],
-    });
+    out.push({ ...loveDoshaClaim(d), planet: d.planets[0] ?? l7 });
   }
 
   if (out.length === 0) {

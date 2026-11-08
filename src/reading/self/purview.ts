@@ -257,3 +257,20 @@ export function applyPurview(bodies: PanelBodies, entries: PurviewEntry[]): Part
   }
   return vetoed;
 }
+
+/**
+ * BUILD-GAPS BG-12: the diagnosis is built after the purview, from the claims that survived it, so the purview's rules
+ * that name `diagnosis.*` claims found nothing on the first pass. A second pass runs over the diagnosis body alone; its
+ * entries that touch a diagnosis claim are folded into the first pass (the same rule and text gains the diagnosis ids),
+ * and a pass-two entry with no diagnosis claim is dropped, so no rule is reported twice.
+ */
+export function mergePurviewEntries(first: PurviewEntry[], second: PurviewEntry[]): PurviewEntry[] {
+  const out = first.map((e) => ({ ...e, affects: [...e.affects] }));
+  for (const e of second) {
+    if (!e.affects.length) continue;
+    const same = out.find((o) => o.rule === e.rule && o.text === e.text && o.action === e.action);
+    if (same) same.affects = [...new Set([...same.affects, ...e.affects])];
+    else out.push({ ...e, affects: [...e.affects] });
+  }
+  return out;
+}
