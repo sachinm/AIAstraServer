@@ -1145,3 +1145,12 @@ Plan to fix these: docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md
 - **P3 — The Terms of Use page must contain the no-reproduction clause** ("won't copy, record, or reproduce anything
   seen in the app") at version `2026-11-08` (`src/auth/terms.ts` `CURRENT_TERMS_VERSION`). Holder: web session /
   Sachin for the wording. Done: the Terms page carries the clause and its version date matches.
+- **P2 — Three reading unit tests fail on this branch without touching anything it changed** (found 2026-11-08 running
+  `npm run test:unit` in `wt/server-alerts-consent`; none of them import requestMeta, accountEvents, emailService,
+  ownerAlerts, terms or the GraphQL schema). `tests/unit/reading/annualPrashna.test.ts:224` ("a ruled-out question
+  never reaches the model": expected false, got true) and `tests/unit/reading/clarify.test.ts` ("falls back to the rule
+  question…": got "Shall I look until 7 Sep 2027, or a different stretch of time?" instead of the dasha-named question;
+  plus an unhandled `ThrottlingException` rejection at `clarify.test.ts:155`) fail in isolation too.
+  `tests/unit/reading/coachAndRoutes.test.ts` R14 (confirm-stream returns `type: 'error'`) fails only in the full run,
+  so it is order-dependent. Not verified on `develop` itself. Holder: the clarify/reading owner. Done: all three green in
+  the full unit run.
