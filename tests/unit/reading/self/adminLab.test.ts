@@ -244,16 +244,17 @@ describe('admin lab: the served shape (docs/admin/10 §5 mirror test)', () => {
     else if (v && typeof v === 'object') {
       for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
         const l = k.toLowerCase().replace(/[^a-z]/g, '');
-        if (['name', 'place', 'city', 'lat', 'lon', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'question'].includes(l) || l.startsWith('birth')) out.push(`${path}.${k}`);
+        if (['name', 'place', 'city', 'lat', 'lon', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid'].includes(l) || l.startsWith('birth')) out.push(`${path}.${k}`);
         offending(x, `${path}.${k}`, out);
       }
     }
     return out;
   };
-  it('a run response and its dossier carry none of the keys the admin refuses, and chart names survive as title', async () => {
+  it('a run response and its dossier carry none of the keys the admin refuses, chart names survive as title, and question is preserved', async () => {
     const j = await (await post({ userId: 'u1', force: true })).json();
     expect(offending(j)).toEqual([]);
     expect(JSON.stringify(j.dossier.yogas)).toContain('"title"');
+    expect(j.reading.question).toMatchObject({ claimId: 'diagnosis.tension', panel: 'diagnosis' });
   });
   it('the dossier records step timings, unread rows, clock applicability and the run scope', async () => {
     const j = await (await post({ userId: 'u1', technique: 'body', force: true })).json();

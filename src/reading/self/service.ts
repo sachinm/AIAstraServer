@@ -305,7 +305,11 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
   const cardCtx = { running: { l1: run.l1, l2: run.l2 }, year: yearSpan ? { from: iso(yearSpan.from), to: iso(yearSpan.to) } : null };
   const byId = new Map([...(diagnosis ? [diagnosis] : []), ...parts].map((r) => [r.panel.id, r.panel] as const));
   const ordered = PANEL_ORDER.map((id) => byId.get(id)).filter((p): p is SelfPanel => !!p);
-  const withPurview = ordered.map((p) => ({ ...p, claims: bodies[p.id]?.claims ?? p.claims }));
+  const withPurview = ordered.map((p) => ({
+    ...p,
+    lead: bodies[p.id]?.lead ?? p.lead,
+    claims: bodies[p.id]?.claims ?? p.claims,
+  }));
   const also = withheldSources(withPurview, answers);
   const purviewMs = lap();
   const shaped: SelfPanel[] = withPurview.map((p) => {
@@ -313,7 +317,16 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
     const card = buildCard(p.id, { lead: p.lead, claims, gaps: [], chapters: p.chapters }, cardCtx);
     gapsAll.push(...card.gaps);
     const status: SelfPanel['status'] = p.status === 'failed' ? 'failed' : card.lines.length === 0 ? 'withheld' : p.status;
-    return { ...p, claims, status, headerRange: card.headerRange, lines: card.lines, ...(p.id === 'body' ? { note: BODY_NOTE } : {}), ...(vetoed[p.id]?.length ? { vetoed: vetoed[p.id] } : {}) };
+    return {
+      ...p,
+      lead: card.lead,
+      claims,
+      status,
+      headerRange: card.headerRange,
+      lines: card.lines,
+      ...(p.id === 'body' ? { note: BODY_NOTE } : {}),
+      ...(vetoed[p.id]?.length ? { vetoed: vetoed[p.id] } : {}),
+    };
   });
 
   // the code auditor over the cards, against the rows the dossier resolves
@@ -377,16 +390,30 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
         .map((al, i) => ({
           id: `${p.id}.ai.${i + 1}`,
           text: al.text,
-          range: p.headerRange,
+          range: al.range && al.range !== 'always' ? al.range : p.headerRange,
           claimIds: fallbackClaimIds.length ? [fallbackClaimIds[0]!] : p.lines[0]?.claimIds ?? [],
           certainty: al.certainty ?? ('strong' as const),
           detail: al.detail ?? 'AI multi-chart synthesis',
         }))
         .filter((al) => al.claimIds.length > 0 && !p.lines.some((existing) => existing.text === al.text));
+      const allLines = mergedAiLines.length ? [...p.lines, ...mergedAiLines] : p.lines;
+      let headerRange = p.headerRange;
+      if (headerRange !== 'always' && p.id !== 'chapters') {
+        let from = headerRange.from;
+        let to = headerRange.to;
+        for (const l of allLines) {
+          if (l.range !== 'always') {
+            if (l.range.from < from) from = l.range.from;
+            if (l.range.to > to) to = l.range.to;
+          }
+        }
+        headerRange = { from, to };
+      }
       return {
         ...p,
+        headerRange,
         ...(aiValid ? { validUntil: aiValid } : {}),
-        lines: mergedAiLines.length ? [...p.lines, ...mergedAiLines] : p.lines,
+        lines: allLines,
       };
     });
   }
@@ -405,6 +432,7 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
   const oracleStageMs =
     (oracle.stages ?? []).find((s) => s.agentId === 'self.reading_oracle')?.ms ?? oracle.ms ?? oracleTotalMs;
 
+  const targetScope = opts.only ?? 'all';
   const fresh = panels.some((p) => !p.cached) || (oracle.status === 'ok' && !oracle.cached);
   let dossierId: string | null = null;
   if (fresh || opts.trigger === 'manual') {
@@ -437,12 +465,35 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
           : {}),
         auditMs,
       },
-      scope: opts.only ?? 'all',
+      scope: targetScope,
       ...(oracle.status !== 'off' ? { oracle } : {}),
     };
     dossierId = await writeDossier(prisma, dIn, buildDossier(dIn));
   } else {
-    dossierId = (await prisma.readingDossier?.findFirst?.({ where: { kundli_id: kundli.id, board: 'self' }, orderBy: { created_at: 'desc' }, select: { id: true } }).catch(() => null))?.id ?? null;
+    const asOfDate = new Date(`${asOf}T00:00:00Z`);
+    const recent = await prisma.readingDossier
+      ?.findMany?.({
+        where: { kundli_id: kundli.id, board: 'self', as_of: asOfDate },
+        orderBy: { created_at: 'desc' },
+        take: 10,
+        select: { id: true, audit: true },
+      })
+      .catch(() => null);
+    const matching = recent?.find((r) => (((r.audit as { scope?: string } | null)?.scope) ?? 'all') === targetScope);
+    if (matching) {
+      dossierId = matching.id;
+    } else {
+      dossierId =
+        (
+          await prisma.readingDossier
+            ?.findFirst?.({
+              where: { kundli_id: kundli.id, board: 'self', as_of: asOfDate },
+              orderBy: { created_at: 'desc' },
+              select: { id: true },
+            })
+            .catch(() => null)
+        )?.id ?? null;
+    }
   }
   return {
     status: 'ok',

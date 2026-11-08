@@ -129,9 +129,9 @@ describe('technique catalogue', () => {
       expect(techniqueById(id)?.status, id).toBe('built');
       expect(techniqueById(id)?.code, id).toMatch(/^src\/reading\/area\//);
     }
-    // 85 built; the model layer and the Love and Work reading panels are planned (docs/reading-engine/58, 59)
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(85);
-    expect(TECHNIQUES.filter((t) => t.status === 'planned').map((t) => t.id).sort()).toEqual(['self.reading.oracle', ...['diagnosis', 'chapters', 'heart', 'partner', 'bond', 'circle', 'struggle', 'year'].map((x) => `love.reading.${x}`), ...['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year'].map((x) => `work.reading.${x}`)].sort());
+    // 86 built (including self.reading.oracle); the Love and Work reading panels are planned (docs/reading-engine/58, 59, 63)
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(86);
+    expect(TECHNIQUES.filter((t) => t.status === 'planned').map((t) => t.id).sort()).toEqual([...['diagnosis', 'chapters', 'heart', 'partner', 'bond', 'circle', 'struggle', 'year'].map((x) => `love.reading.${x}`), ...['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year'].map((x) => `work.reading.${x}`)].sort());
     expect(TECHNIQUES).toHaveLength(102);
   });
 
