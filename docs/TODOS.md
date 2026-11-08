@@ -1109,3 +1109,39 @@ Plan to fix these: docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md
   left out). Doc 60 §6: a person's request never builds or pulls. Done: transit contacts pulled by the digest sweep and stored.
 - **P3: Love board on Sachin's kundli is "steady / split"** with main and conditional = test, karaka and annual = support; the
   Love and Work reading panels (doc 59) are planned rows only, so Love and Work run the older vote boards.
+
+## Filed 2026-11-08 by the sign-up/sign-in alerts and Terms consent build (branch `feat/signup-signin-alerts`)
+
+- **P1 — Apply migration `20261108120000_auth_terms_acceptance` before this server code ships.** It adds
+  `auth.terms_version`, `auth.terms_accepted_at`, `auth.age_confirmed_at` (additive, nullable). Prisma selects every
+  scalar column on `auth` reads without a `select`, so code from this branch on a database without the columns fails
+  those reads. Not applied by the build session (shared DB). Holder: deploy session. Done: `prisma migrate status` shows
+  it applied on staging and prod before the Lambda deploy.
+- **P1 — CloudFront origin request policy `e1684868` (staging API) does not forward `CloudFront-Viewer-Address` or
+  `CloudFront-Viewer-Country`.** Found by the deploy session 2026-11-08: it forwards only Origin, X-Astra-Authorization,
+  Accept, Access-Control-Request-*, X-Face-Box, Content-Type and X-Admin-Lab-Token. Until it does, `getClientIp`
+  (`src/lib/requestMeta.ts`) falls back to X-Forwarded-For (`xff_right` when the Lambda Web Adapter's
+  `x-amzn-request-context` gives the function URL peer, else `xff_first`, which a client can forge), owner alerts show
+  "(unverified, …)" and the country is unknown. Holder: deploy session, waiting on Sachin's yes. Done: both headers in
+  the policy (and the prod policy), an owner alert shows a bare IP and a country.
+- **P2 — Owner alerts are fire-and-forget on Lambda.** `alertOwnerOfAuth` (`src/notify/ownerAlerts.ts`) sends after
+  the response is returned; Lambda can freeze the instance before the 5 s send finishes, so an alert may arrive late
+  (on the next invocation) or not at all. Unverified on the live Lambda. If alerts go missing, move the send to an async
+  self-invoke (like the kundli sync, docs/reading-engine/31) or a queue. Holder: open. Done: alerts verified arriving
+  on staging, or moved off the request path.
+- **P2 — Sign-in alert throttle is per instance.** One sign-in email per user per 10 minutes is kept in an in-memory
+  map; each warm Lambda instance has its own, so a user can produce more than one alert in 10 minutes. Acceptable for
+  now. Done: move to a DB/Dynamo key if the owner finds it noisy.
+- **P2 — Owner alert env vars to set (deploy session).** `OWNER_ALERTS_ENABLED=1` and
+  `OWNER_ALERT_EMAILS=send.sachin@yahoo.com` on the API Lambda; both default off. Uses the existing `RESEND_API_KEY` /
+  `SMTP_HOST` mail transport. Then, once the web ships the consent box (docs/auth/otp-consent-contract.md),
+  `REQUIRE_TERMS_ON_SIGNIN=1` and `REQUIRE_TERMS_ON_SIGNUP=1`. Done: set and one real sign-up and sign-in alert received.
+- **P3 — `verifySignupCode` accepts any account's login code**, so an already verified person who calls it gets a
+  "New sign-up" owner alert instead of "Sign-in". Found reading `src/services/authService.ts` (`verifySignupCode` →
+  `verifyLoginCode` → `completeLogin`, no pending-account check). Holder: open. Done: verifySignupCode refuses (or
+  routes as sign-in) for an already verified account.
+- **P3 — The deprecated one-shot `signup` mutation sends no owner alert and records no Terms.** Its person is alerted
+  on the later sign-in instead. Leave unless an old web build still uses it.
+- **P3 — The Terms of Use page must contain the no-reproduction clause** ("won't copy, record, or reproduce anything
+  seen in the app") at version `2026-11-08` (`src/auth/terms.ts` `CURRENT_TERMS_VERSION`). Holder: web session /
+  Sachin for the wording. Done: the Terms page carries the clause and its version date matches.

@@ -66,6 +66,11 @@ model Auth {
   token_version              Int                    @default(1) @map("token_version")
   /// Updated at most once per 5 minutes per user by request auth.
   last_seen_at               DateTime?              @map("last_seen_at") @db.Timestamptz(6)
+  /// Terms of Use version last accepted (src/auth/terms.ts); migration 20261108120000_auth_terms_acceptance.
+  terms_version              String?                @map("terms_version")
+  terms_accepted_at          DateTime?              @map("terms_accepted_at") @db.Timestamptz(6)
+  /// When the person last confirmed they are 18 or older (same checkbox as the Terms).
+  age_confirmed_at           DateTime?              @map("age_confirmed_at") @db.Timestamptz(6)
   activity_days              UserActivityDay[]
   admin_actions_done         AdminAction[]          @relation("AdminActionActor")
   admin_actions_on           AdminAction[]          @relation("AdminActionTarget")
