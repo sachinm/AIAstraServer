@@ -1088,3 +1088,7 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
   (web worktree finding). The 22-word limit is not checked on the web side (the server auditor enforces it).
 - **Deploy note:** M40 is applied to the shared database; `ADMIN_LAB` and `ADMIN_LAB_TOKEN` are new env vars (deploy
   session; off by default).
+- **P3: The dossier has no "rows declared but unread" count** (admin lab request, 2026-11-08). `audit.unresolvedKeys`
+  counts evidence keys that did not resolve; it is not the rows a technique's contract declares minus the rows its
+  claims cite. Owner: reading-dev. Done: per technique, declared rows (from the contract filters over the digest)
+  minus cited rows, stored in the dossier and shown in the admin lab.
