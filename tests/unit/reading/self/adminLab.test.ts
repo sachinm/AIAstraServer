@@ -19,7 +19,7 @@ const dossiers = new Map<string, any>();
 const actions: any[] = [];
 const prisma: any = {
   auth: {
-    findUnique: async ({ where }: any) => (where.id === 'u1' ? { research: true } : where.id === 'u2' ? { research: false } : null),
+    findUnique: async ({ where }: any) => (where.id === 'u1' ? { locked_at: null } : where.id === 'u2' ? { locked_at: new Date('2026-11-01T00:00:00Z') } : null),
     findMany: async () => [{ id: 'u1-aaaaaaaa' }],
   },
   kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1', preferred_dasha: 'dwisatpathi' } : null) },
@@ -67,6 +67,7 @@ const post = (body: unknown, token = 'lab-secret') => fetch(`${base}/api/admin-l
 describe('admin lab', () => {
   it('refuses without the token, without consent, and an unknown technique', async () => {
     expect((await post({ userId: 'u1' }, 'wrong')).status).toBe(403);
+    // QA: no research flag needed; a locked account is still refused
     expect((await post({ userId: 'u2' })).status).toBe(403);
     expect((await post({ userId: 'u1', technique: 'self.reading.nonesuch' })).status).toBe(400);
     expect((await post({ userId: 'u9' })).status).toBe(404);

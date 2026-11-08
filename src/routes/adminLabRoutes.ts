@@ -1,11 +1,11 @@
 /**
  * The server surface of the admin Techniques Lab (docs/admin/10): run one board technique, or the whole board, for a
- * research-consented person through the same build the person's board uses, with trigger 'manual', and read the stored
+ * person with a kundli (QA: Sachin, 2026-11-07, no research flag needed) through the same build the person's board uses, with trigger 'manual', and read the stored
  * dossiers. Mounted only when ADMIN_LAB=1; every call needs the header `x-admin-lab-token` equal to ADMIN_LAB_TOKEN
  * (compared in constant time). Birth fields are stripped from every response. Every run writes `agent_runs` (through
  * the build) and an `admin_actions` row (`lab.run`, ids only, never output).
  *
- *   GET  /api/admin-lab/people                                  → research-consented people, masked
+ *   GET  /api/admin-lab/people                                  → people with a kundli, masked
  *   POST /api/admin-lab/run { userId, board:'self', technique?: '<panel id>'|'all', force?, asOf?: 'YYYY-MM-DD' } → 200 LabRun |
  *        400 bad_request | bad_as_of | unknown_technique | board_not_built (love, work) | 403 | 404
  *   GET  /api/admin-lab/runs/:id                                → the stored dossier
@@ -46,7 +46,8 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
   const selfDeps: SelfDeps = { prisma: deps.prisma, ...(deps.self ?? {}) };
 
   app.get('/api/admin-lab/people', guard, async (_req, res) => {
-    const rows = await deps.prisma.auth.findMany({ where: { research: true }, select: { id: true }, take: 200 }).catch(() => []);
+    // QA (Sachin, 2026-11-07): every unlocked account with a kundli; the research flag no longer gates the lab
+    const rows = await deps.prisma.auth.findMany({ where: { locked_at: null, kundlis: { some: {} } }, select: { id: true }, orderBy: { created_at: 'desc' }, take: 200 }).catch(() => []);
     res.json({ items: rows.map((r) => ({ userId: r.id, label: `Person ${r.id.slice(0, 8)}` })) });
   });
 
@@ -59,9 +60,9 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     if (b.asOf !== undefined && (typeof b.asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.asOf) || Number.isNaN(Date.parse(b.asOf)))) return res.status(400).json({ error: 'bad_as_of' });
     const tech = typeof b.technique === 'string' ? b.technique.replace(/^self\.reading\./, '') : 'all';
     if (tech !== 'all' && !(SELF_PANEL_IDS as readonly string[]).includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
-    const person = await deps.prisma.auth.findUnique({ where: { id: b.userId }, select: { research: true } }).catch(() => null);
+    const person = await deps.prisma.auth.findUnique({ where: { id: b.userId }, select: { locked_at: true } }).catch(() => null);
     if (!person) return res.status(404).json({ error: 'no_person' });
-    if (!person.research) return res.status(403).json({ error: 'no_research_consent' });
+    if (person.locked_at) return res.status(403).json({ error: 'locked' });
     try {
       const t0 = Date.now();
       const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}), ...(tech === 'all' ? {} : { only: tech as SelfPanelId }) });
