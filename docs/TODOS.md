@@ -1092,3 +1092,43 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
   counts evidence keys that did not resolve; it is not the rows a technique's contract declares minus the rows its
   claims cite. Owner: reading-dev. Done: per technique, declared rows (from the contract filters over the digest)
   minus cited rows, stored in the dossier and shown in the admin lab.
+
+## Filed 2026-11-07 by the Self pipeline review (Opus, read-only, on develop 46c241c)
+
+Plan to fix these: docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md (in progress).
+
+- **P2: a fully cached You board load is about ten serial database round trips plus nine `agent_runs` inserts** (2.3–4.9 s on
+  Sachin's kundli). Kundli read twice (`service.ts:161`, `digest/load.ts:60`); every digest section and varga decrypted, `source`
+  included and unused (`load.ts:66`, memo 5 min per process); activation groupBy plus two findMany where one `activationFor` call
+  with `shortTo` would do (`service.ts:91,176-179`); the sky overlay decrypted only for a boolean (`boardService.ts:58-63`); an
+  awaited `agentRun.create` per panel (`outputStore.ts:364-390`); a second serial round for the diagnosis (`service.ts:255`).
+  Done: one bundle read per kundli and window, one batched run log.
+- **P2: clock, purview and audit run outside `withAgentRun` / `withTechniqueOutput`** (`service.ts:173,253-254,280`): 0 runs in
+  the admin and absent from the dossier's technique list (`dossier.ts:103`). Done: each is a recorded, stored step.
+- **P2: struggle header counts claims before the purview veto** (`struggle.ts:79`, `purview.ts:56-63`); the vetoed claim also took
+  one of `MAX_CLAIMS` (6). Seen live: "6 things" over 5 lines. Same class: yogas header vs card (`yogas.ts:38-40`, `card.ts:39-42`);
+  line ranges past the header range (`card.ts:30`, `struggle.ts:74-77`, `body.ts:32-46`). Done: headers built after veto and card cut.
+- **P2: body panel cache key ignores whether the sky overlay is stored** (`service.ts:241`): stays "partial" until the sub-period ends.
+- **P2: a new Tithi Pravesha year does not invalidate the year panel**; it reads the TP row by the VP year (`year.ts:30`, window
+  `service.ts:183-185`).
+- **P2: the 45-minute cache recycler deletes immutable natal panel outputs** (`outputStore.ts:357,488-533`, `cacheSweep.ts:215`).
+- **P2: a lab force run never writes the store** (`service.ts:212-213`), so a forced rebuild after a fix leaves the board stale.
+- **P2: a cached load's dossier id is the newest dossier of any scope or date** (`service.ts:291`).
+- **P2: the model layer is unwired and untracked**: `runSelfOracle` is never called; it calls `callGemini` with no run or output
+  wrapper (`oracle.ts:51-56`); no `responseSchema`; reader output unvalidated; the validator keeps uncited paragraphs (`oracle.ts:40-48`).
+- **P2: prompt caching cannot work for the Self reader and Oracle**: no `cachedContent`; system prompts under ~1k tokens (below
+  the implicit-cache minimum); `TODAY` on line 2 of the BRIEF; different system prefixes for reader and Oracle.
+- **P2: `oracle/self.md` asks for 450–700 words of prose under eight headings**, contradicting doc 61 (dated cards of 1–3 lines).
+- **P2: `gemini-2.5-pro` is missing from `PRICES` in `src/reading/llm/models.ts:38-48`**, so its cost would be recorded as $0.
+- **P3: R15-self.md is thin on technique**: 4 patterns (one apparently chart-specific); no Parashari lordship (kendra/trikona,
+  yogakaraka, 6/8/12, maraka, badhaka, dispositor strength, Chandra lagna) or Jaimini rules (rasi drishti, houses from karakamsa,
+  AK–AmK, 12th from AL, UL). `_shared.md` describes JSON dot-path evidence ids; the BRIEF uses `planet:D1.Mo` keys.
+- **P3: shared work repeated per load**: `runningChain` ×5, `runningMudda` ×2, `collectData` twice, purview, boundaries and audit
+  recomputed on every cached load; struggle keyed on L3 though it reads L1–L2; chapter settings not in the cache key (`chapters.ts:24,34`).
+- **P3: admin lab**: the dossier bundle hash excludes trigger, timings and scope (`dossier.ts:109`), so a manual run can return an
+  older row's timings (`:117-118`); `stripBirthFields` drops any `question` key, so the confirm question never reaches the lab
+  (`dossier.ts:153`); `/api/admin-lab/people` returns an empty list on a database error (`adminLabRoutes.ts`).
+- **P3: the admin Techniques page lists Lucky-times techniques under Self, Love and Work**, by category; the lab now filters to
+  runnable `<board>.reading.*` panels (admin ceea3b8), the Techniques page does not.
+- **P2: the Sachin kundli (c584c0a3) has no stored sky overlay**, so the body panel cannot check Saturn, Mars or the nodes over the
+  lagna and Moon. Done: the overlay is pulled for it (engine call, no Gemini).
