@@ -28,7 +28,7 @@ import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import { runningMudda, runningTp } from './panels/year.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
-import { clockLabel } from './words.js';
+import { BANNED_LINE_WORDS, clockLabel, MAX_LINE_WORDS, wordCount } from './words.js';
 import type {
   ConfirmAnswer,
   LineCertainty,
@@ -478,7 +478,7 @@ export function parseOracleStructuredBlocks(
       .flatMap((x) => x[1]!.split(',').map((s) => s.trim()))
       .filter((k) => allowedKeys.has(k));
     const cleanText = redactEngineTerms(body.replace(/\s*\{[^}]+\}/g, '').trim());
-    if (!cleanText) continue;
+    if (!cleanText || wordCount(cleanText) > MAX_LINE_WORDS || BANNED_LINE_WORDS.some((re) => re.test(cleanText))) continue;
     let range: LineRange = 'always';
     if (/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(rawRange)) {
       const [from, to] = rawRange.split('..');
@@ -1108,9 +1108,18 @@ export async function runSelfOracle(
           spentTodayUsd: spentUsd,
           stages,
         };
+        const aiValidTo = structured.validUntil[scopeKey === 'all' ? 'overall' : scopeKey] ?? structured.validUntil.overall;
+        const refinedPeriod: DateSpan | null =
+          aiValidTo && aiValidTo !== 'always' && /^\d{4}-\d{2}-\d{2}$/.test(aiValidTo) && aiValidTo > reading.asOf
+            ? {
+                from: ctx.runningSpan?.from ?? new Date(`${reading.asOf}T00:00:00Z`),
+                to: new Date(`${aiValidTo}T00:00:00Z`),
+              }
+            : null;
         return {
           value: result,
           summary: { status: 'ok', calls, dropped: validated.dropped, spentUsd },
+          ...(refinedPeriod ? { context: { runningPeriod: refinedPeriod } } : {}),
         };
       },
     );

@@ -189,7 +189,7 @@ export async function writeDossier(prisma: PrismaClient, input: DossierInput, re
  * anything starting with birth, plus the person's own name fields. Chart names (a yoga's, a star's, a saham's) are kept
  * under `title`, so nothing a reader needs is lost. The top-level `kundli_id` is removed; `question` (the chart confirm question) is preserved.
  */
-export const REFUSED_KEY_LETTERS = new Set(['name', 'place', 'placeresolved', 'placeofbirth', 'city', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'username', 'dateofbirth', 'timeofbirth', 'question']);
+export const REFUSED_KEY_LETTERS = new Set(['name', 'place', 'placeresolved', 'placeofbirth', 'city', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'username', 'dateofbirth', 'timeofbirth']);
 const letters = (k: string) => k.toLowerCase().replace(/[^a-z]/g, '');
 export function isRefusedKey(k: string): boolean {
   const l = letters(k);
