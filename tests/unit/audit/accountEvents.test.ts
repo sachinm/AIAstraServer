@@ -76,6 +76,16 @@ describe('recordAccountEvent', () => {
     });
   });
 
+  it('stores where the IP came from in after.ip_source', async () => {
+    const { db, rows } = fakeDb();
+    await recordAccountEvent(db, {
+      userId: 'u1',
+      action: 'sign_in',
+      request: factsFromFetch(req({ 'cloudfront-viewer-address': '198.51.100.4:4431', 'x-forwarded-for': '6.6.6.6' })),
+    });
+    expect(rows[0]).toMatchObject({ ip: '198.51.100.4', after: { ip_source: 'viewer' } });
+  });
+
   it('a failed write is logged and dropped, never thrown', async () => {
     const { db } = fakeDb(true);
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);

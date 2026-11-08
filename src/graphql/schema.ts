@@ -11,6 +11,8 @@ import {
 import { completeProfile, ownProfileFields, referralStats, updateProfile } from '../services/profileService.js';
 import { getClientIp } from '../lib/requestMeta.js';
 import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
+import { alertOwnerOfAuth } from '../notify/ownerAlerts.js';
+import { checkTerms, currentTermsInfo, recordTermsAcceptance } from '../auth/terms.js';
 import { forgetUser } from '../auth/requestAuth.js';
 import { popLastOtpFailure } from '../auth/emailCode.js';
 import { assertTurnstileIfConfigured } from '../services/turnstileService.js';
@@ -155,7 +157,7 @@ const typeDefs = /* GraphQL */ `
   type LoginResult {
     success: Boolean!
     message: String
-    "ACCOUNT_LOCKED when the code was right but the account is locked."
+    "ACCOUNT_LOCKED when the code was right but the account is locked; terms_required / terms_outdated when the Terms box is required and missing or stale (checked before the code, so the code is not used up)."
     code: String
     token: String
     user: ID
@@ -183,9 +185,18 @@ const typeDefs = /* GraphQL */ `
     role: String
   }
 
+  "The Terms of Use version the sign-in and sign-up checkbox accepts (docs/auth/otp-consent-contract.md)."
+  type TermsInfo {
+    version: String!
+    "loginWithMagicLink refuses without termsAccepted/termsVersion (code terms_required / terms_outdated)."
+    requiredOnSignIn: Boolean!
+    "startSignup and verifySignupCode refuse without them."
+    requiredOnSignUp: Boolean!
+  }
+
   type SignupStartResult {
     success: Boolean!
-    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure; SIGNUP_EMAIL_LIMIT when the day's sign-up emails are used up (try tomorrow)."
+    "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure; SIGNUP_EMAIL_LIMIT when the day's sign-up emails are used up (try tomorrow); terms_required / terms_outdated when the Terms box is required and missing or stale."
     code: String
     message: String!
   }
@@ -352,6 +363,8 @@ const typeDefs = /* GraphQL */ `
   }
 
   type Query {
+    "Public: the current Terms of Use version and whether sign-in / sign-up enforce it."
+    currentTerms: TermsInfo!
     "Asking guide for one area (bucketId) or for every chip area. Health appears only for roles allowed to discuss it."
     askingGuide(bucketId: String): [AskingGuideCard!]!
     me: User
@@ -389,6 +402,10 @@ const typeDefs = /* GraphQL */ `
     name: String!
     email: String!
     turnstileToken: String
+    "The 18+ and Terms box was ticked."
+    termsAccepted: Boolean
+    "currentTerms.version as shown to the person."
+    termsVersion: String
   }
 
   input CompleteProfileInput {
@@ -423,13 +440,13 @@ const typeDefs = /* GraphQL */ `
     "DEPRECATED: use startSignup, verifySignupCode and completeProfile. Kept so old web builds keep working. No longer accepts age."
     signup(input: SignUpInput!): SignUpResult!
     startSignup(input: StartSignupInput!): SignupStartResult!
-    verifySignupCode(email: String!, code: String!): LoginResult!
+    verifySignupCode(email: String!, code: String!, termsAccepted: Boolean, termsVersion: String): LoginResult!
     completeProfile(input: CompleteProfileInput!): CompleteProfileResult!
     updateProfile(input: UpdateProfileInput!): UpdateProfileResult!
     "Restart the caller's chart build (the Retry button). A build already running is left alone."
     retryChartBuild: ChartStatus
     requestMagicLink(email: String!, recaptchaToken: String, turnstileToken: String): MagicLinkRequestResult!
-    loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String): LoginResult!
+    loginWithMagicLink(email: String!, code: String!, recaptchaToken: String, turnstileToken: String, termsAccepted: Boolean, termsVersion: String): LoginResult!
     """Server side of logout: deletes the caller's LLM prompt caches in the background. Always true."""
     logout: Boolean!
     uploadKundli(fileBase64: String!): UploadKundliResult!
@@ -472,6 +489,9 @@ function withAdmin<T>(
 
 const resolvers = {
   Query: {
+    currentTerms() {
+      return currentTermsInfo();
+    },
     askingGuide(_parent: unknown, { bucketId }: { bucketId?: string | null }, context: GraphQLContext) {
       requireRoles(context, [...ALL_AUTHENTICATED_ROLES]);
       const bucket = bucketId && isBucketId(bucketId) ? bucketId : null;
@@ -1139,13 +1159,44 @@ const resolvers = {
     },
     async startSignup(
       _parent: unknown,
-      { input }: { input: { name: string; email: string; turnstileToken?: string | null } },
+      {
+        input,
+      }: {
+        input: {
+          name: string;
+          email: string;
+          turnstileToken?: string | null;
+          termsAccepted?: boolean | null;
+          termsVersion?: string | null;
+        };
+      },
       context: GraphQLContext
     ) {
-      const { turnstileToken, ...rest } = input;
+      const { turnstileToken, termsAccepted, termsVersion, ...rest } = input;
+      const reqFacts = factsFromFetch(context.request);
+      const terms = checkTerms('sign_up', { termsAccepted, termsVersion });
+      if (!terms.ok) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'sign_up_started',
+          outcome: 'refused',
+          note: terms.code,
+          request: reqFacts,
+        });
+        return { success: false, code: terms.code, message: terms.message };
+      }
       const clientIp = getClientIp(context.request);
       const res = await startSignup(rest, turnstileToken ?? null, clientIp);
-      const reqFacts = factsFromFetch(context.request);
+      if (res.success && terms.version) {
+        // the pending account row exists now (created or reused): store the box ticked on page 1
+        const accepted = terms.version;
+        void (async () => {
+          const row = await context.prisma?.auth
+            ?.findFirst?.({ where: { email: { equals: rest.email.trim(), mode: 'insensitive' } }, select: { id: true } })
+            .catch(() => null);
+          if (row?.id) await recordTermsAcceptance(context.prisma, row.id, accepted, 'sign_up', reqFacts);
+        })().catch(() => undefined);
+      }
       const tf = !res.success ? popLastTurnstileFailure(clientIp) : null;
       if (tf) {
         void recordAccountEvent(context.prisma, {
@@ -1168,9 +1219,27 @@ const resolvers = {
     },
     async verifySignupCode(
       _parent: unknown,
-      { email, code }: { email: string; code: string },
+      {
+        email,
+        code,
+        termsAccepted,
+        termsVersion,
+      }: { email: string; code: string; termsAccepted?: boolean | null; termsVersion?: string | null },
       context: GraphQLContext
     ) {
+      const reqFacts = factsFromFetch(context?.request);
+      // checked before the code, so a refusal does not use the code up
+      const terms = checkTerms('sign_up', { termsAccepted, termsVersion });
+      if (!terms.ok) {
+        void recordAccountEvent(context?.prisma, {
+          userId: null,
+          action: 'sign_up_verify',
+          outcome: 'refused',
+          note: terms.code,
+          request: reqFacts,
+        });
+        return { success: false, code: terms.code, message: terms.message };
+      }
       const res = await verifySignupCode(email, code);
       const locked = !res.success && 'code' in res && res.code === 'ACCOUNT_LOCKED';
       const otpFailure = !res.success && !locked ? popLastOtpFailure(email) : null;
@@ -1180,8 +1249,13 @@ const resolvers = {
         outcome: res.success ? 'ok' : locked ? 'refused' : 'failed',
         note: res.success ? null : subjectTag(email),
         ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
-        request: factsFromFetch(context?.request),
+        request: reqFacts,
       });
+      if (res.success) {
+        if (terms.version) void recordTermsAcceptance(context?.prisma, res.user, terms.version, 'sign_up', reqFacts);
+        // the completed sign-up (code verified), not sign_up_started
+        alertOwnerOfAuth(context?.prisma, 'sign_up', res.user, email, reqFacts);
+      }
       return res;
     },
     async completeProfile(
@@ -1273,17 +1347,33 @@ const resolvers = {
         email,
         code,
         turnstileToken,
+        termsAccepted,
+        termsVersion,
       }: {
         email: string;
         code: string;
         recaptchaToken?: string | null;
         turnstileToken?: string | null;
+        termsAccepted?: boolean | null;
+        termsVersion?: string | null;
       },
       context: GraphQLContext
     ) {
+      const reqFacts = factsFromFetch(context.request);
+      // checked before Turnstile and the code, so a refusal uses up neither
+      const terms = checkTerms('sign_in', { termsAccepted, termsVersion });
+      if (!terms.ok) {
+        void recordAccountEvent(context.prisma, {
+          userId: null,
+          action: 'sign_in',
+          outcome: 'refused',
+          note: terms.code,
+          request: reqFacts,
+        });
+        return { success: false, code: terms.code, message: terms.message };
+      }
       const clientIp = getClientIp(context.request);
       const login = await loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
-      const reqFacts = factsFromFetch(context.request);
       const tf = !login.success ? popLastTurnstileFailure(clientIp) : null;
       if (tf) {
         void recordAccountEvent(context.prisma, {
@@ -1305,6 +1395,10 @@ const resolvers = {
         ...(otpFailure ? { after: { otp_reason: otpFailure } } : {}),
         request: reqFacts,
       });
+      if (login.success) {
+        if (terms.version) void recordTermsAcceptance(context.prisma, login.user, terms.version, 'sign_in', reqFacts);
+        alertOwnerOfAuth(context.prisma, 'sign_in', login.user, email, reqFacts);
+      }
       return login;
     },
     async logout(_parent: unknown, _args: unknown, context: GraphQLContext) {

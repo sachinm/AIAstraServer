@@ -68,6 +68,24 @@ something.
   Love and Work.
 - Love and Work reading panels (doc 59) are catalogue rows only.
 
+## Update, 2026-11-08 early: what is pending
+
+Done since this was written:
+- **Lab token (action 1) is fixed.** The deploy session added `X-Admin-Lab-Token` to CloudFront origin request policy
+  e1684868 (staging API distribution E3UPJNUU8APCT only), on Sachin's yes. Both Lambdas and the secret held the same token
+  and `AIASTRA_SERVER_BASE` was correct. Verified: `/api/admin-lab/people` returns 200 with the token, 403 without.
+- Another session has since moved develop on (self-oracle family readers in parallel, a `BUILD-GAPS.MD` queue). Read
+  `git log` and BUILD-GAPS.MD before starting; some items below may already be done.
+
+Pending:
+1. **Browser retest of the lab.** Blocked only on Sachin signing in again: the browser pane reopened and lost the admin
+   sign-in (kept per tab). Then pick his account and open the stored builds; a run may make a live engine call for the sky
+   overlay, which he approved.
+2. **Birth details in the lab.** Server branch `feat/admin-lab-person-birth` (38dc3b8) is unmerged and needs a unit test,
+   the admin proxy, page fields and the docs/01 privacy note (action 2 below).
+3. **Fable plan, doc 63.** The agent stopped on the usage limit before saving the file. Rerun it from this handoff.
+4. Actions 3 to 6 below, unchanged.
+
 ## Next actions, in order
 
 1. **Get the lab token through.** This is the deploy session's job, since it needs AWS.

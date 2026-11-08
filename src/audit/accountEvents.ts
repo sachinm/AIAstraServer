@@ -12,13 +12,15 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import type express from 'express';
-import { getClientIp } from '../lib/requestMeta.js';
+import { resolveClientIp, type ClientIpSource } from '../lib/requestMeta.js';
 
 export type AccountActor = 'self' | 'staff' | 'payment_gateway' | 'system';
 export type AccountOutcome = 'ok' | 'refused' | 'failed';
 
 export interface RequestFacts {
   ip: string | null;
+  /** how far `ip` can be trusted (src/lib/requestMeta.ts); stored as `after.ip_source` on the row */
+  ip_source?: ClientIpSource | null;
   ip_chain: string | null;
   user_agent: string | null;
   accept_language: string | null;
@@ -49,8 +51,10 @@ type HeaderGet = (name: string) => string | null | undefined;
 
 function factsFrom(get: HeaderGet, path: string | null, method: string | null): RequestFacts {
   const forwarded = get('x-forwarded-for');
+  const client = resolveClientIp(get);
   return {
-    ip: clip(forwarded?.split(',')[0]?.trim() || get('x-real-ip') || get('cf-connecting-ip') || null, 45),
+    ip: clip(client.ip, 45),
+    ip_source: client.source,
     ip_chain: clip(forwarded ?? null, 200),
     user_agent: clip(get('user-agent'), 300),
     accept_language: clip(get('accept-language'), 100),
@@ -70,8 +74,7 @@ export function factsFromFetch(request: Request | undefined | null): RequestFact
   } catch {
     path = null;
   }
-  const f = factsFrom((n) => request.headers.get(n), path, request.method ?? null);
-  return { ...f, ip: f.ip ?? getClientIp(request) };
+  return factsFrom((n) => request.headers.get(n), path, request.method ?? null);
 }
 
 /** From an Express request (the REST routes). */
@@ -97,6 +100,8 @@ export async function recordAccountEvent(prisma: Db | null | undefined, e: Accou
   if (!prisma || typeof (prisma as { accountEvent?: { create?: unknown } }).accountEvent?.create !== 'function') return;
   try {
     const r = e.request;
+    // the IP's source rides in `after` (no column for it): cheap, and no migration needed before it ships
+    const after = r?.ip_source ? { ...(e.after ?? {}), ip_source: r.ip_source } : e.after;
     await prisma.accountEvent.create({
       data: {
         user_id: e.userId,
@@ -105,7 +110,7 @@ export async function recordAccountEvent(prisma: Db | null | undefined, e: Accou
         outcome: e.outcome ?? 'ok',
         fields: e.fields ?? [],
         before: (e.before ?? undefined) as never,
-        after: (e.after ?? undefined) as never,
+        after: (after ?? undefined) as never,
         note: clip(e.note, 120),
         ip: r?.ip ?? null,
         ip_chain: r?.ip_chain ?? null,
