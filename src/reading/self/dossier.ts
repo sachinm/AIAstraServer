@@ -70,7 +70,7 @@ export interface DossierRecord {
   clocks: Record<string, unknown>;
   panels: unknown[];
   gaps: string[];
-  audit: CodeAudit & { steps: DossierInput['steps'] | null; unreadRows: number; scope: string };
+  audit: CodeAudit & { steps: DossierInput['steps'] | null; /** evidence keys the claims cite that did not resolve to a stored row (not a count of rows left unread) */ unresolvedKeys: number; scope: string };
   bundleHash: string;
 }
 
@@ -107,7 +107,7 @@ export function buildDossier(input: DossierInput): DossierRecord {
   const panels = input.panels.map((p) => ({ id: p.id, technique: p.technique, headerRange: p.headerRange, lines: p.lines, claims: p.claims, vetoed: p.vetoed ?? [], chapters: p.chapters ?? [] }));
   const gaps = [...input.gaps, ...unresolved.map((k) => `dossier: ${k} did not resolve`)];
   const bundleHash = createHash('sha256').update(canonicalJson({ v: input.view.version, clock: input.clock.system, code: input.codeVersion, asOf: input.asOf, data, panels })).digest('hex').slice(0, 32);
-  return { techniques, rules: input.purview, data, yogas: input.view.yogas(), clocks, panels, gaps, audit: { ...input.audit, steps: input.steps ?? null, unreadRows: unresolved.length, scope: input.scope ?? 'all' }, bundleHash };
+  return { techniques, rules: input.purview, data, yogas: input.view.yogas(), clocks, panels, gaps, audit: { ...input.audit, steps: input.steps ?? null, unresolvedKeys: unresolved.length, scope: input.scope ?? 'all' }, bundleHash };
 }
 
 /** Writes the dossier once per build content; returns its id. A failed write never fails the reading. */
