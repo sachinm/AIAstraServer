@@ -1144,3 +1144,39 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
 - **P3: Page times "Forecast" text is generic.** It tells staff to "use GET /api/dashboard/sections-stream" for
   `/api/admin-lab/*` routes, which are staff lab calls with 30 s engine pulls, not customer pages. Owner: admin. Done:
   recommendations keyed by route family; lab routes excluded from customer forecasts.
+
+## Filed 2026-11-08 by the BUILD-GAPS session (branch `feat/build-gaps-p2`, BUILD-GAPS.MD BG-06..BG-14)
+
+### P2: real, can wait
+
+- **Engine additions that BG-06/08/10/11 need (Node must not count them).** These four-school items were not built because
+  the stored rows give no value for them, and getting one in Node means counting houses or signs. Engine repo
+  `AIAstra_Radha` (data map: side-session note `bg06-12-data-map.md`). Status: open (engine pass). Done: each field is
+  exported, read into the digest by selection, and the panel claim is added.
+  1. **Devatas (BG-08):** Ishta (12th from karakamsa in D9), Dharma (9th from karakamsa), Palana (6th from AmK in D9), each
+     with sign, lord and occupants, in `facts_export._karakas`.
+  2. **nth-from tables (BG-06 11th/12th from AL; BG-11 10th/6th/7th from Saturn, 10th/11th vs 6/8/12 from AL and A10):**
+     `nth_from_arudha_lagna {n: house}`, `nth_from_point` for A10, `nth_from_planet {planet: {n: house}}` in
+     `house_counts_export.house_counts_table` (today only the inverse maps exist).
+  3. **UL–A7 relation (BG-10):** a stored count from UL to A7 in `_build_arudhas`, or the digest reads `house_counts.house_from_house`.
+  4. **Paksha Bala (BG-07):** `kaala_parts.paksha` in `natal_export._build_shadbala` (only the six shadbala totals are kept);
+     the digest also does not read `facts.panchanga` tithi and paksha yet.
+- **D20 and D24 cards (BG-07, BG-08) are not in the dossier's default chart list,** so mind/atma cannot read them. Status: open. Done: the digest builds D20/D24 cards for a cohort kundli and the panels cite them.
+- **Two clarify tests fail on `develop`, unrelated to BUILD-GAPS.** `tests/unit/reading/clarify.test.ts:157` expects
+  "Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?" and gets "Shall I look until 7 Sep 2027,
+  or a different stretch of time?"; `tests/unit/reading/annualPrashna.test.ts` "a ruled-out question never reaches the model"
+  fails the same way. Neither file was touched on this branch. Status: open. Done: the wording and the tests agree.
+- **The unit suite reads `.env` (`tests/setup.ts` calls `dotenv.config()`),** so a checkout with a live `.env` fails 6 test
+  files (Gemini output cap, engine base URL, prompt cache, export spacing, thinking config). Seen 2026-11-08 in a worktree
+  with the main `.env` copied in; green with `.env` moved aside. Status: open. Done: tests pin their own env or setup skips `.env` under vitest.
+- **BG-14 web follow-up: panels now carry `plan` (summary, dated steps, calendar).** `SelfPanel.plan` (server
+  `src/reading/self/types.ts`) and `audit.dateGaps` are new; the web You/Love/Work boards do not render them yet. Calendar
+  entries with `inWindow: false` should show as unconfirmed, not hidden. Status: open (web). Done: each board shows the
+  plan summary, the dated steps and a calendar per panel.
+- **BG-14: lucky-day / muhurta tables are not yet a date window for the board audit.** `storedWindows` (service.ts)
+  takes the activation rows, the year charts' dashas and the transit range with Sade Sati and dhaiya; the board service
+  does not load `day_tables`. Status: open. Done: the board service passes the person's stored day tables and a calendar
+  date on a lucky day counts as grounded.
+- **BG-14 makes the Oracle write more.** The prompt now asks for a plan and calendar per panel and the output cap rose from
+  4500 to 8000 tokens (`SELF_ORACLE_MAX_OUTPUT_TOKENS`). No live run has measured the cost per board yet (no paid call
+  without Sachin's yes). Status: open. Done: one approved run per board records tokens and cost in the dossier.
