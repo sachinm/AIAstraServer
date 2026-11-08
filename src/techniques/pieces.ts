@@ -386,7 +386,7 @@ function spanOr(now: Date, span: DateSpan | null | undefined, fallbackMs: number
  * fallback window. Daily: until the day ends. Transit: the epoch-aligned transit window. Question: not reusable.
  */
 export function validityWindow(t: TechniqueDef, ctx: ValidityContext, cfg: ValidityConfig = validityConfig(), techniques: readonly TechniqueDef[] = TECHNIQUES): ValidityWindow {
-  const freshness = techniqueFreshness(t, techniques);
+  const freshness = t.id === 'self.reading.oracle' && ctx.runningPeriod ? 'dasha' : techniqueFreshness(t, techniques);
   const scope = techniqueScope(t);
   const now = ctx.now;
   switch (freshness) {

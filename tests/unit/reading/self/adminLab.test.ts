@@ -34,22 +34,55 @@ const prisma: any = {
           }
         : where.id === 'u2'
           ? { id: 'u2', locked_at: new Date('2026-11-01T00:00:00Z') }
-          : null,
+          : where.id === 'u3'
+            ? {
+                id: 'u3',
+                email: 'send.sachin@yahoo.com',
+                name: null,
+                username: 'sach',
+                date_of_birth: '1980-10-14',
+                time_of_birth: '16:55:00',
+                place_of_birth: null,
+                city: null,
+                country_code: null,
+                locked_at: null,
+              }
+            : null,
     findMany: async () => [
       {
         id: 'u1',
         email: 'sachin@example.com',
         name: 'Sachin Mohan',
+        username: 'Sachin Mohan',
         date_of_birth: '1975-07-30',
         time_of_birth: '19:21',
         place_of_birth: 'Pune, Maharashtra, India',
         city: 'Pune',
         country_code: 'IN',
-        kundlis: [{ id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi' }],
+        kundlis: [{ id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi', place_resolved: 'Pune, IN' }],
+      },
+      {
+        id: 'u3',
+        email: 'send.sachin@yahoo.com',
+        name: null,
+        username: 'sach',
+        date_of_birth: '1980-10-14',
+        time_of_birth: '16:55:00',
+        place_of_birth: null,
+        city: null,
+        country_code: null,
+        kundlis: [{ id: 'k3', digest_status: 'ready', preferred_dasha: 'dwisatpathi', place_resolved: 'Pune, IN' }],
       },
     ],
   },
-  kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi' } : null) },
+  kundli: {
+    findFirst: async ({ where }: any) =>
+      where.user_id === 'u1'
+        ? { id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi', place_resolved: 'Pune, IN' }
+        : where.user_id === 'u3'
+          ? { id: 'k3', digest_status: 'ready', preferred_dasha: 'dwisatpathi', place_resolved: 'Pune, IN' }
+          : null,
+  },
   personFact: { findMany: async () => [] },
   techniqueOutput: { findUnique: async () => null, upsert: async ({ create }: any) => create, updateMany: async () => ({ count: 0 }) },
   agentRegistry: { upsert: async () => ({}) },
@@ -149,6 +182,20 @@ describe('admin lab', () => {
         digestStatus: 'ready',
         preferredClock: 'dwisatpathi',
       },
+      {
+        userId: 'u3',
+        label: 'sach (send.sachin@yahoo.com)',
+        email: 'send.sachin@yahoo.com',
+        name: 'sach',
+        dateOfBirth: '1980-10-14',
+        timeOfBirth: '16:55:00',
+        placeOfBirth: 'Pune, IN',
+        city: null,
+        countryCode: null,
+        kundliId: 'k3',
+        digestStatus: 'ready',
+        preferredClock: 'dwisatpathi',
+      },
     ]);
 
     const detailRes = await fetch(`${base}/api/admin-lab/people/u1`, {
@@ -166,6 +213,24 @@ describe('admin lab', () => {
       countryCode: 'IN',
       locked: false,
       kundliId: 'k1',
+      digestStatus: 'ready',
+      preferredClock: 'dwisatpathi',
+    });
+    const fallbackRes = await fetch(`${base}/api/admin-lab/people/u3`, {
+      headers: { 'x-admin-lab-token': 'lab-secret' },
+    });
+    expect(fallbackRes.status).toBe(200);
+    expect(await fallbackRes.json()).toEqual({
+      userId: 'u3',
+      email: 'send.sachin@yahoo.com',
+      name: 'sach',
+      dateOfBirth: '1980-10-14',
+      timeOfBirth: '16:55:00',
+      placeOfBirth: 'Pune, IN',
+      city: null,
+      countryCode: null,
+      locked: false,
+      kundliId: 'k3',
       digestStatus: 'ready',
       preferredClock: 'dwisatpathi',
     });

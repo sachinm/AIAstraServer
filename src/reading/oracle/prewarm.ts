@@ -199,6 +199,8 @@ export async function saveDbReaderCache(
     promptVersion: string;
     natal: boolean;
     held: HeldReader;
+    /** Explicit expiry timestamp (e.g. end of active Dasha sub-period, Tithi Pravesha year, or transit ingress window). */
+    expiresAt?: Date;
     /** When true (default), marks the row as already used once (`hit_count = 1`, `last_used_at = now`). */
     used?: boolean;
   },
@@ -208,9 +210,9 @@ export async function saveDbReaderCache(
   setReaderMemo(entry.cacheKey, entry.held, owner, used);
   const model = (prisma as unknown as { readingFindingsCache?: { upsert?: (args: unknown) => Promise<unknown> } })?.readingFindingsCache;
   if (!model?.upsert) return;
-  const ttlMs = entry.natal ? 7 * 24 * 3_600_000 : MEMO_TTL_MS;
+  const ttlMs = entry.natal ? 3650 * 24 * 3_600_000 : MEMO_TTL_MS;
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + ttlMs);
+  const expiresAt = entry.expiresAt && !Number.isNaN(entry.expiresAt.getTime()) ? entry.expiresAt : new Date(now.getTime() + ttlMs);
   try {
     await model.upsert({
       where: { cache_key: entry.cacheKey },
@@ -239,10 +241,31 @@ export async function saveDbReaderCache(
   }
 }
 
+export const NATAL_READER_IDS = ['R01', 'R02', 'R03', 'R04', 'R05', 'R06'] as const;
+
+/**
+ * Returns true when a `reading_findings_cache` row is protected from the 45-minute idle recycler:
+ * unexpired (`expires_at > now`) natal (`R01..R06`) or `family.*` rows stay valid until their TTL expires.
+ */
+export function isProtectedReaderCacheRow(
+  row: { reader_id?: string | null; expires_at?: Date | string | null },
+  now: Date = new Date(),
+): boolean {
+  const expiresAt = row.expires_at ? (row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at)) : null;
+  if (expiresAt && expiresAt.getTime() <= now.getTime()) return false;
+  const readerId = row.reader_id ?? '';
+  return (
+    (NATAL_READER_IDS as readonly string[]).includes(readerId) ||
+    readerId.startsWith('family.') ||
+    readerId.startsWith('lineman.')
+  );
+}
+
 /**
  * Recycles `reading_findings_cache` rows and in-memory reader memo entries for one individual (`userId`/`kundliId`).
  * By default (`onlyUsed = true`), removes caches that have already been used (`hit_count > 0` or `last_used_at IS NOT NULL`)
  * and whose last use is older than `idleMs` (or immediately when `idleMs` is 0 / omitted).
+ * Unexpired natal (`R01..R06`) and `family.*` DB rows are preserved until `expires_at`.
  */
 export async function recycleIndividualReaderCache(
   prisma: PrismaClient | null | undefined,
@@ -262,6 +285,19 @@ export async function recycleIndividualReaderCache(
   } | null;
   if (!rawPrisma) return { dbDeleted, memoryDeleted };
 
+  const nonProtectedClause = {
+    OR: [
+      { expires_at: { lte: now } },
+      {
+        AND: [
+          { reader_id: { notIn: [...NATAL_READER_IDS] } },
+          { NOT: { reader_id: { startsWith: 'family.' } } },
+          { NOT: { reader_id: { startsWith: 'lineman.' } } },
+        ],
+      },
+    ],
+  };
+
   try {
     if (rawPrisma.readingFindingsCache?.deleteMany) {
       const ownerOr: Array<Record<string, unknown>> = [];
@@ -274,9 +310,15 @@ export async function recycleIndividualReaderCache(
           ...(idleBeforeMs !== undefined
             ? [{ OR: [{ last_used_at: { lte: new Date(idleBeforeMs) } }, { AND: [{ last_used_at: null }, { created_at: { lte: new Date(idleBeforeMs) } }] }] }]
             : []),
+          nonProtectedClause,
         ];
       } else if (idleBeforeMs !== undefined) {
-        where.AND = [{ OR: [{ last_used_at: { lte: new Date(idleBeforeMs) } }, { AND: [{ last_used_at: null }, { created_at: { lte: new Date(idleBeforeMs) } }] }] }];
+        where.AND = [
+          { OR: [{ last_used_at: { lte: new Date(idleBeforeMs) } }, { AND: [{ last_used_at: null }, { created_at: { lte: new Date(idleBeforeMs) } }] }] },
+          nonProtectedClause,
+        ];
+      } else {
+        where.AND = [nonProtectedClause];
       }
       const res = await rawPrisma.readingFindingsCache.deleteMany({ where });
       dbDeleted = res.count;
@@ -287,13 +329,16 @@ export async function recycleIndividualReaderCache(
           ? `DELETE FROM "reading_findings_cache"
               WHERE ("kundli_id" = $1 OR ($2::text IS NOT NULL AND "user_id" = $2))
                 AND ("hit_count" > 0 OR "last_used_at" IS NOT NULL)
-                AND COALESCE("last_used_at", "created_at") <= $3`
+                AND COALESCE("last_used_at", "created_at") <= $3
+                AND ("expires_at" <= $4 OR ("reader_id" NOT IN ('R01','R02','R03','R04','R05','R06') AND "reader_id" NOT LIKE 'family.%' AND "reader_id" NOT LIKE 'lineman.%'))`
           : `DELETE FROM "reading_findings_cache"
               WHERE ("kundli_id" = $1 OR ($2::text IS NOT NULL AND "user_id" = $2))
-                AND COALESCE("last_used_at", "created_at") <= $3`,
+                AND COALESCE("last_used_at", "created_at") <= $3
+                AND ("expires_at" <= $4 OR ("reader_id" NOT IN ('R01','R02','R03','R04','R05','R06') AND "reader_id" NOT LIKE 'family.%' AND "reader_id" NOT LIKE 'lineman.%'))`,
         owner.kundliId,
         owner.userId ?? null,
         cutoff,
+        now,
       );
     }
   } catch {
@@ -304,6 +349,7 @@ export async function recycleIndividualReaderCache(
 
 /**
  * Sweeps expired `reading_findings_cache` rows and recycles already-used rows idle longer than `idleMs` (default 45 min).
+ * Unexpired natal (`R01..R06`) and `family.*` rows are preserved until `expires_at`.
  */
 export async function sweepReaderFindingsCache(
   prisma: PrismaClient | null | undefined,
@@ -332,6 +378,9 @@ export async function sweepReaderFindingsCache(
               AND: [
                 { OR: [{ hit_count: { gt: 0 } }, { last_used_at: { not: null } }] },
                 { OR: [{ last_used_at: { lte: idleBefore } }, { AND: [{ last_used_at: null }, { created_at: { lte: idleBefore } }] }] },
+                { reader_id: { notIn: [...NATAL_READER_IDS] } },
+                { NOT: { reader_id: { startsWith: 'family.' } } },
+                { NOT: { reader_id: { startsWith: 'lineman.' } } },
               ],
             },
           ],
@@ -343,7 +392,13 @@ export async function sweepReaderFindingsCache(
       return await rawPrisma.$executeRawUnsafe(
         `DELETE FROM "reading_findings_cache"
           WHERE "expires_at" <= $1
-             OR (("hit_count" > 0 OR "last_used_at" IS NOT NULL) AND COALESCE("last_used_at", "created_at") <= $2)`,
+             OR (
+               ("hit_count" > 0 OR "last_used_at" IS NOT NULL)
+               AND COALESCE("last_used_at", "created_at") <= $2
+               AND "reader_id" NOT IN ('R01','R02','R03','R04','R05','R06')
+               AND "reader_id" NOT LIKE 'family.%'
+               AND "reader_id" NOT LIKE 'lineman.%'
+             )`,
         now,
         idleBefore,
       );

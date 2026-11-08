@@ -9,6 +9,14 @@ import { body, cap, pname, type PanelInput } from './common.js';
 
 export const SELF_YOGA_HOUSES = [1, 4, 5, 9];
 
+export function yogasLead(claims: readonly SelfClaim[]): string {
+  const active = claims.filter((c) => !c.withheld);
+  if (!active.length) return '';
+  const giftsN = active.filter((c) => c.text.startsWith('A gift')).length;
+  const knotsN = active.length - giftsN;
+  return cap(`${giftsN} ${giftsN === 1 ? 'gift' : 'gifts'} and ${knotsN} ${knotsN === 1 ? 'knot' : 'knots'} in your chart touch your self.`);
+}
+
 export function yogasPanel({ view }: PanelInput): PanelBody {
   const g = gaps();
   const l1 = view.house('D1', 1)?.lord ?? null;
@@ -35,8 +43,6 @@ export function yogasPanel({ view }: PanelInput): PanelBody {
     })
     .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'gift' ? -1 : 1))
     .map((x) => x.claim);
-  const giftsN = claims.filter((c) => c.text.startsWith('A gift')).length;
-  const knotsN = claims.length - giftsN;
-  const lead = cap(`${giftsN} ${giftsN === 1 ? 'gift' : 'gifts'} and ${knotsN} ${knotsN === 1 ? 'knot' : 'knots'} in your chart touch your self.`);
+  const lead = yogasLead(claims);
   return body(lead, claims, g);
 }

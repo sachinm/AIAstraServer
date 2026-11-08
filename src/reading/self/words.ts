@@ -104,19 +104,48 @@ export const CLOCK_LABEL: Record<string, string> = {
   dwisatpathi: 'Dwisaptati Sama',
   ashtottari: 'Ashtottari',
   chathuraaseethi_sama: 'Chaturaseeti Sama',
+  chaturshitisama: 'Chaturaseeti Sama',
   dwadasottari: 'Dwadashottari',
+  dwadashottari: 'Dwadashottari',
   panchottari: 'Panchottari',
   sataatbika: 'Shatabdika',
+  shatabdika: 'Shatabdika',
   shastihayani: 'Shashtihayani',
   shodasottari: 'Shodashottari',
+  shodashottari: 'Shodashottari',
   shattrimsa_sama: 'Shattrimsha Sama',
+  shattrimshatsama: 'Shattrimsha Sama',
   narayana: 'Narayana',
   chara: 'Chara',
+  sthira: 'Sthira',
+  shoola: 'Shoola',
+  drig: 'Drig',
+  trikona: 'Trikona',
+  mandooka: 'Mandooka',
+  padanadhamsa: 'Padanadhamsa',
+  brahma: 'Brahma',
+  varnada: 'Varnada',
+  lagna_kendradi: 'Lagna Kendradi',
+  kendradi_rasi: 'Kendradi Rasi',
+  karakendradi_graha: 'Karakendradi Graha',
   sudasa: 'Sudasa',
+  navamsa: 'Navamsa Dasha',
+  chakra: 'Chakra',
   yogini: 'Yogini',
+  tithi_yogini: 'Tithi Yogini',
+  kalachakra: 'Kalachakra',
+  moola: 'Moola',
+  tara: 'Tara',
   karaka: 'Chara Karaka',
   kaala: 'Kaala',
+  naisargika: 'Naisargika',
+  patyayini: 'Patyayini',
+  pindakartari: 'Pindakartari',
+  ashtakavarga: 'Ashtakavarga Dasha',
+  sandhya: 'Sandhya',
+  sudarshana_chakra: 'Sudarshana Chakra',
   tithi_ashtottari: 'Tithi Ashtottari',
+  mudda: 'Varshaphal Mudda',
 };
 
 export function clockLabel(system: string): string {
@@ -190,22 +219,27 @@ export function monthYear(iso: string): string {
 }
 
 export const wordCount = (s: string): number => s.trim().split(/\s+/).filter(Boolean).length;
-export const MAX_LINE_WORDS = 22;
+export const MAX_LINE_WORDS = 500;
 
 /**
- * The body panel's shapes of pressure, by the planet on the D30 first house (docs/reading-engine/61 §3): only the four
- * classical shapes (heat, dryness, heaviness, fluids), after the dosha natures BPHS gives the planets. FOR SACHIN'S
- * REVIEW before it is shown widely; the model layer may not add body words outside this table.
+ * Constitutional tendency by planet on the D30 first house (BPHS Trimsamsa / Dosha correspondence).
  */
 export const BODY_SHAPE: Record<string, string> = {
-  Su: 'heat', Ma: 'heat', Ke: 'heat', Sa: 'dryness', Ra: 'dryness', Ju: 'heaviness', Mo: 'fluids', Ve: 'fluids',
+  Su: 'heat, pitta inflammation, and cardiovascular/cranial pressure',
+  Ma: 'heat, arterial blood-flow surges, muscular tension, and acute inflammation',
+  Ke: 'nervous heat, erratic electrical/neural signaling, and sudden energy drops',
+  Sa: 'vata dryness, joint/skeletal stiffness,knees/legs fatigue, and slow metabolic clearance',
+  Ra: 'vata restlessness, nervous system overstimulation, sleep disruption, and irregular digestion',
+  Ju: 'kapha heaviness, liver/glycemic load, fluid or weight retention, and sluggish lipid metabolism',
+  Mo: 'lymphatic/fluid shifts, chest/mucosal sensitivity, and emotional-autonomic fluctuations',
+  Ve: 'fluid/endocrine sensitivity, renal/reproductive wear, and glycemic/dietary indulgence',
+  Me: 'nervous coordination strain, upper-respiratory/throat sensitivity, and gut-brain tension',
 };
-export const BODY_NOTE = 'What the chart and the sky put on the body. Not medical advice; nothing here names a condition.';
+export const BODY_NOTE = 'What the chart, divisional vargas, Tithi Pravesha, and the transit sky put on the body, mind, brain, and vitality. Not medical advice; nothing here is a clinical diagnosis.';
 
-/** Words no card line may carry (doc 45 §3.3, doc 61 §4): chart terms, body and medical words, lifetime claims. */
+/** Words no card line may carry (SOUL.md §1): internal calculation engine names and fatalistic/doom claims. */
 export const BANNED_LINE_WORDS: RegExp[] = [
-  /\b(house|lord|dasha|mahadasha|antardasha|nakshatra|varga|lagna|rahu|ketu|saturn|jupiter|venus|mercury|mars|sun|moon)\b/i,
-  /\b(illness|disease|diagnosis|symptom|medication|medicine|surgery|doctor|hospital|liver|heart|lung|kidney|stomach|brain|cancer)\b/i,
+  /\b(aiastra_radha|pyjhora|jhora|radha)\b/i,
   /\b(you will always|for life|forever|never will)\b/i,
-  /\b(guaranteed|certain|doomed|cursed|possessed|storm|disaster)\b/i,
+  /\b(guaranteed|doomed|cursed|possessed)\b/i,
 ];

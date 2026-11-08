@@ -8,7 +8,7 @@
 import { getSelfChapterBoundaryMonths, getSelfChapterConfirmMin } from '../../../config/env.js';
 import type { ActivationRow } from '../../digest/activation.js';
 import { clockLabel, FRUITION_WORDS, HOUSE_SHORT, housesShort, housesWord, longDate, monthYear, PLANET_FACULTY, PLANET_SHORT } from '../words.js';
-import { activationKey, gaps, mainStarts, mdSpine } from '../slices.js';
+import { activationKey, allRunningDashas, gaps, mainStarts, mdSpine } from '../slices.js';
 import type { ChapterConfirmation, PanelBody, SelfChapter, SelfClaim } from '../types.js';
 import { body, cardDetail, pname, type PanelInput } from './common.js';
 
@@ -85,13 +85,16 @@ export function chaptersPanel({ view, activation, asOf, clock }: PanelInput): Pa
     const cell = mdCard?.dashaCharter?.fruition?.[sub.lord];
     const flavour = cell?.fruitionClass && FRUITION_WORDS[cell.fruitionClass] ? ` In this chapter ${FRUITION_WORDS[cell.fruitionClass]}${cell.isDwirdwadasha212 ? ', though what comes in also goes out' : cell.isShadAshtaka68 ? ', with friction between the two' : ''}.` : '';
     if (!cell) g.add(`planet:D1.${spine.running.lord}.dashaCharter.fruition.${sub.lord} missing`);
+    const parallelClocks = allRunningDashas(activation, asOf, clock.system)
+      .filter((s) => s.system !== clock.system && (s.l1 || s.l2))
+      .map((s) => `${clockLabel(s.system)}: ${s.l1 ? `${s.l1.lord ? pname(s.l1.lord) : s.l1.sign}(${s.l1.from}→${s.l1.to})` : ''}${s.l2 ? `/${s.l2.lord ? pname(s.l2.lord) : s.l2.sign}(${s.l2.from}→${s.l2.to})` : ''} [houses ${[...new Set([...(s.l1?.houses ?? []), ...(s.l2?.houses ?? [])])].join(',')}]`);
     running.sub = {
       lord: sub.lord,
       lordLabel: pname(sub.lord),
       from: sub.from,
       to: sub.to,
       text: `Since ${longDate(sub.from)} and until ${longDate(sub.to)}, what presses now is ${housesShort(sub.houses)}.${flavour}`,
-      detail: `${clockLabel(clock.system)} level 2 ${pname(sub.lord)} ${sub.from} → ${sub.to}; activates houses ${sub.houses.join(', ')}${cell ? `; fruition from ${pname(spine.running.lord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}`,
+      detail: `${clockLabel(clock.system)} level 2 ${pname(sub.lord)} ${sub.from} → ${sub.to}; activates houses ${sub.houses.join(', ')}${cell ? `; fruition from ${pname(spine.running.lord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}${parallelClocks.length ? `; all parallel clocks (${parallelClocks.length}): ${parallelClocks.join('; ')}` : ''}`,
       houses: sub.houses,
     };
     running.evidence.push(activationKey(sub));

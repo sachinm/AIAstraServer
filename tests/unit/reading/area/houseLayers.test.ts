@@ -205,6 +205,32 @@ describe('the board', () => {
     expect(easing.tone).toBe('easing');
     expect(easing.date).toBe('2028-01-01');
   });
+  it('primary clocks (conditional and main) govern tone when secondary clocks (rasi, karaka, annual) vote support', () => {
+    const sachinLike = [
+      act({ level: 1, lord: 'Sa', from: '2020-01-01', to: '2039-01-01' }),
+      act({ level: 2, lord: 'Me', from: '2026-01-01', to: '2027-06-01' }),
+      act({ system: 'dwisatpathi', family: 'conditional', level: 1, lord: 'Sa', from: '2022-01-01', to: '2031-01-01' }),
+      act({ system: 'dwisatpathi', family: 'conditional', level: 2, lord: 'Me', from: '2026-01-01', to: '2027-03-01' }),
+      act({ system: 'narayana', family: 'rasi', level: 1, sign: 'Ar', from: '2024-01-01', to: '2029-01-01' }),
+      act({ system: 'karaka', family: 'karaka', level: 1, lord: 'Ju', from: '2025-01-01', to: '2028-01-01' }),
+    ];
+    const v = fakeDigest({
+      houses: [
+        house(1, { lord: 'Ma', sign: 'Ar' }),
+        house(7, { lord: 'Ve', sign: 'Li', occupants: [{ planet: 'Ma', dignity: 'neutral', nature: 'benefic' }] }),
+        house(6, { lord: 'Me' }),
+      ],
+      planets: [
+        planet('Sa', { functional: 'malefic', dignity: 'debilitated' }),
+        planet('Me', { functional: 'malefic', owns: [3, 6] }),
+        planet('Ma', { functional: 'benefic', dignity: 'own', owns: [1] }),
+        planet('Ju', { functional: 'benefic', dignity: 'exalted', owns: [9] }),
+      ],
+    });
+    const t = buildBoard({ view: v, cfg: SELF, asOf: AS_OF, activation: sachinLike, running: runningOn(sachinLike, AS_OF), transit: null }).board.tone;
+    expect(t.tone).not.toBe('open');
+    expect(t.tone).toBe('demanding');
+  });
   it('supports and pressures are plain words with evidence keys; pressures name their release', () => {
     expect(b.board.supports.length).toBeGreaterThan(2);
     expect(b.board.supports.length).toBeLessThanOrEqual(5);

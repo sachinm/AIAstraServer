@@ -1,27 +1,513 @@
 /**
  * The model layer of the You reading (technique `self.reading.oracle`, agent `self.reading_oracle`,
- * docs/reading-engine/58 §4.1). OFF unless SELF_READING_MODEL=1: no call is made before Sachin's yes on key, count and
- * cost (§7). It reads only the panel claims, their evidence keys and certainty, the clock and the person's confirm
- * answers; the reader R15-self and the Self Oracle prompt may rephrase, never add. The validator keeps a paragraph only
- * when every evidence key it cites is in the input.
+ * docs/reading-engine/58 §4.1 & docs/reading-engine/63 §5).
+ *
+ * Architecture (Doc 63):
+ *   1. Five Chart-Family Sub-Agents (`family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`)
+ *      read deterministic digest/activation slices (`parts[0]` = immutable/windowed chart pack for Gemini `cachedContents`,
+ *      `parts[1]` = dynamic horizon/focus suffix) and store reusable findings in `reading_findings_cache`.
+ *   2. The Self Lineman AI Agent (`lineman.self`, prompt `readers/R15-self`) compiles the 5 family findings + panel claims
+ *      into a cross-checked brief (promise vs varga/avastha modifiers, active Mahadasha/Antardasha 9x9 fruition & delays,
+ *      annual TP/VP confirmation, and transit/SAV triggers).
+ *   3. The Self Oracle Synthesizer (`self.reading_oracle`, prompt `oracle/self`) writes the final second-person narrative,
+ *      validated by `validateSelfText` against the allowed evidence keys and stored in `technique_outputs`.
+ *   4. Enforces the cumulative $1.00 spend cap (`getSelfReadingMaxSpendUsd()`).
  */
-import { isSelfReadingModelEnabled } from '../../config/env.js';
-import { callGemini } from '../llm/gemini.js';
-import { modelFor } from '../llm/models.js';
-import { PROMPTS } from '../prompts/generated.js';
-import type { ConfirmAnswer, SelfReading } from './types.js';
+import { createHash } from 'node:crypto';
+import type { PrismaClient } from '@prisma/client';
+import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { getSelfReadingMaxSpendUsd, isSelfReadingModelEnabled } from '../../config/env.js';
+import { withTechniqueOutput } from '../../techniques/outputStore.js';
+import type { DateSpan } from '../../techniques/pieces.js';
+import type { TransitRangePayload } from '../chartData/transitRange.js';
+import type { ActivationRow } from '../digest/activation.js';
+import type { DigestView } from '../digest/types.js';
+import { callGemini, type GeminiResult } from '../llm/gemini.js';
+import { modelFor, usageCostUsd } from '../llm/models.js';
+import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle/prewarm.js';
+import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
+import { runningMudda, runningTp } from './panels/year.js';
+import { allRunningDashas, mdSpine, runningChain } from './slices.js';
+import { clockLabel } from './words.js';
+import type {
+  ConfirmAnswer,
+  LineCertainty,
+  LineRange,
+  SelfClock,
+  SelfOracleLinemanRecord,
+  SelfOraclePayload,
+  SelfOracleStageSummary,
+  SelfPanelId,
+  SelfReading,
+} from './types.js';
 
-export interface SelfOracleResult {
-  status: 'off' | 'ok' | 'failed';
-  text?: string;
-  dropped?: number;
-  calls?: number;
+export type SelfOracleResult = SelfOraclePayload;
+
+export type SelfFamilyAgentId = 'family.rasi' | 'family.varga' | 'family.dasha' | 'family.year' | 'family.sky';
+
+export const SELF_FAMILY_AGENT_IDS: readonly SelfFamilyAgentId[] = [
+  'family.rasi',
+  'family.varga',
+  'family.dasha',
+  'family.year',
+  'family.sky',
+];
+
+/** Maps each panel (or 'all') to the reusable chart-family sub-agents it needs (Doc 63 & reusable sub-technique plan). */
+export const FAMILY_AGENTS_BY_SCOPE: Record<SelfPanelId | 'all', readonly SelfFamilyAgentId[]> = {
+  all: SELF_FAMILY_AGENT_IDS,
+  diagnosis: SELF_FAMILY_AGENT_IDS,
+  body: SELF_FAMILY_AGENT_IDS,
+  struggle: SELF_FAMILY_AGENT_IDS,
+  chapters: ['family.rasi', 'family.varga', 'family.dasha'],
+  year: ['family.rasi', 'family.year'],
+  lagna: ['family.rasi', 'family.varga'],
+  mind: ['family.rasi', 'family.varga'],
+  atma: ['family.rasi', 'family.varga'],
+  yogas: ['family.rasi', 'family.varga'],
+};
+
+export interface SelfFamilyPack {
+  id: SelfFamilyAgentId;
+  natal: boolean;
+  horizonKey: string;
+  /** Expiry timestamp for this reusable sub-technique in `reading_findings_cache`. */
+  expiresAt?: Date;
+  /** Stable chart pack placed in `parts[0]` for Gemini `cachedContents` prefix caching (no TODAY date in natal packs). */
+  prefix: string;
+  /** Dynamic question/horizon suffix placed in `parts[1]`. */
+  dynamic: string;
+  packHash: string;
+  keys: string[];
+  charts: ChartUsed[];
+}
+
+export interface SelfOracleContext {
+  prisma: PrismaClient;
+  userId: string;
+  kundliId: string;
+  view: DigestView;
+  activation: readonly ActivationRow[];
+  sky?: TransitRangePayload | null;
+  now?: Date;
+  force?: boolean;
+  only?: SelfPanelId;
+  codeVersion?: string;
+  runningSpan?: DateSpan | null;
+}
+
+const INTERNAL_ENGINE_RE = /\b(aiastra_radha|pyjhora|jhora|radha)\b/gi;
+
+export function redactEngineTerms(text: string): string {
+  return text.replace(INTERNAL_ENGINE_RE, 'traditional calculations');
+}
+
+const shortHash = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 24);
+
+/**
+ * Builds the 5 deterministic chart-family packs (`family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`)
+ * from `DigestView` + `kundli_activation` + optional `sky` overlay.
+ */
+export function buildSelfFamilyPacks(
+  view: DigestView,
+  activation: readonly ActivationRow[],
+  clock: SelfClock,
+  asOf: string,
+  sky?: TransitRangePayload | null,
+): Record<SelfFamilyAgentId, SelfFamilyPack> {
+  const v = view.version;
+
+  // 1. family.rasi — D1 houses (with Argala & SAV), D1 planets (dignity, shadbala, 5-system avasthas, solar proximity, dispositor & star chains, dashaCharter), points (AL, SL, HL, GL, MD, GK, Sphutas, Karakas), yogas, stars
+  const rasiKeys: string[] = [];
+  const rasiLines: string[] = [`# FAMILY PACK: family.rasi (Natal D1 Houses, Argala, SAV, Planets, Avasthas, Yogas, Arudhas, Special Lagnas AL/SL/HL/GL, Upagrahas MD/GK, Karakas)`];
+  for (let h = 1; h <= 12; h++) {
+    const hc = view.house('D1', h);
+    if (!hc) continue;
+    const key = `house:D1.h${h}`;
+    rasiKeys.push(key);
+    const occ = hc.occupants.map((o) => `${o.planet}(${o.dignity ?? '?'}/${o.nature ?? '?'})`).join(',');
+    const arg = hc.argala
+      ? `primary=[${hc.argala.primary.join(',')}] secondary=[${hc.argala.secondary.join(',')}] obstructed=[${hc.argala.obstructed.join(',')}]`
+      : 'none';
+    rasiLines.push(
+      `{${key}} H${h} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}${hc.coLord ? `/${hc.coLord}` : ''}(in H${hc.lordHouse ?? '?'},${hc.lordDignity ?? '?'}) occ=[${occ}] aspGraha=[${hc.aspectedGraha.join(',')}] aspRasi=[${hc.aspectedRasi.join(',')}] argala={${arg}} sav=${hc.sav ?? 'n/a'} arudha=${hc.arudha ?? '-'} class=[${hc.class.join(',')}]`,
+    );
+  }
+  for (const p of ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']) {
+    const pc = view.planet('D1', p);
+    if (!pc) continue;
+    const key = `planet:D1.${p}`;
+    rasiKeys.push(key);
+    const av = pc.avasthaMultipliers
+      ? `baladi=${pc.avasthaMultipliers.baladi}(${pc.avasthaMultipliers.ripeness}) jagradadi=${pc.avasthaMultipliers.jagradadi} eff=${pc.avasthaMultipliers.effective}`
+      : JSON.stringify(pc.avasthas);
+    const sunProx = pc.sunProximity
+      ? `${pc.sunProximity.zone ?? 'near'}(${pc.sunProximity.distanceDeg != null ? pc.sunProximity.distanceDeg.toFixed(1) : '?'}deg)`
+      : pc.combust
+        ? 'combust'
+        : 'free';
+    rasiLines.push(
+      `{${key}} ${p} in H${pc.house ?? '?'} ${pc.sign ?? '-'} deg=${pc.degree != null ? pc.degree.toFixed(2) : '?'} dig=${pc.dignity ?? '-'} rx=${pc.retro ?? false} owns=[${pc.owns.join(',')}] star=${pc.star ?? '-'}(lord=${pc.starLord ?? '-'},pada=${pc.pada ?? '?'}) disp=${pc.dispositor ?? '-'}(H${pc.dispositorHouse ?? '?'}) chain=[${pc.chain.join('->')}] starChain=[${(pc.starChain ?? []).join('->')}] shadbala=${pc.shadbalaRatio ?? 'n/a'}(#${pc.shadbalaRank ?? '?'}) sun=${sunProx} avastha={${av}} conj=[${pc.conjunctions.join(',')}] aspBy=[${pc.aspectedBy.join(',')}] aspTo=[${pc.aspectsTo.join(',')}]`,
+    );
+  }
+  for (const pt of view.points('D1')) {
+    const key = `point:D1.${pt.id}`;
+    rasiKeys.push(key);
+    rasiLines.push(`{${key}} D1.${pt.id}: planet=${pt.planet ?? '-'} sign=${pt.sign ?? '-'} house=${pt.house ?? '-'} lord=${pt.lord ?? '-'}(H${pt.lordHouse ?? '?'})`);
+  }
+  for (const y of view.yogas()) {
+    const key = `yoga:D1.${y.id}`;
+    rasiKeys.push(key);
+    rasiLines.push(`{${key}} [${y.class}] ${y.name}: planets=[${y.planets.join(',')}] houses=[${y.houses.join(',')}]`);
+  }
+  const st = view.star();
+  if (st) {
+    rasiKeys.push('star:profile');
+    rasiLines.push(
+      `{star:profile} moonStar=${st.moonStar ?? '-'}(lord=${st.moonStarLord ?? '-'}) lagnaStar=${st.lagnaStar ?? '-'} gandanta=[${st.gandanta.join(',')}] pendingKarmaHouses=[${(st.pendingKarmaHouses ?? []).join(',')}]`,
+    );
+  }
+  const rasiPrefix = rasiLines.join('\n');
+
+  // 2. family.varga — Divisional charts D2..D60 and D9 karakas/arudhas
+  const vargaKeys: string[] = [];
+  const vargaLines: string[] = [`# FAMILY PACK: family.varga (Divisional Charts D2..D60 & Varga Modifiers)`];
+  const vargaList = ['D2', 'D3', 'D4', 'D7', 'D9', 'D10', 'D12', 'D16', 'D20', 'D24', 'D27', 'D30', 'D40', 'D45', 'D60'];
+  for (const vg of vargaList) {
+    for (const hc of view.houses(vg)) {
+      if (hc.house === 1 || vg === 'D9' || vg === 'D10' || vg === 'D30') {
+        const hk = `house:${vg}.h${hc.house}`;
+        vargaKeys.push(hk);
+        vargaLines.push(
+          `{${hk}} ${vg}.H${hc.house} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}(H${hc.lordHouse ?? '?'}) occ=[${hc.occupants.map((o) => o.planet).join(',')}]`,
+        );
+      }
+    }
+    for (const p of ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']) {
+      const pc = view.planet(vg, p);
+      if (!pc) continue;
+      const pk = `planet:${vg}.${p}`;
+      vargaKeys.push(pk);
+      vargaLines.push(`{${pk}} ${vg}.${p}: H${pc.house ?? '?'} ${pc.sign ?? '-'} dig=${pc.dignity ?? '-'} owns=[${pc.owns.join(',')}] conj=[${pc.conjunctions.join(',')}]`);
+    }
+  }
+  for (const pt of view.points('D9')) {
+    const key = `point:D9.${pt.id}`;
+    vargaKeys.push(key);
+    vargaLines.push(`{${key}} D9.${pt.id}: planet=${pt.planet ?? '-'} sign=${pt.sign ?? '-'} house=${pt.house ?? '-'} lord=${pt.lord ?? '-'}`);
+  }
+  const vargaPrefix = vargaLines.join('\n');
+
+  // 3. family.dasha — ALL stored dasha systems across every family (Primary Reading Clock, Vimshottari, all Conditional Nakshatra Dashas, all Jaimini Rasi Dashas, Yogini, Kalachakra, Tara, Moola, Karaka, Kaala, Naisargika, Sudarshana) + 9x9 Mahadasha-to-Antardasha fruition matrix
+  const dashaKeys: string[] = [];
+  const allDashas = allRunningDashas(activation, asOf, clock.system);
+  const dashaLines: string[] = [
+    `# FAMILY PACK: family.dasha (ALL ${allDashas.length} Stored Dasha Systems: Primary Clock ${clock.label} [${clock.system}], Vimshottari, Conditional Nakshatra, Jaimini Rasi, Yogini, Kalachakra, Tara, Moola, Karaka, Kaala, Naisargika & 9x9 Fruition Matrix)`,
+    `CLOCK: system=${clock.system} label=${clock.label} reason=${clock.reason} confirming=[${clock.confirming.map((c) => `${c.system}:${c.label}`).join(', ')}] allSystemsCount=${allDashas.length}`,
+  ];
+  const spine = mdSpine(activation, clock.system, asOf);
+  const run = runningChain(activation, clock.system, asOf);
+  for (const row of [spine.previous, spine.running, spine.next, run.l2, run.l3, spine.nextSub]) {
+    if (!row) continue;
+    const k = `activation:${row.system}/${row.level}/${row.lord ?? row.sign}@${row.from}`;
+    if (!dashaKeys.includes(k)) dashaKeys.push(k);
+    dashaLines.push(
+      `{${k}} primary=${row.system}(${clockLabel(row.system)}) family=${row.family} L${row.level} lord=${row.lord ?? row.sign} from=${row.from} to=${row.to} houses=[${row.houses.join(',')}]`,
+    );
+  }
+  // Include EVERY stored dasha system across all families (`vimshottari`, `conditional`, `rasi`, `yogini`, `tithi_ashtottari`, `karaka`, `other`)
+  for (const sysSummary of allDashas) {
+    if (sysSummary.system === clock.system) continue;
+    for (const r of [sysSummary.previous, sysSummary.l1, sysSummary.l2, sysSummary.l3, sysSummary.next]) {
+      if (!r) continue;
+      const k = `activation:${r.system}/${r.level}/${r.lord ?? r.sign}@${r.from}`;
+      if (!dashaKeys.includes(k)) dashaKeys.push(k);
+      dashaLines.push(
+        `{${k}} clock=${r.system}(${clockLabel(r.system)}) family=${r.family} L${r.level} lord=${r.lord ?? r.sign} ${r.from}..${r.to} houses=[${r.houses.join(',')}]`,
+      );
+    }
+  }
+  const vimRun = runningChain(activation, 'vimsottari', asOf);
+  const activeMdPlanets = [...new Set(allDashas.map((d) => d.l1?.lord).filter((x): x is string => Boolean(x)))];
+  const activeAdPlanets = [...new Set(allDashas.map((d) => d.l2?.lord).filter((x): x is string => Boolean(x)))];
+  for (const mdLord of activeMdPlanets) {
+    const mdCard = view.planet('D1', mdLord);
+    if (mdCard?.dashaCharter) {
+      const pk = `planet:D1.${mdLord}`;
+      if (!dashaKeys.includes(pk)) dashaKeys.push(pk);
+      const ch = mdCard.dashaCharter;
+      dashaLines.push(
+        `{${pk}} MD_CHARTER(${mdLord}): H${mdCard.house ?? '?'} ${mdCard.sign ?? '-'} dig=${mdCard.dignity ?? '-'} disp=${mdCard.dispositor ?? '-'}(H${ch.dispositorHouse ?? '?'}) star=${mdCard.starLord ?? '-'}(H${ch.starLordHouse ?? '?'}) owns=[${ch.housesOwned.join(',')}] yogi=${ch.isYogi} avayogi=${ch.isAvayogi}`,
+      );
+      for (const adLord of activeAdPlanets) {
+        const adCell = ch.fruition?.[adLord];
+        if (adCell) {
+          dashaLines.push(
+            `{${pk}} AD_FRUITION(${mdLord}->${adLord}): houseFromMd=${adCell.houseFromMd ?? '?'} houseFromLagna=${adCell.houseFromLagna ?? '?'} class=${adCell.fruitionClass ?? '-'} 6/8=${adCell.isShadAshtaka68} 2/12=${adCell.isDwirdwadasha212} starLink=${adCell.isStarLordOfMd} dispLink=${adCell.isSignDispositorOfMd}`,
+          );
+        }
+      }
+    }
+  }
+  const narRun = runningChain(activation, 'narayana', asOf);
+  const l2Ends = [run.l2?.to, vimRun.l2?.to, narRun.l2?.to]
+    .filter((x): x is string => typeof x === 'string' && x > asOf)
+    .sort();
+  const dashaEndIso = l2Ends[0] ?? run.l2?.to ?? vimRun.l2?.to ?? run.l1?.to;
+  const dashaExpiresAt = dashaEndIso ? new Date(`${dashaEndIso}T00:00:00Z`) : undefined;
+  const dashaHorizonKey = `${clock.system}:${run.l1?.from ?? 'none'}:${run.l2?.from ?? 'none'}:${vimRun.l2?.from ?? 'none'}`;
+  const dashaPrefix = dashaLines.join('\n');
+
+  // 4. family.year — Multi-year Varshaphal (VP) and Tithi Pravesha (TP) across 2025, 2026, 2027 and D1..D60 + tithi_ashtottari & mudda
+  const yearKeys: string[] = [];
+  const yearLines: string[] = [`# FAMILY PACK: family.year (Multi-Year Tithi Pravesha & Varshaphal 2025/2026/2027 across D1..D60 + Tithi Ashtottari & Mudda)`];
+  const mudda = runningMudda(view, asOf);
+  const tpRow = runningTp(view, asOf, mudda?.row.year);
+  for (const a of view.annual()) {
+    const ak = `annual:${a.kind}${a.year}.${a.varga}`;
+    if (!yearKeys.includes(ak)) yearKeys.push(ak);
+    yearLines.push(
+      `{${ak}} ${a.kind}${a.year}.${a.varga} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
+    );
+    for (const hc of a.houses) {
+      if (hc.occupants.length > 0 || hc.house === 1 || hc.house === 6 || hc.house === 8 || hc.house === 10) {
+        yearLines.push(
+          `{${ak}} ${a.kind}${a.year}.${a.varga}.H${hc.house} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}(in H${hc.lordHouse ?? '?'},${hc.lordDignity ?? '?'}) occ=[${hc.occupants.map((o) => `${o.planet}:${o.dignity ?? '?'}`).join(',')}]`,
+        );
+      }
+    }
+    for (const ty of (a.tajakaYogas ?? []).filter((t) => t.present)) {
+      yearLines.push(`{${ak}} TajakaYoga ${ty.id}=present`);
+    }
+    for (const sh of (a.sahams ?? []).slice(0, 12)) {
+      yearLines.push(`{${ak}} Saham ${sh.name}: ${sh.sign ?? '-'} H${sh.house ?? '?'}`);
+    }
+    for (const d of a.dashas ?? []) {
+      const activeP = d.periods.find((p) => p.from <= asOf && p.to > asOf) ?? d.periods[0];
+      const allP = d.periods.slice(0, 9).map((p) => `${p.lord}(${p.from}..${p.to})`).join(', ');
+      yearLines.push(`{${ak}} AnnualDasha ${d.system}: active=${activeP ? `${activeP.lord}(${activeP.from}..${activeP.to})` : 'none'} periods=[${allP}]`);
+    }
+  }
+  const yearEndIso = mudda?.to;
+  const yearExpiresAt = yearEndIso ? new Date(`${yearEndIso}T00:00:00Z`) : undefined;
+  const yearHorizonKey = `vp=${mudda?.row.year ?? 'none'}|tp=${tpRow?.year ?? 'none'}|m=${mudda?.from ?? 'annual'}`;
+  const yearPrefix = yearLines.join('\n');
+
+  // 5. family.sky — Universal Gochara Transit Sky + Ashtakavarga SAV bindus + sensitive points (BB, K64M, K64L, KD22)
+  const skyKeys: string[] = [];
+  const skyLines: string[] = [`# FAMILY PACK: family.sky (Universal Gochara Transit Sky & Sarvashtakavarga SAV Gate)`];
+  const signToHouse = new Map<string, number>();
+  for (let h = 1; h <= 12; h++) {
+    const hc = view.house('D1', h);
+    if (!hc) continue;
+    if (hc.sign) signToHouse.set(hc.sign, h);
+    const hk = `house:D1.h${h}`;
+    skyKeys.push(hk);
+    skyLines.push(`{${hk}} H${h} ${hc.sign ?? '-'} SAV=${hc.sav ?? 'n/a'} lord=${hc.lord ?? '-'} occ=[${hc.occupants.map((o) => o.planet).join(',')}]`);
+  }
+  const mo = view.planet('D1', 'Mo');
+  if (mo) {
+    skyKeys.push('planet:D1.Mo');
+    skyLines.push(`{planet:D1.Mo} Natal Moon in H${mo.house ?? '?'} ${mo.sign ?? '-'} star=${mo.star ?? '-'}`);
+  }
+  for (const code of ['BB', 'K64M', 'K64L', 'KD22', 'AL', 'SL', 'HL', 'MD', 'GK']) {
+    const pt = view.points('D1').find((p) => p.id === code);
+    if (!pt) continue;
+    const pk = `point:D1.${code}`;
+    if (!skyKeys.includes(pk)) skyKeys.push(pk);
+    skyLines.push(`{${pk}} ${code}: sign=${pt.sign ?? '-'} house=${pt.house ?? '-'} lord=${pt.lord ?? '-'}`);
+  }
+  let skyEndIso: string | undefined;
+  if (sky?.ingresses?.length) {
+    skyLines.push(`UNIVERSAL_TRANSIT_SKY range=${sky.from}..${sky.to}`);
+    const activeIngs = sky.ingresses.filter((r) => r.from <= asOf && asOf <= r.to);
+    for (const ing of activeIngs) {
+      const hLagna = ing.house_from_lagna || signToHouse.get(ing.sign) || '?';
+      skyLines.push(`{house:D1.h1} Transit ${ing.planet} in ${ing.sign} (${ing.from}..${ing.to}) H${hLagna} from Lagna${mo?.sign === ing.sign ? ' [OVER NATAL MOON]' : ''}`);
+    }
+    const slowEnds = activeIngs
+      .filter((r) => ['Sa', 'Ju', 'Ra', 'Ke', 'Ma'].includes(r.planet) && r.to > asOf)
+      .map((r) => r.to)
+      .sort();
+    skyEndIso = slowEnds[0];
+  } else {
+    skyLines.push(`UNIVERSAL_TRANSIT_SKY evaluated via natal SAV bindus, Khara points (K64M/K64L/KD22), and annual return positions.`);
+  }
+  const skyExpiresAt = skyEndIso ? new Date(`${skyEndIso}T00:00:00Z`) : undefined;
+  const skyHorizonKey = `sky=${sky ? `${sky.from}:${sky.to}:${asOf.slice(0, 7)}` : asOf.slice(0, 7)}`;
+  const skyPrefix = skyLines.join('\n');
+
+  return {
+    'family.rasi': {
+      id: 'family.rasi',
+      natal: true,
+      horizonKey: 'natal',
+      prefix: rasiPrefix,
+      dynamic: `Analyze the natal D1 promise across all 12 houses (H1..H12), Argala & Virodhargala, SAV bindus, Special Lagnas (AL, SL, HL, GL), Upagrahas (Mandi MD, Gulika GK, Prana/Deha/Mrityu Sphutas), Chara Karakas (AK..DK), 5-system avasthas & delivery multipliers, solar proximity, dispositor & star-lord chains, yogas, and anatomical/somatic correspondences (head, brain, food intake/neck, hands/arms, heart/chest, internal organs/weight, blood flow, legs/knees/ankles/feet). Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|rasi|${rasiPrefix}`),
+      keys: rasiKeys,
+      charts: ['house', 'planet', 'point', 'yoga', 'star'].map((s) => ({ type: `digest.${s}`, variant: v })),
+    },
+    'family.varga': {
+      id: 'family.varga',
+      natal: true,
+      horizonKey: 'natal',
+      prefix: vargaPrefix,
+      dynamic: `Analyze the divisional Varga confirmations and contradictions (D9 Navamsa & Karakamsa, D10 Dasamsa, D30 Trimsamsa physical/constitutional vulnerability, D60 Shashtiamsa root karma) that elevate, modify, or delay the D1 natal promise. Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|varga|${vargaPrefix}`),
+      keys: vargaKeys,
+      charts: ['house', 'planet', 'point'].map((s) => ({ type: `digest.${s}`, variant: v })),
+    },
+    'family.dasha': {
+      id: 'family.dasha',
+      natal: false,
+      horizonKey: dashaHorizonKey,
+      ...(dashaExpiresAt ? { expiresAt: dashaExpiresAt } : {}),
+      prefix: dashaPrefix,
+      dynamic: `AS_OF: ${asOf}. Weigh the primary reading clock (${clock.label}) alongside Vimshottari Dasha, Jaimini Narayana Dasha, and confirming clocks; analyze previous/running/next chapters, the running Antardasha/Pratyantardasha, its 9x9 fruition relationship from the Mahadasha lord, and how these clocks activate the self, mind, and body houses (H1..H12). Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|dasha|${dashaHorizonKey}|${dashaPrefix}`),
+      keys: dashaKeys,
+      charts: [{ type: 'kundli_activation', variant: clock.system }, { type: 'digest.planet', variant: v }],
+    },
+    'family.year': {
+      id: 'family.year',
+      natal: false,
+      horizonKey: yearHorizonKey,
+      ...(yearExpiresAt ? { expiresAt: yearExpiresAt } : {}),
+      prefix: yearPrefix,
+      dynamic: `AS_OF: ${asOf}. Analyze the stored 2025, 2026, and 2027 Tithi Pravesha (TP) and Varshaphal (VP) charts across D1..D60, including the active Tithi Ashtottari and Mudda dashas, Muntha, Year Lord, Tajaka yogas, and how the 2025 TP (pre-Oct 2026), 2026 TP (current month Nov 2026 and into 2027), and 2027 TP shape the body, mind, and self. Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|year|${yearHorizonKey}|${yearPrefix}`),
+      keys: yearKeys,
+      charts: [{ type: 'digest.annual', variant: v }],
+    },
+    'family.sky': {
+      id: 'family.sky',
+      natal: false,
+      horizonKey: skyHorizonKey,
+      ...(skyExpiresAt ? { expiresAt: skyExpiresAt } : {}),
+      prefix: skyPrefix,
+      dynamic: `AS_OF: ${asOf}. Analyze the Universal Transit Sky (Saturn, Jupiter, Rahu, Ketu, Mars over natal Lagna, Moon, and body houses), Sarvashtakavarga (SAV) bindu gates across H1..H12, and sensitive points (Bhrigu Bindu, 64th Navamsa K64M/K64L, 22nd Drekkana KD22). Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|sky|${skyHorizonKey}|${skyPrefix}`),
+      keys: skyKeys,
+      charts: [{ type: 'digest.house', variant: v }, { type: 'digest.point', variant: v }],
+    },
+  };
+}
+
+const FAMILY_SYSTEM_PROMPTS: Record<SelfFamilyAgentId, string> = {
+  'family.rasi':
+    'You are the Rasi (D1) Chart Family Sub-Agent for a multi-school Vedic astrology reading (Parashara BPHS, Jaimini Upadesa Sutras, Pt. Sanjay Rath, and Lunar Astro / Bhrigu Nandi Nadi). Read only the provided D1 houses (H1..H12), Argala & Virodhargala, SAV bindus, planets, Shadbala, 5-system avasthas (Baladi, Jagradadi, Deeptadi, Lajjitadi, Shayanadi), solar proximity, dispositor/nakshatra chains, Special Lagnas (AL, SL, HL, GL), Upagrahas (Mandi MD, Gulika GK, Prana/Deha/Mrityu Sphutas), Chara Karakas (AK..DK), yogas, and somatic/anatomical correspondences (head/brain/nerves H1/H3/H5, food intake/diet/neck/throat H2, hands/arms/shoulders H3, heart/chest/lungs/emotional mind H4, internal organs/stomach/digestive fire/liver/weight balance H5/H6, cellular recovery H8, blood flow/circulation Ma/Su/Mo, hips/thighs H9, knees/joints/bones H10, legs/calves/ankles H11, feet/sleep/lymphatic drainage H12). Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
+  'family.varga':
+    'You are the Divisional Varga (D2..D60) Chart Family Sub-Agent. Audit how D9 (Navamsa/Karakamsa), D10 (Dasamsa), D30 (Trimsamsa physical/constitutional vulnerabilities), and D60 (Shashtiamsa root karma) confirm, modify, or obstruct the D1 placements across identity, mind, soul, and body. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
+  'family.dasha':
+    'You are the Multi-Clock Dasha Family Sub-Agent. Weigh the primary reading clock alongside Vimshottari Dasha, Jaimini Narayana Dasha, and confirming clocks; audit the previous/running/next Mahadasha chapters, the active Antardasha/Pratyantardasha, and the 9x9 Mahadasha-to-Antardasha fruition geometry (Trikona, Kendra, 2/12, 6/8) across H1..H12. Never invent dates or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the exact active Antardasha/Pratyantardasha boundary date.',
+  'family.year':
+    'You are the Annual Return (Tithi Pravesha & Varshaphal) Family Sub-Agent. Audit the stored 2025, 2026, and 2027 Tithi Pravesha (TP) and Varshaphal (VP) charts across D1..D60, Year Lord, Muntha, Tajaka yogas, Sahams, and active Tithi Ashtottari / Mudda dashas covering the current year and upcoming year. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the active annual sub-period or return boundary date.',
+  'family.sky':
+    'You are the Gochara Sky & Ashtakavarga Family Sub-Agent. Audit the Universal Gochara Transit Sky (Saturn, Jupiter, Rahu, Ketu, Mars over natal Lagna, Moon, and body houses), Sarvashtakavarga (SAV) house bindus across H1..H12, and sensitive transit points (BB, K64M, K64L, KD22, AL, SL, HL, MD, GK). Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the active slow-planet transit boundary.',
+};
+
+/** Extracts bullet claims and `{evidence}` citations from a sub-agent or lineman text block for the Admin Lab trace. */
+export function parseLinemanClaims(
+  text: string,
+  allowedKeys: ReadonlySet<string>,
+): {
+  claims: Array<{ id: string; text: string; rows: string[]; certainty: LineCertainty }>;
+  dropped: Array<{ claim: string; why: string }>;
+} {
+  const claims: Array<{ id: string; text: string; rows: string[]; certainty: LineCertainty }> = [];
+  const dropped: Array<{ claim: string; why: string }> = [];
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^([-*•]|\d+\.)\s+/.test(l));
+  let idx = 0;
+  for (const raw of lines) {
+    idx += 1;
+    const cited = [...raw.matchAll(/\{([^}]+)\}/g)]
+      .flatMap((m) => m[1]!.split(',').map((s) => s.trim()))
+      .filter((k) => k.includes(':'));
+    const validRows = cited.filter((k) => allowedKeys.has(k));
+    const clean = redactEngineTerms(raw.replace(/^([-*•]|\d+\.)\s+/, '').replace(/\s*\{[^}]+\}/g, '').trim());
+    if (!clean) continue;
+    if (cited.length > 0 && validRows.length === 0) {
+      dropped.push({ claim: clean, why: `Unresolved evidence keys: ${cited.join(', ')}` });
+      continue;
+    }
+    const certainty: LineCertainty = /\b(confirmed|converge|both)\b/i.test(clean)
+      ? 'strong'
+      : /\b(split|mixed|tension)\b/i.test(clean)
+        ? 'possible'
+        : 'fact';
+    claims.push({
+      id: `claim.${idx}`,
+      text: clean,
+      rows: validRows,
+      certainty,
+    });
+  }
+  return { claims, dropped };
+}
+
+/** Parses `VALID_UNTIL` and `PANEL_SYNTHESIS` blocks from Lineman / Oracle output so AI synthesis enriches panel cards and sets exact cache validity horizons. */
+export function parseOracleStructuredBlocks(
+  text: string,
+  allowedKeys: ReadonlySet<string>,
+): {
+  validUntil: Partial<Record<SelfPanelId | 'overall', string>>;
+  panelLines: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+} {
+  const validUntil: Partial<Record<SelfPanelId | 'overall', string>> = {};
+  const panelLines: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>> = {};
+
+  for (const m of text.matchAll(/[-*•]?\s*(overall|diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year|VALID_UNTIL)\s*:\s*(always|\d{4}-\d{2}-\d{2})/gi)) {
+    const rawKey = m[1]!.toLowerCase();
+    const val = m[2]! === 'always' ? 'always' : m[2]!;
+    if (rawKey === 'valid_until' || rawKey === 'overall') {
+      validUntil.overall = val;
+    } else {
+      validUntil[rawKey as SelfPanelId] = val;
+    }
+  }
+
+  for (const m of text.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year)\]\s*\((always|\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2})\)\s*([^\n]+)/gi)) {
+    const panelId = m[1]!.toLowerCase() as SelfPanelId;
+    const rawRange = m[2]!;
+    const body = m[3]!.trim();
+    const cited = [...body.matchAll(/\{([^}]+)\}/g)]
+      .flatMap((x) => x[1]!.split(',').map((s) => s.trim()))
+      .filter((k) => allowedKeys.has(k));
+    const cleanText = redactEngineTerms(body.replace(/\s*\{[^}]+\}/g, '').trim());
+    if (!cleanText) continue;
+    let range: LineRange = 'always';
+    if (/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(rawRange)) {
+      const [from, to] = rawRange.split('..');
+      range = { from: from!, to: to! };
+      if (!validUntil[panelId]) validUntil[panelId] = to!;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawRange)) {
+      if (!validUntil[panelId]) validUntil[panelId] = rawRange;
+    }
+    const list = panelLines[panelId] ?? [];
+    list.push({
+      text: cleanText,
+      claimIds: cited,
+      range,
+      certainty: 'strong',
+      detail: cited.length ? `AI synthesis (${cited.join(', ')})` : 'AI multi-chart synthesis',
+    });
+    panelLines[panelId] = list;
+  }
+
+  return { validUntil, panelLines };
 }
 
 /** The BRIEF: one line per usable claim, `[id] (certainty) text — detail {evidence}`. Withheld claims are left out. */
 export function selfBrief(reading: SelfReading, answers: Record<string, ConfirmAnswer>): { text: string; keys: Set<string> } {
   const keys = new Set<string>();
-  const lines: string[] = [`READING CLOCK: ${reading.clock.label} (${reading.clock.reason}); confirming: ${reading.clock.confirming.map((c) => c.label).join(', ')}`, `TODAY: ${reading.asOf}`];
+  const lines: string[] = [
+    `READING CLOCK: ${reading.clock.label} (${reading.clock.reason}); confirming: ${reading.clock.confirming.map((c) => c.label).join(', ')}`,
+    `TODAY: ${reading.asOf}`,
+  ];
   for (const p of reading.panels) {
     if (p.status === 'failed' || p.status === 'withheld') continue;
     lines.push(`\n## ${p.title}`);
@@ -45,19 +531,593 @@ export function validateSelfText(text: string, keys: Set<string>): { text: strin
     if (!ok) dropped++;
     return ok;
   });
-  return { text: kept.map((p) => p.replace(/\s*\{[^}]+\}/g, '')).join('\n\n'), dropped };
+  return { text: redactEngineTerms(kept.map((p) => p.replace(/\s*\{[^}]+\}/g, '')).join('\n\n')), dropped };
 }
 
-export async function runSelfOracle(reading: SelfReading, answers: Record<string, ConfirmAnswer>): Promise<SelfOracleResult> {
+function summarizeCall(agentId: string, model: string, res: GeminiResult, ms: number): SelfOracleStageSummary {
+  const promptTokens = res.usage?.promptTokens ?? 0;
+  const cachedTokens = res.usage?.cachedTokens ?? 0;
+  const outputTokens = res.usage?.outputTokens ?? 0;
+  const thoughtTokens = res.usage?.thoughtTokens ?? 0;
+  const cost =
+    Math.round(
+      usageCostUsd({
+        model,
+        promptTokens,
+        cachedTokens,
+        outputTokens,
+        thoughtTokens,
+      }) * 1e6,
+    ) / 1e6;
+  return {
+    agentId,
+    status: 'ok',
+    cached: false,
+    ms,
+    inputTokens: promptTokens,
+    promptTokens,
+    outputTokens,
+    cachedTokens,
+    thoughtTokens,
+    costUsd: cost,
+    summary: res.text.slice(0, 240),
+  };
+}
+
+export async function runSelfOracle(
+  reading: SelfReading,
+  answers: Record<string, ConfirmAnswer>,
+  ctx?: SelfOracleContext,
+): Promise<SelfOracleResult> {
   if (!isSelfReadingModelEnabled()) return { status: 'off' };
+  const maxSpendUsd = getSelfReadingMaxSpendUsd();
   const brief = selfBrief(reading, answers);
+
+  // Fallback path when invoked without full DB/digest context (e.g. standalone unit tests)
+  if (!ctx) {
+    try {
+      const readerModel = modelFor('reader');
+      const oracleModel = modelFor('oracle');
+      const t0 = performance.now();
+      const findings = await callGemini({
+        model: readerModel,
+        node: 'self.reader',
+        system: PROMPTS['readers/R15-self'] ?? '',
+        parts: [brief.text],
+        thinking: 'medium',
+        maxOutputTokens: 3500,
+      });
+      const s1 = summarizeCall('lineman.self', readerModel, findings, Math.round((performance.now() - t0) * 100) / 100);
+      if (s1.costUsd > maxSpendUsd) {
+        return { status: 'budget_exceeded', calls: 1, modelCalls: 1, spentUsd: s1.costUsd, costUsd: s1.costUsd, maxSpendUsd, capUsd: maxSpendUsd, stages: [s1] };
+      }
+      const t1 = performance.now();
+      const out = await callGemini({
+        model: oracleModel,
+        node: 'self.oracle',
+        system: PROMPTS['oracle/self'] ?? '',
+        parts: [brief.text, `FINDINGS:\n${findings.text}\n\nCite evidence keys in {braces} at the end of each paragraph.`],
+        thinking: 'medium',
+        maxOutputTokens: 4500,
+      });
+      const s2 = summarizeCall('self.reading_oracle', oracleModel, out, Math.round((performance.now() - t1) * 100) / 100);
+      const spentUsd = Math.round((s1.costUsd + s2.costUsd) * 1e6) / 1e6;
+      const v = validateSelfText(out.text, brief.keys);
+      const structured = parseOracleStructuredBlocks(`${findings.text}\n\n${out.text}`, brief.keys);
+      return {
+        status: 'ok',
+        text: v.text,
+        output: v.text,
+        brief: brief.text,
+        promptName: 'oracle/self',
+        promptVersion: PROMPT_VERSION,
+        model: oracleModel,
+        validator: {
+          verdict: v.dropped === 0 ? 'ok' : 'rejected',
+          issues: v.dropped ? [`Dropped ${v.dropped} paragraph(s) citing unverified keys`] : [],
+        },
+        tokens: {
+          prompt: (s1.promptTokens ?? 0) + (s2.promptTokens ?? 0),
+          cached: s1.cachedTokens + s2.cachedTokens,
+          output: s1.outputTokens + s2.outputTokens,
+          thought: (s1.thoughtTokens ?? 0) + (s2.thoughtTokens ?? 0),
+        },
+        ms: Math.round(((s1.ms ?? 0) + (s2.ms ?? 0)) * 100) / 100,
+        linemanFindings: redactEngineTerms(findings.text),
+        panelLines: structured.panelLines,
+        validUntil: structured.validUntil,
+        dropped: v.dropped,
+        calls: 2,
+        modelCalls: 2,
+        cached: false,
+        spentUsd,
+        costUsd: spentUsd,
+        maxSpendUsd,
+        capUsd: maxSpendUsd,
+        spentTodayUsd: spentUsd,
+        stages: [s1, s2],
+      };
+    } catch (e) {
+      console.error('[self:oracle]', (e as Error).message);
+      return { status: 'failed', calls: 2, maxSpendUsd, capUsd: maxSpendUsd };
+    }
+  }
+
+  // Full Doc 63 Pipeline: Reusable Family AI Sub-Agents -> Self Lineman -> Self Oracle Synthesizer
+  const { prisma, userId, kundliId, view, activation, sky } = ctx;
+  const scopeKey: SelfPanelId | 'all' = ctx.only ?? 'all';
+  const activeFamilyIds = FAMILY_AGENTS_BY_SCOPE[scopeKey] ?? SELF_FAMILY_AGENT_IDS;
+  const now = ctx.now ?? new Date(`${reading.asOf}T12:00:00Z`);
+  const owner = { userId, kundliId };
+  const packs = buildSelfFamilyPacks(view, activation, reading.clock, reading.asOf, sky);
+  const allKeys = new Set<string>(brief.keys);
+  for (const familyId of activeFamilyIds) {
+    for (const k of packs[familyId].keys) allKeys.add(k);
+  }
+  const answersKey = shortHash(JSON.stringify(Object.entries(answers).sort(([a], [b]) => a.localeCompare(b))));
+  const mudda = runningMudda(view, reading.asOf);
+  const tpRow = runningTp(view, reading.asOf, mudda?.row.year);
+  const oracleDigestVersion = `${view.version}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? PROMPT_VERSION}`;
+
   try {
-    const findings = await callGemini({ model: modelFor('reader'), node: 'self.reader', system: `${PROMPTS['readers/_shared'] ?? ''}\n\n${PROMPTS['readers/R15-self'] ?? ''}`, parts: [brief.text], thinking: 'low', maxOutputTokens: 2000 });
-    const out = await callGemini({ model: modelFor('oracle'), node: 'self.oracle', system: PROMPTS['oracle/self'] ?? '', parts: [brief.text, `FINDINGS:\n${findings.text}\n\nCite evidence keys in {braces} at the end of each paragraph.`], thinking: 'low', maxOutputTokens: 2500 });
-    const v = validateSelfText(out.text, brief.keys);
-    return { status: 'ok', text: v.text, dropped: v.dropped, calls: 2 };
+    const stored = await withTechniqueOutput<SelfOracleResult>(
+      prisma,
+      {
+        technique: 'self.reading.oracle',
+        kundliId,
+        digestVersion: oracleDigestVersion,
+        context: { now, runningPeriod: ctx.runningSpan ?? null },
+        agentId: 'self.reading_oracle',
+        userId,
+        charts: activeFamilyIds.flatMap((id) => packs[id].charts),
+        forceRefresh: Boolean(ctx.force),
+      },
+      async () => {
+        let spentUsd = 0;
+        let calls = 0;
+        const stages: SelfOracleStageSummary[] = [];
+        const linemen: SelfOracleLinemanRecord[] = [];
+        const familyFindings: Record<string, string> = {};
+        const readerModel = modelFor('reader');
+        const oracleModel = modelFor('oracle');
+
+        // Stage 1: Reusable Chart-Family AI Sub-Agents (`family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`)
+        for (const familyId of activeFamilyIds) {
+          const pack = packs[familyId];
+          const cacheKey = `self:${kundliId}:${familyId}:${pack.packHash}:${PROMPT_VERSION}`;
+          const cached = !ctx.force ? await loadDbReaderCache(prisma, cacheKey, owner) : undefined;
+          const cachedText = (cached?.finding as unknown as { rawText?: string } | undefined)?.rawText;
+          if (cachedText) {
+            familyFindings[familyId] = cachedText;
+            const parsed = parseLinemanClaims(cachedText, new Set(pack.keys));
+            linemen.push({
+              agent: familyId,
+              promptName: familyId,
+              promptVersion: PROMPT_VERSION,
+              sliceKeys: pack.keys.slice(0, 60),
+              claims: parsed.claims,
+              dropped: parsed.dropped,
+              tokens: { prompt: 0, cached: 0, output: 0, thought: 0 },
+              ms: 0,
+              cache: 'hit',
+              cached: true,
+            });
+            stages.push({
+              agentId: familyId,
+              status: 'cached',
+              cached: true,
+              ms: 0,
+              inputTokens: 0,
+              promptTokens: 0,
+              outputTokens: 0,
+              cachedTokens: 0,
+              thoughtTokens: 0,
+              costUsd: 0,
+              summary: cachedText.slice(0, 240),
+            });
+            continue;
+          }
+
+          if (spentUsd >= maxSpendUsd) {
+            stages.push({
+              agentId: familyId,
+              status: 'skipped',
+              cached: false,
+              ms: 0,
+              inputTokens: 0,
+              promptTokens: 0,
+              outputTokens: 0,
+              cachedTokens: 0,
+              thoughtTokens: 0,
+              costUsd: 0,
+            });
+            continue;
+          }
+
+          const tStart = performance.now();
+          const res = await withAgentRun(
+            prisma,
+            familyId,
+            {
+              userId,
+              kundliId,
+              technique: 'self.reading.oracle',
+              task: `${familyId} ${reading.asOf}`,
+              input: { family: familyId, keys: pack.keys.length, natal: pack.natal ? 1 : 0 },
+            },
+            async () => {
+              const g = await callGemini({
+                model: readerModel,
+                node: familyId,
+                system: FAMILY_SYSTEM_PROMPTS[familyId],
+                parts: [pack.prefix, pack.dynamic],
+                thinking: 'medium',
+                maxOutputTokens: 2000,
+                cachePrefix: true,
+                cacheOwner: owner,
+              });
+              const pTok = g.usage?.promptTokens ?? 0;
+              const cTok = g.usage?.cachedTokens ?? 0;
+              const oTok = g.usage?.outputTokens ?? 0;
+              const tTok = g.usage?.thoughtTokens ?? 0;
+              const callCost = usageCostUsd({
+                model: readerModel,
+                promptTokens: pTok,
+                cachedTokens: cTok,
+                outputTokens: oTok,
+                thoughtTokens: tTok,
+              });
+              return {
+                value: g,
+                tokensIn: pTok,
+                tokensOut: oTok,
+                costUsd: callCost,
+                charts: pack.charts,
+                output: { chars: g.text.length, cachedTokens: cTok },
+              };
+            },
+          );
+          const ms = Math.round((performance.now() - tStart) * 100) / 100;
+          const st = summarizeCall(familyId, readerModel, res, ms);
+          stages.push(st);
+          spentUsd = Math.round((spentUsd + st.costUsd) * 1e6) / 1e6;
+          calls += 1;
+          const cleanFinding = redactEngineTerms(res.text);
+          familyFindings[familyId] = cleanFinding;
+
+          const parsed = parseLinemanClaims(cleanFinding, new Set(pack.keys));
+          linemen.push({
+            agent: familyId,
+            promptName: familyId,
+            promptVersion: PROMPT_VERSION,
+            sliceKeys: pack.keys.slice(0, 60),
+            claims: parsed.claims,
+            dropped: parsed.dropped,
+            tokens: {
+              prompt: st.promptTokens ?? 0,
+              cached: st.cachedTokens,
+              output: st.outputTokens,
+              thought: st.thoughtTokens ?? 0,
+            },
+            ms,
+            cache: 'run',
+            cached: false,
+          });
+
+          const held: HeldReader = {
+            finding: { reader: familyId, rawText: cleanFinding } as unknown as HeldReader['finding'],
+            usage: {
+              node: familyId,
+              model: readerModel,
+              promptTokens: st.promptTokens ?? 0,
+              cachedTokens: st.cachedTokens,
+              outputTokens: st.outputTokens,
+              thoughtTokens: st.thoughtTokens ?? 0,
+              ms,
+            },
+          };
+          await saveDbReaderCache(prisma, {
+            cacheKey,
+            kundliId,
+            userId,
+            readerId: familyId,
+            packHash: pack.packHash,
+            horizonKey: pack.horizonKey,
+            promptVersion: PROMPT_VERSION,
+            natal: pack.natal,
+            ...(pack.expiresAt ? { expiresAt: pack.expiresAt } : {}),
+            held,
+            used: true,
+          });
+        }
+
+        if (spentUsd >= maxSpendUsd) {
+          const budgetOut: SelfOracleResult = {
+            status: 'budget_exceeded',
+            linemen,
+            familyFindings,
+            calls,
+            modelCalls: calls,
+            cached: false,
+            spentUsd,
+            costUsd: spentUsd,
+            maxSpendUsd,
+            capUsd: maxSpendUsd,
+            spentTodayUsd: spentUsd,
+            stages,
+          };
+          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
+        }
+
+        // Stage 2: Self Lineman (`lineman.self` / `readers/R15-self`)
+        const familyBundleText = activeFamilyIds.map((id) => `### ${id}\n${familyFindings[id] ?? '(none)'}`).join('\n\n');
+        const linemanPrefix = activeFamilyIds.map((id) => packs[id].prefix).join('\n\n');
+        const linemanDynamic = `SCOPE: ${scopeKey}\n\nFAMILY SUB-AGENT FINDINGS:\n${familyBundleText}\n\nPANEL CLAIMS BRIEF:\n${brief.text}`;
+        const linemanHash = shortHash(`${oracleDigestVersion}|${familyBundleText}|${brief.text}`);
+        const linemanCacheKey = `self:${kundliId}:lineman.self:${linemanHash}:${PROMPT_VERSION}`;
+        const cachedLineman = !ctx.force ? await loadDbReaderCache(prisma, linemanCacheKey, owner) : undefined;
+        let linemanFindings = (cachedLineman?.finding as unknown as { rawText?: string } | undefined)?.rawText ?? '';
+
+        if (linemanFindings) {
+          const parsedLineman = parseLinemanClaims(linemanFindings, allKeys);
+          linemen.push({
+            agent: 'lineman.self',
+            promptName: 'readers/R15-self',
+            promptVersion: PROMPT_VERSION,
+            sliceKeys: [...allKeys].slice(0, 80),
+            claims: parsedLineman.claims,
+            dropped: parsedLineman.dropped,
+            tokens: { prompt: 0, cached: 0, output: 0, thought: 0 },
+            ms: 0,
+            cache: 'hit',
+            cached: true,
+          });
+          stages.push({
+            agentId: 'lineman.self',
+            status: 'cached',
+            cached: true,
+            ms: 0,
+            inputTokens: 0,
+            promptTokens: 0,
+            outputTokens: 0,
+            cachedTokens: 0,
+            thoughtTokens: 0,
+            costUsd: 0,
+            summary: linemanFindings.slice(0, 240),
+          });
+        } else {
+          const tLineman = performance.now();
+          const linemanRes = await withAgentRun(
+            prisma,
+            'lineman.self',
+            {
+              userId,
+              kundliId,
+              technique: 'self.reading.oracle',
+              task: `lineman.self ${reading.asOf}`,
+              input: { families: Object.keys(familyFindings).length, keys: allKeys.size },
+            },
+            async () => {
+              const g = await callGemini({
+                model: readerModel,
+                node: 'self.reader',
+                system: PROMPTS['readers/R15-self'] ?? '',
+                parts: [linemanPrefix, linemanDynamic],
+                thinking: 'medium',
+                maxOutputTokens: 3500,
+                cachePrefix: true,
+                cacheOwner: owner,
+              });
+              const pTok = g.usage?.promptTokens ?? 0;
+              const cTok = g.usage?.cachedTokens ?? 0;
+              const oTok = g.usage?.outputTokens ?? 0;
+              const tTok = g.usage?.thoughtTokens ?? 0;
+              const callCost = usageCostUsd({
+                model: readerModel,
+                promptTokens: pTok,
+                cachedTokens: cTok,
+                outputTokens: oTok,
+                thoughtTokens: tTok,
+              });
+              return {
+                value: g,
+                tokensIn: pTok,
+                tokensOut: oTok,
+                costUsd: callCost,
+                charts: activeFamilyIds.flatMap((id) => packs[id].charts),
+                output: { chars: g.text.length, cachedTokens: cTok },
+              };
+            },
+          );
+          const ms = Math.round((performance.now() - tLineman) * 100) / 100;
+          const st = summarizeCall('lineman.self', readerModel, linemanRes, ms);
+          stages.push(st);
+          spentUsd = Math.round((spentUsd + st.costUsd) * 1e6) / 1e6;
+          calls += 1;
+          linemanFindings = redactEngineTerms(linemanRes.text);
+
+          const parsedLineman = parseLinemanClaims(linemanFindings, allKeys);
+          linemen.push({
+            agent: 'lineman.self',
+            promptName: 'readers/R15-self',
+            promptVersion: PROMPT_VERSION,
+            sliceKeys: [...allKeys].slice(0, 80),
+            claims: parsedLineman.claims,
+            dropped: parsedLineman.dropped,
+            tokens: {
+              prompt: st.promptTokens ?? 0,
+              cached: st.cachedTokens,
+              output: st.outputTokens,
+              thought: st.thoughtTokens ?? 0,
+            },
+            ms,
+            cache: 'run',
+            cached: false,
+          });
+
+          const linemanStruct = parseOracleStructuredBlocks(linemanFindings, allKeys);
+          const linemanValidUntil = linemanStruct.validUntil[scopeKey === 'all' ? 'overall' : scopeKey] ?? linemanStruct.validUntil.overall;
+          const linemanExpiresAt =
+            linemanValidUntil && linemanValidUntil !== 'always'
+              ? new Date(`${linemanValidUntil}T00:00:00Z`)
+              : packs['family.dasha'].expiresAt;
+
+          await saveDbReaderCache(prisma, {
+            cacheKey: linemanCacheKey,
+            kundliId,
+            userId,
+            readerId: 'lineman.self',
+            packHash: linemanHash,
+            horizonKey: packs['family.dasha'].horizonKey,
+            promptVersion: PROMPT_VERSION,
+            natal: scopeKey !== 'all' && ['lagna', 'mind', 'atma', 'yogas'].includes(scopeKey),
+            ...(linemanExpiresAt ? { expiresAt: linemanExpiresAt } : {}),
+            held: {
+              finding: { reader: 'lineman.self', rawText: linemanFindings } as unknown as HeldReader['finding'],
+              usage: {
+                node: 'self.reader',
+                model: readerModel,
+                promptTokens: st.promptTokens ?? 0,
+                cachedTokens: st.cachedTokens,
+                outputTokens: st.outputTokens,
+                thoughtTokens: st.thoughtTokens ?? 0,
+                ms,
+              },
+            },
+            used: true,
+          });
+        }
+
+        if (spentUsd >= maxSpendUsd) {
+          const budgetOut: SelfOracleResult = {
+            status: 'budget_exceeded',
+            linemen,
+            linemanFindings,
+            familyFindings,
+            calls,
+            modelCalls: calls,
+            cached: false,
+            spentUsd,
+            costUsd: spentUsd,
+            maxSpendUsd,
+            capUsd: maxSpendUsd,
+            spentTodayUsd: spentUsd,
+            stages,
+          };
+          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
+        }
+
+        // Stage 3: Self Oracle Synthesizer (`self.reading_oracle` / `oracle/self`)
+        const compiledBrief = `${brief.text}\n\n## LINEMAN SYNTHESIS BRIEF (R15-self)\n${linemanFindings}\n\n## FAMILY SUB-AGENT FINDINGS\n${familyBundleText}`;
+        const tOracle = performance.now();
+        const oracleRes = await withAgentRun(
+          prisma,
+          'self.reading_oracle',
+          {
+            userId,
+            kundliId,
+            technique: 'self.reading.oracle',
+            task: `self.reading.oracle ${reading.asOf}`,
+            input: { stages: stages.length, keys: allKeys.size },
+          },
+          async () => {
+            const g = await callGemini({
+              model: oracleModel,
+              node: 'self.oracle',
+              system: PROMPTS['oracle/self'] ?? '',
+              parts: [
+                linemanPrefix,
+                `${compiledBrief}\n\nCite evidence keys in {braces} at the end of each paragraph, include PANEL_SYNTHESIS lines, and end with VALID_UNTIL: <YYYY-MM-DD|always>.`,
+              ],
+              thinking: 'medium',
+              maxOutputTokens: 4500,
+              cachePrefix: true,
+              cacheOwner: owner,
+            });
+            const pTok = g.usage?.promptTokens ?? 0;
+            const cTok = g.usage?.cachedTokens ?? 0;
+            const oTok = g.usage?.outputTokens ?? 0;
+            const tTok = g.usage?.thoughtTokens ?? 0;
+            const callCost = usageCostUsd({
+              model: oracleModel,
+              promptTokens: pTok,
+              cachedTokens: cTok,
+              outputTokens: oTok,
+              thoughtTokens: tTok,
+            });
+            return {
+              value: g,
+              tokensIn: pTok,
+              tokensOut: oTok,
+              costUsd: callCost,
+              charts: activeFamilyIds.flatMap((id) => packs[id].charts),
+              output: { chars: g.text.length, cachedTokens: cTok },
+            };
+          },
+        );
+        const oracleMs = Math.round((performance.now() - tOracle) * 100) / 100;
+        const oracleStage = summarizeCall('self.reading_oracle', oracleModel, oracleRes, oracleMs);
+        stages.push(oracleStage);
+        spentUsd = Math.round((spentUsd + oracleStage.costUsd) * 1e6) / 1e6;
+        calls += 1;
+
+        const structured = parseOracleStructuredBlocks(`${linemanFindings}\n\n${oracleRes.text}`, allKeys);
+        const strippedRaw = oracleRes.text
+          .replace(/\n*PANEL_SYNTHESIS:[\s\S]*$/i, '')
+          .replace(/\n*VALID_UNTIL:\s*(?:always|\d{4}-\d{2}-\d{2})\s*$/i, '')
+          .trim();
+        const validated = validateSelfText(strippedRaw || oracleRes.text, allKeys);
+        const totalTokens = stages.reduce(
+          (acc, s) => ({
+            prompt: acc.prompt + (s.promptTokens ?? 0),
+            cached: acc.cached + s.cachedTokens,
+            output: acc.output + s.outputTokens,
+            thought: acc.thought + (s.thoughtTokens ?? 0),
+          }),
+          { prompt: 0, cached: 0, output: 0, thought: 0 },
+        );
+
+        const result: SelfOracleResult = {
+          status: 'ok',
+          text: validated.text,
+          output: validated.text,
+          brief: compiledBrief,
+          promptName: 'oracle/self',
+          promptVersion: PROMPT_VERSION,
+          model: oracleModel,
+          validator: {
+            verdict: validated.dropped === 0 ? 'ok' : 'rejected',
+            issues: validated.dropped ? [`Dropped ${validated.dropped} paragraph(s) citing unverified keys`] : [],
+          },
+          tokens: totalTokens,
+          ms: oracleMs,
+          linemen,
+          linemanFindings,
+          linemanBrief: compiledBrief,
+          familyFindings,
+          panelLines: structured.panelLines,
+          validUntil: structured.validUntil,
+          dropped: validated.dropped,
+          calls,
+          modelCalls: calls,
+          cached: false,
+          spentUsd,
+          costUsd: spentUsd,
+          maxSpendUsd,
+          capUsd: maxSpendUsd,
+          spentTodayUsd: spentUsd,
+          stages,
+        };
+        return {
+          value: result,
+          summary: { status: 'ok', calls, dropped: validated.dropped, spentUsd },
+        };
+      },
+    );
+
+    return stored.cached ? { ...stored.value, cached: true } : stored.value;
   } catch (e) {
     console.error('[self:oracle]', (e as Error).message);
-    return { status: 'failed', calls: 2 };
+    return { status: 'failed', calls: 0, maxSpendUsd, capUsd: maxSpendUsd };
   }
 }

@@ -6,13 +6,19 @@
  * that stored period.
  */
 import type { PlanetCard } from '../../digest/types.js';
-import { HOUSE_SELF, longDate, PLANET_FACULTY, PLANET_SHORT, RIPENESS_SHORT, RIPENESS_WORDS } from '../words.js';
-import { activationKey, gaps, houseFrame, planetChain, runningChain } from '../slices.js';
+import { clockLabel, HOUSE_SELF, longDate, PLANET_FACULTY, PLANET_SHORT, RIPENESS_SHORT, RIPENESS_WORDS } from '../words.js';
+import { activationKey, allRunningDashas, gaps, houseFrame, planetChain, runningChain } from '../slices.js';
 import type { PanelBody, SelfClaim } from '../types.js';
 import { body, cap, cardDetail, hasCancellation, pname, type PanelInput } from './common.js';
 
 const HEAVY_RIPENESS = new Set(['unripe_sour', 'dried_seed_externalized']);
 const MAX_CLAIMS = 6;
+
+export function struggleLead(claims: readonly SelfClaim[]): string {
+  const active = claims.filter((c) => !c.withheld);
+  if (!active.length) return '';
+  return `${active.length} ${active.length === 1 ? 'thing' : 'things'} in your chart ${active.length === 1 ? 'asks' : 'ask'} more of you than the rest.`;
+}
 
 export function strugglePanel({ view, activation, asOf, clock }: PanelInput): PanelBody {
   const g = gaps();
@@ -66,16 +72,23 @@ export function strugglePanel({ view, activation, asOf, clock }: PanelInput): Pa
   }
 
   const run = runningChain(activation, clock.system, asOf);
+  const allRunning = allRunningDashas(activation, asOf, clock.system);
   // a struggle the reading clock is running now (a release date) comes first (doc 59 §2.2)
   // release dates come from the main period and the sub-period only; the third level is the day-to-day phase of doc 60 §11
   const runningLords = new Set([run.l1?.lord, run.l2?.lord].filter(Boolean));
   const ordered = [...out.filter((c) => c.planet && runningLords.has(c.planet)), ...out.filter((c) => !(c.planet && runningLords.has(c.planet)))];
   const claims: SelfClaim[] = ordered.slice(0, MAX_CLAIMS).map(({ planet, ...c }) => {
     const r = [run.l2, run.l1].find((x) => x && planet && x.lord === planet);
-    if (!r) return c;
+    const otherActive = planet
+      ? allRunning
+          .filter((s) => s.system !== clock.system && (s.l1?.lord === planet || s.l2?.lord === planet))
+          .map((s) => `${clockLabel(s.system)} (${(s.l2?.lord === planet ? s.l2 : s.l1)!.from}→${(s.l2?.lord === planet ? s.l2 : s.l1)!.to})`)
+      : [];
+    const otherSuffix = otherActive.length ? `; also running in ${otherActive.join(', ')}` : '';
+    if (!r) return otherSuffix ? { ...c, detail: `${c.detail}${otherSuffix}` } : c;
     const what = r.level === 1 ? 'chapter' : 'sub-chapter';
-    return { ...c, text: `${c.text} This presses hardest until ${longDate(r.to)}, when your current ${what} ends.`, line: c.line ? `${c.line.replace(/\.$/, '')} until ${longDate(r.to)}.` : undefined, range: { from: r.from, to: r.to }, detail: `${c.detail}; running ${clock.label} level ${r.level} ${pname(r.lord)} ${r.from} → ${r.to}`, evidence: [...c.evidence, activationKey(r)] };
+    return { ...c, text: `${c.text} This presses hardest until ${longDate(r.to)}, when your current ${what} ends.`, line: c.line ? `${c.line.replace(/\.$/, '')} until ${longDate(r.to)}.` : undefined, range: { from: r.from, to: r.to }, detail: `${c.detail}; running ${clock.label} level ${r.level} ${pname(r.lord)} ${r.from} → ${r.to}${otherSuffix}`, evidence: [...c.evidence, activationKey(r)] };
   });
-  const lead = claims.length ? `${claims.length} things in your chart ask more of you than the rest.` : '';
+  const lead = struggleLead(claims);
   return body(lead, claims, g);
 }

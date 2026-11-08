@@ -53,18 +53,55 @@ export function activationSpan(asOf: string): { from: string; to: string } {
   return { from: addMonthsIso(asOf, -13), to: addMonthsIso(asOf, 12 * 30) };
 }
 
+export function coerceSharedSkyPayload(raw: unknown, asOf: string): TransitRangePayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const direct = asRangePayload(raw);
+  if (direct) return direct;
+  const r = raw as Record<string, unknown>;
+  if (Array.isArray(r.ingresses)) {
+    return asRangePayload({
+      from: typeof r.from === 'string' ? r.from : addMonthsIso(asOf, -6),
+      to: typeof r.to === 'string' ? r.to : addMonthsIso(asOf, 18),
+      planets: Array.isArray(r.planets) ? r.planets : ['Sa', 'Ju', 'Ra', 'Ke', 'Ma', 'Su'],
+      natal: r.natal && typeof r.natal === 'object' ? r.natal : { lagna_sign: '', lagna_sign_index: 0, moon_sign: '', moon_sign_index: 0 },
+      ingresses: r.ingresses,
+      stations: Array.isArray(r.stations) ? r.stations : [],
+      lunations: Array.isArray(r.lunations) ? r.lunations : [],
+      eclipses: Array.isArray(r.eclipses) ? r.eclipses : [],
+      sade_sati: Array.isArray(r.sade_sati) ? r.sade_sati : [],
+      dhaiya: Array.isArray(r.dhaiya) ? r.dhaiya : [],
+    });
+  }
+  return null;
+}
+
 export async function defaultLoadTransit(prisma: PrismaClient, kundliId: string, asOf: string): Promise<TransitRangePayload | null> {
   try {
     const rows = await prisma.$queryRaw<Array<{ payload: unknown }>>`SELECT "payload" FROM "kundli_transit_overlays"
       WHERE "kundli_id" = ${kundliId} AND "kind" = 'range' AND "from_date" <= ${asOf}::date AND "to_date" >= ${asOf}::date
       ORDER BY "fetched_at" DESC LIMIT 1`;
-    if (!rows[0]) return null;
-    const opened = await openRow('kundli_transit_overlays', rows[0]);
-    return asRangePayload(opened.payload);
+    if (rows[0]) {
+      const opened = await openRow('kundli_transit_overlays', rows[0]);
+      const parsed = coerceSharedSkyPayload(opened.payload, asOf);
+      if (parsed) return parsed;
+    }
   } catch (e) {
     console.warn('[area] sky overlay unreadable:', (e as Error).message);
-    return null;
   }
+  // Universal shared transit sky fallback (no per-person storage required; shared across all kundlis)
+  try {
+    const sharedRows = await prisma.$queryRaw<Array<{ payload: unknown }>>`SELECT "payload" FROM "transit_range_skies"
+      WHERE "from_date" <= ${asOf}::date AND "to_date" >= ${asOf}::date
+      ORDER BY "fetched_at" DESC LIMIT 1`;
+    if (sharedRows[0]) {
+      const opened = await openRow('transit_range_skies', sharedRows[0]).catch(() => sharedRows[0]!);
+      const parsed = coerceSharedSkyPayload(opened.payload, asOf);
+      if (parsed) return parsed;
+    }
+  } catch {
+    // table may not exist in unit-test mock prisma
+  }
+  return null;
 }
 
 export async function defaultQueueDigest(prisma: PrismaClient, kundliId: string): Promise<void> {

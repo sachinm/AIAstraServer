@@ -99,3 +99,57 @@ export function mainStarts(rows: readonly ActivationRow[], system: string): stri
 }
 
 export const activationKey = (r: ActivationRow): string => `activation:${r.system}/${r.level}/${r.lord ?? r.sign ?? '?'}@${r.from}`;
+
+export interface SystemRunningSummary {
+  system: string;
+  family: ActivationRow['family'];
+  previous: ActivationRow | null;
+  l1: ActivationRow | null;
+  l2: ActivationRow | null;
+  l3: ActivationRow | null;
+  next: ActivationRow | null;
+}
+
+/**
+ * Returns the active chain (`previous`, `l1`, `l2`, `l3`, `next`) for EVERY stored dasha system in `rows` covering `asOf`,
+ * ordered with the primary reading clock first, then Vimshottari, Conditional Nakshatra, Jaimini Rasi, Yogini, Tithi Ashtottari, Karaka, and all other systems.
+ */
+export function allRunningDashas(
+  rows: readonly ActivationRow[],
+  asOf: string,
+  primarySystem?: string,
+): SystemRunningSummary[] {
+  const bySystem = new Map<string, ActivationRow['family']>();
+  for (const r of rows) {
+    if (!bySystem.has(r.system)) bySystem.set(r.system, r.family);
+  }
+  const familyRank: Record<ActivationRow['family'], number> = {
+    vimshottari: 1,
+    conditional: 2,
+    rasi: 3,
+    yogini: 4,
+    tithi_ashtottari: 5,
+    karaka: 6,
+    other: 7,
+  };
+  const systems = [...bySystem.keys()].sort((a, b) => {
+    if (a === primarySystem) return -1;
+    if (b === primarySystem) return 1;
+    const fa = familyRank[bySystem.get(a) ?? 'other'] ?? 9;
+    const fb = familyRank[bySystem.get(b) ?? 'other'] ?? 9;
+    return fa !== fb ? fa - fb : a.localeCompare(b);
+  });
+  return systems.map((sys) => {
+    const spine = mdSpine(rows, sys, asOf);
+    const run = runningChain(rows, sys, asOf);
+    return {
+      system: sys,
+      family: bySystem.get(sys) ?? 'other',
+      previous: spine.previous,
+      l1: run.l1 ?? spine.running,
+      l2: run.l2 ?? spine.runningSub,
+      l3: run.l3,
+      next: spine.next,
+    };
+  });
+}
