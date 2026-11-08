@@ -1,0 +1,101 @@
+/** The admin Techniques Lab surface (docs/admin/10): token and consent guards, a manual run that writes a dossier, one-technique runs, birth fields stripped. */
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import express from 'express';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { digestView } from '../../../../src/reading/digest/load.js';
+import type { ActivationRow } from '../../../../src/reading/digest/activation.js';
+import { registerAdminLabRoutes } from '../../../../src/routes/adminLabRoutes.js';
+
+const FIX = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../fixtures/self/research-calibration.json'), 'utf8')) as {
+  digest: Array<{ section: string; key: string; row: unknown }>;
+  activation: ActivationRow[];
+  systems: Array<{ system: string; family: string }>;
+};
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const dossiers = new Map<string, any>();
+const actions: any[] = [];
+const prisma: any = {
+  auth: {
+    findUnique: async ({ where }: any) => (where.id === 'u1' ? { research: true } : where.id === 'u2' ? { research: false } : null),
+    findMany: async () => [{ id: 'u1-aaaaaaaa' }],
+  },
+  kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1', preferred_dasha: 'dwisatpathi' } : null) },
+  personFact: { findMany: async () => [] },
+  techniqueOutput: { findUnique: async () => null, upsert: async ({ create }: any) => create, updateMany: async () => ({ count: 0 }) },
+  agentRegistry: { upsert: async () => ({}) },
+  agentRun: { create: async () => ({}) },
+  adminAction: { create: async ({ data }: any) => (actions.push(data), data) },
+  readingDossier: {
+    findUnique: async ({ where }: any) => (where.id ? dossiers.get(where.id) ?? null : [...dossiers.values()].find((d) => d.bundle_hash === where.kundli_id_board_bundle_hash?.bundle_hash) ?? null),
+    findFirst: async () => [...dossiers.values()].at(-1) ?? null,
+    findMany: async () => [...dossiers.values()],
+    create: async ({ data }: any) => {
+      const id = `d${dossiers.size + 1}`;
+      dossiers.set(id, { id, ...data, date_of_birth: 'should be stripped' });
+      return { id };
+    },
+  },
+};
+
+let base = '';
+let server: ReturnType<express.Express['listen']>;
+beforeAll(() => {
+  const app = express();
+  app.use(express.json());
+  registerAdminLabRoutes(app, {
+    prisma,
+    enabled: true,
+    token: 'lab-secret',
+    self: {
+      now: () => new Date('2026-11-07T12:00:00Z'),
+      loadDigest: async () => digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' }),
+      systemsPresent: async () => FIX.systems,
+      loadTransit: async () => null,
+      activationFor: async (_p, _k, q) => FIX.activation.filter((r) => (!q.systems || q.systems.includes(r.system)) && r.level <= (q.maxLevel ?? 3) && r.from < q.to && r.to > q.from),
+    },
+  });
+  server = app.listen(0);
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+afterAll(() => server.close());
+
+const post = (body: unknown, token = 'lab-secret') => fetch(`${base}/api/admin-lab/run`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-lab-token': token }, body: JSON.stringify(body) });
+
+describe('admin lab', () => {
+  it('refuses without the token, without consent, and an unknown technique', async () => {
+    expect((await post({ userId: 'u1' }, 'wrong')).status).toBe(403);
+    expect((await post({ userId: 'u2' })).status).toBe(403);
+    expect((await post({ userId: 'u1', technique: 'self.reading.nonesuch' })).status).toBe(400);
+    expect((await post({ userId: 'u9' })).status).toBe(404);
+  });
+  it('a full manual run returns the reading and its dossier, birth fields stripped, and logs the action', async () => {
+    const r = await post({ userId: 'u1', force: true });
+    expect(r.status).toBe(200);
+    const j = await r.json();
+    expect(j.runId).toBe('d1');
+    expect(j.reading.panels).toHaveLength(9);
+    expect(j.reading.audit.verdict).toBe('pass');
+    expect(j.dossier.trigger).toBe('manual');
+    expect(j.dossier.date_of_birth).toBeUndefined();
+    expect(Object.keys(j.dossier.data).length).toBeGreaterThan(10);
+    expect(actions.at(-1)).toMatchObject({ action: 'lab.run', target_user_id: 'u1' });
+  });
+  it('one technique runs only that panel (the diagnosis brings its four inputs)', async () => {
+    const one = await (await post({ userId: 'u1', technique: 'self.reading.body', force: true })).json();
+    expect(one.reading.panels.map((p: any) => p.id)).toEqual(['body']);
+    const diag = await (await post({ userId: 'u1', technique: 'diagnosis', force: true })).json();
+    expect(diag.reading.panels.map((p: any) => p.id).sort()).toEqual(['chapters', 'diagnosis', 'lagna', 'struggle', 'yogas']);
+  });
+  it('lists and reads stored dossiers behind the token', async () => {
+    const h = { 'x-admin-lab-token': 'lab-secret' };
+    expect((await fetch(`${base}/api/admin-lab/dossiers?userId=u1`)).status).toBe(403);
+    const list = await (await fetch(`${base}/api/admin-lab/dossiers?userId=u1`, { headers: h })).json();
+    expect(list.items.length).toBeGreaterThanOrEqual(1);
+    const one = await (await fetch(`${base}/api/admin-lab/runs/d1`, { headers: h })).json();
+    expect(one.id).toBe('d1');
+    expect(one.date_of_birth).toBeUndefined();
+  });
+});

@@ -1019,3 +1019,72 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
 - **P3: `method.md` describes a pack shape (`base`, `frame`, `detail`) that the Oracle path does not send**; readers use v2
   table ids and digest slices use `digest.<section>.<varga>`. Status: open. Done: one data vocabulary per path, stated in
   the prompt that path loads.
+
+## Filed 2026-11-07 by the You reading build (docs/reading-engine/58, branch `feat/self-dashboard-guru-reading`)
+
+- **P2: Stored technique outputs survive code changes.** The `technique_outputs` key carries the contract hash, the
+  digest version and `TECHNIQUE_CACHE_VERSION`, not the code of the technique. A fix to a panel's code or words keeps
+  serving the old output until the digest is rebuilt (seen 2026-11-07: the You reading served the old struggle wording
+  after the fix). Fixed for `self.reading.*` by `SELF_READING_VERSION` in `src/reading/self/service.ts`; every other
+  stored technique (`self.activation`, `love.activation`, `work.present_tone`, code readers) still has the gap. Owner:
+  reading-dev. Done: a per-technique code version in the key (or in the catalogue row, hashed with the contract).
+- **P2: `runningYearSpan` picks a decades-long span.** `src/techniques/outputStore.ts runningYearSpan` prefers the TP
+  row and takes the min/max of its dasha periods. The TP row's `tithi_ashtottari` periods for kundli `c584c0a3` run
+  2015-07-07 → 2123-07-08, so every `freshness: annual` output (the You and Love board builds pass it as `year`) is valid
+  for a century. The You reading takes the year from the VP Mudda span instead (`service.ts`). Owner: reading-dev.
+  Done: the year span is the Tithi Pravesha to the next one (or the VP Mudda span), with a test on this kundli.
+- **P2: Karaka points carried their dispositor only.** `PointRow` for AK…DK held `lord` = the dispositor of the
+  karaka's sign; `selfCharacterAndJoy.ts:473` reads it as the atmakaraka ("AK=Me (H8)" for `c584c0a3`, whose AK is the
+  Sun). Fixed in the digest (`PointRow.planet`, `build.ts pointRows`); `selfCharacterAndJoy.ts` still reads `lord` and is
+  not changed here (the review session owns that module). Every ready digest needs a rebuild to gain `planet`
+  (`c584c0a3` rebuilt 2026-11-07); until then the You reading withholds "Your soul's aim" with a gap. Owner:
+  reading-dev with the deploy session. Done: the 24 research kundlis rebuilt; the character arc reads `planet`.
+- **P3: Chapter confirmation checks dates only.** `self.reading.chapters` counts a confirming clock when its main
+  period starts within 18 months of the chapter start; it does not yet check that the clock's running lord or sign
+  activates the same houses. Owner: reading-dev. Done: a theme check (house overlap from `kundli_activation.houses`) next
+  to the date check, with confirmed requiring both.
+- **P3: The You reading's wall time is mostly database round trips.** From this machine to Render: 7.0 s first open,
+  2.0 s with all seven panels stored (panel code under 300 ms). Measure on the Lambda after deploy; if the stored path is
+  over 150 ms, read the seven stored outputs in one query instead of seven. Owner: reading-dev.
+- **P3: Love and Work panel areas wait on the parent session's guidance** (asked 2026-11-07, at Sachin's request): which
+  panels each board has and what each reads, so they can be built as `love.reading.*` and `work.reading.*` on the same
+  slicers. Owner: the scenery/UX review session, then reading-dev.
+- **Web, found by the web build (`AIAstra_WEB` branch `feat/self-dashboard-guru-reading`, worktree
+  `C:\Users\Owner\Documents\work\wt\web-self-guru`), not from this change:**
+  - P2: the "Your reading" tab sits inside `AreaBoardView`, so when `/api/area/self` is preparing, unavailable or failed
+    the whole page shows the board's message and the reading cannot be reached. Done: the reading tab renders on its
+    own status.
+  - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
+  - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
+  - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
+
+## Filed 2026-11-08 by the You reading research-grade build (docs 60–62, branch `feat/self-dashboard-guru-reading`)
+
+- **Built:** `self.reading.purview` (whole-chart check: lagna lord standing, cancellations, combustion and retrograde,
+  functional nature, vargottama, gandanta, dasha applicability, MD–AD 6/8 and 2/12, stored sky, sensitive core),
+  `self.reading.body` (facts only), the doc 61 card (1–3 lines of at most 22 words, per-line ranges, header ranges),
+  `self.reading.audit` (code auditor; a failing line leaves the card), `reading_dossiers` (M40, sealed) written once per
+  build content, and `/api/admin-lab/*` behind `ADMIN_LAB=1` and `ADMIN_LAB_TOKEN` (header `x-admin-lab-token`).
+- **P2: The request still builds.** Doc 60 §6 says a person's request never builds (it reads the stored reading or
+  queues a build on the four triggers). Today a request runs the panels through the stored outputs, so an unchanged
+  open makes nothing, but a window boundary is crossed on a request. Owner: reading-dev. Done: a build sweep on the
+  `dasha_boundary` / `annual` / `confirm` / `digest` triggers and requests that only read.
+- **P2: No bundle yet (doc 60 phase C).** The build reads the digest (memoised 60 s), two activation queries, the facts
+  and the sky overlay; agents do not exist yet on this path. Done: `board.bundle` in `technique_outputs` read once.
+- **P2: Scenario hydration cannot take chart specs.** `buildCustomResearchSubject` (`src/reading/research/presets.ts`)
+  takes birth data and a profession template, not placements, yogas or periods, and `ResearchGroupKind` has no
+  `self_scenario`. S2–S8 (`docs/reading-engine/scenarios/self/`) are chart specifications with approximate dates;
+  the stored dates win once hydrated. Owner: reading-dev. Done: hydration from a chart spec or hand-built subjects.
+- **P3: S2's "Moon override" was undefined in doc 60 §4;** the scenario uses a Kemadruma row cancelled by a kendra Moon.
+  The purview has no Kemadruma-cancellation rule yet (the engine row decides). Owner: Sachin / reading-dev.
+- **P3: The global banned list of doc 60 §5** must carry the engine names; the per-scenario lists leave them out so the
+  files do not contain them. `BANNED_LINE_WORDS` in `src/reading/self/words.ts` is the code list; add the names there
+  through an env or a non-literal pattern.
+- **P3: Doc 45 vs doc 61 on chart words in cards:** doc 61's examples name planets ("Saturn crosses your Moon"); doc
+  45 §3.3 bans them. The build and the scenarios follow doc 45 (`BANNED_LINE_WORDS`). Owner: Sachin.
+- **P3: `BODY_WORDS` (`BODY_SHAPE` in words.ts) needs Sachin's review** before the body panel is shown widely: planet to
+  one of four shapes after the BPHS dosha natures.
+- **P3: Web chapter cards still say "Likely"** from the older chapter certainty set beside the card certainty words
+  (web worktree finding). The 22-word limit is not checked on the web side (the server auditor enforces it).
+- **Deploy note:** M40 is applied to the shared database; `ADMIN_LAB` and `ADMIN_LAB_TOKEN` are new env vars (deploy
+  session; off by default).

@@ -116,6 +116,8 @@ model Kundli {
   digest_version     String?                @map("digest_version")
   digest_built_at    DateTime?              @map("digest_built_at") @db.Timestamptz(6)
   digest_error       String?                @map("digest_error")
+  /// the reading clock the person trusts (docs/reading-engine/58 §4.1); catalogue dasha id, e.g. dwisatpathi
+  preferred_dasha    String?                @map("preferred_dasha")
   facts              KundliFacts[]
   digestRows         KundliDigest[]
   activations        KundliActivation[]
@@ -130,6 +132,7 @@ model Kundli {
   @@index([digest_status], map: "idx_kundlis_digest_status")
   areaBuilds         AreaBuild[]
   techniqueOutputs   TechniqueOutput[]
+  readingDossiers    ReadingDossier[]
 
   @@map("kundlis")
 }
@@ -1284,6 +1287,36 @@ model UserActivityDay {
   @@id([user_id, day])
   @@index([day], map: "user_activity_days_day")
   @@map("user_activity_days")
+}
+
+/// M40 (docs/reading-engine/60 §3): one research dossier per kundli, board and build content (every row read, the purview,
+/// the cards and the code audit) so an auditor can reverse-engineer the reading. Sealed (src/lib/pii/fields.ts).
+model ReadingDossier {
+  id             String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id      String   @map("kundli_id")
+  board          String
+  trigger        String
+  digest_version String   @map("digest_version")
+  clock          String
+  as_of          DateTime @map("as_of") @db.Date
+  valid_to       DateTime? @map("valid_to") @db.Date
+  bundle_hash    String   @map("bundle_hash")
+  techniques     Json     @default("[]")
+  rules          Json     @default("[]")
+  data           Json     @default("{}")
+  yogas          Json     @default("[]")
+  clocks         Json     @default("{}")
+  panels         Json     @default("[]")
+  gaps           Json     @default("[]")
+  audit          Json     @default("{}")
+  oracle         Json?
+  cost_usd       Float    @default(0) @map("cost_usd")
+  created_at     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reading_dossiers_kundli_fkey")
+
+  @@unique([kundli_id, board, bundle_hash], map: "reading_dossiers_kundli_board_bundle_key")
+  @@index([kundli_id, board, created_at(sort: Desc)], map: "reading_dossiers_kundli_board_created_idx")
+  @@map("reading_dossiers")
 }
 
 /// M37 (docs/reading-engine/56 §4.1): digested technique output stored by its validity date range [valid_from, valid_to)

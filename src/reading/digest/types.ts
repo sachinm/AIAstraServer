@@ -138,6 +138,8 @@ export interface PointRow {
   house: number | null;
   lord: string | null;
   lordHouse: number | null;
+  /** chara karaka rows only: the karaka's own planet (AK → 'Su'); `lord` is the dispositor of its sign */
+  planet?: string;
 }
 
 export interface AnnualRow {
