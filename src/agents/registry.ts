@@ -166,6 +166,23 @@ export const AGENTS: AgentDef[] = [
     description: 'Builds the You board from the stored digest and activation calendar: supports, pressures with release dates, protections, windows ahead by sub-area, the year chart, tone, Looking back',
   },
   {
+    id: 'self.reading_panel',
+    title: 'You reading panel',
+    kind: 'code',
+    module: 'self',
+    subModule: 'reading',
+    description: 'Runs one panel technique of the You reading (self.reading.*) over the stored digest and activation calendar: shared slicers, word tables, chapter confirmation by other clocks (docs/reading-engine/58)',
+  },
+  {
+    id: 'self.reading_oracle',
+    title: 'You reading oracle',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'reading',
+    role: 'oracle',
+    description: 'Writes the You reading in prose from the panel claims through the Self reader (R15) and the Self Oracle prompt; off unless SELF_READING_MODEL=1 (docs/reading-engine/58 §4.1)',
+  },
+  {
     id: 'area.love_board',
     title: 'Love board builder',
     kind: 'code',

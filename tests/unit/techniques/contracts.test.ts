@@ -64,7 +64,9 @@ describe('every technique is a contract (doc 53 §4.3)', () => {
   });
 
   it('code techniques have system none and an output type', () => {
-    for (const t of TECHNIQUES.filter((x) => x.board !== 'chat' || x.id.startsWith('digest.'))) {
+    // board techniques are code, except the You reading's model layer (docs/reading-engine/58 §4.1), off until the spend yes
+    const MODEL_ON_BOARDS = new Set(['self.reading.oracle']);
+    for (const t of TECHNIQUES.filter((x) => (x.board !== 'chat' || x.id.startsWith('digest.')) && !MODEL_ON_BOARDS.has(x.id))) {
       expect(t.contract.system, t.id).toBe('none');
       expect(t.contract.user, t.id).toEqual([]);
     }

@@ -116,6 +116,8 @@ model Kundli {
   digest_version     String?                @map("digest_version")
   digest_built_at    DateTime?              @map("digest_built_at") @db.Timestamptz(6)
   digest_error       String?                @map("digest_error")
+  /// the reading clock the person trusts (docs/reading-engine/58 §4.1); catalogue dasha id, e.g. dwisatpathi
+  preferred_dasha    String?                @map("preferred_dasha")
   facts              KundliFacts[]
   digestRows         KundliDigest[]
   activations        KundliActivation[]

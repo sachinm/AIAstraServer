@@ -1019,3 +1019,41 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
 - **P3: `method.md` describes a pack shape (`base`, `frame`, `detail`) that the Oracle path does not send**; readers use v2
   table ids and digest slices use `digest.<section>.<varga>`. Status: open. Done: one data vocabulary per path, stated in
   the prompt that path loads.
+
+## Filed 2026-11-07 by the You reading build (docs/reading-engine/58, branch `feat/self-dashboard-guru-reading`)
+
+- **P2: Stored technique outputs survive code changes.** The `technique_outputs` key carries the contract hash, the
+  digest version and `TECHNIQUE_CACHE_VERSION`, not the code of the technique. A fix to a panel's code or words keeps
+  serving the old output until the digest is rebuilt (seen 2026-11-07: the You reading served the old struggle wording
+  after the fix). Fixed for `self.reading.*` by `SELF_READING_VERSION` in `src/reading/self/service.ts`; every other
+  stored technique (`self.activation`, `love.activation`, `work.present_tone`, code readers) still has the gap. Owner:
+  reading-dev. Done: a per-technique code version in the key (or in the catalogue row, hashed with the contract).
+- **P2: `runningYearSpan` picks a decades-long span.** `src/techniques/outputStore.ts runningYearSpan` prefers the TP
+  row and takes the min/max of its dasha periods. The TP row's `tithi_ashtottari` periods for kundli `c584c0a3` run
+  2015-07-07 → 2123-07-08, so every `freshness: annual` output (the You and Love board builds pass it as `year`) is valid
+  for a century. The You reading takes the year from the VP Mudda span instead (`service.ts`). Owner: reading-dev.
+  Done: the year span is the Tithi Pravesha to the next one (or the VP Mudda span), with a test on this kundli.
+- **P2: Karaka points carried their dispositor only.** `PointRow` for AK…DK held `lord` = the dispositor of the
+  karaka's sign; `selfCharacterAndJoy.ts:473` reads it as the atmakaraka ("AK=Me (H8)" for `c584c0a3`, whose AK is the
+  Sun). Fixed in the digest (`PointRow.planet`, `build.ts pointRows`); `selfCharacterAndJoy.ts` still reads `lord` and is
+  not changed here (the review session owns that module). Every ready digest needs a rebuild to gain `planet`
+  (`c584c0a3` rebuilt 2026-11-07); until then the You reading withholds "Your soul's aim" with a gap. Owner:
+  reading-dev with the deploy session. Done: the 24 research kundlis rebuilt; the character arc reads `planet`.
+- **P3: Chapter confirmation checks dates only.** `self.reading.chapters` counts a confirming clock when its main
+  period starts within 18 months of the chapter start; it does not yet check that the clock's running lord or sign
+  activates the same houses. Owner: reading-dev. Done: a theme check (house overlap from `kundli_activation.houses`) next
+  to the date check, with confirmed requiring both.
+- **P3: The You reading's wall time is mostly database round trips.** From this machine to Render: 7.0 s first open,
+  2.0 s with all seven panels stored (panel code under 300 ms). Measure on the Lambda after deploy; if the stored path is
+  over 150 ms, read the seven stored outputs in one query instead of seven. Owner: reading-dev.
+- **P3: Love and Work panel areas wait on the parent session's guidance** (asked 2026-11-07, at Sachin's request): which
+  panels each board has and what each reads, so they can be built as `love.reading.*` and `work.reading.*` on the same
+  slicers. Owner: the scenery/UX review session, then reading-dev.
+- **Web, found by the web build (`AIAstra_WEB` branch `feat/self-dashboard-guru-reading`, worktree
+  `C:\Users\Owner\Documents\work\wt\web-self-guru`), not from this change:**
+  - P2: the "Your reading" tab sits inside `AreaBoardView`, so when `/api/area/self` is preparing, unavailable or failed
+    the whole page shows the board's message and the reading cannot be reached. Done: the reading tab renders on its
+    own status.
+  - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
+  - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
+  - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
