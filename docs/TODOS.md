@@ -1109,3 +1109,38 @@ Plan to fix these: docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md
   left out). Doc 60 §6: a person's request never builds or pulls. Done: transit contacts pulled by the digest sweep and stored.
 - **P3: Love board on Sachin's kundli is "steady / split"** with main and conditional = test, karaka and annual = support; the
   Love and Work reading panels (doc 59) are planned rows only, so Love and Work run the older vote boards.
+
+## Filed 2026-11-08 by the admin observatory review (docs/admin/11, live walkthrough of admin.vedic-astrology.app)
+
+Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the same day in `aiadastra_admin` on
+`feat/admin-nav-sections`: the header sections (People / Usage / Engine drop-downs) and the one-viewport Techniques Lab.
+
+- **P1: No per-request record carries an IP.** `page_execution_logs` is PII-free by design; `account_events` gets a row
+  only at sign-in/-up/-out, profile and billing; `assistant_visits` has no user id; no CloudFront or Function URL access
+  log is configured. "Who visited yesterday and from which IP" cannot be answered. Owner: server. Done: plan 11 V1
+  (`request_access` written by `pageTimingMiddleware`, IP sealed, prefix plain, 90-day IP retention).
+- **P2: `account_events.ip` is the first `x-forwarded-for` hop** (`src/lib/requestMeta.ts` `getClientIp`), which a
+  client can set; the assistant and admin paths use `CloudFront-Viewer-Address`. Whether that header is forwarded on
+  the API distribution is still unchecked (item at line ~433). Owner: server + deploy session. Done: one helper that
+  prefers the viewer address and falls back to the last hop; origin request policy confirmed.
+- **P2: Staff lab and research runs count as customer activity.** Day review for 2026-11-07 showed 0 questions and
+  181 agent runs, all from the Techniques Lab. `agent_runs` and `reading_traces` have no `source`. Owner: server. Done:
+  `source = 'app' | 'lab' | 'research'` set by `adminLabRoutes.ts` and the research routes; admin aggregates filter
+  `app` by default.
+- **P2: Users shows "Last seen —" for 34 of 35 accounts** while two of them have a query in the last 7 days. The
+  `last_seen` tick (`requestAuth.ts:151`) started on 2026-11-05 and may not sit on every authenticated path (chat SSE,
+  GraphQL `me` restore). Owner: server. Done: a sign-in and a reading from a test account both move `last_seen_at`
+  within 5 minutes; checked on staging.
+- **P2: Security tiles count event names the server never writes.** `aiadastra_admin/api/src/admin/security.ts:48-54`
+  counts `sign_in_failed`, `sign_up_failed`, `session_revoked`, `account_locked`; the server writes `sign_in` /
+  `sign_up` with `outcome = failed | refused` (`src/graphql/schema.ts:1121-1325`) and never the last two. Only
+  `turnstile_failed` and `sign_out` match. Owner: admin. Done: counts by action + outcome; revocations from
+  `admin_actions`, locks from `auth.locked_at`.
+- **P3: Trace labels are still empty.** All four traces of the last 7 days show bucket / template / tier / subjects "—"
+  (doc 04 G6, still open on 2026-11-08). Owner: reading-dev.
+- **P3: Retention is uneven.** `account_events`, `analytics_events`, `user_activity_days`, `reading_traces`,
+  `agent_runs` are never swept; `page_execution_logs` 30 d; `assistant_visits` 30 d full IP / 400 d rows; CloudWatch
+  undecided. Owner: Sachin (policy), then server. Done: one retention table in docs/privacy and sweeps to match.
+- **P3: Page times "Forecast" text is generic.** It tells staff to "use GET /api/dashboard/sections-stream" for
+  `/api/admin-lab/*` routes, which are staff lab calls with 30 s engine pulls, not customer pages. Owner: admin. Done:
+  recommendations keyed by route family; lab routes excluded from customer forecasts.
