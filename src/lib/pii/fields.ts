@@ -125,6 +125,11 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
     owner: { via: 'user_id' },
     fields: { value: text },
   },
+  ReadingDossier: {
+    table: 'reading_dossiers',
+    owner: { via: 'kundli_id' },
+    fields: { techniques: json, rules: json, data: json, yogas: json, clocks: json, panels: json, gaps: json, audit: json, oracle: json },
+  },
   TechniqueOutput: {
     table: 'technique_outputs',
     owner: { via: 'kundli_id' },

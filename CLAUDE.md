@@ -15,6 +15,9 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
 - **We are making a Vedic astrology personal assistant.** Specific to the person or not shown; the chart leads the
   question and the assistant confirms before it predicts; questions follow known facts; no general prediction. See
   "We are making a Vedic astrology personal assistant" in `AGENTS.md`.
+- **Every sub-task runs in the background.** Sub-agents, side sessions, test runs, builds and long scripts start in
+  background mode so nothing blocks the next step; keep working and read the result when notified. Sub-agents run on
+  Opus 5.5 at medium effort with fast mode. See "Work in parallel by default" in `AGENTS.md`.
 - **Kill any local server you started** (Node or otherwise) as soon as the work that needed it is done.
 - **Plans cover the whole thing before code.** Any plan goes under `docs/` and follows "How a plan is written" in
   `AGENTS.md`: start (facts checked), end goal, deliverable, exactly how backend / API / frontend / UI-UX work when done,

@@ -951,3 +951,140 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   - Added `self.character_arc` (3-decade Character Evolution: Last 10 Years, Who You Are Now, Next 10 Years) and `self.personality_joy` (purely Vedic Moon/Chandra & Mercury/Budha + 4th/5th house personality & joy synthesis) in `src/reading/area/selfCharacterAndJoy.ts`, wired into `buildBoard` (`src/reading/area/houseLayers.ts`), `selfDashboardQa.ts`, `AIAstra_WEB/src/pages/boards/BoardView.tsx`, and `aiadastra_admin/web/src/pages/ResearchLab.tsx`.
   - Extended Research & Verification Lab (`src/reading/research/loveDashboardQa.ts`, `workDashboardQa.ts`, `src/routes/researchRoutes.ts`, `aiadastra_admin`) to support `Self (You) | Love | Work` boards across all 20 synthetic subjects (total 73 built techniques, 27 registered agents, 80-page visual manual in `docs/techniques/01..06`).
   - Added Header "Personalize" Profile Setup Wizard Modal button next to the user profile icon in `AIAstra_WEB/src/components/AppShell.tsx` (`PersonalizeWizardModal.tsx`) and merged `fix/auth-scene-fullbleed` (`03292ec`, `48c4458`) into `develop` and `release-candidate-staging`.
+
+## Filed 2026-11-07 by the home-scenery review session (vedic-astrology.app home, /signin, /signup)
+
+Reviewed on the live site and from `AIAstra_WEB/src/assets/skies/*.webp`, `src/lib/skies.ts`, `scripts/skies/scenes.mjs`,
+`src/components/CosmicSky.tsx`, `src/LandingPage.tsx`. Opinion and additions are in the session's report to Sachin; the
+concrete findings. Full review and plan: `docs/homepage-scene-improvements/01-review-and-plan.md`. Two of these reopen earlier
+decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/phone sign-in in `docs/product/auth-registration-review.md`), so they are Sachin's call:
+
+- **P2: the home loop shows 12 "planets", not the navagraha.** `SKY_SCENES` adds Prajapati (Uranus), Varuna (Neptune) and
+  Yama (Pluto) with invented vahanas (swan, whale, buffalo). A Jyotish regular reads these as Western. Status: open. Done:
+  the three leave the home loop (keep the art for an "outer planets" note if wanted), caption count is 27 + 9.
+- **P2: four scenes break their own iconography.** `hasta.webp` goddess is blue-skinned (reads as Vishnu/Krishna);
+  `shukra.webp` reads as a woman in white (Shukracharya is a bearded male guru); `budha.webp` neon-green winged lion looks
+  like a game asset; `chitra.webp` tiger is realistic fur, not starlight like every other animal. `yama.webp` is grim and
+  near-black, against the "nothing frightening" brief. Status: open. Done: regenerated with `scripts/skies/scenes.mjs`.
+- **P3: every scene carries two baked-in "AdAstra AI" marks**, one bottom-right and one faint in the centre over the subject.
+  Looks like a stock-site preview. Status: open. Done: centre mark removed from all 39.
+- **P2: portrait phones crop the rider.** Images are 1920×1072 shown `bg-cover bg-center`; on a 9:16 screen the subject is cut
+  on both sides and the caption covers the animal. Status: open. Done: a focal point per scene or a portrait crop set.
+- **P3: the caption names only the yoni animal and the rashi** (`रोहिणी · Rohini / बैल · the ox / वृषभ Taurus`). A regular
+  knows a nakshatra by its lord, symbol and deity; the animal alone makes the ox look like Rohini itself. Status: open. Done:
+  caption adds the lord (and optionally the symbol), stays two lines.
+- **P3: Devanagari only.** South-Indian and US-Tamil/Telugu/Kannada/Malayalam visitors see a script they may not read; no
+  transliteration toggle. Status: open. Done: decision recorded; at least an IAST/English-only option.
+- **P2: the first scene is random**, so a first visit can open on Yama, Rahu or Ketu. The sky is shared for all users (Radha
+  transit sky), so the first scene can be today's Moon nakshatra with a "Today the Moon is in …" line, which is what regulars
+  check daily. Node computes nothing: read from the stored shared sky. Status: open. Done: first scene = today's Moon
+  nakshatra when the shared sky is present, random otherwise.
+- **P3: landing copy is Western new-age** ("Discover Your Cosmic Blueprint", "Generate My Chart") and the tagline reads
+  "mastered on the ancient text unabridged and astrological celestial sky". Audience words are Kundli / Janam Kundali /
+  Jathakam, Panchang, Dasha. Status: open. Done: copy pass with Sachin.
+- **P3: eight identical parchment icons sit over the goddess's face and body**, random each visit, and the parchment card with
+  pink gradient text clashes with the cinematic scenes; the product explanation and FAQ are hidden until an icon is clicked.
+  Status: open. Done: one visual language chosen; the icons stay off the subject's face (placement avoids the centre third).
+- **P2: sign-in and sign-up are email-only** with Turnstile. India users expect phone/WhatsApp OTP and US Indians expect
+  Google sign-in; neither page says what the person gets or that birth date, time and place come next. Status: open. Done:
+  decision on Google and phone OTP recorded; a one-line "what you get" and "next: your birth details" on both pages.
+
+## Filed 2026-11-07 by the You-board synthesis review (docs/product/you-board-synthesis-review.md)
+
+- **P1: the Self character and personality panels print defaults as the person's chart.** `src/reading/area/selfCharacterAndJoy.ts`
+  falls back to `Taurus`, `Virgo`, `Rohini`, `Ju`, SAV 28 and "friendly" when a digest field is missing, and builds the
+  evidence strings from those defaults. Found reading the code; how often it fires is not measured. Status: open. Done: a
+  missing field drops the line and records a gap; a test asserts no default sign or star ever reaches the board.
+- **P1: the You board is produced by no model and no prompt.** `area.self_board` is `kind: 'code'`; every headline is a
+  phrase from `self.ts SELF.words` chosen by integer votes (`houseLayers.ts`). The "Oracle" prompts never run for the
+  dashboard. Status: open (plan: the Self dashboard session). Done: the board is a reading of one standing question, written
+  by the Oracle from grounded reader claims, with the vote rule as a veto.
+- **P2: a dasha period's side ignores the house it activates.** `gradeRow` gives every period of a planet that planet's
+  `gradePlanet` score (±1 charter cell): no house from lagna or Moon, no antar-from-maha relation, no star lord. Status:
+  open. Done: R08-style delivery chain in code or in a reader; tests on known charts.
+- **P2: "33 independent timing clocks aligned" counts non-independent systems.** `aheadWindows` merges `systems` across
+  overlapping windows and the web (`AreaBoardView.tsx:647`) prints the count as independent; `familyVotes` treats the same
+  systems as one family. Status: open. Done: the lead window names the families (and the preferred system), not a count.
+- **P2: the main clock is always Vimshottari.** `isTurn` requires `family === 'vimshottari'`; a kundli where Dwisaptati Sama
+  (or another conditional system) applies has no way to lead. Sachin's own chart is the first case. The catalogue and R09
+  spell the system `dwisatpathi`; confirm the engine's key. Status: open. Done: `kundlis.preferred_dasha` (or equivalent)
+  drives the main clock and the Direction line; applicability from the engine fills it when unset.
+- **P2: companion answers reorder, they do not anchor.** `self.focus` only picks the lead sub-area (`selfLead`), `selfFits`
+  is always true, and the shade resolver adds a tie-break bonus; no statement is conditioned on or checked against an
+  answer, and Family, Health and Love all map to `mind`. Status: open. Done: answers are sealed facts that gate claims
+  (doc 48), with a confirm question generated from the strongest claim.
+- **P3: no Self reader exists in the chat engine.** R01..R14 cover frame houses, vargas, Jaimini, strength, yogas, stars,
+  dashas, transits, annual, prashna, another person, remedies; none reads lagna, Moon, Sun, AK, karakamsa, D60 and houses
+  3/4/5/12 as one self. Status: open. Done: `readers/R15-self.md` and `oracle/self.md` per the review §6.
+- **P3: `method.md` describes a pack shape (`base`, `frame`, `detail`) that the Oracle path does not send**; readers use v2
+  table ids and digest slices use `digest.<section>.<varga>`. Status: open. Done: one data vocabulary per path, stated in
+  the prompt that path loads.
+
+## Filed 2026-11-07 by the You reading build (docs/reading-engine/58, branch `feat/self-dashboard-guru-reading`)
+
+- **P2: Stored technique outputs survive code changes.** The `technique_outputs` key carries the contract hash, the
+  digest version and `TECHNIQUE_CACHE_VERSION`, not the code of the technique. A fix to a panel's code or words keeps
+  serving the old output until the digest is rebuilt (seen 2026-11-07: the You reading served the old struggle wording
+  after the fix). Fixed for `self.reading.*` by `SELF_READING_VERSION` in `src/reading/self/service.ts`; every other
+  stored technique (`self.activation`, `love.activation`, `work.present_tone`, code readers) still has the gap. Owner:
+  reading-dev. Done: a per-technique code version in the key (or in the catalogue row, hashed with the contract).
+- **P2: `runningYearSpan` picks a decades-long span.** `src/techniques/outputStore.ts runningYearSpan` prefers the TP
+  row and takes the min/max of its dasha periods. The TP row's `tithi_ashtottari` periods for kundli `c584c0a3` run
+  2015-07-07 → 2123-07-08, so every `freshness: annual` output (the You and Love board builds pass it as `year`) is valid
+  for a century. The You reading takes the year from the VP Mudda span instead (`service.ts`). Owner: reading-dev.
+  Done: the year span is the Tithi Pravesha to the next one (or the VP Mudda span), with a test on this kundli.
+- **P2: Karaka points carried their dispositor only.** `PointRow` for AK…DK held `lord` = the dispositor of the
+  karaka's sign; `selfCharacterAndJoy.ts:473` reads it as the atmakaraka ("AK=Me (H8)" for `c584c0a3`, whose AK is the
+  Sun). Fixed in the digest (`PointRow.planet`, `build.ts pointRows`); `selfCharacterAndJoy.ts` still reads `lord` and is
+  not changed here (the review session owns that module). Every ready digest needs a rebuild to gain `planet`
+  (`c584c0a3` rebuilt 2026-11-07); until then the You reading withholds "Your soul's aim" with a gap. Owner:
+  reading-dev with the deploy session. Done: the 24 research kundlis rebuilt; the character arc reads `planet`.
+- **P3: Chapter confirmation checks dates only.** `self.reading.chapters` counts a confirming clock when its main
+  period starts within 18 months of the chapter start; it does not yet check that the clock's running lord or sign
+  activates the same houses. Owner: reading-dev. Done: a theme check (house overlap from `kundli_activation.houses`) next
+  to the date check, with confirmed requiring both.
+- **P3: The You reading's wall time is mostly database round trips.** From this machine to Render: 7.0 s first open,
+  2.0 s with all seven panels stored (panel code under 300 ms). Measure on the Lambda after deploy; if the stored path is
+  over 150 ms, read the seven stored outputs in one query instead of seven. Owner: reading-dev.
+- **P3: Love and Work panel areas wait on the parent session's guidance** (asked 2026-11-07, at Sachin's request): which
+  panels each board has and what each reads, so they can be built as `love.reading.*` and `work.reading.*` on the same
+  slicers. Owner: the scenery/UX review session, then reading-dev.
+- **Web, found by the web build (`AIAstra_WEB` branch `feat/self-dashboard-guru-reading`, worktree
+  `C:\Users\Owner\Documents\work\wt\web-self-guru`), not from this change:**
+  - P2: the "Your reading" tab sits inside `AreaBoardView`, so when `/api/area/self` is preparing, unavailable or failed
+    the whole page shows the board's message and the reading cannot be reached. Done: the reading tab renders on its
+    own status.
+  - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
+  - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
+  - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
+
+## Filed 2026-11-08 by the You reading research-grade build (docs 60–62, branch `feat/self-dashboard-guru-reading`)
+
+- **Built:** `self.reading.purview` (whole-chart check: lagna lord standing, cancellations, combustion and retrograde,
+  functional nature, vargottama, gandanta, dasha applicability, MD–AD 6/8 and 2/12, stored sky, sensitive core),
+  `self.reading.body` (facts only), the doc 61 card (1–3 lines of at most 22 words, per-line ranges, header ranges),
+  `self.reading.audit` (code auditor; a failing line leaves the card), `reading_dossiers` (M40, sealed) written once per
+  build content, and `/api/admin-lab/*` behind `ADMIN_LAB=1` and `ADMIN_LAB_TOKEN` (header `x-admin-lab-token`).
+- **P2: The request still builds.** Doc 60 §6 says a person's request never builds (it reads the stored reading or
+  queues a build on the four triggers). Today a request runs the panels through the stored outputs, so an unchanged
+  open makes nothing, but a window boundary is crossed on a request. Owner: reading-dev. Done: a build sweep on the
+  `dasha_boundary` / `annual` / `confirm` / `digest` triggers and requests that only read.
+- **P2: No bundle yet (doc 60 phase C).** The build reads the digest (memoised 60 s), two activation queries, the facts
+  and the sky overlay; agents do not exist yet on this path. Done: `board.bundle` in `technique_outputs` read once.
+- **P2: Scenario hydration cannot take chart specs.** `buildCustomResearchSubject` (`src/reading/research/presets.ts`)
+  takes birth data and a profession template, not placements, yogas or periods, and `ResearchGroupKind` has no
+  `self_scenario`. S2–S8 (`docs/reading-engine/scenarios/self/`) are chart specifications with approximate dates;
+  the stored dates win once hydrated. Owner: reading-dev. Done: hydration from a chart spec or hand-built subjects.
+- **P3: S2's "Moon override" was undefined in doc 60 §4;** the scenario uses a Kemadruma row cancelled by a kendra Moon.
+  The purview has no Kemadruma-cancellation rule yet (the engine row decides). Owner: Sachin / reading-dev.
+- **P3: The global banned list of doc 60 §5** must carry the engine names; the per-scenario lists leave them out so the
+  files do not contain them. `BANNED_LINE_WORDS` in `src/reading/self/words.ts` is the code list; add the names there
+  through an env or a non-literal pattern.
+- **P3: Doc 45 vs doc 61 on chart words in cards:** doc 61's examples name planets ("Saturn crosses your Moon"); doc
+  45 §3.3 bans them. The build and the scenarios follow doc 45 (`BANNED_LINE_WORDS`). Owner: Sachin.
+- **P3: `BODY_WORDS` (`BODY_SHAPE` in words.ts) needs Sachin's review** before the body panel is shown widely: planet to
+  one of four shapes after the BPHS dosha natures.
+- **P3: Web chapter cards still say "Likely"** from the older chapter certainty set beside the card certainty words
+  (web worktree finding). The 22-word limit is not checked on the web side (the server auditor enforces it).
+- **Deploy note:** M40 is applied to the shared database; `ADMIN_LAB` and `ADMIN_LAB_TOKEN` are new env vars (deploy
+  session; off by default).
