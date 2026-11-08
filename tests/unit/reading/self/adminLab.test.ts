@@ -19,10 +19,37 @@ const dossiers = new Map<string, any>();
 const actions: any[] = [];
 const prisma: any = {
   auth: {
-    findUnique: async ({ where }: any) => (where.id === 'u1' ? { locked_at: null } : where.id === 'u2' ? { locked_at: new Date('2026-11-01T00:00:00Z') } : null),
-    findMany: async () => [{ id: 'u1-aaaaaaaa' }],
+    findUnique: async ({ where }: any) =>
+      where.id === 'u1'
+        ? {
+            id: 'u1',
+            email: 'sachin@example.com',
+            name: 'Sachin Mohan',
+            date_of_birth: '1975-07-30',
+            time_of_birth: '19:21',
+            place_of_birth: 'Pune, Maharashtra, India',
+            city: 'Pune',
+            country_code: 'IN',
+            locked_at: null,
+          }
+        : where.id === 'u2'
+          ? { id: 'u2', locked_at: new Date('2026-11-01T00:00:00Z') }
+          : null,
+    findMany: async () => [
+      {
+        id: 'u1',
+        email: 'sachin@example.com',
+        name: 'Sachin Mohan',
+        date_of_birth: '1975-07-30',
+        time_of_birth: '19:21',
+        place_of_birth: 'Pune, Maharashtra, India',
+        city: 'Pune',
+        country_code: 'IN',
+        kundlis: [{ id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi' }],
+      },
+    ],
   },
-  kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1', preferred_dasha: 'dwisatpathi' } : null) },
+  kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1', digest_status: 'ready', preferred_dasha: 'dwisatpathi' } : null) },
   personFact: { findMany: async () => [] },
   techniqueOutput: { findUnique: async () => null, upsert: async ({ create }: any) => create, updateMany: async () => ({ count: 0 }) },
   agentRegistry: { upsert: async () => ({}) },
@@ -98,6 +125,51 @@ describe('admin lab', () => {
     const one = await (await fetch(`${base}/api/admin-lab/runs/d1`, { headers: h })).json();
     expect(one.id).toBe('d1');
     expect(one.date_of_birth).toBeUndefined();
+  });
+  it('returns un-obfuscated person and birth details on GET /api/admin-lab/people and /api/admin-lab/people/:userId, and accepts X-Astra-Authorization LabToken fallback', async () => {
+    expect((await fetch(`${base}/api/admin-lab/people`)).status).toBe(403);
+    expect((await fetch(`${base}/api/admin-lab/people/u1`)).status).toBe(403);
+    const listRes = await fetch(`${base}/api/admin-lab/people`, {
+      headers: { 'X-Astra-Authorization': 'LabToken lab-secret' },
+    });
+    expect(listRes.status).toBe(200);
+    const listJson = await listRes.json();
+    expect(listJson.items).toEqual([
+      {
+        userId: 'u1',
+        label: 'Sachin Mohan (sachin@example.com)',
+        email: 'sachin@example.com',
+        name: 'Sachin Mohan',
+        dateOfBirth: '1975-07-30',
+        timeOfBirth: '19:21',
+        placeOfBirth: 'Pune, Maharashtra, India',
+        city: 'Pune',
+        countryCode: 'IN',
+        kundliId: 'k1',
+        digestStatus: 'ready',
+        preferredClock: 'dwisatpathi',
+      },
+    ]);
+
+    const detailRes = await fetch(`${base}/api/admin-lab/people/u1`, {
+      headers: { 'x-admin-lab-token': 'lab-secret' },
+    });
+    expect(detailRes.status).toBe(200);
+    expect(await detailRes.json()).toEqual({
+      userId: 'u1',
+      email: 'sachin@example.com',
+      name: 'Sachin Mohan',
+      dateOfBirth: '1975-07-30',
+      timeOfBirth: '19:21',
+      placeOfBirth: 'Pune, Maharashtra, India',
+      city: 'Pune',
+      countryCode: 'IN',
+      locked: false,
+      kundliId: 'k1',
+      digestStatus: 'ready',
+      preferredClock: 'dwisatpathi',
+    });
+    expect((await fetch(`${base}/api/admin-lab/people/u9`, { headers: { 'x-admin-lab-token': 'lab-secret' } })).status).toBe(404);
   });
 });
 

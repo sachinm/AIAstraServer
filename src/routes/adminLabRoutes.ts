@@ -37,19 +37,78 @@ function tokenOk(given: unknown, want: string | undefined): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function extractLabToken(req: express.Request): string | undefined {
+  const direct = req.header('x-admin-lab-token')?.trim();
+  if (direct) return direct;
+  const astra = req.header('x-astra-authorization')?.trim();
+  if (astra && /^LabToken\s+/i.test(astra)) {
+    return astra.replace(/^LabToken\s+/i, '').trim();
+  }
+  return undefined;
+}
+
 export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps): boolean {
   if (!(deps.enabled ?? isAdminLabEnabled())) return false;
   const token = deps.token ?? process.env.ADMIN_LAB_TOKEN?.trim();
   const guard: express.RequestHandler = (req, res, next) => {
-    if (!tokenOk(req.header('x-admin-lab-token'), token)) return void res.status(403).json({ error: 'forbidden' });
+    if (!tokenOk(extractLabToken(req), token)) return void res.status(403).json({ error: 'forbidden' });
     next();
   };
   const selfDeps: SelfDeps = { prisma: deps.prisma, ...(deps.self ?? {}) };
 
   app.get('/api/admin-lab/people', guard, async (_req, res) => {
-    // QA (Sachin, 2026-11-07): every unlocked account with a kundli; the research flag no longer gates the lab
-    const rows = await deps.prisma.auth.findMany({ where: { locked_at: null, kundlis: { some: {} } }, select: { id: true }, orderBy: { created_at: 'desc' }, take: 200 }).catch(() => []);
-    res.json({ items: rows.map((r) => ({ userId: r.id, label: `Person ${r.id.slice(0, 8)}` })) });
+    // QA (Sachin, 2026-11-07): every unlocked account with a kundli; the research flag no longer gates the lab.
+    // Birth details and name are decrypted via the Prisma PII extension and returned behind the lab token for QA.
+    const rows = await deps.prisma.auth
+      .findMany({
+        where: { locked_at: null, kundlis: { some: {} } },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          date_of_birth: true,
+          time_of_birth: true,
+          place_of_birth: true,
+          city: true,
+          country_code: true,
+          kundlis: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+            select: { id: true, digest_status: true, preferred_dasha: true },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 200,
+      })
+      .catch(() => []);
+    const items = await Promise.all(
+      rows.map(async (r) => {
+        const k =
+          r.kundlis?.[0] ??
+          (await deps.prisma.kundli
+            ?.findFirst?.({
+              where: { user_id: r.id },
+              orderBy: { created_at: 'desc' },
+              select: { id: true, digest_status: true, preferred_dasha: true },
+            })
+            .catch(() => null));
+        return {
+          userId: r.id,
+          label: r.name ? `${r.name} (${r.email ?? r.id.slice(0, 8)})` : `Person ${r.id.slice(0, 8)}`,
+          email: r.email ?? null,
+          name: r.name ?? null,
+          dateOfBirth: r.date_of_birth ?? null,
+          timeOfBirth: r.time_of_birth ?? null,
+          placeOfBirth: r.place_of_birth ?? null,
+          city: r.city ?? null,
+          countryCode: r.country_code ?? null,
+          kundliId: k?.id ?? null,
+          digestStatus: k?.digest_status ?? null,
+          preferredClock: k?.preferred_dasha ?? null,
+        };
+      }),
+    );
+    res.json({ items });
   });
 
   // QA (Sachin, 2026-11-07): staff testing a reading must see whose chart it is. Opened by the PII extension; served
@@ -58,12 +117,13 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     try {
       const a = await deps.prisma.auth.findUnique({
         where: { id: String(req.params.userId) },
-        select: { id: true, name: true, date_of_birth: true, time_of_birth: true, place_of_birth: true, city: true, country_code: true, locked_at: true },
+        select: { id: true, email: true, name: true, date_of_birth: true, time_of_birth: true, place_of_birth: true, city: true, country_code: true, locked_at: true },
       });
       if (!a) return res.status(404).json({ error: 'no_person' });
       const k = await deps.prisma.kundli.findFirst({ where: { user_id: a.id }, orderBy: { created_at: 'desc' }, select: { id: true, digest_status: true, preferred_dasha: true } });
       return res.json({
         userId: a.id,
+        email: a.email ?? null,
         name: a.name ?? null,
         dateOfBirth: a.date_of_birth ?? null,
         timeOfBirth: a.time_of_birth ?? null,

@@ -130,6 +130,7 @@ app.use(
       'X-Amz-Content-Sha256',
       'X-Requested-With',
       'X-Face-Box',
+      'X-Admin-Lab-Token',
     ],
     credentials: true,
     maxAge: 86400,
