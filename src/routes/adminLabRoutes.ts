@@ -6,6 +6,7 @@
  * the build) and an `admin_actions` row (`lab.run`, ids only, never output).
  *
  *   GET  /api/admin-lab/people                                  → people with a kundli, masked
+ *   GET  /api/admin-lab/people/:userId                          → that person's name and birth date, time and place (QA, Sachin 2026-11-07)
  *   POST /api/admin-lab/run { userId, board:'self', technique?: '<panel id>'|'all', force?, asOf?: 'YYYY-MM-DD' } → 200 LabRun |
  *        400 bad_request | bad_as_of | unknown_technique | board_not_built (love, work) | 403 | 404
  *   GET  /api/admin-lab/runs/:id                                → the stored dossier
@@ -49,6 +50,35 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     // QA (Sachin, 2026-11-07): every unlocked account with a kundli; the research flag no longer gates the lab
     const rows = await deps.prisma.auth.findMany({ where: { locked_at: null, kundlis: { some: {} } }, select: { id: true }, orderBy: { created_at: 'desc' }, take: 200 }).catch(() => []);
     res.json({ items: rows.map((r) => ({ userId: r.id, label: `Person ${r.id.slice(0, 8)}` })) });
+  });
+
+  // QA (Sachin, 2026-11-07): staff testing a reading must see whose chart it is. Opened by the PII extension; served
+  // only behind the lab token, never into a dossier (stripBirthFields still applies there).
+  app.get('/api/admin-lab/people/:userId', guard, async (req, res) => {
+    try {
+      const a = await deps.prisma.auth.findUnique({
+        where: { id: String(req.params.userId) },
+        select: { id: true, name: true, date_of_birth: true, time_of_birth: true, place_of_birth: true, city: true, country_code: true, locked_at: true },
+      });
+      if (!a) return res.status(404).json({ error: 'no_person' });
+      const k = await deps.prisma.kundli.findFirst({ where: { user_id: a.id }, orderBy: { created_at: 'desc' }, select: { id: true, digest_status: true, preferred_dasha: true } });
+      return res.json({
+        userId: a.id,
+        name: a.name ?? null,
+        dateOfBirth: a.date_of_birth ?? null,
+        timeOfBirth: a.time_of_birth ?? null,
+        placeOfBirth: a.place_of_birth ?? null,
+        city: a.city ?? null,
+        countryCode: a.country_code ?? null,
+        locked: a.locked_at != null,
+        kundliId: k?.id ?? null,
+        digestStatus: k?.digest_status ?? null,
+        preferredClock: k?.preferred_dasha ?? null,
+      });
+    } catch (e) {
+      console.error('[admin-lab] person', (e as Error).message);
+      return res.status(503).json({ error: 'person_unavailable' });
+    }
   });
 
   app.post('/api/admin-lab/run', guard, async (req, res) => {
