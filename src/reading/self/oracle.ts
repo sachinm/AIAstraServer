@@ -705,15 +705,30 @@ export async function runSelfOracle(
 
         // Stage 1: Reusable Chart-Family AI Sub-Agents (`family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`)
         // Shared across Self, Love, and Work via `self:${kundliId}:${familyId}:...`
-        for (const familyId of activeFamilyIds) {
+        // The readers are independent, so they run in parallel (BUILD-GAPS BG-03): run one after another, a cold
+        // build spent ~30s here and the whole request outran CloudFront's 60s origin timeout. Results are merged
+        // below in `activeFamilyIds` order so stages, linemen and the bundle text stay deterministic.
+        type FamilyOut = {
+          familyId: SelfFamilyAgentId;
+          finding?: string;
+          lineman?: SelfOracleLinemanRecord;
+          stage: SelfOracleStageSummary;
+          called: boolean;
+        };
+        const budgetBlocked = spentUsd >= maxSpendUsd;
+        const familyOuts = await Promise.all(
+          activeFamilyIds.map(async (familyId): Promise<FamilyOut> => {
           const pack = packs[familyId];
           const cacheKey = `self:${kundliId}:${familyId}:${pack.packHash}:${PROMPT_VERSION}`;
           const cached = !ctx.force ? await loadDbReaderCache(prisma, cacheKey, owner) : undefined;
           const cachedText = (cached?.finding as unknown as { rawText?: string } | undefined)?.rawText;
           if (cachedText) {
-            familyFindings[familyId] = cachedText;
             const parsed = parseLinemanClaims(cachedText, new Set(pack.keys));
-            linemen.push({
+            return {
+              familyId,
+              finding: cachedText,
+              called: false,
+              lineman: {
               agent: familyId,
               promptName: familyId,
               promptVersion: PROMPT_VERSION,
@@ -724,8 +739,8 @@ export async function runSelfOracle(
               ms: 0,
               cache: 'hit',
               cached: true,
-            });
-            stages.push({
+              },
+              stage: {
               agentId: familyId,
               status: 'cached',
               cached: true,
@@ -737,12 +752,15 @@ export async function runSelfOracle(
               thoughtTokens: 0,
               costUsd: 0,
               summary: cachedText.slice(0, 240),
-            });
-            continue;
+              },
+            };
           }
 
-          if (spentUsd >= maxSpendUsd) {
-            stages.push({
+          if (budgetBlocked) {
+            return {
+              familyId,
+              called: false,
+              stage: {
               agentId: familyId,
               status: 'skipped',
               cached: false,
@@ -753,8 +771,8 @@ export async function runSelfOracle(
               cachedTokens: 0,
               thoughtTokens: 0,
               costUsd: 0,
-            });
-            continue;
+              },
+            };
           }
 
           const tStart = performance.now();
@@ -802,14 +820,10 @@ export async function runSelfOracle(
           );
           const ms = Math.round((performance.now() - tStart) * 100) / 100;
           const st = summarizeCall(familyId, readerModel, res, ms);
-          stages.push(st);
-          spentUsd = Math.round((spentUsd + st.costUsd) * 1e6) / 1e6;
-          calls += 1;
           const cleanFinding = redactEngineTerms(res.text);
-          familyFindings[familyId] = cleanFinding;
 
           const parsed = parseLinemanClaims(cleanFinding, new Set(pack.keys));
-          linemen.push({
+          const lineman: SelfOracleLinemanRecord = {
             agent: familyId,
             promptName: familyId,
             promptVersion: PROMPT_VERSION,
@@ -825,7 +839,7 @@ export async function runSelfOracle(
             ms,
             cache: 'run',
             cached: false,
-          });
+          };
 
           const held: HeldReader = {
             finding: { reader: familyId, rawText: cleanFinding } as unknown as HeldReader['finding'],
@@ -852,6 +866,17 @@ export async function runSelfOracle(
             held,
             used: true,
           });
+          return { familyId, finding: cleanFinding, lineman, stage: st, called: true };
+          }),
+        );
+        for (const out of familyOuts) {
+          stages.push(out.stage);
+          if (out.lineman) linemen.push(out.lineman);
+          if (out.finding !== undefined) familyFindings[out.familyId] = out.finding;
+          if (out.called) {
+            spentUsd = Math.round((spentUsd + out.stage.costUsd) * 1e6) / 1e6;
+            calls += 1;
+          }
         }
 
         if (spentUsd >= maxSpendUsd) {

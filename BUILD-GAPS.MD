@@ -8,6 +8,21 @@
 
 ---
 
+## Status as of `2026-11-08T08:10` (end of Gemini session — hand-off to Claude Opus 5.5)
+
+| Gap | Status | Where |
+| :--- | :--- | :--- |
+| `BG-01` doshas | **DONE** — the real bug was in `aiadastra_admin/api/src/labAdapter.ts` (hardcoded `doshas: []`), not `dossier.ts` (the server already sends every yoga with its `class`). Fixed by splitting on `class === 'dosha'`. Admin api tsc 0, vitest 162/162. | `aiadastra_admin` `develop` `436550b` (not yet on `release-candidate-staging`) |
+| `BG-03` parallel family readers | **DONE** — `runSelfOracle` runs the uncached `family.*` readers with `Promise.all`, merging results in `activeFamilyIds` order. Server tsc 0. Not yet measured live. | `AIAstra_Server` `develop` (this commit) |
+| `BG-02` 3-panel layout + all-user stored builds | **NOT STARTED** — spec + 7 test guards below | — |
+| `BG-04`/`BG-05` cohort refresh + benchmark | **NOT STARTED** | — |
+| `BG-06`–`BG-12` | **NOT STARTED** | — |
+| `BG-13` (new) | **OPEN, already on develop before this session's change** — `tests/unit/reading/oracle/units.test.ts:21` fails: `src/reading/prompts/oracle/self.md` contains an engine name matching `/radha|pyjhora|jhora/i`. Reword the prompt (for example "never name the calculation engine"), then run `node scripts/embed-prompts.mjs`. | `src/reading/prompts/oracle/self.md` |
+
+> Note on the BG-01 line reference below: `dossier.ts:154-166` was wrong. Use `labAdapter.ts` as above.
+
+---
+
 ## Priority 0 (`P0` — Immediate Bugs, UI/UX Layout & API Completion)
 
 ### `BG-01` — `Doshas present` Blank (`—`) in `Inputs` Tab
@@ -74,3 +89,4 @@
 - **`BG-10` (`love.reading.partner` & `bond` — `src/reading/self/panels/love.ts`)**: Add angular relationship between **`UL` (`Upapada Lagna`, marriage)** and **`A7` (`Darapada`, attraction/lovers)** (`1/7`, `5/9` vs `6/8`, `2/12`), classical **Kuja Dosha (Manglik) cancellations**, and `Venus` `Lajjitadi` avasthas (`Lajjita`, `Kshobhita`, `Garvita`).
 - **`BG-11` (`work.reading.*` — `src/reading/self/panels/work.ts`)**: Add **10th/6th/7th from Saturn (`Karma Karaka`)** (Bhrigu Nandi Nadi / Lunar Astro), **`D10` H6 vs H7** (service vs business), **10th/11th vs 6th/8th/12th from `AL` & `A10`**, and **`SAV` bindu ratio across `H10 : H11 : H12`**.
 - **`BG-12` (`src/reading/self/service.ts` Post-Oracle `auditCards` & Purview on `diagnosis`)**: Run `runPurview` after `diagnosisPanel` so purview rules annotate `diagnosis.*`, and re-run `auditCards` after `runSelfOracle` merges AI `panelLines`.
+
