@@ -45,7 +45,11 @@ export type SubAgentId =
   | 'family.year'
   | 'family.sky'
   | 'lineman.self'
-  | 'oracle.self';
+  | 'oracle.self'
+  | 'lineman.love'
+  | 'oracle.love'
+  | 'lineman.work'
+  | 'oracle.work';
 
 export interface SubAgentDigestSpec {
   id: SubAgentId;
@@ -483,6 +487,46 @@ const RAW_SUBAGENT_DIGEST_SPECS: Record<SubAgentId, RawSubAgentDigestSpec> = {
     techniqueId: 'self.reading.oracle',
     sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
     vargas: ['D1', 'D9', 'D10'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'technique_outputs',
+  },
+  'lineman.love': {
+    id: 'lineman.love',
+    techniqueId: 'love.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D7', 'D9'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'oracle.love': {
+    id: 'oracle.love',
+    techniqueId: 'love.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D7', 'D9'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'technique_outputs',
+  },
+  'lineman.work': {
+    id: 'lineman.work',
+    techniqueId: 'work.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D2', 'D9', 'D10'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'oracle.work': {
+    id: 'oracle.work',
+    techniqueId: 'work.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D2', 'D9', 'D10'],
     tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
     usesActivation: true,
     cachePromptPrefix: true,

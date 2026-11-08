@@ -15,9 +15,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
-import { getSelfReading, type SelfDeps } from '../reading/self/service.js';
+import { getBoardReading, type SelfDeps } from '../reading/self/service.js';
 import { stripBirthFields } from '../reading/self/dossier.js';
-import { SELF_PANEL_IDS, type SelfPanelId } from '../reading/self/types.js';
+import {
+  SELF_PANEL_IDS,
+  LOVE_PANEL_IDS,
+  WORK_PANEL_IDS,
+  type BoardPanelId,
+  type ReadingBoardId,
+} from '../reading/self/types.js';
 
 export interface AdminLabDeps {
   prisma: PrismaClient;
@@ -147,22 +153,31 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
   app.post('/api/admin-lab/run', guard, async (req, res) => {
     const b = (req.body ?? {}) as { userId?: unknown; board?: unknown; technique?: unknown; force?: unknown; asOf?: unknown };
     if (typeof b.userId !== 'string') return res.status(400).json({ error: 'bad_request' });
-    const board = b.board ?? 'self';
-    if (board === 'love' || board === 'work') return res.status(400).json({ error: 'board_not_built', board });
-    if (board !== 'self') return res.status(400).json({ error: 'bad_request' });
+    const rawBoard = b.board ?? 'self';
+    if (rawBoard !== 'self' && rawBoard !== 'love' && rawBoard !== 'work') {
+      return res.status(400).json({ error: 'bad_request' });
+    }
+    const board: ReadingBoardId = rawBoard;
     if (b.asOf !== undefined && (typeof b.asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.asOf) || Number.isNaN(Date.parse(b.asOf)))) return res.status(400).json({ error: 'bad_as_of' });
-    const tech = typeof b.technique === 'string' ? b.technique.replace(/^self\.reading\./, '') : 'all';
+    const tech = typeof b.technique === 'string' ? b.technique.replace(/^(self|love|work)\.reading\./, '') : 'all';
     const stageIds = ['all', 'oracle', 'clock', 'purview', 'audit'] as const;
     const isStage = (stageIds as readonly string[]).includes(tech);
-    if (!isStage && !(SELF_PANEL_IDS as readonly string[]).includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
+    const allowedPanels: readonly string[] =
+      board === 'love' ? LOVE_PANEL_IDS : board === 'work' ? WORK_PANEL_IDS : SELF_PANEL_IDS;
+    if (!isStage && !allowedPanels.includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
     const person = await deps.prisma.auth.findUnique({ where: { id: b.userId }, select: { locked_at: true } }).catch(() => null);
     if (!person) return res.status(404).json({ error: 'no_person' });
     if (person.locked_at) return res.status(403).json({ error: 'locked' });
     try {
       const t0 = Date.now();
-      const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}), ...(isStage ? {} : { only: tech as SelfPanelId }) });
+      const r = await getBoardReading(selfDeps, b.userId, board, {
+        trigger: 'manual',
+        force: b.force === true,
+        ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}),
+        ...(isStage ? {} : { only: tech as BoardPanelId }),
+      });
       await deps.prisma.adminAction
-        ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board: 'self', technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object } })
+        ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board, technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object } })
         .catch(() => undefined);
       if (r.status !== 'ok') return res.status(r.status === 'no_kundli' ? 404 : 202).json({ status: r.status });
       const dossier = r.reading.dossierId ? await deps.prisma.readingDossier.findUnique({ where: { id: r.reading.dossierId } }) : null;

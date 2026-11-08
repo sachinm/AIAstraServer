@@ -13,13 +13,14 @@ import type { PanelBodies } from './panels/diagnosis.js';
 import { struggleLead } from './panels/struggle.js';
 import { yogasLead } from './panels/yogas.js';
 import { activationKey, runningChain } from './slices.js';
-import type { PurviewEntry, SelfClock, SelfPanelId } from './types.js';
+import type { BoardPanelId, PurviewEntry, ReadingBoardId, SelfClock } from './types.js';
 import { PLANET_NAME } from './words.js';
 
 const pn = (p: string) => PLANET_NAME[p] ?? p;
 const WEAK_RIPENESS = new Set(['dried_seed_externalized', 'unripe_sour']);
 
 export interface PurviewInput {
+  board?: ReadingBoardId;
   view: DigestView;
   activation: ActivationRow[];
   asOf: string;
@@ -39,21 +40,48 @@ const claimIds = (b: PanelBodies) => Object.values(b).flatMap((x) => x?.claims ?
 /** the claims whose evidence names the planet's own card */
 const about = (b: PanelBodies, p: string) => Object.values(b).flatMap((x) => x?.claims ?? []).filter((c) => c.evidence.some((e) => e === `planet:D1.${p}` || e === `planet:D9.${p}`)).map((c) => c.id);
 
-export function runPurview({ view, activation, asOf, clock, bodies, skyStored, sky }: PurviewInput): PurviewResult {
+export function runPurview({ board = 'self', view, activation, asOf, clock, bodies, skyStored, sky }: PurviewInput): PurviewResult {
   const out: PurviewEntry[] = [];
   const ids = new Set(claimIds(bodies));
   const has = (id: string) => ids.has(id);
   const l1 = view.house('D1', 1)?.lord ?? null;
+  const l5 = view.house('D1', 5)?.lord ?? null;
+  const l6 = view.house('D1', 6)?.lord ?? null;
+  const l7 = view.house('D1', 7)?.lord ?? null;
+  const l10 = view.house('D1', 10)?.lord ?? null;
+  const l11 = view.house('D1', 11)?.lord ?? null;
   const ak = view.points('D1').find((p) => p.id === 'AK')?.planet ?? null;
-  const selfPlanets = [...new Set([l1, 'Mo', 'Su', ak].filter((x): x is string => !!x))];
+  const dk = view.points('D1').find((p) => p.id === 'DK')?.planet ?? null;
+  const amk = view.points('D1').find((p) => p.id === 'AmK')?.planet ?? null;
+  const selfPlanets =
+    board === 'love'
+      ? [...new Set([l7, l5, 'Ve', 'Mo', dk, 'Ju'].filter((x): x is string => !!x))]
+      : board === 'work'
+        ? [...new Set([l10, l6, l11, amk, 'Sa', 'Su', 'Me', 'Ju'].filter((x): x is string => !!x))]
+        : [...new Set([l1, 'Mo', 'Su', ak].filter((x): x is string => !!x))];
 
-  // 1. the lagna lord's standing governs every footing claim
-  const L = l1 ? view.planet('D1', l1) : null;
+  // 1. primary board lord's standing governs footing claims
+  const primaryLord = board === 'love' ? l7 : board === 'work' ? l10 : l1;
+  const L = primaryLord ? view.planet('D1', primaryLord) : null;
   if (L) {
     const rip = L.avasthaMultipliers?.ripeness;
     const dus = L.house != null && (view.house('D1', L.house)?.class ?? []).includes('dusthana');
     if ((rip && WEAK_RIPENESS.has(rip)) || dus) {
-      out.push({ rule: 'purview.lagna_lord_standing', source: 'BPHS (the lagna lord governs the strength of every house reading)', action: 'annotate', affects: ['lagna.lord_house', 'diagnosis.direction', 'body.footing'].filter(has), rows: [`planet:D1.${l1}`], text: `The lagna lord ${pn(l1!)} is weak in delivery (${rip ?? 'dusthana'}); every footing claim holds only with effort and the diagnosis names it first.` });
+      const ruleName = board === 'love' ? 'purview.seventh_lord_standing' : board === 'work' ? 'purview.tenth_lord_standing' : 'purview.lagna_lord_standing';
+      const targetClaims =
+        board === 'love'
+          ? ['partner.lord_house', 'heart.lord_house', 'diagnosis.direction'].filter(has)
+          : board === 'work'
+            ? ['vocation.lord_house', 'standing.arudha', 'diagnosis.direction'].filter(has)
+            : ['lagna.lord_house', 'diagnosis.direction', 'body.footing'].filter(has);
+      out.push({
+        rule: ruleName,
+        source: 'BPHS (the primary house lord governs the delivery of the domain)',
+        action: 'annotate',
+        affects: targetClaims,
+        rows: [`planet:D1.${primaryLord}`],
+        text: `The primary domain lord ${pn(primaryLord!)} is weak in delivery (${rip ?? 'dusthana'}); domain claims hold with deliberate effort and the diagnosis names it first.`,
+      });
     }
   }
 
@@ -159,12 +187,20 @@ export function runPurview({ view, activation, asOf, clock, bodies, skyStored, s
   }
 
   const alPt = view.points('D1').find((p) => p.id === 'AL');
+  const ulPt = view.points('D1').find((p) => p.id === 'UL');
+  const a7Pt = view.points('D1').find((p) => p.id === 'A7');
+  const a10Pt = view.points('D1').find((p) => p.id === 'A10');
+  const glPt = view.points('D1').find((p) => p.id === 'GL');
   const slPt = view.points('D1').find((p) => p.id === 'SL');
   const hlPt = view.points('D1').find((p) => p.id === 'HL');
   const mdPt = view.points('D1').find((p) => p.id === 'MD');
   const gkPt = view.points('D1').find((p) => p.id === 'GK');
   const spRows = [
     ...(alPt ? ['point:D1.AL'] : []),
+    ...(ulPt && board === 'love' ? ['point:D1.UL'] : []),
+    ...(a7Pt && board === 'love' ? ['point:D1.A7'] : []),
+    ...(a10Pt && board === 'work' ? ['point:D1.A10'] : []),
+    ...(glPt && board === 'work' ? ['point:D1.GL'] : []),
     ...(slPt ? ['point:D1.SL'] : []),
     ...(hlPt ? ['point:D1.HL'] : []),
     ...(mdPt ? ['point:D1.MD'] : []),
@@ -173,11 +209,11 @@ export function runPurview({ view, activation, asOf, clock, bodies, skyStored, s
   if (spRows.length) {
     out.push({
       rule: 'purview.special_lagnas_argala',
-      source: 'BPHS & Jaimini (Arudha Lagna AL, Sree Lagna SL, Hora Lagna HL, Mandi MD, Gulika GK & Argala)',
+      source: 'BPHS & Jaimini (Arudha Lagna AL, Upapada UL, Rajyapada A10, Sree Lagna SL, Hora Lagna HL, Mandi MD, Gulika GK & Argala)',
       action: 'annotate',
-      affects: ['lagna.seen', 'body.special_points_argala', 'body.footing'].filter(has),
+      affects: ['lagna.seen', 'body.special_points_argala', 'body.footing', 'partner.upapada', 'heart.padas', 'standing.arudha', 'standing.rajyapada', 'standing.power_lagnas'].filter(has),
       rows: spRows,
-      text: `Special Lagnas and Upagrahas active: AL=${alPt?.sign ?? '?'}(H${alPt?.house ?? '?'}), SL=${slPt?.sign ?? '?'}(H${slPt?.house ?? '?'}), HL=${hlPt?.sign ?? '?'}(H${hlPt?.house ?? '?'}), MD=${mdPt?.sign ?? '?'}(H${mdPt?.house ?? '?'}), GK=${gkPt?.sign ?? '?'}(H${gkPt?.house ?? '?'}).`,
+      text: `Special Lagnas and Upagrahas active: AL=${alPt?.sign ?? '?'}(H${alPt?.house ?? '?'}), UL=${ulPt?.sign ?? '?'}(H${ulPt?.house ?? '?'}), A10=${a10Pt?.sign ?? '?'}(H${a10Pt?.house ?? '?'}), SL=${slPt?.sign ?? '?'}(H${slPt?.house ?? '?'}), HL=${hlPt?.sign ?? '?'}(H${hlPt?.house ?? '?'}), MD=${mdPt?.sign ?? '?'}(H${mdPt?.house ?? '?'}), GK=${gkPt?.sign ?? '?'}(H${gkPt?.house ?? '?'}).`,
     });
   }
 
@@ -190,9 +226,9 @@ export function runPurview({ view, activation, asOf, clock, bodies, skyStored, s
 }
 
 /** Applies vetoes (removes the claim, keeps it for Chart details) and annotations (adds to the claim's detail). */
-export function applyPurview(bodies: PanelBodies, entries: PurviewEntry[]): Partial<Record<SelfPanelId, Array<{ claimId: string; rule: string; text: string }>>> {
-  const vetoed: Partial<Record<SelfPanelId, Array<{ claimId: string; rule: string; text: string }>>> = {};
-  for (const [id, b] of Object.entries(bodies) as Array<[SelfPanelId, NonNullable<PanelBodies[SelfPanelId]>]>) {
+export function applyPurview(bodies: PanelBodies, entries: PurviewEntry[]): Partial<Record<BoardPanelId, Array<{ claimId: string; rule: string; text: string }>>> {
+  const vetoed: Partial<Record<BoardPanelId, Array<{ claimId: string; rule: string; text: string }>>> = {};
+  for (const [id, b] of Object.entries(bodies) as Array<[BoardPanelId, NonNullable<PanelBodies[BoardPanelId]>]>) {
     if (!b) continue;
     const keep = [];
     for (const c of b.claims) {

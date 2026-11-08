@@ -17,8 +17,10 @@ import { yogasPanel } from '../../../../src/reading/self/panels/yogas.js';
 import { strugglePanel } from '../../../../src/reading/self/panels/struggle.js';
 import { chaptersPanel, confirmShift } from '../../../../src/reading/self/panels/chapters.js';
 import { yearPanel } from '../../../../src/reading/self/panels/year.js';
-import { PANELS, pickQuestion, shapeClaims, withheldSources } from '../../../../src/reading/self/service.js';
+import { PANELS, LOVE_PANELS, WORK_PANELS, pickQuestion, shapeClaims, withheldSources } from '../../../../src/reading/self/service.js';
 import { diagnosisPanel } from '../../../../src/reading/self/panels/diagnosis.js';
+import { loveDiagnosisPanel } from '../../../../src/reading/self/panels/love.js';
+import { workDiagnosisPanel } from '../../../../src/reading/self/panels/work.js';
 import type { PanelInput } from '../../../../src/reading/self/panels/common.js';
 import type { SelfPanel } from '../../../../src/reading/self/types.js';
 
@@ -161,8 +163,22 @@ describe('panels', () => {
   });
   it('no panel text carries chart words (doc 45 §3.3); chart terms live in detail', () => {
     const banned = /\b(house|lord|dasha|mahadasha|antardasha|nakshatra|varga|rahu|ketu|saturn|jupiter|venus|mercury|mars|sun|moon|lagna|D1\.|D9\.)\b/i;
-    for (const b of [...Object.values(PANELS).map((p) => p.run(input)), diagnosisPanel({ lagna: lagnaPanel(input), struggle: strugglePanel(input), yogas: yogasPanel(input), chapters: chaptersPanel(input) })]) {
-      for (const c of b.claims) expect(c.text, c.id).not.toMatch(banned);
+    const loveBodies = Object.fromEntries(Object.entries(LOVE_PANELS).map(([k, p]) => [k, p.run(input)]));
+    const workBodies = Object.fromEntries(Object.entries(WORK_PANELS).map(([k, p]) => [k, p.run(input)]));
+    const allPanelOutputs = [
+      ...Object.values(PANELS).map((p) => p.run(input)),
+      diagnosisPanel({ lagna: lagnaPanel(input), struggle: strugglePanel(input), yogas: yogasPanel(input), chapters: chaptersPanel(input) }),
+      ...Object.values(loveBodies),
+      loveDiagnosisPanel(loveBodies),
+      ...Object.values(workBodies),
+      workDiagnosisPanel(workBodies),
+    ];
+    for (const b of allPanelOutputs) {
+      expect(b.claims.length).toBeGreaterThan(0);
+      for (const c of b.claims) {
+        expect(c.text, c.id).not.toMatch(banned);
+        if (c.line) expect(c.line, `${c.id} line`).not.toMatch(banned);
+      }
       for (const ch of b.chapters ?? []) if (ch.text) expect(ch.text).not.toMatch(banned);
       expect(b.lead).not.toMatch(banned);
     }
