@@ -16,6 +16,15 @@ re-applied by it.
 
 ## P0: wrong readings or data
 
+- **The Tithi Pravesha year dasha is a lifetime dasha, not a year dasha.** Every stored `annual.tithi_pravesha_dasha`
+  row (`system=tithi_ashtottari`, the catalogue default) on the three newest `ready` kundlis (4feca3ca, 858f2f20,
+  b4a777a6) has periods spanning 108 years (e.g. year 2026: 2025-05-30 → 2133-06-01, 19-year first period) while its
+  own `valid_from`/`valid_to` is one Tithi Pravesha year. The G1 fixture shows the same (2026: Jupiter 2015-07-07 →
+  2034-07-06). The digest's annual rows and any reading of "this year's dasha" read it as the year's clock. Found by the
+  Chart Data Review checks (admin `feat/admin-chart-data-review`, check "a year dasha should fit its year") on
+  2026-11-08. Owner: engine (Radha `annual.tithi_pravesha_dasha`). Done: the periods of each year row fall inside that
+  year (compressed to the year), the admin Annual tab shows no "periods span N years" error.
+
 - **12-person multi-age-group (`20s`–`70s`) live benchmark & 4-school review (`Self`, `Love`, `Work`).** Twenty-three of the 24 `ready` kundlis in PostgreSQL were built on `2026-11-06` before `PointRow.planet` (`AK.planet`, `AmK.planet`, `DK.planet`) and the `dasha.applicable` filter on `kundli_activation` were added (code backfills are now in `loadDigest` and `defaultSystemsPresent`, and all `love.reading.*` + `work.reading.*` panels are built and wired). Next session: run `buildDigest(prisma, kundliId)` for the 12-person cohort and execute the multi-age benchmark + independent review per [`docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md`](handoff/2026-11-08-techniques-lab-self-love-work-handoff.md) under the $1.00 spend cap. Status: open (handoff ready). Done: 12-person cohort benchmarked across `self`, `love`, and `work` with `>=95%` verifier pass.
 
 - **The live API refuses https://vedic-astrology.app (CORS).** An OPTIONS preflight to `/graphql` and `/api/billing/plans` on
@@ -1226,3 +1235,42 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
   `tests/unit/reading/coachAndRoutes.test.ts` R14 (confirm-stream returns `type: 'error'`) fails only in the full run,
   so it is order-dependent. Not verified on `develop` itself. Holder: the clarify/reading owner. Done: all three green in
   the full unit run.
+
+## Filed 2026-11-08 by the Chart Data Review build (admin `feat/admin-chart-data-review`, server `feat/admin-chart-data-route`)
+
+Structural checks run read-only on the three newest `ready` kundlis (4feca3ca, 858f2f20, b4a777a6) and the G1 fixture.
+What passed everywhere: SAV adds to 337 (stated, summed, by house, and the BAV columns), each graha once with a sign in
+every stored varga table, the D1 signs agree between `dignities` and `varga.d1`, and every natal dasha (all stored
+systems, levels 1–3) has no gap or overlap. The P0 above (year dasha) is the main defect. The rest:
+
+- **P1 · Mudda periods are offset from the year they are stored for.** `annual.mudda` rows run exactly one year but start
+  11–43 days before the row's own `valid_from` (4feca3ca 2026: 2026-02-06 → 2027-02-06 for the year 2026-02-17 →
+  2027-02-17; 858f2f20 2026: 2025-12-30 → 2026-12-31 for 2026-01-17 → 2027-01-17; G1 2026 starts 2026-09-02 for a
+  2026-10-16 year). Either the engine counts Mudda from another instant (birthday, Varsha Pravesh) than the window it
+  stamps on the row, or the start is wrong. Owner: engine. Done: the row says which instant the periods start from and
+  it matches `valid_from`, or the periods are fixed.
+- **P1 · Annual set incomplete on `ready` kundlis.** b4a777a6 has Tithi Pravesha only for 2026 (no 2025, no 2027) and no
+  other year; 4feca3ca has no 2024 and only the TP chart for 2025 (no Varsha, year dashas or sahams). `annualSet.ts`
+  wants ten years back and ahead; the sweep (40 calls per run) has not filled them, or rows fail silently. Owner:
+  server (digest sweep). Done: previous, current and next TP years complete on every `ready` kundli; the admin Annual tab
+  shows no "is not stored" for them.
+- **P1 · Co-lords chosen as the house lord: Aquarius → Rahu, Scorpio → Ketu.** `dignities` `houses[].lord` and
+  `planets[].sign_lord` name Rahu for Aquarius (all three kundlis) and Ketu for Scorpio (G1), with `natural_lord`
+  Saturn / Mars beside it; `benefic_malefic` then lists Ketu as a trikona lord (G1, 9th = Scorpio). Any reader of
+  `lord` gets Rahu as a house lord. Not a structural error; needs a decision on which field readers use. Owner: Sachin
+  + reading-dev. Done: readers use `natural_lord` or the choice is documented in the catalogue.
+- **P2 · Yogas present with no planets or houses.** 9–13 present yogas per chart (Vesi, Vosi, Ubhayachara, Sunapha,
+  Anapha, Duradhara, Paasa, Bharathi, Asubha, Hamsa, Chaamara, Brahma, Amala) come with `planets: []` and `houses: []`,
+  so a reading cannot say which planets form them. Owner: engine `yogas`. Done: every present yoga names its planets.
+- **P2 · Node spellings differ by type.** `dasha.*` and `karaka.chara` payloads say `Raagu` / `Kethu` (with glyphs in the
+  legacy columns); every other type says `Rahu` / `Ketu`. Matching rows across types by name breaks on the nodes.
+  Owner: engine. Done: one spelling everywhere.
+- **P2 · Deep-varga tables listed in `DIGEST_NATAL_TYPES` are never stored.** `dignities.dN` and `house_counts.dN` for
+  D5, D6, D8, D11, D16, D27, D40, D45, D81, D108, D144 are in the digest's natal list but the catalogue marks them
+  `served = false`, so no kundli has them. Owner: engine / catalogue. Done: served and stored, or dropped from the list.
+- **P2 · The natal chart answer is about 4 MB.** `GET /api/admin-lab/chart-data/:userId` was 4.1 MB with the dashas
+  (3.2 MB of it; `dasha.kaala.l3` alone 1.1 MB). The route now serves `part=dasha` on its own (natal ≈ 0.9 MB), but both
+  Lambdas cap a response at 6 MB, and more level-3 dashas would push `part=dasha` near it. Owner: admin. Done: the dasha
+  part paged by system, or the response compressed.
+- **P3 · Birth panchanga strings carry negative times.** G1 `biodata.yoga` reads `00:-3:-49 from 20:14:14` and the
+  nakshatra end `22:38:11 (-1)`. Owner: engine `biodata`. Done: times formatted without negative fields.
