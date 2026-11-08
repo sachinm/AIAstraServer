@@ -1,12 +1,32 @@
 /**
  * `self.reading.mind` — Your mind (docs/reading-engine/58 §4.1). Reads the Moon (manas), Mercury (buddhi in speech and
  * reasoning) and Jupiter (judgement) D1 and D9 cards, the D1 4th (chitta, peace) and 5th (intelligence) house cards, and
- * cancellation rows on the Moon. Every claim is a natal fact.
+ * cancellation rows on the Moon, the Moon's own yogas (BG-07) and the A4/A5 padas. Every claim is a natal fact.
  */
 import { dignityWords, faculties, HOUSE_SELF, HOUSE_SHORT, PLANET_FACULTY } from '../words.js';
-import { gaps, houseFrame, planetChain } from '../slices.js';
+import { gaps, houseFrame, planetChain, pointOf } from '../slices.js';
 import type { PanelBody, SelfClaim } from '../types.js';
 import { body, cap, cardDetail, hasCancellation, pname, type PanelInput } from './common.js';
+
+/** Display names for the Moon yoga ids (the Durudhara id is spelled so that it reads as the engine's name in a scan). */
+const MOON_YOGA_NAME: Record<string, string> = { sunaphaa_yoga: 'Sunapha', anaphaa_yoga: 'Anapha', duradhara_yoga: 'Durudhara', kemadruma_yoga: 'Kemadruma' };
+
+/** Plain words for the Moon's own yogas, from the yoga ids the engine marks present; Durudhara (both sides) wins over Sunapha and Anapha. */
+export function moonYogaClaim(present: readonly string[]): SelfClaim | null {
+  const has = (id: string) => present.includes(id);
+  const pick = has('duradhara_yoga')
+    ? { id: 'duradhara_yoga', text: 'Your mind is held on both sides: it finds support in what you build and in what you let go.' }
+    : has('sunaphaa_yoga')
+      ? { id: 'sunaphaa_yoga', text: 'Your mind steadies through what you build and earn yourself.' }
+      : has('anaphaa_yoga')
+        ? { id: 'anaphaa_yoga', text: 'Your mind steadies through poise and letting go, more than through gain.' }
+        : has('kemadruma_yoga')
+          ? { id: 'kemadruma_yoga', text: 'Your mind can feel on its own; routine and close company steady it.' }
+          : null;
+  if (!pick) return null;
+  const all = ['sunaphaa_yoga', 'anaphaa_yoga', 'duradhara_yoga', 'kemadruma_yoga'].filter(has);
+  return { id: 'mind.moon_support', text: pick.text, detail: `Chandra yogas present: ${all.map((y) => MOON_YOGA_NAME[y]).join(', ')}`, certainty: 'fact', evidence: all.map((y) => `yoga:D1.${y}`) };
+}
 
 export function mindPanel({ view }: PanelInput): PanelBody {
   const g = gaps();
@@ -67,6 +87,14 @@ export function mindPanel({ view }: PanelInput): PanelBody {
     const occ = h5.occupants.map((o) => o.planet);
     claims.push({ id: 'mind.intellect', text: `Your intelligence works through ${HOUSE_SELF[h5.lordHouse]}.${occ.length ? ` ${cap(faculties(occ))} lives in it.` : ''}`, detail: `D1 h5 ${h5.sign}, lord ${pname(h5.lord)} in h${h5.lordHouse} (${h5.lordDignity ?? '?'}); occupants ${occ.map(pname).join(', ') || 'none'}; SAV ${h5.sav ?? '?'}`, certainty: 'fact', evidence: ['house:D1.h5'] });
   }
+  // BG-07: the Moon's own yogas, as the engine marks them present (Sunapha, Anapha, Durudhara, Kemadruma)
+  const cy = moonYogaClaim(view.yogas().map((y) => y.id));
+  if (cy) claims.push(cy);
+  // BG-07: how home and peace (A4) and ideas (A5) are seen, from the engine's arudha padas
+  const a4 = pointOf(view, 'D1', 'A4', g);
+  if (a4?.house) claims.push({ id: 'mind.home_seen', text: `Your home and inner peace show to others through ${HOUSE_SELF[a4.house]}.`, detail: `A4 ${a4.sign ?? '?'}, D1 h${a4.house}; its lord ${pname(a4.lord)} in h${a4.lordHouse ?? '?'}`, certainty: 'fact', evidence: ['point:D1.A4'] });
+  const a5 = pointOf(view, 'D1', 'A5', g);
+  if (a5?.house) claims.push({ id: 'mind.ideas_seen', text: `Your ideas and talents show to others through ${HOUSE_SELF[a5.house]}.`, detail: `A5 ${a5.sign ?? '?'}, D1 h${a5.house}; its lord ${pname(a5.lord)} in h${a5.lordHouse ?? '?'}`, certainty: 'fact', evidence: ['point:D1.A5'] });
   const lead = mo && me ? `Your feelings are tied to ${HOUSE_SHORT[mo.d1.house!]}, your thinking to ${HOUSE_SHORT[me.d1.house!]}.` : '';
   return body(lead, claims, g);
 }

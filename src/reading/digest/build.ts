@@ -15,7 +15,7 @@ import { lordCode } from '../timeline/dashas.js';
 import { ARUDHA_ARGALA_VARGAS, AVASTHA_VARGAS, VARGA_FACTORS } from '../chartData/catalog.js';
 import { buildActivationRows, type ActivationRowInput } from './activation.js';
 import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
-import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
+import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type DoshaDetails, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -857,6 +857,25 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
+/** The dosha `details` fields the readings use (manglik exceptions, Moon/Venus reference), selected as the engine wrote them. */
+function doshaDetails(v: unknown): DoshaDetails | null {
+  if (!isObj(v)) return null;
+  const out: DoshaDetails = {};
+  const has = bool(v.has_exceptions);
+  if (has != null) out.hasExceptions = has;
+  if (Array.isArray(v.exceptions)) {
+    out.exceptions = v.exceptions
+      .filter(isObj)
+      .map((e) => ({ id: typeof e.id === 'number' || typeof e.id === 'string' ? e.id : null, text: str(e.text_en) ?? '' }))
+      .filter((e) => e.text);
+  }
+  const moon = bool(v.from_moon);
+  if (moon != null) out.fromMoon = moon;
+  const venus = bool(v.from_venus);
+  if (venus != null) out.fromVenus = venus;
+  return Object.keys(out).length ? out : null;
+}
+
 function yogaRows(items: Record<string, unknown>, src: Sources): Built<YogaRow>[] {
   const out: Built<YogaRow>[] = [];
   const seen = new Map<string, Built<YogaRow>>();
@@ -906,7 +925,8 @@ function yogaRows(items: Record<string, unknown>, src: Sources): Built<YogaRow>[
   arr(doshas?.value).forEach((d, i) => {
     if (!isObj(d) || d.present !== true) return;
     const id = str(d.id) ?? slug(String(d.name_en ?? `dosha_${i}`));
-    add({ key: `D1.${id}`, row: { id, name: str(d.name_en) ?? id, planets: codes(d.planets), houses: houses(d.houses), class: 'dosha', source: 'doshas' }, source: [src.of(doshas!, `[${i}]`)] });
+    const details = doshaDetails(d.details);
+    add({ key: `D1.${id}`, row: { id, name: str(d.name_en) ?? id, planets: codes(d.planets), houses: houses(d.houses), class: 'dosha', source: 'doshas', ...(details ? { details } : {}) }, source: [src.of(doshas!, `[${i}]`)] });
   });
   factYogas.forEach((y, i) => {
     if (!isObj(y) || !str(y.name)) return;

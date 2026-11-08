@@ -47,6 +47,8 @@ export interface CodeAudit {
   verdict: 'pass' | 'fail';
   checked: number;
   failures: AuditFailure[];
+  /** BG-14: dates outside every stored engine window; the line is kept and the date is surfaced here */
+  dateGaps?: AuditFailure[];
 }
 export type Certainty = 'fact' | 'confirmed' | 'likely' | 'split';
 export type ConfirmAnswer = 'yes' | 'partly' | 'no' | 'skip';
@@ -121,6 +123,29 @@ export interface SelfPanel {
   vetoed?: Array<{ claimId: string; rule: string; text: string }>;
   /** AI/deterministic validity horizon ('YYYY-MM-DD' or 'always') until which this panel reading remains true */
   validUntil?: string;
+  /** BUILD-GAPS BG-14: the Oracle's plan for this panel (summary, dated steps, a calendar of prospective dates from stored windows) */
+  plan?: PanelPlan;
+}
+
+/** One dated step of a panel plan. */
+export interface PanelPlanStep {
+  text: string;
+  range: LineRange;
+  claimIds: string[];
+}
+/** One prospective date or window on a panel calendar; `inWindow` is false when no stored engine window holds it (shown as a gap, not dropped). */
+export interface PanelCalendarEntry {
+  from: string;
+  to: string;
+  label: string;
+  claimIds: string[];
+  inWindow?: boolean;
+}
+/** BG-14: what the Oracle synthesizes per panel beside its card lines, so the person gets a plan they can act on. */
+export interface PanelPlan {
+  summary: string;
+  steps: PanelPlanStep[];
+  calendar: PanelCalendarEntry[];
 }
 
 export interface SelfClockChoice {
@@ -187,6 +212,8 @@ export interface SelfOraclePayload {
   linemanBrief?: string;
   familyFindings?: Record<string, string>;
   panelLines?: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+  /** BG-14: the Oracle's PANEL_PLAN and PANEL_CALENDAR blocks, per panel */
+  panelPlans?: Partial<Record<BoardPanelId, PanelPlan>>;
   /** AI-determined validity horizon ('YYYY-MM-DD' or 'always') per panel and overall ('overall') */
   validUntil?: Partial<Record<BoardPanelId | 'overall', string>>;
   stages?: SelfOracleStageSummary[];

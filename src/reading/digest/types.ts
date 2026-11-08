@@ -122,6 +122,14 @@ export interface PlanetCard {
   starChain?: string[];
 }
 
+/** Dosha rows only: the engine's `doshas[i].details` fields, selected as written (manglik exceptions, Moon/Venus reference). */
+export interface DoshaDetails {
+  hasExceptions?: boolean;
+  exceptions?: Array<{ id: number | string | null; text: string }>;
+  fromMoon?: boolean;
+  fromVenus?: boolean;
+}
+
 export interface YogaRow {
   id: string;
   name: string;
@@ -129,6 +137,8 @@ export interface YogaRow {
   houses: number[];
   class: string;
   source: string;
+  /** dosha rows only, when the engine wrote any of these fields */
+  details?: DoshaDetails;
 }
 
 export interface PointRow {

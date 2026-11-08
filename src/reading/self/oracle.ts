@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { getSelfReadingMaxSpendUsd, isSelfReadingModelEnabled } from '../../config/env.js';
+import { getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfReadingModelEnabled } from '../../config/env.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -28,12 +28,13 @@ import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import { runningMudda, runningTp } from './panels/year.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
-import { BANNED_LINE_WORDS, clockLabel, MAX_LINE_WORDS, wordCount } from './words.js';
+import { clockLabel, MAX_LINE_WORDS, wordCount } from './words.js';
 import type {
   BoardPanelId,
   ConfirmAnswer,
   LineCertainty,
   LineRange,
+  PanelPlan,
   ReadingBoardId,
   SelfClock,
   SelfOracleLinemanRecord,
@@ -467,7 +468,10 @@ export function parseOracleStructuredBlocks(
 ): {
   validUntil: Partial<Record<BoardPanelId | 'overall', string>>;
   panelLines: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+  panelPlans: Partial<Record<BoardPanelId, PanelPlan>>;
 } {
+  const blocks = splitPlanBlocks(text);
+  text = blocks.rest;
   const validUntil: Partial<Record<BoardPanelId | 'overall', string>> = {};
   const panelLines: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>> = {};
 
@@ -489,7 +493,7 @@ export function parseOracleStructuredBlocks(
       .flatMap((x) => x[1]!.split(',').map((s) => s.trim()))
       .filter((k) => allowedKeys.has(k));
     const cleanText = redactEngineTerms(body.replace(/\s*\{[^}]+\}/g, '').trim());
-    if (!cleanText || wordCount(cleanText) > MAX_LINE_WORDS || BANNED_LINE_WORDS.some((re) => re.test(cleanText))) continue;
+    if (!cleanText || wordCount(cleanText) > MAX_LINE_WORDS) continue;
     let range: LineRange = 'always';
     if (/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(rawRange)) {
       const [from, to] = rawRange.split('..');
@@ -509,7 +513,62 @@ export function parseOracleStructuredBlocks(
     panelLines[panelId] = list;
   }
 
-  return { validUntil, panelLines };
+  return { validUntil, panelLines, panelPlans: parsePanelPlans(blocks.plan, blocks.calendar, allowedKeys) };
+}
+
+const PLAN_HEADERS = /^\s*(PANEL_SYNTHESIS|PANEL_PLAN|PANEL_CALENDAR|VALID_UNTIL)\s*:/im;
+
+/** BG-14: cuts the PANEL_PLAN and PANEL_CALENDAR blocks out of the Oracle's text (each runs to the next block header), so their bullets are not read as card lines. */
+export function splitPlanBlocks(text: string): { rest: string; plan: string; calendar: string } {
+  const take = (name: string, src: string): { body: string; rest: string } => {
+    const at = src.search(new RegExp(`^\\s*${name}\\s*:`, 'im'));
+    if (at < 0) return { body: '', rest: src };
+    const after = src.slice(at).replace(new RegExp(`^\\s*${name}\\s*:`, 'i'), '');
+    const next = after.search(PLAN_HEADERS);
+    const body = next < 0 ? after : after.slice(0, next);
+    return { body, rest: src.slice(0, at) + (next < 0 ? '' : after.slice(next)) };
+  };
+  const a = take('PANEL_PLAN', text);
+  const b = take('PANEL_CALENDAR', a.rest);
+  return { rest: b.rest, plan: a.body, calendar: b.body };
+}
+
+const keysIn = (body: string, allowed: ReadonlySet<string>): string[] =>
+  [...body.matchAll(/\{([^}]+)\}/g)].flatMap((x) => x[1]!.split(',').map((k) => k.trim())).filter((k) => allowed.has(k));
+const stripKeys = (body: string): string => redactEngineTerms(body.replace(/\s*\{[^}]+\}/g, '').trim());
+const rangeOf = (raw: string): { from: string; to: string } | null => {
+  if (/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [from, to] = raw.split('..');
+    return from! <= to! ? { from: from!, to: to! } : null;
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? { from: raw, to: raw } : null;
+};
+
+/**
+ * BG-14: parses the plan blocks. PANEL_PLAN bullets are `- [panel] summary: <text>` and
+ * `- [panel] step (<YYYY-MM-DD..YYYY-MM-DD|always>) <text> {keys}`; PANEL_CALENDAR bullets are
+ * `- [panel] (<YYYY-MM-DD|YYYY-MM-DD..YYYY-MM-DD>) <label> {keys}`. Unknown panels and undated calendar bullets are skipped.
+ */
+export function parsePanelPlans(plan: string, calendar: string, allowedKeys: ReadonlySet<string>): Partial<Record<BoardPanelId, PanelPlan>> {
+  const out: Partial<Record<BoardPanelId, PanelPlan>> = {};
+  const get = (id: BoardPanelId): PanelPlan => (out[id] ??= { summary: '', steps: [], calendar: [] });
+  for (const m of plan.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|heart|partner|bond|circle|vocation|standing|ground|gain|struggle|year)\]\s*summary\s*:\s*([^\n]+)/gi)) {
+    const t = stripKeys(m[2]!);
+    if (t) get(m[1]!.toLowerCase() as BoardPanelId).summary = t;
+  }
+  for (const m of plan.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|heart|partner|bond|circle|vocation|standing|ground|gain|struggle|year)\]\s*step\s*\((always|\d{4}-\d{2}-\d{2}(?:\.\.\d{4}-\d{2}-\d{2})?)\)\s*([^\n]+)/gi)) {
+    const t = stripKeys(m[3]!);
+    if (!t) continue;
+    const r = m[2]! === 'always' ? null : rangeOf(m[2]!);
+    get(m[1]!.toLowerCase() as BoardPanelId).steps.push({ text: t, range: r ?? 'always', claimIds: keysIn(m[3]!, allowedKeys) });
+  }
+  for (const m of calendar.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|heart|partner|bond|circle|vocation|standing|ground|gain|struggle|year)\]\s*\((\d{4}-\d{2}-\d{2}(?:\.\.\d{4}-\d{2}-\d{2})?)\)\s*([^\n]+)/gi)) {
+    const r = rangeOf(m[2]!);
+    const label = stripKeys(m[3]!);
+    if (!r || !label) continue;
+    get(m[1]!.toLowerCase() as BoardPanelId).calendar.push({ ...r, label, claimIds: keysIn(m[3]!, allowedKeys) });
+  }
+  return out;
 }
 
 /** The BRIEF: one line per usable claim, `[id] (certainty) text — detail {evidence}`. Withheld claims are left out. */
@@ -609,7 +668,7 @@ export async function runSelfOracle(
         system: PROMPTS['oracle/self'] ?? '',
         parts: [brief.text, `FINDINGS:\n${findings.text}\n\nCite evidence keys in {braces} at the end of each paragraph.`],
         thinking: 'medium',
-        maxOutputTokens: 4500,
+        maxOutputTokens: getSelfOracleMaxOutputTokens(),
       });
       const s2 = summarizeCall('self.reading_oracle', oracleModel, out, Math.round((performance.now() - t1) * 100) / 100);
       const spentUsd = Math.round((s1.costUsd + s2.costUsd) * 1e6) / 1e6;
@@ -636,6 +695,7 @@ export async function runSelfOracle(
         ms: Math.round(((s1.ms ?? 0) + (s2.ms ?? 0)) * 100) / 100,
         linemanFindings: redactEngineTerms(findings.text),
         panelLines: structured.panelLines,
+        panelPlans: structured.panelPlans,
         validUntil: structured.validUntil,
         dropped: v.dropped,
         calls: 2,
@@ -1080,7 +1140,7 @@ export async function runSelfOracle(
                 `${compiledBrief}\n\nCite evidence keys in {braces} at the end of each paragraph, include PANEL_SYNTHESIS lines, and end with VALID_UNTIL: <YYYY-MM-DD|always>.`,
               ],
               thinking: 'medium',
-              maxOutputTokens: 4500,
+              maxOutputTokens: getSelfOracleMaxOutputTokens(),
               cachePrefix: true,
               cacheOwner: owner,
             });
@@ -1146,6 +1206,7 @@ export async function runSelfOracle(
           linemanBrief: compiledBrief,
           familyFindings,
           panelLines: structured.panelLines,
+          panelPlans: structured.panelPlans,
           validUntil: structured.validUntil,
           dropped: validated.dropped,
           calls,
