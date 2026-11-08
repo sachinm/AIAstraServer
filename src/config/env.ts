@@ -861,7 +861,27 @@ export function getSelfChapterConfirmMin(): number {
   return parseClampedIntEnv('SELF_CHAPTER_CONFIRM_MIN', 2, 1, 5);
 }
 
-/** The model layer of the You reading (reader R15 + Self Oracle). Off until Sachin's yes on spend. Env: `SELF_READING_MODEL=1`. */
+/**
+ * The model layer of the You reading (5 family AI sub-agents + Self Lineman + Self Oracle).
+ * Enabled when `SELF_READING_MODEL=1` or `BOARD_MODEL_LAYER=1` (or automatically in non-test environments when `GEMINI_API_KEY` is configured and `SELF_READING_MODEL` is not `'0'`).
+ */
 export function isSelfReadingModelEnabled(): boolean {
-  return process.env.SELF_READING_MODEL?.trim() === '1';
+  const raw = process.env.SELF_READING_MODEL?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no') return false;
+  const boardRaw = process.env.BOARD_MODEL_LAYER?.trim().toLowerCase();
+  if (boardRaw === '1' || boardRaw === 'true' || boardRaw === 'yes') return true;
+  if (boardRaw === '0' || boardRaw === 'false' || boardRaw === 'no') return false;
+  if (process.env.VITEST || process.env.NODE_ENV === 'test') return false;
+  return Boolean(process.env.GEMINI_API_KEY?.trim());
+}
+
+/**
+ * Maximum cumulative USD spend permitted for Self reading AI sub-agent/Lineman/Oracle runs before halting for user confirmation.
+ * Env: `SELF_READING_MAX_SPEND_USD` (default 1.00 USD).
+ */
+export function getSelfReadingMaxSpendUsd(): number {
+  const raw = Number(process.env.SELF_READING_MAX_SPEND_USD);
+  if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);
+  return 1.0;
 }

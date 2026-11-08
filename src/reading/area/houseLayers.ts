@@ -751,13 +751,34 @@ function enrichLine(
   };
 }
 
-function presentTone(series: Array<{ month: string; side: Vote }>, nowIdx: number, votes: FamilyVote[]): AreaBoardBody['tone'] {
+export function votesSide(votes: FamilyVote[]): Vote {
+  const tests = votes.filter((v) => v.vote === 'test').length;
+  const supports = votes.filter((v) => v.vote === 'support').length;
+  const mainVote = votes.find((v) => v.family === 'main')?.vote ?? null;
+  const condVote = votes.find((v) => v.family === 'conditional')?.vote ?? null;
+  const readingVote = condVote && condVote !== 'neutral' ? condVote : mainVote;
+
+  // Primary clocks (`conditional ?? main` and `main`) govern tone direction; secondary clocks cannot outvote them into the opposite side.
+  if (readingVote === 'test' && mainVote !== 'support') {
+    return (condVote === 'test' && mainVote === 'test') || tests >= 2 ? 'test' : 'neutral';
+  }
+  if (readingVote === 'support' && mainVote !== 'test') {
+    return (condVote === 'support' && mainVote === 'support') || supports >= 2 ? 'support' : 'neutral';
+  }
+  if (readingVote && mainVote && readingVote !== mainVote && readingVote !== 'neutral' && mainVote !== 'neutral') {
+    return 'neutral';
+  }
+  return tests >= 2 && tests > supports ? 'test' : supports >= 2 && supports > tests ? 'support' : 'neutral';
+}
+
+export function presentTone(series: Array<{ month: string; side: Vote }>, nowIdx: number, votes: FamilyVote[]): AreaBoardBody['tone'] {
   const tests = votes.filter((v) => v.vote === 'test').length;
   const supports = votes.filter((v) => v.vote === 'support').length;
   const available = votes.length;
   const at = (i: number) => series[i]?.side ?? 'neutral';
-  const demanding = tests >= 2 && tests > supports;
-  const open = !demanding && supports >= 2 && supports > tests;
+  const primarySide = seriesSide(votes);
+  const demanding = primarySide === 'test';
+  const open = primarySide === 'support';
   let date: string | null = null;
   let tone: Tone = 'steady';
   if (demanding) {
@@ -787,9 +808,7 @@ function presentTone(series: Array<{ month: string; side: Vote }>, nowIdx: numbe
 }
 
 function seriesSide(votes: FamilyVote[]): Vote {
-  const t = votes.filter((v) => v.vote === 'test').length;
-  const s = votes.filter((v) => v.vote === 'support').length;
-  return t >= 2 && t > s ? 'test' : s >= 2 && s > t ? 'support' : 'neutral';
+  return votesSide(votes);
 }
 
 export const AHEAD_MONTHS = 36;

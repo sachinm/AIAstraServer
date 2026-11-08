@@ -36,6 +36,7 @@ export function modelFor(role: ModelRole): string {
 /** USD per 1M tokens (paid tier). Versioned with the matrix in file 05; unknown models cost 0 and are flagged. */
 export const PRICE_TABLE_VERSION = '2026-11-01';
 export const PRICES: Record<string, { in: number; out: number; cached: number }> = {
+  'gemini-2.5-pro': { in: 1.25, out: 10.0, cached: 0.125 },
   'gemini-2.5-flash': { in: 0.3, out: 2.5, cached: 0.03 },
   'gemini-2.5-flash-lite': { in: 0.1, out: 0.4, cached: 0.01 },
   'gemini-2.0-flash': { in: 0.1, out: 0.4, cached: 0.025 },

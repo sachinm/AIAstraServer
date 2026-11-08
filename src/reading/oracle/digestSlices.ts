@@ -38,7 +38,14 @@ export type SubAgentId =
   | 'code:nakshatra'
   | 'code:varga'
   | 'code:annual'
-  | 'code:person';
+  | 'code:person'
+  | 'family.rasi'
+  | 'family.varga'
+  | 'family.dasha'
+  | 'family.year'
+  | 'family.sky'
+  | 'lineman.self'
+  | 'oracle.self';
 
 export interface SubAgentDigestSpec {
   id: SubAgentId;
@@ -409,6 +416,76 @@ const RAW_SUBAGENT_DIGEST_SPECS: Record<SubAgentId, RawSubAgentDigestSpec> = {
     tableTypes: [],
     usesActivation: false,
     cachePromptPrefix: false,
+    cacheOutput: 'technique_outputs',
+  },
+  'family.rasi': {
+    id: 'family.rasi',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star'],
+    vargas: ['D1'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'special_lagnas', 'upagrahas', 'charakaraka'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.varga': {
+    id: 'family.varga',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'point'],
+    vargas: ['D1', 'D2', 'D3', 'D4', 'D7', 'D9', 'D10', 'D12', 'D16', 'D20', 'D24', 'D27', 'D30', 'D40', 'D45', 'D60'],
+    tableTypes: ['strength_matrix'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.dasha': {
+    id: 'family.dasha',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'point', 'star'],
+    vargas: ['D1', 'D9'],
+    tableTypes: ['vimshottari_pratyantar', 'chara_dasha', 'narayana_dasha', 'yogini_dasha', 'conditional_dashas'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.year': {
+    id: 'family.year',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'annual'],
+    vargas: ['D1', 'D9'],
+    tableTypes: ['varshaphala', 'tithi_pravesha'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.sky': {
+    id: 'family.sky',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'star'],
+    vargas: ['D1'],
+    tableTypes: ['ashtakavarga', 'transit_range'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'lineman.self': {
+    id: 'lineman.self',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D9', 'D10'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'oracle.self': {
+    id: 'oracle.self',
+    techniqueId: 'self.reading.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D9', 'D10'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
+    usesActivation: true,
+    cachePromptPrefix: true,
     cacheOutput: 'technique_outputs',
   },
 };

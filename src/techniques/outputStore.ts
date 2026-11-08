@@ -12,7 +12,7 @@
  * and falls through to `make()`.
  */
 import type { PrismaClient } from '@prisma/client';
-import { agentById, withAgentRun, type ChartUsed } from '../agents/registry.js';
+import { AGENTS, agentById, withAgentRun, type ChartUsed } from '../agents/registry.js';
 import { openRow, sealParam } from '../lib/pii/rawSql.js';
 import { TECHNIQUES, techniqueById, type TechniqueDef } from './catalog.js';
 import {
@@ -90,6 +90,8 @@ export interface TechniqueOutputCallInput {
   techniques?: readonly TechniqueDef[];
   /** Optional cache version override. */
   cacheVersion?: string;
+  /** When true, skip reading any cached row, run `make()`, and overwrite the stored row in `technique_outputs`. */
+  forceRefresh?: boolean;
 }
 
 export interface TechniqueMakeResult<T> {
@@ -125,15 +127,20 @@ export function shortestRunningPeriodSpan(
   return best;
 }
 
+const MAX_ANNUAL_SPAN_MS = 400 * 24 * 3_600_000;
+const ONE_YEAR_MS = 365 * 24 * 3_600_000;
+
 /**
- * Finds the running annual chart span (TP preferred, else VP) covering `now` from a digest view's `annual()` rows.
+ * Finds the running annual chart span (~1 solar year; TP preferred when year-sized, else VP/Mudda) covering `now`
+ * from a digest view's `annual()` rows. Multi-decade dashas attached to TP rows (e.g. 108-year `tithi_ashtottari`)
+ * never inflate the annual validity window beyond 1 year.
  */
 export function runningYearSpan(
   view:
     | {
         annual: () => ReadonlyArray<{
           kind: 'TP' | 'VP';
-          dashas: ReadonlyArray<{ periods: ReadonlyArray<{ from: string; to: string }> }>;
+          dashas: ReadonlyArray<{ system?: string; periods: ReadonlyArray<{ from: string; to: string }> }>;
         }>;
       }
     | null
@@ -141,20 +148,40 @@ export function runningYearSpan(
   now: Date,
 ): DateSpan | null {
   if (!view) return null;
-  const candidates: Array<{ kind: 'TP' | 'VP'; span: DateSpan }> = [];
+  const yearSized: Array<{ kind: 'TP' | 'VP'; isMudda: boolean; span: DateSpan }> = [];
+  const oversized: Array<{ kind: 'TP' | 'VP'; span: DateSpan }> = [];
+  const toDate = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
+
   for (const row of view.annual()) {
-    const periods = row.dashas.flatMap((d) => d.periods);
-    if (!periods.length) continue;
-    const fromIso = periods.map((p) => p.from).sort()[0]!;
-    const toIso = periods.map((p) => p.to).sort().at(-1)!;
-    const from = new Date(fromIso.length === 10 ? `${fromIso}T00:00:00Z` : fromIso);
-    const to = new Date(toIso.length === 10 ? `${toIso}T00:00:00Z` : toIso);
-    const span: DateSpan = { from, to };
-    if (windowCovers(span, now)) {
-      candidates.push({ kind: row.kind, span });
+    for (const d of row.dashas) {
+      if (!d.periods.length) continue;
+      const fromIso = d.periods.map((p) => p.from).sort()[0]!;
+      const toIso = d.periods.map((p) => p.to).sort().at(-1)!;
+      const from = toDate(fromIso);
+      const to = toDate(toIso);
+      const span: DateSpan = { from, to };
+      if (!windowCovers(span, now)) continue;
+      const spanMs = to.getTime() - from.getTime();
+      if (spanMs > 0 && spanMs <= MAX_ANNUAL_SPAN_MS) {
+        yearSized.push({ kind: row.kind, isMudda: d.system === 'mudda', span });
+      } else if (spanMs > MAX_ANNUAL_SPAN_MS) {
+        const activePeriod = d.periods
+          .map((p) => ({ from: toDate(p.from), to: toDate(p.to) }))
+          .find((p) => windowCovers(p, now));
+        const clampedFrom =
+          activePeriod && now.getTime() - activePeriod.from.getTime() <= ONE_YEAR_MS ? activePeriod.from : now;
+        const clampedTo = new Date(Math.min(to.getTime(), clampedFrom.getTime() + ONE_YEAR_MS));
+        oversized.push({ kind: row.kind, span: { from: clampedFrom, to: clampedTo } });
+      }
     }
   }
-  const picked = candidates.find((c) => c.kind === 'TP') ?? candidates[0];
+
+  const picked =
+    yearSized.find((c) => c.kind === 'TP') ??
+    yearSized.find((c) => c.isMudda) ??
+    yearSized[0] ??
+    oversized.find((c) => c.kind === 'TP') ??
+    oversized[0];
   return picked?.span ?? null;
 }
 
@@ -341,9 +368,9 @@ export async function withTechniqueOutput<T>(
 
   const store = prisma as StoreCapablePrisma;
   const chosenAgent = input.agentId !== undefined ? input.agentId : (def.agents[0] ?? null);
-  let expiredExisting = false;
+  let expiredExisting = Boolean(input.forceRefresh);
 
-  if (cacheKey !== null) {
+  if (cacheKey !== null && !input.forceRefresh) {
     const readStarted = Date.now();
     try {
       const existing = await readStoredRow(store, cacheKey);
@@ -481,9 +508,34 @@ export async function deleteKundliTechniqueOutputs(prisma: PrismaClient, kundliI
   return 0;
 }
 
+export const LLM_TECHNIQUE_AGENT_IDS: readonly string[] = Object.freeze(
+  AGENTS.filter((a) => a.kind === 'llm').map((a) => a.id),
+);
+
+/**
+ * Returns true when a stored `technique_outputs` row is protected from the 45-minute idle recycler:
+ * - Permanent natal outputs (`freshness === 'natal'` or `valid_to === null`) never change until digest rebuild.
+ * - Unexpired (`valid_to > now`) LLM outputs (`made_by_kind === 'llm'` or `made_by_agent` in `LLM_TECHNIQUE_AGENT_IDS`)
+ *   and `board.bundle*` outputs stay valid until their `valid_to` window ends.
+ */
+export function isProtectedTechniqueOutputRow(
+  row: Partial<StoredTechniqueOutputRow> & { made_by_kind?: string | null },
+  now: Date = new Date(),
+): boolean {
+  if (row.freshness === 'natal') return true;
+  if ('valid_to' in row && row.valid_to === null) return true;
+  const validTo = row.valid_to ? asDate(row.valid_to) : null;
+  if (validTo && validTo.getTime() <= now.getTime()) return false;
+  if ((row.technique_id ?? '').startsWith('board.bundle')) return true;
+  if (row.made_by_kind === 'llm') return true;
+  if (row.made_by_agent && LLM_TECHNIQUE_AGENT_IDS.includes(row.made_by_agent)) return true;
+  return false;
+}
+
 /**
  * Recycles stored technique outputs for a single kundli that have already been used (`hit_count > 0` or `last_hit_at IS NOT NULL`,
  * when `onlyUsed !== false`) and are idle longer than `idleMs` (or immediately when `idleMs` is 0 / omitted).
+ * Permanent natal rows (`freshness = 'natal'` / `valid_to IS NULL`) and unexpired LLM / `board.bundle*` rows are preserved.
  */
 export async function recycleIndividualTechniqueOutputs(
   prisma: PrismaClient | null | undefined,
@@ -495,6 +547,21 @@ export async function recycleIndividualTechniqueOutputs(
   const now = opts.now ?? new Date();
   const onlyUsed = opts.onlyUsed ?? true;
   const idleBefore = opts.idleMs && opts.idleMs > 0 ? new Date(now.getTime() - opts.idleMs) : undefined;
+  const nonProtectedClause = [
+    { freshness: { not: 'natal' } },
+    { valid_to: { not: null } },
+    {
+      OR: [
+        { valid_to: { lte: now } },
+        {
+          AND: [
+            { NOT: { technique_id: { startsWith: 'board.bundle' } } },
+            { OR: [{ made_by_agent: null }, { made_by_agent: { notIn: [...LLM_TECHNIQUE_AGENT_IDS] } }] },
+          ],
+        },
+      ],
+    },
+  ];
   try {
     if (store.techniqueOutput?.deleteMany) {
       const where: Record<string, unknown> = { kundli_id: owner.kundliId };
@@ -504,9 +571,15 @@ export async function recycleIndividualTechniqueOutputs(
           ...(idleBefore
             ? [{ OR: [{ last_hit_at: { lte: idleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: idleBefore } }] }] }]
             : []),
+          ...nonProtectedClause,
         ];
       } else if (idleBefore) {
-        where.AND = [{ OR: [{ last_hit_at: { lte: idleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: idleBefore } }] }] }];
+        where.AND = [
+          { OR: [{ last_hit_at: { lte: idleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: idleBefore } }] }] },
+          ...nonProtectedClause,
+        ];
+      } else {
+        where.AND = [...nonProtectedClause];
       }
       const res = await store.techniqueOutput.deleteMany({ where });
       return res.count;
@@ -518,12 +591,32 @@ export async function recycleIndividualTechniqueOutputs(
           ? `DELETE FROM "technique_outputs"
               WHERE "kundli_id" = $1
                 AND ("hit_count" > 0 OR "last_hit_at" IS NOT NULL)
-                AND COALESCE("last_hit_at", "created_at") <= $2`
+                AND COALESCE("last_hit_at", "created_at") <= $2
+                AND "freshness" <> 'natal'
+                AND "valid_to" IS NOT NULL
+                AND (
+                  "valid_to" <= $3
+                  OR (
+                    "technique_id" NOT LIKE 'board.bundle%'
+                    AND ("made_by_agent" IS NULL OR NOT ("made_by_agent" = ANY($4::text[])))
+                  )
+                )`
           : `DELETE FROM "technique_outputs"
               WHERE "kundli_id" = $1
-                AND COALESCE("last_hit_at", "created_at") <= $2`,
+                AND COALESCE("last_hit_at", "created_at") <= $2
+                AND "freshness" <> 'natal'
+                AND "valid_to" IS NOT NULL
+                AND (
+                  "valid_to" <= $3
+                  OR (
+                    "technique_id" NOT LIKE 'board.bundle%'
+                    AND ("made_by_agent" IS NULL OR NOT ("made_by_agent" = ANY($4::text[])))
+                  )
+                )`,
         owner.kundliId,
         cutoff,
+        now,
+        [...LLM_TECHNIQUE_AGENT_IDS],
       );
     }
   } catch (e) {
@@ -538,6 +631,7 @@ const DAY_MS = 24 * 3_600_000;
  * Sweep (`cache:sweep`, docs/reading-engine/56 §4.1): deletes expired rows whose `valid_to < now - 1 day`,
  * and when `opts.recycleUsedAfterMs` is set, also recycles already-used rows (`hit_count > 0` or `last_hit_at IS NOT NULL`)
  * idle longer than `recycleUsedAfterMs` (45 minutes), bounded to `limit` rows per run (default 5,000).
+ * Permanent natal rows (`freshness = 'natal'` / `valid_to IS NULL`) and unexpired LLM / `board.bundle*` rows are preserved.
  */
 export async function sweepTechniqueOutputs(
   prisma: PrismaClient,
@@ -558,13 +652,27 @@ export async function sweepTechniqueOutputs(
             WHERE "cache_key" IN (
               SELECT "cache_key" FROM "technique_outputs"
                WHERE ("valid_to" IS NOT NULL AND "valid_to" < $1)
-                  OR (("hit_count" > 0 OR "last_hit_at" IS NOT NULL) AND COALESCE("last_hit_at", "created_at") <= $3)
+                  OR (
+                    ("hit_count" > 0 OR "last_hit_at" IS NOT NULL)
+                    AND COALESCE("last_hit_at", "created_at") <= $3
+                    AND "freshness" <> 'natal'
+                    AND "valid_to" IS NOT NULL
+                    AND (
+                      "valid_to" <= $4
+                      OR (
+                        "technique_id" NOT LIKE 'board.bundle%'
+                        AND ("made_by_agent" IS NULL OR NOT ("made_by_agent" = ANY($5::text[])))
+                      )
+                    )
+                  )
                ORDER BY COALESCE("valid_to", "last_hit_at", "created_at") ASC
                LIMIT $2
             )`,
           cutoff,
           cap,
           usedIdleBefore,
+          now,
+          [...LLM_TECHNIQUE_AGENT_IDS],
         );
       }
       return await store.$executeRawUnsafe(
@@ -589,6 +697,19 @@ export async function sweepTechniqueOutputs(
                   AND: [
                     { OR: [{ hit_count: { gt: 0 } }, { last_hit_at: { not: null } }] },
                     { OR: [{ last_hit_at: { lte: usedIdleBefore } }, { AND: [{ last_hit_at: null }, { created_at: { lte: usedIdleBefore } }] }] },
+                    { freshness: { not: 'natal' } },
+                    { valid_to: { not: null } },
+                    {
+                      OR: [
+                        { valid_to: { lte: now } },
+                        {
+                          AND: [
+                            { NOT: { technique_id: { startsWith: 'board.bundle' } } },
+                            { OR: [{ made_by_agent: null }, { made_by_agent: { notIn: [...LLM_TECHNIQUE_AGENT_IDS] } }] },
+                          ],
+                        },
+                      ],
+                    },
                   ],
                 },
               ],

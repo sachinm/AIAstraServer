@@ -10,7 +10,7 @@ import { contractHash, canonicalJson } from '../../techniques/pieces.js';
 import { techniqueById } from '../../techniques/catalog.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
-import type { CodeAudit, PurviewEntry, SelfClock, SelfPanel } from './types.js';
+import type { CodeAudit, PurviewEntry, SelfClock, SelfOraclePayload, SelfPanel } from './types.js';
 
 /** Resolves an evidence key to the stored row it names. Unknown keys return undefined. */
 export function resolveKey(key: string, view: DigestView, activation: readonly ActivationRow[]): unknown {
@@ -57,9 +57,21 @@ export interface DossierInput {
   gaps: string[];
   audit: CodeAudit;
   /** per-step milliseconds of this build (admin doc 10: the lab's flow view) */
-  steps?: { loadMs: number; panelsMs: number; purviewMs: number; cardsMs: number; auditMs: number };
+  steps?: {
+    loadMs: number;
+    panelsMs: number;
+    purviewMs: number;
+    cardsMs: number;
+    linemenMs?: number;
+    briefMs?: number;
+    oracleMs?: number;
+    validatorMs?: number;
+    auditMs: number;
+  };
   /** 'all' or the one technique a lab run asked for */
   scope?: string;
+  /** Optional AI sub-agent + Lineman + Oracle synthesis result and cost */
+  oracle?: SelfOraclePayload | null;
 }
 
 export interface DossierRecord {
@@ -72,6 +84,8 @@ export interface DossierRecord {
   gaps: string[];
   audit: CodeAudit & { steps: DossierInput['steps'] | null; /** evidence keys the claims cite that did not resolve to a stored row (not a count of rows left unread) */ unresolvedKeys: number; scope: string };
   bundleHash: string;
+  oracle?: SelfOraclePayload | null;
+  costUsd?: number;
 }
 
 /** The evidence keys every claim and purview rule of the build names, resolved; `claim:` keys are internal links. */
@@ -93,21 +107,45 @@ export function buildDossier(input: DossierInput): DossierRecord {
   const { data, unresolved } = collectData(input);
   const running = input.activation.filter((r) => r.from <= input.asOf && input.asOf < r.to);
   const applicability = input.purview.find((e) => e.rule === 'purview.dasha_applicability');
+  const allSystems = [...new Set([input.clock.system, ...input.clock.confirming.map((c) => c.system), ...input.activation.map((r) => r.system)])];
   const clocks = {
     reading: input.clock,
     /** true / false from the engine's verdict when the reading clock is a conditional system; null when it is not one */
     applicable: applicability ? applicability.action === 'annotate' : null,
-    running: running.map((r) => ({ system: r.system, level: r.level, lord: r.lord ?? r.sign, from: r.from, to: r.to, houses: r.houses })),
-    main: [input.clock.system, ...input.clock.confirming.map((c) => c.system)].map((s) => ({ system: s, periods: input.activation.filter((r) => r.system === s && r.level === 1).map((r) => ({ lord: r.lord ?? r.sign, from: r.from, to: r.to })) })),
+    running: running.map((r) => ({ system: r.system, family: r.family, level: r.level, lord: r.lord ?? r.sign, from: r.from, to: r.to, houses: r.houses })),
+    main: allSystems.map((s) => ({ system: s, periods: input.activation.filter((r) => r.system === s && r.level === 1).map((r) => ({ lord: r.lord ?? r.sign, from: r.from, to: r.to })) })),
   };
-  const techniques = input.panels.map((p) => {
-    const t = techniqueById(p.technique);
-    return { id: p.technique, contractHash: t ? contractHash(t) : null, codeVersion: input.codeVersion, cached: p.cached, ms: p.ms, status: p.status };
-  });
-  const panels = input.panels.map((p) => ({ id: p.id, technique: p.technique, headerRange: p.headerRange, lines: p.lines, claims: p.claims, vetoed: p.vetoed ?? [], chapters: p.chapters ?? [] }));
+  const stageEntry = (id: string, ms: number, status = 'ok', cached = false) => {
+    const t = techniqueById(id);
+    return { id, contractHash: t ? contractHash(t) : null, codeVersion: input.codeVersion, cached, ms, status };
+  };
+  const techniques = [
+    stageEntry('self.reading.clock', input.steps?.loadMs ?? 0),
+    ...input.panels.map((p) => {
+      const t = techniqueById(p.technique);
+      return { id: p.technique, contractHash: t ? contractHash(t) : null, codeVersion: input.codeVersion, cached: p.cached, ms: p.ms, status: p.status };
+    }),
+    stageEntry('self.reading.purview', input.steps?.purviewMs ?? 0),
+    stageEntry('self.reading.audit', input.steps?.auditMs ?? 0, input.audit.verdict === 'pass' ? 'ok' : 'failed'),
+    ...(input.oracle && input.oracle.status !== 'off'
+      ? [stageEntry('self.reading.oracle', input.steps?.oracleMs ?? 0, input.oracle.status === 'ok' ? 'ok' : 'failed', Boolean(input.oracle.cached))]
+      : []),
+  ];
+  const panels = input.panels.map((p) => ({ id: p.id, technique: p.technique, headerRange: p.headerRange, ...(p.validUntil ? { validUntil: p.validUntil } : {}), lines: p.lines, claims: p.claims, vetoed: p.vetoed ?? [], chapters: p.chapters ?? [] }));
   const gaps = [...input.gaps, ...unresolved.map((k) => `dossier: ${k} did not resolve`)];
-  const bundleHash = createHash('sha256').update(canonicalJson({ v: input.view.version, clock: input.clock.system, code: input.codeVersion, asOf: input.asOf, data, panels })).digest('hex').slice(0, 32);
-  return { techniques, rules: input.purview, data, yogas: input.view.yogas(), clocks, panels, gaps, audit: { ...input.audit, steps: input.steps ?? null, unresolvedKeys: unresolved.length, scope: input.scope ?? 'all' }, bundleHash };
+  const bundleHash = createHash('sha256').update(canonicalJson({ v: input.view.version, clock: input.clock.system, code: input.codeVersion, asOf: input.asOf, data, panels, oracle: input.oracle?.output ?? input.oracle?.text ?? null })).digest('hex').slice(0, 32);
+  return {
+    techniques,
+    rules: input.purview,
+    data,
+    yogas: input.view.yogas(),
+    clocks,
+    panels,
+    gaps,
+    audit: { ...input.audit, steps: input.steps ?? null, unresolvedKeys: unresolved.length, scope: input.scope ?? 'all' },
+    bundleHash,
+    ...(input.oracle ? { oracle: input.oracle, costUsd: input.oracle.spentUsd ?? 0 } : {}),
+  };
 }
 
 /** Writes the dossier once per build content; returns its id. A failed write never fails the reading. */
@@ -134,6 +172,7 @@ export async function writeDossier(prisma: PrismaClient, input: DossierInput, re
         panels: rec.panels as object,
         gaps: rec.gaps as object,
         audit: rec.audit as unknown as object,
+        ...(rec.oracle ? { oracle: rec.oracle as unknown as object, cost_usd: rec.costUsd ?? 0 } : {}),
       },
       select: { id: true },
     });
@@ -146,11 +185,11 @@ export async function writeDossier(prisma: PrismaClient, input: DossierInput, re
 
 /**
  * What a staff tool may see (admin doc 10 §5): person keys are dropped at any depth, judged by the key's letters
- * (`place_resolved` → `placeresolved`): place, city, lat, lon, tz, email, phone, address, ip, kundli id, question and
+ * (`place_resolved` → `placeresolved`): place, city, lat, lon, tz, email, phone, address, ip, kundli id and
  * anything starting with birth, plus the person's own name fields. Chart names (a yoga's, a star's, a saham's) are kept
- * under `title`, so nothing a reader needs is lost. The top-level `kundli_id` is removed.
+ * under `title`, so nothing a reader needs is lost. The top-level `kundli_id` is removed; `question` (the chart confirm question) is preserved.
  */
-export const REFUSED_KEY_LETTERS = new Set(['name', 'place', 'placeresolved', 'placeofbirth', 'city', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'question', 'username', 'dateofbirth', 'timeofbirth']);
+export const REFUSED_KEY_LETTERS = new Set(['name', 'place', 'placeresolved', 'placeofbirth', 'city', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'username', 'dateofbirth', 'timeofbirth', 'question']);
 const letters = (k: string) => k.toLowerCase().replace(/[^a-z]/g, '');
 export function isRefusedKey(k: string): boolean {
   const l = letters(k);
