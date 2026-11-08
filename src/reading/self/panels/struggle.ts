@@ -73,21 +73,23 @@ export function strugglePanel({ view, activation, asOf, clock }: PanelInput): Pa
 
   const run = runningChain(activation, clock.system, asOf);
   const allRunning = allRunningDashas(activation, asOf, clock.system);
+  const resolveLord = (r: { lord?: string | null; sign?: string | null } | null | undefined): string | null =>
+    r?.lord ?? (r?.sign ? view.houses('D1').find((h) => h.sign === r.sign)?.lord ?? null : null);
   // a struggle the reading clock is running now (a release date) comes first (doc 59 §2.2)
   // release dates come from the main period and the sub-period only; the third level is the day-to-day phase of doc 60 §11
-  const runningLords = new Set([run.l1?.lord, run.l2?.lord].filter(Boolean));
+  const runningLords = new Set([resolveLord(run.l1), resolveLord(run.l2)].filter(Boolean));
   const ordered = [...out.filter((c) => c.planet && runningLords.has(c.planet)), ...out.filter((c) => !(c.planet && runningLords.has(c.planet)))];
   const claims: SelfClaim[] = ordered.slice(0, MAX_CLAIMS).map(({ planet, ...c }) => {
-    const r = [run.l2, run.l1].find((x) => x && planet && x.lord === planet);
+    const r = [run.l2, run.l1].find((x) => x && planet && resolveLord(x) === planet);
     const otherActive = planet
       ? allRunning
-          .filter((s) => s.system !== clock.system && (s.l1?.lord === planet || s.l2?.lord === planet))
-          .map((s) => `${clockLabel(s.system)} (${(s.l2?.lord === planet ? s.l2 : s.l1)!.from}→${(s.l2?.lord === planet ? s.l2 : s.l1)!.to})`)
+          .filter((s) => s.system !== clock.system && (resolveLord(s.l1) === planet || resolveLord(s.l2) === planet))
+          .map((s) => `${clockLabel(s.system)} (${(resolveLord(s.l2) === planet ? s.l2 : s.l1)!.from}→${(resolveLord(s.l2) === planet ? s.l2 : s.l1)!.to})`)
       : [];
     const otherSuffix = otherActive.length ? `; also running in ${otherActive.join(', ')}` : '';
     if (!r) return otherSuffix ? { ...c, detail: `${c.detail}${otherSuffix}` } : c;
     const what = r.level === 1 ? 'chapter' : 'sub-chapter';
-    return { ...c, text: `${c.text} This presses hardest until ${longDate(r.to)}, when your current ${what} ends.`, line: c.line ? `${c.line.replace(/\.$/, '')} until ${longDate(r.to)}.` : undefined, range: { from: r.from, to: r.to }, detail: `${c.detail}; running ${clock.label} level ${r.level} ${pname(r.lord)} ${r.from} → ${r.to}${otherSuffix}`, evidence: [...c.evidence, activationKey(r)] };
+    return { ...c, text: `${c.text} This presses hardest until ${longDate(r.to)}, when your current ${what} ends.`, line: c.line ? `${c.line.replace(/\.$/, '')} until ${longDate(r.to)}.` : undefined, range: { from: r.from, to: r.to }, detail: `${c.detail}; running ${clock.label} level ${r.level} ${r.lord ? pname(r.lord) : r.sign} ${r.from} → ${r.to}${otherSuffix}`, evidence: [...c.evidence, activationKey(r)] };
   });
   const lead = struggleLead(claims);
   return body(lead, claims, g);

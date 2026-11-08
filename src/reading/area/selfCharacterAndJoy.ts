@@ -471,7 +471,7 @@ export function buildSelfCharacterArc(
   const l1Card = view.planet('D1', l1Code);
   const d9L1Card = view.planet('D9', l1Code);
   const akPoint = view.points('D1').find((p) => p.id === 'AK');
-  const akCode = akPoint?.lord ?? 'Su';
+  const akCode = akPoint?.planet ?? akPoint?.lord ?? 'Su';
   const akCard = view.planet('D1', akCode);
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
@@ -814,7 +814,7 @@ export function buildLoveRelationshipArc(
   const veD9 = view.planet('D9', 'Ve');
   const dkPoint = view.points('D1').find((p) => p.id === 'DK');
   const ulPoint = view.points('D1').find((p) => p.id === 'UL');
-  const dkCode = dkPoint?.lord ?? 'Ve';
+  const dkCode = dkPoint?.planet ?? dkPoint?.lord ?? 'Ve';
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
   const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
@@ -1030,7 +1030,7 @@ export function buildWorkCharacterArc(
   const l10Code = h10?.lord ?? 'Sa';
   const d10H10 = view.house('D10', 10);
   const amkPoint = view.points('D1').find((p) => p.id === 'AmK');
-  const amkCode = amkPoint?.lord ?? l10Code;
+  const amkCode = amkPoint?.planet ?? amkPoint?.lord ?? l10Code;
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
   const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
@@ -1188,7 +1188,7 @@ export function buildWorkVocationAndPersonality(view: DigestView): SelfPersonali
       whatYouEnjoy: '3. Independent Advisory, Consulting & Specialist Practice',
       whyItFeelsGood: 'High-trust advisory, research, finance, or specialized domain consulting where clients rely on your diagnostic rigor.',
       whyItFits: 'High-trust advisory, research, finance, or specialized domain consulting where clients rely on your diagnostic rigor.',
-      evidence: [`D1.point.AmK:${amkPoint?.lord ?? 'Ju'}`, 'D1.Ju'],
+      evidence: [`D1.point.AmK:${amkPoint?.planet ?? amkPoint?.lord ?? 'Ju'}`, 'D1.Ju'],
     },
     {
       id: 'founder_ventures',
@@ -1217,7 +1217,7 @@ export function buildWorkVocationAndPersonality(view: DigestView): SelfPersonali
     evidence: [
       `D1.h10:${h10?.sign ?? 'Capricorn'}`,
       `D10.h10:${workSign}`,
-      `D1.point.AmK:${amkPoint?.lord ?? 'Sa'}`,
+      `D1.point.AmK:${amkPoint?.planet ?? amkPoint?.lord ?? 'Sa'}`,
       `D1.point.A10:H${a10Point?.house ?? 10}`,
     ],
   };

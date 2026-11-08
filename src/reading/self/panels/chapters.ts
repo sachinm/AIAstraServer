@@ -80,26 +80,38 @@ export function chaptersPanel({ view, activation, asOf, clock }: PanelInput): Pa
   else g.add(`activation:${clock.system} previous level 1 missing`);
   const running = make('running', spine.running);
   const sub = spine.runningSub;
-  if (sub?.lord) {
-    const mdCard = spine.running.lord ? view.planet('D1', spine.running.lord) : null;
-    const cell = mdCard?.dashaCharter?.fruition?.[sub.lord];
+  const resolveLord = (r: ActivationRow | null | undefined): string | null =>
+    r?.lord ?? (r?.sign ? view.houses('D1').find((h) => h.sign === r.sign)?.lord ?? null : null);
+  const subLord = resolveLord(sub);
+  if (sub && (sub.lord || sub.sign)) {
+    const mdLord = resolveLord(spine.running);
+    const mdCard = mdLord ? view.planet('D1', mdLord) : null;
+    const cell = subLord ? mdCard?.dashaCharter?.fruition?.[subLord] : undefined;
     const flavour = cell?.fruitionClass && FRUITION_WORDS[cell.fruitionClass] ? ` In this chapter ${FRUITION_WORDS[cell.fruitionClass]}${cell.isDwirdwadasha212 ? ', though what comes in also goes out' : cell.isShadAshtaka68 ? ', with friction between the two' : ''}.` : '';
-    if (!cell) g.add(`planet:D1.${spine.running.lord}.dashaCharter.fruition.${sub.lord} missing`);
+    if (!cell && mdLord && subLord) g.add(`planet:D1.${mdLord}.dashaCharter.fruition.${subLord} missing`);
     const parallelClocks = allRunningDashas(activation, asOf, clock.system)
       .filter((s) => s.system !== clock.system && (s.l1 || s.l2))
       .map((s) => `${clockLabel(s.system)}: ${s.l1 ? `${s.l1.lord ? pname(s.l1.lord) : s.l1.sign}(${s.l1.from}→${s.l1.to})` : ''}${s.l2 ? `/${s.l2.lord ? pname(s.l2.lord) : s.l2.sign}(${s.l2.from}→${s.l2.to})` : ''} [houses ${[...new Set([...(s.l1?.houses ?? []), ...(s.l2?.houses ?? [])])].join(',')}]`);
     running.sub = {
-      lord: sub.lord,
-      lordLabel: pname(sub.lord),
+      lord: sub.lord ?? sub.sign ?? '?',
+      lordLabel: sub.lord ? pname(sub.lord) : (sub.sign ?? '?'),
       from: sub.from,
       to: sub.to,
       text: `Since ${longDate(sub.from)} and until ${longDate(sub.to)}, what presses now is ${housesShort(sub.houses)}.${flavour}`,
-      detail: `${clockLabel(clock.system)} level 2 ${pname(sub.lord)} ${sub.from} → ${sub.to}; activates houses ${sub.houses.join(', ')}${cell ? `; fruition from ${pname(spine.running.lord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}${parallelClocks.length ? `; all parallel clocks (${parallelClocks.length}): ${parallelClocks.join('; ')}` : ''}`,
+      detail: `${clockLabel(clock.system)} level 2 ${sub.lord ? pname(sub.lord) : sub.sign} ${sub.from} → ${sub.to}; activates houses ${sub.houses.join(', ')}${cell ? `; fruition from ${pname(mdLord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}${parallelClocks.length ? `; all parallel clocks (${parallelClocks.length}): ${parallelClocks.join('; ')}` : ''}`,
       houses: sub.houses,
     };
     running.evidence.push(activationKey(sub));
   } else g.add(`activation:${clock.system} level 2 covering ${asOf} missing`);
-  if (spine.nextSub?.lord) running.nextSub = { lord: spine.nextSub.lord, lordLabel: pname(spine.nextSub.lord), from: spine.nextSub.from, to: spine.nextSub.to, houses: spine.nextSub.houses };
+  if (spine.nextSub && (spine.nextSub.lord || spine.nextSub.sign)) {
+    running.nextSub = {
+      lord: spine.nextSub.lord ?? spine.nextSub.sign ?? '?',
+      lordLabel: spine.nextSub.lord ? pname(spine.nextSub.lord) : (spine.nextSub.sign ?? '?'),
+      from: spine.nextSub.from,
+      to: spine.nextSub.to,
+      houses: spine.nextSub.houses,
+    };
+  }
   chapters.push(running);
   if (spine.next) chapters.push(make('next', spine.next));
   else g.add(`activation:${clock.system} next level 1 missing`);
