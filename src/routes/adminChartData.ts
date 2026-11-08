@@ -3,7 +3,8 @@
  * person's chart, opened by the Prisma PII extension and served behind the admin-lab token. Nothing here computes
  * astrology; the rows are returned as stored.
  *
- *   GET /api/admin-lab/chart-data/:userId?part=natal|dasha|annual|digest|activation|all&years=2025,2026,2027
+ *   GET /api/admin-lab/chart-data/:userId?part=natal|dasha|annual|digest|activation|transit|all&years=2025,2026,2027
+ *       transit only: &from=YYYY-MM-DD&to=YYYY-MM-DD&place=<lat>,<lon>
  *
  * Every answer carries the person (QA, Sachin 2026-11-08: every auth and kundli row is made-up test data, so birth
  * details are shown in full), the latest kundli's status columns, the catalogue (built-in list merged with the
@@ -16,7 +17,13 @@
  *               plus the `current` variants of the registration pull
  *   digest      `kundli_digest` rows
  *   activation  `kundli_activation` rows
- *   all         everything above (small charts and tests only)
+ *   transit     the stored transit data over a window (default 30 days back to 365 ahead, at most 731 days): the shared
+ *               sky (`transit_instants` for one place, `transit_range_skies` overlapping the window) and this kundli's
+ *               own engine answers (`kundli_transit_overlays`: houses and contacts; `transit_snapshots`: the natal-overlay
+ *               chart with its windows). `place` picks the sky's place (two-decimal lat,lon of a stored place key);
+ *               default the place with the most rows in the window. Bounded to TRANSIT_MAX_BYTES; when cut, `nextFrom`
+ *               says where the next page starts.
+ *   all         everything above except transit (small charts and tests only)
  */
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
@@ -24,7 +31,7 @@ import { BUILTIN_CHART_TYPES } from '../reading/chartData/catalog.js';
 import { DIGEST_NATAL_TYPES } from '../reading/digest/build.js';
 import { ANNUAL_CHART_TYPES, ANNUAL_YEAR_TYPES } from '../reading/digest/annualSet.js';
 
-export const CHART_DATA_PARTS = ['natal', 'dasha', 'annual', 'digest', 'activation', 'all'] as const;
+export const CHART_DATA_PARTS = ['natal', 'dasha', 'annual', 'digest', 'activation', 'transit', 'all'] as const;
 export type ChartDataPart = (typeof CHART_DATA_PARTS)[number];
 
 /** The legacy `kundlis` JSON columns (sealed; opened by the extension) served with the natal part. */
@@ -51,6 +58,169 @@ export function parseYears(v: unknown): number[] | null | undefined {
 export function yearOfVariant(variant: string): number | null {
   const m = /^year=(\d{4})(?:;|$)/.exec(variant);
   return m ? Number(m[1]) : null;
+}
+
+// ------------------------------------------------------------------------------------------------- transit part
+
+/** Default window: 30 days back, 365 ahead. The cap keeps one answer well under the Lambda's 6 MB response limit. */
+export const TRANSIT_DEFAULT_BACK_DAYS = 30;
+export const TRANSIT_DEFAULT_AHEAD_DAYS = 365;
+export const TRANSIT_MAX_DAYS = 731;
+/** Bytes of payload one transit answer may carry before the sky instants are cut and paged (`nextFrom`). */
+export const TRANSIT_MAX_BYTES = 4_500_000;
+
+const DAY_MS = 86_400_000;
+const addDays = (d: string, n: number): string => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+const validDate = (d: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`)) && addDays(d, 0) === d;
+
+/** The transit window from the query; undefined when malformed, reversed or longer than TRANSIT_MAX_DAYS. */
+export function parseWindow(fromQ: unknown, toQ: unknown, today: string): { from: string; to: string } | undefined {
+  const f = fromQ === undefined || fromQ === '' ? null : fromQ;
+  const t = toQ === undefined || toQ === '' ? null : toQ;
+  if ((f !== null && (typeof f !== 'string' || !validDate(f))) || (t !== null && (typeof t !== 'string' || !validDate(t)))) return undefined;
+  const span = TRANSIT_DEFAULT_BACK_DAYS + TRANSIT_DEFAULT_AHEAD_DAYS;
+  const from = (f as string | null) ?? (t ? addDays(t as string, -span) : addDays(today, -TRANSIT_DEFAULT_BACK_DAYS));
+  const to = (t as string | null) ?? addDays(from, span);
+  if (to < from) return undefined;
+  if ((Date.parse(to) - Date.parse(from)) / DAY_MS + 1 > TRANSIT_MAX_DAYS) return undefined;
+  return { from, to };
+}
+
+/** `37.34,-121.89` as given; null when absent; undefined when malformed. */
+export function parsePlace(v: unknown): string | null | undefined {
+  if (v === undefined || v === '') return null;
+  if (typeof v !== 'string' || !/^-?\d{1,3}(\.\d{1,2})?,-?\d{1,3}(\.\d{1,2})?$/.test(v)) return undefined;
+  return v;
+}
+
+/** A sky place key (`lat,lon,tz`) without its offset: one place across its daylight-saving keys. */
+export const placeOfKey = (key: string): string => key.split(',').slice(0, 2).join(',');
+
+/**
+ * The place-local calendar date of a stored instant: the UTC instant moved by the key's own UTC offset. Clock arithmetic
+ * only, so a row stored at 20:00Z under `-8` belongs to that day's noon in the place.
+ */
+export function localDateOf(atUtc: Date, key: string): string {
+  const tz = Number(key.split(',')[2]);
+  return new Date(atUtc.getTime() + (Number.isFinite(tz) ? tz : 0) * 3_600_000).toISOString().slice(0, 10);
+}
+
+const bytesOf = (v: unknown): number => (v == null ? 0 : Buffer.byteLength(JSON.stringify(v)));
+
+type InstantRow = { place_key: string; at_utc: Date; factors_key: string; ayanamsa: string; calc_version: string | null; source_hash: string; fetched_at: Date; payload: unknown };
+
+/**
+ * Every stored transit row for this kundli over the window, as stored (overlays and snapshots are opened by the PII
+ * extension). Nothing is computed: rows are selected by date and place, and dated by their own key's offset.
+ */
+export async function loadTransit(prisma: PrismaClient, kundliId: string, win: { from: string; to: string }, placeWanted: string | null) {
+  const lo = new Date(Date.parse(`${win.from}T00:00:00Z`) - DAY_MS);
+  const hi = new Date(Date.parse(`${win.to}T00:00:00Z`) + 2 * DAY_MS);
+  const fromD = new Date(`${win.from}T00:00:00Z`);
+  const toD = new Date(`${win.to}T00:00:00Z`);
+  const grouped: unknown = await prisma.transitInstant.groupBy({ by: ['place_key'], where: { at_utc: { gte: lo, lt: hi } }, _count: { _all: true }, orderBy: { place_key: 'asc' } });
+  const counts = grouped as Array<{ place_key: string; _count: { _all: number } }>;
+  const byPlace = new Map<string, { place: string; keys: string[]; rows: number }>();
+  for (const c of counts) {
+    const place = placeOfKey(c.place_key);
+    const g = byPlace.get(place) ?? { place, keys: [], rows: 0 };
+    g.keys.push(c.place_key);
+    g.rows += c._count._all;
+    byPlace.set(place, g);
+  }
+  const places = [...byPlace.values()].map((g) => ({ ...g, keys: g.keys.sort() })).sort((a, b) => b.rows - a.rows || a.place.localeCompare(b.place));
+  const chosen = placeWanted ? (places.find((p) => p.place === placeWanted) ?? null) : (places[0] ?? null);
+
+  const instants = chosen
+    ? ((await prisma.transitInstant.findMany({
+        where: { place_key: { in: chosen.keys }, at_utc: { gte: lo, lt: hi } },
+        select: { place_key: true, at_utc: true, factors_key: true, ayanamsa: true, calc_version: true, source_hash: true, fetched_at: true, payload: true },
+        orderBy: [{ at_utc: 'asc' }, { place_key: 'asc' }],
+      })) as InstantRow[])
+    : [];
+  const inst = instants
+    .map((r) => ({
+      placeKey: r.place_key,
+      atUtc: iso(r.at_utc),
+      localDate: localDateOf(r.at_utc, r.place_key),
+      factorsKey: r.factors_key,
+      ayanamsa: r.ayanamsa,
+      calcVersion: r.calc_version,
+      sourceHash: r.source_hash,
+      fetchedAt: iso(r.fetched_at),
+      payload: r.payload ?? null,
+      bytes: bytesOf(r.payload),
+    }))
+    .filter((r) => r.localDate >= win.from && r.localDate <= win.to);
+
+  const ranges = (
+    await prisma.transitRangeSky.findMany({
+      where: { from_date: { lte: toD }, to_date: { gte: fromD } },
+      select: { place_key: true, from_date: true, to_date: true, planets_key: true, flags_key: true, ayanamsa: true, calc_version: true, source_hash: true, fetched_at: true, payload: true },
+      orderBy: [{ place_key: 'asc' }, { from_date: 'asc' }],
+    })
+  ).map((r) => ({
+    placeKey: r.place_key,
+    from: day(r.from_date),
+    to: day(r.to_date),
+    planetsKey: r.planets_key,
+    flagsKey: r.flags_key,
+    ayanamsa: r.ayanamsa,
+    calcVersion: r.calc_version,
+    sourceHash: r.source_hash,
+    fetchedAt: iso(r.fetched_at),
+    payload: r.payload ?? null,
+    bytes: bytesOf(r.payload),
+  }));
+
+  const overlays = (
+    await prisma.kundliTransitOverlay.findMany({
+      where: { kundli_id: kundliId, from_date: { lte: toD }, to_date: { gte: fromD } },
+      select: { kind: true, params_key: true, from_date: true, to_date: true, calc_version: true, source_hash: true, fetched_at: true, payload: true },
+      orderBy: [{ kind: 'asc' }, { from_date: 'asc' }],
+    })
+  ).map((r) => ({
+    kind: r.kind,
+    paramsKey: r.params_key,
+    from: day(r.from_date),
+    to: day(r.to_date),
+    calcVersion: r.calc_version,
+    sourceHash: r.source_hash,
+    fetchedAt: iso(r.fetched_at),
+    payload: r.payload ?? null,
+    bytes: bytesOf(r.payload),
+  }));
+
+  const snapshots = (
+    await prisma.transitSnapshot.findMany({
+      where: { kundli_id: kundliId, from_date: { lte: toD }, to_date: { gte: fromD } },
+      select: { id: true, from_date: true, to_date: true, ayanamsa: true, snapshot_version: true, built_at: true, snapshot: true },
+      orderBy: { built_at: 'desc' },
+      take: 3,
+    })
+  ).map((r) => ({
+    id: r.id,
+    from: day(r.from_date),
+    to: day(r.to_date),
+    ayanamsa: r.ayanamsa,
+    snapshotVersion: r.snapshot_version,
+    builtAt: iso(r.built_at),
+    snapshot: r.snapshot ?? null,
+    bytes: bytesOf(r.snapshot),
+  }));
+
+  // bound the answer: the kundli's own rows and the ranges always come; the sky instants are cut at the end and paged
+  let bytes = [...ranges, ...overlays, ...snapshots].reduce((n, r) => n + r.bytes, 0);
+  let cut = inst.length;
+  for (let i = 0; i < inst.length; i++) {
+    if (bytes + inst[i]!.bytes > TRANSIT_MAX_BYTES) {
+      cut = i;
+      break;
+    }
+    bytes += inst[i]!.bytes;
+  }
+  const nextFrom = cut < inst.length ? inst[cut]!.localDate : null;
+  return { from: win.from, to: win.to, place: chosen, places, instants: inst.slice(0, cut), ranges, overlays, snapshots, truncated: nextFrom !== null, nextFrom, bytes };
 }
 
 type RowMeta = {
@@ -107,6 +277,8 @@ const META_SELECT = {
 
 export interface ChartDataDeps {
   prisma: PrismaClient;
+  /** the clock for the transit window's default (tests) */
+  today?: () => Date;
 }
 
 /** The handler (the caller mounts it behind the lab token guard). */
@@ -114,7 +286,9 @@ export function chartDataHandler(deps: ChartDataDeps): express.RequestHandler {
   return async (req, res) => {
     const part = parsePart(req.query.part);
     const years = parseYears(req.query.years);
-    if (!part || years === undefined) return void res.status(400).json({ error: 'bad_request' });
+    const win = part === 'transit' ? parseWindow(req.query.from, req.query.to, (deps.today?.() ?? new Date()).toISOString().slice(0, 10)) : null;
+    const place = parsePlace(req.query.place);
+    if (!part || years === undefined || win === undefined || place === undefined) return void res.status(400).json({ error: 'bad_request' });
     const userId = String(req.params.userId);
     try {
       const a = await deps.prisma.auth.findUnique({
@@ -178,7 +352,7 @@ export function chartDataHandler(deps: ChartDataDeps): express.RequestHandler {
         locked: a.locked_at != null,
       };
       if (!k) {
-        return void res.json({ person, kundli: null, types, index: [], part, years, rows: [], legacy: null, digest: null, activation: null, servedAt: new Date().toISOString() });
+        return void res.json({ person, kundli: null, types, index: [], part, years, rows: [], legacy: null, digest: null, activation: null, transit: null, servedAt: new Date().toISOString() });
       }
       const index = await deps.prisma.kundliData.findMany({ where: { kundli_id: k.id }, select: META_SELECT, orderBy: [{ data_type: 'asc' }, { variant: 'asc' }] });
 
@@ -234,6 +408,7 @@ export function chartDataHandler(deps: ChartDataDeps): express.RequestHandler {
               digestVersion: x.digest_version,
             }))
           : null;
+      const transit = part === 'transit' && win ? await loadTransit(deps.prisma, k.id, win, place) : null;
       const kr = k as typeof k & Record<string, unknown>;
       const legacy = withNatal ? Object.fromEntries(LEGACY_COLUMNS.map((c) => [c, kr[c] ?? null])) : null;
       return void res.json({
@@ -263,6 +438,7 @@ export function chartDataHandler(deps: ChartDataDeps): express.RequestHandler {
         legacy,
         digest,
         activation,
+        transit,
         servedAt: new Date().toISOString(),
       });
     } catch (e) {

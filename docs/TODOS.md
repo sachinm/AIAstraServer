@@ -1274,3 +1274,37 @@ systems, levels 1–3) has no gap or overlap. The P0 above (year dasha) is the m
   part paged by system, or the response compressed.
 - **P3 · Birth panchanga strings carry negative times.** G1 `biodata.yoga` reads `00:-3:-49 from 20:14:14` and the
   nakshatra end `22:38:11 (-1)`. Owner: engine `biodata`. Done: times formatted without negative fields.
+
+## Filed 2026-11-08 by the Chart Data Review transits build (admin and server `feat/admin-chart-data-transits`)
+
+Read-only look at the transit rows of the three newest `ready` kundlis (4feca3ca, 858f2f20, b4a777a6) against the San
+Jose daily sky (`37.34,-121.89`, keys `-7` and `-8`) for the admin Transits tab's default window, 2026-10-09 to
+2026-11-08 + 365 days. What passed: the sky has one row on each of the 396 dates (no gap, no doubled date), each row
+lists the nine grahas once, every stored `sign` matches its `sign_index`, each kundli's natal-overlay stays run without a
+gap or overlap per planet, and no stay disagrees with the sky's sign on any date inside it. The defects:
+
+- **P1 · No `kundli_transit_overlays` rows for any of the three newest `ready` kundlis.** Only Sumit (75b0d618) has an
+  overlay. The others' houses come only from the per-kundli `transit_snapshots` natal-overlay chart, which the item
+  "The reader still builds a full per-kundli transit chart" above says should go. Contacts are stored for nobody but
+  Sumit, and the snapshots carry no `contacts` block. Owner: deploy session (`npm run transits:overlay` per kundli) and
+  reading-dev (the plan in that item). Done: each `ready` kundli has a range and a contacts overlay over its reading
+  horizon, and the admin Transits tab lists its contacts.
+- **P1 · No stored house for the Moon on any date.** The snapshot rows hold Su, Ma, Me, Ju, Ve, Sa, Ra, Ke; the range
+  overlays are monthly with Sa, Ju, Ra, Ke. Nothing stores the Moon's house from the lagna or the Moon per day, so a
+  daily reading has no engine house for the Moon (the admin Transits tab warns "Moon has no stored stay"). Owner:
+  deploy session (`transits:overlay --step day` with the Moon). Done: a daily overlay row per kundli and date with the
+  Moon's `natal_house` and `house_from_moon`.
+- **P2 · The shared sky stores no retrograde flag.** None of the 396 San Jose instants in the window (nor the Pune rows)
+  carries `retrograde` on a planet, so the sky alone cannot say whether a planet is retrograde on a date; only the
+  monthly range rows and the stations carry it. Owner: engine `transit` export (add the flag) and the sky job. Done:
+  every instant's planets have `retrograde`, and the admin Transits tab's Retrograde column is filled.
+- **P2 · The houses stop at the snapshot's `as_of`.** The three snapshots start 2026-11-01 or 2026-11-02, so the 23
+  to 24 days of the default window before that have sky rows but no stored house (the Transits tab shows an error per
+  planet). The past month matters for "what just happened" questions. Owner: reading-dev. Done: the overlay a kundli
+  stores covers at least 30 days back.
+- **P2 · Sky rows carry no engine version.** `transit_instants.calc_version` is null on every row in the window, so a
+  change in the engine cannot be told apart from an old row. Owner: engine (return `calc_version`) and the sky job.
+  Done: new rows carry it; old rows are listed as unversioned.
+- **P3 · The three snapshots were built on two engine commits.** 4feca3ca and 858f2f20 say `8191a38`, b4a777a6 says
+  `b66869a` (built the day before). Fine if both commits agree on transits; not checked. Owner: reading-dev. Done: one
+  commit, or a note that the two agree.
