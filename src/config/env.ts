@@ -828,3 +828,40 @@ export function getPageTimingRetentionDays(): number {
   return parseClampedIntEnv('PAGE_TIMING_RETENTION_DAYS', 30, 1, 365);
 }
 
+
+// ── The You reading (docs/reading-engine/58) ─
+
+const SELF_CONDITIONAL_DEFAULT = ['dwisatpathi', 'ashtottari', 'chathuraaseethi_sama', 'dwadasottari', 'panchottari', 'sataatbika', 'shastihayani', 'shodasottari', 'shattrimsa_sama'];
+const SELF_CONFIRM_DEFAULT = ['vimsottari', 'narayana', 'chara', 'yogini', 'karaka', 'tithi_ashtottari'];
+
+function listEnv(key: string, fallback: readonly string[]): string[] {
+  const raw = process.env[key]?.trim();
+  if (!raw) return [...fallback];
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : [...fallback];
+}
+
+/** Conditional dasha systems in the order the reading clock prefers them when the engine says one applies. Env: `SELF_CLOCK_CONDITIONAL_ORDER`. */
+export function getSelfClockConditionalOrder(): string[] {
+  return listEnv('SELF_CLOCK_CONDITIONAL_ORDER', SELF_CONDITIONAL_DEFAULT);
+}
+
+/** The clocks that confirm a chapter of the reading clock (catalogue dasha ids). Env: `SELF_CONFIRM_SYSTEMS`. */
+export function getSelfConfirmSystems(): string[] {
+  return listEnv('SELF_CONFIRM_SYSTEMS', SELF_CONFIRM_DEFAULT);
+}
+
+/** How near (months) a confirming clock's main period must start to the chapter's start to agree on the shift. Env: `SELF_CHAPTER_BOUNDARY_MONTHS` (default 18, 6..36). */
+export function getSelfChapterBoundaryMonths(): number {
+  return parseClampedIntEnv('SELF_CHAPTER_BOUNDARY_MONTHS', 18, 6, 36);
+}
+
+/** Confirming clocks needed for a chapter to be `confirmed` (one gives `likely`). Env: `SELF_CHAPTER_CONFIRM_MIN` (default 2, 1..5). */
+export function getSelfChapterConfirmMin(): number {
+  return parseClampedIntEnv('SELF_CHAPTER_CONFIRM_MIN', 2, 1, 5);
+}
+
+/** The model layer of the You reading (reader R15 + Self Oracle). Off until Sachin's yes on spend. Env: `SELF_READING_MODEL=1`. */
+export function isSelfReadingModelEnabled(): boolean {
+  return process.env.SELF_READING_MODEL?.trim() === '1';
+}

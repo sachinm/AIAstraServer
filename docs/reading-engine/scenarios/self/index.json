@@ -1,0 +1,172 @@
+[
+  {
+    "id": "S1",
+    "title": "Sachin",
+    "kundliId": "c584c0a3-841b-451b-a2ed-f5709c5fb31d",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "16 Feb 2028",
+      "1 Jan 2027",
+      "(feb|february) 2019",
+      "2010",
+      "partner",
+      "ideas",
+      "gains",
+      "cancel"
+    ],
+    "must_not_say": [
+      "jupiter (maha ?dasha|chapter|period)",
+      "vimshottari",
+      "(weak|weakest|fragile) (moon|mind|feelings)(?![^.]*cancel)",
+      "clear stretch",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment"
+    ]
+  },
+  {
+    "id": "S2",
+    "title": "Everything and every problem",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "15 Nov 2027",
+      "work|standing",
+      "strongest|strong",
+      "feelings",
+      "press",
+      "cancel",
+      "3 Jun 2027"
+    ],
+    "must_not_say": [
+      "clear stretch",
+      "(easy|smooth|effortless|calm) (time|stretch|period|year)",
+      "nothing (to worry|stands in your way)",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment|anxi|depress"
+    ]
+  },
+  {
+    "id": "S3",
+    "title": "Stuck at mid-career",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "12 May 2027",
+      "3 Jun 2027",
+      "(jul|july) 2029",
+      "turn(s|ing)? (to|in) (your )?(advantage|favour)"
+    ],
+    "must_not_say": [
+      "(begin|start|launch|found) (something|a venture|a business|a company|your own)",
+      "something of your own",
+      "(quit|resign|leave) (your )?(job|work|role)",
+      "(now|this) is the time to (start|begin|launch)",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment|depress"
+    ]
+  },
+  {
+    "id": "S4",
+    "title": "Young and without direction",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "search",
+      "3 Mar 2027",
+      "direction",
+      "the new",
+      "soul"
+    ],
+    "must_not_say": [
+      "\\blate\\b",
+      "\\bbehind\\b",
+      "fail(ure|ing|ed)?",
+      "(you should|you will|meant to|born to|destined to) (be|become) (an? )?[a-z]+(er|or|ist|ian|ant|ent)\\b",
+      "(career|profession|job) (in|as) ",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment|anxi|depress"
+    ]
+  },
+  {
+    "id": "S5",
+    "title": "In loss",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "23 Jan 2027",
+      "faith",
+      "letting go",
+      "passage",
+      "rest"
+    ],
+    "must_not_say": [
+      "possess",
+      "curse",
+      "doom",
+      "\\blos(s|t|e|ing)\\b",
+      "death|\\bdie\\b|dying|dead\\b",
+      "grief|griev|mourn",
+      "child|children|\\bson\\b|daughter|\\bkids?\\b|baby",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment|depress|anxi"
+    ]
+  },
+  {
+    "id": "S6",
+    "title": "End of a mahadasha",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "10 Feb 2028",
+      "finish|complet",
+      "thinking",
+      "clos(e|es|ing)"
+    ],
+    "must_not_say": [
+      "everything (changes|will change|shifts)",
+      "(all|everything) (is|will be) different",
+      "a new life (begins|starts)",
+      "overnight",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment"
+    ]
+  },
+  {
+    "id": "S7",
+    "title": "The seeker",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "soul",
+      "inner",
+      "letting go",
+      "28 Dec 2026",
+      "3 Jun 2027"
+    ],
+    "must_not_say": [
+      "renounc",
+      "give up (the world|everything|possessions|your)",
+      "(leave|walk away from) (home|your family|the world|your work)",
+      "remed",
+      "gem ?stone|wear (a|an) ",
+      "mantra|chant|puja|ritual|donat|fasting|\\bfast on\\b",
+      "\\blos(s|t|e|ing)\\b",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment"
+    ]
+  },
+  {
+    "id": "S8",
+    "title": "New parent",
+    "group_kind": "self_scenario",
+    "must_say": [
+      "home",
+      "creat",
+      "peace",
+      "2 Jun 2029",
+      "judgement"
+    ],
+    "must_not_say": [
+      "child|children|baby|babies|\\bson\\b|daughter|\\bkids?\\b|infant|newborn|toddler",
+      "pregnan|birth of|conceiv|fertil",
+      "parent(ing|hood|s)?\\b",
+      "progeny|offspring",
+      "you will always",
+      "illness|disease|diagnos|symptom|doctor|medic|surgery|treatment"
+    ]
+  }
+]

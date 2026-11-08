@@ -958,7 +958,7 @@ function pointRows(items: Record<string, unknown>, tables: Map<string, ChartTabl
     for (const k of karakas) {
       const card = planets.get(`${t.varga}.${k.planet}`);
       if (!card) continue;
-      push({ key: `${t.varga}.${k.id}`, row: { id: k.id, varga: t.varga, sign: card.row.sign, house: card.row.house, lord: card.row.dispositor, lordHouse: card.row.dispositorHouse }, source: [k.source, card.source[0]!] });
+      push({ key: `${t.varga}.${k.id}`, row: { id: k.id, varga: t.varga, sign: card.row.sign, house: card.row.house, lord: card.row.dispositor, lordHouse: card.row.dispositorHouse, planet: k.planet }, source: [k.source, card.source[0]!] });
     }
   }
 

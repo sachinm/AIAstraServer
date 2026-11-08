@@ -22,9 +22,17 @@ export const FACT_CATALOG: Record<string, readonly string[] | '*'> = {
 
 const FOCUS = new Set(['career', 'money', 'love', 'family', 'home', 'learning', 'travel', 'health', 'creativity', 'spirituality']);
 
+/** answers to the You reading's confirm question (docs/reading-engine/58 §4.1): key `self.confirm.<claimId>` */
+export const SELF_CONFIRM_PREFIX = 'self.confirm.';
+export const SELF_CONFIRM_ANSWERS = ['yes', 'partly', 'no', 'skip'] as const;
+
 export type FactCheck = { ok: true; value: string } | { ok: false; error: string };
 
 export function checkFact(key: string, value: unknown): FactCheck {
+  if (key.startsWith(SELF_CONFIRM_PREFIX)) {
+    if (!/^self\.confirm\.[a-z0-9_.]{1,60}$/.test(key)) return { ok: false, error: `unknown_key:${key}` };
+    return typeof value === 'string' && (SELF_CONFIRM_ANSWERS as readonly string[]).includes(value) ? { ok: true, value } : { ok: false, error: `bad_value:${key}` };
+  }
   const allowed = FACT_CATALOG[key];
   if (!allowed) return { ok: false, error: `unknown_key:${key}` };
   if (value === null) return { ok: true, value: DECLINED };
