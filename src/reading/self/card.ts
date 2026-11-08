@@ -7,10 +7,10 @@
 import type { ActivationRow } from '../digest/activation.js';
 import { struggleLead } from './panels/struggle.js';
 import { yogasLead } from './panels/yogas.js';
-import type { LineCertainty, LineRange, PanelBody, SelfClaim, SelfLine, SelfPanelId } from './types.js';
+import type { BoardPanelId, LineCertainty, LineRange, PanelBody, SelfClaim, SelfLine } from './types.js';
 import { MAX_LINE_WORDS, wordCount } from './words.js';
 
-const PRIORITY: Partial<Record<SelfPanelId, string[]>> = {
+const PRIORITY: Partial<Record<BoardPanelId, string[]>> = {
   diagnosis: ['diagnosis.direction', 'diagnosis.tension', 'diagnosis.now'],
   chapters: ['chapters.previous', 'chapters.running', 'chapters.next'],
   lagna: ['lagna.lord_house', 'lagna.lord_state', 'lagna.seen', 'lagna.on_self', 'lagna.moon_lagna', 'lagna.inner', 'lagna.star'],
@@ -34,6 +34,14 @@ const PRIORITY: Partial<Record<SelfPanelId, string[]>> = {
     'body.pressed',
   ],
   atma: ['atma.ak', 'atma.karakamsa', 'atma.judgement', 'atma.purpose', 'atma.sun', 'atma.ak_state', 'atma.letting_go'],
+  heart: ['heart.lord_house', 'heart.lord_state', 'heart.venus', 'heart.moon', 'heart.d9', 'heart.padas'],
+  partner: ['partner.lord_house', 'partner.lord_state', 'partner.dk', 'partner.karaka', 'partner.d9', 'partner.upapada'],
+  bond: ['bond.ul_sustenance', 'bond.peace_depth', 'bond.argala', 'bond.d9_bridge'],
+  circle: ['circle.family', 'circle.home', 'circle.children', 'circle.community'],
+  vocation: ['vocation.lord_house', 'vocation.lord_state', 'vocation.amk', 'vocation.karakas', 'vocation.d10', 'vocation.karakamsa'],
+  standing: ['standing.arudha', 'standing.rajyapada', 'standing.power_lagnas', 'standing.sun_sav', 'standing.argala'],
+  ground: ['ground.service_house', 'ground.effort_house', 'ground.padas', 'ground.stamina', 'ground.d10_service'],
+  gain: ['gain.income_house', 'gain.treasury_house', 'gain.padas_indu', 'gain.hora_sav', 'gain.dhana_yoga'],
   year: ['year.lord_place', 'year.short_clock', 'year.self_lord', 'year.lord_company'],
 };
 
@@ -44,7 +52,7 @@ export interface CardContext {
   year: { from: string; to: string } | null;
 }
 
-export function headerRangeOf(id: SelfPanelId, ctx: CardContext): LineRange {
+export function headerRangeOf(id: BoardPanelId, ctx: CardContext): LineRange {
   const sub = ctx.running.l2 ?? ctx.running.l1;
   if (id === 'diagnosis' || id === 'struggle' || id === 'body') return sub ? { from: sub.from, to: sub.to } : 'always';
   if (id === 'chapters') return ctx.running.l1 ? { from: ctx.running.l1.from, to: ctx.running.l1.to } : 'always';
@@ -54,7 +62,7 @@ export function headerRangeOf(id: SelfPanelId, ctx: CardContext): LineRange {
 
 const certaintyOf = (c: SelfClaim): LineCertainty => (c.certainty === 'confirmed' ? 'strong' : c.certainty === 'likely' ? 'moderate' : c.certainty === 'split' ? 'possible' : 'fact');
 
-function ordered(id: SelfPanelId, claims: SelfClaim[]): SelfClaim[] {
+function ordered(id: BoardPanelId, claims: SelfClaim[]): SelfClaim[] {
   if (id === 'yogas') {
     const gifts = claims.filter((c) => c.text.startsWith('A gift'));
     const knots = claims.filter((c) => c.text.startsWith('A knot'));
@@ -72,7 +80,7 @@ function ordered(id: SelfPanelId, claims: SelfClaim[]): SelfClaim[] {
 
 /** Builds the lines of a panel without artificial 3-line truncation, recomputes lead, and records any length gaps. */
 export function buildCard(
-  id: SelfPanelId,
+  id: BoardPanelId,
   b: PanelBody,
   ctx: CardContext,
 ): { headerRange: LineRange; lines: SelfLine[]; gaps: string[]; lead: string } {

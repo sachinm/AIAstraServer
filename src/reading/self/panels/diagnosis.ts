@@ -7,10 +7,10 @@
  */
 import { housesShort, housesWord, longDate } from '../words.js';
 import { gaps } from '../slices.js';
-import type { PanelBody, SelfClaim, SelfPanelId } from '../types.js';
+import type { BoardPanelId, PanelBody, SelfClaim } from '../types.js';
 import { body } from './common.js';
 
-export type PanelBodies = Partial<Record<SelfPanelId, PanelBody>>;
+export type PanelBodies = Partial<Record<BoardPanelId, PanelBody>>;
 
 const lower = (s: string) => (s ? s[0]!.toLowerCase() + s.slice(1) : s);
 

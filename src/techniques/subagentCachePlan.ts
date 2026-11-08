@@ -149,6 +149,24 @@ const TECHNIQUE_TO_SUBAGENTS: Readonly<Record<string, SubAgentId[]>> = {
     'lineman.self',
     'oracle.self',
   ],
+  'love.reading.oracle': [
+    'family.rasi',
+    'family.varga',
+    'family.dasha',
+    'family.year',
+    'family.sky',
+    'lineman.love',
+    'oracle.love',
+  ],
+  'work.reading.oracle': [
+    'family.rasi',
+    'family.varga',
+    'family.dasha',
+    'family.year',
+    'family.sky',
+    'lineman.work',
+    'oracle.work',
+  ],
 };
 
 /** Maps a technique ID to its `SubAgentId[]` in `SUBAGENT_DIGEST_SPECS`. */
@@ -398,8 +416,9 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
     };
   }
 
-  // 4b. Self Reading AI Sub-Agents -> Self Lineman -> Self Oracle (`self.reading.oracle`)
-  if (t.id === 'self.reading.oracle') {
+  // 4b. Board Reading AI Sub-Agents -> Lineman -> Oracle (`self.reading.oracle`, `love.reading.oracle`, `work.reading.oracle`)
+  if (t.id === 'self.reading.oracle' || t.id === 'love.reading.oracle' || t.id === 'work.reading.oracle') {
+    const bName = t.id.split('.')[0] ?? 'self';
     return {
       techniqueId: t.id,
       title: t.title,
@@ -421,7 +440,7 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
       },
       outputCache: {
         primaryTable: 'reading_findings_cache+technique_outputs',
-        cacheKeyFormula: 'reading_findings_cache(family.<layer>|lineman.self) + techniqueCacheKey(self.reading.oracle)',
+        cacheKeyFormula: `reading_findings_cache(family.<layer>|lineman.${bName}) + techniqueCacheKey(${t.id})`,
         freshness: recipe.freshness,
         scope: recipe.scope,
         outputPiece: recipe.output,
@@ -433,10 +452,10 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
           '15m `kundli-digest-sweep` (`sweepDigests` + `ensureAnnualSet` top-up)',
         ],
         preRunCacheUploadAndWarm: [
-          'Self reading build (`runSelfOracle` slices `DigestView` + `ActivationRow[]` + `TransitRangePayload` into 5 family packs, uploads each pack prefix via `ensurePromptCache` / `cachePrefix: true` into `llm_cache_entries`, and persists `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`, and `lineman.self` findings in `reading_findings_cache`)',
+          `Board reading build (\`runSelfOracle\` slices \`DigestView\` + \`ActivationRow[]\` + \`TransitRangePayload\` into 5 shared family packs, uploads each pack prefix via \`ensurePromptCache\` / \`cachePrefix: true\` into \`llm_cache_entries\`, and persists \`family.rasi\`, \`family.varga\`, \`family.dasha\`, \`family.year\`, \`family.sky\`, and \`lineman.${bName}\` findings in \`reading_findings_cache\`)`,
         ],
         liveRequestExecution: [
-          'Self reading service (`getSelfReading` -> `runSelfOracle` reads cached family findings from `reading_findings_cache` and cached Oracle output from `technique_outputs`, or runs the 5 family sub-agents -> `lineman.self` -> `self.reading_oracle` under the $1.00 spend guard)',
+          `Board reading service (\`getBoardReading\` -> \`runSelfOracle\` reads shared cached family findings from \`reading_findings_cache\` and cached Oracle output from \`technique_outputs\`, or runs the 5 family sub-agents -> \`lineman.${bName}\` -> \`${bName}.reading_oracle\` under the $1.00 spend guard)`,
         ],
         invalidationAndRecycleSweep: [
           '45m per-individual inactivity recycler (`recycleIndividualCaches` preserves unexpired natal `family.*` rows and `llm` `technique_outputs` while evicting expired windows and Gemini `cachedContents`)',

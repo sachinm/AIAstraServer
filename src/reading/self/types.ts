@@ -7,6 +7,17 @@ export type SelfPanelId = 'diagnosis' | 'chapters' | 'lagna' | 'mind' | 'body' |
 /** display order (docs/reading-engine/61 §4): In short, chapters, who you are, mind, body, soul, gifts and knots, struggle, this year */
 export const SELF_PANEL_IDS: readonly SelfPanelId[] = ['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year'];
 
+export type LovePanelId = 'diagnosis' | 'chapters' | 'heart' | 'partner' | 'bond' | 'circle' | 'struggle' | 'year';
+/** display order (docs/reading-engine/59 §3): In short, chapters, how you love, the partner you draw, the bond itself, who else is in it, what tests it, this year */
+export const LOVE_PANEL_IDS: readonly LovePanelId[] = ['diagnosis', 'chapters', 'heart', 'partner', 'bond', 'circle', 'struggle', 'year'];
+
+export type WorkPanelId = 'diagnosis' | 'chapters' | 'vocation' | 'standing' | 'ground' | 'gain' | 'struggle' | 'year';
+/** display order (docs/reading-engine/59 §4): In short, chapters, what you are built to do, how you are seen, where the work is now, what it pays, what tests it, this year */
+export const WORK_PANEL_IDS: readonly WorkPanelId[] = ['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year'];
+
+export type BoardPanelId = SelfPanelId | LovePanelId | WorkPanelId;
+export type ReadingBoardId = 'self' | 'love' | 'work';
+
 /** docs/reading-engine/62: a card line's validity range and certainty */
 export type LineRange = { from: string; to: string } | 'always';
 export type LineCertainty = 'fact' | 'strong' | 'moderate' | 'possible';
@@ -94,7 +105,7 @@ export interface SelfChapter {
 }
 
 export interface SelfPanel {
-  id: SelfPanelId;
+  id: BoardPanelId;
   technique: string;
   title: string;
   lead: string;
@@ -127,7 +138,7 @@ export interface SelfClock {
 
 export interface SelfQuestion {
   claimId: string;
-  panel: SelfPanelId;
+  panel: BoardPanelId;
   text: string;
   options: Array<{ value: ConfirmAnswer; label: string }>;
 }
@@ -175,9 +186,9 @@ export interface SelfOraclePayload {
   linemanFindings?: string;
   linemanBrief?: string;
   familyFindings?: Record<string, string>;
-  panelLines?: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+  panelLines?: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
   /** AI-determined validity horizon ('YYYY-MM-DD' or 'always') per panel and overall ('overall') */
-  validUntil?: Partial<Record<SelfPanelId | 'overall', string>>;
+  validUntil?: Partial<Record<BoardPanelId | 'overall', string>>;
   stages?: SelfOracleStageSummary[];
   dropped?: number;
   calls?: number;

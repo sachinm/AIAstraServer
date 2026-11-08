@@ -266,12 +266,24 @@ describe('admin lab: the served shape (docs/admin/10 §5 mirror test)', () => {
     expect(list.items.some((r: any) => r.technique === 'body')).toBe(true);
     expect(offending(list)).toEqual([]);
   });
-  it('takes an as-of date and names unbuilt boards', async () => {
+  it('takes an as-of date and executes love and work boards end-to-end', async () => {
     const j = await (await post({ userId: 'u1', asOf: '2027-03-01', force: true })).json();
     expect(j.reading.asOf).toBe('2027-03-01');
     expect((await post({ userId: 'u1', asOf: '1 March' })).status).toBe(400);
-    const love = await post({ userId: 'u1', board: 'love' });
-    expect(love.status).toBe(400);
-    expect(await love.json()).toEqual({ error: 'board_not_built', board: 'love' });
+    const love = await post({ userId: 'u1', board: 'love', force: true });
+    expect(love.status).toBe(200);
+    const loveJson = await love.json();
+    expect(loveJson.reading.panels.map((p: any) => p.id)).toEqual(['diagnosis', 'chapters', 'heart', 'partner', 'bond', 'circle', 'struggle', 'year']);
+    expect(offending(loveJson)).toEqual([]);
+    const work = await post({ userId: 'u1', board: 'work', force: true });
+    expect(work.status).toBe(200);
+    const workJson = await work.json();
+    expect(workJson.reading.panels.map((p: any) => p.id)).toEqual(['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year']);
+    expect(offending(workJson)).toEqual([]);
+    const singleLove = await post({ userId: 'u1', board: 'love', technique: 'love.reading.partner', force: true });
+    expect(singleLove.status).toBe(200);
+    const singleLoveJson = await singleLove.json();
+    expect(singleLoveJson.technique).toBe('partner');
+    expect(singleLoveJson.reading.panels.map((p: any) => p.id)).toEqual(['partner']);
   });
 });

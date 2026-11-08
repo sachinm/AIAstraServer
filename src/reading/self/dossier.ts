@@ -10,7 +10,7 @@ import { contractHash, canonicalJson } from '../../techniques/pieces.js';
 import { techniqueById } from '../../techniques/catalog.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
-import type { CodeAudit, PurviewEntry, SelfClock, SelfOraclePayload, SelfPanel } from './types.js';
+import type { CodeAudit, PurviewEntry, ReadingBoardId, SelfClock, SelfOraclePayload, SelfPanel } from './types.js';
 
 /** Resolves an evidence key to the stored row it names. Unknown keys return undefined. */
 export function resolveKey(key: string, view: DigestView, activation: readonly ActivationRow[]): unknown {
@@ -44,7 +44,7 @@ export function resolveKey(key: string, view: DigestView, activation: readonly A
 
 export interface DossierInput {
   kundliId: string;
-  board: 'self';
+  board: ReadingBoardId;
   trigger: 'request' | 'manual' | 'digest' | 'dasha_boundary' | 'annual' | 'confirm';
   view: DigestView;
   activation: readonly ActivationRow[];
@@ -119,16 +119,17 @@ export function buildDossier(input: DossierInput): DossierRecord {
     const t = techniqueById(id);
     return { id, contractHash: t ? contractHash(t) : null, codeVersion: input.codeVersion, cached, ms, status };
   };
+  const prefix = `${input.board}.reading`;
   const techniques = [
-    stageEntry('self.reading.clock', input.steps?.loadMs ?? 0),
+    stageEntry(`${prefix}.clock`, input.steps?.loadMs ?? 0),
     ...input.panels.map((p) => {
       const t = techniqueById(p.technique);
       return { id: p.technique, contractHash: t ? contractHash(t) : null, codeVersion: input.codeVersion, cached: p.cached, ms: p.ms, status: p.status };
     }),
-    stageEntry('self.reading.purview', input.steps?.purviewMs ?? 0),
-    stageEntry('self.reading.audit', input.steps?.auditMs ?? 0, input.audit.verdict === 'pass' ? 'ok' : 'failed'),
+    stageEntry(`${prefix}.purview`, input.steps?.purviewMs ?? 0),
+    stageEntry(`${prefix}.audit`, input.steps?.auditMs ?? 0, input.audit.verdict === 'pass' ? 'ok' : 'failed'),
     ...(input.oracle && input.oracle.status !== 'off'
-      ? [stageEntry('self.reading.oracle', input.steps?.oracleMs ?? 0, input.oracle.status === 'ok' ? 'ok' : 'failed', Boolean(input.oracle.cached))]
+      ? [stageEntry(`${prefix}.oracle`, input.steps?.oracleMs ?? 0, input.oracle.status === 'ok' ? 'ok' : 'failed', Boolean(input.oracle.cached))]
       : []),
   ];
   const panels = input.panels.map((p) => ({ id: p.id, technique: p.technique, headerRange: p.headerRange, ...(p.validUntil ? { validUntil: p.validUntil } : {}), lines: p.lines, claims: p.claims, vetoed: p.vetoed ?? [], chapters: p.chapters ?? [] }));

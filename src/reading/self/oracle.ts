@@ -30,9 +30,11 @@ import { runningMudda, runningTp } from './panels/year.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
 import { BANNED_LINE_WORDS, clockLabel, MAX_LINE_WORDS, wordCount } from './words.js';
 import type {
+  BoardPanelId,
   ConfirmAnswer,
   LineCertainty,
   LineRange,
+  ReadingBoardId,
   SelfClock,
   SelfOracleLinemanRecord,
   SelfOraclePayload,
@@ -54,7 +56,7 @@ export const SELF_FAMILY_AGENT_IDS: readonly SelfFamilyAgentId[] = [
 ];
 
 /** Maps each panel (or 'all') to the reusable chart-family sub-agents it needs (Doc 63 & reusable sub-technique plan). */
-export const FAMILY_AGENTS_BY_SCOPE: Record<SelfPanelId | 'all', readonly SelfFamilyAgentId[]> = {
+export const FAMILY_AGENTS_BY_SCOPE: Record<BoardPanelId | 'all', readonly SelfFamilyAgentId[]> = {
   all: SELF_FAMILY_AGENT_IDS,
   diagnosis: SELF_FAMILY_AGENT_IDS,
   body: SELF_FAMILY_AGENT_IDS,
@@ -65,6 +67,14 @@ export const FAMILY_AGENTS_BY_SCOPE: Record<SelfPanelId | 'all', readonly SelfFa
   mind: ['family.rasi', 'family.varga'],
   atma: ['family.rasi', 'family.varga'],
   yogas: ['family.rasi', 'family.varga'],
+  heart: ['family.rasi', 'family.varga'],
+  partner: ['family.rasi', 'family.varga'],
+  bond: ['family.rasi', 'family.varga'],
+  circle: ['family.rasi', 'family.varga'],
+  vocation: ['family.rasi', 'family.varga'],
+  standing: ['family.rasi', 'family.varga'],
+  ground: ['family.rasi', 'family.varga'],
+  gain: ['family.rasi', 'family.varga'],
 };
 
 export interface SelfFamilyPack {
@@ -84,6 +94,7 @@ export interface SelfFamilyPack {
 
 export interface SelfOracleContext {
   prisma: PrismaClient;
+  board?: ReadingBoardId;
   userId: string;
   kundliId: string;
   view: DigestView;
@@ -91,7 +102,7 @@ export interface SelfOracleContext {
   sky?: TransitRangePayload | null;
   now?: Date;
   force?: boolean;
-  only?: SelfPanelId;
+  only?: BoardPanelId;
   codeVersion?: string;
   runningSpan?: DateSpan | null;
 }
@@ -454,24 +465,24 @@ export function parseOracleStructuredBlocks(
   text: string,
   allowedKeys: ReadonlySet<string>,
 ): {
-  validUntil: Partial<Record<SelfPanelId | 'overall', string>>;
-  panelLines: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+  validUntil: Partial<Record<BoardPanelId | 'overall', string>>;
+  panelLines: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
 } {
-  const validUntil: Partial<Record<SelfPanelId | 'overall', string>> = {};
-  const panelLines: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>> = {};
+  const validUntil: Partial<Record<BoardPanelId | 'overall', string>> = {};
+  const panelLines: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>> = {};
 
-  for (const m of text.matchAll(/[-*•]?\s*(overall|diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year|VALID_UNTIL)\s*:\s*(always|\d{4}-\d{2}-\d{2})/gi)) {
+  for (const m of text.matchAll(/[-*•]?\s*(overall|diagnosis|chapters|lagna|mind|body|atma|yogas|heart|partner|bond|circle|vocation|standing|ground|gain|struggle|year|VALID_UNTIL)\s*:\s*(always|\d{4}-\d{2}-\d{2})/gi)) {
     const rawKey = m[1]!.toLowerCase();
     const val = m[2]! === 'always' ? 'always' : m[2]!;
     if (rawKey === 'valid_until' || rawKey === 'overall') {
       validUntil.overall = val;
     } else {
-      validUntil[rawKey as SelfPanelId] = val;
+      validUntil[rawKey as BoardPanelId] = val;
     }
   }
 
-  for (const m of text.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year)\]\s*\((always|\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2})\)\s*([^\n]+)/gi)) {
-    const panelId = m[1]!.toLowerCase() as SelfPanelId;
+  for (const m of text.matchAll(/[-*•]?\s*\[(diagnosis|chapters|lagna|mind|body|atma|yogas|heart|partner|bond|circle|vocation|standing|ground|gain|struggle|year)\]\s*\((always|\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2})\)\s*([^\n]+)/gi)) {
+    const panelId = m[1]!.toLowerCase() as BoardPanelId;
     const rawRange = m[2]!;
     const body = m[3]!.trim();
     const cited = [...body.matchAll(/\{([^}]+)\}/g)]
@@ -643,9 +654,13 @@ export async function runSelfOracle(
     }
   }
 
-  // Full Doc 63 Pipeline: Reusable Family AI Sub-Agents -> Self Lineman -> Self Oracle Synthesizer
+  // Full Doc 63 Pipeline: Reusable Family AI Sub-Agents -> Board Lineman -> Board Oracle Synthesizer
   const { prisma, userId, kundliId, view, activation, sky } = ctx;
-  const scopeKey: SelfPanelId | 'all' = ctx.only ?? 'all';
+  const board: ReadingBoardId = ctx.board ?? 'self';
+  const linemanAgentId = `lineman.${board}`;
+  const oracleAgentId = `${board}.reading_oracle`;
+  const oracleTechniqueId = `${board}.reading.oracle`;
+  const scopeKey: BoardPanelId | 'all' = ctx.only ?? 'all';
   const activeFamilyIds = FAMILY_AGENTS_BY_SCOPE[scopeKey] ?? SELF_FAMILY_AGENT_IDS;
   const now = ctx.now ?? new Date(`${reading.asOf}T12:00:00Z`);
   const owner = { userId, kundliId };
@@ -657,17 +672,24 @@ export async function runSelfOracle(
   const answersKey = shortHash(JSON.stringify(Object.entries(answers).sort(([a], [b]) => a.localeCompare(b))));
   const mudda = runningMudda(view, reading.asOf);
   const tpRow = runningTp(view, reading.asOf, mudda?.row.year);
-  const oracleDigestVersion = `${view.version}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? PROMPT_VERSION}`;
+  const oracleDigestVersion = `${view.version}|board=${board}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? PROMPT_VERSION}`;
+
+  const boardFocusInstruction =
+    board === 'love'
+      ? `BOARD: LOVE & RELATIONSHIPS (love.reading). Focus your Vedic synthesis on H7 (partnership), H5 (heart & romance), H2 (family & sustenance), H4 (home & emotional peace), H8 (intimacy & shared vulnerability), H11 (friends & community), H12 (bed pleasures & release), L7, L5, Venus, Moon, Jupiter, Darakaraka (DK), Putrakaraka (PK), Upapada Lagna (UL), 2nd from UL, Darapada (A7), Navamsa (D9), Saptamsa (D7), active multi-clock chapters, and 2025/2026/2027 Tithi Pravesha & Varshaphal. In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|heart|partner|bond|circle|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
+      : board === 'work'
+        ? `BOARD: WORK, CAREER & WEALTH (work.reading). Focus your Vedic synthesis on H10 (vocation & karma), H6 (service, execution & competition), H11 (gains & networks), H2 (treasury & resources), H3 (initiative & skills), H9 (dharma & mentorship), L10, L6, L11, L2, Amatyakaraka (AmK), Saturn, Sun, Mercury, Jupiter, Mars, Arudha Lagna (AL), Rajyapada (A10), Ghatika Lagna (GL), Hora Lagna (HL), Sree Lagna (SL), Indu Lagna (IL), Labhapada (A11), Dhanapada (A2), Dasamsa (D10), Hora (D2), Karakamsa (D9.AK), SAV bindus, active multi-clock chapters, and 2025/2026/2027 Tithi Pravesha & Varshaphal. In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|vocation|standing|ground|gain|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
+        : `BOARD: SELF (self.reading). In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`;
 
   try {
     const stored = await withTechniqueOutput<SelfOracleResult>(
       prisma,
       {
-        technique: 'self.reading.oracle',
+        technique: oracleTechniqueId,
         kundliId,
         digestVersion: oracleDigestVersion,
         context: { now, runningPeriod: ctx.runningSpan ?? null },
-        agentId: 'self.reading_oracle',
+        agentId: oracleAgentId,
         userId,
         charts: activeFamilyIds.flatMap((id) => packs[id].charts),
         forceRefresh: Boolean(ctx.force),
@@ -682,6 +704,7 @@ export async function runSelfOracle(
         const oracleModel = modelFor('oracle');
 
         // Stage 1: Reusable Chart-Family AI Sub-Agents (`family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`)
+        // Shared across Self, Love, and Work via `self:${kundliId}:${familyId}:...`
         for (const familyId of activeFamilyIds) {
           const pack = packs[familyId];
           const cacheKey = `self:${kundliId}:${familyId}:${pack.packHash}:${PROMPT_VERSION}`;
@@ -741,7 +764,7 @@ export async function runSelfOracle(
             {
               userId,
               kundliId,
-              technique: 'self.reading.oracle',
+              technique: oracleTechniqueId,
               task: `${familyId} ${reading.asOf}`,
               input: { family: familyId, keys: pack.keys.length, natal: pack.natal ? 1 : 0 },
             },
@@ -849,19 +872,19 @@ export async function runSelfOracle(
           return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
         }
 
-        // Stage 2: Self Lineman (`lineman.self` / `readers/R15-self`)
+        // Stage 2: Board Lineman (`lineman.self` / `lineman.love` / `lineman.work`)
         const familyBundleText = activeFamilyIds.map((id) => `### ${id}\n${familyFindings[id] ?? '(none)'}`).join('\n\n');
         const linemanPrefix = activeFamilyIds.map((id) => packs[id].prefix).join('\n\n');
-        const linemanDynamic = `SCOPE: ${scopeKey}\n\nFAMILY SUB-AGENT FINDINGS:\n${familyBundleText}\n\nPANEL CLAIMS BRIEF:\n${brief.text}`;
+        const linemanDynamic = `${boardFocusInstruction}\nSCOPE: ${scopeKey}\n\nFAMILY SUB-AGENT FINDINGS:\n${familyBundleText}\n\nPANEL CLAIMS BRIEF:\n${brief.text}`;
         const linemanHash = shortHash(`${oracleDigestVersion}|${familyBundleText}|${brief.text}`);
-        const linemanCacheKey = `self:${kundliId}:lineman.self:${linemanHash}:${PROMPT_VERSION}`;
+        const linemanCacheKey = `${board}:${kundliId}:${linemanAgentId}:${linemanHash}:${PROMPT_VERSION}`;
         const cachedLineman = !ctx.force ? await loadDbReaderCache(prisma, linemanCacheKey, owner) : undefined;
         let linemanFindings = (cachedLineman?.finding as unknown as { rawText?: string } | undefined)?.rawText ?? '';
 
         if (linemanFindings) {
           const parsedLineman = parseLinemanClaims(linemanFindings, allKeys);
           linemen.push({
-            agent: 'lineman.self',
+            agent: linemanAgentId,
             promptName: 'readers/R15-self',
             promptVersion: PROMPT_VERSION,
             sliceKeys: [...allKeys].slice(0, 80),
@@ -873,7 +896,7 @@ export async function runSelfOracle(
             cached: true,
           });
           stages.push({
-            agentId: 'lineman.self',
+            agentId: linemanAgentId,
             status: 'cached',
             cached: true,
             ms: 0,
@@ -889,18 +912,18 @@ export async function runSelfOracle(
           const tLineman = performance.now();
           const linemanRes = await withAgentRun(
             prisma,
-            'lineman.self',
+            linemanAgentId,
             {
               userId,
               kundliId,
-              technique: 'self.reading.oracle',
-              task: `lineman.self ${reading.asOf}`,
+              technique: oracleTechniqueId,
+              task: `${linemanAgentId} ${reading.asOf}`,
               input: { families: Object.keys(familyFindings).length, keys: allKeys.size },
             },
             async () => {
               const g = await callGemini({
                 model: readerModel,
-                node: 'self.reader',
+                node: `${board}.reader`,
                 system: PROMPTS['readers/R15-self'] ?? '',
                 parts: [linemanPrefix, linemanDynamic],
                 thinking: 'medium',
@@ -930,7 +953,7 @@ export async function runSelfOracle(
             },
           );
           const ms = Math.round((performance.now() - tLineman) * 100) / 100;
-          const st = summarizeCall('lineman.self', readerModel, linemanRes, ms);
+          const st = summarizeCall(linemanAgentId, readerModel, linemanRes, ms);
           stages.push(st);
           spentUsd = Math.round((spentUsd + st.costUsd) * 1e6) / 1e6;
           calls += 1;
@@ -938,7 +961,7 @@ export async function runSelfOracle(
 
           const parsedLineman = parseLinemanClaims(linemanFindings, allKeys);
           linemen.push({
-            agent: 'lineman.self',
+            agent: linemanAgentId,
             promptName: 'readers/R15-self',
             promptVersion: PROMPT_VERSION,
             sliceKeys: [...allKeys].slice(0, 80),
@@ -966,16 +989,18 @@ export async function runSelfOracle(
             cacheKey: linemanCacheKey,
             kundliId,
             userId,
-            readerId: 'lineman.self',
+            readerId: linemanAgentId,
             packHash: linemanHash,
             horizonKey: packs['family.dasha'].horizonKey,
             promptVersion: PROMPT_VERSION,
-            natal: scopeKey !== 'all' && ['lagna', 'mind', 'atma', 'yogas'].includes(scopeKey),
+            natal:
+              scopeKey !== 'all' &&
+              ['lagna', 'mind', 'atma', 'yogas', 'heart', 'partner', 'bond', 'circle', 'vocation', 'standing', 'ground', 'gain'].includes(scopeKey),
             ...(linemanExpiresAt ? { expiresAt: linemanExpiresAt } : {}),
             held: {
-              finding: { reader: 'lineman.self', rawText: linemanFindings } as unknown as HeldReader['finding'],
+              finding: { reader: linemanAgentId, rawText: linemanFindings } as unknown as HeldReader['finding'],
               usage: {
-                node: 'self.reader',
+                node: `${board}.reader`,
                 model: readerModel,
                 promptTokens: st.promptTokens ?? 0,
                 cachedTokens: st.cachedTokens,
@@ -1007,23 +1032,23 @@ export async function runSelfOracle(
           return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
         }
 
-        // Stage 3: Self Oracle Synthesizer (`self.reading_oracle` / `oracle/self`)
-        const compiledBrief = `${brief.text}\n\n## LINEMAN SYNTHESIS BRIEF (R15-self)\n${linemanFindings}\n\n## FAMILY SUB-AGENT FINDINGS\n${familyBundleText}`;
+        // Stage 3: Board Oracle Synthesizer (`self.reading_oracle` / `love.reading_oracle` / `work.reading_oracle`)
+        const compiledBrief = `${boardFocusInstruction}\n\n${brief.text}\n\n## LINEMAN SYNTHESIS BRIEF (${linemanAgentId})\n${linemanFindings}\n\n## FAMILY SUB-AGENT FINDINGS\n${familyBundleText}`;
         const tOracle = performance.now();
         const oracleRes = await withAgentRun(
           prisma,
-          'self.reading_oracle',
+          oracleAgentId,
           {
             userId,
             kundliId,
-            technique: 'self.reading.oracle',
-            task: `self.reading.oracle ${reading.asOf}`,
+            technique: oracleTechniqueId,
+            task: `${oracleTechniqueId} ${reading.asOf}`,
             input: { stages: stages.length, keys: allKeys.size },
           },
           async () => {
             const g = await callGemini({
               model: oracleModel,
-              node: 'self.oracle',
+              node: `${board}.oracle`,
               system: PROMPTS['oracle/self'] ?? '',
               parts: [
                 linemanPrefix,
@@ -1056,7 +1081,7 @@ export async function runSelfOracle(
           },
         );
         const oracleMs = Math.round((performance.now() - tOracle) * 100) / 100;
-        const oracleStage = summarizeCall('self.reading_oracle', oracleModel, oracleRes, oracleMs);
+        const oracleStage = summarizeCall(oracleAgentId, oracleModel, oracleRes, oracleMs);
         stages.push(oracleStage);
         spentUsd = Math.round((spentUsd + oracleStage.costUsd) * 1e6) / 1e6;
         calls += 1;
