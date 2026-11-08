@@ -13,6 +13,7 @@ import { ensureGeminiCacheForUser } from './geminiCacheService.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { buildFactsForKundli, scheduleFactsBuild } from '../reading/data/factsBuilder.js';
 import { markDigestInputsChanged } from '../reading/digest/status.js';
+import { queueDigestBuild } from '../reading/digest/event.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
 import { fetchRegistrationItemsUntil, firstTierReady, loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
@@ -468,6 +469,12 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
       // the registration pull stored new engine rows: the digest is behind them (ready -> stale, failed -> pending; a new
       // kundli is pending already), and the digest sweep rebuilds it (docs/reading-engine/53 §4.1 Status)
       if (rest.fetched > 0) await markDigestInputsChanged(prisma, kundliId);
+      // start the digest now rather than at the next sweep (docs/reading-engine/53 §4.1): only once the pull is done, so
+      // the build reads every row; queueDigestBuild self-invokes on Lambda and never throws
+      if (!rest.more) {
+        const d = await prisma.kundli.findUnique({ where: { id: kundliId }, select: { digest_status: true } }).catch(() => null);
+        if (d && d.digest_status !== 'ready' && d.digest_status !== 'building') await queueDigestBuild(prisma, kundliId).catch(() => undefined);
+      }
       return { gateComplete: true, more: rest.more };
     } else {
       queueLog({

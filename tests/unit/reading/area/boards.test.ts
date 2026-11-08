@@ -12,6 +12,10 @@ import { FACT_CATALOG } from '../../../../src/profile/facts.js';
 import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 import { selfActivation, selfFixture } from '../../../helpers/fakeDigest.js';
 
+// the immediate digest trigger (a self-invoke on Lambda): spied, never run
+const queueDigestBuild = vi.fn(async () => 'skipped' as const);
+vi.mock('../../../../src/reading/digest/event.js', async (orig) => ({ ...(await orig<typeof import('../../../../src/reading/digest/event.js')>()), queueDigestBuild: (...a: unknown[]) => (queueDigestBuild as any)(...a) }));
+
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 function fakePrisma() {
@@ -138,6 +142,8 @@ describe('the board services', () => {
     // the default queue sets digest_status pending unless it is building, pending or ready
     await getLoveBoard(deps(db), 'u3');
     expect(db.queued).toEqual(['k3']);
+    // and starts the build at once rather than waiting for the sweep
+    expect(queueDigestBuild).toHaveBeenCalledWith(db.prisma, 'k3');
   });
   it('builds once a day per area, tags the run, then serves the stored build', async () => {
     const db = fakePrisma();

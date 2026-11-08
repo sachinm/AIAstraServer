@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetAgentRegistryState } from '../../../../src/agents/registry.js';
 import { handleKundliDigestEvent, parseKundliDigestEvent, runDigestSweep } from '../../../../src/reading/digest/event.js';
+import { queueDigestBuild } from '../../../../src/reading/digest/event.js';
 import { fakeDigestPrisma } from './helpers.js';
 
 const TOKEN = 'digest-test-token';
@@ -105,5 +106,39 @@ describe('handling', () => {
     const built: string[] = [];
     await runDigestSweep({ prisma: f.prisma as never, now: () => now, build: async (_p, id) => (built.push(id), ok), topUpCandidates: async () => [] });
     expect(built).toEqual(['pending', 'old', 'stuck', 'failed']);
+  });
+});
+
+describe('queueDigestBuild (the immediate trigger)', () => {
+  it('marks a failed or stale digest pending, then starts it; at most once a minute per kundli per container', async () => {
+    const prev = { fn: process.env.AWS_LAMBDA_FUNCTION_NAME };
+    delete process.env.AWS_LAMBDA_FUNCTION_NAME; // off Lambda: built in process (here against a fake that fails quietly)
+    try {
+      const updates: unknown[] = [];
+      const prisma = { kundli: { updateMany: async (a: unknown) => (updates.push(a), { count: 1 }) } } as never;
+      expect(await queueDigestBuild(prisma, 'kq-1')).toBe('in_process');
+      expect(updates[0]).toEqual({ where: { id: 'kq-1', digest_status: { in: ['failed', 'stale'] } }, data: { digest_status: 'pending' } });
+      const seen = updates.length;
+      expect(await queueDigestBuild(prisma, 'kq-1')).toBe('skipped');
+      // the cooldown: the second call within a minute writes nothing of its own
+      expect(updates.filter((u: any) => u?.data?.digest_status === 'pending' && u?.where?.id === 'kq-1').length).toBe(1);
+      expect(updates.length).toBeGreaterThanOrEqual(seen);
+    } finally {
+      if (prev.fn !== undefined) process.env.AWS_LAMBDA_FUNCTION_NAME = prev.fn;
+    }
+  });
+
+  it('on Lambda without the event token it starts nothing and leaves the kundli to the sweep', async () => {
+    const prev = { fn: process.env.AWS_LAMBDA_FUNCTION_NAME, tok: process.env.KUNDLI_DIGEST_EVENT_TOKEN };
+    process.env.AWS_LAMBDA_FUNCTION_NAME = 'aiastra-server-api';
+    delete process.env.KUNDLI_DIGEST_EVENT_TOKEN;
+    try {
+      const prisma = { kundli: { updateMany: async () => ({ count: 0 }) } } as never;
+      expect(await queueDigestBuild(prisma, 'kq-2')).toBe('skipped');
+    } finally {
+      if (prev.fn === undefined) delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+      else process.env.AWS_LAMBDA_FUNCTION_NAME = prev.fn;
+      if (prev.tok !== undefined) process.env.KUNDLI_DIGEST_EVENT_TOKEN = prev.tok;
+    }
   });
 });

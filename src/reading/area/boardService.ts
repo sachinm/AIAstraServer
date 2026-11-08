@@ -11,6 +11,7 @@ import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from 
 import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
+import { queueDigestBuild } from '../digest/event.js';
 import type { DigestView } from '../digest/types.js';
 import { asRangePayload, type TransitRangePayload } from '../chartData/transitRange.js';
 import { openRow } from '../../lib/pii/rawSql.js';
@@ -104,8 +105,14 @@ export async function defaultLoadTransit(prisma: PrismaClient, kundliId: string,
   return null;
 }
 
+/**
+ * The board found the digest not ready: mark it pending (unless building or ready) and start the build now (an async
+ * self-invoke on Lambda, in process off it), so the person waits a minute, not a sweep interval. The sweep stays the
+ * safety net. Never throws.
+ */
 export async function defaultQueueDigest(prisma: PrismaClient, kundliId: string): Promise<void> {
   await prisma.kundli.updateMany({ where: { id: kundliId, digest_status: { notIn: ['building', 'pending', 'ready'] } }, data: { digest_status: 'pending' } });
+  await queueDigestBuild(prisma, kundliId).catch(() => undefined);
 }
 
 /** The digest sections a board build reads, for the run's `charts` (docs/admin/03 §4.1). */
