@@ -66,6 +66,7 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
           id: true,
           email: true,
           name: true,
+          username: true,
           date_of_birth: true,
           time_of_birth: true,
           place_of_birth: true,
@@ -74,7 +75,7 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
           kundlis: {
             orderBy: { created_at: 'desc' },
             take: 1,
-            select: { id: true, digest_status: true, preferred_dasha: true },
+            select: { id: true, digest_status: true, preferred_dasha: true, place_resolved: true },
           },
         },
         orderBy: { created_at: 'desc' },
@@ -89,17 +90,19 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
             ?.findFirst?.({
               where: { user_id: r.id },
               orderBy: { created_at: 'desc' },
-              select: { id: true, digest_status: true, preferred_dasha: true },
+              select: { id: true, digest_status: true, preferred_dasha: true, place_resolved: true },
             })
             .catch(() => null));
+        const resolvedName = r.name?.trim() || r.username?.trim() || null;
+        const resolvedPlace = r.place_of_birth?.trim() || k?.place_resolved?.trim() || null;
         return {
           userId: r.id,
-          label: r.name ? `${r.name} (${r.email ?? r.id.slice(0, 8)})` : `Person ${r.id.slice(0, 8)}`,
+          label: resolvedName ? `${resolvedName} (${r.email ?? r.id.slice(0, 8)})` : `Person ${r.id.slice(0, 8)}`,
           email: r.email ?? null,
-          name: r.name ?? null,
+          name: resolvedName,
           dateOfBirth: r.date_of_birth ?? null,
           timeOfBirth: r.time_of_birth ?? null,
-          placeOfBirth: r.place_of_birth ?? null,
+          placeOfBirth: resolvedPlace,
           city: r.city ?? null,
           countryCode: r.country_code ?? null,
           kundliId: k?.id ?? null,
@@ -117,17 +120,17 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     try {
       const a = await deps.prisma.auth.findUnique({
         where: { id: String(req.params.userId) },
-        select: { id: true, email: true, name: true, date_of_birth: true, time_of_birth: true, place_of_birth: true, city: true, country_code: true, locked_at: true },
+        select: { id: true, email: true, name: true, username: true, date_of_birth: true, time_of_birth: true, place_of_birth: true, city: true, country_code: true, locked_at: true },
       });
       if (!a) return res.status(404).json({ error: 'no_person' });
-      const k = await deps.prisma.kundli.findFirst({ where: { user_id: a.id }, orderBy: { created_at: 'desc' }, select: { id: true, digest_status: true, preferred_dasha: true } });
+      const k = await deps.prisma.kundli.findFirst({ where: { user_id: a.id }, orderBy: { created_at: 'desc' }, select: { id: true, digest_status: true, preferred_dasha: true, place_resolved: true } });
       return res.json({
         userId: a.id,
         email: a.email ?? null,
-        name: a.name ?? null,
+        name: a.name?.trim() || a.username?.trim() || null,
         dateOfBirth: a.date_of_birth ?? null,
         timeOfBirth: a.time_of_birth ?? null,
-        placeOfBirth: a.place_of_birth ?? null,
+        placeOfBirth: a.place_of_birth?.trim() || k?.place_resolved?.trim() || null,
         city: a.city ?? null,
         countryCode: a.country_code ?? null,
         locked: a.locked_at != null,
