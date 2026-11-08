@@ -237,9 +237,12 @@ export const BODY_SHAPE: Record<string, string> = {
 };
 export const BODY_NOTE = 'What the chart, divisional vargas, Tithi Pravesha, and the transit sky put on the body, mind, brain, and vitality. Not medical advice; nothing here is a clinical diagnosis.';
 
-/** Words no card line may carry (SOUL.md §1): internal calculation engine names and fatalistic/doom claims. */
+/** Words no card line may carry (SOUL.md §1): the internal calculation engine names only; they are redacted, never a reason to drop a line. Tone is the Oracle prompt's job, not a post-filter (BG-14). */
 export const BANNED_LINE_WORDS: RegExp[] = [
   /\b(aiastra_radha|pyjhora|jhora|radha)\b/i,
-  /\b(you will always|for life|forever|never will)\b/i,
-  /\b(guaranteed|doomed|cursed|possessed)\b/i,
 ];
+
+/** BG-14: replaces an engine name in a card line with neutral words, so the line is kept and the name never shows. */
+export function redactBannedWords(text: string): string {
+  return BANNED_LINE_WORDS.reduce((t, re) => t.replace(new RegExp(re.source, 'gi'), 'traditional calculations'), text);
+}

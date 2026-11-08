@@ -125,10 +125,24 @@ describe('code auditor (self.reading.audit)', () => {
   it('passes a grounded line with a stored date', () => {
     expect(auditCards({ ...base, panels: [panel([line('Your judgement gives mostly to others until 1 Jan 2027.')])] }).audit).toMatchObject({ verdict: 'pass', checked: 1 });
   });
-  it('fails and removes a line with an invented date, a banned word, a vetoed or unknown claim, or too many words', () => {
+  it('BG-14: keeps a line whose date no stored window holds and lists the date as a gap', () => {
+    const r = auditCards({ ...base, panels: [panel([line('Until 3 Mar 2027 it eases.')])] });
+    expect(r.audit.verdict).toBe('pass');
+    expect(r.panels[0]!.lines).toHaveLength(1);
+    expect(r.audit.dateGaps?.[0]).toMatchObject({ lineId: 'struggle.1', check: 'date' });
+  });
+  it('BG-14: accepts a prospective date inside a stored window', () => {
+    const r = auditCards({ ...base, windows: [{ from: '2027-02-01', to: '2027-06-30' }], panels: [panel([line('Until 3 Mar 2027 it eases; Apr 2027 is the month to act.')])] });
+    expect(r.audit).toMatchObject({ verdict: 'pass', checked: 1 });
+    expect(r.audit.dateGaps).toBeUndefined();
+  });
+  it('BG-14: redacts an engine name instead of dropping the line, and has no phrase ban', () => {
+    const r = auditCards({ ...base, panels: [panel([line('Calculated by pyjhora engine.'), { ...line('This is guaranteed to last forever.'), id: 'struggle.2' }])] });
+    expect(r.audit.verdict).toBe('pass');
+    expect(r.panels[0]!.lines.map((l) => l.text)).toEqual(['Calculated by traditional calculations engine.', 'This is guaranteed to last forever.']);
+  });
+  it('fails and removes a line with a vetoed or unknown claim, or too many words', () => {
     const cases: Array<[string, string[]]> = [
-      ['Until 3 Mar 2027 it eases.', ['c1']],
-      ['Calculated by pyjhora engine.', ['c1']],
       ['A line.', ['nope']],
       [Array.from({ length: 501 }, () => 'word').join(' '), ['c1']],
     ];
