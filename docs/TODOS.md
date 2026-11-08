@@ -951,3 +951,40 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
   - Added `self.character_arc` (3-decade Character Evolution: Last 10 Years, Who You Are Now, Next 10 Years) and `self.personality_joy` (purely Vedic Moon/Chandra & Mercury/Budha + 4th/5th house personality & joy synthesis) in `src/reading/area/selfCharacterAndJoy.ts`, wired into `buildBoard` (`src/reading/area/houseLayers.ts`), `selfDashboardQa.ts`, `AIAstra_WEB/src/pages/boards/BoardView.tsx`, and `aiadastra_admin/web/src/pages/ResearchLab.tsx`.
   - Extended Research & Verification Lab (`src/reading/research/loveDashboardQa.ts`, `workDashboardQa.ts`, `src/routes/researchRoutes.ts`, `aiadastra_admin`) to support `Self (You) | Love | Work` boards across all 20 synthetic subjects (total 73 built techniques, 27 registered agents, 80-page visual manual in `docs/techniques/01..06`).
   - Added Header "Personalize" Profile Setup Wizard Modal button next to the user profile icon in `AIAstra_WEB/src/components/AppShell.tsx` (`PersonalizeWizardModal.tsx`) and merged `fix/auth-scene-fullbleed` (`03292ec`, `48c4458`) into `develop` and `release-candidate-staging`.
+
+## Filed 2026-11-07 by the home-scenery review session (vedic-astrology.app home, /signin, /signup)
+
+Reviewed on the live site and from `AIAstra_WEB/src/assets/skies/*.webp`, `src/lib/skies.ts`, `scripts/skies/scenes.mjs`,
+`src/components/CosmicSky.tsx`, `src/LandingPage.tsx`. Opinion and additions are in the session's report to Sachin; the
+concrete findings. Full review and plan: `docs/homepage-scene-improvements/01-review-and-plan.md`. Two of these reopen earlier
+decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/phone sign-in in `docs/product/auth-registration-review.md`), so they are Sachin's call:
+
+- **P2: the home loop shows 12 "planets", not the navagraha.** `SKY_SCENES` adds Prajapati (Uranus), Varuna (Neptune) and
+  Yama (Pluto) with invented vahanas (swan, whale, buffalo). A Jyotish regular reads these as Western. Status: open. Done:
+  the three leave the home loop (keep the art for an "outer planets" note if wanted), caption count is 27 + 9.
+- **P2: four scenes break their own iconography.** `hasta.webp` goddess is blue-skinned (reads as Vishnu/Krishna);
+  `shukra.webp` reads as a woman in white (Shukracharya is a bearded male guru); `budha.webp` neon-green winged lion looks
+  like a game asset; `chitra.webp` tiger is realistic fur, not starlight like every other animal. `yama.webp` is grim and
+  near-black, against the "nothing frightening" brief. Status: open. Done: regenerated with `scripts/skies/scenes.mjs`.
+- **P3: every scene carries two baked-in "AdAstra AI" marks**, one bottom-right and one faint in the centre over the subject.
+  Looks like a stock-site preview. Status: open. Done: centre mark removed from all 39.
+- **P2: portrait phones crop the rider.** Images are 1920×1072 shown `bg-cover bg-center`; on a 9:16 screen the subject is cut
+  on both sides and the caption covers the animal. Status: open. Done: a focal point per scene or a portrait crop set.
+- **P3: the caption names only the yoni animal and the rashi** (`रोहिणी · Rohini / बैल · the ox / वृषभ Taurus`). A regular
+  knows a nakshatra by its lord, symbol and deity; the animal alone makes the ox look like Rohini itself. Status: open. Done:
+  caption adds the lord (and optionally the symbol), stays two lines.
+- **P3: Devanagari only.** South-Indian and US-Tamil/Telugu/Kannada/Malayalam visitors see a script they may not read; no
+  transliteration toggle. Status: open. Done: decision recorded; at least an IAST/English-only option.
+- **P2: the first scene is random**, so a first visit can open on Yama, Rahu or Ketu. The sky is shared for all users (Radha
+  transit sky), so the first scene can be today's Moon nakshatra with a "Today the Moon is in …" line, which is what regulars
+  check daily. Node computes nothing: read from the stored shared sky. Status: open. Done: first scene = today's Moon
+  nakshatra when the shared sky is present, random otherwise.
+- **P3: landing copy is Western new-age** ("Discover Your Cosmic Blueprint", "Generate My Chart") and the tagline reads
+  "mastered on the ancient text unabridged and astrological celestial sky". Audience words are Kundli / Janam Kundali /
+  Jathakam, Panchang, Dasha. Status: open. Done: copy pass with Sachin.
+- **P3: eight identical parchment icons sit over the goddess's face and body**, random each visit, and the parchment card with
+  pink gradient text clashes with the cinematic scenes; the product explanation and FAQ are hidden until an icon is clicked.
+  Status: open. Done: one visual language chosen; the icons stay off the subject's face (placement avoids the centre third).
+- **P2: sign-in and sign-up are email-only** with Turnstile. India users expect phone/WhatsApp OTP and US Indians expect
+  Google sign-in; neither page says what the person gets or that birth date, time and place come next. Status: open. Done:
+  decision on Google and phone OTP recorded; a one-line "what you get" and "next: your birth details" on both pages.
