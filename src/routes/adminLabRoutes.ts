@@ -11,12 +11,14 @@
  *        400 bad_request | bad_as_of | unknown_technique | board_not_built (love, work) | 403 | 404
  *   GET  /api/admin-lab/runs/:id                                → the stored dossier
  *   GET  /api/admin-lab/dossiers?userId=&board=                 → the person's dossiers, newest first
+ *   GET  /api/admin-lab/chart-data/:userId?part=&years=         → every stored chart row, opened (./adminChartData.ts)
  */
 import { timingSafeEqual } from 'node:crypto';
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import { getBoardReading, type SelfDeps } from '../reading/self/service.js';
 import { stripBirthFields } from '../reading/self/dossier.js';
+import { chartDataHandler } from './adminChartData.js';
 import {
   SELF_PANEL_IDS,
   LOVE_PANEL_IDS,
@@ -149,6 +151,9 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
       return res.status(503).json({ error: 'person_unavailable' });
     }
   });
+
+  // Chart Data Review (QA, Sachin 2026-11-08): the stored engine rows of one person, opened, as stored
+  app.get('/api/admin-lab/chart-data/:userId', guard, chartDataHandler({ prisma: deps.prisma }));
 
   app.post('/api/admin-lab/run', guard, async (req, res) => {
     const b = (req.body ?? {}) as { userId?: unknown; board?: unknown; technique?: unknown; force?: unknown; asOf?: unknown };
