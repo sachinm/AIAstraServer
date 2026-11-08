@@ -35,7 +35,7 @@ import { activationKey, allRunningDashas, gaps, houseFrame, mdSpine, planetChain
 import type { BoardPanelId, ChapterConfirmation, PanelBody, SelfChapter, SelfClaim } from '../types.js';
 import { body, cardDetail, hasCancellation, pname, stateWords, type PanelInput } from './common.js';
 import { certaintyOf, confirmShift } from './chapters.js';
-import { runningMudda, runningTp } from './year.js';
+import { activeTpAshtottariPeriod, runningMudda, runningTp } from './year.js';
 import { struggleLead } from './struggle.js';
 
 export const LOVE_HOUSES: readonly number[] = [7, 5, 11, 2, 8, 4, 12];
@@ -51,6 +51,7 @@ export function heartPanel({ view }: PanelInput): PanelBody {
   const h5 = houseFrame(view, 'D1', 5, g);
   const h7 = houseFrame(view, 'D1', 7, g);
   const l5 = planetChain(view, h5?.lord ?? null, g);
+  const d9h5 = houseFrame(view, 'D9', 5, g);
   const d9h7 = houseFrame(view, 'D9', 7, g);
   const ul = pointOf(view, 'D1', 'UL', g);
   const a7 = pointOf(view, 'D1', 'A7', g);
@@ -96,16 +97,22 @@ export function heartPanel({ view }: PanelInput): PanelBody {
     });
   }
 
-  if (d9h7 && d9h7.lordHouse != null) {
+  if ((d9h7 && d9h7.lordHouse != null) || (d9h5 && d9h5.lordHouse != null)) {
+    const innerH = d9h7?.lordHouse ?? d9h5?.lordHouse ?? 7;
     const d9Ve = ve?.d9;
     const veNote = d9Ve?.house != null ? `, while your inner capacity for closeness sits in ${HOUSE_SHORT[d9Ve.house]}` : '';
+    const d9h5Note = d9h5?.lordHouse != null && d9h5.lordHouse !== innerH ? ` and inner romance moves through ${HOUSE_SHORT[d9h5.lordHouse]}` : '';
     claims.push({
       id: 'heart.inner_bond',
-      line: `Beneath the surface, closeness asks for ${HOUSE_SHORT[d9h7.lordHouse]}.`,
-      text: `Beneath the surface, the inner shape of partnership is steered from ${HOUSE_SELF[d9h7.lordHouse]}${veNote}.`,
-      detail: `D9 h7 ${d9h7.sign ?? '?'}, lord ${pname(d9h7.lord)} in D9 h${d9h7.lordHouse} (${d9h7.lordDignity ?? '?'})${d9Ve ? `; D9 Venus in h${d9Ve.house ?? '?'} ${d9Ve.sign ?? '?'}` : ''}`,
+      line: `Beneath the surface, closeness asks for ${HOUSE_SHORT[innerH]}.`,
+      text: `Beneath the surface, the inner shape of partnership is steered from ${HOUSE_SELF[innerH]}${veNote}${d9h5Note}.`,
+      detail: `D9 h7 ${d9h7?.sign ?? '?'}, lord ${pname(d9h7?.lord)} in D9 h${d9h7?.lordHouse ?? '?'} (${d9h7?.lordDignity ?? '?'}); D9 h5 ${d9h5?.sign ?? '?'}, lord ${pname(d9h5?.lord)} in D9 h${d9h5?.lordHouse ?? '?'}${d9Ve ? `; D9 Venus in h${d9Ve.house ?? '?'} ${d9Ve.sign ?? '?'}` : ''}`,
       certainty: 'fact',
-      evidence: ['house:D9.h7', ...(d9Ve ? ['planet:D9.Ve'] : [])],
+      evidence: [
+        ...(d9h7 ? ['house:D9.h7'] : []),
+        ...(d9h5 ? ['house:D9.h5'] : []),
+        ...(d9Ve ? ['planet:D9.Ve'] : []),
+      ],
     });
   }
 
@@ -135,7 +142,10 @@ export function partnerPanel({ view }: PanelInput): PanelBody {
   const l7 = planetChain(view, h7?.lord ?? null, g);
   const dk = pointOf(view, 'D1', 'DK', g);
   const dkChain = planetChain(view, dk?.planet ?? null, g);
+  const ve = planetChain(view, 'Ve', g);
+  const ju = planetChain(view, 'Ju', g);
   const d9h7 = houseFrame(view, 'D9', 7, g);
+  const d9L7 = d9h7?.lord ? view.planet('D9', d9h7.lord) : null;
   const ul = pointOf(view, 'D1', 'UL', g);
   const a7 = pointOf(view, 'D1', 'A7', g);
 
@@ -147,22 +157,36 @@ export function partnerPanel({ view }: PanelInput): PanelBody {
       id: 'partner.seventh_lord',
       line: `The partner you draw is shaped by ${HOUSE_SHORT[l7.d1.house]}.`,
       text: `Who you meet as an equal partner is steered from ${HOUSE_SELF[l7.d1.house]}.${sw ? ` ${sw}` : ''}`,
-      detail: `D1 h7 ${h7?.sign ?? '?'} lord ${cardDetail(l7.d1)}${l7.d9 ? `; D9 ${l7.d9.sign ?? '?'} h${l7.d9.house ?? '?'}` : ''}`,
+      detail: `D1 h7 ${h7?.sign ?? '?'} lord ${cardDetail(l7.d1)}${l7.d9 ? `; D9 ${l7.d9.sign ?? '?'} h${l7.d9.house ?? '?'}` : ''}${d9L7 ? `; D9 h7 lord ${pname(d9h7?.lord)} in D9 h${d9L7.house ?? '?'} ${d9L7.sign ?? '?'} (${d9L7.dignity ?? '?'})` : ''}`,
       certainty: 'fact',
-      evidence: ['house:D1.h7', ...l7.evidence],
+      evidence: [
+        'house:D1.h7',
+        ...l7.evidence,
+        ...(d9h7 ? ['house:D9.h7'] : []),
+        ...(d9L7 && d9h7?.lord ? [`planet:D9.${d9h7.lord}`] : []),
+      ],
     });
   }
 
   if (dk?.planet && dkChain && dkChain.d1.house != null && PLANET_FACULTY[dk.planet]) {
     const sw = stateWords(dkChain.d1);
+    const karakaNote =
+      ve?.d1.house != null && ju?.d1.house != null
+        ? `; natural partnership factors sit in ${HOUSE_SHORT[ve.d1.house]} and ${HOUSE_SHORT[ju.d1.house]}`
+        : '';
     if (!lead) lead = `You are drawn to someone who carries ${PLANET_SHORT[dk.planet]}.`;
     claims.push({
       id: 'partner.darakaraka',
       line: `You are drawn to someone who carries ${PLANET_SHORT[dk.planet]}.`,
-      text: `At a deeper level, you are drawn to a partner who brings ${PLANET_FACULTY[dk.planet]}, lived through ${HOUSE_SELF[dkChain.d1.house]}.${sw ? ` ${sw}` : ''}`,
-      detail: `Darakaraka (DK) ${pname(dk.planet)}: ${cardDetail(dkChain.d1)}${dkChain.d9 ? `; D9 ${dkChain.d9.sign ?? '?'} h${dkChain.d9.house ?? '?'}` : ''}`,
+      text: `At a deeper level, you are drawn to a partner who brings ${PLANET_FACULTY[dk.planet]}, lived through ${HOUSE_SELF[dkChain.d1.house]}${karakaNote}.${sw ? ` ${sw}` : ''}`,
+      detail: `Darakaraka (DK) ${pname(dk.planet)}: ${cardDetail(dkChain.d1)}${dkChain.d9 ? `; D9 ${dkChain.d9.sign ?? '?'} h${dkChain.d9.house ?? '?'}` : ''}${ve ? `; Venus ${cardDetail(ve.d1)}` : ''}${ju ? `; Jupiter ${cardDetail(ju.d1)}` : ''}`,
       certainty: 'fact',
-      evidence: ['point:D1.DK', ...dkChain.evidence],
+      evidence: [
+        'point:D1.DK',
+        ...dkChain.evidence,
+        ...(ve ? ['planet:D1.Ve'] : []),
+        ...(ju ? ['planet:D1.Ju'] : []),
+      ],
     });
   }
 
@@ -225,18 +249,25 @@ export function bondPanel({ view }: PanelInput): PanelBody {
   const l8 = planetChain(view, h8?.lord ?? null, g);
   const ju = planetChain(view, 'Ju', g);
   const ul = pointOf(view, 'D1', 'UL', g);
+  const ulLord = ul?.lord ? view.planet('D1', ul.lord) : null;
 
   let lead = '';
   if (h2 && l2 && l2.d1.house != null) {
     const sw = stateWords(l2.d1);
+    const ulNote = ul?.house != null ? `, while your committed bond is anchored in ${HOUSE_SHORT[ul.house]}` : '';
     lead = `A lasting bond for you is sustained through ${HOUSE_SHORT[l2.d1.house]}.`;
     claims.push({
       id: 'bond.keeping',
       line: `What holds a bond together for you is ${HOUSE_SHORT[l2.d1.house]}.`,
-      text: `How you keep a relationship steady day after day rests on ${HOUSE_SELF[l2.d1.house]}.${sw ? ` ${sw}` : ''}`,
-      detail: `D1 h2 ${h2.sign ?? '?'} lord ${cardDetail(l2.d1)}${ul ? `; UL in h${ul.house ?? '?'} ${ul.sign ?? '?'}` : ''}`,
+      text: `How you keep a relationship steady day after day rests on ${HOUSE_SELF[l2.d1.house]}${ulNote}.${sw ? ` ${sw}` : ''}`,
+      detail: `D1 h2 ${h2.sign ?? '?'} lord ${cardDetail(l2.d1)}${ul ? `; UL in h${ul.house ?? '?'} ${ul.sign ?? '?'}, lord ${pname(ul.lord)} in h${ulLord?.house ?? '?'} (${ulLord?.dignity ?? '?'})` : ''}`,
       certainty: 'fact',
-      evidence: ['house:D1.h2', ...l2.evidence, ...(ul ? ['point:D1.UL'] : [])],
+      evidence: [
+        'house:D1.h2',
+        ...l2.evidence,
+        ...(ul ? ['point:D1.UL'] : []),
+        ...(ulLord && ul?.lord ? [`planet:D1.${ul.lord}`] : []),
+      ],
     });
   }
 
@@ -381,26 +412,38 @@ export function loveChaptersPanel({ view, activation, asOf, clock }: PanelInput)
   }
   const ul = view.points('D1').find((p) => p.id === 'UL');
   const a7 = view.points('D1').find((p) => p.id === 'A7');
+  const l7 = view.house('D1', 7)?.lord ?? null;
+  const dk = pointOf(view, 'D1', 'DK', g)?.planet ?? null;
+  const lovePlanets = new Set([l7, 'Ve', dk, 'Mo', 'Ju'].filter((x): x is string => !!x));
+  const resolveLord = (r: ActivationRow | null | undefined): string | null =>
+    r?.lord ?? (r?.sign ? view.houses('D1').find((h) => h.sign === r.sign)?.lord ?? null : null);
   const who = (r: ActivationRow) => r.lord ?? r.sign ?? '?';
   const pickLoveHouses = (houses: readonly number[]): number[] => {
     const filtered = houses.filter((h) => LOVE_HOUSES.includes(h));
     return filtered.length ? filtered : [...houses];
   };
   const carried = (r: ActivationRow): { text: string; detail: string; evidence: string[] } => {
+    const effLord = resolveLord(r);
     if (!r.lord) {
       const signNote =
         (ul?.sign && r.sign === ul.sign ? '; holds Upapada (UL)' : '') +
-        (a7?.sign && r.sign === a7.sign ? '; holds Darapada (A7)' : '');
-      return { text: '', detail: `sign period ${r.sign}${signNote}`, evidence: [] };
+        (a7?.sign && r.sign === a7.sign ? '; holds Darapada (A7)' : '') +
+        (effLord && lovePlanets.has(effLord) ? `; ruled by love karaka/lord ${pname(effLord)}` : '');
+      return {
+        text: '',
+        detail: `sign period ${r.sign}${signNote}`,
+        evidence: effLord && view.planet('D1', effLord) ? [`planet:D1.${effLord}`] : [],
+      };
     }
     const c = view.planet('D1', r.lord);
     if (!c || c.house == null || !PLANET_FACULTY[r.lord]) {
       g.add(`planet:D1.${r.lord} missing`);
       return { text: '', detail: '', evidence: [] };
     }
+    const roleNote = lovePlanets.has(r.lord) ? ' (key love factor)' : '';
     return {
       text: ` In love, it is carried by ${PLANET_FACULTY[r.lord]}, placed in ${HOUSE_SHORT[c.house]}.`,
-      detail: cardDetail(c),
+      detail: `${cardDetail(c)}${roleNote}`,
       evidence: [`planet:D1.${r.lord}`],
     };
   };
@@ -439,33 +482,35 @@ export function loveChaptersPanel({ view, activation, asOf, clock }: PanelInput)
   else g.add(`activation:${clock.system} previous level 1 missing`);
   const running = make('running', spine.running);
   const sub = spine.runningSub;
-  if (sub?.lord) {
-    const mdCard = spine.running.lord ? view.planet('D1', spine.running.lord) : null;
-    const cell = mdCard?.dashaCharter?.fruition?.[sub.lord];
+  const subLord = resolveLord(sub);
+  if (sub && (sub.lord || sub.sign)) {
+    const mdLord = resolveLord(spine.running);
+    const mdCard = mdLord ? view.planet('D1', mdLord) : null;
+    const cell = subLord ? mdCard?.dashaCharter?.fruition?.[subLord] : undefined;
     const flavour =
       cell?.fruitionClass && FRUITION_WORDS[cell.fruitionClass]
         ? ` In this chapter ${FRUITION_WORDS[cell.fruitionClass]}${cell.isDwirdwadasha212 ? ', though what comes in also goes out' : cell.isShadAshtaka68 ? ', with friction between the two' : ''}.`
         : '';
-    if (!cell) g.add(`planet:D1.${spine.running.lord}.dashaCharter.fruition.${sub.lord} missing`);
+    if (!cell && mdLord && subLord) g.add(`planet:D1.${mdLord}.dashaCharter.fruition.${subLord} missing`);
     const subLoveH = pickLoveHouses(sub.houses);
     const parallelClocks = allRunningDashas(activation, asOf, clock.system)
       .filter((s) => s.system !== clock.system && (s.l1 || s.l2))
       .map((s) => `${clockLabel(s.system)}: ${s.l1 ? `${s.l1.lord ? pname(s.l1.lord) : s.l1.sign}(${s.l1.from}→${s.l1.to})` : ''}${s.l2 ? `/${s.l2.lord ? pname(s.l2.lord) : s.l2.sign}(${s.l2.from}→${s.l2.to})` : ''}`);
     running.sub = {
-      lord: sub.lord,
-      lordLabel: pname(sub.lord),
+      lord: sub.lord ?? sub.sign ?? '?',
+      lordLabel: sub.lord ? pname(sub.lord) : (sub.sign ?? '?'),
       from: sub.from,
       to: sub.to,
       text: `Since ${longDate(sub.from)} and until ${longDate(sub.to)}, what presses in love is ${housesShort(subLoveH)}.${flavour}`,
-      detail: `${clockLabel(clock.system)} level 2 ${pname(sub.lord)} ${sub.from} → ${sub.to}; activates love houses ${subLoveH.join(', ')}${cell ? `; fruition from ${pname(spine.running.lord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}${parallelClocks.length ? `; all parallel clocks (${parallelClocks.length}): ${parallelClocks.join('; ')}` : ''}`,
+      detail: `${clockLabel(clock.system)} level 2 ${sub.lord ? pname(sub.lord) : sub.sign} ${sub.from} → ${sub.to}; activates love houses ${subLoveH.join(', ')}${cell ? `; fruition from ${pname(mdLord)}: ${ordinal(cell.houseFromMd)} from the main lord, ${cell.fruitionClass}${cell.isDwirdwadasha212 ? ', 2/12' : ''}${cell.isShadAshtaka68 ? ', 6/8' : ''}` : ''}${parallelClocks.length ? `; all parallel clocks (${parallelClocks.length}): ${parallelClocks.join('; ')}` : ''}`,
       houses: subLoveH,
     };
     running.evidence.push(activationKey(sub));
   } else g.add(`activation:${clock.system} level 2 covering ${asOf} missing`);
-  if (spine.nextSub?.lord) {
+  if (spine.nextSub && (spine.nextSub.lord || spine.nextSub.sign)) {
     running.nextSub = {
-      lord: spine.nextSub.lord,
-      lordLabel: pname(spine.nextSub.lord),
+      lord: spine.nextSub.lord ?? spine.nextSub.sign ?? '?',
+      lordLabel: spine.nextSub.lord ? pname(spine.nextSub.lord) : (spine.nextSub.sign ?? '?'),
       from: spine.nextSub.from,
       to: spine.nextSub.to,
       houses: pickLoveHouses(spine.nextSub.houses),
@@ -641,17 +686,19 @@ export function loveStrugglePanel({ view, activation, asOf, clock }: PanelInput)
 
   const run = runningChain(activation, clock.system, asOf);
   const allRunning = allRunningDashas(activation, asOf, clock.system);
-  const runningLords = new Set([run.l1?.lord, run.l2?.lord].filter(Boolean));
+  const resolveLord = (r: ActivationRow | null | undefined): string | null =>
+    r?.lord ?? (r?.sign ? view.houses('D1').find((h) => h.sign === r.sign)?.lord ?? null : null);
+  const runningLords = new Set([resolveLord(run.l1), resolveLord(run.l2)].filter(Boolean));
   const ordered = [
     ...out.filter((c) => c.planet && runningLords.has(c.planet)),
     ...out.filter((c) => !(c.planet && runningLords.has(c.planet))),
   ];
   const claims: SelfClaim[] = ordered.slice(0, MAX_STRUGGLE_CLAIMS).map(({ planet, ...c }) => {
-    const r = [run.l2, run.l1].find((x) => x && planet && x.lord === planet);
+    const r = [run.l2, run.l1].find((x) => x && planet && resolveLord(x) === planet);
     const otherActive = planet
       ? allRunning
-          .filter((s) => s.system !== clock.system && (s.l1?.lord === planet || s.l2?.lord === planet))
-          .map((s) => `${clockLabel(s.system)} (${(s.l2?.lord === planet ? s.l2 : s.l1)!.from}→${(s.l2?.lord === planet ? s.l2 : s.l1)!.to})`)
+          .filter((s) => s.system !== clock.system && (resolveLord(s.l1) === planet || resolveLord(s.l2) === planet))
+          .map((s) => `${clockLabel(s.system)} (${(resolveLord(s.l2) === planet ? s.l2 : s.l1)!.from}→${(resolveLord(s.l2) === planet ? s.l2 : s.l1)!.to})`)
       : [];
     const otherSuffix = otherActive.length ? `; also running in ${otherActive.join(', ')}` : '';
     if (!r) return otherSuffix ? { ...c, detail: `${c.detail}${otherSuffix}` } : c;
@@ -661,7 +708,7 @@ export function loveStrugglePanel({ view, activation, asOf, clock }: PanelInput)
       text: `${c.text} This presses hardest until ${longDate(r.to)}, when your current ${what} ends.`,
       line: c.line ? `${c.line.replace(/\.$/, '')} until ${longDate(r.to)}.` : undefined,
       range: { from: r.from, to: r.to },
-      detail: `${c.detail}; running ${clock.label} level ${r.level} ${pname(r.lord)} ${r.from} → ${r.to}${otherSuffix}`,
+      detail: `${c.detail}; running ${clock.label} level ${r.level} ${r.lord ? pname(r.lord) : r.sign} ${r.from} → ${r.to}${otherSuffix}`,
       evidence: [...c.evidence, activationKey(r)],
     };
   });
@@ -673,14 +720,25 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
   const g = gaps();
   const claims: SelfClaim[] = [];
   const m = runningMudda(view, asOf);
-  if (!m) {
+  const tp = runningTp(view, asOf, m?.row.year);
+  if (!m && !tp) {
     g.add(`annual:VP covering ${asOf} missing`);
     return body('', [], g);
   }
-  const year = m.row.year;
-  const tp = runningTp(view, asOf, year);
+  const year = m?.row.year ?? tp!.year;
   const tpYear = tp?.year ?? year;
   const l7 = view.house('D1', 7)?.lord ?? 'Ve';
+  const mudda = m?.row.dashas.find((d) => d.system === 'mudda');
+  const span = mudda?.periods.length
+    ? { from: mudda.periods.map((p) => p.from).sort()[0]!, to: mudda.periods.map((p) => p.to).sort().at(-1)! }
+    : null;
+  const ta = activeTpAshtottariPeriod(tp, asOf, span);
+  const loveSahams = [...(tp?.sahams ?? []), ...(m?.row.sahams ?? [])].filter((s) =>
+    /vivaha|preethi|priti|kali|kama/i.test(s.name),
+  );
+  const sahamNote = loveSahams.length
+    ? `; sahams ${loveSahams.map((s) => `${s.name} in ${s.sign ?? '?'} h${s.house ?? '?'}`).join(', ')}`
+    : '';
   let lead = '';
   if (!tp) {
     g.add(`annual:TP${tpYear}.D1 missing`);
@@ -693,7 +751,7 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
         id: 'year.lord_place',
         line: `This year's chart puts your partnership factor in ${HOUSE_SHORT[atL7.house]}${dw ? `, ${dw}` : ''}.`,
         text: `This year's chart puts what steers your partnerships in ${HOUSE_SELF[atL7.house]}${dw ? `, ${dw}` : ''}.`,
-        detail: `TP${tpYear} lagna ${tp.lagna}; natal 7th lord ${pname(l7)} in year h${atL7.house} ${atL7.sign} (${occL7.dignity ?? '?'})`,
+        detail: `TP${tpYear} lagna ${tp.lagna}; natal 7th lord ${pname(l7)} in year h${atL7.house} ${atL7.sign} (${occL7.dignity ?? '?'})${sahamNote}`,
         certainty: 'fact',
         evidence: [`annual:TP${tpYear}.D1`],
       });
@@ -713,31 +771,32 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
       });
     }
     const y7 = tp.houses.find((h) => h.house === 7);
-    if (y7?.lordHouse) {
+    const y5 = tp.houses.find((h) => h.house === 5);
+    if (y7?.lordHouse || y5?.lordHouse) {
+      const targetH = y7?.lordHouse ?? y5?.lordHouse ?? 7;
+      const y5Note = y5?.lordHouse && y5.lordHouse !== targetH ? `, while romance moves through ${HOUSE_SHORT[y5.lordHouse]}` : '';
       claims.push({
         id: 'year.self_lord',
-        line: `This year partnership is steered from ${HOUSE_SHORT[y7.lordHouse]}.`,
-        text: `This year your partnerships are steered from ${HOUSE_SELF[y7.lordHouse]}.`,
-        detail: `TP${tpYear} h7 ${y7.sign}, lord ${pname(y7.lord)} in year h${y7.lordHouse} (${y7.lordDignity ?? '?'})`,
+        line: `This year partnership is steered from ${HOUSE_SHORT[targetH]}.`,
+        text: `This year your partnerships are steered from ${HOUSE_SELF[targetH]}${y5Note}.`,
+        detail: `TP${tpYear} h7 ${y7?.sign ?? '?'}, lord ${pname(y7?.lord)} in year h${y7?.lordHouse ?? '?'} (${y7?.lordDignity ?? '?'}); TP${tpYear} h5 ${y5?.sign ?? '?'}, lord ${pname(y5?.lord)} in year h${y5?.lordHouse ?? '?'}${sahamNote}`,
         certainty: 'fact',
         evidence: [`annual:TP${tpYear}.D1`],
       });
     }
   }
-  const mudda = m.row.dashas.find((d) => d.system === 'mudda');
-  const span = mudda?.periods.length
-    ? { from: mudda.periods.map((p) => p.from).sort()[0]!, to: mudda.periods.map((p) => p.to).sort().at(-1)! }
-    : null;
-  for (const c of claims) c.range = yearRange(span);
-  if (PLANET_FACULTY[m.lord]) {
+  for (const c of claims) c.range = yearRange(span ?? (ta ? { from: ta.from, to: ta.to } : null));
+  const shortClock = m ?? (ta ? { lord: ta.lord, from: ta.from, to: ta.to } : null);
+  if (shortClock && PLANET_FACULTY[shortClock.lord]) {
+    const evKey = m ? `annual:VP${year}.D1` : `annual:TP${tpYear}.D1`;
     claims.push({
       id: 'year.short_clock',
-      range: { from: m.from, to: m.to },
-      line: `Until ${longDate(m.to)} the year's short clock runs through ${PLANET_SHORT[m.lord] ?? 'this period'}.`,
-      text: `Until ${longDate(m.to)} the year's short clock in love runs through ${PLANET_FACULTY[m.lord]}.`,
-      detail: `VP${year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}`,
+      range: { from: shortClock.from, to: shortClock.to },
+      line: `Until ${longDate(shortClock.to)} the year's short clock runs through ${PLANET_SHORT[shortClock.lord] ?? 'this period'}.`,
+      text: `Until ${longDate(shortClock.to)} the year's short clock in love runs through ${PLANET_FACULTY[shortClock.lord]}.`,
+      detail: `${m ? `VP${year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}` : ''}${ta ? `${m ? '; ' : ''}TP${tpYear} tithi_ashtottari ${pname(ta.lord)} ${ta.from} → ${ta.to}` : ''}${sahamNote}`,
       certainty: 'fact',
-      evidence: [`annual:VP${year}.D1`],
+      evidence: [evKey],
     });
   }
   return body(lead || (claims[0]?.text ?? ''), claims, g);
