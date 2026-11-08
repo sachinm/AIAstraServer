@@ -4,6 +4,7 @@ import { resetAgentRegistryState } from '../../../src/agents/registry.js';
 import { techniqueById, type TechniqueDef } from '../../../src/techniques/catalog.js';
 import {
   deleteKundliTechniqueOutputs,
+  recycleIndividualTechniqueOutputs,
   resetTechniqueOutputStoreState,
   runningYearSpan,
   shortestRunningPeriodSpan,
@@ -295,7 +296,10 @@ describe('withTechniqueOutput (date-range validity cache)', () => {
       annual: () => [
         {
           kind: 'TP' as const,
-          dashas: [{ periods: [{ from: '2026-06-01', to: '2027-06-01' }] }],
+          dashas: [
+            { system: 'tithi_ashtottari', periods: [{ from: '2026-02-09', to: '2134-02-09' }] },
+            { system: 'mudda', periods: [{ from: '2026-06-01', to: '2027-06-01' }] },
+          ],
         },
       ],
     };
@@ -486,5 +490,39 @@ describe('withTechniqueOutput (date-range validity cache)', () => {
     expect(deleted).toBe(1);
     expect(store.rows.size).toBe(0);
   });
+
+  it('supports forceRefresh to bypass cached row and overwrite with fresh output', async () => {
+    const store = makeFakeStore();
+    let count = 0;
+    const first = await withTechniqueOutput(
+      store.prisma,
+      {
+        technique: 'general.jaimini',
+        kundliId: 'kundli-1',
+        digestVersion: 'v3',
+        context: { now: NOW },
+        config: cfg,
+      },
+      async () => ({ run: ++count }),
+    );
+    expect(first.cached).toBe(false);
+    expect(first.value).toEqual({ run: 1 });
+
+    const forced = await withTechniqueOutput(
+      store.prisma,
+      {
+        technique: 'general.jaimini',
+        kundliId: 'kundli-1',
+        digestVersion: 'v3',
+        context: { now: NOW },
+        config: cfg,
+        forceRefresh: true,
+      },
+      async () => ({ run: ++count }),
+    );
+    expect(forced.cached).toBe(false);
+    expect(forced.value).toEqual({ run: 2 });
+  });
 });
+
 

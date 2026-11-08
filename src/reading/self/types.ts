@@ -108,6 +108,8 @@ export interface SelfPanel {
   lines: SelfLine[];
   note?: string;
   vetoed?: Array<{ claimId: string; rule: string; text: string }>;
+  /** AI/deterministic validity horizon ('YYYY-MM-DD' or 'always') until which this panel reading remains true */
+  validUntil?: string;
 }
 
 export interface SelfClockChoice {
@@ -130,6 +132,64 @@ export interface SelfQuestion {
   options: Array<{ value: ConfirmAnswer; label: string }>;
 }
 
+export interface SelfOracleStageSummary {
+  agentId: string;
+  status?: 'ok' | 'cached' | 'failed' | 'skipped';
+  cached: boolean;
+  ms?: number;
+  inputTokens?: number;
+  promptTokens?: number;
+  cachedTokens: number;
+  outputTokens: number;
+  thoughtTokens?: number;
+  costUsd: number;
+  summary?: string;
+  digest?: string;
+}
+
+export interface SelfOracleLinemanRecord {
+  agent: string;
+  promptName: string;
+  promptVersion: string | null;
+  sliceKeys: string[];
+  claims: Array<{ id: string; text: string; rows: string[]; certainty: LineCertainty }>;
+  dropped: Array<{ claim: string; why: string }>;
+  tokens: { prompt: number; cached: number; output: number; thought: number };
+  ms: number;
+  cache: 'hit' | 'run';
+  cached?: boolean;
+}
+
+export interface SelfOraclePayload {
+  status: 'off' | 'ok' | 'failed' | 'budget_exceeded';
+  text?: string;
+  output?: string;
+  brief?: string;
+  promptName?: string;
+  promptVersion?: string;
+  model?: string;
+  validator?: { verdict: 'ok' | 'rejected'; issues: string[] };
+  tokens?: { prompt: number; cached: number; output: number; thought: number };
+  ms?: number;
+  linemen?: SelfOracleLinemanRecord[];
+  linemanFindings?: string;
+  linemanBrief?: string;
+  familyFindings?: Record<string, string>;
+  panelLines?: Partial<Record<SelfPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
+  /** AI-determined validity horizon ('YYYY-MM-DD' or 'always') per panel and overall ('overall') */
+  validUntil?: Partial<Record<SelfPanelId | 'overall', string>>;
+  stages?: SelfOracleStageSummary[];
+  dropped?: number;
+  calls?: number;
+  modelCalls?: number;
+  spentUsd?: number;
+  costUsd?: number;
+  maxSpendUsd?: number;
+  capUsd?: number;
+  spentTodayUsd?: number;
+  cached?: boolean;
+}
+
 export interface SelfReading {
   asOf: string;
   digestVersion: string;
@@ -142,6 +202,8 @@ export interface SelfReading {
   audit: CodeAudit;
   dossierId: string | null;
   builtLine: string;
+  validUntil?: string | null;
+  oracle?: SelfOraclePayload;
 }
 
 /** What a panel function returns before the service adds cache state and timing. */

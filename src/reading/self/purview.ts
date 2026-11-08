@@ -7,9 +7,12 @@
  */
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
+import type { TransitRangePayload } from '../chartData/transitRange.js';
 import { getSelfClockConditionalOrder } from '../../config/env.js';
 import type { PanelBodies } from './panels/diagnosis.js';
-import { runningChain } from './slices.js';
+import { struggleLead } from './panels/struggle.js';
+import { yogasLead } from './panels/yogas.js';
+import { activationKey, runningChain } from './slices.js';
 import type { PurviewEntry, SelfClock, SelfPanelId } from './types.js';
 import { PLANET_NAME } from './words.js';
 
@@ -23,6 +26,7 @@ export interface PurviewInput {
   clock: SelfClock;
   bodies: PanelBodies;
   skyStored: boolean;
+  sky?: TransitRangePayload | null;
 }
 
 export interface PurviewResult {
@@ -35,7 +39,7 @@ const claimIds = (b: PanelBodies) => Object.values(b).flatMap((x) => x?.claims ?
 /** the claims whose evidence names the planet's own card */
 const about = (b: PanelBodies, p: string) => Object.values(b).flatMap((x) => x?.claims ?? []).filter((c) => c.evidence.some((e) => e === `planet:D1.${p}` || e === `planet:D9.${p}`)).map((c) => c.id);
 
-export function runPurview({ view, activation, asOf, clock, bodies, skyStored }: PurviewInput): PurviewResult {
+export function runPurview({ view, activation, asOf, clock, bodies, skyStored, sky }: PurviewInput): PurviewResult {
   const out: PurviewEntry[] = [];
   const ids = new Set(claimIds(bodies));
   const has = (id: string) => ids.has(id);
@@ -106,8 +110,76 @@ export function runPurview({ view, activation, asOf, clock, bodies, skyStored }:
     if (cell?.isShadAshtaka68 || cell?.isDwirdwadasha212) out.push({ rule: 'purview.md_ad_relation', source: 'BPHS (antardasha results from the mahadasha lord: 6/8 and 2/12)', action: 'annotate', affects: ['chapters.sub', 'diagnosis.now'].filter(has), rows: [`planet:D1.${run.l1.lord}`], text: `The sub-period lord ${pn(run.l2.lord)} sits ${cell.isShadAshtaka68 ? '6/8' : '2/12'} from the main lord ${pn(run.l1.lord)}: a cost or a reversal inside the chapter.` });
   }
 
-  // 9. sade sati and nodes need the stored sky
-  if (!skyStored) out.push({ rule: 'purview.sky', source: 'gochara (sade sati and nodal transits)', action: 'annotate', affects: [], rows: [], text: 'The sky overlay is not stored for this chart; transit pressure on the lagna and the Moon was not checked.' });
+  // 9. sade sati and nodes via universal shared sky or per-kundli overlay
+  if (!skyStored && !sky) {
+    out.push({ rule: 'purview.sky', source: 'gochara (sade sati and nodal transits)', action: 'annotate', affects: [], rows: [], text: 'The sky overlay is not stored for this chart; transit pressure on the lagna and the Moon was not checked.' });
+  } else {
+    const mo = view.planet('D1', 'Mo');
+    const signToHouse = new Map<string, number>();
+    for (const hc of view.houses('D1')) if (hc.sign) signToHouse.set(hc.sign, hc.house);
+    const activeNotes: string[] = [];
+    if (sky?.ingresses?.length) {
+      for (const pl of ['Sa', 'Ju', 'Ra', 'Ke']) {
+        const ing = sky.ingresses.find((r) => r.planet === pl && r.from <= asOf && asOf <= r.to);
+        if (!ing) continue;
+        const h = ing.house_from_lagna || signToHouse.get(ing.sign) || null;
+        activeNotes.push(`${pn(pl)} in ${ing.sign}${h ? ` (H${h})` : ''}${mo?.sign === ing.sign ? ' over natal Moon' : ''}`);
+      }
+    }
+    const h1Sav = view.house('D1', 1)?.sav;
+    const h6Sav = view.house('D1', 6)?.sav;
+    out.push({
+      rule: 'purview.sky',
+      source: 'gochara (universal transit sky & Sarvashtakavarga)',
+      action: 'annotate',
+      affects: ['body.sky_gochara', 'body.footing', 'struggle.sub'].filter(has),
+      rows: ['house:D1.h1', ...(mo ? ['planet:D1.Mo'] : [])],
+      text: activeNotes.length
+        ? `Universal transit sky active (${activeNotes.join(', ')}); natal SAV H1=${h1Sav ?? '?'}, H6=${h6Sav ?? '?'}.`
+        : `Universal sky and natal Sarvashtakavarga evaluated (H1 SAV=${h1Sav ?? '?'}, H6 SAV=${h6Sav ?? '?'}).`,
+    });
+  }
+
+  // 9b. Multi-clock weighting (Vimshottari + Narayana + Tithi Pravesha alongside primary clock) & Special Points (AL, SL, HL, MD, GK, Argala)
+  const vimRun = runningChain(activation, 'vimsottari', asOf);
+  const narRun = runningChain(activation, 'narayana', asOf);
+  const multiRows: string[] = [];
+  if (vimRun.l1) multiRows.push(activationKey(vimRun.l1));
+  if (vimRun.l2) multiRows.push(activationKey(vimRun.l2));
+  if (narRun.l1) multiRows.push(activationKey(narRun.l1));
+  if (multiRows.length) {
+    out.push({
+      rule: 'purview.multi_clock_weight',
+      source: 'BPHS & Jaimini Upadesa Sutras (Vimshottari + Narayana + Conditional Dasha synthesis)',
+      action: 'annotate',
+      affects: ['chapters.running', 'body.now', 'body.clocks_vim_narayana', 'diagnosis.now'].filter(has),
+      rows: multiRows,
+      text: `Alongside ${clock.label}, Vimshottari (${vimRun.l1 ? `${pn(vimRun.l1.lord ?? '')}/${pn(vimRun.l2?.lord ?? '')}` : 'active'}) and Jaimini Narayana (${narRun.l1 ? `${narRun.l1.sign ?? narRun.l1.lord}` : 'active'}) carry major concurrent weight.`,
+    });
+  }
+
+  const alPt = view.points('D1').find((p) => p.id === 'AL');
+  const slPt = view.points('D1').find((p) => p.id === 'SL');
+  const hlPt = view.points('D1').find((p) => p.id === 'HL');
+  const mdPt = view.points('D1').find((p) => p.id === 'MD');
+  const gkPt = view.points('D1').find((p) => p.id === 'GK');
+  const spRows = [
+    ...(alPt ? ['point:D1.AL'] : []),
+    ...(slPt ? ['point:D1.SL'] : []),
+    ...(hlPt ? ['point:D1.HL'] : []),
+    ...(mdPt ? ['point:D1.MD'] : []),
+    ...(gkPt ? ['point:D1.GK'] : []),
+  ];
+  if (spRows.length) {
+    out.push({
+      rule: 'purview.special_lagnas_argala',
+      source: 'BPHS & Jaimini (Arudha Lagna AL, Sree Lagna SL, Hora Lagna HL, Mandi MD, Gulika GK & Argala)',
+      action: 'annotate',
+      affects: ['lagna.seen', 'body.special_points_argala', 'body.footing'].filter(has),
+      rows: spRows,
+      text: `Special Lagnas and Upagrahas active: AL=${alPt?.sign ?? '?'}(H${alPt?.house ?? '?'}), SL=${slPt?.sign ?? '?'}(H${slPt?.house ?? '?'}), HL=${hlPt?.sign ?? '?'}(H${hlPt?.house ?? '?'}), MD=${mdPt?.sign ?? '?'}(H${mdPt?.house ?? '?'}), GK=${gkPt?.sign ?? '?'}(H${gkPt?.house ?? '?'}).`,
+    });
+  }
 
   // 10. sensitive core: a Ketu or 8th/12th passage running
   const l2 = run.l2;
@@ -133,6 +205,8 @@ export function applyPurview(bodies: PanelBodies, entries: PurviewEntry[]): Part
       keep.push(notes.length ? { ...c, detail: `${c.detail} | whole-chart check: ${notes.join(' ')}` } : c);
     }
     b.claims = keep;
+    if (id === 'struggle') b.lead = struggleLead(keep);
+    else if (id === 'yogas') b.lead = yogasLead(keep);
   }
   return vetoed;
 }

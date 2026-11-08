@@ -152,13 +152,13 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     if (board !== 'self') return res.status(400).json({ error: 'bad_request' });
     if (b.asOf !== undefined && (typeof b.asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.asOf) || Number.isNaN(Date.parse(b.asOf)))) return res.status(400).json({ error: 'bad_as_of' });
     const tech = typeof b.technique === 'string' ? b.technique.replace(/^self\.reading\./, '') : 'all';
-    if (tech !== 'all' && !(SELF_PANEL_IDS as readonly string[]).includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
+    if (tech !== 'all' && tech !== 'oracle' && !(SELF_PANEL_IDS as readonly string[]).includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
     const person = await deps.prisma.auth.findUnique({ where: { id: b.userId }, select: { locked_at: true } }).catch(() => null);
     if (!person) return res.status(404).json({ error: 'no_person' });
     if (person.locked_at) return res.status(403).json({ error: 'locked' });
     try {
       const t0 = Date.now();
-      const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}), ...(tech === 'all' ? {} : { only: tech as SelfPanelId }) });
+      const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}), ...(tech === 'all' || tech === 'oracle' ? {} : { only: tech as SelfPanelId }) });
       await deps.prisma.adminAction
         ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board: 'self', technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object } })
         .catch(() => undefined);

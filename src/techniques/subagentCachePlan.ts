@@ -140,6 +140,15 @@ const TECHNIQUE_TO_SUBAGENTS: Readonly<Record<string, SubAgentId[]>> = {
   'general.validator': ['validator'],
   'general.intake': ['intake'],
   'general.clarify': ['clarify'],
+  'self.reading.oracle': [
+    'family.rasi',
+    'family.varga',
+    'family.dasha',
+    'family.year',
+    'family.sky',
+    'lineman.self',
+    'oracle.self',
+  ],
 };
 
 /** Maps a technique ID to its `SubAgentId[]` in `SUBAGENT_DIGEST_SPECS`. */
@@ -384,6 +393,53 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
         ],
         invalidationAndRecycleSweep: [
           '45m per-individual inactivity recycler (`recycleIndividualCaches` cleans up `llm_cache_entries` for the kundli)',
+        ],
+      },
+    };
+  }
+
+  // 4b. Self Reading AI Sub-Agents -> Self Lineman -> Self Oracle (`self.reading.oracle`)
+  if (t.id === 'self.reading.oracle') {
+    return {
+      techniqueId: t.id,
+      title: t.title,
+      board: t.board,
+      category: t.category,
+      status: t.status,
+      recipe,
+      subAgents,
+      subAgentSpecs,
+      llmCacheUpload: {
+        usesLlmCache: true,
+        cacheStore: 'gemini_cached_contents+llm_cache_entries',
+        cacheKeyFormula: 'sha256(model | system(familyOrLinemanOrOraclePrompt) | cachedPrefix(FAMILY PACK or LINEMAN BRIEF from kundli_digest + kundli_activation))',
+        systemPromptPiece: recipe.prompt,
+        cachedPrefixReaderPieces: readerPieces,
+        digestSections,
+        perRequestSuffixFields: userFields,
+        ttlSeconds: 3600,
+      },
+      outputCache: {
+        primaryTable: 'reading_findings_cache+technique_outputs',
+        cacheKeyFormula: 'reading_findings_cache(family.<layer>|lineman.self) + techniqueCacheKey(self.reading.oracle)',
+        freshness: recipe.freshness,
+        scope: recipe.scope,
+        outputPiece: recipe.output,
+        recycledEvery45m: true,
+      },
+      processes: {
+        preRunDataPreparation: [
+          'kundli-digest worker (`POST /events` -> `buildDigest` writes `kundli_digest` + `kundli_activation`)',
+          '15m `kundli-digest-sweep` (`sweepDigests` + `ensureAnnualSet` top-up)',
+        ],
+        preRunCacheUploadAndWarm: [
+          'Self reading build (`runSelfOracle` slices `DigestView` + `ActivationRow[]` + `TransitRangePayload` into 5 family packs, uploads each pack prefix via `ensurePromptCache` / `cachePrefix: true` into `llm_cache_entries`, and persists `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`, and `lineman.self` findings in `reading_findings_cache`)',
+        ],
+        liveRequestExecution: [
+          'Self reading service (`getSelfReading` -> `runSelfOracle` reads cached family findings from `reading_findings_cache` and cached Oracle output from `technique_outputs`, or runs the 5 family sub-agents -> `lineman.self` -> `self.reading_oracle` under the $1.00 spend guard)',
+        ],
+        invalidationAndRecycleSweep: [
+          '45m per-individual inactivity recycler (`recycleIndividualCaches` preserves unexpired natal `family.*` rows and `llm` `technique_outputs` while evicting expired windows and Gemini `cachedContents`)',
         ],
       },
     };

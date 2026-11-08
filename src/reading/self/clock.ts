@@ -31,7 +31,7 @@ export function resolveClock(preferred: string | null | undefined, present: read
     reason = 'default';
   }
   const confirming = getSelfConfirmSystems().filter((s) => s !== system && has.has(s));
-  const choiceIds = [...new Set([system, ...applicable, ...getSelfConfirmSystems().filter((s) => has.has(s))])];
+  const choiceIds = [...new Set([system, ...applicable, ...getSelfConfirmSystems().filter((s) => has.has(s)), ...present.map((p) => p.system)])];
   return {
     system,
     label: clockLabel(system),

@@ -979,9 +979,20 @@ function pointRows(items: Record<string, unknown>, tables: Map<string, ChartTabl
     });
     arr(a.special_points).forEach((r, i) => {
       if (!isObj(r) || !str(r.id)) return;
+      const id = str(r.id)!;
       const sign = str(r.sign);
       const l = lordOfSign(t, sign, src);
-      push({ key: `${t.varga}.${str(r.id)}`, row: { id: str(r.id)!, varga: t.varga, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: [src.of(t.arudhas!, `special_points[${i}]`), ...l.source] });
+      const spSource = [src.of(t.arudhas!, `special_points[${i}]`), ...l.source];
+      if (id === 'GK' && keys.has(`${t.varga}.GK`)) {
+        const existing = out.find((b) => b.key === `${t.varga}.GK`);
+        if (existing) {
+          existing.row = { ...existing.row, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse };
+          existing.source = [...existing.source, ...spSource];
+        }
+        push({ key: `${t.varga}.GULIKA`, row: { id: 'GULIKA', varga: t.varga, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: spSource });
+        return;
+      }
+      push({ key: `${t.varga}.${id}`, row: { id, varga: t.varga, sign, house: int(r.house_from_lagna), lord: l.lord, lordHouse: l.lordHouse }, source: spSource });
     });
     for (const field of ['surya_arudhas', 'chandra_arudhas'] as const) {
       arr(a[field]).forEach((r, i) => {

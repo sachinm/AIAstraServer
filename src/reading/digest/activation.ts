@@ -195,12 +195,33 @@ export function buildActivationRows(items: Record<string, unknown>, digestRows: 
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above `maxLevel` (and `shortMaxLevel` inside `shortTo`). */
+/** The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above `maxLevel` (and `shortMaxLevel` inside `[shortFrom, shortTo)` / `shortSystems`). */
 export async function activationFor(
   prisma: PrismaClient,
   kundliId: string,
-  q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3; shortTo?: string; shortMaxLevel?: 1 | 2 | 3 }
+  q: {
+    from: string;
+    to: string;
+    houses?: number[];
+    systems?: string[];
+    maxLevel?: 1 | 2 | 3;
+    shortFrom?: string;
+    shortTo?: string;
+    shortMaxLevel?: 1 | 2 | 3;
+    shortSystems?: string[];
+  },
 ): Promise<ActivationRow[]> {
+  const hasShortWindow = Boolean(
+    q.maxLevel && q.shortMaxLevel && q.shortMaxLevel > q.maxLevel && (q.shortTo || q.shortFrom),
+  );
+  const shortClause: Record<string, unknown> = hasShortWindow
+    ? {
+        level: { lte: q.shortMaxLevel },
+        ...(q.shortTo ? { from_date: { lte: new Date(`${q.shortTo}T00:00:00Z`) } } : {}),
+        ...(q.shortFrom ? { to_date: { gt: new Date(`${q.shortFrom}T00:00:00Z`) } } : {}),
+        ...(q.shortSystems?.length ? { system: { in: q.shortSystems } } : {}),
+      }
+    : {};
   const rows = await prisma.kundliActivation.findMany({
     where: {
       kundli_id: kundliId,
@@ -209,13 +230,10 @@ export async function activationFor(
       ...(q.houses?.length ? { houses: { hasSome: q.houses } } : {}),
       ...(q.systems?.length ? { system: { in: q.systems } } : {}),
       ...(q.maxLevel
-        ? q.shortTo && q.shortMaxLevel && q.shortMaxLevel > q.maxLevel
+        ? hasShortWindow
           ? {
-            OR: [
-              { level: { lte: q.maxLevel } },
-              { level: { lte: q.shortMaxLevel }, from_date: { lte: new Date(`${q.shortTo}T00:00:00Z`) } },
-            ],
-          }
+              OR: [{ level: { lte: q.maxLevel } }, shortClause],
+            }
           : { level: { lte: q.maxLevel } }
         : {}),
     },
