@@ -988,3 +988,34 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
 - **P2: sign-in and sign-up are email-only** with Turnstile. India users expect phone/WhatsApp OTP and US Indians expect
   Google sign-in; neither page says what the person gets or that birth date, time and place come next. Status: open. Done:
   decision on Google and phone OTP recorded; a one-line "what you get" and "next: your birth details" on both pages.
+
+## Filed 2026-11-07 by the You-board synthesis review (docs/product/you-board-synthesis-review.md)
+
+- **P1: the Self character and personality panels print defaults as the person's chart.** `src/reading/area/selfCharacterAndJoy.ts`
+  falls back to `Taurus`, `Virgo`, `Rohini`, `Ju`, SAV 28 and "friendly" when a digest field is missing, and builds the
+  evidence strings from those defaults. Found reading the code; how often it fires is not measured. Status: open. Done: a
+  missing field drops the line and records a gap; a test asserts no default sign or star ever reaches the board.
+- **P1: the You board is produced by no model and no prompt.** `area.self_board` is `kind: 'code'`; every headline is a
+  phrase from `self.ts SELF.words` chosen by integer votes (`houseLayers.ts`). The "Oracle" prompts never run for the
+  dashboard. Status: open (plan: the Self dashboard session). Done: the board is a reading of one standing question, written
+  by the Oracle from grounded reader claims, with the vote rule as a veto.
+- **P2: a dasha period's side ignores the house it activates.** `gradeRow` gives every period of a planet that planet's
+  `gradePlanet` score (±1 charter cell): no house from lagna or Moon, no antar-from-maha relation, no star lord. Status:
+  open. Done: R08-style delivery chain in code or in a reader; tests on known charts.
+- **P2: "33 independent timing clocks aligned" counts non-independent systems.** `aheadWindows` merges `systems` across
+  overlapping windows and the web (`AreaBoardView.tsx:647`) prints the count as independent; `familyVotes` treats the same
+  systems as one family. Status: open. Done: the lead window names the families (and the preferred system), not a count.
+- **P2: the main clock is always Vimshottari.** `isTurn` requires `family === 'vimshottari'`; a kundli where Dwisaptati Sama
+  (or another conditional system) applies has no way to lead. Sachin's own chart is the first case. The catalogue and R09
+  spell the system `dwisatpathi`; confirm the engine's key. Status: open. Done: `kundlis.preferred_dasha` (or equivalent)
+  drives the main clock and the Direction line; applicability from the engine fills it when unset.
+- **P2: companion answers reorder, they do not anchor.** `self.focus` only picks the lead sub-area (`selfLead`), `selfFits`
+  is always true, and the shade resolver adds a tie-break bonus; no statement is conditioned on or checked against an
+  answer, and Family, Health and Love all map to `mind`. Status: open. Done: answers are sealed facts that gate claims
+  (doc 48), with a confirm question generated from the strongest claim.
+- **P3: no Self reader exists in the chat engine.** R01..R14 cover frame houses, vargas, Jaimini, strength, yogas, stars,
+  dashas, transits, annual, prashna, another person, remedies; none reads lagna, Moon, Sun, AK, karakamsa, D60 and houses
+  3/4/5/12 as one self. Status: open. Done: `readers/R15-self.md` and `oracle/self.md` per the review §6.
+- **P3: `method.md` describes a pack shape (`base`, `frame`, `detail`) that the Oracle path does not send**; readers use v2
+  table ids and digest slices use `digest.<section>.<varga>`. Status: open. Done: one data vocabulary per path, stated in
+  the prompt that path loads.
