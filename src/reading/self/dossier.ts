@@ -56,6 +56,10 @@ export interface DossierInput {
   purview: PurviewEntry[];
   gaps: string[];
   audit: CodeAudit;
+  /** per-step milliseconds of this build (admin doc 10: the lab's flow view) */
+  steps?: { loadMs: number; panelsMs: number; purviewMs: number; cardsMs: number; auditMs: number };
+  /** 'all' or the one technique a lab run asked for */
+  scope?: string;
 }
 
 export interface DossierRecord {
@@ -66,7 +70,7 @@ export interface DossierRecord {
   clocks: Record<string, unknown>;
   panels: unknown[];
   gaps: string[];
-  audit: CodeAudit;
+  audit: CodeAudit & { steps: DossierInput['steps'] | null; unreadRows: number; scope: string };
   bundleHash: string;
 }
 
@@ -88,8 +92,11 @@ export function collectData(input: Pick<DossierInput, 'view' | 'activation' | 'p
 export function buildDossier(input: DossierInput): DossierRecord {
   const { data, unresolved } = collectData(input);
   const running = input.activation.filter((r) => r.from <= input.asOf && input.asOf < r.to);
+  const applicability = input.purview.find((e) => e.rule === 'purview.dasha_applicability');
   const clocks = {
     reading: input.clock,
+    /** true / false from the engine's verdict when the reading clock is a conditional system; null when it is not one */
+    applicable: applicability ? applicability.action === 'annotate' : null,
     running: running.map((r) => ({ system: r.system, level: r.level, lord: r.lord ?? r.sign, from: r.from, to: r.to, houses: r.houses })),
     main: [input.clock.system, ...input.clock.confirming.map((c) => c.system)].map((s) => ({ system: s, periods: input.activation.filter((r) => r.system === s && r.level === 1).map((r) => ({ lord: r.lord ?? r.sign, from: r.from, to: r.to })) })),
   };
@@ -100,7 +107,7 @@ export function buildDossier(input: DossierInput): DossierRecord {
   const panels = input.panels.map((p) => ({ id: p.id, technique: p.technique, headerRange: p.headerRange, lines: p.lines, claims: p.claims, vetoed: p.vetoed ?? [], chapters: p.chapters ?? [] }));
   const gaps = [...input.gaps, ...unresolved.map((k) => `dossier: ${k} did not resolve`)];
   const bundleHash = createHash('sha256').update(canonicalJson({ v: input.view.version, clock: input.clock.system, code: input.codeVersion, asOf: input.asOf, data, panels })).digest('hex').slice(0, 32);
-  return { techniques, rules: input.purview, data, yogas: input.view.yogas(), clocks, panels, gaps, audit: input.audit, bundleHash };
+  return { techniques, rules: input.purview, data, yogas: input.view.yogas(), clocks, panels, gaps, audit: { ...input.audit, steps: input.steps ?? null, unreadRows: unresolved.length, scope: input.scope ?? 'all' }, bundleHash };
 }
 
 /** Writes the dossier once per build content; returns its id. A failed write never fails the reading. */
@@ -137,14 +144,36 @@ export async function writeDossier(prisma: PrismaClient, input: DossierInput, re
   }
 }
 
-/** Fields a staff tool must never see (admin doc 10): birth details anywhere in a payload are dropped. */
-const BIRTH_KEYS = new Set(['date_of_birth', 'time_of_birth', 'place_of_birth', 'birth', 'birth_date', 'birth_time', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'place_resolved', 'email', 'name', 'username']);
-export function stripBirthFields<T>(v: T): T {
-  if (Array.isArray(v)) return v.map((x) => stripBirthFields(x)) as unknown as T;
+/**
+ * What a staff tool may see (admin doc 10 §5): person keys are dropped at any depth, judged by the key's letters
+ * (`place_resolved` → `placeresolved`): place, city, lat, lon, tz, email, phone, address, ip, kundli id, question and
+ * anything starting with birth, plus the person's own name fields. Chart names (a yoga's, a star's, a saham's) are kept
+ * under `title`, so nothing a reader needs is lost. The top-level `kundli_id` is removed.
+ */
+export const REFUSED_KEY_LETTERS = new Set(['name', 'place', 'placeresolved', 'placeofbirth', 'city', 'lat', 'lon', 'latitude', 'longitude', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'question', 'username', 'dateofbirth', 'timeofbirth']);
+const letters = (k: string) => k.toLowerCase().replace(/[^a-z]/g, '');
+export function isRefusedKey(k: string): boolean {
+  const l = letters(k);
+  return REFUSED_KEY_LETTERS.has(l) || l.startsWith('birth');
+}
+const PERSON_NAME_KEYS = new Set(['username', 'fullname', 'firstname', 'lastname']);
+function served(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(served);
   if (v && typeof v === 'object' && !(v instanceof Date)) {
     const out: Record<string, unknown> = {};
-    for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (!BIRTH_KEYS.has(k)) out[k] = stripBirthFields(x);
-    return out as T;
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      const l = letters(k);
+      if (l === 'name') {
+        if (!('title' in (v as Record<string, unknown>))) out.title = served(x);
+        continue;
+      }
+      if (PERSON_NAME_KEYS.has(l) || isRefusedKey(k)) continue;
+      out[k] = served(x);
+    }
+    return out;
   }
   return v;
+}
+export function stripBirthFields<T>(v: T): T {
+  return served(v) as T;
 }

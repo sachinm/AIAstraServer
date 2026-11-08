@@ -99,3 +99,40 @@ describe('admin lab', () => {
     expect(one.date_of_birth).toBeUndefined();
   });
 });
+
+describe('admin lab: the served shape (docs/admin/10 §5 mirror test)', () => {
+  const offending = (v: unknown, path = '$', out: string[] = []): string[] => {
+    if (Array.isArray(v)) v.forEach((x, i) => offending(x, `${path}[${i}]`, out));
+    else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        const l = k.toLowerCase().replace(/[^a-z]/g, '');
+        if (['name', 'place', 'city', 'lat', 'lon', 'tz', 'email', 'phone', 'address', 'ip', 'kundliid', 'question'].includes(l) || l.startsWith('birth')) out.push(`${path}.${k}`);
+        offending(x, `${path}.${k}`, out);
+      }
+    }
+    return out;
+  };
+  it('a run response and its dossier carry none of the keys the admin refuses, and chart names survive as title', async () => {
+    const j = await (await post({ userId: 'u1', force: true })).json();
+    expect(offending(j)).toEqual([]);
+    expect(JSON.stringify(j.dossier.yogas)).toContain('"title"');
+  });
+  it('the dossier records step timings, unread rows, clock applicability and the run scope', async () => {
+    const j = await (await post({ userId: 'u1', technique: 'body', force: true })).json();
+    expect(j.dossier.audit.steps).toEqual(expect.objectContaining({ loadMs: expect.any(Number), panelsMs: expect.any(Number), purviewMs: expect.any(Number), cardsMs: expect.any(Number), auditMs: expect.any(Number) }));
+    expect(j.dossier.audit.unreadRows).toBe(0);
+    expect(j.dossier.audit.scope).toBe('body');
+    expect(j.dossier.clocks.applicable).toBe(true);
+    const list = await (await fetch(`${base}/api/admin-lab/dossiers?userId=u1`, { headers: { 'x-admin-lab-token': 'lab-secret' } })).json();
+    expect(list.items.some((r: any) => r.technique === 'body')).toBe(true);
+    expect(offending(list)).toEqual([]);
+  });
+  it('takes an as-of date and names unbuilt boards', async () => {
+    const j = await (await post({ userId: 'u1', asOf: '2027-03-01', force: true })).json();
+    expect(j.reading.asOf).toBe('2027-03-01');
+    expect((await post({ userId: 'u1', asOf: '1 March' })).status).toBe(400);
+    const love = await post({ userId: 'u1', board: 'love' });
+    expect(love.status).toBe(400);
+    expect(await love.json()).toEqual({ error: 'board_not_built', board: 'love' });
+  });
+});

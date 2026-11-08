@@ -153,6 +153,6 @@ describe('dossier', () => {
     expect(resolveKey('activation:dwisatpathi/1/Ra@2019-02-16', FIX.activation.length ? view : view, FIX.activation)).toMatchObject({ lord: 'Ra', to: '2028-02-16' });
   });
   it('strips birth fields at any depth', () => {
-    expect(stripBirthFields({ a: 1, date_of_birth: 'x', nested: [{ lat: 1, keep: 2, place_of_birth: 'y' }] })).toEqual({ a: 1, nested: [{ keep: 2 }] });
+    expect(stripBirthFields({ a: 1, date_of_birth: 'x', kundli_id: 'k', nested: [{ lat: 1, keep: 2, place_of_birth: 'y', name: 'Dhana Yoga' }] })).toEqual({ a: 1, nested: [{ keep: 2, title: 'Dhana Yoga' }] });
   });
 });

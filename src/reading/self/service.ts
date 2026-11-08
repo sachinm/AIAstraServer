@@ -152,13 +152,17 @@ export interface SelfReadingOptions {
   force?: boolean;
   /** run one technique only (lab); the diagnosis brings its four inputs */
   only?: SelfPanelId;
+  /** build as of this day (lab), YYYY-MM-DD; default today */
+  asOf?: string;
 }
 
 export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfReadingOptions = {}): Promise<SelfReadingResult> {
   const prisma = deps.prisma;
   const kundli = await prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true, preferred_dasha: true } });
   if (!kundli) return { status: 'no_kundli' };
-  const now = (deps.now ?? (() => new Date()))();
+  const now = opts.asOf ? new Date(`${opts.asOf}T12:00:00Z`) : (deps.now ?? (() => new Date()))();
+  const t0 = performance.now();
+  const lap = (() => { let last = t0; return () => { const t = performance.now(); const ms = Math.round((t - last) * 100) / 100; last = t; return ms; }; })();
   const asOf = now.toISOString().slice(0, 10);
   const view = await (deps.loadDigest ?? realLoadDigest)(prisma, kundli.id);
   if (!view) {
@@ -239,11 +243,13 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
   const DIAG_INPUTS: SelfPanelId[] = ['lagna', 'struggle', 'yogas', 'chapters'];
   const wanted = (id: SelfPanelId) => !opts.only || opts.only === id || (opts.only === 'diagnosis' && DIAG_INPUTS.includes(id));
   const partIds = (Object.keys(runners) as Array<keyof typeof runners>).filter(wanted);
+  const loadMs = lap();
   const parts = await Promise.all(partIds.map((id) => runPanel(id, PANEL_META[id].title, PANEL_META[id].window, runners[id])));
   const bodies: PanelBodies = {};
   for (const r of parts) if (r.body) bodies[r.panel.id] = { ...r.body, claims: [...r.body.claims] };
 
   // the whole-chart purview over the parts, then the diagnosis from what survives it
+  const panelsMs = lap();
   const purview = runPurview({ view, activation, asOf, clock, bodies, skyStored });
   const vetoed = applyPurview(bodies, purview.entries);
   const diagnosis = wanted('diagnosis') ? await runPanel('diagnosis', DIAGNOSIS_TITLE, 'dasha', () => diagnosisPanel(bodies)) : null;
@@ -255,6 +261,7 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
   const ordered = PANEL_ORDER.map((id) => byId.get(id)).filter((p): p is SelfPanel => !!p);
   const withPurview = ordered.map((p) => ({ ...p, claims: bodies[p.id]?.claims ?? p.claims }));
   const also = withheldSources(withPurview, answers);
+  const purviewMs = lap();
   const shaped: SelfPanel[] = withPurview.map((p) => {
     const claims = shapeClaims(p.claims, answers, also);
     const card = buildCard(p.id, { lead: p.lead, claims, gaps: [], chapters: p.chapters }, cardCtx);
@@ -269,14 +276,16 @@ export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfR
   for (const v of Object.values(vetoed).flat()) if (v) allClaims.set(v.claimId, []);
   const { data } = collectData({ view, activation, panels: shaped, purview: purview.entries });
   const boundaries = new Set<string>([...activation.flatMap((r) => [r.from, r.to]), ...view.annual().flatMap((a) => a.dashas.flatMap((d) => d.periods.flatMap((pp) => [pp.from, pp.to])))]);
+  const cardsMs = lap();
   const audited = auditCards({ panels: shaped, claims: allClaims, vetoed: new Set(Object.values(vetoed).flat().map((v) => v!.claimId)), resolvedKeys: new Set(Object.keys(data)), boundaries });
   const panels = audited.panels.map((p) => (p.lines.length === 0 && p.status !== 'failed' ? { ...p, status: 'withheld' as const } : p));
 
+  const auditMs = lap();
   const validTo = (run.l2 ?? run.l1)?.to ?? null;
   const fresh = panels.some((p) => !p.cached);
   let dossierId: string | null = null;
   if (fresh || opts.trigger === 'manual') {
-    const dIn: DossierInput = { kundliId: kundli.id, board: 'self', trigger: opts.trigger ?? 'request', view, activation, asOf, validTo, clock, codeVersion: SELF_READING_VERSION, panels, purview: purview.entries, gaps: [...new Set(gapsAll)], audit: audited.audit };
+    const dIn: DossierInput = { kundliId: kundli.id, board: 'self', trigger: opts.trigger ?? 'request', view, activation, asOf, validTo, clock, codeVersion: SELF_READING_VERSION, panels, purview: purview.entries, gaps: [...new Set(gapsAll)], audit: audited.audit, steps: { loadMs, panelsMs, purviewMs, cardsMs, auditMs }, scope: opts.only ?? 'all' };
     dossierId = await writeDossier(prisma, dIn, buildDossier(dIn));
   } else {
     dossierId = (await prisma.readingDossier?.findFirst?.({ where: { kundli_id: kundli.id, board: 'self' }, orderBy: { created_at: 'desc' }, select: { id: true } }).catch(() => null))?.id ?? null;
