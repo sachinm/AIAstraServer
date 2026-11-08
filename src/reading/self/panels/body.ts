@@ -48,10 +48,9 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
   const ripeness = L.d1.avasthaMultipliers?.ripeness ? RIPENESS_WORDS[L.d1.avasthaMultipliers.ripeness] : null;
   if (lw) {
     const line = `Your body's footing rests on a ruler that is ${lw} where it sits${sw ? `; your vitality is ${sw}` : ''}.`;
-    const fullText = `${line} Your physical constitution, head, and cranial vitality are anchored in ${HOUSE_SELF[L.d1.house ?? 1] ?? 'your partnerships and outer commitments'}${ripeness ? `, where your primary vitality ruler ${ripeness}` : ''}${L.d9?.sign ? ` and holds ${dignityWords(L.d9.dignity) ?? 'steady'} standing in the inner chart` : ''}${d60L?.sign ? ` with deep root resilience in D60 (${d60L.sign})` : ''}.`;
+    const fullText = `${line} Your physical constitution, head, and cranial vitality are anchored in ${HOUSE_SELF[L.d1.house ?? 1] ?? 'your partnerships and outer commitments'}${ripeness ? `, where your primary vitality ruler ${ripeness}` : ''}${L.d9?.sign ? ` and holds ${dignityWords(L.d9.dignity) ?? 'steady'} standing in the inner chart` : ''}${d60L?.sign ? ` with deep root resilience in the root chart (${d60L.sign})` : ''}.`;
     claims.push({
       id: 'body.footing',
-      line,
       text: fullText,
       detail: `Lagna ${h1.sign}; lagna lord ${cardDetail(L.d1)}${L.d9 ? `; D9 ${L.d9.sign} (${L.d9.dignity ?? '?'})` : ''}${d60L ? `; D60 ${d60L.sign} (${d60L.dignity ?? '?'})` : ''}${su ? `; Sun ${cardDetail(su.d1)}` : ''}`,
       certainty: 'fact',
@@ -141,7 +140,6 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
     const organsText = `${wearLine} For internal organs, digestive tract, liver/pancreatic metabolism, and weight regulation, the 6th house (${h6.sign}) puts its ruler in ${HOUSE_SELF[h6.lordHouse]} while your metabolic and hepatic regulator (${PLANET_FACULTY.Ju}) sits in ${HOUSE_SHORT[ju?.house ?? 7] ?? 'partnership'}${juRip ? ` and ${juRip}` : ''}: under sustained work stress or sedentary stretches, the body is prone to digestive sluggishness, water/weight retention around the midsection, and metabolic fatigue unless daily movement and clean hydration stay non-negotiable.`;
     claims.push({
       id: 'body.wear',
-      line: wearLine,
       text: organsText,
       detail: `D1 h6 (internal organs, intestines, metabolic weight, daily wear) ${h6.sign}, lord ${pname(h6.lord)} in h${h6.lordHouse} (${h6.lordDignity ?? '?'}); occupants ${occ6 || 'none'}; Ju in h${ju?.house ?? '?'} (${ju?.dignity ?? '?'});Ve in h${ve?.house ?? '?'}`,
       certainty: 'fact',
@@ -205,7 +203,6 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
       const fullNow = `${shortLine} Under your primary ${clock.label} clock, the active ${what} activates ${ r.houses.map((h) => HOUSE_SHORT[h]).filter(Boolean).join(', ') || 'service and recovery' }, placing direct demand on daily routine, metabolic balance, digestive pacing, and restorative rest through ${longDate(r.to)}.`;
       claims.push({
         id: 'body.now',
-        line: shortLine,
         text: fullNow,
         detail: `${clock.label} level ${r.level} ${pname(r.lord)} ${r.from} → ${r.to}; ${pname(r.lord)} in D1 h${c?.house ?? '?'}; activates houses ${r.houses.join(', ')}`,
         certainty: 'fact',

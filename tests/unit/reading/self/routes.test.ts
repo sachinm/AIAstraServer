@@ -87,6 +87,8 @@ describe('GET /api/self/reading', () => {
     expect(r1.reading.panels.map((p: any) => p.technique)).toEqual(['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year'].map((x) => `self.reading.${x}`));
     expect(r1.reading.panels.every((p: any) => p.status !== 'failed' && p.status !== 'withheld' && !p.cached)).toBe(true);
     expect(r1.reading.audit.verdict).toBe('pass');
+    const strugglePanelOut = r1.reading.panels.find((p: any) => p.id === 'struggle');
+    expect(strugglePanelOut.lead).toBe(`${strugglePanelOut.claims.length} ${strugglePanelOut.claims.length === 1 ? 'thing' : 'things'} in your chart ${strugglePanelOut.claims.length === 1 ? 'asks' : 'ask'} more of you than the rest.`);
     expect(r1.reading.panels.find((p: any) => p.id === 'body').status).toBe('partial');
     expect(f.outputs.size).toBe(9);
     expect(f.runs.filter((r) => r.agent_id === 'self.reading_panel' || r.agentId === 'self.reading_panel').length).toBeGreaterThanOrEqual(9);
