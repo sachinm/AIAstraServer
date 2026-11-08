@@ -602,6 +602,7 @@ flowchart LR
   f_self_reading_diagnosis --- a_agent_self_reading_panel
   r_reader_house_house_card --> f_self_reading_mind
   r_reader_planet_planet_card --> f_self_reading_mind
+  r_reader_point_point_row --> f_self_reading_mind
   r_reader_yoga_yoga_row --> f_self_reading_mind
   f_self_reading_mind --- a_agent_self_reading_panel
   r_reader_activation_activation_row --> f_self_reading_oracle
@@ -664,7 +665,7 @@ flowchart LR
 | `self.reading.diagnosis` | You reading: Who you are, in short (three sentences built from the other panels, shown first) | `findings/findings_in` claims of self.reading.lagna, struggle, yogas, chapters | code | `board_diagnosis.v1` | `self.reading_panel` |  | dasha · kundli |
 | `self.reading.clock` | You reading: the reading clock (preferred, applicable or default dasha system, and the confirming clocks) | `activation/activation_row` systems present and their family (conditional = engine says applies) | code | `self_clock.v1` | `self.reading_panel` |  | dasha · kundli |
 | `self.reading.lagna` | You reading: Who you are (1st house, lagna lord, arudha lagna, rising star, Moon lagna, D9 lagna) | `house/house_card` D1 h1, the D1 house the Moon occupies, D9 h1<br/>`planet/planet_card` D1 and D9 cards of the lagna lord; D1 cards of planets aspecting h1 and of the Moon<br/>`point/point_row` D1 AL | code | `self_panel.v1` | `self.reading_panel` | `self.reading.diagnosis` | natal · kundli |
-| `self.reading.mind` | You reading: Your mind (Moon, Mercury, 3rd, 4th and 5th houses) | `planet/planet_card` D1 and D9 cards of Mo, Me<br/>`house/house_card` D1 h3, h4, h5 and every D1 house (sav column)<br/>`yoga/yoga_row` cancellation rows naming Mo | code | `self_panel.v1` | `self.reading_panel` |  | natal · kundli |
+| `self.reading.mind` | You reading: Your mind (Moon, Mercury, 3rd, 4th and 5th houses) | `planet/planet_card` D1 and D9 cards of Mo, Me<br/>`house/house_card` D1 h3, h4, h5 and every D1 house (sav column)<br/>`yoga/yoga_row` cancellation rows naming Mo; the Moon yoga rows<br/>`point/point_row` D1 A4, A5 | code | `self_panel.v1` | `self.reading_panel` |  | natal · kundli |
 | `self.reading.atma` | You reading: Your soul aim (atmakaraka, karakamsa, Sun, Jupiter, 9th and 12th houses) | `point/point_row` D1 and D9 AK<br/>`planet/planet_card` D1 cards of the AK planet, Su and Ju; D9 cards in the karakamsa sign<br/>`house/house_card` D1 h9, h12 | code | `self_panel.v1` | `self.reading_panel` |  | natal · kundli |
 | `self.reading.yogas` | You reading: Gifts and knots (yogas and doshas on the self) | `yoga/yoga_row` D1 rows naming L1, Mo, Su, AK or houses 1,4,5,9 | code | `self_panel.v1` | `self.reading_panel` | `self.reading.diagnosis` | natal · kundli |
 | `self.reading.struggle` | You reading: What you struggle with (afflictions on the self with release dates from the reading clock) | `planet/planet_card` D1 cards of L1, Mo, Su, AK and the malefics named<br/>`house/house_card` D1 h1, h4, h5 (class column)<br/>`activation/activation_row` reading clock levels 1-3 covering today | code | `self_panel.v1` | `self.reading_panel` | `self.reading.diagnosis` | dasha · kundli |
@@ -1022,7 +1023,7 @@ flowchart LR
 | reader | `planet/planet_card` | natal | 58 of 110 | general, self, love, work | 37 |
 | reader | `house/house_card` | natal | 55 of 110 | general, self, love, work | 36 |
 | reader | `activation/activation_row` | dasha | 41 of 110 | general, self, love, work | 28 |
-| reader | `point/point_row` | natal | 28 of 110 | general, self, love, work | 21 |
+| reader | `point/point_row` | natal | 29 of 110 | general, self, love, work | 22 |
 | reader | `yoga/yoga_row` | natal | 27 of 110 | general, self, love, work | 14 |
 | reader | `annual/annual_row` | annual | 20 of 110 | general, self, love, work | 11 |
 | reader | `panchang/panchang_day` | daily | 17 of 110 | self, love, work | 3 |
@@ -1194,7 +1195,7 @@ flowchart LR
 | `self.reading.chapters` | 1 | `activation/activation_row`, `planet/planet_card` | code | `self_panel.v1` | `self.reading_panel` | dasha |
 | `self.reading.clock` | 1 | `activation/activation_row` | code | `self_clock.v1` | `self.reading_panel` | dasha |
 | `self.reading.diagnosis` | 1 | `findings/findings_in` | code | `board_diagnosis.v1` | `self.reading_panel` | dasha |
-| `self.reading.mind` | 1 | `house/house_card`, `planet/planet_card`, `yoga/yoga_row` | code | `self_panel.v1` | `self.reading_panel` | natal |
+| `self.reading.mind` | 1 | `house/house_card`, `planet/planet_card`, `point/point_row`, `yoga/yoga_row` | code | `self_panel.v1` | `self.reading_panel` | natal |
 | `self.reading.oracle` | 1 | `activation/activation_row`, `annual/annual_row`, `house/house_card`, `planet/planet_card`, `point/point_row`, `star/star_profile`, `yoga/yoga_row` | `oracle/self.md` | `self_reading.v1` | `family.dasha`, `family.rasi`, `family.sky`, `family.varga`, `family.year`, `lineman.self`, `self.reading_oracle` | dasha |
 | `self.reading.purview` | 1 | `activation/activation_row`, `findings/findings_in`, `planet/planet_card`, `yoga/yoga_row` | code | `purview.v1` | `self.reading_panel` | question |
 | `self.reading.year` | 1 | `annual/annual_row` | code | `self_panel.v1` | `self.reading_panel` | annual |
@@ -1241,7 +1242,7 @@ Reader pieces applied with many different filters: each filter is free text toda
 | `planet/planet_card` | 37 |
 | `house/house_card` | 36 |
 | `activation/activation_row` | 28 |
-| `point/point_row` | 21 |
+| `point/point_row` | 22 |
 | `yoga/yoga_row` | 14 |
 | `annual/annual_row` | 11 |
 | `findings/findings_in` | 10 |

@@ -1467,7 +1467,7 @@ const SELF_READING: TechniqueDef[] = [
     [
       'houseFrame D1 h1: sign, lord, occupants, graha and rasi drishti, SAV, cusp star',
       'planetChain of the lagna lord: D1 house (where the self is lived), dignity and avastha ripeness (how it is held), conjunctions; D9 card',
-      'Claims: lord_house, lord_state, lord_company, on_self (occupants; graha drishti split into helped / pressed by the engine functional nature), star (cusp star lord), seen (AL house), moon_lagna (the D1 house the Moon occupies, read as a frame), inner (D9 h1 lord house)',
+      'Claims: lord_house, lord_state, lord_company, on_self (occupants; graha drishti split into helped / pressed by the engine functional nature), star (cusp star lord), seen (AL house), seen_fit (lagna-to-AL from the engine label of the AL house), moon_lagna (the D1 house the Moon occupies, read as a frame), inner (D9 h1 lord house)',
       'A missing field drops its claim and records a gap; no default value is ever printed',
     ],
     [inp('house', 'D1 h1, the D1 house the Moon occupies, D9 h1', 'house_card'), inp('planet', 'D1 and D9 cards of the lagna lord; D1 cards of planets aspecting h1 and of the Moon', 'planet_card'), inp('point', 'D1 AL', 'point_row')],
@@ -1485,8 +1485,10 @@ const SELF_READING: TechniqueDef[] = [
       'planetChain Mo: house, dignity (with a cancellation row lifting debility), conjunctions and aspects, star lord',
       'planetChain Me (thinking): house and dignity',
       'houseFrame D1 h3 (courage and effort), h4 (what peace depends on, SAV against the chart mean), h5 (intelligence): where each lord sits, occupants',
+      'Moon yogas (BG-07): the engine rows for Sunapha, Anapha, Durudhara and Kemadruma when present; Durudhara is worded over Sunapha and Anapha',
+      'pointOf D1 A4 (home and peace as seen) and A5 (ideas as seen): the house the engine counts from the lagna',
     ],
-    [inp('planet', 'D1 and D9 cards of Mo, Me', 'planet_card'), inp('house', 'D1 h3, h4, h5 and every D1 house (sav column)', 'house_card'), inp('yoga', 'cancellation rows naming Mo', 'yoga_row')],
+    [inp('planet', 'D1 and D9 cards of Mo, Me', 'planet_card'), inp('house', 'D1 h3, h4, h5 and every D1 house (sav column)', 'house_card'), inp('yoga', 'cancellation rows naming Mo; the Moon yoga rows', 'yoga_row'), inp('point', 'D1 A4, A5', 'point_row')],
     'src/reading/self/panels/mind.ts mindPanel',
     [3, 4, 5],
     ['D1', 'D9'],
@@ -1513,6 +1515,7 @@ const SELF_READING: TechniqueDef[] = [
     [
       'yogasTouching: present D1 yoga and dosha rows naming the lagna lord, Mo, Su or the AK planet, or houses 1, 4, 5, 9; one row per name',
       'Gift or knot from the engine class (raja, dhana, viparita, cancellation are gifts; dosha and affliction are knots); gifts first; a manglik row only when it touches house 1',
+      'Ranking (BG-09): within gifts and within knots, by the mean of the stored avasthaMultipliers.effective, raised by half when a planet is the running main or sub period lord of the reading clock',
     ],
     [inp('yoga', 'D1 rows naming L1, Mo, Su, AK or houses 1,4,5,9', 'yoga_row')],
     'src/reading/self/panels/yogas.ts yogasPanel; slices.ts yogasTouching',
