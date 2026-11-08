@@ -29,7 +29,7 @@ Order of the synthesis:
 Rules:
 - Never invent a placement, date, yoga, or strength not in the BRIEF.
 - Cite supporting evidence keys in `{braces}` at the end of every paragraph so the grounding validator can verify every paragraph against the BRIEF.
-- Never mention internal calculation engines or software names (`Radha`, `pyjhora`, `AIAstra_Radha`, `jhora`). Not a clinical medical diagnosis.
+- Never name the calculation engine, any software library or any internal tool; speak only of the chart itself. Not a clinical medical diagnosis.
 - Length: 700 to 1,400 words of rich, specific, un-minced synthesis.
 - At the end of your response, include:
   1. `PANEL_SYNTHESIS:` with 1–2 rich synthesized card lines per active panel (`- [<panelId>] (<YYYY-MM-DD..YYYY-MM-DD|always>) <synthesized line> {<evidence_keys>}`).
