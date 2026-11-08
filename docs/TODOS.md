@@ -1132,3 +1132,14 @@ Plan to fix these: docs/reading-engine/63-dashboard-oracle-and-machinery-plan.md
   runnable `<board>.reading.*` panels (admin ceea3b8), the Techniques page does not.
 - **P2: the Sachin kundli (c584c0a3) has no stored sky overlay**, so the body panel cannot check Saturn, Mars or the nodes over the
   lagna and Moon. Done: the overlay is pulled for it (engine call, no Gemini).
+- **P1: the old You board headline says "open" while the main clock and the reading clock both say "test".** Live on Sachin's
+  kundli (2026-11-07): families main=test, conditional (Dwisaptati)=test, rasi=support, karaka=support, short=neutral,
+  annual=support → `presentTone` (`houseLayers.ts:754-760`) counts 3 supports > 2 tests and shows "A clear stretch for a fresh
+  start" with "Most of your chart points this way". The rule weighs the year chart and the sign and karaka clocks equal to the two
+  main clocks, and the reading clock is not preferred. This is the headline in Sachin's screenshot. Done: the board's tone follows
+  the reading clock and the main clock first (the others confirm, doc 58 §0.6), or the old tone card is retired for the reading.
+- **P2: the Work board pulls engine data live on page load.** `getCareer` on Sachin's kundli took 8.1 s cold and called
+  `transit_contacts` for 2024-11..2028-11 at request time (locally: "Could not load credentials from any providers"; S6/S6D then
+  left out). Doc 60 §6: a person's request never builds or pulls. Done: transit contacts pulled by the digest sweep and stored.
+- **P3: Love board on Sachin's kundli is "steady / split"** with main and conditional = test, karaka and annual = support; the
+  Love and Work reading panels (doc 59) are planned rows only, so Love and Work run the older vote boards.
