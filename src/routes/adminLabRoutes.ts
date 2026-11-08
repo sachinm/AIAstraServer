@@ -6,7 +6,8 @@
  * the build) and an `admin_actions` row (`lab.run`, ids only, never output).
  *
  *   GET  /api/admin-lab/people                                  → research-consented people, masked
- *   POST /api/admin-lab/run { userId, board:'self', technique?: '<panel id>'|'all', force? } → 200 LabRun | 400 | 403 | 404
+ *   POST /api/admin-lab/run { userId, board:'self', technique?: '<panel id>'|'all', force?, asOf?: 'YYYY-MM-DD' } → 200 LabRun |
+ *        400 bad_request | bad_as_of | unknown_technique | board_not_built (love, work) | 403 | 404
  *   GET  /api/admin-lab/runs/:id                                → the stored dossier
  *   GET  /api/admin-lab/dossiers?userId=&board=                 → the person's dossiers, newest first
  */
@@ -50,8 +51,12 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
   });
 
   app.post('/api/admin-lab/run', guard, async (req, res) => {
-    const b = (req.body ?? {}) as { userId?: unknown; board?: unknown; technique?: unknown; force?: unknown };
-    if (typeof b.userId !== 'string' || (b.board ?? 'self') !== 'self') return res.status(400).json({ error: 'bad_request' });
+    const b = (req.body ?? {}) as { userId?: unknown; board?: unknown; technique?: unknown; force?: unknown; asOf?: unknown };
+    if (typeof b.userId !== 'string') return res.status(400).json({ error: 'bad_request' });
+    const board = b.board ?? 'self';
+    if (board === 'love' || board === 'work') return res.status(400).json({ error: 'board_not_built', board });
+    if (board !== 'self') return res.status(400).json({ error: 'bad_request' });
+    if (b.asOf !== undefined && (typeof b.asOf !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.asOf) || Number.isNaN(Date.parse(b.asOf)))) return res.status(400).json({ error: 'bad_as_of' });
     const tech = typeof b.technique === 'string' ? b.technique.replace(/^self\.reading\./, '') : 'all';
     if (tech !== 'all' && !(SELF_PANEL_IDS as readonly string[]).includes(tech)) return res.status(400).json({ error: 'unknown_technique' });
     const person = await deps.prisma.auth.findUnique({ where: { id: b.userId }, select: { research: true } }).catch(() => null);
@@ -59,9 +64,9 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
     if (!person.research) return res.status(403).json({ error: 'no_research_consent' });
     try {
       const t0 = Date.now();
-      const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(tech === 'all' ? {} : { only: tech as SelfPanelId }) });
+      const r = await getSelfReading(selfDeps, b.userId, { trigger: 'manual', force: b.force === true, ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}), ...(tech === 'all' ? {} : { only: tech as SelfPanelId }) });
       await deps.prisma.adminAction
-        ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board: 'self', technique: tech, force: b.force === true } as object } })
+        ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board: 'self', technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object } })
         .catch(() => undefined);
       if (r.status !== 'ok') return res.status(r.status === 'no_kundli' ? 404 : 202).json({ status: r.status });
       const dossier = r.reading.dossierId ? await deps.prisma.readingDossier.findUnique({ where: { id: r.reading.dossierId } }) : null;
@@ -89,7 +94,7 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
       take: 50,
       select: { id: true, created_at: true, trigger: true, clock: true, as_of: true, valid_to: true, digest_version: true, audit: true, cost_usd: true },
     });
-    return res.json({ items: rows.map((r) => ({ ...r, verdict: (r.audit as { verdict?: string } | null)?.verdict ?? null, audit: undefined })) });
+    return res.json(stripBirthFields({ items: rows.map((r) => { const a = (r.audit ?? {}) as { verdict?: string; scope?: string }; return { ...r, verdict: a.verdict ?? null, technique: a.scope ?? 'all', audit: undefined }; }) }));
   });
   return true;
 }
