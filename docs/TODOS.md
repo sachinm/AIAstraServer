@@ -880,11 +880,12 @@ M32 and M33 are applied to the shared database; the 24 research kundlis are dige
 231,879 activation rows). Open items:
 
 ### P1: blocks or risks a release
-- **Deploy wiring for the digest (deploy session).** The Lambda needs `KUNDLI_DIGEST_EVENT_TOKEN` (without it every
-  digest event is refused, by design), optionally `DIGEST_SWEEP_MAX_MS` (default 60 s) and `DIGEST_ANNUAL_MAX_CALLS`
-  (default 40), and an EventBridge rule `kundli-digest-sweep` every 15 min sending `{ "source": "kundli-digest-sweep",
-  "token": … }` to `/events`. Until then new kundlis stay `pending` (boards fall back as doc 53 §4.7 says). Done: the
-  rule fires and a new sign-up's kundli reaches `ready` within one sweep.
+- **P2: The digest sweep builds about 3 kundlis per run.** Wired 2026-11-08 on Sachin's yes: `KUNDLI_DIGEST_EVENT_TOKEN`
+  on `aiastra-server-api` (copy in Secrets Manager `aiastra/kundli-digest-event-token`), EventBridge rule
+  `kundli-digest-sweep` at `rate(5 minutes)`. The first sweep found 8 candidates and built 3 before its 60 s budget
+  (`stopped_for_budget: true`). With the immediate trigger (a finished chart pull or a board that finds the digest
+  missing self-invokes one build), the sweep is the safety net, so this only matters for backlogs. Owner: deploy
+  session. Done: `DIGEST_SWEEP_MAX_MS` raised (the Lambda timeout allows it) or the backlog behaviour accepted.
 - **The annual set was not proven against the engine locally.** `ensureAnnualSet` for kundli `3784ca07…` with a cap of 6
   reached ensureChartData and the engine client, which failed with "Could not load credentials from any providers"
   (transport `lambda`; no local credentials can invoke the engine, see memory `aws-working-commands`). Six

@@ -544,7 +544,7 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
       processes: {
         preRunDataPreparation: [
           'Triggered on kundli registration / chart update via `POST /events` (`name: "kundli-digest"`) -> `handleDigestEvent`',
-          'Picked up every 15 minutes by `kundli-digest-sweep` (`sweepDigests` + `ensureAnnualSet` top-up)',
+          'Started at once by queueDigestBuild; picked up every 5 minutes by `kundli-digest-sweep` (`sweepDigests` + `ensureAnnualSet` top-up)',
         ],
         preRunCacheUploadAndWarm: [
           'Writes the 6 `kundli_digest` sections (`house`, `planet`, `yoga`, `point`, `annual`, `star`) and 30-year `kundli_activation` calendar in one transaction so downstream sub-agents never read raw `kundli_data`',

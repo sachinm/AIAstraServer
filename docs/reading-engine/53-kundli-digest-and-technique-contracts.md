@@ -254,7 +254,7 @@ Lucky times is 100% deterministic (`engine_pull` + `code`, zero AI/LLM):
 | `POST /api/chat/ask-stream` | before the flow: `selectTechniques(intent, facts, 'chat')`; the chosen ids ride on the trace and every span; if `digest_status != ready`, reply "your chart is still being prepared" (as the facts gate does today) and queue the digest |
 | `GET /api/area/:area`, `GET /api/lucky/range` | read the digest and `activation`; same shapes as today plus `digest_version` in the response meta |
 | Internal event `kundli-digest` (EventBridge, like `kundli-sync`) | builds or rebuilds one kundli's digest; idempotent; writes status; 2 min timeout; token-guarded like `KUNDLI_SYNC_EVENT_TOKEN` |
-| Sweep `kundli-digest-sweep` (15 min) | queues kundlis with `facts_status = ready` and `digest_status in (pending, stale)`, at most 20 per run |
+| Sweep `kundli-digest-sweep` (every 5 min; a finished chart pull or a board that finds the digest missing starts one build at once) | queues kundlis with `facts_status = ready` and `digest_status in (pending, stale)`, at most 20 per run |
 | Admin `GET /users`, `/users/:id` | `digestStatus`, `digestVersion`, `digestBuiltAt`; `POST /users/:id/digest/rebuild` (audited) |
 | Admin `GET /techniques/:id` | `selectors`, `contract` |
 | Admin `GET /review/day` | each query's `techniques[]` |
