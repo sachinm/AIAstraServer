@@ -242,6 +242,8 @@ export interface SelfReadingOptions {
   trigger?: DossierInput['trigger'];
   /** skip the stored outputs and make every panel (lab) */
   force?: boolean;
+  /** the person asked for a fresh reading (docs/billing/03): remake the synthesis; panels and readers keep their stores */
+  refresh?: boolean;
   /** run one technique only (lab); the diagnosis brings its four inputs */
   only?: BoardPanelId;
   /** build as of this day (lab), YYYY-MM-DD; default today */
@@ -527,6 +529,7 @@ export async function getBoardReading(
     sky,
     now,
     force: opts.force,
+    refresh: opts.refresh,
     only: opts.only,
     codeVersion: SELF_READING_VERSION,
     runningSpan: periodSpan('chapters'),

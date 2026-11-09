@@ -5,7 +5,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { storedValidity, validityOf, type ReadingValidity } from './validity.js';
+import { latestReadyBuild, refreshDue, storedValidity, validityOf, type ReadingValidity } from './validity.js';
 import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
@@ -45,7 +45,7 @@ export function fitsStatus(subarea: string, status: WorkStatus | null): boolean 
 export type CareerResult =
   | { status: 'no_kundli' }
   | { status: 'no_data'; notes: string[] }
-  | ({ status: 'ok'; map: CareerMap; work: WorkStatus | null; built_at: string; cached: boolean } & ReadingValidity);
+  | ({ status: 'ok'; map: CareerMap; work: WorkStatus | null; built_at: string; cached: boolean; refresh_due: boolean } & ReadingValidity);
 
 export async function getWorkStatus(prisma: PrismaClient, userId: string): Promise<WorkStatus | null> {
   const f = await prisma.personFact.findUnique({ where: { user_id_key: { user_id: userId, key: 'work.status' } } });
@@ -71,7 +71,7 @@ export function careerChartsRead(inputs: Pick<TimelineInputs, 'items' | 'contact
   ];
 }
 
-export async function getCareer(deps: CareerDeps, userId: string): Promise<CareerResult> {
+export async function getCareer(deps: CareerDeps, userId: string, opts: { force?: boolean } = {}): Promise<CareerResult> {
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli' };
   const nowAt = (deps.now ?? (() => new Date()))();
@@ -79,13 +79,15 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
   const work = await getWorkStatus(deps.prisma, userId);
   const asOfDate = new Date(`${asOf}T00:00:00Z`);
 
-  const cached = await deps.prisma.areaBuild.findUnique({ where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: 'career', as_of: asOfDate } } });
+  // offline first (docs/billing/03): the newest map is served whatever its day; `force` remakes it on request
+  const cached = opts.force ? null : await latestReadyBuild(deps.prisma, kundli.id, 'career');
+  const builtOn = cached ? cached.as_of.toISOString().slice(0, 10) : asOf;
   let map: CareerMap | null = null;
   let validity: ReadingValidity | null = null;
-  if (cached?.status === 'ready') {
+  if (cached) {
     const { validity: _v, ...rest } = cached.result as unknown as CareerMap & { validity?: unknown };
     map = rest as CareerMap;
-    validity = storedValidity(cached.result, cached.created_at, asOf);
+    validity = storedValidity(cached.result, cached.created_at, builtOn);
   }
   let fresh = false;
   if (!map) {
@@ -96,6 +98,7 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
         technique: 'work.present_tone',
         kundliId: kundli.id,
         digestVersion: DIGEST_VERSION,
+        forceRefresh: Boolean(opts.force),
         context: { now: nowAt },
         agentId: 'area.career_map',
         userId,
@@ -151,7 +154,8 @@ export async function getCareer(deps: CareerDeps, userId: string): Promise<Caree
     fresh = !out.cached;
   }
   const shown: CareerMap = { ...map, ahead: map.ahead.filter((w) => fitsStatus(w.subarea, work)) };
-  return { status: 'ok', map: shown, work, built_at: asOf, cached: !fresh, ...(validity ?? storedValidity(null, null, asOf)) };
+  const v = validity ?? storedValidity(null, null, builtOn);
+  return { status: 'ok', map: shown, work, built_at: builtOn, cached: !fresh, ...v, refresh_due: refreshDue(v.valid_until, asOf) };
 }
 
 /** The boards whose Looking-back answers are stored in `area_checks` (doc 45 §9; doc 54 §3 adds self and love). */
