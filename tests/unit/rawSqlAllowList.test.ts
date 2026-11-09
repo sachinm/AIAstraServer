@@ -24,6 +24,7 @@ const SEALING = [
 const REVIEWED_PLAIN: Record<string, string> = {
   'src/agents/registry.ts': 'static agent catalogue metadata seed (agent_registry)',
   'src/auth/requestAuth.ts': 'session id and expiry lookup in app_sessions',
+  'scripts/self-v2-replay.ts': 'dry-run guard only: names $executeRaw to block raw writes during the paid replay; runs no raw SQL',
   'src/reading/oracle/prewarm.ts': 'fallback DELETE on reading_findings_cache by plain kundli_id, user_id and timestamp columns only',
   'src/reading/run.ts': 'boolean capability check for techniqueOutput delegate; executes no raw SQL',
   'src/techniques/catalog.ts': 'static technique catalogue metadata seed (technique_registry)',
