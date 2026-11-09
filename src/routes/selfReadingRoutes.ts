@@ -1,10 +1,11 @@
 /**
  * HTTP surface of the You reading (docs/reading-engine/58 §4.2, 64 §4). Mounted with the boards (AREA_ENABLED=1).
  *
- *   GET  /api/self/reading            → 200 { status:'ok', built_at, cached, reading }
+ *   GET  /api/self/reading            → 200 { status:'ok', built_at, cached, reading }; while the Oracle's synthesis is built in
+ *                                       the background, 200 with the code panels, `reading.oracle.status = 'pending'` and
+ *                                       `build` (invoked | in_process | already_building), and the page polls
  *                                     | 202 { status:'preparing', stage:'chart' }    the digest is not ready yet
- *                                     | 202 { status:'preparing', stage:'reading' }  the Oracle's synthesis is being built in
- *                                                                                   the background (never inside this request)
+ *                                     | 202 { status:'preparing', stage:'reading' }  even the stored read outran the budget
  *                                     | 404 no_kundli
  *   POST /api/self/reading/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_answer
  *   PUT  /api/self/clock              { system: string | null } → 200 { clock } | 400 unknown_system | 404 no_kundli
@@ -61,7 +62,9 @@ export function registerSelfReadingRoutes(app: express.Express, deps: SelfReadin
           // the synthesis cannot be had right now: the code panels are served, the Oracle marked failed, nothing hidden
           return res.json({ ...r, reading: { ...r.reading, oracle: { ...r.reading.oracle, status: 'failed' } } });
         }
-        return res.status(202).json({ status: 'preparing', stage: 'reading', build: outcome });
+        // the code panels are ready now: serve them, the Oracle marked pending, so the page shows them under a waiting
+        // veil and polls until the synthesis lands (docs/reading-engine/64 §4)
+        return res.json({ ...r, build: outcome, reading: { ...r.reading, oracle: { ...r.reading.oracle, status: 'pending' } } });
       }
       return res.json(r);
     } catch (e) {
