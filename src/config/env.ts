@@ -903,3 +903,14 @@ export function getSelfOracleMaxOutputTokens(): number {
   const n = Number(process.env.SELF_ORACLE_MAX_OUTPUT_TOKENS ?? '');
   return Number.isFinite(n) && n >= 1000 && n <= 32000 ? Math.floor(n) : 8000;
 }
+
+/**
+ * The AES-256 key the web build encrypts the loading veil's illustrations with (docs/loading-overlay/01 §4.1):
+ * OVERLAY_ART_KEY, exactly 64 hex chars. Null when unset or malformed; the route then answers 404 and the veil shows
+ * its lines alone. The same value must be in the web build's env (Amplify) for the ciphertext to match.
+ */
+export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | null {
+  const raw = env.OVERLAY_ART_KEY?.trim();
+  if (!raw || !/^[0-9a-fA-F]{64}$/.test(raw)) return null;
+  return Buffer.from(raw, 'hex');
+}
