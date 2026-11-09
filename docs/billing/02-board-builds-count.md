@@ -102,6 +102,8 @@ Deploy (server, then web) goes through the deploy sub-session.
 
 ## 9. Recommendation and the decision for Sachin
 
+**Decided by Sachin, 2026-11-09: keep it** (build and show the board at the limit, the counter stays at the limit).
+
 **At the limit, a fresh board is built and shown, and the counter stays at the limit.** The boards are the free
 experience; blocking them would show an empty You/Love/Work page on the day the month's questions run out, while the
 cost of a board build is small next to a question. Questions stay blocked.

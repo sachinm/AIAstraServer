@@ -1456,11 +1456,9 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 
 ## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
 
-- **P1 · Decision for Sachin: what a fresh board does at the question limit.** Built as recommended in
-  `docs/billing/02-board-builds-count.md` §9: the board is still built and shown, and the counter stays at the limit.
-  Also confirm the rate: each of You, Love and Work costs one question per day it is opened, so a daily free user uses
-  about 3 a day and runs out of 20 in about a week before asking anything. Owner: Sachin. Done: the rule confirmed, or the
-  key changed (`boardChargeKey` in `src/billing/questionGate.ts`, e.g. one per day across boards).
+- **Decided 2026-11-09 (Sachin): a fresh board at the question limit is still built and shown; the counter stays at
+  the limit.** As built in `docs/billing/02-board-builds-count.md` §9. Still open: whether ~3 questions a day for a daily
+  free user is the intended rate (`boardChargeKey` in `src/billing/questionGate.ts` can become one per day across boards).
 - **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
   top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
   (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
