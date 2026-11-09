@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { classifyRules } from '../../../src/reading/buckets/classifier.js';
 import { confirmClarify, prashnaRule, startClarify, type ClarifyState } from '../../../src/reading/clarify/machine.js';
-import { judgePrashna } from '../../../src/reading/clarify/planner.js';
+import { clearClarifyCache, judgePrashna } from '../../../src/reading/clarify/planner.js';
 import { confirmAndBuildIntent } from '../../../src/reading/clarify/service.js';
 import { MemoryClarifyStore } from '../../../src/reading/clarify/store.js';
 import { setBedrockClientForTests } from '../../../src/reading/llm/bedrock.js';
@@ -197,6 +197,8 @@ describe('prashna eligibility (clarify rules)', () => {
     const send = vi.fn();
     const reply = (text: string) => ({ output: { message: { role: 'assistant', content: [{ text }] } }, usage: { inputTokens: 100, outputTokens: 5, totalTokens: 105 } });
     beforeEach(() => {
+      // the planner keeps model replies in memory per question: without this a case is answered by the one before it
+      clearClarifyCache();
       process.env.READING_MODEL_CLARIFY = 'bedrock:openai.gpt-oss-120b-1:0';
       setBedrockClientForTests({ send });
       send.mockReset();
