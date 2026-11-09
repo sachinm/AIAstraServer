@@ -882,11 +882,11 @@ export function isSelfReadingModelEnabled(): boolean {
  */
 /**
  * The Oracle returns the dashboard's area document (docs/reading-engine/65) instead of the essay + PANEL_SYNTHESIS text:
- * `SELF_ORACLE_AREAS=1`. Off by default until Phase B renders it.
+ * On by default since Phase B renders it; `SELF_ORACLE_AREAS=0` returns to the essay path.
  */
 export function isSelfOracleAreasEnabled(): boolean {
   const raw = process.env.SELF_ORACLE_AREAS?.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes';
+  return !(raw === '0' || raw === 'false' || raw === 'no');
 }
 
 export function getSelfReadingMaxSpendUsd(): number {

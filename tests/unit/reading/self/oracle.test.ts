@@ -16,9 +16,27 @@ import {
 import type { SelfReading } from '../../../../src/reading/self/types.js';
 
 vi.mock('../../../../src/reading/llm/gemini.js', () => ({
-  callGemini: vi.fn(async () => ({
-    text: '- Confirmed Jupiter in 7th {planet:D1.Ju}\n\nPANEL_SYNTHESIS:\n- [lagna] (always) Your identity steers through partnership and agreements. {planet:D1.Ju}\n\nVALID_UNTIL:\noverall: 2027-01-01\nlagna: always',
+  callGemini: vi.fn(async (o: { responseSchema?: unknown }) => ({
+    // the Oracle (asked for the area document by schema) answers JSON; the readers and the lineman answer findings
+    text: o.responseSchema
+      ? JSON.stringify({
+          areas: [
+            {
+              id: 'lagna',
+              headline: 'Rich identity synthesis',
+              paragraphs: ['Jupiter, your lagna lord, sits in the 7th {planet:D1.Ju}.', 'Your identity steers through partnership and agreements.'],
+              dates: [],
+              actions: [],
+              certainty: 'strong',
+              evidence: ['planet:D1.Ju', 'claim:lagna.lord_house'],
+              validUntil: 'always',
+            },
+          ],
+          validUntil: '2027-01-01',
+        })
+      : '- Confirmed Jupiter in 7th {planet:D1.Ju}\n\nVALID_UNTIL:\noverall: 2027-01-01\nlagna: always',
     usage: { node: 'test', model: 'gemini-3.1-flash-lite', promptTokens: 500, cachedTokens: 400, outputTokens: 120, thoughtTokens: 50, ms: 15 },
+    finishReason: 'STOP',
   })),
 }));
 
@@ -105,6 +123,12 @@ describe('self oracle', () => {
     expect(res.linemen?.map((l) => l.agent)).toEqual(['family.rasi', 'family.varga', 'lineman.self']);
     expect(res.validUntil).toMatchObject({ overall: '2027-01-01', lagna: 'always' });
     expect(res.panelLines?.lagna?.length).toBeGreaterThan(0);
+    // the area document (doc 65): the lagna area validated, its inline citation stripped, its evidence kept
+    expect(res.areas?.areas.lagna).toMatchObject({ headline: 'Rich identity synthesis', certainty: 'strong', evidence: ['planet:D1.Ju'] });
+    expect(res.areas?.areas.lagna?.paragraphs[0]).toBe('Jupiter, your lagna lord, sits in the 7th.');
+    expect(res.areas?.validUntil).toBe('2027-01-01');
+    expect(res.promptName).toBe('oracle/self-areas');
+    expect(res.cacheWarm).toBeDefined();
   });
 });
 
@@ -144,33 +168,3 @@ describe('tidyOracleParagraph', () => {
   });
 });
 
-describe('splitOracleSections', () => {
-  it('gives each panel the section whose heading names it; a joint heading feeds both panels; text before any heading is In short', async () => {
-    const { splitOracleSections } = await import('../../../../src/reading/self/oracle.js');
-    const titles = { diagnosis: 'In short', chapters: 'Your chapters', lagna: 'Who you are', atma: "Your soul's aim", mind: 'Your mind', body: 'Your body', yogas: 'Gifts and knots', struggle: 'What you struggle with', year: 'This year' };
-    const text = [
-      'Opening words.',
-      'In short (Diagnosis & Core Architecture)',
-      'Your life is steered ``. Second sentence.',
-      '---',
-      "Who you are & Your soul's aim",
-      'Identity paragraph.',
-      'Your mind & Brain',
-      'Mind paragraph.',
-      '### Gifts and knots & What you struggle with',
-      '- **Dhana Yoga**: a gift.',
-      'This year',
-      'Year paragraph.',
-    ].join('\n\n');
-    const s = splitOracleSections(text, titles, ['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year']);
-    expect(s.diagnosis).toBe('Opening words.\n\nYour life is steered. Second sentence.');
-    expect(s.lagna).toBe('Identity paragraph.');
-    expect(s.atma).toBe('Identity paragraph.');
-    expect(s.mind).toBe('Mind paragraph.');
-    expect(s.yogas).toBe('- **Dhana Yoga**: a gift.');
-    expect(s.struggle).toBe('- **Dhana Yoga**: a gift.');
-    expect(s.year).toBe('Year paragraph.');
-    expect(s.chapters).toBeUndefined();
-    expect(s.body).toBeUndefined();
-  });
-});

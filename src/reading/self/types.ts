@@ -125,8 +125,11 @@ export interface SelfPanel {
   validUntil?: string;
   /** BUILD-GAPS BG-14: the Oracle's plan for this panel (summary, dated steps, a calendar of prospective dates from stored windows) */
   plan?: PanelPlan;
-  /** the Oracle's prose for this panel: the section of its reading whose heading names the panel (doc 64 §4) */
-  synthesis?: string;
+  /** docs/reading-engine/65: the Oracle's area for this panel (headline, prose, dates, actions); the card when present */
+  area?: import('./areaDoc.js').OracleArea;
+  /** ok: `area` is the card; pending: the synthesis is being built (code lines under the veil); withheld: the Oracle
+   * had nothing grounded for this area; failed: the Oracle failed; off: the model layer is off (code lines are the card) */
+  areaStatus?: 'ok' | 'pending' | 'withheld' | 'failed' | 'off';
 }
 
 /** One dated step of a panel plan. */

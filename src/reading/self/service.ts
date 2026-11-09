@@ -70,7 +70,7 @@ import { applyPurview, mergePurviewEntries, runPurview } from './purview.js';
 import { buildCard } from './card.js';
 import { auditCards, inStoredWindow, mergeAudits } from './audit.js';
 import { buildDossier, collectData, writeDossier, type DossierInput } from './dossier.js';
-import { runSelfOracle, splitOracleSections, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
+import { runSelfOracle, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
 import { defaultLoadTransit } from '../area/boardService.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
 
@@ -543,11 +543,11 @@ export async function getBoardReading(
   const aiAudits: CodeAudit[] = [];
   const planGaps: AuditFailure[] = [];
   if (oracle.status === 'ok') {
-    // the Oracle's prose, split by its own section headings into the panels they name (doc 64 §4)
-    const sectionTitles: Record<string, string> = { diagnosis: DIAGNOSIS_TITLE, ...Object.fromEntries(Object.entries(metaMap).map(([id, m]) => [id, m.title])) };
-    const sections = oracle.text ? splitOracleSections(oracle.text, sectionTitles, panelOrder) : {};
+    // docs/reading-engine/65: the Oracle's area for this panel is the card; the code lines stay as the audit and fallback
+    const areas = oracle.areas?.areas ?? {};
     panels = panels.map((p) => {
-      const synthesis = sections[p.id];
+      const area = areas[p.id];
+      const areaStatus: SelfPanel['areaStatus'] = oracle.areas ? (area ? 'ok' : 'withheld') : 'ok';
       const aiValid = oracle.validUntil?.[p.id];
       const aiLines = oracle.panelLines?.[p.id] ?? [];
       const fallbackClaimIds = p.claims.filter((c) => !c.withheld).map((c) => c.id);
@@ -598,9 +598,15 @@ export async function getBoardReading(
         ...(aiValid ? { validUntil: aiValid } : {}),
         lines: allLines,
         ...(plan && (plan.summary || plan.steps.length || plan.calendar.length) ? { plan } : {}),
-        ...(synthesis ? { synthesis } : {}),
+        areaStatus,
+        ...(area ? { area } : {}),
       };
     });
+  }
+
+  if (oracle.status !== 'ok') {
+    const areaStatus: SelfPanel['areaStatus'] = oracle.status === 'pending' ? 'pending' : oracle.status === 'off' ? 'off' : 'failed';
+    panels = panels.map((p) => ({ ...p, areaStatus }));
   }
 
   const finalAudit: CodeAudit = aiAudits.length || planGaps.length ? mergeAudits([audited.audit, ...aiAudits, { verdict: 'pass', checked: 0, failures: [], dateGaps: planGaps }]) : audited.audit;
