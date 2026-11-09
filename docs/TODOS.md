@@ -1915,3 +1915,34 @@ region costs about $1 per million tokens per hour.
   Done: count the database round trips and time them on the Lambda before changing code.
 - **P3 · The Oracle still reports 0 thought tokens** on gemini-3.8-flash at `low` (3 of 3 calls). This is unchanged
   from run 1 and needs one tiny paid call with a yes.
+
+## Filed 2026-11-09: Self v2 pipeline gaps (review of the build flow, doc 66 §4.8)
+
+- **P1 · Every build pays twice when `SELF_V2_BUILD=1`.** `runSelfReadingBuild` runs the v1 path (lineman + v1 Oracle,
+  ≈ $0.055) and then `runSelfV2Build`; the v2 page never reads the v1 output. Owner: server. Done: with the v2 build on,
+  the v1 Oracle and lineman are skipped for the self board (code panels may stay as the floor); a test asserts no v1
+  model call when the flag is on. Must ship before the flag is set on staging.
+- **P1 · "Right now" goes stale silently.** Offline-first means no rebuild until the person taps Fresh reading, but the
+  hero's "since" and "eases" dates and the strip are relative to the build date, and the `sky_week` stamp never fires on
+  its own. Owner: server + web. Done: the hero shows "as of <build date>"; when a stored window boundary has passed, the
+  card says it has moved on and the Fresh reading button lights up.
+- **P2 · Explicit cache regions mostly expire unused.** Regions live 45 min and storage bills per hour; an offline-first
+  board rebuilds rarely, so the family-pack regions are paid for and almost never reused. Owner: server. Done: explicit
+  caching only for the Oracle prefix shared by its three parallel calls; implicit caching elsewhere; storage cost per
+  build in the Lab.
+- **P2 · Shared sub-techniques are Self-only.** S1 clock, S2 periods, S3 windows, S4/S5 ledgers and S10 profile are the
+  same for Love and Work. Owner: server. Done: board-neutral sub-techniques stored once per kundli and stamps, read by
+  all three boards.
+- **P2 · The free first build is a one-minute veil on first open.** Owner: server. Done: the trial build starts when the
+  kundli's digest is ready after registration, so the first open serves a stored reading.
+- **P2 · Confirm answers change nothing until a paid rebuild.** Owner: server. Done: a confirm re-runs only the
+  Personalizer (≈ $0.006, ≈ 10 s) and the board updates; not charged as a question.
+- **P2 · Degraded windows go unnoticed.** With `pressure_inventory` missing every window is equal strength and the hero
+  ranks by end date only; nothing alerts. Owner: admin + server. Done: gap counts per build in the Lab and an alert when
+  degraded builds pass a threshold.
+- **P2 · Personal facts now reach Gemini.** The Personalizer receives age band, gender, work, love and children
+  (docs/privacy/01 lists open Gemini decisions). Owner: Sachin. Done: a decision on what the Personalizer may receive,
+  recorded before `SELF_V2_BUILD` is set for real users.
+- **P3 · No quality gate between build and screen.** Validators drop sentences but nothing scores the build. Owner:
+  server. Done: a per-build quality score (withheld cards, dropped sentences, profile distinctness); a poor build keeps
+  serving the last good reading and is flagged in the Lab.
