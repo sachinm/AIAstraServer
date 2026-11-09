@@ -5,6 +5,13 @@
  * S7 over one `SelfBuildContext`, stamps the context with what can make each output stale, and times every step. Each
  * sub-technique is a `withAgentRun` span tagged `self.sub.<name>` and the kundli; summaries hold counts and ids only.
  * A failing sub-technique leaves its slot empty and records a gap; the others still run.
+ *
+ * Round trips (doc 66 replay 2026-11-09: 9.1 s from a laptop, estimate 0.3 s): the digest, the kundli row, the systems
+ * present and the sky are read in one parallel round; the activation and the pressure inventory in the next (they need
+ * the clock, which needs the systems present); every span's `agent_runs` write goes to a sink awaited once, in
+ * parallel, at the end, instead of one awaited write per step on the critical path. The activation window stays the
+ * whole life at levels 1–2 (S2 needs the previous and next main periods, S8 a best window anywhere in the past) plus
+ * level 3 within a year of today: one query, a few hundred rows, so its cost is the round trip, not the rows.
  */
 import { createHash } from 'node:crypto';
 import { withAgentRun, type ChartUsed } from '../../../agents/registry.js';
@@ -58,16 +65,25 @@ export async function runSelfSubTechniques(
   const g = gaps();
   const t0 = performance.now();
 
-  // Layer 0: one read per table
-  const view = await (deps.loadDigest ?? realLoadDigest)(prisma, kundliId);
-  if (!view) return { status: 'preparing' };
-  const [kundli, present, sky] = await Promise.all([
+  // Layer 0: one read per table, all in one parallel round
+  const [viewR, kundliR, presentR, skyR] = await Promise.allSettled([
+    (deps.loadDigest ?? realLoadDigest)(prisma, kundliId),
     prisma.kundli.findUnique({ where: { id: kundliId }, select: { preferred_dasha: true } }).catch(() => null),
     (deps.systemsPresent ?? defaultSystemsPresent)(prisma, kundliId),
     (deps.loadTransit ?? defaultLoadTransit)(prisma, kundliId, asOf).catch(() => null),
   ]);
+  // the digest decides first: no digest is "preparing" whatever the other reads did; then a failed read throws as before
+  if (viewR.status === 'rejected') throw viewR.reason;
+  const view = viewR.value;
+  if (!view) return { status: 'preparing' };
+  if (presentR.status === 'rejected') throw presentR.reason;
+  const present = presentR.value;
+  const kundli = kundliR.status === 'fulfilled' ? kundliR.value : null;
+  const sky = skyR.status === 'fulfilled' ? skyR.value : null;
   const preferred = kundli?.preferred_dasha ?? null;
   ms.load = round(performance.now() - t0);
+  // the run-log writes of every span, awaited together at the end (never one round trip per step)
+  const runLogs: Array<Promise<unknown>> = [];
 
   const span = async <T>(name: string, charts: ChartUsed[], fn: () => T | Promise<T>, summary: (v: T) => Record<string, unknown>): Promise<T | undefined> => {
     const t = performance.now();
@@ -75,7 +91,7 @@ export async function runSelfSubTechniques(
       return await withAgentRun(
         prisma,
         SUB_AGENT,
-        { userId, task: `${subTechniqueId(name)} ${asOf}`, technique: subTechniqueId(name), kundliId, input: { version: view.version, step: name }, charts },
+        { userId, task: `${subTechniqueId(name)} ${asOf}`, technique: subTechniqueId(name), kundliId, input: { version: view.version, step: name }, charts, logSink: runLogs },
         async () => {
           const value = await fn();
           return { value, output: summary(value) };
@@ -96,7 +112,10 @@ export async function runSelfSubTechniques(
     applicable: c.applicable.length,
     notApplicable: c.notApplicable.length,
   }))) as ClockResolution | undefined;
-  if (!clock) return { status: 'preparing' };
+  if (!clock) {
+    await Promise.allSettled(runLogs);
+    return { status: 'preparing' };
+  }
 
   const t1 = performance.now();
   const systems = [...new Set([clock.primary, ...clock.confirming])];
@@ -207,6 +226,9 @@ export async function runSelfSubTechniques(
       ...(profile ? { profile } : {}),
     },
   };
+  const tl = performance.now();
+  await Promise.allSettled(runLogs);
+  ms.runLogs = round(performance.now() - tl);
   ms.total = round(performance.now() - t0);
   return { ctx, loaded: { view, activation, sky, preferred, pressure }, gaps: g.list, ms };
 }

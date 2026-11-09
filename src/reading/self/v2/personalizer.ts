@@ -6,7 +6,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getSelfPersonalizerMaxOutputTokens } from '../../../config/env.js';
+import { getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens } from '../../../config/env.js';
 import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
 import type { PersonalizerInput, PreparedAgentSlice, SelfBuildContext, SelfV2CardsResult, WindowRef } from '../v2types.js';
 import { markAgentUsed } from './cache.js';
@@ -15,6 +15,14 @@ import { parsePersonalDoc, TONES, validatePersonalDoc } from './personalizerVali
 import { promptHash, SELF_V2_PERSONALIZER_PROMPT } from './slices.js';
 
 export const PERSONALIZER_TIMEOUT_MS = 60_000;
+/**
+ * The Personalizer translates, it does not reason: it asks for the lowest thinking the model allows (`minimal`; Gemini
+ * 3.x counts thought tokens against the output cap, doc 66 replay 2026-11-09 failure 1).
+ */
+export const PERSONALIZER_THINKING = 'minimal' as const;
+
+/** a finish that means the JSON was cut at the output cap */
+export const isTruncated = (finishReason: string | null | undefined): boolean => finishReason === 'MAX_TOKENS';
 
 /** The responseSchema: the hero's words and one card per area of the Oracle document. Code fills strip and dates. */
 export function personalizerSchema(areaIds: readonly string[]): Record<string, unknown> {
@@ -77,7 +85,28 @@ export interface PersonalizerDeps {
   maxSpendUsd: number;
 }
 
-/** One Personalizer call, then the validator. Never throws; only an `ok` result is stored by the build. */
+/** The second call's result with both calls' tokens, so the run log and the cost count the retry. */
+export function addUsage(first: GeminiResult, second: GeminiResult): GeminiResult {
+  const a = first.usage;
+  const b = second.usage;
+  if (!a || !b) return second;
+  return {
+    ...second,
+    usage: {
+      ...b,
+      promptTokens: a.promptTokens + b.promptTokens,
+      cachedTokens: a.cachedTokens + b.cachedTokens,
+      outputTokens: a.outputTokens + b.outputTokens,
+      thoughtTokens: a.thoughtTokens + b.thoughtTokens,
+      ms: a.ms + b.ms,
+    },
+  };
+}
+
+/**
+ * One Personalizer call (one retry on a cut document), then the validator. Never throws; only an `ok` result is stored
+ * by the build.
+ */
 export async function runPersonalizer(
   deps: PersonalizerDeps,
   ctx: SelfBuildContext,
@@ -102,27 +131,32 @@ export async function runPersonalizer(
         charts: [{ type: 'technique_output', variant: 'self.v2.oracle' }],
       },
       async () => {
-        const g = await deps.callGemini({
-          model,
-          node: 'self.personalizer',
-          system: slice.system,
-          parts: [slice.prefix, slice.suffix],
-          thinking: 'low',
-          maxOutputTokens: getSelfPersonalizerMaxOutputTokens(),
-          timeoutMs: PERSONALIZER_TIMEOUT_MS,
-          cachePrefix: true,
-          cacheOwner: slice.cacheOwner,
-          responseSchema: personalizerSchema(areaIds),
-        });
+        const ask = (maxOutputTokens: number) =>
+          deps.callGemini({
+            model,
+            node: 'self.personalizer',
+            system: slice.system,
+            parts: [slice.prefix, slice.suffix],
+            thinking: PERSONALIZER_THINKING,
+            maxOutputTokens,
+            timeoutMs: PERSONALIZER_TIMEOUT_MS,
+            cachePrefix: true,
+            cacheOwner: slice.cacheOwner,
+            responseSchema: personalizerSchema(areaIds),
+          });
+        const first = await ask(getSelfPersonalizerMaxOutputTokens());
+        // one retry on a cut document, at the higher cap; the usage of both calls is counted
+        const g = isTruncated(first.finishReason) ? addUsage(first, await ask(getSelfPersonalizerRetryMaxOutputTokens())) : first;
         return {
           value: g,
           usage: { model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-          output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0 },
+          output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, retried: g !== first },
         };
       },
     );
     markAgentUsed(slice, deps.informUsed);
-    const parsed = parsePersonalDoc(res.text);
+    // a document cut at the cap is never parsed, validated or stored, even when a partial JSON would parse
+    const parsed = isTruncated(res.finishReason) ? null : parsePersonalDoc(res.text);
     const call = timingOf('self.personalizer', 'self.personalizer', model, res, performance.now() - t0, parsed ? 'ok' : 'failed');
     const base = { promptHash: pHash, model, call };
     if ((deps.spentUsd ?? 0) + call.costUsd > deps.maxSpendUsd) return { ...base, status: 'budget_exceeded', doc: null, cardStatus: {}, gaps: ['personalizer: spend over the cap'] };

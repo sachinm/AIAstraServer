@@ -474,6 +474,12 @@ export interface RunContext {
   kundliId?: string | null;
   subject?: string | null;
   charts?: ChartUsed[];
+  /**
+   * When given, the `agent_runs` write is pushed here instead of awaited, so a chain of short code steps does not wait
+   * one database round trip per step; the caller awaits the sink once at the end (the Self v2 sub-techniques, doc 66
+   * replay: 9.1 s from a laptop). The write never throws.
+   */
+  logSink?: Array<Promise<unknown>>;
 }
 
 export interface RunUsage {
@@ -597,22 +603,26 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
           ...(withTags ? { ...tags, charts_used: (tags.charts_used ?? undefined) as object | undefined } : {}),
         },
       });
-    try {
-      if (Date.now() < m29MissingUntil) await write(false);
-      else {
-        try {
-          await write(true);
-        } catch (e) {
-          if (!isMissingColumn(e)) throw e;
-          m29MissingUntil = Date.now() + M29_RETRY_MS;
-          console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
-          await write(false);
+    const persist = async () => {
+      try {
+        if (Date.now() < m29MissingUntil) await write(false);
+        else {
+          try {
+            await write(true);
+          } catch (e) {
+            if (!isMissingColumn(e)) throw e;
+            m29MissingUntil = Date.now() + M29_RETRY_MS;
+            console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
+            await write(false);
+          }
         }
+      } catch (e) {
+        if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
+        warned = true;
       }
-    } catch (e) {
-      if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
-      warned = true;
-    }
+    };
+    if (ctx.logSink) ctx.logSink.push(persist());
+    else await persist();
     }
   }
 }

@@ -14,6 +14,27 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { AreaBrief, OracleV2Output, PersonalCardDoc, SelfV2CardsResult, SelfV2Frame, SelfV2OracleResult } from '../v2types.js';
+import { normaliseEvidenceKey } from './slices.js';
+
+/**
+ * A stored Oracle document with one prefix per evidence key (`risk:risk:x` → `risk:x`): builds stored before the slice
+ * fix of 2026-11-09 (doc 66 replay failure 10) read the same as new ones.
+ */
+export function normaliseStoredOracle(out: OracleV2Output | null): OracleV2Output | null {
+  if (!out?.doc?.areas) return out;
+  const fix = (ks: readonly string[] | undefined) => [...new Set((ks ?? []).map(normaliseEvidenceKey))];
+  const areas = Object.fromEntries(Object.entries(out.doc.areas).map(([id, a]) => [id, a ? { ...a, evidence: fix(a.evidence) } : a])) as OracleV2Output['doc']['areas'];
+  return { ...out, doc: { ...out.doc, areas }, patterns: (out.patterns ?? []).map((p) => ({ ...p, evidence: fix(p.evidence) })) };
+}
+
+/** Stored cards with their sources normalised the same way. */
+export function normaliseStoredCards(doc: PersonalCardDoc | null): PersonalCardDoc | null {
+  if (!doc?.cards) return doc;
+  const cards = Object.fromEntries(
+    Object.entries(doc.cards).map(([id, c]) => [id, c ? { ...c, sources: (c.sources ?? []).map(normaliseEvidenceKey), patterns: (c.patterns ?? []).map((p) => ({ ...p, source: normaliseEvidenceKey(p.source) })) } : c]),
+  ) as PersonalCardDoc['cards'];
+  return { ...doc, cards };
+}
 
 export const SELF_V2_ORACLE_TECHNIQUE = 'self.v2.oracle';
 export const SELF_V2_PERSONALIZER_TECHNIQUE = 'self.v2.personalizer';
@@ -77,12 +98,12 @@ export async function readSelfV2Latest(prisma: PrismaClient, kundliId: string, c
       (prisma as unknown as StorePrisma).areaBuild?.findFirst?.({ where: { kundli_id: kundliId, area: SELF_V2_MARKER_AREA }, orderBy: { as_of: 'desc' } }) ?? Promise.resolve(null),
     ]);
     const storedCards = cardsRow?.output as StoredSelfV2Cards | undefined;
-    const cards = storedCards?.result?.doc ?? null;
+    const cards = normaliseStoredCards(storedCards?.result?.doc ?? null);
     const storedOracle = oracleRow?.output as StoredSelfV2Oracle | undefined;
     const status: SelfV2Latest['status'] = cards ? 'ok' : marker?.status === 'failed' ? 'failed' : 'pending';
     return {
       cards,
-      oracle: storedOracle?.result?.output ?? null,
+      oracle: normaliseStoredOracle(storedOracle?.result?.output ?? null),
       briefs: storedOracle?.briefs ?? null,
       builtAt: iso(cardsRow?.created_at ?? oracleRow?.created_at ?? null),
       status,

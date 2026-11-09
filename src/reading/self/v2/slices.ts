@@ -7,8 +7,10 @@
  * - family.rasi … family.sky: `buildSelfFamilyPacks` as today; family.sky is padded past 1,024 tokens with the window
  *   rows it may legitimately read (doc 65 §9b).
  * - self.oracle: prefix = the natal slice (the family.rasi and family.varga packs: D1/D9 houses, planets, points,
- *   yogas) + the S4 promise ledger, stable per digest version; suffix = clock, periods, windows summary, risk top 12,
- *   promise top 8, mind/body/presence/year facts, area briefs, family findings, confirms.
+ *   yogas) + the S4 promise ledger + the reading frame (clock, periods, windows summary, risk top 12, promise top 8,
+ *   mind/body/presence/year facts, area briefs), all known before any agent runs and the same for the three Oracle
+ *   calls; suffix = TODAY, the family findings and the confirms. The doc 66 replay (2026-11-09) cached 38.6 % with the
+ *   frame in the suffix (13.4 k of 34.6 k provider tokens); with it in the prefix the cached share is about 80 %.
  * - self.personalizer: prefix = the Oracle document (stable per Oracle key); suffix = the profile pack (without age in
  *   years and hash) and the windows summary.
  *
@@ -47,8 +49,19 @@ export const ORACLE_PROMISE_TOP = 8;
 
 export const FAMILY_IDS: readonly SelfV2FamilyAgentId[] = ['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky'];
 
-/** chars / 4: the estimate the Lab shows before a call */
+/**
+ * chars / 4: a lower bound on the provider's count, used only to pad a prefix past the cache minimum (it never pads
+ * too little). Not the Lab's estimate: on these slices the provider counts about twice as many tokens.
+ */
 export const estTokens = (s: string): number => Math.ceil(s.length / 4);
+/**
+ * Characters per provider token on the slices (keys, ids, numbers and short tags), measured on the doc 66 replay of
+ * 2026-11-09: the Oracle's ≈ 74.6 k chars (chars/4 = 18.7 k) were 34.6 k provider tokens with the system prompt, about
+ * 2.2 chars per token. Gemini's countTokens is not wired in the client (docs/TODOS.md).
+ */
+export const PROVIDER_CHARS_PER_TOKEN = 2.2;
+/** the Lab's estimate of the provider's token count before a call */
+export const estProviderTokens = (s: string): number => Math.ceil(s.length / PROVIDER_CHARS_PER_TOKEN);
 export const shortHash = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 24);
 
 /** The system prompt of an agent, by bundle name (empty when the bundle has not been regenerated). */
@@ -61,8 +74,9 @@ export class KeyBook {
   readonly keys = new Set<string>();
   k(key: string | null | undefined): string {
     if (!key) return '';
-    this.keys.add(key);
-    return `{${key}}`;
+    const k = normaliseEvidenceKey(key);
+    this.keys.add(k);
+    return `{${k}}`;
   }
   ks(keys: readonly (string | null | undefined)[]): string {
     return keys.map((x) => this.k(x)).filter(Boolean).join(' ');
@@ -71,6 +85,15 @@ export class KeyBook {
 
 /** a brief claim id as the Oracle cites it: `claim:<id>` (doc 65 Phase A: the prefix is part of the id) */
 export const claimKey = (id: string): string => (id.startsWith('claim:') ? id : `claim:${id}`);
+/** a risk row id as an evidence key: the S5 ids already carry `risk:` (doc 66 replay failure 10: `risk:risk:`) */
+export const riskKey = (id: string): string => (id.startsWith('risk:') ? id : `risk:${id}`);
+/** a promise entry id as an evidence key: the S4 ids already carry `promise:` */
+export const promiseKey = (id: string): string => (id.startsWith('promise:') ? id : `promise:${id}`);
+/**
+ * One prefix per evidence key: `risk:risk:x` → `risk:x`, `promise:promise:x` → `promise:x` (and the same for claim and
+ * window). Applied when a key is written and when a stored document is read, so builds stored before the fix match.
+ */
+export const normaliseEvidenceKey = (key: string): string => key.replace(/^(risk|promise|claim|window):(?:\1:)+/, '$1:');
 
 /** The S1 resolution in the shape the family packs read. */
 export function toSelfClock(c: ClockResolution): SelfClock {
@@ -100,7 +123,7 @@ function prepared(
     cacheOwner: { userId: ctx.userId, kundliId: ctx.kundliId },
     model,
     system,
-    estTokens: { prefix: estTokens(prefix), suffix: estTokens(suffix) },
+    estTokens: { prefix: estProviderTokens(prefix), suffix: estProviderTokens(suffix) },
     keys: [...new Set(keys)],
   };
 }
@@ -161,7 +184,7 @@ function promiseLine(book: KeyBook, e: PromiseEntry): string {
   const src = [e.source.yogaId ? `yoga=${e.source.yogaId}` : '', e.source.planet ? `planet=${e.source.planet}` : '', e.source.house != null ? `house=${e.source.house}` : '']
     .filter(Boolean)
     .join(' ');
-  return `${book.k(`promise:${e.id}`)} ${e.kind} matter=${e.matter} ${src} who=[${e.who.join(',')}] strength=${e.strength}${e.cancels ? ` cancels=${book.k(`promise:${e.cancels}`)}` : ''} evidence ${book.ks(e.evidence)}`;
+  return `${book.k(promiseKey(e.id))} ${e.kind} matter=${e.matter} ${src} who=[${e.who.join(',')}] strength=${e.strength}${e.cancels ? ` cancels=${book.k(promiseKey(e.cancels))}` : ''} evidence ${book.ks(e.evidence)}`;
 }
 
 /** The S4 ledger in the Oracle's prefix: every entry, stable per digest version. */
@@ -217,22 +240,49 @@ export function buildOracleInput(ctx: SelfBuildContext, briefs: readonly AreaBri
   };
 }
 
-/** The stable natal prefix of the Oracle: the rasi and varga packs, then the whole promise ledger. No date in it. */
-export function oraclePrefix(packs: Record<SelfFamilyAgentId, SelfFamilyPack>, ledger: PromiseLedger | undefined): { text: string; keys: string[] } {
+/**
+ * The Oracle's cached prefix: the rasi and varga packs and the whole promise ledger (stable per digest version), then,
+ * when the input is given, the reading frame (`oracleFrame`): everything the sub-techniques and the briefs fix before
+ * any agent runs. No TODAY stamp, no family finding and no confirm in it, so the warm-up (before the family readers)
+ * and the three Oracle calls (after them) send it byte for byte.
+ */
+export function oraclePrefix(
+  packs: Record<SelfFamilyAgentId, SelfFamilyPack>,
+  ledger: PromiseLedger | undefined,
+  input?: OracleInput,
+): { text: string; keys: string[] } {
   const book = new KeyBook();
+  const frame = input ? oracleFrame(input) : null;
   const text = [
     '# NATAL SLICE (stable per digest version: D1 and divisional houses, planets, points, yogas)',
     packs['family.rasi'].prefix,
     packs['family.varga'].prefix,
     renderPromiseLedger(book, ledger),
+    ...(frame ? ['# READING FRAME (the clock, periods, windows, ledgers, facts and briefs of this build)', frame.text] : []),
   ].join('\n\n');
-  return { text, keys: [...packs['family.rasi'].keys, ...packs['family.varga'].keys, ...book.keys] };
+  return { text, keys: [...packs['family.rasi'].keys, ...packs['family.varga'].keys, ...book.keys, ...(frame?.keys ?? [])] };
 }
 
-/** The Oracle's variable suffix (doc 66 §4.8): everything dated, the briefs and the family findings. */
+/** The Oracle's variable suffix: the per-build stamp (TODAY), the family findings and the person's confirms. */
 export function oracleSuffix(input: OracleInput, asOf: string): { text: string; keys: string[] } {
   const b = new KeyBook();
   const L: string[] = [`TODAY: ${asOf}`];
+  L.push('## FAMILY FINDINGS (the five family readers)');
+  for (const f of input.familyFindings) L.push(`### ${f.family}`, f.text || '(none)');
+  if (!input.familyFindings.length) L.push('(none this build)');
+  L.push('## CONFIRMS (the person\'s last answers; a No lowers that claim\'s certainty)');
+  for (const cf of input.confirms) L.push(`- ${b.k(claimKey(cf.claimId))} ${cf.answer}${cf.at ? ` (${cf.at.slice(0, 10)})` : ''}`);
+  if (!input.confirms.length) L.push('(none)');
+  return { text: L.join('\n'), keys: [...b.keys] };
+}
+
+/**
+ * The reading frame (doc 66 §4.8): the clock, periods, windows summary, risk and promise tops, the mind, body, presence
+ * and year facts, and the area briefs. Fixed by the sub-techniques before any agent runs; part of the cached prefix.
+ */
+export function oracleFrame(input: OracleInput): { text: string; keys: string[] } {
+  const b = new KeyBook();
+  const L: string[] = [];
   const c = input.clock;
   L.push(
     '## CLOCK (S1)',
@@ -266,11 +316,11 @@ export function oracleSuffix(input: OracleInput, asOf: string): { text: string; 
       .filter(Boolean)
       .join(' ');
     L.push(
-      `${b.k(`risk:${r.id}`)} matter=${r.matter} what=${r.what} from: ${from || 'n/a'} who=[${r.who.join(',')}] since=${r.since ?? 'n/a'} until=${r.until ?? 'n/a'} polarity=${r.polarity} strength=${r.strength} holds=[${r.holds.map((h) => b.k(`promise:${h}`)).join(' ')}] evidence ${b.ks(r.evidence)}`,
+      `${b.k(riskKey(r.id))} matter=${r.matter} what=${r.what} from: ${from || 'n/a'} who=[${r.who.join(',')}] since=${r.since ?? 'n/a'} until=${r.until ?? 'n/a'} polarity=${r.polarity} strength=${r.strength} holds=[${r.holds.map((h) => b.k(promiseKey(h))).join(' ')}] evidence ${b.ks(r.evidence)}`,
     );
   }
   L.push(`## PROMISE (S4, the ${input.promise.length} strongest entries; the whole ledger is in the natal slice)`);
-  for (const e of input.promise) L.push(`- ${b.k(`promise:${e.id}`)} ${e.kind} ${e.matter} strength=${e.strength}`);
+  for (const e of input.promise) L.push(`- ${b.k(promiseKey(e.id))} ${e.kind} ${e.matter} strength=${e.strength}`);
   const m = input.mind;
   L.push(
     '## MIND FACTS (S6: facts only; you name the pattern)',
@@ -316,15 +366,9 @@ export function oracleSuffix(input: OracleInput, asOf: string): { text: string; 
       L.push(`- ${b.k(claimKey(cl.id))} ${cl.fact} (${range}) ${b.ks(cl.evidence)}`);
     }
     for (const d of a.dates) L.push(`- date ${d.from}..${d.to} ${d.label}`);
-    if (a.ledgerRows.length) L.push(`- risk rows: ${a.ledgerRows.map((id) => b.k(`risk:${id}`)).join(' ')}`);
-    if (a.promiseEntries.length) L.push(`- promise entries: ${a.promiseEntries.map((id) => b.k(`promise:${id}`)).join(' ')}`);
+    if (a.ledgerRows.length) L.push(`- risk rows: ${a.ledgerRows.map((id) => b.k(riskKey(id))).join(' ')}`);
+    if (a.promiseEntries.length) L.push(`- promise entries: ${a.promiseEntries.map((id) => b.k(promiseKey(id))).join(' ')}`);
   }
-  L.push('## FAMILY FINDINGS (the five family readers)');
-  for (const f of input.familyFindings) L.push(`### ${f.family}`, f.text || '(none)');
-  if (!input.familyFindings.length) L.push('(none this build)');
-  L.push('## CONFIRMS (the person\'s last answers; a No lowers that claim\'s certainty)');
-  for (const cf of input.confirms) L.push(`- ${b.k(claimKey(cf.claimId))} ${cf.answer}${cf.at ? ` (${cf.at.slice(0, 10)})` : ''}`);
-  if (!input.confirms.length) L.push('(none)');
   return { text: L.join('\n'), keys: [...b.keys] };
 }
 
@@ -336,7 +380,7 @@ export function buildOracleSlice(
   familyFindings: OracleInput['familyFindings'] = [],
 ): { slice: PreparedAgentSlice; input: OracleInput } {
   const input = buildOracleInput(ctx, briefs, familyFindings);
-  const pre = oraclePrefix(packs, ctx.sub.promise);
+  const pre = oraclePrefix(packs, ctx.sub.promise, input);
   const suf = oracleSuffix(input, ctx.asOf);
   // the family findings were written over the family packs' keys; the Oracle may cite those too
   const familyKeys = (['family.dasha', 'family.year', 'family.sky'] as const).flatMap((id) => packs[id].keys);
@@ -388,6 +432,58 @@ export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Ou
   };
 }
 
+const AGE_BAND_WORDS: Record<string, string> = {
+  under_25: 'under 25',
+  '25_35': '25 to 35',
+  '36_45': '36 to 45',
+  '46_60': '46 to 60',
+  '60_plus': '60 and over',
+};
+const WORK_WORDS: Record<string, string> = {
+  yes: 'works (employed)',
+  between_jobs: 'between jobs (no current job)',
+  own_business: 'runs their own business',
+  studying: 'studying (no job)',
+  retired: 'retired (no current job)',
+};
+/** work statuses with no current job: the cards may not assume a workplace, a team, a boss or a role */
+const NO_JOB = new Set(['between_jobs', 'studying', 'retired']);
+
+/**
+ * The person's stated facts as plain lines and the register rules they set (doc 66 replay failure 5: a retired person
+ * aged 60 and over got "executive responsibility" and "public pitches"). Selection and wording only.
+ */
+export function profileLines(p: PersonalizerInput['profile']): string[] {
+  const f = p.facts ?? {};
+  const status = f.work?.status ?? null;
+  const focus = f.focus ?? [];
+  const L = [
+    `age band: ${p.ageBand ? (AGE_BAND_WORDS[p.ageBand] ?? p.ageBand) : 'not known'}`,
+    `gender: ${p.gender ?? 'not stated (use no gendered words at all)'}`,
+    `reader: ${p.role}`,
+    `work status: ${status ? (WORK_WORDS[status] ?? status) : 'not stated (assume nothing about work)'}`,
+    `work level: ${f.work?.level ?? 'not stated'}`,
+    `love status: ${f.love ?? 'not stated (assume nothing about a partner)'}`,
+    `children: ${f.children ?? 'not stated (assume nothing about children)'}`,
+    `focus: ${focus.length ? focus.join(', ') : 'not stated'}`,
+    ...(f.place ? [`place: ${f.place}`] : []),
+    '## WHAT THESE FACTS FORBID AND REQUIRE',
+  ];
+  if (status && NO_JOB.has(status)) {
+    L.push(
+      `- This person has no current job (${status.replace('_', ' ')}). Never write of a workplace, colleagues, a team, a boss, clients, pitches, promotion, executive duties or professional timelines, unless the Oracle paragraph is explicitly about a past role (then say "in your past work"). Carry a career reading over to what this person does now: ${status === 'retired' ? 'meaning, mentoring, family, community, rest and the projects they choose' : status === 'studying' ? 'study, learning, first steps and the people around them' : 'the search for work, skills and the people who can open a door'}.`,
+    );
+  }
+  if (!f.love) L.push('- No love status was given: never assume a partner, a marriage or a break-up.');
+  if (!f.children || f.children === 'none') L.push('- No children are stated: never mention a child of theirs.');
+  if (focus.length) {
+    L.push(
+      `- Focus first: the hero and the first card you write speak to ${focus.join(' and ')} when the Oracle document has material for it; the other cards follow.`,
+    );
+  }
+  return L;
+}
+
 /** The Personalizer's suffix: the person (never the chart) and the windows summary. */
 export function personalizerSuffix(input: PersonalizerInput, asOf: string): string {
   const p = input.profile;
@@ -396,10 +492,7 @@ export function personalizerSuffix(input: PersonalizerInput, asOf: string): stri
   return [
     `TODAY: ${asOf}`,
     '## THE PERSON',
-    `age band: ${p.ageBand ?? 'not known'}`,
-    `gender: ${p.gender ?? 'not stated (use no gendered words at all)'}`,
-    `reader: ${p.role}`,
-    `facts: ${JSON.stringify(p.facts)}`,
+    ...profileLines(p),
     `declined (never mention): ${p.declined.length ? p.declined.join(', ') : 'none'}`,
     `last answers: ${p.lastConfirms.map((c) => `${claimKey(c.claimId)}=${c.answer}`).join(', ') || 'none'}`,
     `mood today: ${p.mood ?? 'not given'}`,

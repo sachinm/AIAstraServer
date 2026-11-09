@@ -81,7 +81,7 @@ describe('Personalizer validator (doc 66 §4.1)', () => {
     const v = run(card({ sources: ['diagnosis.p1', 'diagnosis.p9', 'diagnosis.p2', 'planet:D1.Sa'] }));
     expect(v.doc.cards.diagnosis!.body).toEqual(['It eases after 20 Feb 2027.', 'Finish one thing a week.']);
     expect(v.gaps.join(' ')).toMatch(/no source in the Oracle document/);
-    const short = run(card({ sources: ['diagnosis.p1'] }));
+    const short = run(card({ sources: ['diagnosis.p9'] })); // no source of the card is in the Oracle: truly unsourced
     expect(short.cardStatus.diagnosis).toBe('withheld');
   });
 
