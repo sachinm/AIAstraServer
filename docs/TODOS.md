@@ -1371,6 +1371,10 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
   background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
   they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P2 · Admin web `src/lib/themeCss.test.ts` fails to load on admin `develop` (d34221f):** "SyntaxError: Invalid or
+  unexpected token", no tests run. Seen 2026-11-08 night in the main checkout and in `wt/admin-loads` after merging
+  develop; from the theme work (`feat/admin-theme`), not the Dashboard loads branch. Owner: the theme session. Done: the
+  file loads and its tests pass in CI.
 - **P2 · The dossier's `trigger` has no `event` value.** The background build writes its dossier with `trigger:
   'request'`; a lab reader cannot tell a page-queued build from an in-request one. Owner: reading-dev. Done:
   `DossierInput.trigger` gains `'event'` and `buildEvent.ts` passes it.

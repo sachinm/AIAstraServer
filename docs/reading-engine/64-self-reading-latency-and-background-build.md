@@ -100,7 +100,20 @@ being written. It usually takes a minute or two and will appear here by itself."
 its lines, then the Oracle's plan (summary, dated steps, calendar) and, while the prompt still produces it, the essay in
 a "The full reading" card under the panels.
 
-**UI/UX.** No chart terms outside Chart details; no engine names; the loading copy never promises a time it cannot keep.
+**The reading is a dashboard, not an essay (Sachin, 2026-11-08 late night).** Nobody reads "The full reading". The
+Oracle already writes its reading under headings that name the panels (In short, Your chapters, Who you are & Your
+soul's aim, Your mind & Brain, Your body, Gifts and knots & What you struggle with, This year); the service now splits
+the text at those headings (`splitOracleSections`) and hands each panel its own section as `panel.synthesis`, a joint
+heading feeding both panels it names. The page renders that prose inside the panel, under the card lines and above the
+plan, with a **dates table** built from every dated sentence in the section (ranges and single dates), so each area of
+focus carries its own statements, its own dates and its own plan. The whole text is shown only when no panel took a
+section (an old stored output). Phase 3 keeps this shape and adds what prose cannot: a dasha timeline chart for Your
+chapters, a year calendar for This year, and a gifts/knots table, each from the stored engine rows, never from the text.
+The loading state is the same per panel: each card shows at once under a veil with the rotating Oracle lines, and the
+veil lifts when its section lands.
+
+**UI/UX.** No engine names, no internal scores or multipliers (the prompt now forbids them); the loading copy never
+promises a time it cannot keep.
 
 ## 5. Architecture after Phases 2–4
 
@@ -139,6 +152,10 @@ set on the Lambda) authorises the self-invoke; `SELF_ORACLE_MAX_OUTPUT_TOKENS` d
    invocation that is not frozen.
 4. **Built.** Web: 202 stage copy and 10 s poll, 502/503/504 as "being written", six-minute budget; render `plan` and
    the Oracle essay; tests for each state.
+4b. **Built (branch `feat/self-reading-oracle-veil`).** The code panels served at once with `oracle.status = 'pending'`;
+   per-panel veils with the rotating Oracle lines; the Oracle's sections split into `panel.synthesis` and rendered as
+   prose with a dates table inside each panel; the essay card retired; citations and empty backticks tidied; the prompt
+   forbids internal scores and inline bullet runs.
 5. Phase 2: lineman prompt and prefix take findings + claims only; measure tokens and seconds in the lab on two kundlis
    before and after (no paid call without Sachin's yes: 2 kundlis × 1 lineman ≈ $0.03).
 6. Phase 3: Oracle prompt rewritten to the §2 scope (running Mahadasha, its Antardasha relationship, per-area cards

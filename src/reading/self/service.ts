@@ -70,7 +70,7 @@ import { applyPurview, mergePurviewEntries, runPurview } from './purview.js';
 import { buildCard } from './card.js';
 import { auditCards, inStoredWindow, mergeAudits } from './audit.js';
 import { buildDossier, collectData, writeDossier, type DossierInput } from './dossier.js';
-import { runSelfOracle, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
+import { runSelfOracle, splitOracleSections, type SelfOracleContext, type SelfOracleResult } from './oracle.js';
 import { defaultLoadTransit } from '../area/boardService.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
 
@@ -539,7 +539,11 @@ export async function getBoardReading(
   const aiAudits: CodeAudit[] = [];
   const planGaps: AuditFailure[] = [];
   if (oracle.status === 'ok') {
+    // the Oracle's prose, split by its own section headings into the panels they name (doc 64 §4)
+    const sectionTitles: Record<string, string> = { diagnosis: DIAGNOSIS_TITLE, ...Object.fromEntries(Object.entries(metaMap).map(([id, m]) => [id, m.title])) };
+    const sections = oracle.text ? splitOracleSections(oracle.text, sectionTitles, panelOrder) : {};
     panels = panels.map((p) => {
+      const synthesis = sections[p.id];
       const aiValid = oracle.validUntil?.[p.id];
       const aiLines = oracle.panelLines?.[p.id] ?? [];
       const fallbackClaimIds = p.claims.filter((c) => !c.withheld).map((c) => c.id);
@@ -590,6 +594,7 @@ export async function getBoardReading(
         ...(aiValid ? { validUntil: aiValid } : {}),
         lines: allLines,
         ...(plan && (plan.summary || plan.steps.length || plan.calendar.length) ? { plan } : {}),
+        ...(synthesis ? { synthesis } : {}),
       };
     });
   }

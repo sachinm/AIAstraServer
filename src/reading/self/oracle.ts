@@ -580,6 +580,40 @@ export function parsePanelPlans(plan: string, calendar: string, allowedKeys: Rea
   return out;
 }
 
+/**
+ * Splits the Oracle's reading into the panels' sections (docs/reading-engine/64 §4). A section starts at a heading: a
+ * markdown heading, or a short line with no sentence end, whose words contain a panel title ("Who you are & Your
+ * soul's aim" feeds both `lagna` and `atma`). Text before the first heading goes to the first panel in `order`
+ * (In short). Returns only the panels that received text, each tidied of rules and empty citations.
+ */
+export function splitOracleSections(text: string, titles: Record<string, string>, order: readonly string[]): Partial<Record<string, string>> {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const entries = Object.entries(titles).map(([id, t]) => [id, norm(t)] as const);
+  const isHeading = (block: string) => /^#{1,6}\s/.test(block) || (block.length <= 90 && !/[.!?]$/.test(block) && !/\n/.test(block) && !/^[-*•]/.test(block));
+  const panelsFor = (heading: string): string[] => {
+    const h = norm(heading.replace(/^#{1,6}\s*/, ''));
+    return entries.filter(([, t]) => t && h.includes(t)).map(([id]) => id);
+  };
+  const out: Record<string, string[]> = {};
+  let current: string[] = order.length ? [order[0]!] : [];
+  for (const raw of text.split(/\n{2,}/)) {
+    const block = tidyOracleParagraph(raw);
+    if (!block) continue;
+    if (isHeading(block)) {
+      const ids = panelsFor(block);
+      if (ids.length) {
+        current = ids;
+        continue;
+      }
+      // a heading naming no panel: it stays as a sub-heading of the current section
+    }
+    for (const id of current) (out[id] ??= []).push(block);
+  }
+  const result: Partial<Record<string, string>> = {};
+  for (const [id, blocks] of Object.entries(out)) if (blocks.length) result[id] = blocks.join('\n\n');
+  return result;
+}
+
 /** The BRIEF: one line per usable claim, `[id] (certainty) text — detail {evidence}`. Withheld claims are left out. */
 export function selfBrief(reading: SelfReading, answers: Record<string, ConfirmAnswer>): { text: string; keys: Set<string> } {
   const keys = new Set<string>();
@@ -610,7 +644,21 @@ export function validateSelfText(text: string, keys: Set<string>): { text: strin
     if (!ok) dropped++;
     return ok;
   });
-  return { text: redactEngineTerms(kept.map((p) => p.replace(/\s*\{[^}]+\}/g, '')).join('\n\n')), dropped };
+  return { text: redactEngineTerms(kept.map((p) => tidyOracleParagraph(p)).join('\n\n')), dropped };
+}
+
+/**
+ * Removes a paragraph's citations and what the model wraps them in: `{keys}` and the empty backticks left behind when it
+ * wrote `` `{key}` ``, a stray space before punctuation, and horizontal rules. Never touches the words.
+ */
+export function tidyOracleParagraph(p: string): string {
+  return p
+    .replace(/`?\s*\{[^}]+\}\s*`?/g, '')
+    .replace(/`\s*`/g, '')
+    .replace(/[ \t]+([.,;:!?])/g, '$1')
+    .replace(/^\s*-{3,}\s*$/gm, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 function summarizeCall(agentId: string, model: string, res: GeminiResult, ms: number): SelfOracleStageSummary {

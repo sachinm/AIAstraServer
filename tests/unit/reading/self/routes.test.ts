@@ -141,18 +141,23 @@ describe('GET /api/self/reading', () => {
 
 describe('GET /api/self/reading with the model layer on (docs/reading-engine/64 §4)', () => {
   afterAll(() => { delete process.env.SELF_READING_MODEL; });
-  it('never runs the Oracle in the request: it queues one background build and answers 202 stage=reading, once', async () => {
+  it('never runs the Oracle in the request: it serves the code panels with the Oracle pending and queues one build, once', async () => {
     process.env.SELF_READING_MODEL = '1';
     const r1 = await get('u1');
-    expect(r1.status).toBe(202);
-    expect(await r1.json()).toMatchObject({ status: 'preparing', stage: 'reading', build: 'invoked' });
+    expect(r1.status).toBe(200);
+    const j1 = await r1.json();
+    expect(j1).toMatchObject({ status: 'ok', build: 'invoked' });
+    expect(j1.reading.oracle.status).toBe('pending');
+    expect(j1.reading.panels).toHaveLength(9);
     expect(invokes).toHaveLength(1);
     expect(invokes[0]).toMatchObject({ source: 'self-reading-build', userId: 'u1', board: 'self' });
     expect(f.markers.get('k1|self.reading')).toMatchObject({ status: 'building' });
     // the next poll finds the build running and does not queue another
     const r2 = await get('u1');
-    expect(r2.status).toBe(202);
-    expect(await r2.json()).toMatchObject({ status: 'preparing', stage: 'reading', build: 'already_building' });
+    expect(r2.status).toBe(200);
+    const j2 = await r2.json();
+    expect(j2).toMatchObject({ status: 'ok', build: 'already_building' });
+    expect(j2.reading.oracle.status).toBe('pending');
     expect(invokes).toHaveLength(1);
     // no Oracle output was stored by the page requests
     expect([...f.outputs.keys()].some((k) => k.includes('oracle'))).toBe(false);
