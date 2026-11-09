@@ -15,6 +15,8 @@ export const FACT_CATALOG: Record<string, readonly string[] | '*'> = {
   'family.children': ['none', 'expecting', 'young', 'grown'],
   'self.focus': '*',
   'place.current': '*',
+  /** the Self board's mood tap for one day, `<mood>:<YYYY-MM-DD>` (docs/reading-engine/66 §4.2; read by profile.moodFor) */
+  'self.mood': '*',
   'wizard.selfie': ['done', 'skipped'],
   'wizard.done': '*',
   'wizard.skipped': '*',
@@ -25,6 +27,10 @@ const FOCUS = new Set(['career', 'money', 'love', 'family', 'home', 'learning', 
 /** answers to the You reading's confirm question (docs/reading-engine/58 §4.1): key `self.confirm.<claimId>` */
 export const SELF_CONFIRM_PREFIX = 'self.confirm.';
 export const SELF_CONFIRM_ANSWERS = ['yes', 'partly', 'no', 'skip'] as const;
+
+/** the mood tap's values and its stored form */
+export const SELF_MOODS = ['heavy', 'mixed', 'fine'] as const;
+const SELF_MOOD_RE = /^(heavy|mixed|fine):\d{4}-\d{2}-\d{2}$/;
 
 export type FactCheck = { ok: true; value: string } | { ok: false; error: string };
 
@@ -38,6 +44,7 @@ export function checkFact(key: string, value: unknown): FactCheck {
   if (value === null) return { ok: true, value: DECLINED };
   if (typeof value !== 'string' || !value.trim() || value.length > 120) return { ok: false, error: `bad_value:${key}` };
   const v = value.trim();
+  if (key === 'self.mood') return SELF_MOOD_RE.test(v) ? { ok: true, value: v } : { ok: false, error: 'bad_value:self.mood' };
   if (key === 'self.focus') {
     const parts = v.split(',').map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0 || parts.length > 3 || parts.some((p) => !FOCUS.has(p))) return { ok: false, error: 'bad_value:self.focus' };
@@ -55,6 +62,13 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
 }
 
 /**
+ * Fact keys the person can store that are not facts about their life: `self.mood` is a tap for one day
+ * (`<mood>:<YYYY-MM-DD>`, read only through the profile pack's `moodFor`), so it never reaches the FACTS line or the
+ * technique matcher (doc 66 §4.2).
+ */
+export const NOT_A_READING_FACT: ReadonlySet<string> = new Set(['self.mood']);
+
+/**
  * The facts the person has confirmed (a confirmation time, a catalogue key), key → value, for the technique matcher
  * and the reading's FACTS line (docs/reading-engine/53 §4.3–§4.4). `declined` stays, so a caller can tell "rather not say"
  * from "not asked".
@@ -62,7 +76,7 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
 export async function confirmedFacts(prisma: PrismaClient, userId: string): Promise<Record<string, string>> {
   const { facts } = await readFacts(prisma, userId);
   const out: Record<string, string> = {};
-  for (const [k, f] of Object.entries(facts)) if (f.confirmed_at && FACT_CATALOG[k]) out[k] = f.value;
+  for (const [k, f] of Object.entries(facts)) if (f.confirmed_at && FACT_CATALOG[k] && !NOT_A_READING_FACT.has(k)) out[k] = f.value;
   return out;
 }
 

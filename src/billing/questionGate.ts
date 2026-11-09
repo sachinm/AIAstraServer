@@ -40,9 +40,13 @@ export type ReserveResult = { ok: true; ticket: QuestionTicket } | { ok: false; 
 
 /** The boards a person can ask a fresh reading of (docs/billing/03); the Work board's map is `/api/area/career`. */
 export type BoardCharge = 'self' | 'love' | 'work';
+/** what an immediate charge did: counted, a free repeat of its key, refused at the limit (the action still proceeds), or limits off */
+export type BoardChargeOutcome = 'charged' | 'free' | 'at_limit' | 'off';
 
 /** One fresh reading per board per UTC day: a double tap or a retry the same day is the same question. */
 export const boardRefreshKey = (board: BoardCharge, day: string): string => `board:${board}:refresh:${day}`;
+/** A clock switch on the Self board (docs/reading-engine/66 §4.4): one question per system per UTC day. */
+export const clockChargeKey = (day: string, system: string): string => `board:self:${day}:clock:${system}`;
 
 const FREE_TICKET = (userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
 
@@ -222,6 +226,24 @@ export class QuestionGate {
     } catch (err) {
       console.error('[plans] board refresh settle failed:', (err as Error).message);
     }
+  }
+
+  /**
+   * Takes one question under `key` and commits it at once, with chargeBoard's rules: a repeat of the key is free, at the
+   * limit nothing is counted (the action still proceeds), exempt roles and limits off are never charged. Never throws.
+   */
+  async chargeKey(userId: string, key: string): Promise<BoardChargeOutcome> {
+    if (!this.enabled) return 'off';
+    const held = await this.reserve(userId, { key });
+    if (!held.ok) return 'at_limit';
+    if (!held.ticket.id) return 'free';
+    await this.commit(held.ticket);
+    return 'charged';
+  }
+
+  /** A Self board clock switch (docs/reading-engine/66 §4.4, billing/02 §9): `board:self:<day>:clock:<system>`. */
+  async chargeClock(userId: string, day: string, system: string): Promise<BoardChargeOutcome> {
+    return this.chargeKey(userId, clockChargeKey(day, system));
   }
 
   private partsSince(): Date {

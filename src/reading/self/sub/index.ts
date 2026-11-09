@@ -5,6 +5,13 @@
  * S7 over one `SelfBuildContext`, stamps the context with what can make each output stale, and times every step. Each
  * sub-technique is a `withAgentRun` span tagged `self.sub.<name>` and the kundli; summaries hold counts and ids only.
  * A failing sub-technique leaves its slot empty and records a gap; the others still run.
+ *
+ * Round trips (doc 66 replay 2026-11-09: 9.1 s from a laptop, estimate 0.3 s): the digest, the kundli row, the systems
+ * present and the sky are read in one parallel round; the activation and the pressure inventory in the next (they need
+ * the clock, which needs the systems present); every span's `agent_runs` write goes to a sink awaited once, in
+ * parallel, at the end, instead of one awaited write per step on the critical path. The activation window stays the
+ * whole life at levels 1–2 (S2 needs the previous and next main periods, S8 a best window anywhere in the past) plus
+ * level 3 within a year of today: one query, a few hundred rows, so its cost is the round trip, not the rows.
  */
 import { createHash } from 'node:crypto';
 import { withAgentRun, type ChartUsed } from '../../../agents/registry.js';
@@ -29,13 +36,17 @@ import { subPresenceFacts } from './presence.js';
 import { subYear } from './year.js';
 import { subProfile } from './profile.js';
 import { isoWeek } from './config.js';
+import { loadPressureInventory as realLoadPressure, type PressureInventoryDetail, type PressureLoad } from './pressure.js';
 
-export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'activationFor' | 'systemsPresent' | 'loadTransit' | 'now'> {}
-export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null }
+export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'activationFor' | 'systemsPresent' | 'loadTransit' | 'now'> {
+  /** the engine's pressure inventory on the primary clock (default: kundli_data, pulled when missing or older than 7 days) */
+  loadPressure?: (prisma: SelfDeps['prisma'], kundliId: string, system: string, asOf: string) => Promise<PressureLoad>;
+}
+export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null; pressure?: PressureInventoryDetail | null }
 export interface SelfV2SubResult { ctx: SelfBuildContext; loaded: SelfV2Loaded; gaps: string[]; ms: Record<string, number> }
 
-/** the code agent the spans run under; a dedicated `self.sub` registry row belongs to the agents lane (registry.ts) */
-const SUB_AGENT = 'self.reading_panel';
+/** the code agent the spans run under (`self.sub`, src/agents/registry.ts) */
+const SUB_AGENT = 'self.sub';
 /** level 3 is read for the primary clock in asOf −12 m … +12 m (S3's "started in the last year" and the strip) */
 const SHORT_MONTHS = 12;
 
@@ -54,16 +65,25 @@ export async function runSelfSubTechniques(
   const g = gaps();
   const t0 = performance.now();
 
-  // Layer 0: one read per table
-  const view = await (deps.loadDigest ?? realLoadDigest)(prisma, kundliId);
-  if (!view) return { status: 'preparing' };
-  const [kundli, present, sky] = await Promise.all([
+  // Layer 0: one read per table, all in one parallel round
+  const [viewR, kundliR, presentR, skyR] = await Promise.allSettled([
+    (deps.loadDigest ?? realLoadDigest)(prisma, kundliId),
     prisma.kundli.findUnique({ where: { id: kundliId }, select: { preferred_dasha: true } }).catch(() => null),
     (deps.systemsPresent ?? defaultSystemsPresent)(prisma, kundliId),
     (deps.loadTransit ?? defaultLoadTransit)(prisma, kundliId, asOf).catch(() => null),
   ]);
+  // the digest decides first: no digest is "preparing" whatever the other reads did; then a failed read throws as before
+  if (viewR.status === 'rejected') throw viewR.reason;
+  const view = viewR.value;
+  if (!view) return { status: 'preparing' };
+  if (presentR.status === 'rejected') throw presentR.reason;
+  const present = presentR.value;
+  const kundli = kundliR.status === 'fulfilled' ? kundliR.value : null;
+  const sky = skyR.status === 'fulfilled' ? skyR.value : null;
   const preferred = kundli?.preferred_dasha ?? null;
   ms.load = round(performance.now() - t0);
+  // the run-log writes of every span, awaited together at the end (never one round trip per step)
+  const runLogs: Array<Promise<unknown>> = [];
 
   const span = async <T>(name: string, charts: ChartUsed[], fn: () => T | Promise<T>, summary: (v: T) => Record<string, unknown>): Promise<T | undefined> => {
     const t = performance.now();
@@ -71,7 +91,7 @@ export async function runSelfSubTechniques(
       return await withAgentRun(
         prisma,
         SUB_AGENT,
-        { userId, task: `${subTechniqueId(name)} ${asOf}`, technique: subTechniqueId(name), kundliId, input: { version: view.version, step: name }, charts },
+        { userId, task: `${subTechniqueId(name)} ${asOf}`, technique: subTechniqueId(name), kundliId, input: { version: view.version, step: name }, charts, logSink: runLogs },
         async () => {
           const value = await fn();
           return { value, output: summary(value) };
@@ -92,10 +112,17 @@ export async function runSelfSubTechniques(
     applicable: c.applicable.length,
     notApplicable: c.notApplicable.length,
   }))) as ClockResolution | undefined;
-  if (!clock) return { status: 'preparing' };
+  if (!clock) {
+    await Promise.allSettled(runLogs);
+    return { status: 'preparing' };
+  }
 
   const t1 = performance.now();
   const systems = [...new Set([clock.primary, ...clock.confirming])];
+  // the engine's pressure inventory on the primary clock, beside the activation read; a failed pull is a gap, never a stop
+  const pressureP = (deps.loadPressure ?? ((p, k, s, a) => realLoadPressure(p, k, s, a)))(prisma, kundliId, clock.primary, asOf).catch(
+    (e: Error): PressureLoad => ({ inventory: null, source: 'none', gaps: [`pressure_inventory: ${e.message?.slice(0, 120)}`] }),
+  );
   const activation = await (deps.activationFor ?? realActivationFor)(prisma, kundliId, {
     from: addMonthsIso(asOf, -12 * 90),
     to: addMonthsIso(asOf, 12 * 40),
@@ -106,11 +133,16 @@ export async function runSelfSubTechniques(
     shortSystems: [clock.primary],
     shortMaxLevel: 3,
   });
+  const pressureLoad = await pressureP;
+  for (const x of pressureLoad.gaps) g.add(x);
+  const pressure = pressureLoad.inventory && pressureLoad.inventory.clock === clock.primary ? pressureLoad.inventory : null;
+  if (pressureLoad.inventory && !pressure) g.add(`pressure_inventory: stored for ${pressureLoad.inventory.clock}, not the primary clock ${clock.primary}; not used`);
   ms.activation = round(performance.now() - t1);
 
-  const env: SubEnv = { view, activation, sky, asOf, g };
+  const env: SubEnv = { view, activation, sky, asOf, g, pressure };
   const actCharts: ChartUsed[] = [{ type: 'kundli_activation', variant: clock.primary }];
   const skyCharts: ChartUsed[] = sky ? [{ type: 'kundli_transit_overlays', variant: `${sky.from}..${sky.to}` }] : [];
+  const pressureCharts: ChartUsed[] = pressure ? [{ type: 'pressure_inventory', variant: `system=${pressure.clock}@${pressure.asOf}` }] : [];
 
   // S2 ∥ S3 ∥ S4 ∥ S6 ∥ S8 ∥ S9 ∥ S10 (S8 reads S2's running sub, so it follows S2 inside its branch)
   const s2Then8 = (async () => {
@@ -128,7 +160,7 @@ export async function runSelfSubTechniques(
   })();
   const [{ periods, presence }, windows, promise, mind, year, profile] = await Promise.all([
     s2Then8,
-    span('windows', [...actCharts, ...skyCharts, ...digestCharts(['planet'])], () => subWindows(env, clock), (w: WindowSetDetail) => ({
+    span('windows', pressure ? pressureCharts : [...actCharts, ...skyCharts, ...digestCharts(['planet'])], () => subWindows(env, clock), (w: WindowSetDetail) => ({
       rows: w.rows.length,
       strip: w.strip.length,
       heaviest: w.heaviestNow?.rowId ?? null,
@@ -194,6 +226,9 @@ export async function runSelfSubTechniques(
       ...(profile ? { profile } : {}),
     },
   };
+  const tl = performance.now();
+  await Promise.allSettled(runLogs);
+  ms.runLogs = round(performance.now() - tl);
   ms.total = round(performance.now() - t0);
-  return { ctx, loaded: { view, activation, sky, preferred }, gaps: g.list, ms };
+  return { ctx, loaded: { view, activation, sky, preferred, pressure }, gaps: g.list, ms };
 }

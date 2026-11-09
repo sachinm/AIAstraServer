@@ -89,6 +89,18 @@ describe('normalizePagePath & extractGraphqlOperation', () => {
     });
   });
 
+  it('credits board API calls without a page header to their own board (doc 66 §4.6)', () => {
+    const page = (route: string) => normalizePagePath(null, route).pagePath;
+    expect(page('/api/self/v2')).toBe('/dashboard/you');
+    expect(page('/api/self/reading')).toBe('/dashboard/you');
+    expect(page('/api/area/self')).toBe('/dashboard/you');
+    expect(page('/api/area/love')).toBe('/dashboard/love');
+    expect(page('/api/area/career')).toBe('/dashboard/work');
+    expect(page('/api/lucky/month')).toBe('/dashboard/lucky');
+    expect(page('/api/life-reading')).toBe('/dashboard/charts');
+    expect(normalizePagePath('/dashboard/you?v2=1').pagePath).toBe('/dashboard/you');
+  });
+
   it('infers canonical page from GraphQL operation name when header is absent', () => {
     expect(normalizePagePath(null, '/graphql', 'myCharts')).toEqual({
       pagePath: '/dashboard/charts',

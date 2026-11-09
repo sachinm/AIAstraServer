@@ -15,6 +15,7 @@ import { FAMILIES, FAMILIES_NOT_BUILT } from '../reading/area/career.js';
 import { SCENARIOS, YOGA_AVOID_DEFAULT, YOGA_FAVOUR_DEFAULT, type ScenarioRule } from '../reading/luckyTimes/scenarios.js';
 import { HORIZONS, SUBJECT_IDS, type SubjectId } from '../reading/packs/frames.js';
 import { SYSTEM_LABELS } from '../reading/timeline/types.js';
+import { SELF_V2_REFRESH, type SelfV2AreaId } from '../reading/self/v2types.js';
 import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
 import type { ContractInput, ContractSection, TechniqueContract, TechniqueSelectors } from './contracts.js';
 import type { LayoutId } from './layouts.js';
@@ -1897,12 +1898,25 @@ const selfV2Row = (
   algorithm,
   source: SELF_V2_SOURCE,
   code,
-  agents: ['self.reading_panel'],
+  agents: [id.startsWith('self.sub.') ? 'self.sub' : 'self.reading_panel'],
   accuracy: 'area_checks:self',
   selectors: { boards: ['you'], subjects: ['general_life_direction'], houses, vargas },
   contract: codeContract(inputs, output),
 });
-const subFindings = (ids: string): ContractInput => inp('findings', `outputs of ${ids} in the build context`, 'findings_in');
+/**
+ * What an area brief reads, by the triggers that make it stale (SELF_V2_REFRESH): the digest cards behind S4/S6/S7/S8,
+ * the clock periods, the week's sky, the year chart, the person pack. Each is read from the build context (never the
+ * database); the sections give the store its freshness, and the store key carries the stamps (build.ts layerStoreKey).
+ */
+function selfV2AreaInputs(area: string): ContractInput[] {
+  const triggers = SELF_V2_REFRESH[area as SelfV2AreaId] ?? ['digest'];
+  const out: ContractInput[] = [inp('planet', 'D1 cards behind the self.sub outputs (build context)', 'planet_card')];
+  if (triggers.some((t) => t === 'main_period' || t === 'sub_period' || t === 'sub_sub_period')) out.push(inp('activation', 'self.sub.periods and self.sub.windows dasha rows (build context)', 'activation_row'));
+  if (triggers.includes('sky_week')) out.push(inp('transit', 'self.sub.windows sky rows (build context)', 'transit_row'));
+  if (triggers.includes('year')) out.push(inp('annual', 'self.sub.year frame (build context)', 'annual_row'));
+  if (triggers.includes('profile') || triggers.includes('confirm')) out.push(inp('person', 'self.sub.profile confirms (build context)', 'person_pack'));
+  return out;
+}
 const ALL_HOUSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const SELF_V2: TechniqueDef[] = [
@@ -1979,7 +1993,11 @@ const SELF_V2: TechniqueDef[] = [
       'since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot',
       'top3 = the three rows with the highest engine strength, then the soonest until',
     ],
-    [subFindings('self.sub.periods, self.sub.windows, self.sub.promise')],
+    [
+      inp('activation', 'S2 periods and S3 primary-clock rows live at asOf (read from the build context)', 'activation_row'),
+      inp('transit', 'S3 stored sky overlay rows live at asOf (read from the build context)', 'transit_row'),
+      inp('yoga', 'S4 knots and graces naming the same planet (read from the build context)', 'yoga_row'),
+    ],
     'src/reading/self/sub/risk.ts subRisk; src/reading/self/v2words.ts RISK_WHAT',
     ALL_HOUSES,
     ['D1'],
@@ -2010,7 +2028,13 @@ const SELF_V2: TechniqueDef[] = [
       'liveTransits: S3 live overlay rows of SELF_V2_BODY_TRANSIT_PLANETS with stored house_from_lagna or house_from_moon 1, and Sade Sati',
       'sensitive: the engine flag only; none is stored, so false with a gap',
     ],
-    [inp('house', 'D1 h1, h6, h8; D30 h1', 'house_card'), inp('planet', 'D1 lagna lord, Su, Mo, Ma, Sa', 'planet_card'), inp('point', 'D1 A6', 'point_row'), subFindings('self.sub.windows')],
+    [
+      inp('house', 'D1 h1, h6, h8; D30 h1', 'house_card'),
+      inp('planet', 'D1 lagna lord, Su, Mo, Ma, Sa', 'planet_card'),
+      inp('point', 'D1 A6', 'point_row'),
+      inp('activation', 'running L1-L3 periods of the primary clock on SELF_V2_BODY_HOUSES', 'activation_row'),
+      inp('transit', 'S3 live overlay rows over lagna and Moon (read from the build context)', 'transit_row'),
+    ],
     'src/reading/self/sub/body.ts subBodyFacts',
     [1, 6, 8],
     ['D1', 'D30'],
@@ -2054,7 +2078,7 @@ const SELF_V2: TechniqueDef[] = [
       'loadProfilePack: auth (birth date, gender, role) and person_facts in two reads',
       'Age is calendar arithmetic over the typed birth date, banded by SELF_AGE_BANDS; gender null when not stated; declined keys listed; the last five confirm answers; the mood of today only; a stable hash',
     ],
-    [inp('text', 'auth and person_facts of the user', 'text_in')],
+    [inp('person', 'auth (birth date, gender, role) and person_facts of the user', 'person_pack')],
     'src/reading/self/sub/profile.ts subProfile; src/reading/person/profile.ts loadProfilePack',
     [1],
     ['D1'],
@@ -2085,7 +2109,7 @@ const SELF_V2: TechniqueDef[] = [
         'Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person',
         `Horizon ${horizon}; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.${area}`,
       ],
-      [subFindings('self.sub.*')],
+      selfV2AreaInputs(area),
       `src/reading/self/areas/${area}.ts; areas/index.ts buildAreaBriefs`,
       [1],
       ['D1'],
@@ -2094,7 +2118,97 @@ const SELF_V2: TechniqueDef[] = [
   ),
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2];
+// ---------------------------------------------------------------------------------------------------------------------
+// Self v2 agents (doc 66 §4.8)
+// Layer 3 of the You board v2: the Oracle (three calls over one cached natal prefix), the Personalizer and the hero it
+// writes. The sub-techniques and areas (Layers 1–2) are another block, appended by their own lane.
+// ---------------------------------------------------------------------------------------------------------------------
+const SELF_V2_AGENTS_SOURCE = 'docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers';
+const SELF_V2_NATAL_INPUTS: ContractInput[] = [
+  inp('house', 'D1 and divisional house cards 1..12 (the family.rasi and family.varga packs)', 'house_card'),
+  inp('planet', 'D1 and divisional planet cards with avasthas and dasha_charter', 'planet_card'),
+  inp('yoga', 'D1 yogas, doshas and cancellations behind the promise ledger', 'yoga_row'),
+  inp('point', 'D1/D9 chara karakas, arudha padas and special lagnas', 'point_row'),
+  inp('star', 'Moon star, lagna star, gandanta', 'star_profile'),
+  inp('annual', 'the running year chart and its short clock (S9)', 'annual_row'),
+  inp('activation', 'the reading clock L1-L3, its boundaries and the windows around today (S2, S3)', 'activation_row'),
+];
+const SELF_V2_AGENTS: TechniqueDef[] = [
+  {
+    id: 'self.v2.oracle',
+    title: 'You board v2: Oracle over the ledgers and the area briefs',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('natal', 'D1'), c('divisional', 'D9'), c('divisional', 'D10'), c('divisional', 'D30'), c('dasha', 'reading clock'), c('annual', 'year chart'), c('transit', 'sky overlay')],
+    algorithm: [
+      'Builds every agent slice from the build context and the rows the sub-techniques loaded (no database read): the five family packs (family.sky padded past 1,024 tokens with its window rows) and the Oracle prefix (the family.rasi and family.varga natal packs plus the whole promise ledger), stable per digest version',
+      'Warms every prefix in parallel in the explicit cache before the first agent call; each region has its llm_cache_entries row and the 45-minute recycler is informed after each call',
+      'Runs the five family readers in parallel, read through reading_findings_cache',
+      'Runs the Oracle as three parallel calls of three or four areas each over the same cached prefix, the suffix carrying the clock, periods, windows summary, the twelve heaviest risk-ledger rows, the eight strongest promise entries, the mind, body, presence and year facts, the eleven area briefs, the family findings and the confirms',
+      'Merges the three JSON documents and validates them with the area validator: every evidence key from the input (claim ids keep their claim: prefix), every date inside a period, window or year span the input carries, caps; up to three patterns for mind and stuck',
+      'Stores only a complete, validated document in technique_outputs, keyed by digest version, clock, boundary stamps, input hash and prompt hash',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/build.ts runSelfV2Build; src/reading/self/v2/oracle.ts runOracleV2; src/reading/self/v2/slices.ts buildSelfV2Slices',
+    agents: ['self.oracle.v2', 'family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: { inputs: SELF_V2_NATAL_INPUTS, system: 'src/reading/prompts/oracle/self-areas-v2.md', user: ['TODAY', 'FACTS'], output: 'self_v2_oracle.v1' },
+  },
+  {
+    id: 'self.v2.personalizer',
+    title: 'You board v2: Personalizer cards for this person',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('dasha', 'reading clock'), c('transit', 'windows around today')],
+    algorithm: [
+      'Takes the validated Oracle document as the cached prefix (stable per Oracle key) and the profile pack (age band, stated gender or none, role, facts, declined topics, last confirms, mood) with the windows summary as the suffix',
+      'Writes one card per area (headline, two or three short paragraphs, patterns, the four-step ladder best, practical, drift, floor, dates copied from the Oracle) in plain second person, JSON by schema',
+      'Validates every headline and body sentence against a source (an Oracle paragraph id or evidence key), every date against the Oracle document, and rejects chart terms, engine names, internal ids, medical words and, when no gender is stated, gendered words; a card with no body is withheld and the Oracle headline, redacted, stands in',
+      'Stores the hero and cards in technique_outputs under the Oracle key, the profile hash and the prompt hash, so a profile change re-runs only this step',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/personalizer.ts runPersonalizer; src/reading/self/v2/personalizerValidate.ts validatePersonalDoc',
+    agents: ['self.personalizer'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: {
+      inputs: [inp('activation', 'the windows summary around today (S3): heaviest now, eases at, next support from', 'activation_row')],
+      system: 'src/reading/prompts/personalizer/self.md',
+      user: ['TODAY', 'FACTS'],
+      output: 'self_v2_cards.v1',
+    },
+  },
+  {
+    id: 'self.v2.hero',
+    title: 'You board v2: the hero (tone, one dated sentence, one question)',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('dasha', 'reading clock'), c('transit', 'windows around today')],
+    algorithm: [
+      'The Personalizer writes the tone (demanding, heavy, mixed, easing, steady or open), one sentence naming the life area and the date it changes, and one yes-or-no question on the strongest dated claim of the live areas',
+      'Code fills the six-month window strip, the easing date and the next check from the stored windows',
+      'The question is kept only when its claim id is in the Oracle document; the hero is withheld when the live areas are missing, all only possible, or split between strong and possible',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/personalizerValidate.ts validateHero, heroSplit',
+    agents: ['self.personalizer'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: {
+      inputs: [inp('activation', 'the six-month window strip and the easing date (S3)', 'activation_row')],
+      system: 'src/reading/prompts/personalizer/self.md',
+      user: ['TODAY', 'FACTS'],
+      output: 'self_v2_hero.v1',
+    },
+  },
+];
+
+
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2, ...SELF_V2_AGENTS];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

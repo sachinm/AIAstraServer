@@ -1,6 +1,10 @@
 /**
- * S3 `self.sub.windows` (docs/reading-engine/66 §4.8, degraded mode of §8): dated windows around asOf. Until the
- * engine's `pressure_inventory` (`kundli_pressure`) is stored, the rows are the primary clock's activation periods
+ * S3 `self.sub.windows` (docs/reading-engine/66 §4.8): dated windows around asOf. When the engine's `pressure_inventory`
+ * on the primary clock is stored (`kundli_data`, src/reading/self/sub/pressure.ts), its rows are the windows as the
+ * engine graded them (houses touched, matters, polarity, strength 1–3, true dates) and `degraded` is false. Rahu and
+ * Ketu periods always press in the engine's table; that is kept as given.
+ *
+ * Degraded mode (§8, no inventory stored or the pull failed): the rows are the primary clock's activation periods
  * (levels 1–3, houses as stored) and the stored sky overlay (ingresses with `house_from_lagna` / `house_from_moon`,
  * Sade Sati and dhaiya spans). Polarity is the engine's functional-nature label of the period lord (`FUNCTIONAL_POLARITY`);
  * a transit or rasi period has no engine polarity, so it is 'mixed'. The engine stores no 1–3 strength grade yet, so
@@ -113,13 +117,44 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
   return rows.sort((a, b) => a.from.localeCompare(b.from) || (a.level ?? 9) - (b.level ?? 9) || a.rowId.localeCompare(b.rowId));
 }
 
+/** the engine's inventory rows overlapping asOf ± 36 months, as S3 rows (values carried, nothing recomputed) */
+export function pressureWindowRows(env: SubEnv): WindowRow[] {
+  const inv = env.pressure;
+  if (!inv) return [];
+  const lo = addMonthsIso(env.asOf, -WINDOW_RANGE_MONTHS);
+  const hi = addMonthsIso(env.asOf, WINDOW_RANGE_MONTHS);
+  return inv.rows
+    .filter((r) => overlaps(r.from, r.to, lo, hi))
+    .map((r) => ({
+      rowId: r.id,
+      kind: r.kind,
+      ...(r.level ? { level: r.level } : {}),
+      planet: r.planet || null,
+      houses: [...r.housesTouched],
+      houseFromMoon: r.houseFromMoon,
+      matters: [...r.matters],
+      polarity: r.polarity,
+      strength: r.strength,
+      from: r.from,
+      to: r.to,
+      // the engine keeps every row's true dates, so "since" and "until" can always be said
+      sinceKnown: true,
+      untilKnown: true,
+      evidence: r.evidence.length ? [...r.evidence] : [r.id],
+    }))
+    .sort((a, b) => a.from.localeCompare(b.from) || (a.level ?? 9) - (b.level ?? 9) || a.rowId.localeCompare(b.rowId));
+}
+
 const byWeight = (a: WindowRow, b: WindowRow) => b.strength - a.strength || a.to.localeCompare(b.to) || a.rowId.localeCompare(b.rowId);
 
 export function subWindows(env: SubEnv, clock: ClockResolution): WindowSetDetail {
-  const rows = windowRows(env, clock);
+  const fromEngine = Boolean(env.pressure && env.pressure.clock === clock.primary && env.pressure.rows.length);
+  const rows = fromEngine ? pressureWindowRows(env) : windowRows(env, clock);
   const asOf = env.asOf;
-  env.g.add('windows: kundli_pressure not stored; built from kundli_activation and the sky overlay (degraded)');
-  env.g.add('windows: the engine stores no strength grade; every row is 2');
+  if (!fromEngine) {
+    env.g.add('windows: pressure_inventory not stored; built from kundli_activation and the sky overlay (degraded)');
+    env.g.add('windows: the engine stores no strength grade; every row is 2');
+  }
   const stripLo = addMonthsIso(asOf, -STRIP_MONTHS);
   const stripHi = addMonthsIso(asOf, STRIP_MONTHS);
   const strip = rows.filter((w) => overlaps(w.from, w.to, stripLo, stripHi));
@@ -140,7 +175,7 @@ export function subWindows(env: SubEnv, clock: ClockResolution): WindowSetDetail
     startedLast12m: startedLast12m.map(toRef),
     endingNext6m: endingNext6m.map(toRef),
     byMatter,
-    degraded: true,
+    degraded: !fromEngine,
     rows,
   };
 }

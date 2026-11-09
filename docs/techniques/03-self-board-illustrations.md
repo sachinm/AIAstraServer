@@ -1087,7 +1087,7 @@ flowchart LR
 
 ---
 
-## Page 26 of 47 — `self.sub.clock`: Self v2 S1: the primary dasha clock and its confirming clocks
+## Page 26 of 50 — `self.sub.clock`: Self v2 S1: the primary dasha clock and its confirming clocks
 
 | Field | Value |
 |---|---|
@@ -1104,7 +1104,7 @@ flowchart LR
 
 ---
 
-## Page 27 of 47 — `self.sub.periods`: Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries
+## Page 27 of 50 — `self.sub.periods`: Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries
 
 | Field | Value |
 |---|---|
@@ -1122,7 +1122,7 @@ flowchart LR
 
 ---
 
-## Page 28 of 47 — `self.sub.windows`: Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)
+## Page 28 of 50 — `self.sub.windows`: Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)
 
 | Field | Value |
 |---|---|
@@ -1140,7 +1140,7 @@ flowchart LR
 
 ---
 
-## Page 29 of 47 — `self.sub.promise`: Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags
+## Page 29 of 50 — `self.sub.promise`: Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags
 
 | Field | Value |
 |---|---|
@@ -1158,7 +1158,7 @@ flowchart LR
 
 ---
 
-## Page 30 of 47 — `self.sub.risk`: Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)
+## Page 30 of 50 — `self.sub.risk`: Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)
 
 | Field | Value |
 |---|---|
@@ -1176,7 +1176,7 @@ flowchart LR
 
 ---
 
-## Page 31 of 47 — `self.sub.mind_facts`: Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only
+## Page 31 of 50 — `self.sub.mind_facts`: Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only
 
 | Field | Value |
 |---|---|
@@ -1193,7 +1193,7 @@ flowchart LR
 
 ---
 
-## Page 32 of 47 — `self.sub.body_facts`: Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)
+## Page 32 of 50 — `self.sub.body_facts`: Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)
 
 | Field | Value |
 |---|---|
@@ -1211,7 +1211,7 @@ flowchart LR
 
 ---
 
-## Page 33 of 47 — `self.sub.presence_facts`: Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)
+## Page 33 of 50 — `self.sub.presence_facts`: Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)
 
 | Field | Value |
 |---|---|
@@ -1228,7 +1228,7 @@ flowchart LR
 
 ---
 
-## Page 34 of 47 — `self.sub.year`: Self v2 S9: the year frame from the stored annual row covering today
+## Page 34 of 50 — `self.sub.year`: Self v2 S9: the year frame from the stored annual row covering today
 
 | Field | Value |
 |---|---|
@@ -1245,7 +1245,7 @@ flowchart LR
 
 ---
 
-## Page 35 of 47 — `self.sub.profile`: Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)
+## Page 35 of 50 — `self.sub.profile`: Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)
 
 | Field | Value |
 |---|---|
@@ -1261,7 +1261,7 @@ flowchart LR
 
 ---
 
-## Page 36 of 47 — `self.v2.now`: Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)
+## Page 36 of 50 — `self.v2.now`: Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1278,7 +1278,7 @@ flowchart LR
 
 ---
 
-## Page 37 of 47 — `self.v2.stuck`: Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief)
+## Page 37 of 50 — `self.v2.stuck`: Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1295,7 +1295,7 @@ flowchart LR
 
 ---
 
-## Page 38 of 47 — `self.v2.chapter`: Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief)
+## Page 38 of 50 — `self.v2.chapter`: Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1312,7 +1312,7 @@ flowchart LR
 
 ---
 
-## Page 39 of 47 — `self.v2.diagnosis`: Self v2 area: In short (selection over the self.sub outputs into an AreaBrief)
+## Page 39 of 50 — `self.v2.diagnosis`: Self v2 area: In short (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1329,7 +1329,7 @@ flowchart LR
 
 ---
 
-## Page 40 of 47 — `self.v2.lagna`: Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief)
+## Page 40 of 50 — `self.v2.lagna`: Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1346,7 +1346,7 @@ flowchart LR
 
 ---
 
-## Page 41 of 47 — `self.v2.mind`: Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief)
+## Page 41 of 50 — `self.v2.mind`: Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1363,7 +1363,7 @@ flowchart LR
 
 ---
 
-## Page 42 of 47 — `self.v2.body`: Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)
+## Page 42 of 50 — `self.v2.body`: Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1380,7 +1380,7 @@ flowchart LR
 
 ---
 
-## Page 43 of 47 — `self.v2.drive`: Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief)
+## Page 43 of 50 — `self.v2.drive`: Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1397,7 +1397,7 @@ flowchart LR
 
 ---
 
-## Page 44 of 47 — `self.v2.presence`: Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief)
+## Page 44 of 50 — `self.v2.presence`: Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1414,7 +1414,7 @@ flowchart LR
 
 ---
 
-## Page 45 of 47 — `self.v2.yogas`: Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)
+## Page 45 of 50 — `self.v2.yogas`: Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1431,7 +1431,7 @@ flowchart LR
 
 ---
 
-## Page 46 of 47 — `self.v2.chapters`: Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief)
+## Page 46 of 50 — `self.v2.chapters`: Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1448,7 +1448,7 @@ flowchart LR
 
 ---
 
-## Page 47 of 47 — `self.v2.year`: Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)
+## Page 47 of 50 — `self.v2.year`: Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1462,3 +1462,54 @@ flowchart LR
 1. Pure selection over ctx.sub (no database, no digest read): the year frame lagna, year lord and short clock; nothing when noCoverage
 2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
 3. Horizon twelve_months; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.year
+
+---
+
+## Page 48 of 50 — `self.v2.oracle`: You board v2: Oracle over the ledgers and the area briefs
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:D1`, `divisional:D9/D10/D30`, `dasha:reading clock`, `annual:year chart`, `transit:sky overlay` |
+| **Inputs** | house, planet, yoga, point, star, annual, activation (the natal slice + promise ledger as the cached prefix; the dated build context as the suffix) |
+| **Agent** | `self.oracle.v2` + `family.rasi/varga/dasha/year/sky` (model, `oracle/self-areas-v2.md`) |
+| **Output** | `self_v2_oracle.v1` |
+| **Code** | `src/reading/self/v2/build.ts runSelfV2Build; v2/oracle.ts runOracleV2; v2/slices.ts` |
+
+1. Builds every slice from the build context (no database read); warms the prefixes in parallel before any call
+2. Runs the five family readers, then three parallel Oracle calls of three or four areas each over one cached prefix
+3. Merges and validates (keys from the input, claim: ids kept, dates inside stored windows, caps, up to three patterns); stores only a complete document
+
+---
+
+## Page 49 of 50 — `self.v2.personalizer`: You board v2: Personalizer cards for this person
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:reading clock`, `transit:windows around today` |
+| **Inputs** | the validated Oracle document (cached prefix), the profile pack and the windows summary |
+| **Agent** | `self.personalizer` (model, `personalizer/self.md`) |
+| **Output** | `self_v2_cards.v1` |
+| **Code** | `src/reading/self/v2/personalizer.ts; v2/personalizerValidate.ts` |
+
+1. Writes one card per area in plain second person: headline, two or three short paragraphs, patterns, the four-step ladder, dates copied from the Oracle
+2. Every sentence cites an Oracle paragraph or key; chart terms, internal ids, medical words and (with no stated gender) gendered words are dropped; a card with no body is withheld
+3. Stored under the Oracle key, the profile hash and the prompt hash
+
+---
+
+## Page 50 of 50 — `self.v2.hero`: You board v2: the hero (tone, one dated sentence, one question)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:reading clock`, `transit:windows around today` |
+| **Inputs** | the six-month window strip and the easing date |
+| **Agent** | `self.personalizer` (model, `personalizer/self.md`) |
+| **Output** | `self_v2_hero.v1` |
+| **Code** | `src/reading/self/v2/personalizerValidate.ts validateHero, heroSplit` |
+
+1. The Personalizer writes the tone, one sentence with the life area and the date, and one yes-or-no question on the strongest dated claim
+2. Code fills the strip, the easing date and the next check
+3. Withheld when the live areas are missing, all only possible, or split between strong and possible

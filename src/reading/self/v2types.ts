@@ -33,18 +33,18 @@ export type SelfV2AreaId =
 export type SelfV2Group = 'now' | 'you' | 'time';
 
 export const SELF_V2_AREAS: ReadonlyArray<{ id: SelfV2AreaId; group: SelfV2Group; title: string; technique: string }> = [
-  { id: 'now', group: 'now', title: 'Right now', technique: 'self.now' },
-  { id: 'stuck', group: 'now', title: 'Where you get stuck', technique: 'self.stuck' },
-  { id: 'chapter', group: 'now', title: 'This chapter', technique: 'self.chapter' },
-  { id: 'diagnosis', group: 'you', title: 'In short', technique: 'self.diagnosis' },
-  { id: 'lagna', group: 'you', title: 'Who you are', technique: 'self.lagna' },
-  { id: 'mind', group: 'you', title: 'How you think', technique: 'self.mind' },
-  { id: 'body', group: 'you', title: 'Body & energy', technique: 'self.body' },
-  { id: 'drive', group: 'you', title: 'Drive & ambition', technique: 'self.drive' },
-  { id: 'presence', group: 'you', title: 'How you come across', technique: 'self.presence' },
-  { id: 'yogas', group: 'you', title: 'Gifts & knots', technique: 'self.yogas' },
-  { id: 'chapters', group: 'time', title: 'Chapters', technique: 'self.chapters' },
-  { id: 'year', group: 'time', title: 'This year', technique: 'self.year' },
+  { id: 'now', group: 'now', title: 'Right now', technique: 'self.v2.now' },
+  { id: 'stuck', group: 'now', title: 'Where you get stuck', technique: 'self.v2.stuck' },
+  { id: 'chapter', group: 'now', title: 'This chapter', technique: 'self.v2.chapter' },
+  { id: 'diagnosis', group: 'you', title: 'In short', technique: 'self.v2.diagnosis' },
+  { id: 'lagna', group: 'you', title: 'Who you are', technique: 'self.v2.lagna' },
+  { id: 'mind', group: 'you', title: 'How you think', technique: 'self.v2.mind' },
+  { id: 'body', group: 'you', title: 'Body & energy', technique: 'self.v2.body' },
+  { id: 'drive', group: 'you', title: 'Drive & ambition', technique: 'self.v2.drive' },
+  { id: 'presence', group: 'you', title: 'How you come across', technique: 'self.v2.presence' },
+  { id: 'yogas', group: 'you', title: 'Gifts & knots', technique: 'self.v2.yogas' },
+  { id: 'chapters', group: 'time', title: 'Chapters', technique: 'self.v2.chapters' },
+  { id: 'year', group: 'time', title: 'This year', technique: 'self.v2.year' },
 ];
 
 /** what makes an area's output stale (doc 66 mockup §5); the store key carries the stamp of each */
@@ -539,4 +539,145 @@ export interface WindowRow extends WindowRef {
 /** S3 output with its rows (assignable to `WindowSet`) */
 export interface WindowSetDetail extends WindowSet {
   rows: WindowRow[];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// API additions (step 5): GET /api/self/v2 (docs/reading-engine/66 §4.5). The web mirrors this type exactly.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type SelfV2Status = 'ok' | 'pending' | 'preparing' | 'no_kundli';
+
+export interface SelfV2ClockView {
+  /** the clock the board is read on */
+  system: string;
+  label: string;
+  /** ClockResolution['reason'] */
+  reason: string;
+  /** one plain line saying why this clock */
+  reasonLine: string;
+  /** the clocks the person may switch to: the ones that apply plus the configured confirming clocks */
+  applicable: Array<{ system: string; label: string; line: string }>;
+  /** conditional clocks the engine says do not apply (or did not check): greyed, unselectable, with the reason */
+  notApplicable: Array<{ system: string; label: string; reason: string }>;
+}
+
+export interface SelfV2AreaView {
+  id: SelfV2AreaId;
+  group: SelfV2Group;
+  title: string;
+  status: CardStatus;
+  card: PersonalCard | null;
+  /** the code lines of the matching legacy panel, when available */
+  floor: string[];
+  /**
+   * How long this area's reading holds (final integration): the span of the shortest clock period that can make it
+   * stale (SELF_V2_REFRESH), the year span for `year`, 'always' for a standing area; null when the build stored no frame.
+   */
+  range?: { from: string; to: string } | 'always' | null;
+  /** the range in words: "True until 1 Jan 2027", "Always", "This year: 9 Sep 2026 – 9 Sep 2027"; '' when unknown */
+  rangeLabel?: string;
+  /** "Chart details": the Oracle's own text for this area, engine names redacted */
+  details: { headline?: string; paragraphs?: string[]; evidence: string[]; certainty?: string };
+}
+
+export interface SelfV2Response {
+  status: SelfV2Status;
+  builtAt: string | null;
+  nextCheck: string | null;
+  clock: SelfV2ClockView;
+  /** the stored hero; `supporting` (final integration) names the areas whose cards ground it, for "Why we think so" */
+  hero: (HeroDoc & { supporting?: SelfV2AreaId[] }) | null;
+  areas: SelfV2AreaView[];
+  /** `role` (final integration): practitioners see evidence keys under Chart details */
+  profile: { ageBand: AgeBand | null; hasGender: boolean; missing: string[]; role?: ReaderRole };
+  /** the running sub period's end date (S2 `runningSub.to`), for "Sub-chapter ends"; null when not known */
+  subChapterEnds?: string | null;
+  usage?: unknown;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1c additions (doc 66 §4.8 Layer 3: slices, warm-up, Oracle ×3, Personalizer, build order). Appended; nothing above
+// changes.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** the five family readers among the v2 agents */
+export type SelfV2FamilyAgentId = Extract<SelfV2AgentId, `family.${string}`>;
+
+/** an agent slice with what the warm-up and the call need: the model and the system prompt (part of the cache key) */
+export interface PreparedAgentSlice extends AgentSlice {
+  model: string;
+  system: string;
+  /** chars / 4, the estimate the Lab shows before a call */
+  estTokens: { prefix: number; suffix: number };
+  /** evidence keys the slice carries in `{braces}`; the validator's allowed set */
+  keys: string[];
+}
+
+/** one warmed region (Gemini explicit cache); `name` null when caching is off or creation failed */
+export interface WarmedRegion {
+  agent: SelfV2AgentId;
+  prefixHash: string;
+  model: string;
+  name: string | null;
+  ms: number;
+}
+
+/** per agent call: wall time, tokens and cost (AGENTS.md machinery rule 6) */
+export interface SelfV2AgentTiming {
+  agent: SelfV2AgentId;
+  /** 'oracle.a' | 'oracle.b' | 'oracle.c' for the three Oracle calls, else the agent id */
+  call: string;
+  status: 'ok' | 'cached' | 'failed' | 'skipped';
+  ms: number;
+  promptTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  thoughtTokens: number;
+  costUsd: number;
+}
+
+export type SelfV2OracleStatus = 'ok' | 'partial' | 'failed' | 'budget_exceeded';
+
+/** what the v2 Oracle step returns and stores (only `ok` is stored) */
+export interface SelfV2OracleResult {
+  status: SelfV2OracleStatus;
+  output: OracleV2Output | null;
+  /** staff-only validator reasons */
+  gaps: string[];
+  withheld: string[];
+  promptName: 'oracle/self-areas-v2';
+  promptHash: string;
+  model: string;
+  calls: SelfV2AgentTiming[];
+  familyFindings: Array<{ family: string; text: string }>;
+  spentUsd: number;
+  cached: boolean;
+}
+
+/** the stored Personalizer output (`self.v2.cards`) */
+export interface SelfV2CardsResult {
+  status: 'ok' | 'failed' | 'budget_exceeded';
+  doc: PersonalCardDoc | null;
+  /** per area: ok, or withheld (the Oracle headline under redaction stands in) */
+  cardStatus: Partial<Record<SelfV2AreaId, CardStatus>>;
+  gaps: string[];
+  promptHash: string;
+  model: string;
+  call: SelfV2AgentTiming | null;
+  cached: boolean;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Final integration additions (branch feat/self-v2-integrate). Appended; nothing above changes.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * What the API needs from the build context besides the cards: the stamps, the clock periods (S2) and the year frame
+ * (S9), stored beside the cards so GET /api/self/v2 can say how long each area holds without re-running anything.
+ */
+export interface SelfV2Frame {
+  asOf: IsoDate;
+  stamps: SelfBuildStamps;
+  periods: PeriodFrame | null;
+  year: YearFrame | null;
 }

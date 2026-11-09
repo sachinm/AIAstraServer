@@ -914,3 +914,155 @@ export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | nu
   if (!raw || !/^[0-9a-fA-F]{64}$/.test(raw)) return null;
   return Buffer.from(raw, 'hex');
 }
+
+/**
+ * Self board v2 routes (docs/reading-engine/66 §4.5). Env `SELF_V2_ENABLED`: '1' on, '0' off; unset follows
+ * `AREA_ENABLED` like the other board routes.
+ */
+export function isSelfV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = env.SELF_V2_ENABLED?.trim();
+  if (v === '1') return true;
+  if (v === '0') return false;
+  return env.AREA_ENABLED?.trim() === '1';
+}
+
+/**
+ * The person facts the Self Personalizer benefits from, in the order the board asks for a missing one (doc 66 §2,
+ * doc 52 §3). Env `SELF_V2_FACT_KEYS` (comma list of `FACT_CATALOG` keys).
+ */
+export function getSelfV2FactKeys(): string[] {
+  return listEnv('SELF_V2_FACT_KEYS', ['work.status', 'love.status', 'family.children', 'self.focus']);
+}
+
+/**
+ * Self board v2 (docs/reading-engine/66 §4.8): the self build event also runs `runSelfV2Build` after the existing build.
+ * Env: `SELF_V2_BUILD=1` turns it on; default off. The board charge stays the existing one per board per day.
+ */
+export function isSelfV2BuildEnabled(): boolean {
+  const raw = process.env.SELF_V2_BUILD?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+/**
+ * The engine's `pressure_inventory` pull for the Self v2 windows (docs/reading-engine/66 §4.3). Env
+ * `SELF_V2_PRESSURE_PULL`: '0' / 'false' / 'off' turns the pull off (S3 stays degraded); default on. A failed pull never
+ * fails the build.
+ */
+export function isSelfV2PressurePullEnabled(): boolean {
+  const raw = process.env.SELF_V2_PRESSURE_PULL?.trim().toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/** A stored pressure inventory older than this is pulled again. Env `SELF_V2_PRESSURE_MAX_AGE_DAYS` (1–60; default 7). */
+export function getSelfV2PressureMaxAgeDays(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_MAX_AGE_DAYS', 7, 1, 60);
+}
+
+/** After a failed pull, the next attempt waits this long. Env `SELF_V2_PRESSURE_RETRY_HOURS` (1–168; default 24). */
+export function getSelfV2PressureRetryHours(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_RETRY_HOURS', 24, 1, 168);
+}
+
+/** The pull's own time limit inside a build. Env `SELF_V2_PRESSURE_TIMEOUT_MS` (1000–60000; default 15000). */
+export function getSelfV2PressureTimeoutMs(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_TIMEOUT_MS', 15000, 1000, 60000);
+}
+
+/** The Self v2 Personalizer's model (docs/reading-engine/66 §4.1). Env: `SELF_PERSONALIZER_MODEL` (default gemini-3.1-flash-lite). */
+export function getSelfPersonalizerModel(): string {
+  return process.env.SELF_PERSONALIZER_MODEL?.trim() || 'gemini-3.1-flash-lite';
+}
+
+/**
+ * Output cap of the Self v2 Personalizer. Env: `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (integer, 500–16000; default 8000).
+ * Measured on the doc 66 replay (2026-11-09): the complete hero plus eleven cards of profile c came to 4,023 output
+ * tokens (11.8 k chars of JSON); on Gemini 3.x the thought tokens count against this cap, and profiles a and b thought
+ * ≈ 2.2 k at `low` and were cut at 5,000. The Personalizer now asks for `minimal` thinking; 8,000 leaves ≈ 4 k for the
+ * cards at their longest (120-word bodies) plus thought.
+ */
+export function getSelfPersonalizerMaxOutputTokens(): number {
+  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 8000, 500, 16000);
+}
+
+/**
+ * The Personalizer's one retry after a `MAX_TOKENS` finish: `minimal` thinking and this cap. Env
+ * `SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS` (integer, 1000–16000; default 12000). A truncated document is never stored.
+ */
+export function getSelfPersonalizerRetryMaxOutputTokens(): number {
+  return parseClampedIntEnv('SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS', 12000, 1000, 16000);
+}
+
+/**
+ * Role words a Self v2 card may not use for a person whose stated work status contradicts them (doc 66 replay
+ * 2026-11-09 failure 5: "executive responsibility", "public pitches", "workplace friction" for a retired person). A
+ * reviewed words table, not astrology: the Personalizer validator drops a sentence that carries one. Env
+ * `SELF_V2_ROLE_WORDS_NOT_WORKING` (comma list of words or phrases; matched whole-word, case-insensitive) applies when
+ * `work.status` is one of `SELF_V2_NOT_WORKING_STATUSES` (default retired, between_jobs, studying: the `work.status` values in src/profile/facts.ts).
+ */
+export function getSelfV2RoleWordsNotWorking(): string[] {
+  return listEnv('SELF_V2_ROLE_WORDS_NOT_WORKING', [
+    'executive',
+    'executives',
+    'pitch',
+    'pitches',
+    'workplace',
+    'office politics',
+    'boss',
+    'manager',
+    'managerial',
+    'promotion',
+    'colleagues',
+    'coworkers',
+    'co-workers',
+    'professional timelines',
+    'professional reputation',
+    'professional leadership',
+    'career ladder',
+    'your career',
+    'your job',
+    'your team',
+    'clients',
+    'payroll',
+    'quarterly',
+  ]);
+}
+
+/** Work statuses under which `getSelfV2RoleWordsNotWorking` applies. Env `SELF_V2_NOT_WORKING_STATUSES`. */
+export function getSelfV2NotWorkingStatuses(): string[] {
+  return listEnv('SELF_V2_NOT_WORKING_STATUSES', ['retired', 'between_jobs', 'studying']);
+}
+
+/**
+ * Words the Self v2 body card may not carry (doc 61 §3: energy and wear, never a diagnosis or diet and medicine advice).
+ * Env `SELF_V2_BODY_ADVICE_WORDS` (comma list; whole-word, case-insensitive). The general medical list
+ * (`MEDICAL_WORDS` in personalizerValidate.ts) applies to every card.
+ */
+export function getSelfV2BodyAdviceWords(): string[] {
+  return listEnv('SELF_V2_BODY_ADVICE_WORDS', [
+    'diet',
+    'dietary',
+    'food',
+    'foods',
+    'spicy',
+    'meal',
+    'meals',
+    'eat',
+    'eating',
+    'fasting',
+    'inflammatory',
+    'inflammation',
+    'digestive',
+    'digestion',
+    'intestinal',
+    'nervous system',
+    'medication',
+    'medicine',
+    'supplement',
+    'supplements',
+    'symptom',
+    'symptoms',
+    'diagnosis',
+    'dose',
+    'hydration',
+  ]);
+}

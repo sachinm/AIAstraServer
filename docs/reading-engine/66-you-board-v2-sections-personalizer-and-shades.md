@@ -415,6 +415,67 @@ which graces hold it. Its job is to read the row against the classical rules, co
 what the code cannot (the pattern behind it, the interaction between rows, the counsel), and never to rediscover the
 dates. The Personalizer then says it in the person's words with the four-step ladder.
 
+### 4.9 Budget per build (estimates, added by the final integration 2026-11-09)
+
+Every figure below is an **estimate** unless the row says "measured". Measured rows come from the doc 65 replay of the
+v1 path; the v2 rows are the plan's arithmetic over the slice sizes and the prices in `src/reading/llm/models.ts`
+(`PRICES`; Flash doubles on 2027-01-01 through `PRICE_CHANGES`, so every v2 Oracle figure doubles that day). No v2 build
+has run against a provider yet; the first replay (doc 66 §13, needs Sachin's yes) replaces these with measured numbers.
+
+| Step | Measured today (doc 65 replay, v1 path) | v2 estimate |
+|---|---|---|
+| Family readers ×5 | cold ≈ 126 k in / ≈ 3.5 k out ≈ $0.037 | $0 warm (read through `reading_findings_cache`) / ≈ $0.037 cold |
+| Lineman | 126,105 in / 98,322 cached / 596 out / 3.4 s / $0.0103 | retired on the v2 path |
+| Oracle | 40,665 in / 12,246 cached / 5,908 out / 44.6 s / $0.0444 | 3 parallel calls, each ≈ 11 k in (≈ 8 k cached) / ≈ 2.2 k out; ≈ $0.033 in all; ≈ 17–20 s |
+| Personalizer | (none in v1) | ≈ 8 k in / ≈ 2–4 k out ≈ $0.005–0.008; ≈ 8–12 s |
+| One build | 72 s; $0.055 warm, ≈ $0.09 cold | cold ≈ $0.075–0.08 and ≈ 35 s; warm ≈ $0.04 and ≈ 28 s; profile-only ≈ $0.005 and ≈ 10 s |
+
+**Measured on the first v2 replay (2026-11-09, kundli `c584c0a3`, doc 66 replay report), next to the estimate, and
+what the fixes of branch `fix/self-v2-replay-findings` should change.** The "after the fixes" column is arithmetic on the
+replay's own token counts and the 2026-11-09 prices (3.8-flash ≈ $0.75 / M input, $0.075 / M cached, $3.75 / M out,
+derived from the replay's per-call costs); no call has been made since.
+
+| Step | v2 estimate | Measured 2026-11-09 | Expected after the fixes (not yet measured) |
+|---|---|---|---|
+| Family readers ×5 | ≈ $0.037 cold | 87.2 k in, 99.3 % cached, 3.3 k out + 5.4 k thought; $0.0154; 6.4 s | unchanged |
+| Oracle ×3 | each ≈ 11 k in (≈ 8 k cached), ≈ 2.2 k out; ≈ $0.033; ≈ 17–20 s | each 34.6 k in, 13.4 k cached (**38.6 %**), 2.2–3.7 k out, 0 thought reported; **$0.0842**; 27.4 s | the reading frame moves into the cached prefix: each ≈ 29.4 k of 34.6 k cached (**≈ 85 %**, target ≥ 70 %), ≈ $0.006 input per call instead of ≈ $0.017; step ≈ **$0.052**; wall unchanged (output-bound). The larger region costs more storage per hour (not in `PRICES`). |
+| Personalizer (per profile) | ≈ 8 k in, ≈ 2–4 k out; $0.005–0.008; 8–12 s | 7.7 k in (97 % cached), 2.7–4.0 k out + 0.1–2.3 k thought; $0.0064–0.0077; 12.2–13.6 s; **2 of 3 cut at `MAX_TOKENS`** | thinking `minimal` (≈ 0.1–0.3 k thought), cap 8,000, one retry at 12,000 on `MAX_TOKENS`: ≈ $0.006 and ≈ 9–11 s per profile; a retry doubles that profile's cost when it happens |
+| Sub-techniques + briefs | ≈ 300 ms | **9.1 s** (database round trips from a laptop) | ≈ 10 sequential round trips cut to ≈ 6 (Layer 0 in one round, run logs awaited once at the end): a 150 ms-per-trip simulation runs under 1 s (test `replayFindings.test.ts`); the database side (digest row size, Render latency) cannot be checked offline; on the Lambda next to the database it should be well under 1.5 s |
+| One cold build, one profile | ≈ $0.075–0.08, ≈ 35 s | ≈ $0.107 + ≈ $0.004 storage, ≈ 61 s | ≈ $0.074 + storage, ≈ 50–55 s from a laptop |
+
+Token estimate: the Lab now shows chars / 2.2 (`estProviderTokens`; the replay's 74.6 k chars of Oracle input were
+34.6 k provider tokens); chars / 4 stays only as the conservative padding bound for the 1,024-token cache minimum.
+
+Notes, each one a caveat on the table:
+
+- **Explicit cache storage is billed per hour and is not in `PRICES`.** The v2 build warms the five family packs, the
+  Oracle prefix and the Personalizer prefix as explicit regions (`warmPrefixes`). Verify the storage rate per
+  region-hour before relying on explicit caching for the family packs; if the packs do not pay their storage back on a
+  warm rebuild, warm only `self.oracle` and `self.personalizer` (docs/TODOS.md, filed by the agents lane).
+- **Thinking tokens were recorded as 0 on the v1 path** because it never passed `usage` to the run log
+  (`withAgentRun` reads only `usage`); fixed 2026-11-09 in `src/reading/self/oracle.ts`, and the v2 path passes it.
+  Whether Gemini 3.x returns `thoughtsTokenCount` with `includeThoughts: false` is still unverified, so the Oracle's
+  thinking cost may be missing from the measured row.
+- **The Personalizer's output cap is 8,000 tokens** (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, raised from 5,000 after
+  the replay): profile c's complete document was 4,023 output tokens, and on Gemini 3.x thought tokens count against
+  the cap. A `MAX_TOKENS` finish is retried once at `SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS` (12,000); a cut
+  document is never stored.
+
+**Slice sizes on the fixtures (chars / 4, `estTokens`; not provider counts).**
+
+| Slice | Agents lane unit fixture (`tests/unit/reading/self/v2agents/fixtures.ts`) | Research calibration kundli (`tests/fixtures/self/research-calibration.json`, e2e test) |
+|---|---|---|
+| `family.rasi` prefix | not reported | 2,663 (suffix 128) |
+| `family.varga` prefix | ≈ 880 (below the 1,024 minimum) | 680 (suffix 69) |
+| `family.dasha` prefix | ≈ 190 (below) | 1,803 (suffix 99) |
+| `family.year` prefix | ≈ 30 (below) | 795 (suffix 96) |
+| `family.sky` prefix | padded past 1,024 | 579 (suffix 76; below: the fixture has no stored sky rows to pad with) |
+| `self.oracle` | ≥ 1,024 (asserted by `build.test.ts`) | prefix 3,676, suffix 4,603 |
+| `self.personalizer` | not reported | prefix 800 (below; the mocked Oracle document is short), suffix 128 |
+
+A prefix under 1,024 tokens is refused as an explicit region and its call goes uncached; docs/TODOS.md keeps the
+padding item open, now with the research-kundli numbers.
+
 ## 5. Architecture
 
 ```
@@ -448,7 +509,7 @@ chart term above the fold and no scroll of sections.
 - Server: `src/reading/person/profile.ts`; `src/reading/self/personalizer.ts` (+ prompt, schema, validator);
   `oracle/self-areas` prompt v2 (tenth area, patterns, inventory brief); catalogue, registry, cache plan, digest slices,
   summaries rows; `PUT /api/self/clock`, `POST /api/self/confirm`, `POST /api/self/mood`; `clock_viewed` event; env
-  `SELF_PERSONALIZER_MODEL` (default `gemini-3.1-flash-lite`), `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (2,500),
+  `SELF_PERSONALIZER_MODEL` (default `gemini-3.1-flash-lite`), `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (5,000),
   `SELF_AGE_BANDS` ("25,36,46,61"), `SELF_HERO_HORIZON_MONTHS` (6), `READING_EXPLICIT_CACHE=1` on the Lambda (open since
   doc 65 §9b).
 - Web: `src/pages/you/` v2 (Hero, Strip, Chips, AreaCard, Patterns, Ladder, ClockSheet), tests, 360 px snapshots.

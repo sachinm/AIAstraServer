@@ -6,6 +6,7 @@
  * Writing a run never breaks the request: a failed insert is logged once and swallowed.
  */
 import type { PrismaClient } from '@prisma/client';
+import { getSelfPersonalizerModel } from '../config/env.js';
 import { clarifyModelConfig } from '../reading/llm/bedrock.js';
 import { modelFor, PRICE_TABLE_VERSION, priceFor, usageCostUsd, type ModelRole } from '../reading/llm/models.js';
 import { techniqueById } from '../techniques/catalog.js';
@@ -237,6 +238,36 @@ export const AGENTS: AgentDef[] = [
     description: 'Synthesizes the You reading from the five family sub-agents (family.rasi, family.varga, family.dasha, family.year, family.sky), the Self Lineman (lineman.self), and the deterministic panel claims with Gemini cachedContents prefix caching (docs/reading-engine/58 §4.1, 63 §4.1)',
   },
   {
+    id: 'self.sub',
+    title: 'You board v2 sub-techniques',
+    kind: 'code',
+    module: 'self',
+    subModule: 'v2',
+    description:
+      'Runs the ten shared You board v2 sub-techniques (self.sub.*: clock, periods, windows, promise, risk, mind, body and presence facts, year, profile) once per build over one build context, from the stored digest, activation and sky rows; no model (docs/reading-engine/66 §4.8 Layer 1)',
+  },
+  {
+    id: 'self.oracle.v2',
+    title: 'You board v2 Oracle',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'v2',
+    role: 'oracle',
+    description:
+      'Reads the eleven You board v2 areas in three parallel calls over one cached natal prefix (the D1/divisional slice and the promise ledger), confirming or rejecting each risk-ledger row with evidence and naming up to three patterns; JSON by schema, validated against the input keys and the stored windows (docs/reading-engine/66 §4.1, §4.8)',
+  },
+  {
+    id: 'self.personalizer',
+    title: 'You board v2 Personalizer',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'v2',
+    provider: 'gemini',
+    currentModel: () => getSelfPersonalizerModel(),
+    description:
+      'Writes the hero and one card per area for this person from the Oracle document and the profile pack (age band, stated gender or none, facts, confirms, mood), in plain second person with no chart term; every sentence cites an Oracle paragraph or key (docs/reading-engine/66 §4.1)',
+  },
+  {
     id: 'love.reading_panel',
     title: 'Love reading panel',
     kind: 'code',
@@ -443,6 +474,12 @@ export interface RunContext {
   kundliId?: string | null;
   subject?: string | null;
   charts?: ChartUsed[];
+  /**
+   * When given, the `agent_runs` write is pushed here instead of awaited, so a chain of short code steps does not wait
+   * one database round trip per step; the caller awaits the sink once at the end (the Self v2 sub-techniques, doc 66
+   * replay: 9.1 s from a laptop). The write never throws.
+   */
+  logSink?: Array<Promise<unknown>>;
 }
 
 export interface RunUsage {
@@ -566,22 +603,26 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
           ...(withTags ? { ...tags, charts_used: (tags.charts_used ?? undefined) as object | undefined } : {}),
         },
       });
-    try {
-      if (Date.now() < m29MissingUntil) await write(false);
-      else {
-        try {
-          await write(true);
-        } catch (e) {
-          if (!isMissingColumn(e)) throw e;
-          m29MissingUntil = Date.now() + M29_RETRY_MS;
-          console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
-          await write(false);
+    const persist = async () => {
+      try {
+        if (Date.now() < m29MissingUntil) await write(false);
+        else {
+          try {
+            await write(true);
+          } catch (e) {
+            if (!isMissingColumn(e)) throw e;
+            m29MissingUntil = Date.now() + M29_RETRY_MS;
+            console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
+            await write(false);
+          }
         }
+      } catch (e) {
+        if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
+        warned = true;
       }
-    } catch (e) {
-      if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
-      warned = true;
-    }
+    };
+    if (ctx.logSink) ctx.logSink.push(persist());
+    else await persist();
     }
   }
 }

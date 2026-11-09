@@ -304,7 +304,9 @@ describe('words tables and registration', () => {
       expect(t!.contract.system).toBe('none');
       expect(contractProblems(t!)).toEqual([]);
     }
-    expect(TECHNIQUES.slice(-ids.length).map((t) => t.id)).toEqual(ids);
+    // the agents lane's block (self.v2.oracle, personalizer, hero) follows this one
+    const AGENT_ROWS = ['self.v2.oracle', 'self.v2.personalizer', 'self.v2.hero'];
+    expect(TECHNIQUES.filter((t) => !AGENT_ROWS.includes(t.id)).slice(-ids.length).map((t) => t.id)).toEqual(ids);
   });
   it('the sub-technique run summaries carry no personal keys', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../../../../src/reading/self/sub/index.ts'), 'utf8');

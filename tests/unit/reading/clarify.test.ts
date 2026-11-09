@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { classifyRules } from '../../../src/reading/buckets/classifier.js';
 import { absorbAnswer, ABANDON_AFTER_MS, applyDefaults, assumptionText, confirmClarify, expireIfStale, MAX_QUESTIONS, parseHorizonValue, startClarify, type ClarifyState } from '../../../src/reading/clarify/machine.js';
-import { phraseAsk, resolveFreeText } from '../../../src/reading/clarify/planner.js';
+import { clearClarifyCache, phraseAsk, resolveFreeText } from '../../../src/reading/clarify/planner.js';
 import { answerClarify, beginClarify, confirmAndBuildIntent } from '../../../src/reading/clarify/service.js';
 import { MemoryClarifyStore } from '../../../src/reading/clarify/store.js';
 import { extractJsonObject, setBedrockClientForTests } from '../../../src/reading/llm/bedrock.js';
@@ -129,6 +129,8 @@ describe('clarify state machine', () => {
 describe('clarify model step (Bedrock, fake client)', () => {
   const send = vi.fn();
   beforeEach(() => {
+    // the planner keeps model replies in memory per question: without this a case is answered by the one before it
+    clearClarifyCache();
     process.env.READING_MODEL_CLARIFY = 'bedrock:openai.gpt-oss-120b-1:0';
     setBedrockClientForTests({ send });
     send.mockReset();

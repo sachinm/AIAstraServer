@@ -231,3 +231,6 @@ web CDN, decrypted art cached in IndexedDB.
   still capture the decoded pixels. These steps stop casual copying and keep the files unreadable at rest and on the CDN.
 - Layout after review: the veil is a floating frosted panel at 90% of the viewport for page-level waits (72-74% tint,
   14 px blur), brand line in the header's own classes, quip as plain text, 3D board and glass tiles.
+- **Suffix (fixed 2026-11-09 after the first staging deploy):** the static host's SPA rewrite serves only known suffixes
+  as files and answers anything else (`.bin`) with `index.html`, so the ciphertext ships as `/_a/<hash>.png`. The bytes
+  are still opaque AES-GCM ciphertext; only the suffix is chosen to pass the rewrite.

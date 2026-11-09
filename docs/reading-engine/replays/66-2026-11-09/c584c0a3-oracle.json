@@ -1,0 +1,772 @@
+{
+  "kundli": "c584c0a3",
+  "status": "ok",
+  "slices": [
+    {
+      "agent": "family.rasi",
+      "prefixTokens": 2683,
+      "suffixTokens": 128,
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "agent": "family.varga",
+      "prefixTokens": 3082,
+      "suffixTokens": 69,
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "agent": "family.dasha",
+      "prefixTokens": 1694,
+      "suffixTokens": 97,
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "agent": "family.year",
+      "prefixTokens": 30438,
+      "suffixTokens": 96,
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "agent": "family.sky",
+      "prefixTokens": 1054,
+      "suffixTokens": 76,
+      "model": "gemini-3.1-flash-lite"
+    },
+    {
+      "agent": "self.oracle",
+      "prefixTokens": 6099,
+      "suffixTokens": 9452,
+      "model": "gemini-3.8-flash"
+    },
+    {
+      "agent": "self.oracle (with findings)",
+      "prefixTokens": 6099,
+      "suffixTokens": 12560,
+      "model": "gemini-3.8-flash"
+    },
+    {
+      "agent": "self.personalizer",
+      "prefixTokens": 5660,
+      "suffixTokens": 148,
+      "model": "gemini-3.1-flash-lite"
+    }
+  ],
+  "briefs": [
+    {
+      "areaId": "now",
+      "claims": 32,
+      "dates": 4
+    },
+    {
+      "areaId": "stuck",
+      "claims": 9,
+      "dates": 2
+    },
+    {
+      "areaId": "chapter",
+      "claims": 19,
+      "dates": 2
+    },
+    {
+      "areaId": "diagnosis",
+      "claims": 4,
+      "dates": 3
+    },
+    {
+      "areaId": "lagna",
+      "claims": 2,
+      "dates": 0
+    },
+    {
+      "areaId": "mind",
+      "claims": 10,
+      "dates": 1
+    },
+    {
+      "areaId": "body",
+      "claims": 4,
+      "dates": 1
+    },
+    {
+      "areaId": "drive",
+      "claims": 10,
+      "dates": 1
+    },
+    {
+      "areaId": "presence",
+      "claims": 6,
+      "dates": 1
+    },
+    {
+      "areaId": "yogas",
+      "claims": 5,
+      "dates": 0
+    },
+    {
+      "areaId": "chapters",
+      "claims": 4,
+      "dates": 25
+    },
+    {
+      "areaId": "year",
+      "claims": 2,
+      "dates": 2
+    }
+  ],
+  "subGaps": [
+    "pressure_inventory: pull off (SELF_V2_PRESSURE_PULL=0)",
+    "windows: sky:ingress/Ju/Taurus@2025-01-01 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Aquarius@2025-01-01 house_from_lagna missing",
+    "windows: sky:ingress/Ra/Pisces@2025-01-01 house_from_lagna missing",
+    "windows: sky:ingress/Ke/Virgo@2025-01-01 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Pisces@2025-03-29 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Gemini@2025-05-14 house_from_lagna missing",
+    "windows: sky:ingress/Ra/Aquarius@2025-05-18 house_from_lagna missing",
+    "windows: sky:ingress/Ke/Leo@2025-05-18 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Cancer@2025-10-18 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Gemini@2025-12-05 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Cancer@2026-06-02 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Leo@2026-10-31 house_from_lagna missing",
+    "windows: sky:ingress/Ra/Capricorn@2026-12-05 house_from_lagna missing",
+    "windows: sky:ingress/Ke/Cancer@2026-12-05 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Cancer@2027-01-25 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Aries@2027-06-03 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Leo@2027-06-26 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Pisces@2027-10-20 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Virgo@2027-11-26 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Aries@2028-02-23 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Leo@2028-02-28 house_from_lagna missing",
+    "windows: sky:ingress/Ra/Sagittarius@2028-06-24 house_from_lagna missing",
+    "windows: sky:ingress/Ke/Gemini@2028-06-24 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Virgo@2028-07-24 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Libra@2028-12-26 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Virgo@2029-03-29 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Taurus@2029-08-08 house_from_lagna missing",
+    "windows: sky:ingress/Ju/Libra@2029-08-25 house_from_lagna missing",
+    "windows: sky:ingress/Sa/Aries@2029-10-05 house_from_lagna missing",
+    "windows: pressure_inventory not stored; built from kundli_activation and the sky overlay (degraded)",
+    "windows: the engine stores no strength grade; every row is 2",
+    "promise: yoga:D1.chandra_mangala_yoga has no stored houses",
+    "promise: yoga:D1.pitru has no stored houses",
+    "promise: 14 yoga rows carry no gift/knot/grace class and were left out",
+    "promise: the engine stores no strength grade for yogas; every entry is 2",
+    "year: annual:VP2026.D1.yearLord missing",
+    "body: the engine stores no sensitive-passage flag; sensitive is false"
+  ],
+  "familyFindings": [
+    {
+      "family": "family.rasi",
+      "chars": 3298,
+      "text": "Based on the natal D1 chart provided, here is the analysis of the life promise and somatic correspondences:\n\n*   **Mental & Nervous System (H1/H3/H5):** The Lagna (H1) in Pisces is aspected by the Sun, Jupiter, and Saturn, indicating a personality shaped by high-pressure responsibilities and a strong sense of duty `{house:D1.h1}`. The presence of Rahu in H5 (Cancer) suggests an unconventional, highly active, and sometimes volatile mental state, as H5 governs the intelligence and emotional processing `{house:D1.h5}`.\n*   **Dietary & Throat Health (H2):** H2 (Aries) is ruled by Mars, which is in its own sign in H9. While this strengthens the digestive fire, the conjunction of Mars with a debilitated Moon suggests that dietary habits may be prone to emotional fluctuations or intensity, requiring disciplined intake to maintain balance `{house:D1.h2, planet:D1.Ma, planet:D1.Mo}`.\n*   **Heart, Chest, & Emotional Mind (H4):** H4 (Gemini) receives primary argala from Rahu, Sun, Jupiter, and Saturn. This intense concentration of planetary influence on the chest and emotional center indicates that the individual carries significant psychological weight and must guard against stress-induced respiratory or cardiac fatigue `{house:D1.h4}`.\n*   **Internal Organs & Digestive Balance (H5/H6):** Venus is situated in H6 (Leo) in an enemy sign; however, this forms a *Viparita Raja Yoga*, suggesting that health challenges related to internal organs or weight management may eventually lead to unexpected gains or resilience through adversity `{house:D1.h6, yoga:D1.facts_viparita_raja_yoga_lord_of_8_in_6}`.\n*   **Blood Flow & Circulation (Ma/Su/Mo):** The conjunction of the debilitated Moon and Mars in H9 (Scorpio) creates a *Chandra-Mangala* influence. Because Mars is in its own sign, this provides a \"Neecha Bhanga\" effect, but the circulation and blood-related vitality remain sensitive to the individual's emotional state and stress levels `{planet:D1.Mo, planet:D1.Ma, yoga:D1.facts_neecha_bhanga}`.\n*   **Lower Limbs & Lymphatic Drainage (H11/H12):** Ketu in H11 (Capricorn) indicates potential sensitivity in the knees and lower leg circulation. As H11 is an upachaya house, this placement suggests that health issues in the lower extremities may improve over time with consistent effort and lifestyle management `{house:D1.h11}`.\n*   **Professional & Social Standing (AL/SL/HL/GL):** The concentration of the Arudha Lagna (AL), Special Lagnas (SL, HL, GL), and Upagrahas (Mandi/Gulika) in Sagittarius (H10) is a powerful indicator that the individual’s life is heavily defined by their public reputation, career, and social status. This alignment suggests that professional success is the primary vehicle for the individual's life purpose `{point:D1.AL, point:D1.SL, point:D1.HL, point:D1.GL, point:D1.GULIKA}`.\n*   **Financial Promise:** The chart features multiple Dhana Yogas involving the lords of 2/5 and 11/1. Despite the debilitated Moon, the strength of the dispositor chain and the presence of these yogas suggest significant potential for wealth accumulation, provided the individual manages the volatility indicated by the Kala Sarpa Dosha `{yoga:D1.facts_dhana_yoga_lords_of_2_and_5, yoga:D1.facts_dhana_yoga_lords_of_11_and_1, yoga:D1.kala_sarpa}`.\n\nVALID_UNTIL: always"
+    },
+    {
+      "family": "family.varga",
+      "chars": 2605,
+      "text": "The following audit examines the divisional chart influences on the D1 Pisces identity, focusing on the soul's trajectory (D9), professional manifestation (D10), physical constitution (D30), and karmic roots (D60).\n\n*   **Identity & Soul Path (D9):** The shift to a Leo Navamsa Lagna moves the identity from the fluid, receptive nature of Pisces to a more fixed, solar-driven expression. With the Atmakaraka (AK) Sun residing in Virgo (H2) alongside debilitated Venus and Mars, the soul’s growth is tied to the refinement of speech, values, and the management of analytical, service-oriented challenges {point:D9.AK}, {planet:D9.Su}.\n*   **Professional Manifestation (D10):** The D10 Sagittarius Lagna, ruled by Jupiter in Gemini (H7), confirms a career path centered on counseling, teaching, or intellectual partnerships. However, the placement of Jupiter in an enemy sign suggests that professional success requires navigating frequent communication-based friction rather than relying on pure authority {house:D10.h1}, {planet:D10.Ju}.\n*   **Constitutional Vulnerability (D30):** The Taurus D30 Lagna provides a degree of physical resilience, yet the debilitation of the Moon in Scorpio (H7) conjunct the Sun points to significant vulnerabilities in emotional regulation and hormonal or fluid-based health. This indicates that physical well-being is highly susceptible to stress-induced volatility {house:D30.h1}, {planet:D30.Mo}.\n*   **Physical Stressors (D30):** The conjunction of Mars and Saturn in Virgo (H5) within the Trimsamsa chart suggests a constitutional predisposition toward digestive or nervous system strain. This indicates that the body requires disciplined maintenance to prevent the manifestation of chronic tension {planet:D30.Ma}, {planet:D30.Sa}.\n*   **Root Karma (D60):** The D60 Scorpio Lagna with Ketu indicates that the root karma involves a profound need for detachment and the shedding of past-life power dynamics. The presence of Ketu in the first house of the Shashtiamsa suggests that the individual's life path is defined by a karmic mandate to transcend ego-driven control {house:D60.h1}, {planet:D60.Ke}.\n*   **Karmic Obstacles (D60):** The concentration of the Sun, Moon, and Jupiter in Aries (H6) within the D60 chart confirms that the soul’s evolution is tied to overcoming conflict and health-related obstacles. The presence of these luminaries in the sixth house of the root chart suggests that service and the mastery of daily struggles are the primary vehicles for resolving past-life debts {planet:D60.Su}, {planet:D60.Mo}, {planet:D60.Ju}.\n\nVALID_UNTIL: always"
+    },
+    {
+      "family": "family.dasha",
+      "chars": 2409,
+      "text": "As of 2026-11-09, the multi-clock analysis indicates a period of intense structural transition and karmic realignment, governed by the convergence of the Kaala, Vimshottari, and Narayana systems.\n\n*   **Primary Clock (Kaala) Audit:** You are currently in the Jupiter (Ju) Mahadasha, Mars (Ma) Antardasha, and Ketu (Ke) Pratyantardasha. The transition into the Ketu PD on 2026-11-05 shifts the focus toward the 5th/9th house axis, emphasizing internal reflection and spiritual inquiry {activation:kaala/3/Ke@2026-11-05}. The Ju/Ma fruition geometry is classified as `upachaya_effort`, indicating that current actions are directed toward long-term stabilization and overcoming obstacles through disciplined exertion {planet:D1.Ju}.\n*   **Vimshottari Clock Audit:** The Moon (Mo) Mahadasha is active, with the Venus (Ve) Antardasha running until 2027-09-15 {activation:vimsottari/1/Mo@2018-03-16}. The Mo/Ve fruition is `kendra_structural`, which suggests that your social or professional environment is undergoing a necessary reorganization to support the growth initiated during the Moon period {planet:D1.Mo}.\n*   **Narayana & Confirming Clocks:** The Narayana system is currently in the Pisces Mahadasha (H1/H7) with the Cancer Antardasha (H5/H9) active since 2026-10-15 {activation:narayana/2/Cancer@2026-10-15}. This creates a powerful Trikona activation, linking your identity (H1) with your intellect and creative output (H5/H9). Simultaneously, the Yogini clock is in the Venus MD/Sun AD phase, highlighting a period of ego-alignment and vitality {activation:yogini/2/Su@2026-09-17}.\n*   **9x9 Fruition Geometry & House Activation:**\n    *   **H1 (Self/Body):** Activated by Narayana Pisces MD {activation:narayana/1/Pisces@2021-10-15} and Karaka Jupiter MD {activation:karaka/1/Ju@2024-10-14}, providing a strong foundation for personal authority.\n    *   **H6/H8/H12 (Crisis/Reversal):** The Vimshottari Venus AD {activation:vimsottari/2/Ve@2026-01-14} continues to trigger house 6 and 8, suggesting that while the Narayana system supports growth, the Vimshottari system is forcing the resolution of past debts or hidden complexities.\n    *   **H2/H4/H9 (Dhana/Stability):** The Kaala Mars AD {activation:kaala/2/Ma@2026-05-05} is actively engaging the 2nd and 9th houses, indicating that financial gains are tied to your adherence to personal principles and sustained effort.\n\nVALID_UNTIL: 2026-12-12"
+    },
+    {
+      "family": "family.year",
+      "chars": 1943,
+      "text": "Based on the audit of the stored Tithi Pravesha (TP) and Varshaphal (VP) charts for the 2025–2027 cycle, the following analysis outlines the progression of the self, mind, and physical state:\n\n*   **2026 Emotional Sensitivity:** The 2026 TP chart features a Cancer Lagna with the Moon debilitated in the first house, indicating that the current annual cycle is defined by high emotional sensitivity and a deep, internal focus on self-perception `{annual:TP2026.D1}`.\n*   **2026 Transformative Wisdom:** The 2026 VP chart highlights Jupiter exalted in the 8th house, suggesting that the year is characterized by profound transformation and the acquisition of hidden or occult knowledge, despite the internal restlessness caused by the Moon's debilitation in the 12th house `{annual:VP2026.D1}`.\n*   **Current Discipline (Mudda Dasha):** The active Mudda Dasha of Saturn, running until December 24, 2026, imposes a period of necessary discipline, restriction, and hard work, which may temporarily delay personal ambitions in favor of long-term structural stability `{annual:VP2026.D1}`.\n*   **Self-Identity Focus (Patyayini Dasha):** The Patyayini Dasha of the Lagna is currently active until February 27, 2027, placing a primary emphasis on the physical body and personal identity, requiring a balanced approach to health and self-expression during this window `{annual:VP2026.D1}`.\n*   **2027 Intellectual Shift:** The upcoming 2027 TP chart shifts the focus to a Gemini Lagna with Mercury placed in the 5th house, signaling a transition toward intellectual pursuits, communication, and creative problem-solving in the next annual cycle `{annual:TP2027.D1}`.\n*   **2027 Service Orientation:** The 2027 VP chart shows Jupiter placed in the 6th house, suggesting that the next year will likely involve a focus on service, daily routines, or overcoming obstacles through wisdom and structured effort `{annual:VP2027.D1}`.\n\nVALID_UNTIL: 2027-09-02"
+    },
+    {
+      "family": "family.sky",
+      "chars": 2109,
+      "text": "As of 2026-11-09, the following audit of the Universal Gochara Transit Sky and Sarvashtakavarga (SAV) bindu gates is provided for the Pisces Lagna:\n\n*   **Lagna & Saturn Transit:** Saturn is currently transiting Pisces (H1), placing the native in the initial phase of Sade Sati. With an H1 SAV of 27, the structural re-evaluation of the self and physical vitality is moderate, requiring disciplined management of personal health and identity. {house:D1.h1}\n*   **Jupiter & Ketu in H6:** The transit of Jupiter and Ketu through Leo (H6) with an SAV of 30 suggests a period of intense focus on service, overcoming obstacles, and resolving disputes. While the SAV is stable, the 6th house placement of Jupiter often limits external expansion, favoring internal refinement and the management of daily routines. {house:D1.h6}\n*   **Rahu in H12:** Rahu’s transit through Aquarius (H12) with an SAV of 26 indicates a cycle of increased expenditure or a need for spiritual detachment. This placement often triggers a push-pull dynamic between the desire for isolation and the demands of the 6th house transit. {house:D1.h12}\n*   **Sensitive Point Vulnerability:** The low SAV bindus in H8 (18) and H9 (20) highlight a period of vulnerability regarding sudden transformations (KD22 in H8) and belief systems or long-distance travel (K64L in H9). Caution is advised during transits affecting these specific houses. {point:D1.KD22}, {point:D1.K64L}\n*   **Professional Anchor:** Despite the taxing transits in the health and body houses, the high SAV (32) in H10 provides a strong foundation for career and public standing. The presence of AL, SL, MD, and GK in this house suggests that professional reputation remains a primary source of stability during this cycle. {point:D1.AL}, {point:D1.SL}, {point:D1.MD}, {point:D1.GK}\n*   **Bhrigu Bindu (BB) Influence:** The BB in Virgo (H7) is currently being influenced by the axis of the Saturn transit, suggesting that partnerships and contractual matters are undergoing a significant period of karmic adjustment and structural review. {point:D1.BB}\n\nVALID_UNTIL: 2027-01-25"
+    }
+  ],
+  "oracle": {
+    "status": "ok",
+    "gaps": [],
+    "withheld": [],
+    "output": {
+      "doc": {
+        "areas": {
+          "diagnosis": {
+            "id": "diagnosis",
+            "headline": "A long chapter of expanding leadership now meets a closing month of sharp mental detachment and demanding discipline.",
+            "paragraphs": [
+              "Your chart is anchored by Jupiter as the ruler of both your Pisces ascendant and your Sagittarius tenth house. Situated in the seventh house in Virgo alongside the Sun and Saturn, Jupiter spends its vitality in high-stakes public accountability, collaborative alliances, and structural leadership. Since October 2023, you have operated under Jupiter's overarching eleven-year Kaala period, granting authority and professional footing, even as everyday commitments require steady negotiation.",
+              "The current tension stems from the closing weeks of Mars sub-period running through 2026-12-12, complicated by the final sub-sub-period of Ketu that began on 2026-11-05. While Mars energizes your fortune and financial resources from Scorpio in the ninth house, Ketu activates the karmic nodal axis from Capricorn in the eleventh house, touching your creative initiatives and networks with sudden mental withdrawal and friction. This temporary exhaustion lifts on 2026-12-12, when a much smoother energetic current takes over."
+            ],
+            "dates": [
+              {
+                "from": "2023-10-23",
+                "to": "2034-10-22",
+                "label": "Jupiter major life chapter"
+              },
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period"
+              },
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu compression window"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "text": "Refrain from making irrevocable decisions about creative partnerships or professional alliances until the Ketu compression lifts on 2026-12-12."
+              },
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Conserve physical vitality by delegating complex operational tasks rather than pushing through emotional burnout."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "house:D1.h1",
+              "planet:D1.Ju",
+              "activation:kaala/1/Ju@2023-10-23",
+              "activation:kaala/2/Ma@2026-05-05",
+              "activation:kaala/3/Ke@2026-11-05",
+              "risk:risk:activation:kaala/3/Ke@2026-11-05"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "stuck": {
+            "id": "stuck",
+            "headline": "Karmic friction around creative output and social expectations demands patience until inner pressure eases on December 12.",
+            "paragraphs": [
+              "The friction you feel right now is centered in your fifth and eleventh house axis, governed by the natal nodal polarity and the running activation of Ketu from 2026-11-05 until 2026-12-12. In your birth chart, Rahu sits in Cancer in the fifth house while Ketu occupies Capricorn in the eleventh house, establishing a natal tendency to obsess over creative perfection while feeling abruptly detached from group gains and long-term networks.",
+              "This knot is aggravated by Saturn's natal aspect from the seventh house onto your debilitated Moon in the ninth house, which can create waves of isolation, questioning your personal convictions and relationships with mentors or teachers. However, because Mars occupies Scorpio alongside the Moon, this debility is cancelled by Neecha Bhanga, ensuring that pressure consistently converts into long-term discipline. The acute sense of alienation and stalled ideas eases directly on 2026-12-12."
+            ],
+            "dates": [
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu detachment and mental strain"
+              },
+              {
+                "from": "2026-12-12",
+                "to": "2026-12-13",
+                "label": "Relief and shift in sub-cycle"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Notice when mental fatigue tempts you to abandon collaborative projects abruptly, and postpone final judgments until mid-December."
+              },
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Ground your nervous system through steady daily routines to counteract the cold scrutiny Saturn casts on the Moon."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "risk:risk:activation:kaala/3/Ke@2026-11-05",
+              "yoga:D1.kala_sarpa",
+              "yoga:D1.ganda_moola",
+              "yoga:D1.facts_neecha_bhanga",
+              "planet:D1.Ra",
+              "planet:D1.Ke",
+              "planet:D1.Sa",
+              "planet:D1.Mo",
+              "planet:D1.Ma"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "chapter": {
+            "id": "chapter",
+            "headline": "Disciplined effort in financial and foundational matters reaches its finish line as a rigorous sub-period concludes.",
+            "paragraphs": [
+              "You are living through the final weeks of the Mars sub-period, which opened on 2026-05-05 and concludes on 2026-12-12. In your nativity, Mars is a powerful functional benefic for Pisces Lagna, ruling the second house of wealth and the ninth house of fortune, placed strongly in its own sign of Scorpio in the ninth house. Because Mars forms a harmonious third-house upachaya effort geometry with your main period lord Jupiter, this stretch has demanded proactive exertion, self-reliance, and financial structuring.",
+              "This sub-period has activated the powerful Dhana Yoga formed by Mars and the Moon, rewarding sustained labor with tangible assets and long-term security. While the closing Ketu sub-sub-period between 2026-11-05 and 2026-12-12 feels like an uphill test of mental fortitude, the conclusion of this chapter on 2026-12-12 clears the way for fresh collaborative momentum."
+            ],
+            "dates": [
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period"
+              },
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu sub-sub-period pressure"
+              },
+              {
+                "from": "2026-12-13",
+                "to": "2026-12-15",
+                "label": "Fresh lunar activation and relief"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Finalize ongoing financial paperwork, accounts, and contractual obligations before the sub-period boundary on 2026-12-12."
+              },
+              {
+                "from": "2026-12-13",
+                "to": "2026-12-19",
+                "text": "Prepare your calendar for increased external engagement as immediate psychological compression gives way to supportive momentum."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "activation:kaala/2/Ma@2026-05-05",
+              "activation:kaala/3/Ke@2026-11-05",
+              "activation:kaala/1/Ju@2023-10-23",
+              "house:D1.h2",
+              "house:D1.h9",
+              "planet:D1.Ma",
+              "yoga:D1.facts_dhana_yoga_lords_of_2_and_5"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "chapters": {
+            "id": "chapters",
+            "headline": "A long era of intellectual preparation gave way to Jupiter's leadership chapter, setting up a major life build until 2034.",
+            "paragraphs": [
+              "The previous eight-year era belonged to Mercury, running from 2015-01-05 to 2023-10-23. Ruling the fourth and seventh houses and placed in the eighth house in Libra, Mercury demanded deep analytical discernment, commercial negotiations, and the navigation of hidden complexities or joint resources. That period required you to adapt to fluctuating partnership dynamics and build internal intellectual resilience.",
+              "On 2023-10-23, you entered your current eleven-year Jupiter major period, which runs until 2034-10-22. As lord of your Pisces ascendant and Sagittarius tenth house, Jupiter places personal authority, executive responsibility, and public reputation at the core of this chapter. Upcoming sub-period transitions will successively engage your networks, domestic base, and creative assets until the major period culminates on 2034-10-22, when an extended fourteen-year Venus major chapter commences."
+            ],
+            "dates": [
+              {
+                "from": "2015-01-05",
+                "to": "2023-10-23",
+                "label": "Mercury major chapter"
+              },
+              {
+                "from": "2023-10-23",
+                "to": "2034-10-22",
+                "label": "Jupiter major chapter"
+              },
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period"
+              },
+              {
+                "from": "2034-10-22",
+                "to": "2048-01-02",
+                "label": "Venus major chapter"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2034-10-22",
+                "text": "Anchor your long-range plans around institutional leadership, professional integrity, and mentorship, honoring Jupiter's tenth house rulership."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "activation:kaala/1/Me@2015-01-05",
+              "activation:kaala/1/Ju@2023-10-23",
+              "activation:kaala/1/Ve@2034-10-22",
+              "house:D1.h1",
+              "house:D1.h10",
+              "planet:D1.Ju",
+              "point:D1.AL"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "lagna": {
+            "id": "lagna",
+            "headline": "You navigate life with deep intuitive wisdom, balancing public authority with an intensely private, searching inner self.",
+            "paragraphs": [
+              "Your rising sign is Pisces, ruled by Jupiter placed in the seventh house in Virgo. Because your lagna lord aspects the first house directly, you possess natural resilience, broad ethical understanding, and an expansive personal presence. However, with the Sun and Saturn also in Virgo casting their drishti onto your lagna, your path is shaped by heavy duties and exacting standards. People meet someone anchored by an instinctive moral compass, yet you routinely carry an elevated sense of responsibility that demands discipline and endurance.",
+              "A striking dynamic in your chart is the divergence between how the world perceives you and how you experience your inner life. Your Arudha Lagna sits in the tenth house in Sagittarius, joined by the Sree Lagna and Hora Lagna. Externally, the world recognizes you as an ambitious, dignified professional whose identity is closely tied to public standing and decisive leadership. Internally, with your fourth house in Gemini ruled by Mercury in the eighth house, your private mental landscape is analytical, constantly questioning, and deeply guarded."
+            ],
+            "dates": [],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2034-10-22",
+                "text": "Honor your need for mental sanctuary; separate public obligations from your private retreat to prevent emotional fatigue."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "claim:lagna.bearing",
+              "claim:lagna.seen_vs_private",
+              "house:D1.h1",
+              "planet:D1.Ju",
+              "planet:D1.Su",
+              "planet:D1.Sa",
+              "point:D1.AL",
+              "point:D1.SL",
+              "planet:D1.Mo",
+              "house:D1.h4"
+            ],
+            "validUntil": "always"
+          },
+          "mind": {
+            "id": "mind",
+            "headline": "Your intellect cuts deeply beneath appearances, yet heavy expectations can trigger sudden cycles of detachment and mental restlessness.",
+            "paragraphs": [
+              "Your Moon resides in Scorpio in the ninth house, in the intense nakshatra of Jyeshtha. While the Moon is debilitated here, it forms a Neecha Bhanga through its conjunction with Mars in its own sign, transmuting emotional vulnerability into formidable psychological resilience and financial acumen. Nevertheless, Saturn's tenth aspect onto this Moon imparts a persistent seriousness, making it difficult to fully switch off an underlying sense of vigilance.",
+              "Your analytical mind is governed by Mercury in Libra in the eighth house, directing your intellectual curiosities toward hidden truths, complex systems, and structural troubleshooting. The presence of Rahu in the fifth house introduces unconventional, sharp ideation, but because it anchors a full Kala Sarpa pattern with Ketu in the eleventh house, your creative flow can swing between intense fixation and sudden intellectual fatigue. You think non-linearly, needing profound meaning rather than superficial pleasantries.",
+              "Currently, from 2026-11-05 until 2026-12-12, the running Ketu sub-sub-period activates this fifth and eleventh house karmic axis. This temporary activation heightens feelings of detachment from creative pursuits, social networks, or speculative plans. Recognizing this as an engineered period of internal evaluation allows you to reflect quietly without mistaking temporary aloofness for permanent disinterest."
+            ],
+            "dates": [
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu sub-sub-period detachment window"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "text": "Avoid making abrupt commitments or severing ties; treat emotional dryness as a signal for study and solitary reflection."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "claim:mind.feeling",
+              "claim:mind.thinking",
+              "claim:mind.peace",
+              "claim:mind.judgement",
+              "claim:mind.pattern:Ra.h5",
+              "claim:mind.pattern:Sa>Mo",
+              "claim:mind.risk:ideas_and_children:detachment",
+              "planet:D1.Mo",
+              "planet:D1.Me",
+              "house:D1.h5",
+              "planet:D1.Ra",
+              "planet:D1.Ke",
+              "planet:D1.Sa",
+              "yoga:D1.facts_neecha_bhanga",
+              "yoga:D1.kala_sarpa",
+              "risk:risk:activation:kaala/3/Ke@2026-11-05",
+              "activation:kaala/3/Ke@2026-11-05"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "drive": {
+            "id": "drive",
+            "headline": "Your career ambition is powered by disciplined partnerships and high ethical purpose, channeling relentless effort into tangible wealth.",
+            "paragraphs": [
+              "Your Atmakaraka is the Sun in Virgo in the seventh house, indicating that the core trajectory of your soul unfolds through collaborative endeavors, accountability, and the refinement of professional agreements. In your tenth house of vocation, Sagittarius holds your Arudha Lagna and Sree Lagna, signifying that your public standing is closely bound to institutional integrity, advisory roles, and managerial authority.",
+              "The engine of your ambition is heavily energized by a potent Dhana Yoga in the ninth house, where Mars in Scorpio joins the Moon to unite the lords of the second, fifth, and ninth houses. This configuration bestows remarkable instinct for resource management and calculated risks. Under the running Jupiter main period (2023-10-23 to 2034-10-22) and the Mars sub-period (2026-05-05 to 2026-12-12), this drive operates in an upachaya relationship, rewarding sustained, focused exertion over quick outcomes.",
+              "While Ketu's brief activation from 2026-11-05 to 2026-12-12 presses your eleventh house of gains and network circles with sudden detachment, your broader momentum remains steady. Ground your daily drive in tangible execution, letting the overarching Jupiter-Mars period strengthen your material footing."
+            ],
+            "dates": [
+              {
+                "from": "2023-10-23",
+                "to": "2034-10-22",
+                "label": "Jupiter main period"
+              },
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period"
+              },
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu sub-sub-period pressure"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Channel current professional energy into back-end structural tasks and long-term financial modeling rather than public pitches."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "claim:drive.gift:money_in_hand",
+              "claim:drive.live:career_and_standing:supports:self_and_body+effort_and_courage+partnership+career_and_standing+gains_and_network",
+              "claim:drive.live:money_in_hand:supports:money_in_hand+effort_and_courage+home_and_peace+luck_and_belief+loss_rest_and_distance",
+              "claim:drive.live:gains_and_network:presses:ideas_and_children+luck_and_belief+gains_and_network",
+              "point:D1.AK",
+              "planet:D1.Su",
+              "planet:D1.Ju",
+              "planet:D1.Ma",
+              "planet:D1.Mo",
+              "yoga:D1.facts_dhana_yoga_lords_of_2_and_5",
+              "activation:kaala/1/Ju@2023-10-23",
+              "activation:kaala/2/Ma@2026-05-05",
+              "activation:kaala/3/Ke@2026-11-05"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "presence": {
+            "id": "presence",
+            "headline": "You project an aura of composed gravitas and sharp discernment, presenting polished competence while remaining emotionally reserved.",
+            "paragraphs": [
+              "Your physical carriage is defined by Pisces on the ascendant receiving direct aspects from Jupiter, the Sun, and Saturn across the seventh house. This triple aspect confers a deliberate, dignified bearing; you appear seasoned, measured, and serious, rarely revealing panic even in high-stakes environments. Your second house of voice and facial expression is Aries, ruled by Mars in Scorpio, lending your tone an incisive, commanding clarity when speaking on matters of substance.",
+              "Your aesthetic taste is guided by Venus in Leo in the sixth house. You favor clean, classic, and commanding styling over flamboyant adornment, valuing attire that reflects competence and quiet authority. You carried yourself with peak magnetic polish during your Venus sub-period from 2024-06-14 to 2024-09-16, a benchmark window for personal charm and self-presentation.",
+              "Because your Arudha Lagna occupies Jupiter's sign in the tenth house while your Moon is tucked away in the ninth, the public perceives you as completely unflappable and naturally authoritative. Keep your outward demeanor consistent, remembering that your natural composure inspires confidence in others."
+            ],
+            "dates": [
+              {
+                "from": "2024-06-14",
+                "to": "2024-09-16",
+                "label": "Peak Venus aesthetic window"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Maintain your structured, understated public attire; project quiet certainty even when dealing with complex partnerships."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "claim:presence.bearing",
+              "claim:presence.style",
+              "claim:presence.adornment",
+              "claim:presence.face",
+              "claim:presence.public_vs_private",
+              "claim:presence.best_window",
+              "house:D1.h1",
+              "house:D1.h2",
+              "planet:D1.Ju",
+              "planet:D1.Su",
+              "planet:D1.Sa",
+              "planet:D1.Ve",
+              "point:D1.AL",
+              "activation:kaala/2/Ve@2024-06-14"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "body": {
+            "id": "body",
+            "headline": "Your physical constitution is anchored by strong vital reserves, though disciplined management of digestion and daily stress remains essential.",
+            "paragraphs": [
+              "Your physical base stems from a Pisces ascendant ruled by Jupiter, conferring natural resilience and constitutional breadth. However, with the ascendant receiving direct aspects from the Sun, Jupiter, and a powerful Saturn in Virgo, your body operates under continuous structural duty and demands steady maintenance. The bodily foundation is sustained under Jupiter's overarching major period lasting until 2034-10-22, providing vitality even when workloads intensify.",
+              "Physical wear focuses primarily around metabolic processing and emotional stress accumulation. Mars rules the second house of nutritional intake and aspects the fourth house, while its placement in the water sign Scorpio alongside a debilitated Moon links your digestive fire directly to emotional tension. In the Trimsamsa (D30), the placement of Mars and Saturn in Virgo indicates that unaddressed nervous tension tends to manifest in the digestive tract and intestinal tract. Venus occupying the sixth house in Leo further emphasizes the need to moderate rich foods and manage internal heat.",
+              "During this Mars sub-period ending on 2026-12-12, constitutional energy is high but prone to inflammatory spikes or muscular fatigue from exertion. Routine physical discipline, hydration, and regular meal timing prevent the nervous and digestive strain highlighted by Saturn and Mars from depleting your deeper reserves."
+            ],
+            "dates": [
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period physical exertion"
+              },
+              {
+                "from": "2023-10-23",
+                "to": "2034-10-22",
+                "label": "Jupiter major period baseline vitality"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Maintain disciplined meal schedules and avoid overly spicy or irregular food to soothe digestive fire."
+              },
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Engage in moderate, grounding physical movement rather than exhaustive training to protect the nervous system."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "house:D1.h1",
+              "planet:D1.Ju",
+              "planet:D1.Su",
+              "house:D1.h6",
+              "house:D1.h8",
+              "planet:D1.Ma",
+              "planet:D1.Sa",
+              "point:D1.A6",
+              "house:D30.h1",
+              "planet:D1.Mo",
+              "claim:body.footing",
+              "claim:body.wear",
+              "claim:body.shape",
+              "claim:body.live_lord:Ju:h1",
+              "activation:kaala/1/Ju@2023-10-23",
+              "activation:kaala/2/Ma@2026-05-05"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "yogas": {
+            "id": "yogas",
+            "headline": "Significant financial and recovery combinations balance a challenging nodal axis, turning professional trials into long-term assets.",
+            "paragraphs": [
+              "Your chart carries potent wealth combinations, most notably the Dhana Yoga formed by the mutual association of the second lord Mars and the fifth lord Moon in the auspicious ninth house. While the Moon experiences debilitation in Scorpio, this is directly cancelled by Mars occupying its own sign in the same house, forming Neecha Bhanga. This grace ensures that early crises or emotional tests surrounding mentors and beliefs ultimately transform into material security and resilience.",
+              "In the sphere of work and adversaries, eighth lord Venus placed in the sixth house forms a classical Viparita Raja Yoga (Harsha Yoga). This pattern promises that professional setbacks, competitive pressures, or institutional hurdles resolve in your favor, granting unexpected elevation through challenging environments and strategic endurance.",
+              "Concurrently, the chart contains structural knots: the Moon in the final degrees of Scorpio forms Ganda Moola Dosha, requiring continuous inner grounding, while all planets hemmed between Rahu in the fifth house and Ketu in the eleventh create Kala Sarpa Dosha. Under the current Ketu sub-sub-period running until 2026-12-12, this axis is acutely triggered, prompting momentary detachment in associations and creative pursuits before yielding to steady progress."
+            ],
+            "dates": [
+              {
+                "from": "2026-11-05",
+                "to": "2026-12-12",
+                "label": "Ketu sub-sub-period nodal activation"
+              },
+              {
+                "from": "2026-05-05",
+                "to": "2026-12-12",
+                "label": "Mars sub-period Dhana Yoga activation"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Channel current feelings of professional detachment into quiet planning rather than abrupt relationship changes."
+              },
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-12",
+                "text": "Rely on patient negotiation when facing workplace friction, trusting the protective Viparita combination to resolve conflict."
+              }
+            ],
+            "certainty": "strong",
+            "evidence": [
+              "yoga:D1.facts_dhana_yoga_lords_of_2_and_5",
+              "yoga:D1.facts_viparita_raja_yoga_lord_of_8_in_6",
+              "yoga:D1.kala_sarpa",
+              "yoga:D1.ganda_moola",
+              "yoga:D1.facts_neecha_bhanga",
+              "promise:promise:facts_dhana_yoga_lords_of_2_and_5",
+              "promise:promise:facts_viparita_raja_yoga_lord_of_8_in_6",
+              "promise:promise:kala_sarpa",
+              "promise:promise:ganda_moola",
+              "promise:promise:facts_neecha_bhanga",
+              "planet:D1.Ma",
+              "planet:D1.Mo",
+              "planet:D1.Ve",
+              "planet:D1.Ra",
+              "planet:D1.Ke"
+            ],
+            "validUntil": "2026-12-12"
+          },
+          "year": {
+            "id": "year",
+            "headline": "The current annual cycle demands structured labor and sober discipline before opening into intellectual expansion.",
+            "paragraphs": [
+              "The running annual solar return spans from 2026-09-09 to 2027-09-09. This annual framework establishes a rigorous context for the year, prioritizing structural endurance, the re-examination of personal obligations, and steady execution over rapid outward expansion.",
+              "Operating within this annual chart, the short clock Mudda Dasha of Saturn runs from 2026-10-28 until 2026-12-24. Saturn's tenure demands strict time management, patience with institutional delays, and careful attention to health and routine. Personal ambitions meet temporary friction during these weeks, functioning as a necessary testing ground to build resilient foundations for the rest of the annual cycle."
+            ],
+            "dates": [
+              {
+                "from": "2026-09-09",
+                "to": "2027-09-09",
+                "label": "Annual solar return year"
+              },
+              {
+                "from": "2026-10-28",
+                "to": "2026-12-24",
+                "label": "Saturn annual Mudda Dasha"
+              }
+            ],
+            "actions": [
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-24",
+                "text": "Accept measured progress in professional timelines and prioritize steady, error-free administrative execution."
+              },
+              {
+                "from": "2026-11-09",
+                "to": "2026-12-24",
+                "text": "Establish firm daily boundaries to prevent work demands from spilling into necessary rest periods."
+              }
+            ],
+            "certainty": "likely",
+            "evidence": [
+              "annual:VP2026.D1#lagna",
+              "annual:VP2026.D1#mudda",
+              "claim:year.year_lagna",
+              "claim:year.short_clock:Sa"
+            ],
+            "validUntil": "2026-12-24"
+          }
+        },
+        "validUntil": "2026-12-12"
+      },
+      "patterns": [
+        {
+          "areaId": "stuck",
+          "behaviour": "You abruptly pull back from social groups and creative plans when expectations become heavy.",
+          "mechanism": "Rahu in the 5th opposite Ketu in the 11th creates sharp cyclical shifts between intense creative focus and sudden emotional detachment under nodal activations.",
+          "since": "2026-11-05",
+          "until": "2026-12-12",
+          "evidence": [
+            "planet:D1.Ra",
+            "planet:D1.Ke",
+            "house:D1.h5",
+            "house:D1.h11",
+            "yoga:D1.kala_sarpa",
+            "activation:kaala/3/Ke@2026-11-05"
+          ]
+        },
+        {
+          "areaId": "stuck",
+          "behaviour": "You subject your inner feelings and beliefs to severe self-criticism, mistaking temporary emotional fatigue for permanent failure.",
+          "mechanism": "Saturn in the 7th casts its full third-house aspect onto the debilitated Moon in the 9th, cooling the mind with heavy duty and skepticism.",
+          "since": null,
+          "until": null,
+          "evidence": [
+            "planet:D1.Sa",
+            "planet:D1.Mo",
+            "house:D1.h7",
+            "house:D1.h9",
+            "yoga:D1.ganda_moola"
+          ]
+        },
+        {
+          "areaId": "mind",
+          "behaviour": "You oscillate between fixating intensely on unconventional creative ideas and abruptly withdrawing your interest.",
+          "mechanism": "Rahu occupies the fifth house of intellect and creative expression while hemmed in the Kala Sarpa axis, destabilizing sustained mental focus according to classical nodal rules.",
+          "since": null,
+          "until": null,
+          "evidence": [
+            "planet:D1.Ra",
+            "house:D1.h5",
+            "yoga:D1.kala_sarpa"
+          ]
+        }
+      ]
+    },
+    "calls": [
+      {
+        "agent": "self.oracle",
+        "call": "oracle.a",
+        "status": "ok",
+        "ms": 27409.32,
+        "promptTokens": 34639,
+        "cachedTokens": 13385,
+        "outputTokens": 3682,
+        "thoughtTokens": 0,
+        "costUsd": 0.030752
+      },
+      {
+        "agent": "self.oracle",
+        "call": "oracle.b",
+        "status": "ok",
+        "ms": 26592.71,
+        "promptTokens": 34640,
+        "cachedTokens": 13385,
+        "outputTokens": 3028,
+        "thoughtTokens": 0,
+        "costUsd": 0.0283
+      },
+      {
+        "agent": "self.oracle",
+        "call": "oracle.c",
+        "status": "ok",
+        "ms": 21996.81,
+        "promptTokens": 34634,
+        "cachedTokens": 13385,
+        "outputTokens": 2195,
+        "thoughtTokens": 0,
+        "costUsd": 0.025172
+      }
+    ],
+    "spentUsd": 0.099578
+  }
+}

@@ -1066,8 +1066,9 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
   - P2: the "Your reading" tab sits inside `AreaBoardView`, so when `/api/area/self` is preparing, unavailable or failed
     the whole page shows the board's message and the reading cannot be reached. Done: the reading tab renders on its
     own status.
-  - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
-  - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
+  - Fixed 2026-11-09: `src/components/AskModal.test.tsx` failed because the sidebar now opens collapsed (206b350); the
+    tests press Expand all first.
+  - Fixed on `develop` by 2026-11-09: `src/routes.tsx` `boardsEnabled` typecheck error (tsc -b is clean).
   - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
 
 ## Filed 2026-11-08 by the You reading research-grade build (docs 60–62, branch `feat/self-dashboard-guru-reading`)
@@ -1172,7 +1173,9 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
   4. **Paksha Bala (BG-07):** `kaala_parts.paksha` in `natal_export._build_shadbala` (only the six shadbala totals are kept);
      the digest also does not read `facts.panchanga` tithi and paksha yet.
 - **D20 and D24 cards (BG-07, BG-08) are not in the dossier's default chart list,** so mind/atma cannot read them. Status: open. Done: the digest builds D20/D24 cards for a cohort kundli and the panels cite them.
-- **Two clarify tests fail on `develop`, unrelated to BUILD-GAPS.** `tests/unit/reading/clarify.test.ts:157` expects
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`):** the clarify and annual-prashna tests failed because `planner.ts` keeps model replies in an in-memory
+  `clarifyCache` keyed by question, so a case was answered by the one before it. Both describe blocks now call
+  `clearClarifyCache()` in `beforeEach`. Was: **Two clarify tests fail on `develop`, unrelated to BUILD-GAPS.** `tests/unit/reading/clarify.test.ts:157` expects
   "Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?" and gets "Shall I look until 7 Sep 2027,
   or a different stretch of time?"; `tests/unit/reading/annualPrashna.test.ts` "a ruled-out question never reaches the model"
   fails the same way. Neither file was touched on this branch. Status: open. Done: the wording and the tests agree.
@@ -1226,7 +1229,7 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
 - **P3 — The Terms of Use page must contain the no-reproduction clause** ("won't copy, record, or reproduce anything
   seen in the app") at version `2026-11-08` (`src/auth/terms.ts` `CURRENT_TERMS_VERSION`). Holder: web session /
   Sachin for the wording. Done: the Terms page carries the clause and its version date matches.
-- **P2 — Three reading unit tests fail on this branch without touching anything it changed** (found 2026-11-08 running
+- **Clarify and prashna part fixed 2026-11-09 (cache between cases, see above); R14 order-dependence still open.** **P2 — Three reading unit tests fail on this branch without touching anything it changed** (found 2026-11-08 running
   `npm run test:unit` in `wt/server-alerts-consent`; none of them import requestMeta, accountEvents, emailService,
   ownerAlerts, terms or the GraphQL schema). `tests/unit/reading/annualPrashna.test.ts:224` ("a ruled-out question
   never reaches the model": expected false, got true) and `tests/unit/reading/clarify.test.ts` ("falls back to the rule
@@ -1459,22 +1462,30 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **Superseded 2026-11-09 by doc 03 (offline-first boards).** Opening a board never costs a question; only a fresh
   reading the person asks for, once "good until" has passed, takes one; each board's first reading is free. Boards always
   show their last reading, at the limit too (Sachin's decision kept). See `docs/billing/03-offline-first-boards.md`.
-- **P2 · A served older You synthesis may not match today's code panels.** Offline first serves the newest stored
-  synthesis even when its key (answers, clock, year, prompt version) differs from today's. Its areas are per panel, so
-  they still fit, but a prompt or shape change could show an older card shape until the person refreshes. Found
-  2026-11-09 building doc 03. Done: decided acceptable, or the fallback limited to the same prompt version.
+- **Accepted by Sachin 2026-11-09: a served older You synthesis may not match today's code panels.** Offline first
+  serves the newest stored synthesis even when its key (answers, clock, year, prompt version) differs from today's, so a
+  prompt or shape change can show an older card layout until the person asks for a fresh reading. Sachin: fine, no users
+  yet. Revisit before launch.
 - **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
   top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
   (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
-- **P2 · Web checks that fail on web `develop` without this change.** `src/components/AskModal.test.tsx` (2 tests: the
-  conversation list order, "Old" not found; "Unpin My nature" not found), `src/lib/theme.test.ts` (SyntaxError on the
-  dynamic import of `scripts/gen-light-theme.mjs` under vitest on Windows), and `tsc -b`: `src/routes.tsx(24,1)`
-  `boardsEnabled` declared but never read. Found 2026-11-09. Done: all three green on web `develop`.
-- **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
-  gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
-- **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
-  pushed. Owner: deploy session (server first, then web). Done: a free staging account opening a new board sees the count
-  move by one, and opening it again does not.
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`):** web `develop` checks: `AskModal.test.tsx` (sidebar opens collapsed; tests expand first),
+  `theme.test.ts` (the generator's `#!` line with a CRLF ending broke its import under vitest on Windows; the line is
+  removed, the script is run as `node scripts/gen-light-theme.mjs`), and `tsc -b` (already clean).
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`), found in the same run:** web `theme-light.css` was really stale on
+  `develop` (regenerated); web `WelcomeWizard.test.tsx` "falls back to null when @mediapipe/tasks-vision is unavailable"
+  hung 30 s once the package is installed (jsdom waits on its wasm), so the test now mocks the package as missing; server
+  `oracle/self-areas-v2.md` and `personalizer/self.md` (Self v2) named the engine inside their own "never name it" line,
+  which `tests/unit/reading/oracle/units.test.ts` forbids; reworded without the names and `generated.ts` re-embedded
+  (PROMPT_VERSION changes, so those prompts' stored outputs are rebuilt on the next fresh reading).
+- **P2 · `src/reading/prompts/method.md` and `persona.md` still name the engine in their prohibition line** ("such as
+  Radha or pyjhora"). The test only checks `readers/` and `oracle/`. A model that is told the names can repeat them.
+  Done: reworded like the Self v2 prompts and the test widened to every prompt, or kept on purpose with a note.
+- **Closed by doc 03: a board charge keyed by user and day.** Charges are now only for fresh readings the person asks
+  for; a new kundli's first boards are free by design.
+- **P2 · Offline-first boards not deployed yet.** Merged and pushed to `origin/develop` in both repos; deploy brief sent to
+  the deploy session 2026-11-09. Done: a free staging account opening a board twice sees the count unchanged, and a fresh
+  reading after "good until" moves it by one.
 
 ## Filed 2026-11-09 by the You board v2 review, server side (docs/reading-engine/66 §12, audit `docs/research/research_notes/Self screen design patterns/server_self_board_audit.md`)
 
@@ -1627,12 +1638,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 
 ## Filed 2026-11-09 by Self v2 step 1b (branch feat/self-v2-subtechniques)
 
-- **P2 · S3 windows run degraded until the engine stores a pressure grade.** `src/reading/self/sub/windows.ts`: no
-  `kundli_pressure` table and no 1–3 strength in any stored row, so every window is strength 2, transits and Sade Sati
-  are polarity `mixed`, and dasha polarity is the period lord's stored functional-nature label through
-  `FUNCTIONAL_POLARITY` (`v2words.ts`). `heaviestNow`, `top3` and the hero strip therefore order only by end date. Fact
-  (gaps `windows: ... degraded` on every build). Owner: engine `feat/pressure-inventory` (doc 66 §13 step 2). Done:
-  S3 reads `kundli_pressure` rows when present and the two gaps disappear.
+- **Fixed 2026-11-09 (final integration) · S3 degraded until a pressure grade:** S3 now reads the engine's `pressure_inventory` from `kundli_data` when stored (`src/reading/self/sub/pressure.ts`); degraded only while the engine is not deployed.
 - **P2 · No engine sensitive-passage flag.** S7 `bodyFacts.sensitive` is always false with a gap; the v1 service still
   decides it in Node (`service.ts isSensitive`: Ketu sub period or Saturn on 8 and 12), which doc 66 §12 lists as a
   Node derivation. Fact. Owner: engine pass (doc 66 §4.3) then server. Done: the engine stores the flag, S7 reads it,
@@ -1657,3 +1663,215 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 - **P3 · S5 does not yet drop declined matters.** Doc 66 §4.8 says S10's declined facts remove matters from S5, but
   declined keys are fact keys (`love.status`), not matters, and no reviewed fact-key → matter table exists. Owner: Sachin
   (words table) then server. Done: a reviewed table and S5 filtering by it.
+
+
+## Filed 2026-11-09 by Self v2 steps 5/6/8 (branch feat/self-v2-api)
+
+- **Fixed 2026-11-09 (final integration) · GET /api/self/v2 pending forever:** the store reader is a static import and the build event runs the v2 build under SELF_V2_BUILD=1; the offline e2e test gets `ok` with 12 areas.
+- **Fixed 2026-11-09 (final integration) · clock switch during a running build:** the marker and the cards key carry the clock; PUT /api/self/v2/clock queues on the new clock while the old one runs (`tests/unit/reading/self/v2/clockSwitch.test.ts`).
+- **Fixed 2026-11-09 (final integration) · `confirmedFacts()` returned `self.mood`:** dropped through `NOT_A_READING_FACT` (`tests/unit/profile/confirmedFacts.test.ts`).
+- **P3 · `clock_viewed` is written server side only.** `src/analytics/events.ts` `EVENT_NAMES` does not list it, so the
+  web cannot send it through `/api/events`; the row comes from `PUT /api/self/v2/clock` (`analytics_events`: event
+  `clock_viewed`, surface `self`, target = system, props `kundli_id, from, to, charged, outcome`). Fact. Owner: whoever
+  needs a web-side view event. Done: add the name if the web sends one.
+- **P3 · `floor` lines are empty on GET /api/self/v2.** The legacy panels' code lines are optional (`SelfV2Deps.floors`)
+  and not wired, because reading them means running the legacy board. Fact. Owner: integrator. Done: the v2 build
+  stores the code lines per area and `floors` reads them.
+- **Note for the web (`feat/self-v2-page`).** The hero question for a missing fact has `claimId = fact.<key>`
+  (`work.status`, `love.status`, `family.children`, `self.focus`); its answer goes to `PUT /api/profile/facts` with the
+  wizard's options (doc 52 §3, `src/reading/self/v2api/words.ts` `FACT_QUESTIONS`), not to `/api/self/v2/confirm`. The
+  v2 clock switch is `PUT /api/self/v2/clock` (v1 `PUT /api/self/clock` is unchanged).
+
+## Filed 2026-11-09 by the Self v2 integration (engine `feat/pressure-inventory`, web `feat/self-v2-page`)
+
+- **P3 · Engine worktree venv lacks `httpx`**, a test dependency in the engine's `pyproject.toml`, so the 14 API tests in
+  `src/jhora/tests/test_r3_vargas_catalog.py` error in `AIAstra_Radha-wt-pressure`. The route was checked by hand (200,
+  400 for an inapplicable system, 429). Owner: a Haiku install agent. Done: `httpx` installed and the 14 tests pass.
+- **P2 · `pressure_inventory` (engine `bd739ce`) has no `return` rows and no `summary` block** (heaviest now, eases at,
+  next support), and its fields are snake_case. Rahu and Ketu periods always press (the engine's functional-nature table
+  counts the nodes as malefics). Its gochara table follows doc 66 and differs from `reading_tables`. Owner: engine pass.
+  Done: decided which gochara table is canonical; summary computed by the engine, not Node.
+- **Fixed 2026-11-09 (final integration) · four fields the web inferred:** `range`/`rangeLabel` per area, `subChapterEnds`, `hero.supporting`, `profile.role` on `SelfV2Response`; the web reads them.
+- **P3 · Web: five copies of the scroll-snap carousel remain** (`SelfReading.tsx`, `AreaBoardView.tsx` twice, the Work and
+  Life Reading boards) beside the new shared `src/components/carousel/Carousel.tsx` and `Chips.tsx`. Owner: web. Done:
+  all boards on the shared components.
+- **P3 · Web: the Personalize wizard modal is mounted twice** (`TopNavigation.tsx` with local state, and
+  `pages/you/v2/SelfBoardV2.tsx`). Owner: web. Done: one modal opened through shared state.
+- **P3 · Web: `tsc -b` leaves `tsconfig.*.tsbuildinfo` files that are not gitignored.** Owner: web. Done: ignored.
+
+## Filed 2026-11-09 by Self v2 step 1c/3/4 (branch feat/self-v2-agents)
+
+- **Status · Self v2 steps 1c, 3, 4 built, not live.** `src/reading/self/v2/` (slices, cache warm-up, Oracle ×3,
+  Personalizer + validator, build order, store) behind `SELF_V2_BUILD=1` (default off). No paid call has been made; every
+  test mocks Gemini. The first live replay needs Sachin's yes (doc 66 §13: ≈ $0.15 for two dossiers × three profiles).
+- **P2 · `OracleAreaDoc` is typed on the v1 panel ids.** `areaDoc.ts` (`OracleArea.id`, `validateAreaDoc` `panelIds`,
+  `oracleAreaSchema`) takes `BoardPanelId`; the v2 ids (stuck, chapter, drive, presence, now) are cast through
+  `asPanelIds` in `src/reading/self/v2/oracle.ts`. Works at run time (the validator compares strings). Owner:
+  reading-dev. Done: `areaDoc.ts` generic over the area id type, the cast removed.
+- **P2 · Explicit cache storage is billed per hour and the five family packs are cached explicitly.** The v2 build keeps
+  the v1 behaviour (`warmPrefixes` warms the five family packs, the Oracle prefix, then the Personalizer prefix; each
+  region has its `llm_cache_entries` row). Coordinator asked to keep explicit caching to the Oracle and Personalizer
+  prefixes. Owner: reading-dev with Sachin. Done: storage cost per region-hour priced from the Lab replay; if the family
+  packs do not pay back their storage on a warm rebuild, warm only `self.oracle` and `self.personalizer` and let the
+  families use implicit caching.
+- **P1 · Agent runs logged zero tokens on the v1 Self/Love/Work reading path.** `runSelfOracle` returned
+  `tokensIn`/`tokensOut` from its `withAgentRun` callbacks, but `withAgentRun` reads only `usage`, so `agent_runs`
+  stored 0 prompt, cached, output and thought tokens for every family reader, lineman and Oracle run (fixed in
+  `src/reading/self/oracle.ts`: `usage` now passed; the v2 path passes it too). Not verified: whether Gemini 3.x returns
+  `thoughtsTokenCount` at all with `includeThoughts: false` (the Lab's stage summaries also read 0). Owner: reading-dev.
+  Done: one stored replay shows non-zero `thought_tokens`, or `gemini.ts toUsage` is changed to the field Gemini sends.
+- **Fixed 2026-11-09 (final integration) · Personalizer cap 2,500 tight:** default raised to 5,000 (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`); the first replay's output count still confirms it.
+- **P2 · A partial Oracle (one of three calls failed) is not stored and no cards are written.** The next build re-runs
+  all three calls. Owner: reading-dev. Done: store the two good calls' areas under their own keys and re-run only the
+  failed call, if replays show partials happen.
+- **P2 · The Personalizer's per-sentence source rule is strict.** `sources` must align one-to-one with headline + body
+  sentences; a model that cites per paragraph loses sentences. Owner: reading-dev. Done: the replay's drop rate per
+  card under 10 %, or the rule relaxed to per paragraph.
+- **P3 · Personalizer validator word lists are constants.** `CHART_TERMS`, `GENDERED_WORDS`, `MEDICAL_WORDS` in
+  `src/reading/self/v2/personalizerValidate.ts`; the hero's live areas (`LIVE_AREAS`) too. AGENTS.md asks for
+  configurable selections in `src/config/env.ts`. Owner: reading-dev. Done: env-backed lists with these defaults.
+- **P3 · `readSelfV2Latest` serves the newest stored cards even past their window.** It does not check `valid_to`; the
+  API lane should queue a rebuild when `builtAt` is older than the running sub-sub period. Owner: API lane. Done: the
+  route compares and queues.
+- **P3 · `docs/admin/07-technique-pieces-and-agents.md` regenerated on this branch** after the merge with 1b; a later
+  catalogue change on develop needs it regenerated again (`npx tsx scripts/write-technique-pieces-doc.ts`).
+- **Fixed 2026-11-09 (final integration) · fourteen unkeyed step-2 outputs:** the rows read concrete sections (a new `person` section for S10) and each output is keyed by its own refresh stamps; `layers.unkeyed` is empty and a rebuild with unchanged stamps writes nothing.
+- **P3 · Only family.sky is padded to the 1,024-token cache minimum.** On a sparse chart (the unit fixture) family.varga,
+  family.dasha and family.year prefixes come out at ≈ 880, 190 and 30 tokens, below the minimum, so their explicit regions
+  are refused and the calls go uncached. Owner: reading-dev. Done: pad or merge the short family packs, measured on the
+  two stored dossiers.
+- **P3 · `tests/unit/reading/cacheRecycle45m.test.ts` "executes scheduled per-individual recycle…" timed out once
+  (45 s) under a parallel run on 2026-11-09 and passed on the rerun.** Flaky under load. Owner: reading-dev. Done: the
+  test uses fake timers end to end.
+
+## Filed 2026-11-09 by the Self v2 final integration (branch feat/self-v2-integrate)
+
+- **P1 · What still blocks a live staging run.** (1) The engine's `pressure_inventory` is not deployed: every pull
+  answers 400, the board stays in degraded windows with a gap, and the loader retries once per kundli and clock per 24 h
+  (`SELF_V2_PRESSURE_RETRY_HOURS`). (2) `SELF_V2_BUILD=1` and `SELF_V2_ENABLED=1` are not set on the API Lambda.
+  (3) No paid replay has been made: the first one needs Sachin's yes (doc 66 §13, §4.9 has the estimates). (4) The
+  shared Prisma client must be generated from the current schema before deploy (the `terms_version` item above). Owner:
+  Sachin (yes), deploy sub-session. Done: a staging GET /api/self/v2 returns `ok` with twelve areas from a live build.
+- **P2 · Pressure rows: `houses` is the engine's `houses_touched`, aspects included.** S5 takes a risk row's first house
+  for "from where" and its people from all of them, and S7 calls a transit "over the lagna" when house 1 is touched, so on
+  engine rows both now count aspected houses. The engine row has no separate "house it stands in" field for transits and
+  stations, and Node may not count it from `sign_index`. Fact (code read). Owner: engine pass, then reading-dev. Done:
+  the engine adds the placement house to transit and station rows and S5/S7 read it.
+- **P3 · Two key namespaces for one period.** With the inventory, S3 rows carry the engine's `dasha:<system>/<level>/<lord>@<from>`
+  ids while S2 periods keep `activation:<system>/...`; the Oracle may cite either for the same period. Owner: reading-dev.
+  Done: one namespace (an alias table in the slice, or S2 reading the inventory's dasha rows).
+- **P3 · Sub-techniques still all run before the store lookup.** `runSelfSubTechniques` computes all ten (≈ 80 ms on the
+  research kundli) and only then are the outputs keyed; a rebuild with unchanged stamps writes nothing and calls no model,
+  but the code layer is not skipped. Owner: reading-dev. Done: S1, S2 and S10 run first to make the stamps, and the other
+  sub-techniques read their stored output on a key hit.
+- **P3 · `hero.supporting` is derived, not cited.** The hero stores no per-sentence sources, so the API names the hero
+  question's claim area plus the live areas (`LIVE_AREAS`) that have a card (`response.ts heroSupporting`). Owner:
+  reading-dev. Done: the Personalizer schema carries hero sources and the API reads them.
+- **P3 · Range words for standing-plus-live areas.** Mind, drive and chapters say "True until <main period end>" (e.g. 16
+  Feb 2037 on the research kundli), which reads long. Owner: Sachin (words). Done: reviewed wording per horizon in
+  `response.ts areaRange`.
+- **P3 · Slice prefixes under 1,024 tokens on the research kundli.** `family.varga` 680, `family.year` 795, `family.sky`
+  579 and `self.personalizer` 800 (doc 66 §4.9 table; e2e test output), so those regions are refused and the calls go
+  uncached. Extends the agents lane's padding item above. Owner: reading-dev. Done: every warmed prefix ≥ 1,024 on the two
+  stored dossiers.
+- **P3 · `tests/unit/chartCatalogSync.test.ts` "logs a failed sync as a warning" failed once (8.3 s) in a parallel run
+  and passed on the rerun.** Flaky under load, not caused by this branch. Owner: whoever next touches the catalog sync.
+  Done: the test uses fake timers.
+- **P3 · The `pressure_inventory` chart type row is created by the loader** (`chart_data_types`, served false) the first
+  time a pull is attempted, because `kundli_data.data_type` has a foreign key and no migration was allowed. The catalog
+  sync marks it served once the engine lists the type. Owner: none needed; noted for whoever reads the table.
+
+## Filed 2026-11-09 by the Self v2 regression check (branch fix/self-v2-test-regressions)
+
+Ten tests in seven files fail on `9595614` (the last commit before any Self v2 code) as well as on `c5f0c77`, alone and
+inside the full suite alike; they are not Self v2 regressions and were left as they are. Likely shared cause for the
+env-driven ones: `tests/setup.ts` runs `dotenv.config()`, so the worktree's local `.env` (rebuilt from the Lambda:
+`ASTROKUNDLI_TRANSPORT`, `GEMINI_MAX_OUTPUT_TOKENS`, `GEMINI_THINKING_*`, `READING_EXPLICIT_CACHE`, model ids) leaks into
+tests that assume those vars are unset. Owner: whoever next touches tests/setup.ts (load `.env` only outside vitest, or
+have these tests clear the vars they depend on).
+- **P2 · `tests/unit/astroKundliExportSpacing.test.ts`, all four "keeps the (start) spacing ..." cases:**
+  `expected ~250 to be greater than or equal to 1090`. Fails on 9595614 too.
+- **P2 · `tests/unit/env.test.ts` > isAstroKundliConfigured > "returns false when base URL is empty for current env":**
+  `expected true to be false` (lambda transport from `.env` wins over the empty base URL). Fails on 9595614 too.
+- **P2 · `tests/unit/geminiChatService.test.ts` > "uses GEMINI_MAX_OUTPUT_TOKENS when set":** `expected undefined to be
+  4096`. Fails on 9595614 too.
+- **P2 · `tests/unit/reading/promptCache.test.ts` > "is off by default: no cache created, full prompt sent":** `expected
+  [ { …(5) } ] to have a length of +0 but got 1` (`READING_EXPLICIT_CACHE` set in `.env`). Fails on 9595614 too.
+- **P2 · `tests/unit/reading/run.test.ts` > "sends the thinking config in the request body ...":** expected
+  `{ thinkingBudget: 2048, … }`, received `{ thinkingLevel: 'medium', … }`. Fails on 9595614 too.
+- **P2 · `tests/unit/reading/clarify.test.ts` > "falls back to the rule question on error, junk, a long question or
+  unsafe wording":** expected "Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?", received
+  "Shall I look until 7 Sep 2027, or a different stretch of time?". Fails on 9595614 too. Already fixed on develop by
+  `c9db440` (clears the planner's in-memory clarify cache in `beforeEach`); not repeated on this branch.
+- **P2 · `tests/unit/reading/annualPrashna.test.ts` > model planner > "a ruled-out question never reaches the model; bad
+  model output keeps the rules":** `expected true to be false`. Fails on 9595614 too. Same clarify-cache cause, already
+  fixed on develop by `c9db440`.
+
+## Filed 2026-11-09 by the Self v2 release
+
+- **P2 · The engine (AIAstra_Radha) has no documented release path.** The deploy session would not ship engine develop
+  `9a4fb5d` (the `pressure_inventory` export) without one. Until it ships, the Self v2 windows run degraded: equal
+  strength, transits mixed. Owner: Sachin with the deploy session. Done: a written engine release path in `AGENTS.md` or
+  `docs/ops/`, the export live on the engine Lambda, and the server's pull storing a `kundli_data` `pressure_inventory`
+  row for one test kundli.
+
+## Filed 2026-11-09 by the Self v2 live replay
+
+Source: `docs/reading-engine/66-replay-2026-11-09-self-v2.md` (11 paid calls, $0.12, kundli `c584c0a3`, three synthetic
+profiles). Owner: the next Self v2 agents/validator branch unless noted.
+- **P1 · Personalizer truncates at the output cap when it thinks.** Profiles a and b hit `MAX_TOKENS` with output
+  plus about 2.2 k thought tokens equal to 5,000 (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). The whole card document is
+  lost. `src/reading/self/v2/personalizer.ts` passes `thinking: 'low'`. Done: thinking off (or cap about 8 k, or the
+  cards split over two calls), and a replay of profiles a and b returns `STOP`.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** thinking `minimal`, cap 8,000, one retry at 12,000, a cut document never stored; the replay of a and b (needs a yes) is still to run.
+- **P1 · The Personalizer validator drops a whole date when its label holds a chart term** ("Ketu detachment", "Mars
+  sub-period"): 9 of 11 cards lost their dates (`personalizerValidate.ts`). Done: the label is redacted or rewritten and
+  the date kept, with a test.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** the label becomes the area title and the date stays (only exact Oracle windows).
+- **P1 · The Personalizer ignores the profile's facts:** a retired person aged 60 and over got "executive
+  responsibility", "public pitches" and "workplace friction". Done: a prompt rule and example, plus a validator check
+  for career words when `work.status` is retired or between_jobs.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** THE PERSON lists each fact and its bans; env role-words table drops the sentence; hero not naming the focus is flagged.
+- **P2 · Sentence/source alignment drops most body sentences:** 21 sentences on 11 cards, bodies of 12–42 words.
+  Done: a `{text, source}` sentence array in the schema, or lenient matching.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** `alignSources` reads per sentence, body-only, per paragraph or card-level; 0 drops on the replay.
+- **P2 · `CHART_TERMS` misses "nodal axis", "sub-period", "karmic", "combinations", "annual cycle"; `MEDICAL_WORDS`
+  misses "inflammatory", "digestive", "nervous system" and diet advice.** These reached profile c's cards.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** terms added; body card diet/medicine list `SELF_V2_BODY_ADVICE_WORDS`.
+- **P2 · Date pairs are not checked.** The Oracle invented 1–7-day "relief" spans (2026-12-12..13, 12-13..15, 12-13..19)
+  that pass `inStoredWindow` because each day lies inside the year span. The Personalizer paired an action start with a
+  chapter end. Done: pair checks in both validators.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** Oracle dates must be a stored span, actions start today or on an edge; card dates an Oracle window.
+- **P2 · Double-prefixed evidence keys** `risk:risk:…` and `promise:promise:…` in the Oracle slice
+  (`src/reading/self/v2/slices.ts`, `` b.k(`risk:${r.id}`) `` where `r.id` already starts `risk:`; the same for promise).
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** `riskKey`/`promiseKey`, keys normalised on write, on the model's output and on read.
+- **P2 · The Oracle costs 2.5× the §4.9 estimate.** 34.6 k provider tokens per call against 15.5 k by chars/4; 38.6 %
+  cached. Done: the stable part of the suffix moves into the prefix, and the Lab uses `countTokens`.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** the reading frame is in the cached prefix (≈ 85 % projected), the Lab estimates chars / 2.2; `countTokens` is not wired (filed below).
+- **P3 · The Oracle reports 0 thinking tokens** on gemini-3.8-flash with thinking `low`; unverified whether
+  `thoughtsTokenCount` is missing. Needs one tiny paid call with Sachin's yes.
+- **P3 · An Oracle self-contradiction is not caught:** "Saturn's tenth aspect onto this Moon" against the pattern's
+  (correct) third aspect from the 7th onto the 9th. Aspect claims are not checked against the digest.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** the Oracle prompt now reads aspects only from the input's aspect fields; the validator check is filed below.
+- **P3 · Sub-techniques take 9.1 s from this machine** (estimate 0.3 s). Check on the Lambda before acting.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** Layer 0 in one parallel round, run logs awaited once; the database side is unmeasured offline.
+- **P3 · The 14-word headline cap withholds In short** (18-word headline); give the schema a length hint.
+- **P3 · Replay brief listed `19b210cd…` as a kundli.** It is the user id of `c584c0a3`, so doc 66 §13's "two stored
+  dossiers" are one chart. Choose a second test kundli for the next replay.
+
+## Filed 2026-11-09 by fix/self-v2-replay-findings
+
+- **P2 · Re-run the replay for profiles a and b** (2 Personalizer calls, ≈ $0.012, needs Sachin's yes) and one
+  Oracle replay to measure the cached share of the new prefix (target ≥ 70 %, projected ≈ 85 %) and the sub-technique
+  wall time against the 1.5 s target. Not done: no paid call allowed on this branch.
+- **P3 · Gemini `countTokens` is not in the client** (`src/reading/llm/gemini.ts`). The Lab estimates chars / 2.2. Done:
+  a free `countTokens` call in the Lab only, never on a build's path.
+- **P3 · An aspect claim cannot be checked against the input in Node** without counting houses (forbidden: Radha is the
+  only source). Done: the engine exports each aspect with its count (3rd/7th/10th) per planet pair; then the Oracle
+  validator flags an area that names an aspect absent from the evidence. Prompt rule added meanwhile.
+- **P3 · The Oracle prefix now changes per build** (it carries the reading frame), so a region lives for one build and
+  its storage is larger (≈ 29 k tokens instead of 13 k). Measure the storage cost per region-hour on the next replay.
+- **P3 · "First card speaks to the focus" is only a prompt rule.** Cards are keyed by area and shown in the board's
+  order; only the hero is checked (a gap, never a drop). Owner: the UI lane, if focus should reorder the cards.
+- **P3 · One role word or diet word drops the whole ladder** (the four steps are one object). Done: drop only the step
+  and show three, or ask the Personalizer to rewrite.
