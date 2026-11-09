@@ -36,7 +36,7 @@ import type {
   WindowRef,
   WindowSet,
 } from '../v2types.js';
-import type { SelfV2Loaded } from './subContract.js';
+import type { SelfV2Loaded } from '../sub/index.js';
 
 export const SELF_V2_ORACLE_PROMPT = 'oracle/self-areas-v2';
 export const SELF_V2_PERSONALIZER_PROMPT = 'personalizer/self';

@@ -1872,11 +1872,234 @@ const BOARD_READING_BUILT: TechniqueDef[] = [
 ];
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Self v2 (doc 66 §4.8): ten shared sub-techniques `self.sub.*` that run once per build over one SelfBuildContext, and
+// twelve area selections `self.v2.<area>` (the hero plus eleven areas) that read only the sub-technique outputs. Code
+// only: no prompt, no user turn. Agent: the You reading code agent until the agents lane registers a `self.sub` row.
+// ---------------------------------------------------------------------------------------------------------------------
+const SELF_V2_SOURCE = 'docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts';
+const selfV2Row = (
+  id: string,
+  title: string,
+  charts: TechniqueChart[],
+  algorithm: string[],
+  inputs: ContractInput[],
+  code: string,
+  houses: number[],
+  vargas: string[],
+  output: string,
+): TechniqueDef => ({
+  id,
+  title,
+  category: 'self',
+  board: 'you',
+  status: 'built',
+  charts,
+  algorithm,
+  source: SELF_V2_SOURCE,
+  code,
+  agents: [id.startsWith('self.sub.') ? 'self.sub' : 'self.reading_panel'],
+  accuracy: 'area_checks:self',
+  selectors: { boards: ['you'], subjects: ['general_life_direction'], houses, vargas },
+  contract: codeContract(inputs, output),
+});
+const subFindings = (ids: string): ContractInput => inp('findings', `outputs of ${ids} in the build context`, 'findings_in');
+const ALL_HOUSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+const SELF_V2: TechniqueDef[] = [
+  selfV2Row(
+    'self.sub.clock',
+    'Self v2 S1: the primary dasha clock and its confirming clocks',
+    [c('dasha', 'dasha.applicable'), c('dasha', 'all served systems')],
+    [
+      'Read kundlis.preferred_dasha and the systems present in kundli_activation with their family (defaultSystemsPresent: a conditional system the engine does not mark applicable comes back as family other)',
+      'resolveClock: the preferred system when it has periods, else the first SELF_CLOCK_CONDITIONAL_ORDER system of family conditional (reason conditional_applies), else vimsottari (default)',
+      'confirming = SELF_CONFIRM_SYSTEMS present, minus the primary; applicable = every present system whose family is not other; notApplicable = the rest, reason not_marked_applicable_by_engine',
+    ],
+    [inp('activation', 'systems present and their family; dasha.applicable', 'activation_row')],
+    'src/reading/self/sub/clock.ts subClock; src/reading/self/clock.ts resolveClock',
+    [1],
+    ['D1'],
+    'self_v2.clock_resolution',
+  ),
+  selfV2Row(
+    'self.sub.periods',
+    'Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries',
+    [c('dasha', 'primary clock L1-L3'), c('natal', 'dasha charter')],
+    [
+      'mdSpine and runningChain over the stored activation rows of the primary clock at asOf: previous, running and next level-1 period, the running level-2 and level-3 period',
+      'subRelation: the main lord D1 card dashaCharter.fruition[sub lord] as the engine stored it: 6/8 when isShadAshtaka68, 2/12 when isDwirdwadasha212, else its fruitionClass; null and a gap when not stored (rasi clocks have none)',
+      'boundaries: the from/to of the three main periods, of every sub period of the running main period and of the running sub-sub period, de-duplicated, sorted',
+      'No running level-1 period: the frame is null and a gap is recorded',
+    ],
+    [inp('activation', 'primary clock L1-L2 over the life, L3 asOf ±12 months', 'activation_row'), inp('planet', 'D1 card of the main lord (dasha_charter)', 'planet_card')],
+    'src/reading/self/sub/periods.ts subPeriods, charterRelation; slices.ts mdSpine, runningChain',
+    [1],
+    ['D1'],
+    'self_v2.period_frame',
+  ),
+  selfV2Row(
+    'self.sub.windows',
+    'Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)',
+    [c('dasha', 'primary clock L1-L3'), c('transit', 'stored sky overlay'), c('natal', 'functional nature')],
+    [
+      'Rows: every primary-clock activation row overlapping asOf ±36 months (matters from its stored houses through SELF.matters) and the sky overlay ingresses of SELF_V2_WINDOW_TRANSIT_PLANETS (house_from_lagna, house_from_moon as stored), Sade Sati and dhaiya spans',
+      'Polarity: the period lord D1 card functional label through FUNCTIONAL_POLARITY (malefic presses, benefic supports, neutral mixed); transits and sign periods mixed; strength 2 for every row (the engine stores no grade); degraded true with gaps',
+      'strip = rows overlapping asOf ±6 months; heaviestNow = the live pressing row by strength then soonest end; easesAt = its end when stored; nextSupportFrom = the first supporting row starting after asOf',
+      'startedLast12m = rows that started in the last 12 months; endingNext6m = rows ending in the next 6 months; byMatter groups the strip; since/until only where the stored row has them',
+    ],
+    [inp('activation', 'primary clock L1-L3 asOf ±36 months', 'activation_row'), inp('transit', 'stored sky overlay covering asOf', 'transit_row'), inp('planet', 'D1 functional nature of period lords', 'planet_card')],
+    'src/reading/self/sub/windows.ts subWindows, windowRows',
+    ALL_HOUSES,
+    ['D1'],
+    'self_v2.window_set',
+  ),
+  selfV2Row(
+    'self.sub.promise',
+    'Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags',
+    [c('natal', 'yogas'), c('natal', 'doshas'), c('natal', 'dasha charter')],
+    [
+      'Each D1 yoga/dosha row (varga rows left out): kind from its stored class through PROMISE_KIND_BY_CLASS (cancellation grace; dosha, affliction knot; raja, mahapurusha, dhana, viparita gift); rows with no such class are left out with a gap',
+      'Duplicates by name and kind are dropped; matter = SELF.matters of the first stored house, who = SELF.people of every stored house; evidence = the yoga key and its planets',
+      'A knot whose stored dosha details say hasExceptions adds a grace that cancels it',
+      'A planet whose D1 dashaCharter isYogi adds a gift, isAvayogi a knot, on the matter of its stored house; strength 2 (the engine stores no grade) with a gap',
+    ],
+    [inp('yoga', 'D1 yogas and doshas with class and details', 'yoga_row'), inp('planet', 'D1 cards (house, owns, dasha_charter yogi flags)', 'planet_card')],
+    'src/reading/self/sub/promise.ts subPromise; src/reading/self/v2words.ts PROMISE_KIND_BY_CLASS, SELF_MATTERS, SELF_PEOPLE',
+    ALL_HOUSES,
+    ['D1'],
+    'self_v2.promise_ledger',
+  ),
+  selfV2Row(
+    'self.sub.risk',
+    'Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)',
+    [c('dasha', 'primary clock'), c('transit', 'stored sky overlay'), c('natal', 'yogas')],
+    [
+      'Join of S2, S3 and S4 only: every S3 row live at asOf whose polarity presses and that has a planet and stored houses',
+      'matter = its first matter; what = RISK_WHAT[planet]; from = planet, first stored house, window id and the yoga id of an S4 knot naming the same planet; who = SELF.people of its houses',
+      'since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot',
+      'top3 = the three rows with the highest engine strength, then the soonest until',
+    ],
+    [subFindings('self.sub.periods, self.sub.windows, self.sub.promise')],
+    'src/reading/self/sub/risk.ts subRisk; src/reading/self/v2words.ts RISK_WHAT',
+    ALL_HOUSES,
+    ['D1'],
+    'self_v2.risk_ledger',
+  ),
+  selfV2Row(
+    'self.sub.mind_facts',
+    'Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only',
+    [c('divisional', 'D1'), c('divisional', 'D9'), c('natal', 'yogas'), c('nakshatra', 'star profile')],
+    [
+      'feeling: Moon D1 and D9 cards, the star profile, D1 yoga rows naming the Moon; thinking: Mercury D1 and D9, the 5th; peace: the 4th and its lord card; judgement: the 5th lord card and Jupiter',
+      'candidatePatterns: the stored D1 house of each SELF_V2_MIND_PATTERN_PLANETS planet, and every planet in the Moon card aspectedBy',
+      'A missing card or house is a gap, never a default; the Oracle names the pattern',
+    ],
+    [inp('planet', 'D1/D9 Moon, Mercury, Jupiter, Rahu, Saturn, Ketu, 4th and 5th lords', 'planet_card'), inp('house', 'D1 h4, h5', 'house_card'), inp('yoga', 'D1 yogas naming the Moon', 'yoga_row'), inp('star', 'star profile', 'star_profile')],
+    'src/reading/self/sub/mind.ts subMindFacts',
+    [4, 5],
+    ['D1', 'D9'],
+    'self_v2.mind_facts',
+  ),
+  selfV2Row(
+    'self.sub.body_facts',
+    'Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)',
+    [c('divisional', 'D1'), c('divisional', 'D30'), c('jaimini', 'A6'), c('dasha', 'primary clock'), c('transit', 'stored sky overlay')],
+    [
+      'footing: h1, lagna lord, Sun; wear: h6, h8, Mars, Saturn, A6; shape: D30 h1, Moon (evidence keys; a missing row is a gap)',
+      'liveLords: the running L1-L3 periods of the primary clock whose stored activation houses include SELF_V2_BODY_HOUSES',
+      'liveTransits: S3 live overlay rows of SELF_V2_BODY_TRANSIT_PLANETS with stored house_from_lagna or house_from_moon 1, and Sade Sati',
+      'sensitive: the engine flag only; none is stored, so false with a gap',
+    ],
+    [inp('house', 'D1 h1, h6, h8; D30 h1', 'house_card'), inp('planet', 'D1 lagna lord, Su, Mo, Ma, Sa', 'planet_card'), inp('point', 'D1 A6', 'point_row'), subFindings('self.sub.windows')],
+    'src/reading/self/sub/body.ts subBodyFacts',
+    [1, 6, 8],
+    ['D1', 'D30'],
+    'self_v2.body_facts',
+  ),
+  selfV2Row(
+    'self.sub.presence_facts',
+    'Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)',
+    [c('divisional', 'D1'), c('divisional', 'D9'), c('jaimini', 'AL'), c('dasha', 'primary clock')],
+    [
+      'bearing: h1 and the lagna lord; style: planets the h1 card lists as occupants and graha drishti; adornment: Venus D1 and D9; face: h2; publicVsPrivate: AL, Moon, h4',
+      'bestWindow: the most recent completed L1 or L2 period of the primary clock whose lord is in SELF_V2_PRESENCE_PLANETS or is the lagna lord',
+      'liveCare: the running sub period when its lord is one of them',
+    ],
+    [inp('house', 'D1 h1, h2, h4', 'house_card'), inp('planet', 'D1/D9 Venus, lagna lord, Moon', 'planet_card'), inp('point', 'D1 AL', 'point_row'), inp('activation', 'primary clock L1-L2', 'activation_row')],
+    'src/reading/self/sub/presence.ts subPresenceFacts',
+    [1, 2, 4],
+    ['D1', 'D9'],
+    'self_v2.presence_facts',
+  ),
+  selfV2Row(
+    'self.sub.year',
+    'Self v2 S9: the year frame from the stored annual row covering today',
+    [c('annual', 'Varshaphal mudda')],
+    [
+      'runningMudda: the stored VP D1 annual row whose mudda periods cover asOf; its span is the year, the running mudda period the short clock',
+      'yearLagna and yearLord are evidence keys only when the row stores them, else null with a gap',
+      'No stored row covers asOf: noCoverage true, nothing taken from another year',
+    ],
+    [inp('annual', 'VP D1 rows with mudda periods', 'annual_row')],
+    'src/reading/self/sub/year.ts subYear; panels/year.ts runningMudda',
+    [1],
+    ['D1'],
+    'self_v2.year_frame',
+  ),
+  selfV2Row(
+    'self.sub.profile',
+    'Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)',
+    [c('natal', 'none (person facts)')],
+    [
+      'loadProfilePack: auth (birth date, gender, role) and person_facts in two reads',
+      'Age is calendar arithmetic over the typed birth date, banded by SELF_AGE_BANDS; gender null when not stated; declined keys listed; the last five confirm answers; the mood of today only; a stable hash',
+    ],
+    [inp('text', 'auth and person_facts of the user', 'text_in')],
+    'src/reading/self/sub/profile.ts subProfile; src/reading/person/profile.ts loadProfilePack',
+    [1],
+    ['D1'],
+    'self_v2.profile_pack',
+  ),
+  ...(
+    [
+      ['now', 'Right now (hero)', 'heaviest live window, eases date, next support, six-month strip (non-mixed rows), running sub-sub period, the ledger top3', 'six_months_each_way'],
+      ['stuck', 'Where you get stuck', 'heaviest live window, pressing windows started in the last 12 months still running, every live ledger row, standing knots, mind candidate patterns', 'live_plus_standing'],
+      ['chapter', 'This chapter', 'running sub period, its charter relation to the main lord, non-mixed strip windows inside it, the live ledger rows', 'sub_period'],
+      ['diagnosis', 'In short', 'bearing keys, the ledger top row, running main and sub period', 'sub_period'],
+      ['lagna', 'Who you are', 'bearing and public/private keys, promise entries on self_and_body', 'always'],
+      ['mind', 'How you think', 'feeling, thinking, peace and judgement keys, candidate patterns, promise entries and ledger rows on ideas and home', 'always_plus_live'],
+      ['body', 'Body & energy', 'footing, wear and shape keys, live lords on body houses, live transits, ledger rows on body, work load and the sudden', 'live_plus_standing'],
+      ['drive', 'Drive & ambition', 'promise entries, ledger rows and live non-mixed windows on effort, career, gains, money and ideas', 'always_plus_live'],
+      ['presence', 'How you come across', 'bearing, style, adornment, face and public/private keys, the best past window, the live care line', 'always_plus_live'],
+      ['yogas', 'Gifts & knots', 'every promise entry, gifts then knots then graces', 'always'],
+      ['chapters', 'Chapters', 'previous, running and next main period, running sub period, L1/L2 boundaries inside the running main period', 'chapter'],
+      ['year', 'This year', 'the year frame lagna, year lord and short clock; nothing when noCoverage', 'twelve_months'],
+    ] as const
+  ).map(([area, title, picks, horizon]) =>
+    selfV2Row(
+      `self.v2.${area}`,
+      `Self v2 area: ${title} (selection over the self.sub outputs into an AreaBrief)`,
+      [c('natal', 'self.sub outputs')],
+      [
+        `Pure selection over ctx.sub (no database, no digest read): ${picks}`,
+        'Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person',
+        `Horizon ${horizon}; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.${area}`,
+      ],
+      [subFindings('self.sub.*')],
+      `src/reading/self/areas/${area}.ts; areas/index.ts buildAreaBriefs`,
+      [1],
+      ['D1'],
+      'self_v2.area_brief',
+    ),
+  ),
+];
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Self v2 agents (doc 66 §4.8)
 // Layer 3 of the You board v2: the Oracle (three calls over one cached natal prefix), the Personalizer and the hero it
 // writes. The sub-techniques and areas (Layers 1–2) are another block, appended by their own lane.
 // ---------------------------------------------------------------------------------------------------------------------
-const SELF_V2_SOURCE = 'docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers';
+const SELF_V2_AGENTS_SOURCE = 'docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers';
 const SELF_V2_NATAL_INPUTS: ContractInput[] = [
   inp('house', 'D1 and divisional house cards 1..12 (the family.rasi and family.varga packs)', 'house_card'),
   inp('planet', 'D1 and divisional planet cards with avasthas and dasha_charter', 'planet_card'),
@@ -1902,7 +2125,7 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
       'Merges the three JSON documents and validates them with the area validator: every evidence key from the input (claim ids keep their claim: prefix), every date inside a period, window or year span the input carries, caps; up to three patterns for mind and stuck',
       'Stores only a complete, validated document in technique_outputs, keyed by digest version, clock, boundary stamps, input hash and prompt hash',
     ],
-    source: SELF_V2_SOURCE,
+    source: SELF_V2_AGENTS_SOURCE,
     code: 'src/reading/self/v2/build.ts runSelfV2Build; src/reading/self/v2/oracle.ts runOracleV2; src/reading/self/v2/slices.ts buildSelfV2Slices',
     agents: ['self.oracle.v2', 'family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky'],
     accuracy: 'area_checks:self',
@@ -1922,7 +2145,7 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
       'Validates every headline and body sentence against a source (an Oracle paragraph id or evidence key), every date against the Oracle document, and rejects chart terms, engine names, internal ids, medical words and, when no gender is stated, gendered words; a card with no body is withheld and the Oracle headline, redacted, stands in',
       'Stores the hero and cards in technique_outputs under the Oracle key, the profile hash and the prompt hash, so a profile change re-runs only this step',
     ],
-    source: SELF_V2_SOURCE,
+    source: SELF_V2_AGENTS_SOURCE,
     code: 'src/reading/self/v2/personalizer.ts runPersonalizer; src/reading/self/v2/personalizerValidate.ts validatePersonalDoc',
     agents: ['self.personalizer'],
     accuracy: 'area_checks:self',
@@ -1946,7 +2169,7 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
       'Code fills the six-month window strip, the easing date and the next check from the stored windows',
       'The question is kept only when its claim id is in the Oracle document; the hero is withheld when the live areas are missing, all only possible, or split between strong and possible',
     ],
-    source: SELF_V2_SOURCE,
+    source: SELF_V2_AGENTS_SOURCE,
     code: 'src/reading/self/v2/personalizerValidate.ts validateHero, heroSplit',
     agents: ['self.personalizer'],
     accuracy: 'area_checks:self',
@@ -1960,7 +2183,8 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
   },
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2_AGENTS];
+
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2, ...SELF_V2_AGENTS];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

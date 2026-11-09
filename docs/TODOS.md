@@ -1456,9 +1456,13 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 
 ## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
 
-- **Decided 2026-11-09 (Sachin): a fresh board at the question limit is still built and shown; the counter stays at
-  the limit.** As built in `docs/billing/02-board-builds-count.md` §9. Still open: whether ~3 questions a day for a daily
-  free user is the intended rate (`boardChargeKey` in `src/billing/questionGate.ts` can become one per day across boards).
+- **Superseded 2026-11-09 by doc 03 (offline-first boards).** Opening a board never costs a question; only a fresh
+  reading the person asks for, once "good until" has passed, takes one; each board's first reading is free. Boards always
+  show their last reading, at the limit too (Sachin's decision kept). See `docs/billing/03-offline-first-boards.md`.
+- **P2 · A served older You synthesis may not match today's code panels.** Offline first serves the newest stored
+  synthesis even when its key (answers, clock, year, prompt version) differs from today's. Its areas are per panel, so
+  they still fit, but a prompt or shape change could show an older card shape until the person refreshes. Found
+  2026-11-09 building doc 03. Done: decided acceptable, or the fallback limited to the same prompt version.
 - **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
   top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
   (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
@@ -1614,3 +1618,96 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
   `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
   and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
+- **P2 · Web `.env.development` points at the old Render API (`https://aiastraserver.onrender.com`), which answers 503**
+  (checked 2026-11-09 from a local dev server: sign-in shows "Something went wrong"). Local `npm run dev` therefore
+  cannot sign in. The live API is the CloudFront/Lambda origin in `.env.staging`. Owner: web-dev. Done: dev points at
+  a local server (`http://localhost:3000`, as the file's own comment says) or at staging with its CORS allowing the
+  dev origin.
+
+
+## Filed 2026-11-09 by Self v2 step 1b (branch feat/self-v2-subtechniques)
+
+- **P2 · S3 windows run degraded until the engine stores a pressure grade.** `src/reading/self/sub/windows.ts`: no
+  `kundli_pressure` table and no 1–3 strength in any stored row, so every window is strength 2, transits and Sade Sati
+  are polarity `mixed`, and dasha polarity is the period lord's stored functional-nature label through
+  `FUNCTIONAL_POLARITY` (`v2words.ts`). `heaviestNow`, `top3` and the hero strip therefore order only by end date. Fact
+  (gaps `windows: ... degraded` on every build). Owner: engine `feat/pressure-inventory` (doc 66 §13 step 2). Done:
+  S3 reads `kundli_pressure` rows when present and the two gaps disappear.
+- **P2 · No engine sensitive-passage flag.** S7 `bodyFacts.sensitive` is always false with a gap; the v1 service still
+  decides it in Node (`service.ts isSensitive`: Ketu sub period or Saturn on 8 and 12), which doc 66 §12 lists as a
+  Node derivation. Fact. Owner: engine pass (doc 66 §4.3) then server. Done: the engine stores the flag, S7 reads it,
+  and `isSensitive` is deleted.
+- **P3 · No engine strength grade for yogas; no yoga → grace link beyond dosha exceptions.** S4 entries are all strength 2,
+  and a cancellation yoga (e.g. Neecha Bhanga) holds a risk only by naming the same planet (S5 joins on
+  `planet:D1.<p>` evidence). The stored `yearLord` is also absent on the research kundli's VP rows, so S9 `yearLord` is
+  null with a gap. Fact (fixture `tests/fixtures/self/research-calibration.json`). Owner: engine pass. Done: the engine
+  stores a grade, the knot a cancellation cancels, and the year lord.
+- **P3 · `self.sub.*` spans run under agent `self.reading_panel`.** `src/reading/self/sub/index.ts` `SUB_AGENT`: step
+  1b may not edit `src/agents/registry.ts`. Owner: the agents lane (`feat/self-v2-agents`). Done: a `self.sub` code
+  agent row, `SUB_AGENT` and the catalogue rows' `agents` switched to it, and `src/reading/self/sub/index.ts` added to
+  `CALL_SITES` in `tests/unit/techniques/summaries.test.ts` (its own test in `tests/unit/reading/self/v2` covers it
+  until then).
+- **P3 · Sub-technique and area outputs are not yet written to `technique_outputs`.** `runSelfSubTechniques` fills
+  `ctx.sub` and `ctx.stamps` and areas carry `refreshStamp`, but no `withTechniqueOutput` store under `self.sub.<name>`
+  / `self.area.<id>` keyed by the stamps (doc 66 §4.8 step 2), so a boundary rebuild still reruns all ten. Owner: the
+  build-order lane (`runSelfReadingBuild`). Done: store keys from the stamps; only the fired sub-techniques rerun.
+- **P3 · Catalogue ids differ from `SELF_V2_AREAS[].technique`.** Areas are registered as `self.v2.<area>` (to avoid the
+  existing `self.reading.<x>` rows), while `v2types.ts SELF_V2_AREAS` names `self.now`, `self.stuck`, … Owner: whoever
+  next edits `v2types.ts` (contracts lane). Done: one id per area in both places.
+- **P3 · S5 does not yet drop declined matters.** Doc 66 §4.8 says S10's declined facts remove matters from S5, but
+  declined keys are fact keys (`love.status`), not matters, and no reviewed fact-key → matter table exists. Owner: Sachin
+  (words table) then server. Done: a reviewed table and S5 filtering by it.
+
+## Filed 2026-11-09 by Self v2 step 1c/3/4 (branch feat/self-v2-agents)
+
+- **Status · Self v2 steps 1c, 3, 4 built, not live.** `src/reading/self/v2/` (slices, cache warm-up, Oracle ×3,
+  Personalizer + validator, build order, store) behind `SELF_V2_BUILD=1` (default off). No paid call has been made; every
+  test mocks Gemini. The first live replay needs Sachin's yes (doc 66 §13: ≈ $0.15 for two dossiers × three profiles).
+- **P2 · `OracleAreaDoc` is typed on the v1 panel ids.** `areaDoc.ts` (`OracleArea.id`, `validateAreaDoc` `panelIds`,
+  `oracleAreaSchema`) takes `BoardPanelId`; the v2 ids (stuck, chapter, drive, presence, now) are cast through
+  `asPanelIds` in `src/reading/self/v2/oracle.ts`. Works at run time (the validator compares strings). Owner:
+  reading-dev. Done: `areaDoc.ts` generic over the area id type, the cast removed.
+- **P2 · Explicit cache storage is billed per hour and the five family packs are cached explicitly.** The v2 build keeps
+  the v1 behaviour (`warmPrefixes` warms the five family packs, the Oracle prefix, then the Personalizer prefix; each
+  region has its `llm_cache_entries` row). Coordinator asked to keep explicit caching to the Oracle and Personalizer
+  prefixes. Owner: reading-dev with Sachin. Done: storage cost per region-hour priced from the Lab replay; if the family
+  packs do not pay back their storage on a warm rebuild, warm only `self.oracle` and `self.personalizer` and let the
+  families use implicit caching.
+- **P1 · Agent runs logged zero tokens on the v1 Self/Love/Work reading path.** `runSelfOracle` returned
+  `tokensIn`/`tokensOut` from its `withAgentRun` callbacks, but `withAgentRun` reads only `usage`, so `agent_runs`
+  stored 0 prompt, cached, output and thought tokens for every family reader, lineman and Oracle run (fixed in
+  `src/reading/self/oracle.ts`: `usage` now passed; the v2 path passes it too). Not verified: whether Gemini 3.x returns
+  `thoughtsTokenCount` at all with `includeThoughts: false` (the Lab's stage summaries also read 0). Owner: reading-dev.
+  Done: one stored replay shows non-zero `thought_tokens`, or `gemini.ts toUsage` is changed to the field Gemini sends.
+- **P2 · The Personalizer's 2,500-token default cap is tight.** Hero + eleven cards (headline, body ≤ 120 words,
+  patterns, ladder, dates, sources) is ≈ 3.5–4.5 k output tokens; at 2,500 the JSON may truncate and the whole card
+  document fails (not stored). Default kept as asked (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). Owner: reading-dev. Done:
+  the first replay's output token count decides the default (or the Personalizer splits into two calls).
+- **P2 · A partial Oracle (one of three calls failed) is not stored and no cards are written.** The next build re-runs
+  all three calls. Owner: reading-dev. Done: store the two good calls' areas under their own keys and re-run only the
+  failed call, if replays show partials happen.
+- **P2 · The Personalizer's per-sentence source rule is strict.** `sources` must align one-to-one with headline + body
+  sentences; a model that cites per paragraph loses sentences. Owner: reading-dev. Done: the replay's drop rate per
+  card under 10 %, or the rule relaxed to per paragraph.
+- **P3 · Personalizer validator word lists are constants.** `CHART_TERMS`, `GENDERED_WORDS`, `MEDICAL_WORDS` in
+  `src/reading/self/v2/personalizerValidate.ts`; the hero's live areas (`LIVE_AREAS`) too. AGENTS.md asks for
+  configurable selections in `src/config/env.ts`. Owner: reading-dev. Done: env-backed lists with these defaults.
+- **P3 · `readSelfV2Latest` serves the newest stored cards even past their window.** It does not check `valid_to`; the
+  API lane should queue a rebuild when `builtAt` is older than the running sub-sub period. Owner: API lane. Done: the
+  route compares and queues.
+- **P3 · `docs/admin/07-technique-pieces-and-agents.md` regenerated on this branch** after the merge with 1b; a later
+  catalogue change on develop needs it regenerated again (`npx tsx scripts/write-technique-pieces-doc.ts`).
+- **P2 · Fourteen step-2 outputs get no store key.** `storeLayerOutputs` (`src/reading/self/v2/build.ts`) hands every
+  `self.sub.*` output and every area brief to `withTechniqueOutput`, but the catalogue rows `self.sub.risk`,
+  `self.sub.body_facts`, `self.sub.profile` and all eleven `self.v2.<area>` rows read a `findings` input with no
+  synthesizer upstream, so `techniqueFreshness` makes them per-question and `techniqueCacheKey` returns null: nothing is
+  written (the build reports them in `layers.unkeyed` and a gap). Fact (unit test output 2026-11-09). Owner: reading-dev
+  (catalogue rows from step 1b). Done: those rows read `activation`/digest sections (or name their upstream as
+  synthesizer) so they key by the stamps; the build test asserts `unkeyed` is empty.
+- **P3 · Only family.sky is padded to the 1,024-token cache minimum.** On a sparse chart (the unit fixture) family.varga,
+  family.dasha and family.year prefixes come out at ≈ 880, 190 and 30 tokens, below the minimum, so their explicit regions
+  are refused and the calls go uncached. Owner: reading-dev. Done: pad or merge the short family packs, measured on the
+  two stored dossiers.
+- **P3 · `tests/unit/reading/cacheRecycle45m.test.ts` "executes scheduled per-individual recycle…" timed out once
+  (45 s) under a parallel run on 2026-11-09 and passed on the rerun.** Flaky under load. Owner: reading-dev. Done: the
+  test uses fake timers end to end.

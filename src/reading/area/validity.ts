@@ -10,6 +10,20 @@ export interface ReadingValidity {
   valid_until: string | null;
 }
 
+/** May the person ask for a fresh reading today (docs/billing/03)? Only once the last good day has passed. */
+export function refreshDue(validUntil: string | null, today: string): boolean {
+  return validUntil !== null && today > validUntil;
+}
+
+/** The newest ready build of an area for a kundli, any day (offline first: the last reading is served until refreshed). */
+export function latestReadyBuild<T extends { as_of: Date }>(
+  prisma: { areaBuild: { findFirst: (q: { where: { kundli_id: string; area: string; status: string }; orderBy: { as_of: 'desc' } }) => Promise<T | null> } },
+  kundliId: string,
+  area: string,
+): Promise<T | null> {
+  return prisma.areaBuild.findFirst({ where: { kundli_id: kundliId, area, status: 'ready' }, orderBy: { as_of: 'desc' } });
+}
+
 const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
 
 /** From a `withTechniqueOutput` result; the window's end is exclusive, and a reading is served at least through `asOf`. */

@@ -8,7 +8,8 @@ import type { GeminiCallOptions, GeminiResult } from '../../../../../src/reading
 import type { ActivationRow } from '../../../../../src/reading/digest/activation.js';
 import type { DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../../../../../src/reading/digest/types.js';
 import type { AreaBrief, ProfilePack, SelfBuildContext, SelfV2AreaId, WindowRef } from '../../../../../src/reading/self/v2types.js';
-import type { SelfV2Subs, SelfV2SubResult } from '../../../../../src/reading/self/v2/subContract.js';
+import type { SelfV2SubResult } from '../../../../../src/reading/self/sub/index.js';
+import type { SelfV2Subs } from '../../../../../src/reading/self/v2/build.js';
 
 export const ASOF = '2026-11-09';
 const SIGNS = ['Aries', 'Taurus', 'Gemini', 'Cancer', 'Leo', 'Virgo', 'Libra', 'Scorpio', 'Sagittarius', 'Capricorn', 'Aquarius', 'Pisces'];

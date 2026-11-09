@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
-import { withTechniqueOutput } from '../../techniques/outputStore.js';
+import { latestStoredOutput, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
 import type { ActivationRow } from '../digest/activation.js';
@@ -106,12 +106,15 @@ export interface SelfOracleContext {
   sky?: TransitRangePayload | null;
   now?: Date;
   force?: boolean;
+  /** the person asked for a fresh reading (docs/billing/03): the synthesis is remade; the family readers keep their cache */
+  refresh?: boolean;
   only?: BoardPanelId;
   codeVersion?: string;
   runningSpan?: DateSpan | null;
   /**
-   * `cached_only` (the page request): serve a stored synthesis that covers today, otherwise answer `{ status: 'pending' }`
-   * without a model call and without storing anything; the background build (`buildEvent.ts`) runs the default `build`.
+   * `cached_only` (the page request): serve a stored synthesis that covers today; failing that, the newest one ever made
+   * for this board (offline first, docs/billing/03); with none at all answer `{ status: 'pending' }` without a model
+   * call and without storing anything, and the background build (`buildEvent.ts`) makes the first, free one.
    */
   mode?: 'build' | 'cached_only';
   /** docs/reading-engine/65: stored boundaries and windows the area validator checks dates against */
@@ -783,11 +786,14 @@ export async function runSelfOracle(
         agentId: oracleAgentId,
         userId,
         charts: activeFamilyIds.flatMap((id) => packs[id].charts),
-        forceRefresh: Boolean(ctx.force),
+        forceRefresh: Boolean(ctx.force || ctx.refresh),
       },
       async () => {
         // the page asked for the store only: nothing covers today, so say so and run no model (the sentinel is not stored)
         if (ctx.mode === 'cached_only') {
+          // offline first: the newest synthesis made for this board is served until the person asks for a fresh one
+          const last = await latestStoredOutput<SelfOracleResult>(prisma, { techniqueId: oracleTechniqueId, kundliId, digestContains: `|board=${board}|scope=${scopeKey}|` });
+          if (last && last.value?.status === 'ok') return { value: { ...last.value, cached: true }, skipStore: true };
           const pending: SelfOracleResult = { status: 'pending', calls: 0, maxSpendUsd, capUsd: maxSpendUsd, cached: false };
           return { value: pending, skipStore: true };
         }
@@ -909,6 +915,8 @@ export async function runSelfOracle(
               });
               return {
                 value: g,
+                // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+                usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
                 tokensIn: pTok,
                 tokensOut: oTok,
                 costUsd: callCost,
@@ -1071,6 +1079,8 @@ export async function runSelfOracle(
               });
               return {
                 value: g,
+                // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+                usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
                 tokensIn: pTok,
                 tokensOut: oTok,
                 costUsd: callCost,
@@ -1211,6 +1221,8 @@ export async function runSelfOracle(
             });
             return {
               value: g,
+              // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+              usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
               tokensIn: pTok,
               tokensOut: oTok,
               costUsd: callCost,

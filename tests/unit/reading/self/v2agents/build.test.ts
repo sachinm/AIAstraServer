@@ -13,6 +13,7 @@ const ENV = {
   SELF_READING_MAX_SPEND_USD: '1',
 } as const;
 const NOW = () => new Date('2026-11-09T12:00:00Z');
+const agentRows = (db: ReturnType<typeof makePrisma>) => [...db.outputs.values()].filter((x) => x.technique_id === 'self.v2.oracle' || x.technique_id === 'self.v2.personalizer').length;
 
 describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every model call mocked', () => {
   const saved: Record<string, string | undefined> = {};
@@ -75,13 +76,20 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     expect(r.stored).toEqual({ oracle: true, cards: true });
     expect(r.keys.oracle).toMatch(/^self\.v2\.oracle\|dv-1\|clock=vimsottari\|.*\|p=[0-9a-f]{24}$/);
     expect(r.keys.cards).toMatch(/^self\.v2\.cards\|o=[0-9a-f]{24}\|profile=profile-hash-1\|p=[0-9a-f]{24}$/);
-    const rows = [...db.outputs.values()];
-    expect(rows.map((x) => x.technique_id).sort()).toEqual(['self.v2.oracle', 'self.v2.personalizer']);
+    const ids = [...db.outputs.values()].map((x) => String(x.technique_id));
+    expect(ids.filter((x) => x === 'self.v2.oracle' || x === 'self.v2.personalizer').sort()).toEqual(['self.v2.oracle', 'self.v2.personalizer']);
+    // step 2: the ten sub-technique outputs and the eleven area briefs, keyed by the stamps
+    const SUBS = ['self.sub.body_facts', 'self.sub.clock', 'self.sub.mind_facts', 'self.sub.periods', 'self.sub.presence_facts', 'self.sub.profile', 'self.sub.promise', 'self.sub.risk', 'self.sub.windows', 'self.sub.year'];
+    // every sub output goes to the store; those the catalogue gives a per-question freshness get no key (docs/TODOS.md)
+    expect([...r.layers.stored, ...r.layers.unkeyed].filter((x) => x.startsWith('self.sub.')).sort()).toEqual(SUBS);
+    expect(ids.filter((x) => x.startsWith('self.sub.')).sort()).toEqual(r.layers.stored.filter((x) => x.startsWith('self.sub.')).sort());
+    expect(r.layers.failed).toEqual([]);
+    expect([...r.layers.stored, ...r.layers.unkeyed].filter((x) => /^self.v2./.test(x))).toHaveLength(11);
     const latest = await readSelfV2Latest(db.prisma, 'k-v2');
     expect(latest.status).toBe('ok');
     expect(Object.keys(latest.cards!.cards)).toHaveLength(11);
     expect(latest.cards!.hero.question).toEqual({ claimId: 'claim:stuck.work_load', text: 'Has work felt heavier lately?' });
-    expect(latest.oracle!.doc.areas.stuck!.evidence).toContain('claim:stuck.work_load');
+    expect((latest.oracle!.doc.areas as Record<string, { evidence: string[] }>).stuck!.evidence).toContain('claim:stuck.work_load');
     expect(latest.briefs).toHaveLength(11);
     expect(latest.builtAt).toMatch(/^\d{4}-/);
     expect(db.builds.get('k-v2|self.v2')!.status).toBe('ready');
@@ -108,7 +116,7 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     const r = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
     expect(r.status).toBe('budget_exceeded');
     expect(r.stored).toEqual({ oracle: false, cards: false });
-    expect(db.outputs.size).toBe(0);
+    expect(agentRows(db)).toBe(0);
     expect(log.some((x) => x.startsWith('call:self.oracle.v2.'))).toBe(false);
     const latest = await readSelfV2Latest(db.prisma, 'k-v2');
     expect(latest).toMatchObject({ status: 'failed', cards: null, oracle: null });
@@ -125,7 +133,7 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     const r = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
     expect(r.status).toBe('failed');
     expect(r.oracle!.status).toBe('failed');
-    expect(db.outputs.size).toBe(0);
+    expect(agentRows(db)).toBe(0);
     expect(log).not.toContain('call:self.personalizer');
   });
 

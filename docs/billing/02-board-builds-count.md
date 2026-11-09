@@ -1,5 +1,8 @@
 # 02 — Fresh board builds count as questions
 
+> **Superseded by `03-offline-first-boards.md` (2026-11-09):** automatic builds are no longer charged; only a fresh
+> reading the person asks for is. §10 (the made / good-until line) still holds.
+
 Sachin, 2026-11-09: "Everytime there's a new dashboard reading done all fresh then increment the question '0 of 20
 questions used — Upgrade' counter for that account! for any board/across all boards. And when there's a general reading
 question asked increment the question counter."

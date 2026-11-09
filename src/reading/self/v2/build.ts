@@ -51,7 +51,15 @@ import {
   type FamilySlices,
 } from './slices.js';
 import { SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
-import { loadSelfV2Subs, type SelfV2Subs } from './subContract.js';
+import { buildAreaBriefs } from '../areas/index.js';
+import { runSelfSubTechniques, subTechniqueId, type SelfV2Deps } from '../sub/index.js';
+
+/** the sub-techniques and area briefs (doc 66 §4.8 Layers 1–2); injectable so tests run on fixtures */
+export interface SelfV2Subs {
+  runSelfSubTechniques: typeof runSelfSubTechniques;
+  buildAreaBriefs: typeof buildAreaBriefs;
+}
+const REAL_SUBS: SelfV2Subs = { runSelfSubTechniques, buildAreaBriefs };
 
 export interface SelfV2BuildDeps {
   prisma: PrismaClient;
@@ -64,6 +72,8 @@ export interface SelfV2BuildDeps {
   now?: () => Date;
   /** run every agent even when a stored output covers today */
   force?: boolean;
+  /** the sub-techniques' own loaders (digest, activation, systems present, transit); default: the stored rows */
+  sub?: Omit<SelfV2Deps, 'prisma'>;
   /** test seam: each step's name, in order */
   onStep?: (step: string) => void;
 }
@@ -72,7 +82,7 @@ export interface SelfV2BuildArgs {
   userId: string;
   kundliId: string;
   asOf: string;
-  /** the sub-techniques and area briefs (doc 66 §4.8 Layers 1–2); default: the real ones, loaded lazily */
+  /** the sub-techniques and area briefs (doc 66 §4.8 Layers 1–2); default: src/reading/self/sub and areas */
   subs?: SelfV2Subs;
 }
 
@@ -88,6 +98,8 @@ export interface SelfV2BuildResult {
   gaps: string[];
   stored: { oracle: boolean; cards: boolean };
   keys: { oracle: string | null; cards: string | null };
+  /** step 2's stores: keyed and written, without a key (not written), failed */
+  layers: { stored: string[]; unkeyed: string[]; failed: string[] };
 }
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
@@ -122,6 +134,62 @@ function runningPeriodOf(ctx: SelfBuildContext): { from: Date; to: Date } | null
   const p = ctx.sub.periods;
   const x = p?.runningSubSub ?? p?.runningSub ?? p?.running ?? null;
   return x ? { from: new Date(`${x.from}T00:00:00Z`), to: new Date(`${x.to}T00:00:00Z`) } : null;
+}
+
+/** the sub-technique slots of the build context and their catalogue ids (self.sub.mind_facts …) */
+const SUB_SLOTS: ReadonlyArray<[keyof SelfBuildContext['sub'], string]> = [
+  ['clock', 'clock'],
+  ['periods', 'periods'],
+  ['windows', 'windows'],
+  ['promise', 'promise'],
+  ['risk', 'risk'],
+  ['mind', 'mindFacts'],
+  ['body', 'bodyFacts'],
+  ['presence', 'presenceFacts'],
+  ['year', 'year'],
+  ['profile', 'profile'],
+];
+
+/** The key of a Layer 1 or Layer 2 output: its id, the digest version, the clock and every boundary stamp. */
+export function layerStoreKey(id: string, ctx: SelfBuildContext): string {
+  const s = ctx.stamps;
+  return [id, s.digestVersion, `clock=${s.clock}`, `main=${s.mainPeriod ?? '-'}`, `sub=${s.subPeriod ?? '-'}`, `subsub=${s.subSubPeriod ?? '-'}`, `sky=${s.skyWeek ?? '-'}`, `year=${s.year ?? '-'}`, `profile=${s.profileHash ?? '-'}`, `confirm=${s.confirmHash ?? '-'}`].join('|');
+}
+
+/**
+ * Step 2's stores (doc 66 §4.8; AGENTS.md machinery rule 1): each sub-technique output under `self.sub.<name>` and each
+ * area brief under `self.v2.<area>`, keyed by the stamps. An unchanged key is a hit and writes nothing. Never throws.
+ */
+export async function storeLayerOutputs(
+  prisma: PrismaClient,
+  ctx: SelfBuildContext,
+  briefs: readonly AreaBrief[],
+  now: Date,
+  runningPeriod: { from: Date; to: Date } | null,
+): Promise<{ stored: string[]; unkeyed: string[]; failed: string[] }> {
+  const items: Array<{ id: string; agent: string; value: unknown }> = [
+    ...SUB_SLOTS.filter(([slot]) => ctx.sub[slot] !== undefined).map(([slot, name]) => ({ id: subTechniqueId(name), agent: 'self.sub', value: ctx.sub[slot] })),
+    ...briefs.map((b) => ({ id: `self.v2.${b.areaId}`, agent: 'self.reading_panel', value: b })),
+  ];
+  const stored: string[] = [];
+  const unkeyed: string[] = [];
+  const failed: string[] = [];
+  await Promise.all(
+    items.map(async (it) => {
+      try {
+        const res = await withTechniqueOutput(
+          prisma,
+          { technique: it.id, kundliId: ctx.kundliId, digestVersion: layerStoreKey(it.id, ctx), context: { now, runningPeriod }, agentId: it.agent, userId: ctx.userId, logCachedRun: false },
+          async () => it.value,
+        );
+        // a technique whose freshness is per question (a `findings` input with no synthesizer upstream) gets no key
+        (res.cacheKey ? stored : unkeyed).push(it.id);
+      } catch {
+        failed.push(it.id);
+      }
+    }),
+  );
+  return { stored, unkeyed, failed };
 }
 
 /** Step 4: the five family readers, in parallel, each read through `reading_findings_cache` first. */
@@ -219,6 +287,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     gaps,
     stored: { oracle: false, cards: false },
     keys: { oracle: null, cards: null },
+    layers: { stored: [], unkeyed: [], failed: [] },
   };
   const call = deps.callGemini ?? realCallGemini;
   const d = { ...deps, callGemini: call };
@@ -227,12 +296,8 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     // 0–1: sub-techniques
     step('subs');
     let t = performance.now();
-    const subs = args.subs ?? (await loadSelfV2Subs());
-    if (!subs) {
-      gaps.push('the sub-techniques (src/reading/self/sub, src/reading/self/areas) are not on this build');
-      return out;
-    }
-    const sub = await subs.runSelfSubTechniques({ prisma: deps.prisma }, { userId: args.userId, kundliId: args.kundliId, asOf: args.asOf });
+    const subs = args.subs ?? REAL_SUBS;
+    const sub = await subs.runSelfSubTechniques({ ...(deps.sub ?? {}), prisma: deps.prisma }, { userId: args.userId, kundliId: args.kundliId, asOf: args.asOf });
     ms.subs = since(t);
     if ('status' in sub) {
       out.status = 'preparing';
@@ -257,8 +322,16 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     ms.slices = since(t);
     step('warm');
     t = performance.now();
-    out.warmed.push(...(await warmPrefixes([...FAMILY_IDS.map((id) => fam.slices[id]), first.slice], { ensureCache: deps.ensureCache })));
+    // step 2's stores (self.sub.* and self.v2.<area>) run beside the warm-up; neither waits on the other
+    const [warmed, storedLayers] = await Promise.all([
+      warmPrefixes([...FAMILY_IDS.map((id) => fam.slices[id]), first.slice], { ensureCache: deps.ensureCache }),
+      storeLayerOutputs(deps.prisma, ctx, briefs, now, runningPeriodOf(ctx)),
+    ]);
+    out.warmed.push(...warmed);
     ms.warm = since(t);
+    if (storedLayers.failed.length) gaps.push(`layer outputs not stored: ${storedLayers.failed.join(', ')}`);
+    if (storedLayers.unkeyed.length) gaps.push(`layer outputs with no store key (catalogue freshness is per question): ${storedLayers.unkeyed.join(', ')}`);
+    out.layers = storedLayers;
 
     const inputHash = shortHash(canonicalJson({ ...first.input, familyFindings: [] }));
     const oracleKey = oracleStoreKey(ctx, first.slice, inputHash);

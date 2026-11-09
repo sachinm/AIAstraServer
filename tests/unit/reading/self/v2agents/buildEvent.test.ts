@@ -22,32 +22,30 @@ describe('the self build event runs the v2 build behind SELF_V2_BUILD=1 (doc 66 
   it('off by default: the existing build only', async () => {
     delete process.env.SELF_V2_BUILD;
     const v2Build = vi.fn(async () => ({ status: 'ok' }));
-    await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, gate: { chargeBoard: vi.fn(async () => 'charged' as const) }, v2Build }, 'u1', 'k1', 'self');
+    await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, v2Build }, 'u1', 'k1', 'self');
     expect(v2Build).not.toHaveBeenCalled();
   });
 
-  it('on: runs after the self build with its day, never for love or work, and the charge stays one per board', async () => {
+  it('on: runs after the self build and its settlement, never for love or work; the v2 build settles nothing itself', async () => {
     process.env.SELF_V2_BUILD = '1';
     const order: string[] = [];
-    const chargeBoard = vi.fn(async () => (order.push('charge'), 'charged' as const));
+    const settleBoardRefresh = vi.fn(async () => {
+      order.push('settle');
+      return undefined as never;
+    });
     const v2Build = vi.fn(async () => (order.push('v2'), { status: 'ok' }));
-    const r = await runSelfReadingBuild({ prisma: prisma(), build: async () => (order.push('build'), reading()), now: () => NOW, gate: { chargeBoard }, v2Build }, 'u1', 'k1', 'self');
+    const r = await runSelfReadingBuild({ prisma: prisma(), build: async () => (order.push('build'), reading()), now: () => NOW, gate: { settleBoardRefresh }, v2Build }, 'u1', 'k1', 'self', { refreshDay: '2026-11-09' });
     expect(r?.status).toBe('ok');
-    expect(order).toEqual(['build', 'charge', 'v2']);
+    expect(order).toEqual(['build', 'settle', 'v2']);
     expect(v2Build).toHaveBeenCalledWith(expect.anything(), 'u1', 'k1', '2026-11-09');
-    expect(chargeBoard).toHaveBeenCalledTimes(1);
-    await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, gate: { chargeBoard }, v2Build }, 'u1', 'k1', 'love');
+    expect(settleBoardRefresh).toHaveBeenCalledTimes(1);
+    await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, v2Build }, 'u1', 'k1', 'love');
     expect(v2Build).toHaveBeenCalledTimes(1);
   });
 
   it('a v2 build that throws never fails the build event', async () => {
     process.env.SELF_V2_BUILD = '1';
-    const r = await runSelfReadingBuild(
-      { prisma: prisma(), build: async () => reading(), now: () => NOW, gate: { chargeBoard: vi.fn(async () => 'charged' as const) }, v2Build: async () => { throw new Error('boom'); } },
-      'u1',
-      'k1',
-      'self',
-    );
+    const r = await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, v2Build: async () => { throw new Error('boom'); } }, 'u1', 'k1', 'self');
     expect(r?.status).toBe('ok');
   });
 });

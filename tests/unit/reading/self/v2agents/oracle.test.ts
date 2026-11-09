@@ -61,7 +61,7 @@ describe('Self v2 Oracle: three calls over one prefix (doc 66 §4.1)', () => {
   it('keeps claim: keys through the validator (the claim-id drop of docs/TODOS.md is fixed on the v2 path)', async () => {
     const { ctx, slice } = setup();
     const r = await runOracleV2({ prisma: makePrisma().prisma, callGemini: makeGemini([]), informUsed: vi.fn(), maxSpendUsd: 1 }, ctx, slice);
-    expect(r.output!.doc.areas.stuck!.evidence).toEqual(expect.arrayContaining(['claim:stuck.main', 'claim:stuck.work_load', 'risk:r1']));
+    expect((r.output!.doc.areas as Record<string, { evidence: string[] }>).stuck!.evidence).toEqual(expect.arrayContaining(['claim:stuck.main', 'claim:stuck.work_load', 'risk:r1']));
     expect(claimKeysOf(r.output!)).toEqual(expect.arrayContaining(['claim:diagnosis.main', 'claim:stuck.work_load']));
   });
 

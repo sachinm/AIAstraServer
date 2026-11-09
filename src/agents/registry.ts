@@ -238,6 +238,15 @@ export const AGENTS: AgentDef[] = [
     description: 'Synthesizes the You reading from the five family sub-agents (family.rasi, family.varga, family.dasha, family.year, family.sky), the Self Lineman (lineman.self), and the deterministic panel claims with Gemini cachedContents prefix caching (docs/reading-engine/58 §4.1, 63 §4.1)',
   },
   {
+    id: 'self.sub',
+    title: 'You board v2 sub-techniques',
+    kind: 'code',
+    module: 'self',
+    subModule: 'v2',
+    description:
+      'Runs the ten shared You board v2 sub-techniques (self.sub.*: clock, periods, windows, promise, risk, mind, body and presence facts, year, profile) once per build over one build context, from the stored digest, activation and sky rows; no model (docs/reading-engine/66 §4.8 Layer 1)',
+  },
+  {
     id: 'self.oracle.v2',
     title: 'You board v2 Oracle',
     kind: 'llm',

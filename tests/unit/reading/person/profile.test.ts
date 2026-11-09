@@ -141,7 +141,7 @@ describe('v2 area table', () => {
     expect(new Set(SELF_V2_AREAS.map((a) => a.id)).size).toBe(12);
     for (const a of SELF_V2_AREAS) {
       expect(SELF_V2_REFRESH[a.id].length).toBeGreaterThan(0);
-      expect(a.technique).toBe(`self.${a.id}`);
+      expect(a.technique).toBe(`self.v2.${a.id}`);
     }
     expect(SELF_V2_AREAS.filter((a) => a.id !== 'now').map((a) => a.title)).toContain('How you come across');
   });

@@ -20,6 +20,7 @@ const CALL_SITES = [
   'src/reading/self/v2/oracle.ts',
   'src/reading/self/v2/personalizer.ts',
   'src/reading/self/v2/build.ts',
+  'src/reading/self/sub/index.ts',
 ];
 const PERSONAL = /email|name|birth|dob|place|lat|lon|question/i;
 

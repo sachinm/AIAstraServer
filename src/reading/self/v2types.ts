@@ -33,18 +33,18 @@ export type SelfV2AreaId =
 export type SelfV2Group = 'now' | 'you' | 'time';
 
 export const SELF_V2_AREAS: ReadonlyArray<{ id: SelfV2AreaId; group: SelfV2Group; title: string; technique: string }> = [
-  { id: 'now', group: 'now', title: 'Right now', technique: 'self.now' },
-  { id: 'stuck', group: 'now', title: 'Where you get stuck', technique: 'self.stuck' },
-  { id: 'chapter', group: 'now', title: 'This chapter', technique: 'self.chapter' },
-  { id: 'diagnosis', group: 'you', title: 'In short', technique: 'self.diagnosis' },
-  { id: 'lagna', group: 'you', title: 'Who you are', technique: 'self.lagna' },
-  { id: 'mind', group: 'you', title: 'How you think', technique: 'self.mind' },
-  { id: 'body', group: 'you', title: 'Body & energy', technique: 'self.body' },
-  { id: 'drive', group: 'you', title: 'Drive & ambition', technique: 'self.drive' },
-  { id: 'presence', group: 'you', title: 'How you come across', technique: 'self.presence' },
-  { id: 'yogas', group: 'you', title: 'Gifts & knots', technique: 'self.yogas' },
-  { id: 'chapters', group: 'time', title: 'Chapters', technique: 'self.chapters' },
-  { id: 'year', group: 'time', title: 'This year', technique: 'self.year' },
+  { id: 'now', group: 'now', title: 'Right now', technique: 'self.v2.now' },
+  { id: 'stuck', group: 'now', title: 'Where you get stuck', technique: 'self.v2.stuck' },
+  { id: 'chapter', group: 'now', title: 'This chapter', technique: 'self.v2.chapter' },
+  { id: 'diagnosis', group: 'you', title: 'In short', technique: 'self.v2.diagnosis' },
+  { id: 'lagna', group: 'you', title: 'Who you are', technique: 'self.v2.lagna' },
+  { id: 'mind', group: 'you', title: 'How you think', technique: 'self.v2.mind' },
+  { id: 'body', group: 'you', title: 'Body & energy', technique: 'self.v2.body' },
+  { id: 'drive', group: 'you', title: 'Drive & ambition', technique: 'self.v2.drive' },
+  { id: 'presence', group: 'you', title: 'How you come across', technique: 'self.v2.presence' },
+  { id: 'yogas', group: 'you', title: 'Gifts & knots', technique: 'self.v2.yogas' },
+  { id: 'chapters', group: 'time', title: 'Chapters', technique: 'self.v2.chapters' },
+  { id: 'year', group: 'time', title: 'This year', technique: 'self.v2.year' },
 ];
 
 /** what makes an area's output stale (doc 66 mockup §5); the store key carries the stamp of each */
@@ -513,6 +513,33 @@ export interface PersonalCardDoc {
 }
 
 export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed';
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1b additions (step 1b, branch feat/self-v2-subtechniques): the window rows S3 keeps beside its `WindowSet` selections,
+// so S5 and S7 can join on the planet and houses the engine stated without reading the database again.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** one dated window as S3 read it: an activation row of the primary clock or a stored sky overlay row */
+export interface WindowRow extends WindowRef {
+  kind: PressureKind;
+  /** the period lord or the transiting planet as the engine wrote it; null for a rasi period */
+  planet: string | null;
+  /** dasha level, when kind = dasha */
+  level?: 1 | 2 | 3;
+  /** D1 houses as stored (activation `houses`, overlay `house_from_lagna`) */
+  houses: number[];
+  /** overlay `house_from_moon`, when stored */
+  houseFromMoon: number | null;
+  /** false when the stored row starts or ends outside the stored range: "since" / "until" is not said */
+  sinceKnown: boolean;
+  untilKnown: boolean;
+  evidence: EvidenceKey[];
+}
+
+/** S3 output with its rows (assignable to `WindowSet`) */
+export interface WindowSetDetail extends WindowSet {
+  rows: WindowRow[];
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // 1c additions (doc 66 §4.8 Layer 3: slices, warm-up, Oracle ×3, Personalizer, build order). Appended; nothing above
