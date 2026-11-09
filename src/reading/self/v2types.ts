@@ -606,6 +606,13 @@ export interface SelfV2RefreshView {
   madeAt: string | null;
   validUntil: string | null;
   due: boolean;
+  /**
+   * Appended 2026-11-09 (fix/self-v2-single-build), from today's You build marker: a build is running now (`building`),
+   * or today's last build failed (`failed`; a fresh reading's question was given back). The page stops polling on
+   * `failed` and offers Try again. Both false when no build ran today.
+   */
+  building: boolean;
+  failed: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

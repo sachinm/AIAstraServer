@@ -461,6 +461,19 @@ Notes, each one a caveat on the table:
   the cap. A `MAX_TOKENS` finish is retried once at `SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS` (12,000); a cut
   document is never stored.
 
+**One build, one bill (branch `fix/self-v2-single-build`, 2026-11-09).** Until this branch a self build with
+`SELF_V2_BUILD=1` ran the whole v1 path first (family readers through the v1 code, the v1 lineman and the v1 Oracle) and
+then the v2 build, and a self refresh forced the v1 synthesis as well, because the v1 synthesis owned `valid_until`. Now,
+with the flag on (and the model layer on), the self build event runs the v1 code panels only (`oracleMode:
+'cached_only'`: no model call; they stay as the floor the old page and the v2 API read) and the v2 build is the
+reading. The board's dates (`selfBoardDates`) come from the newest stored v2 Oracle document's `doc.validUntil`; the
+question held for a refresh is committed when the v2 build is `ok` and given back otherwise. So every cold build and
+every refresh drops the v1 lineman + v1 Oracle, **≈ $0.055** by the doc 65 measurement ($0.0103 + $0.0444): the "one
+cold build, one profile" row above is the whole cost of a self build with the flag on, where before it was that plus
+≈ $0.055. The v1 family readers are not run either: on a warm `reading_findings_cache` they cost nothing, but where
+their packs differ from the v2 packs a cold v1 read was a second bill (up to ≈ $0.037, not counted in the $0.055).
+Love and Work builds are unchanged. Tests: `tests/unit/reading/self/v2agents/singleBuild.test.ts`.
+
 **Slice sizes on the fixtures (chars / 4, `estTokens`; not provider counts).**
 
 | Slice | Agents lane unit fixture (`tests/unit/reading/self/v2agents/fixtures.ts`) | Research calibration kundli (`tests/fixtures/self/research-calibration.json`, e2e test) |
