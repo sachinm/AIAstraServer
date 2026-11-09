@@ -10,6 +10,8 @@
  *   POST /api/self/reading/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_answer
  *   PUT  /api/self/clock              { system: string | null } → 200 { clock } | 400 unknown_system | 404 no_kundli
  *
+ * Offline first (docs/billing/03): the newest synthesis made is served until the person asks for a fresh one
+ * (`POST /api/boards/self/refresh`); while that is made the old one is answered as `pending` so the page polls.
  * A page open never waits on a model: the reading is read with `oracleMode: 'cached_only'`; a pending Oracle queues one
  * background build (`buildEvent.ts`) and answers 202, and the page polls. A build that failed in the last half hour is
  * served as the code panels without Oracle lines (`oracle.status = 'failed'`), never as an error page.
@@ -19,7 +21,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { writeFacts, SELF_CONFIRM_PREFIX } from '../profile/facts.js';
 import { getSelfReading, setPreferredClock, type SelfDeps } from '../reading/self/service.js';
-import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
+import { queueSelfReadingBuild, readBuildMarker, type QueueDeps } from '../reading/self/buildEvent.js';
 import { isAreaEnabled } from './areaRoutes.js';
 
 export interface SelfReadingRouteDeps {
@@ -65,6 +67,16 @@ export function registerSelfReadingRoutes(app: express.Express, deps: SelfReadin
         // the code panels are ready now: serve them, the Oracle marked pending, so the page shows them under a waiting
         // veil and polls until the synthesis lands (docs/reading-engine/64 §4)
         return res.json({ ...r, build: outcome, reading: { ...r.reading, oracle: { ...r.reading.oracle, status: 'pending' } } });
+      }
+      // a fresh reading the person asked for is being made (docs/billing/03): the last one stays on screen under the
+      // waiting veil and the page polls until the new one lands
+      if (r.reading.oracle?.status === 'ok') {
+        const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
+        const now = (deps.queue?.now ?? (() => new Date()))();
+        if (kundli && (await readBuildMarker(deps.prisma, kundli.id, 'self', now)) === 'building') {
+          const panels = r.reading.panels.map((p) => ({ ...p, areaStatus: 'pending' as const }));
+          return res.json({ ...r, build: 'already_building', reading: { ...r.reading, panels, oracle: { ...r.reading.oracle, status: 'pending' } } });
+        }
       }
       return res.json(r);
     } catch (e) {

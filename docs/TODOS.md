@@ -1456,9 +1456,13 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 
 ## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
 
-- **Decided 2026-11-09 (Sachin): a fresh board at the question limit is still built and shown; the counter stays at
-  the limit.** As built in `docs/billing/02-board-builds-count.md` §9. Still open: whether ~3 questions a day for a daily
-  free user is the intended rate (`boardChargeKey` in `src/billing/questionGate.ts` can become one per day across boards).
+- **Superseded 2026-11-09 by doc 03 (offline-first boards).** Opening a board never costs a question; only a fresh
+  reading the person asks for, once "good until" has passed, takes one; each board's first reading is free. Boards always
+  show their last reading, at the limit too (Sachin's decision kept). See `docs/billing/03-offline-first-boards.md`.
+- **P2 · A served older You synthesis may not match today's code panels.** Offline first serves the newest stored
+  synthesis even when its key (answers, clock, year, prompt version) differs from today's. Its areas are per panel, so
+  they still fit, but a prompt or shape change could show an older card shape until the person refreshes. Found
+  2026-11-09 building doc 03. Done: decided acceptable, or the fallback limited to the same prompt version.
 - **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
   top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
   (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.

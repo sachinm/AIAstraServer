@@ -46,6 +46,10 @@ export interface StoredTechniqueOutputRow {
 
 export interface TechniqueOutputDelegate {
   findUnique?: (args: { where: { cache_key: string } }) => Promise<StoredTechniqueOutputRow | null>;
+  findFirst?: (args: {
+    where: { technique_id: string; kundli_id: string; digest_version?: { contains: string } };
+    orderBy: { created_at: 'desc' };
+  }) => Promise<StoredTechniqueOutputRow | null>;
   create?: (args: { data: StoredTechniqueOutputRow }) => Promise<StoredTechniqueOutputRow>;
   upsert?: (args: {
     where: { cache_key: string };
@@ -491,6 +495,29 @@ export async function withTechniqueOutput<T>(
     window: effectiveWindow,
     madeAt: input.context.now,
   };
+}
+
+/**
+ * The newest stored output of a technique for a kundli, whatever its window or key (docs/billing/03: a board keeps
+ * showing its last reading until the person asks for a fresh one). `digestContains` narrows the key (a board, a scope).
+ * Null when none is stored or the store cannot be read.
+ */
+export async function latestStoredOutput<T>(
+  prisma: PrismaClient,
+  q: { techniqueId: string; kundliId: string; digestContains?: string },
+): Promise<{ value: T; madeAt: Date; validTo: Date | null } | null> {
+  const store = prisma as StoreCapablePrisma;
+  try {
+    const row = await store.techniqueOutput?.findFirst?.({
+      where: { technique_id: q.techniqueId, kundli_id: q.kundliId, ...(q.digestContains ? { digest_version: { contains: q.digestContains } } : {}) },
+      orderBy: { created_at: 'desc' },
+    });
+    if (!row) return null;
+    return { value: row.output as T, madeAt: row.created_at ? asDate(row.created_at) : asDate(row.valid_from), validTo: row.valid_to ? asDate(row.valid_to) : null };
+  } catch (e) {
+    warnOnce('read', e);
+    return null;
+  }
 }
 
 /**

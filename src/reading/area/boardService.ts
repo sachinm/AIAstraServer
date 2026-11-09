@@ -7,7 +7,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { storedValidity, validityOf, type ReadingValidity } from './validity.js';
+import { latestReadyBuild, refreshDue, storedValidity, validityOf, type ReadingValidity } from './validity.js';
 import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
@@ -46,7 +46,12 @@ export interface AreaSpec {
 export type AreaBoardResult =
   | { status: 'no_kundli' }
   | { status: 'preparing' }
-  | ({ status: 'ok'; built_at: string; cached: boolean; focus: string | null; ask: boolean; board: AreaBoardBody } & ReadingValidity);
+  | ({ status: 'ok'; built_at: string; cached: boolean; focus: string | null; ask: boolean; board: AreaBoardBody; refresh_due: boolean } & ReadingValidity);
+
+/** `force`: the person asked for a fresh reading (docs/billing/03): skip the stored one and remake it. */
+export interface BoardBuildOptions {
+  force?: boolean;
+}
 
 const DECLINED = 'declined';
 
@@ -161,7 +166,7 @@ export function shapeBoard(built: BuiltBoard, spec: AreaSpec, fact: string | nul
   return { focus, board: { ...built.board, ahead } };
 }
 
-export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: string): Promise<AreaBoardResult> {
+export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: string, opts: BoardBuildOptions = {}): Promise<AreaBoardResult> {
   const prisma = deps.prisma;
   const kundli = await prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli' };
@@ -170,9 +175,12 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
   const asOfDate = new Date(`${asOf}T00:00:00Z`);
   const fact = await getFact(prisma, userId, spec.factKey);
 
-  const cached = await prisma.areaBuild.findUnique({ where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: spec.area, as_of: asOfDate } } });
-  let built: BuiltBoard | null = cached?.status === 'ready' ? (cached.result as unknown as BuiltBoard) : null;
-  let validity = built ? storedValidity(cached?.result, cached?.created_at, asOf) : null;
+  // offline first (docs/billing/03): the newest reading made for this board is served, whatever its day; only the very
+  // first one is made here (free), and a fresh one only when the person asks (`force`)
+  const cached = opts.force ? null : await latestReadyBuild(prisma, kundli.id, spec.area);
+  const builtOn = cached ? cached.as_of.toISOString().slice(0, 10) : asOf;
+  let built: BuiltBoard | null = cached ? (cached.result as unknown as BuiltBoard) : null;
+  let validity = built ? storedValidity(cached?.result, cached?.created_at, builtOn) : null;
   let fresh = false;
   if (!built) {
     const view = await (deps.loadDigest ?? realLoadDigest)(prisma, kundli.id);
@@ -188,6 +196,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
       {
         technique: spec.technique,
         kundliId: kundli.id,
+        forceRefresh: Boolean(opts.force),
         digestVersion: view.version,
         context: { now: nowAt, year: yearSpan },
         agentId: spec.agent,
@@ -248,5 +257,6 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
     fresh = !out.cached;
   }
   const shaped = shapeBoard(built, spec, fact);
-  return { status: 'ok', built_at: asOf, cached: !fresh, focus: shaped.focus, ask: fact === null, board: shaped.board, ...(validity ?? storedValidity(null, null, asOf)) };
+  const v = validity ?? storedValidity(null, null, builtOn);
+  return { status: 'ok', built_at: builtOn, cached: !fresh, focus: shaped.focus, ask: fact === null, board: shaped.board, ...v, refresh_due: refreshDue(v.valid_until, asOf) };
 }
