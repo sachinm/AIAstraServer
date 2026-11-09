@@ -513,3 +513,75 @@ export interface PersonalCardDoc {
 }
 
 export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed';
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1c additions (doc 66 §4.8 Layer 3: slices, warm-up, Oracle ×3, Personalizer, build order). Appended; nothing above
+// changes.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** the five family readers among the v2 agents */
+export type SelfV2FamilyAgentId = Extract<SelfV2AgentId, `family.${string}`>;
+
+/** an agent slice with what the warm-up and the call need: the model and the system prompt (part of the cache key) */
+export interface PreparedAgentSlice extends AgentSlice {
+  model: string;
+  system: string;
+  /** chars / 4, the estimate the Lab shows before a call */
+  estTokens: { prefix: number; suffix: number };
+  /** evidence keys the slice carries in `{braces}`; the validator's allowed set */
+  keys: string[];
+}
+
+/** one warmed region (Gemini explicit cache); `name` null when caching is off or creation failed */
+export interface WarmedRegion {
+  agent: SelfV2AgentId;
+  prefixHash: string;
+  model: string;
+  name: string | null;
+  ms: number;
+}
+
+/** per agent call: wall time, tokens and cost (AGENTS.md machinery rule 6) */
+export interface SelfV2AgentTiming {
+  agent: SelfV2AgentId;
+  /** 'oracle.a' | 'oracle.b' | 'oracle.c' for the three Oracle calls, else the agent id */
+  call: string;
+  status: 'ok' | 'cached' | 'failed' | 'skipped';
+  ms: number;
+  promptTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  thoughtTokens: number;
+  costUsd: number;
+}
+
+export type SelfV2OracleStatus = 'ok' | 'partial' | 'failed' | 'budget_exceeded';
+
+/** what the v2 Oracle step returns and stores (only `ok` is stored) */
+export interface SelfV2OracleResult {
+  status: SelfV2OracleStatus;
+  output: OracleV2Output | null;
+  /** staff-only validator reasons */
+  gaps: string[];
+  withheld: string[];
+  promptName: 'oracle/self-areas-v2';
+  promptHash: string;
+  model: string;
+  calls: SelfV2AgentTiming[];
+  familyFindings: Array<{ family: string; text: string }>;
+  spentUsd: number;
+  cached: boolean;
+}
+
+/** the stored Personalizer output (`self.v2.cards`) */
+export interface SelfV2CardsResult {
+  status: 'ok' | 'failed' | 'budget_exceeded';
+  doc: PersonalCardDoc | null;
+  /** per area: ok, or withheld (the Oracle headline under redaction stands in) */
+  cardStatus: Partial<Record<SelfV2AreaId, CardStatus>>;
+  gaps: string[];
+  promptHash: string;
+  model: string;
+  call: SelfV2AgentTiming | null;
+  cached: boolean;
+}

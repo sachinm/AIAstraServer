@@ -14,7 +14,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { getKundliDigestEventToken } from '../../config/env.js';
+import { getKundliDigestEventToken, isSelfReadingModelEnabled, isSelfV2BuildEnabled } from '../../config/env.js';
 import { queueLog, queueLogError } from '../../lib/queueLogger.js';
 import { questionGate, type QuestionGate } from '../../billing/questionGate.js';
 import { getBoardReading, type SelfDeps, type SelfReadingResult } from './service.js';
@@ -127,6 +127,8 @@ export interface QueueDeps {
   now?: () => Date;
   /** the question gate a fresh synthesis is charged to (docs/billing/02; tests replace it) */
   gate?: Pick<QuestionGate, 'chargeBoard'>;
+  /** the Self v2 build run after the self build when SELF_V2_BUILD=1 (docs/reading-engine/66 §4.8; tests replace it) */
+  v2Build?: (prisma: PrismaClient, userId: string, kundliId: string, asOf: string) => Promise<{ status: string; ms?: Record<string, number> }>;
 }
 
 let lambdaClient: LambdaClient | null = null;
@@ -139,6 +141,28 @@ async function defaultInvoke(payload: Record<string, unknown>): Promise<void> {
 }
 
 const defaultBuild = (deps: SelfDeps, userId: string, board: ReadingBoardId) => getBoardReading(deps, userId, board, { trigger: 'request' });
+
+/** The Self v2 build, loaded only when the flag is on (the v2 modules stay out of the event path otherwise). */
+async function defaultV2Build(prisma: PrismaClient, userId: string, kundliId: string, asOf: string): Promise<{ status: string; ms?: Record<string, number> }> {
+  const { runSelfV2Build } = await import('./v2/build.js');
+  return runSelfV2Build({ prisma }, { userId, kundliId, asOf });
+}
+
+/**
+ * SELF_V2_BUILD=1: after the self build, the v2 build runs in the same invocation (docs/reading-engine/66 §4.8). It never
+ * charges (the board's one charge per day stays with the build above) and never fails the build event. The current
+ * lineman path is untouched; it is retired only for the v2 path.
+ */
+async function maybeRunSelfV2(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, asOf: string): Promise<void> {
+  if (board !== 'self' || !isSelfV2BuildEnabled() || !isSelfReadingModelEnabled()) return;
+  const t0 = Date.now();
+  try {
+    const v2 = await (deps.v2Build ?? defaultV2Build)(deps.prisma, userId, kundliId, asOf);
+    queueLog({ event: 'self_v2_build_done', kundli_id: kundliId, status: v2.status, ms: Date.now() - t0 });
+  } catch (e) {
+    queueLogError({ event: 'self_v2_build_failed', kundli_id: kundliId, error: (e as Error).message?.slice(0, 300), ms: Date.now() - t0 });
+  }
+}
 
 /** Runs one build to the end, marking the marker `ready` or `failed`. Never throws. */
 export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId): Promise<SelfReadingResult | null> {
@@ -155,6 +179,7 @@ export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundl
       ? await (deps.gate ?? questionGate(deps.prisma)).chargeBoard(userId, board, r.reading.asOf)
       : 'none';
     queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', charged, ms: Date.now() - t0 });
+    await maybeRunSelfV2(deps, userId, kundliId, board, r.status === 'ok' ? r.reading.asOf : now.toISOString().slice(0, 10));
     return r;
   } catch (e) {
     await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300));

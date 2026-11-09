@@ -49,7 +49,10 @@ export type SubAgentId =
   | 'lineman.love'
   | 'oracle.love'
   | 'lineman.work'
-  | 'oracle.work';
+  | 'oracle.work'
+  // the You board v2 agents (docs/reading-engine/66 §4.8 Layer 3)
+  | 'self.oracle'
+  | 'self.personalizer';
 
 export interface SubAgentDigestSpec {
   id: SubAgentId;
@@ -529,6 +532,29 @@ const RAW_SUBAGENT_DIGEST_SPECS: Record<SubAgentId, RawSubAgentDigestSpec> = {
     vargas: ['D1', 'D2', 'D9', 'D10'],
     tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'charakaraka', 'varshaphala', 'tithi_pravesha', 'ashtakavarga', 'transit_range'],
     usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'technique_outputs',
+  },
+  // You board v2 (docs/reading-engine/66 §4.8): the Oracle's cached prefix is the natal slice (family.rasi + family.varga
+  // packs) plus the S4 promise ledger, stable per digest version; the Personalizer reads no digest section at all (its
+  // prefix is the Oracle document, its suffix the profile pack), so its slice is empty here.
+  'self.oracle': {
+    id: 'self.oracle',
+    techniqueId: 'self.v2.oracle',
+    sections: ['house', 'planet', 'point', 'yoga', 'star', 'annual'],
+    vargas: ['D1', 'D2', 'D3', 'D4', 'D7', 'D9', 'D10', 'D12', 'D16', 'D20', 'D24', 'D27', 'D30', 'D40', 'D45', 'D60'],
+    tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'special_lagnas', 'charakaraka', 'varshaphala', 'tithi_pravesha'],
+    usesActivation: true,
+    cachePromptPrefix: true,
+    cacheOutput: 'technique_outputs',
+  },
+  'self.personalizer': {
+    id: 'self.personalizer',
+    techniqueId: 'self.v2.personalizer',
+    sections: [],
+    vargas: [],
+    tableTypes: [],
+    usesActivation: false,
     cachePromptPrefix: true,
     cacheOutput: 'technique_outputs',
   },

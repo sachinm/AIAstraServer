@@ -17,6 +17,9 @@ const CALL_SITES = [
   'src/reading/clarify/monitor.ts',
   'src/reading/research/selfDashboardQa.ts',
   'src/techniques/outputStore.ts',
+  'src/reading/self/v2/oracle.ts',
+  'src/reading/self/v2/personalizer.ts',
+  'src/reading/self/v2/build.ts',
 ];
 const PERSONAL = /email|name|birth|dob|place|lat|lon|question/i;
 
