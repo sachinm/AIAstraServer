@@ -244,6 +244,9 @@ function build(): ChartDataType[] {
   out.push({ id: 'daily_grade', family: 'transit', radhaType: 'daily_grade', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 640, label: 'Day grade over a date range (Moon star, tara, chandra bala, panchanga, events)' });
   out.push({ id: 'muhurta', family: 'panchanga', radhaType: 'muhurta', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 650, label: 'Muhurta tables per day at a place (sunrise, horas, muhurtas, kalas, optional natal grade)' });
   out.push({ id: 'transit_ashtakavarga', family: 'transit', radhaType: 'transit_ashtakavarga', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 660, label: 'Dated transit positions scored by natal ashtakavarga (BAV, SAV, kakshya)' });
+  // Self board v2 (doc 66 §4.3): one row per kundli and clock (variant `system=<clock>`), pulled and refreshed by
+  // src/reading/self/sub/pressure.ts, never by ensureChartData (it depends on the date asked for).
+  out.push({ id: 'pressure_inventory', family: 'transit', radhaType: 'pressure_inventory', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 670, label: 'Dated windows of pressure and support around a date, on one dasha clock (Self board v2)' });
   return out;
 }
 

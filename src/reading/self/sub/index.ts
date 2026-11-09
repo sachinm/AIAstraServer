@@ -29,9 +29,13 @@ import { subPresenceFacts } from './presence.js';
 import { subYear } from './year.js';
 import { subProfile } from './profile.js';
 import { isoWeek } from './config.js';
+import { loadPressureInventory as realLoadPressure, type PressureInventoryDetail, type PressureLoad } from './pressure.js';
 
-export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'activationFor' | 'systemsPresent' | 'loadTransit' | 'now'> {}
-export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null }
+export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'activationFor' | 'systemsPresent' | 'loadTransit' | 'now'> {
+  /** the engine's pressure inventory on the primary clock (default: kundli_data, pulled when missing or older than 7 days) */
+  loadPressure?: (prisma: SelfDeps['prisma'], kundliId: string, system: string, asOf: string) => Promise<PressureLoad>;
+}
+export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null; pressure?: PressureInventoryDetail | null }
 export interface SelfV2SubResult { ctx: SelfBuildContext; loaded: SelfV2Loaded; gaps: string[]; ms: Record<string, number> }
 
 /** the code agent the spans run under (`self.sub`, src/agents/registry.ts) */
@@ -96,6 +100,10 @@ export async function runSelfSubTechniques(
 
   const t1 = performance.now();
   const systems = [...new Set([clock.primary, ...clock.confirming])];
+  // the engine's pressure inventory on the primary clock, beside the activation read; a failed pull is a gap, never a stop
+  const pressureP = (deps.loadPressure ?? ((p, k, s, a) => realLoadPressure(p, k, s, a)))(prisma, kundliId, clock.primary, asOf).catch(
+    (e: Error): PressureLoad => ({ inventory: null, source: 'none', gaps: [`pressure_inventory: ${e.message?.slice(0, 120)}`] }),
+  );
   const activation = await (deps.activationFor ?? realActivationFor)(prisma, kundliId, {
     from: addMonthsIso(asOf, -12 * 90),
     to: addMonthsIso(asOf, 12 * 40),
@@ -106,11 +114,16 @@ export async function runSelfSubTechniques(
     shortSystems: [clock.primary],
     shortMaxLevel: 3,
   });
+  const pressureLoad = await pressureP;
+  for (const x of pressureLoad.gaps) g.add(x);
+  const pressure = pressureLoad.inventory && pressureLoad.inventory.clock === clock.primary ? pressureLoad.inventory : null;
+  if (pressureLoad.inventory && !pressure) g.add(`pressure_inventory: stored for ${pressureLoad.inventory.clock}, not the primary clock ${clock.primary}; not used`);
   ms.activation = round(performance.now() - t1);
 
-  const env: SubEnv = { view, activation, sky, asOf, g };
+  const env: SubEnv = { view, activation, sky, asOf, g, pressure };
   const actCharts: ChartUsed[] = [{ type: 'kundli_activation', variant: clock.primary }];
   const skyCharts: ChartUsed[] = sky ? [{ type: 'kundli_transit_overlays', variant: `${sky.from}..${sky.to}` }] : [];
+  const pressureCharts: ChartUsed[] = pressure ? [{ type: 'pressure_inventory', variant: `system=${pressure.clock}@${pressure.asOf}` }] : [];
 
   // S2 ∥ S3 ∥ S4 ∥ S6 ∥ S8 ∥ S9 ∥ S10 (S8 reads S2's running sub, so it follows S2 inside its branch)
   const s2Then8 = (async () => {
@@ -128,7 +141,7 @@ export async function runSelfSubTechniques(
   })();
   const [{ periods, presence }, windows, promise, mind, year, profile] = await Promise.all([
     s2Then8,
-    span('windows', [...actCharts, ...skyCharts, ...digestCharts(['planet'])], () => subWindows(env, clock), (w: WindowSetDetail) => ({
+    span('windows', pressure ? pressureCharts : [...actCharts, ...skyCharts, ...digestCharts(['planet'])], () => subWindows(env, clock), (w: WindowSetDetail) => ({
       rows: w.rows.length,
       strip: w.strip.length,
       heaviest: w.heaviestNow?.rowId ?? null,
@@ -195,5 +208,5 @@ export async function runSelfSubTechniques(
     },
   };
   ms.total = round(performance.now() - t0);
-  return { ctx, loaded: { view, activation, sky, preferred }, gaps: g.list, ms };
+  return { ctx, loaded: { view, activation, sky, preferred, pressure }, gaps: g.list, ms };
 }

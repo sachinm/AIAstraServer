@@ -1627,12 +1627,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 
 ## Filed 2026-11-09 by Self v2 step 1b (branch feat/self-v2-subtechniques)
 
-- **P2 · S3 windows run degraded until the engine stores a pressure grade.** `src/reading/self/sub/windows.ts`: no
-  `kundli_pressure` table and no 1–3 strength in any stored row, so every window is strength 2, transits and Sade Sati
-  are polarity `mixed`, and dasha polarity is the period lord's stored functional-nature label through
-  `FUNCTIONAL_POLARITY` (`v2words.ts`). `heaviestNow`, `top3` and the hero strip therefore order only by end date. Fact
-  (gaps `windows: ... degraded` on every build). Owner: engine `feat/pressure-inventory` (doc 66 §13 step 2). Done:
-  S3 reads `kundli_pressure` rows when present and the two gaps disappear.
+- **Fixed 2026-11-09 (final integration) · S3 degraded until a pressure grade:** S3 now reads the engine's `pressure_inventory` from `kundli_data` when stored (`src/reading/self/sub/pressure.ts`); degraded only while the engine is not deployed.
 - **P2 · No engine sensitive-passage flag.** S7 `bodyFacts.sensitive` is always false with a gap; the v1 service still
   decides it in Node (`service.ts isSensitive`: Ketu sub period or Saturn on 8 and 12), which doc 66 §12 lists as a
   Node derivation. Fact. Owner: engine pass (doc 66 §4.3) then server. Done: the engine stores the flag, S7 reads it,
@@ -1661,23 +1656,9 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 
 ## Filed 2026-11-09 by Self v2 steps 5/6/8 (branch feat/self-v2-api)
 
-- **P1 · GET /api/self/v2 stays `pending` until the v2 build is wired.** The route queues the Self build through
-  `queueSelfReadingBuild` (the helper GET /api/self/reading uses), and that event still runs the legacy
-  `getBoardReading`, which writes nothing `readSelfV2Latest` reads. The store reader is loaded from
-  `src/reading/self/v2/store.ts` by a guarded dynamic import (`src/reading/self/v2api/storeContract.ts`); while that
-  module is absent every GET answers `pending`. Fact (code read). Owner: the integrator merging `feat/self-v2-agents`.
-  Done: the `self-reading-build` event (or a v2 event) runs the v2 build and writes the store; a GET after it returns
-  `ok` with cards.
-- **P2 · A clock switch during a running Self build does not rebuild on the new clock.** `PUT /api/self/v2/clock`
-  writes `preferred_dasha` and calls `queueSelfReadingBuild`, which answers `already_building` while today's marker is
-  `building`; the running build read the old clock, and once it lands `ready` nothing queues another, so the board shows
-  the old clock's cards until the next day. Fact (code read, `buildEvent.ts` marker per kundli/board/day). Owner:
-  integrator / agents lane. Done: the marker or the store key carries the clock, so a switch queues a build on the new
-  clock even when one is running.
-- **P2 · `self.mood` is now a `FACT_CATALOG` key, so `confirmedFacts()` returns it.** The reading FACTS line and the
-  technique matcher (`src/profile/facts.ts` `confirmedFacts`) will see `self.mood = heavy:2026-11-09`, and
-  `PUT /api/profile/facts` accepts it (validated: `<heavy|mixed|fine>:<YYYY-MM-DD>`). Inference about the effect on
-  prompts. Owner: reading-dev. Done: `confirmedFacts` drops `self.mood` (or maps it through `moodFor` for today only).
+- **Fixed 2026-11-09 (final integration) · GET /api/self/v2 pending forever:** the store reader is a static import and the build event runs the v2 build under SELF_V2_BUILD=1; the offline e2e test gets `ok` with 12 areas.
+- **Fixed 2026-11-09 (final integration) · clock switch during a running build:** the marker and the cards key carry the clock; PUT /api/self/v2/clock queues on the new clock while the old one runs (`tests/unit/reading/self/v2/clockSwitch.test.ts`).
+- **Fixed 2026-11-09 (final integration) · `confirmedFacts()` returned `self.mood`:** dropped through `NOT_A_READING_FACT` (`tests/unit/profile/confirmedFacts.test.ts`).
 - **P3 · `clock_viewed` is written server side only.** `src/analytics/events.ts` `EVENT_NAMES` does not list it, so the
   web cannot send it through `/api/events`; the row comes from `PUT /api/self/v2/clock` (`analytics_events`: event
   `clock_viewed`, surface `self`, target = system, props `kundli_id, from, to, charged, outcome`). Fact. Owner: whoever
@@ -1699,10 +1680,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   next support), and its fields are snake_case. Rahu and Ketu periods always press (the engine's functional-nature table
   counts the nodes as malefics). Its gochara table follows doc 66 and differs from `reading_tables`. Owner: engine pass.
   Done: decided which gochara table is canonical; summary computed by the engine, not Node.
-- **P2 · The Self v2 API lacks four things the web page infers** (web `feat/self-v2-page` report): a range line per area,
-  an explicit sub-chapter end date, the hero's supporting areas for "Why we think so", and the reader's role in
-  `profile` (the web hides evidence keys for everyone until it knows the role). Owner: server integration. Done: fields
-  on `SelfV2Response` and the web reads them.
+- **Fixed 2026-11-09 (final integration) · four fields the web inferred:** `range`/`rangeLabel` per area, `subChapterEnds`, `hero.supporting`, `profile.role` on `SelfV2Response`; the web reads them.
 - **P3 · Web: five copies of the scroll-snap carousel remain** (`SelfReading.tsx`, `AreaBoardView.tsx` twice, the Work and
   Life Reading boards) beside the new shared `src/components/carousel/Carousel.tsx` and `Chips.tsx`. Owner: web. Done:
   all boards on the shared components.
@@ -1731,10 +1709,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   `src/reading/self/oracle.ts`: `usage` now passed; the v2 path passes it too). Not verified: whether Gemini 3.x returns
   `thoughtsTokenCount` at all with `includeThoughts: false` (the Lab's stage summaries also read 0). Owner: reading-dev.
   Done: one stored replay shows non-zero `thought_tokens`, or `gemini.ts toUsage` is changed to the field Gemini sends.
-- **P2 · The Personalizer's 2,500-token default cap is tight.** Hero + eleven cards (headline, body ≤ 120 words,
-  patterns, ladder, dates, sources) is ≈ 3.5–4.5 k output tokens; at 2,500 the JSON may truncate and the whole card
-  document fails (not stored). Default kept as asked (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). Owner: reading-dev. Done:
-  the first replay's output token count decides the default (or the Personalizer splits into two calls).
+- **Fixed 2026-11-09 (final integration) · Personalizer cap 2,500 tight:** default raised to 5,000 (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`); the first replay's output count still confirms it.
 - **P2 · A partial Oracle (one of three calls failed) is not stored and no cards are written.** The next build re-runs
   all three calls. Owner: reading-dev. Done: store the two good calls' areas under their own keys and re-run only the
   failed call, if replays show partials happen.
@@ -1749,13 +1724,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   route compares and queues.
 - **P3 · `docs/admin/07-technique-pieces-and-agents.md` regenerated on this branch** after the merge with 1b; a later
   catalogue change on develop needs it regenerated again (`npx tsx scripts/write-technique-pieces-doc.ts`).
-- **P2 · Fourteen step-2 outputs get no store key.** `storeLayerOutputs` (`src/reading/self/v2/build.ts`) hands every
-  `self.sub.*` output and every area brief to `withTechniqueOutput`, but the catalogue rows `self.sub.risk`,
-  `self.sub.body_facts`, `self.sub.profile` and all eleven `self.v2.<area>` rows read a `findings` input with no
-  synthesizer upstream, so `techniqueFreshness` makes them per-question and `techniqueCacheKey` returns null: nothing is
-  written (the build reports them in `layers.unkeyed` and a gap). Fact (unit test output 2026-11-09). Owner: reading-dev
-  (catalogue rows from step 1b). Done: those rows read `activation`/digest sections (or name their upstream as
-  synthesizer) so they key by the stamps; the build test asserts `unkeyed` is empty.
+- **Fixed 2026-11-09 (final integration) · fourteen unkeyed step-2 outputs:** the rows read concrete sections (a new `person` section for S10) and each output is keyed by its own refresh stamps; `layers.unkeyed` is empty and a rebuild with unchanged stamps writes nothing.
 - **P3 · Only family.sky is padded to the 1,024-token cache minimum.** On a sparse chart (the unit fixture) family.varga,
   family.dasha and family.year prefixes come out at ≈ 880, 190 and 30 tokens, below the minimum, so their explicit regions
   are refused and the calls go uncached. Owner: reading-dev. Done: pad or merge the short family packs, measured on the
@@ -1763,3 +1732,40 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 - **P3 · `tests/unit/reading/cacheRecycle45m.test.ts` "executes scheduled per-individual recycle…" timed out once
   (45 s) under a parallel run on 2026-11-09 and passed on the rerun.** Flaky under load. Owner: reading-dev. Done: the
   test uses fake timers end to end.
+
+## Filed 2026-11-09 by the Self v2 final integration (branch feat/self-v2-integrate)
+
+- **P1 · What still blocks a live staging run.** (1) The engine's `pressure_inventory` is not deployed: every pull
+  answers 400, the board stays in degraded windows with a gap, and the loader retries once per kundli and clock per 24 h
+  (`SELF_V2_PRESSURE_RETRY_HOURS`). (2) `SELF_V2_BUILD=1` and `SELF_V2_ENABLED=1` are not set on the API Lambda.
+  (3) No paid replay has been made: the first one needs Sachin's yes (doc 66 §13, §4.9 has the estimates). (4) The
+  shared Prisma client must be generated from the current schema before deploy (the `terms_version` item above). Owner:
+  Sachin (yes), deploy sub-session. Done: a staging GET /api/self/v2 returns `ok` with twelve areas from a live build.
+- **P2 · Pressure rows: `houses` is the engine's `houses_touched`, aspects included.** S5 takes a risk row's first house
+  for "from where" and its people from all of them, and S7 calls a transit "over the lagna" when house 1 is touched, so on
+  engine rows both now count aspected houses. The engine row has no separate "house it stands in" field for transits and
+  stations, and Node may not count it from `sign_index`. Fact (code read). Owner: engine pass, then reading-dev. Done:
+  the engine adds the placement house to transit and station rows and S5/S7 read it.
+- **P3 · Two key namespaces for one period.** With the inventory, S3 rows carry the engine's `dasha:<system>/<level>/<lord>@<from>`
+  ids while S2 periods keep `activation:<system>/...`; the Oracle may cite either for the same period. Owner: reading-dev.
+  Done: one namespace (an alias table in the slice, or S2 reading the inventory's dasha rows).
+- **P3 · Sub-techniques still all run before the store lookup.** `runSelfSubTechniques` computes all ten (≈ 80 ms on the
+  research kundli) and only then are the outputs keyed; a rebuild with unchanged stamps writes nothing and calls no model,
+  but the code layer is not skipped. Owner: reading-dev. Done: S1, S2 and S10 run first to make the stamps, and the other
+  sub-techniques read their stored output on a key hit.
+- **P3 · `hero.supporting` is derived, not cited.** The hero stores no per-sentence sources, so the API names the hero
+  question's claim area plus the live areas (`LIVE_AREAS`) that have a card (`response.ts heroSupporting`). Owner:
+  reading-dev. Done: the Personalizer schema carries hero sources and the API reads them.
+- **P3 · Range words for standing-plus-live areas.** Mind, drive and chapters say "True until <main period end>" (e.g. 16
+  Feb 2037 on the research kundli), which reads long. Owner: Sachin (words). Done: reviewed wording per horizon in
+  `response.ts areaRange`.
+- **P3 · Slice prefixes under 1,024 tokens on the research kundli.** `family.varga` 680, `family.year` 795, `family.sky`
+  579 and `self.personalizer` 800 (doc 66 §4.9 table; e2e test output), so those regions are refused and the calls go
+  uncached. Extends the agents lane's padding item above. Owner: reading-dev. Done: every warmed prefix ≥ 1,024 on the two
+  stored dossiers.
+- **P3 · `tests/unit/chartCatalogSync.test.ts` "logs a failed sync as a warning" failed once (8.3 s) in a parallel run
+  and passed on the rerun.** Flaky under load, not caused by this branch. Owner: whoever next touches the catalog sync.
+  Done: the test uses fake timers.
+- **P3 · The `pressure_inventory` chart type row is created by the loader** (`chart_data_types`, served false) the first
+  time a pull is attempted, because `kundli_data.data_type` has a foreign key and no migration was allowed. The catalog
+  sync marks it served once the engine lists the type. Owner: none needed; noted for whoever reads the table.

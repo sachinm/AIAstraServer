@@ -415,6 +415,49 @@ which graces hold it. Its job is to read the row against the classical rules, co
 what the code cannot (the pattern behind it, the interaction between rows, the counsel), and never to rediscover the
 dates. The Personalizer then says it in the person's words with the four-step ladder.
 
+### 4.9 Budget per build (estimates, added by the final integration 2026-11-09)
+
+Every figure below is an **estimate** unless the row says "measured". Measured rows come from the doc 65 replay of the
+v1 path; the v2 rows are the plan's arithmetic over the slice sizes and the prices in `src/reading/llm/models.ts`
+(`PRICES`; Flash doubles on 2027-01-01 through `PRICE_CHANGES`, so every v2 Oracle figure doubles that day). No v2 build
+has run against a provider yet; the first replay (doc 66 §13, needs Sachin's yes) replaces these with measured numbers.
+
+| Step | Measured today (doc 65 replay, v1 path) | v2 estimate |
+|---|---|---|
+| Family readers ×5 | cold ≈ 126 k in / ≈ 3.5 k out ≈ $0.037 | $0 warm (read through `reading_findings_cache`) / ≈ $0.037 cold |
+| Lineman | 126,105 in / 98,322 cached / 596 out / 3.4 s / $0.0103 | retired on the v2 path |
+| Oracle | 40,665 in / 12,246 cached / 5,908 out / 44.6 s / $0.0444 | 3 parallel calls, each ≈ 11 k in (≈ 8 k cached) / ≈ 2.2 k out; ≈ $0.033 in all; ≈ 17–20 s |
+| Personalizer | (none in v1) | ≈ 8 k in / ≈ 2–4 k out ≈ $0.005–0.008; ≈ 8–12 s |
+| One build | 72 s; $0.055 warm, ≈ $0.09 cold | cold ≈ $0.075–0.08 and ≈ 35 s; warm ≈ $0.04 and ≈ 28 s; profile-only ≈ $0.005 and ≈ 10 s |
+
+Notes, each one a caveat on the table:
+
+- **Explicit cache storage is billed per hour and is not in `PRICES`.** The v2 build warms the five family packs, the
+  Oracle prefix and the Personalizer prefix as explicit regions (`warmPrefixes`). Verify the storage rate per
+  region-hour before relying on explicit caching for the family packs; if the packs do not pay their storage back on a
+  warm rebuild, warm only `self.oracle` and `self.personalizer` (docs/TODOS.md, filed by the agents lane).
+- **Thinking tokens were recorded as 0 on the v1 path** because it never passed `usage` to the run log
+  (`withAgentRun` reads only `usage`); fixed 2026-11-09 in `src/reading/self/oracle.ts`, and the v2 path passes it.
+  Whether Gemini 3.x returns `thoughtsTokenCount` with `includeThoughts: false` is still unverified, so the Oracle's
+  thinking cost may be missing from the measured row.
+- **The Personalizer's output cap is 5,000 tokens** (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, raised from 2,500): the
+  hero and eleven cards come to ≈ 3.5–4.5 k output tokens, and a truncated JSON fails the whole card document.
+
+**Slice sizes on the fixtures (chars / 4, `estTokens`; not provider counts).**
+
+| Slice | Agents lane unit fixture (`tests/unit/reading/self/v2agents/fixtures.ts`) | Research calibration kundli (`tests/fixtures/self/research-calibration.json`, e2e test) |
+|---|---|---|
+| `family.rasi` prefix | not reported | 2,663 (suffix 128) |
+| `family.varga` prefix | ≈ 880 (below the 1,024 minimum) | 680 (suffix 69) |
+| `family.dasha` prefix | ≈ 190 (below) | 1,803 (suffix 99) |
+| `family.year` prefix | ≈ 30 (below) | 795 (suffix 96) |
+| `family.sky` prefix | padded past 1,024 | 579 (suffix 76; below: the fixture has no stored sky rows to pad with) |
+| `self.oracle` | ≥ 1,024 (asserted by `build.test.ts`) | prefix 3,676, suffix 4,603 |
+| `self.personalizer` | not reported | prefix 800 (below; the mocked Oracle document is short), suffix 128 |
+
+A prefix under 1,024 tokens is refused as an explicit region and its call goes uncached; docs/TODOS.md keeps the
+padding item open, now with the research-kundli numbers.
+
 ## 5. Architecture
 
 ```
@@ -448,7 +491,7 @@ chart term above the fold and no scroll of sections.
 - Server: `src/reading/person/profile.ts`; `src/reading/self/personalizer.ts` (+ prompt, schema, validator);
   `oracle/self-areas` prompt v2 (tenth area, patterns, inventory brief); catalogue, registry, cache plan, digest slices,
   summaries rows; `PUT /api/self/clock`, `POST /api/self/confirm`, `POST /api/self/mood`; `clock_viewed` event; env
-  `SELF_PERSONALIZER_MODEL` (default `gemini-3.1-flash-lite`), `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (2,500),
+  `SELF_PERSONALIZER_MODEL` (default `gemini-3.1-flash-lite`), `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (5,000),
   `SELF_AGE_BANDS` ("25,36,46,61"), `SELF_HERO_HORIZON_MONTHS` (6), `READING_EXPLICIT_CACHE=1` on the Lambda (open since
   doc 65 §9b).
 - Web: `src/pages/you/` v2 (Hero, Strip, Chips, AreaCard, Patterns, Ladder, ClockSheet), tests, 360 px snapshots.

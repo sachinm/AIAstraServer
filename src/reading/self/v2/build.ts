@@ -26,13 +26,16 @@ import type { ensurePromptCache } from '../../llm/promptCache.js';
 import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../../oracle/prewarm.js';
 import { PROMPT_VERSION } from '../../prompts/generated.js';
 import { redactEngineTerms } from '../oracle.js';
+import { SELF_V2_REFRESH } from '../v2types.js';
 import type {
   AreaBrief,
   PreparedAgentSlice,
+  RefreshTrigger,
   SelfBuildContext,
   SelfV2AgentTiming,
   SelfV2CardsResult,
   SelfV2FamilyAgentId,
+  SelfV2Frame,
   SelfV2OracleResult,
   WarmedRegion,
 } from '../v2types.js';
@@ -98,8 +101,8 @@ export interface SelfV2BuildResult {
   gaps: string[];
   stored: { oracle: boolean; cards: boolean };
   keys: { oracle: string | null; cards: string | null };
-  /** step 2's stores: keyed and written, without a key (not written), failed */
-  layers: { stored: string[]; unkeyed: string[]; failed: string[] };
+  /** step 2's stores: keyed and written now, already stored under the same key (nothing written), without a key, failed */
+  layers: { stored: string[]; cached: string[]; unkeyed: string[]; failed: string[] };
 }
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
@@ -124,9 +127,9 @@ export function oracleStoreKey(ctx: SelfBuildContext, oracleSlice: PreparedAgent
   ].join('|');
 }
 
-/** The cards' store key: the Oracle key, the profile hash and the Personalizer prompt. */
+/** The cards' store key: the clock (so a read can ask for one clock), the Oracle key, the profile hash and the prompt. */
 export function cardsStoreKey(ctx: SelfBuildContext, oracleKey: string): string {
-  return ['self.v2.cards', `o=${shortHash(oracleKey)}`, `profile=${ctx.sub.profile?.hash ?? ctx.stamps.profileHash ?? '-'}`, `p=${promptHash(SELF_V2_PERSONALIZER_PROMPT)}`].join('|');
+  return ['self.v2.cards', `clock=${ctx.stamps.clock}`, `o=${shortHash(oracleKey)}`, `profile=${ctx.sub.profile?.hash ?? ctx.stamps.profileHash ?? '-'}`, `p=${promptHash(SELF_V2_PERSONALIZER_PROMPT)}`].join('|');
 }
 
 /** the shortest running period: the stored output's window */
@@ -150,10 +153,41 @@ const SUB_SLOTS: ReadonlyArray<[keyof SelfBuildContext['sub'], string]> = [
   ['profile', 'profile'],
 ];
 
-/** The key of a Layer 1 or Layer 2 output: its id, the digest version, the clock and every boundary stamp. */
-export function layerStoreKey(id: string, ctx: SelfBuildContext): string {
+/**
+ * What can make each sub-technique's output stale (doc 66 §4.8 Layer 1); the digest version and the clock are in every
+ * key. The areas use SELF_V2_REFRESH.
+ */
+export const SUB_REFRESH: Readonly<Record<string, readonly RefreshTrigger[]>> = {
+  clock: ['digest'],
+  periods: ['main_period', 'sub_period', 'sub_sub_period'],
+  windows: ['sub_sub_period', 'sky_week'],
+  promise: ['digest'],
+  risk: ['sub_sub_period', 'sky_week'],
+  mindFacts: ['digest'],
+  bodyFacts: ['sub_sub_period', 'sky_week'],
+  presenceFacts: ['main_period', 'sub_period'],
+  year: ['year'],
+  profile: ['profile', 'confirm'],
+};
+
+const ALL_TRIGGERS: readonly RefreshTrigger[] = ['main_period', 'sub_period', 'sub_sub_period', 'sky_week', 'year', 'profile', 'confirm'];
+
+/**
+ * The key of a Layer 1 or Layer 2 output: its id, the digest version, the clock and the stamps of the triggers that can
+ * change it (default: every stamp). Unchanged stamps give the same key, so a rebuild writes nothing.
+ */
+export function layerStoreKey(id: string, ctx: SelfBuildContext, triggers: readonly RefreshTrigger[] = ALL_TRIGGERS): string {
   const s = ctx.stamps;
-  return [id, s.digestVersion, `clock=${s.clock}`, `main=${s.mainPeriod ?? '-'}`, `sub=${s.subPeriod ?? '-'}`, `subsub=${s.subSubPeriod ?? '-'}`, `sky=${s.skyWeek ?? '-'}`, `year=${s.year ?? '-'}`, `profile=${s.profileHash ?? '-'}`, `confirm=${s.confirmHash ?? '-'}`].join('|');
+  const t = new Set(triggers);
+  const parts = [id, s.digestVersion, `clock=${s.clock}`];
+  if (t.has('main_period')) parts.push(`main=${s.mainPeriod ?? '-'}`);
+  if (t.has('sub_period')) parts.push(`sub=${s.subPeriod ?? '-'}`);
+  if (t.has('sub_sub_period')) parts.push(`subsub=${s.subSubPeriod ?? '-'}`);
+  if (t.has('sky_week')) parts.push(`sky=${s.skyWeek ?? '-'}`);
+  if (t.has('year')) parts.push(`year=${s.year ?? '-'}`);
+  if (t.has('profile')) parts.push(`profile=${s.profileHash ?? '-'}`);
+  if (t.has('confirm')) parts.push(`confirm=${s.confirmHash ?? '-'}`);
+  return parts.join('|');
 }
 
 /**
@@ -166,12 +200,13 @@ export async function storeLayerOutputs(
   briefs: readonly AreaBrief[],
   now: Date,
   runningPeriod: { from: Date; to: Date } | null,
-): Promise<{ stored: string[]; unkeyed: string[]; failed: string[] }> {
-  const items: Array<{ id: string; agent: string; value: unknown }> = [
-    ...SUB_SLOTS.filter(([slot]) => ctx.sub[slot] !== undefined).map(([slot, name]) => ({ id: subTechniqueId(name), agent: 'self.sub', value: ctx.sub[slot] })),
-    ...briefs.map((b) => ({ id: `self.v2.${b.areaId}`, agent: 'self.reading_panel', value: b })),
+): Promise<{ stored: string[]; cached: string[]; unkeyed: string[]; failed: string[] }> {
+  const items: Array<{ id: string; agent: string; value: unknown; triggers: readonly RefreshTrigger[] }> = [
+    ...SUB_SLOTS.filter(([slot]) => ctx.sub[slot] !== undefined).map(([slot, name]) => ({ id: subTechniqueId(name), agent: 'self.sub', value: ctx.sub[slot], triggers: SUB_REFRESH[name] ?? ALL_TRIGGERS })),
+    ...briefs.map((b) => ({ id: `self.v2.${b.areaId}`, agent: 'self.reading_panel', value: b, triggers: SELF_V2_REFRESH[b.areaId] ?? ALL_TRIGGERS })),
   ];
   const stored: string[] = [];
+  const cached: string[] = [];
   const unkeyed: string[] = [];
   const failed: string[] = [];
   await Promise.all(
@@ -179,17 +214,17 @@ export async function storeLayerOutputs(
       try {
         const res = await withTechniqueOutput(
           prisma,
-          { technique: it.id, kundliId: ctx.kundliId, digestVersion: layerStoreKey(it.id, ctx), context: { now, runningPeriod }, agentId: it.agent, userId: ctx.userId, logCachedRun: false },
+          { technique: it.id, kundliId: ctx.kundliId, digestVersion: layerStoreKey(it.id, ctx, it.triggers), context: { now, runningPeriod }, agentId: it.agent, userId: ctx.userId, logCachedRun: false },
           async () => it.value,
         );
         // a technique whose freshness is per question (a `findings` input with no synthesizer upstream) gets no key
-        (res.cacheKey ? stored : unkeyed).push(it.id);
+        (!res.cacheKey ? unkeyed : res.cached ? cached : stored).push(it.id);
       } catch {
         failed.push(it.id);
       }
     }),
   );
-  return { stored, unkeyed, failed };
+  return { stored, cached, unkeyed, failed };
 }
 
 /** Step 4: the five family readers, in parallel, each read through `reading_findings_cache` first. */
@@ -287,7 +322,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     gaps,
     stored: { oracle: false, cards: false },
     keys: { oracle: null, cards: null },
-    layers: { stored: [], unkeyed: [], failed: [] },
+    layers: { stored: [], cached: [], unkeyed: [], failed: [] },
   };
   const call = deps.callGemini ?? realCallGemini;
   const d = { ...deps, callGemini: call };
@@ -434,8 +469,9 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         if (r.call) agents.push(r.call);
         step('personalizer.validated');
         const result: SelfV2CardsResult = { ...r, cached: false };
+        const frame: SelfV2Frame = { asOf: ctx.asOf, stamps: ctx.stamps, periods: ctx.sub.periods ?? null, year: ctx.sub.year ?? null };
         return {
-          value: { key: cardsKey, oracleKey, result },
+          value: { key: cardsKey, oracleKey, result, frame },
           skipStore: r.status !== 'ok',
           summary: { status: r.status, cards: r.doc ? Object.keys(r.doc.cards).length : 0, withheld: Object.values(r.cardStatus).filter((s) => s === 'withheld').length },
         };

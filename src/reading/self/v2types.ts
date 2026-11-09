@@ -569,6 +569,13 @@ export interface SelfV2AreaView {
   card: PersonalCard | null;
   /** the code lines of the matching legacy panel, when available */
   floor: string[];
+  /**
+   * How long this area's reading holds (final integration): the span of the shortest clock period that can make it
+   * stale (SELF_V2_REFRESH), the year span for `year`, 'always' for a standing area; null when the build stored no frame.
+   */
+  range?: { from: string; to: string } | 'always' | null;
+  /** the range in words: "True until 1 Jan 2027", "Always", "This year: 9 Sep 2026 – 9 Sep 2027"; '' when unknown */
+  rangeLabel?: string;
   /** "Chart details": the Oracle's own text for this area, engine names redacted */
   details: { headline?: string; paragraphs?: string[]; evidence: string[]; certainty?: string };
 }
@@ -578,9 +585,13 @@ export interface SelfV2Response {
   builtAt: string | null;
   nextCheck: string | null;
   clock: SelfV2ClockView;
-  hero: HeroDoc | null;
+  /** the stored hero; `supporting` (final integration) names the areas whose cards ground it, for "Why we think so" */
+  hero: (HeroDoc & { supporting?: SelfV2AreaId[] }) | null;
   areas: SelfV2AreaView[];
-  profile: { ageBand: AgeBand | null; hasGender: boolean; missing: string[] };
+  /** `role` (final integration): practitioners see evidence keys under Chart details */
+  profile: { ageBand: AgeBand | null; hasGender: boolean; missing: string[]; role?: ReaderRole };
+  /** the running sub period's end date (S2 `runningSub.to`), for "Sub-chapter ends"; null when not known */
+  subChapterEnds?: string | null;
   usage?: unknown;
 }
 
@@ -654,4 +665,19 @@ export interface SelfV2CardsResult {
   model: string;
   call: SelfV2AgentTiming | null;
   cached: boolean;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Final integration additions (branch feat/self-v2-integrate). Appended; nothing above changes.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * What the API needs from the build context besides the cards: the stamps, the clock periods (S2) and the year frame
+ * (S9), stored beside the cards so GET /api/self/v2 can say how long each area holds without re-running anything.
+ */
+export interface SelfV2Frame {
+  asOf: IsoDate;
+  stamps: SelfBuildStamps;
+  periods: PeriodFrame | null;
+  year: YearFrame | null;
 }

@@ -15,6 +15,7 @@ import { FAMILIES, FAMILIES_NOT_BUILT } from '../reading/area/career.js';
 import { SCENARIOS, YOGA_AVOID_DEFAULT, YOGA_FAVOUR_DEFAULT, type ScenarioRule } from '../reading/luckyTimes/scenarios.js';
 import { HORIZONS, SUBJECT_IDS, type SubjectId } from '../reading/packs/frames.js';
 import { SYSTEM_LABELS } from '../reading/timeline/types.js';
+import { SELF_V2_REFRESH, type SelfV2AreaId } from '../reading/self/v2types.js';
 import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
 import type { ContractInput, ContractSection, TechniqueContract, TechniqueSelectors } from './contracts.js';
 import type { LayoutId } from './layouts.js';
@@ -1902,7 +1903,20 @@ const selfV2Row = (
   selectors: { boards: ['you'], subjects: ['general_life_direction'], houses, vargas },
   contract: codeContract(inputs, output),
 });
-const subFindings = (ids: string): ContractInput => inp('findings', `outputs of ${ids} in the build context`, 'findings_in');
+/**
+ * What an area brief reads, by the triggers that make it stale (SELF_V2_REFRESH): the digest cards behind S4/S6/S7/S8,
+ * the clock periods, the week's sky, the year chart, the person pack. Each is read from the build context (never the
+ * database); the sections give the store its freshness, and the store key carries the stamps (build.ts layerStoreKey).
+ */
+function selfV2AreaInputs(area: string): ContractInput[] {
+  const triggers = SELF_V2_REFRESH[area as SelfV2AreaId] ?? ['digest'];
+  const out: ContractInput[] = [inp('planet', 'D1 cards behind the self.sub outputs (build context)', 'planet_card')];
+  if (triggers.some((t) => t === 'main_period' || t === 'sub_period' || t === 'sub_sub_period')) out.push(inp('activation', 'self.sub.periods and self.sub.windows dasha rows (build context)', 'activation_row'));
+  if (triggers.includes('sky_week')) out.push(inp('transit', 'self.sub.windows sky rows (build context)', 'transit_row'));
+  if (triggers.includes('year')) out.push(inp('annual', 'self.sub.year frame (build context)', 'annual_row'));
+  if (triggers.includes('profile') || triggers.includes('confirm')) out.push(inp('person', 'self.sub.profile confirms (build context)', 'person_pack'));
+  return out;
+}
 const ALL_HOUSES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const SELF_V2: TechniqueDef[] = [
@@ -1979,7 +1993,11 @@ const SELF_V2: TechniqueDef[] = [
       'since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot',
       'top3 = the three rows with the highest engine strength, then the soonest until',
     ],
-    [subFindings('self.sub.periods, self.sub.windows, self.sub.promise')],
+    [
+      inp('activation', 'S2 periods and S3 primary-clock rows live at asOf (read from the build context)', 'activation_row'),
+      inp('transit', 'S3 stored sky overlay rows live at asOf (read from the build context)', 'transit_row'),
+      inp('yoga', 'S4 knots and graces naming the same planet (read from the build context)', 'yoga_row'),
+    ],
     'src/reading/self/sub/risk.ts subRisk; src/reading/self/v2words.ts RISK_WHAT',
     ALL_HOUSES,
     ['D1'],
@@ -2010,7 +2028,13 @@ const SELF_V2: TechniqueDef[] = [
       'liveTransits: S3 live overlay rows of SELF_V2_BODY_TRANSIT_PLANETS with stored house_from_lagna or house_from_moon 1, and Sade Sati',
       'sensitive: the engine flag only; none is stored, so false with a gap',
     ],
-    [inp('house', 'D1 h1, h6, h8; D30 h1', 'house_card'), inp('planet', 'D1 lagna lord, Su, Mo, Ma, Sa', 'planet_card'), inp('point', 'D1 A6', 'point_row'), subFindings('self.sub.windows')],
+    [
+      inp('house', 'D1 h1, h6, h8; D30 h1', 'house_card'),
+      inp('planet', 'D1 lagna lord, Su, Mo, Ma, Sa', 'planet_card'),
+      inp('point', 'D1 A6', 'point_row'),
+      inp('activation', 'running L1-L3 periods of the primary clock on SELF_V2_BODY_HOUSES', 'activation_row'),
+      inp('transit', 'S3 live overlay rows over lagna and Moon (read from the build context)', 'transit_row'),
+    ],
     'src/reading/self/sub/body.ts subBodyFacts',
     [1, 6, 8],
     ['D1', 'D30'],
@@ -2054,7 +2078,7 @@ const SELF_V2: TechniqueDef[] = [
       'loadProfilePack: auth (birth date, gender, role) and person_facts in two reads',
       'Age is calendar arithmetic over the typed birth date, banded by SELF_AGE_BANDS; gender null when not stated; declined keys listed; the last five confirm answers; the mood of today only; a stable hash',
     ],
-    [inp('text', 'auth and person_facts of the user', 'text_in')],
+    [inp('person', 'auth (birth date, gender, role) and person_facts of the user', 'person_pack')],
     'src/reading/self/sub/profile.ts subProfile; src/reading/person/profile.ts loadProfilePack',
     [1],
     ['D1'],
@@ -2085,7 +2109,7 @@ const SELF_V2: TechniqueDef[] = [
         'Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person',
         `Horizon ${horizon}; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.${area}`,
       ],
-      [subFindings('self.sub.*')],
+      selfV2AreaInputs(area),
       `src/reading/self/areas/${area}.ts; areas/index.ts buildAreaBriefs`,
       [1],
       ['D1'],

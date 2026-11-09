@@ -23,8 +23,11 @@ export interface SelfV2Deps {
   /** the engine's `dasha.applicable` rows; null when none is stored */
   loadApplicability?: (prisma: PrismaClient, kundliId: string) => Promise<ApplicabilityRow[] | null>;
   loadProfile?: (prisma: PrismaClient, userId: string, asOf: string) => Promise<ProfilePack>;
-  /** queues the Self build (default: queueSelfReadingBuild, the same helper GET /api/self/reading uses) */
-  queueBuild?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<QueueOutcome>;
+  /**
+   * queues the Self build (default: queueSelfReadingBuild, the same helper GET /api/self/reading uses). `clock` is the
+   * clock the build is for: the marker carries it, so a clock switch queues a build even while one runs on the old clock.
+   */
+  queueBuild?: (prisma: PrismaClient, userId: string, kundliId: string, clock?: string) => Promise<QueueOutcome>;
   queueDigest?: (prisma: PrismaClient, kundliId: string) => Promise<void>;
   gate?: Pick<QuestionGate, 'chargeClock' | 'getStatus'>;
   /** the legacy panels' code lines per area, when the integrator has them (optional) */
@@ -41,8 +44,8 @@ export async function defaultLoadApplicability(prisma: PrismaClient, kundliId: s
   return row?.payload !== undefined && row?.payload !== null ? parseApplicability(row.payload) : null;
 }
 
-const defaultQueueBuild = (prisma: PrismaClient, userId: string, kundliId: string): Promise<QueueOutcome> =>
-  queueSelfReadingBuild({ prisma }, userId, kundliId, 'self');
+const defaultQueueBuild = (prisma: PrismaClient, userId: string, kundliId: string, clock?: string): Promise<QueueOutcome> =>
+  queueSelfReadingBuild({ prisma }, userId, kundliId, 'self', clock ? { clock } : {});
 
 async function latestKundli(prisma: PrismaClient, userId: string) {
   return prisma.kundli.findFirst({
@@ -68,9 +71,10 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   const kundli = await latestKundli(prisma, userId);
   if (!kundli) return { body: noKundliResponse(), queued: null };
   const asOf = dayOf((deps.now ?? (() => new Date()))());
-  const [latest, clock, profile, floors] = await Promise.all([
-    (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id),
-    clockFor(deps, kundli.id, kundli.preferred_dasha),
+  const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
+  const [latest, profile, floors] = await Promise.all([
+    // only the board clock's build: after a switch the old clock's cards are not served as the new one's
+    (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
     (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf),
     deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({}),
   ]);
@@ -83,7 +87,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
       await (deps.queueDigest ?? defaultQueueDigest)(prisma, kundli.id).catch((e) => console.warn('[self:v2] digest queue failed:', (e as Error).message));
       status = 'preparing';
     } else {
-      queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id);
+      queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary);
       status = 'pending';
     }
   } else if (latest.status === 'pending') {
@@ -139,7 +143,7 @@ export async function switchClock(deps: SelfV2Deps, userId: string, system: unkn
   } catch (e) {
     console.error('[self:v2] clock_viewed event failed:', (e as Error).message);
   }
-  await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id).catch((e) => {
+  await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, system).catch((e) => {
     console.error('[self:v2] build queue failed:', (e as Error).message);
     return 'skipped' as const;
   });
