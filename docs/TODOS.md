@@ -1398,3 +1398,15 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · The dossier's `trigger` has no `event` value.** The background build writes its dossier with `trigger:
   'request'`; a lab reader cannot tell a page-queued build from an in-request one. Owner: reading-dev. Done:
   `DossierInput.trigger` gains `'event'` and `buildEvent.ts` passes it.
+- **P2 · The API logs no reason per invocation and no line per engine call** (`server.ts` `POST /events`,
+  `src/lib/astroKundliClient.ts`). Admin › Usage › Lambda calls (admin doc 13) splits web vs background vs each sweep
+  from AWS metrics, and the self-invokes from `digest_built` / `reading_build_*` / `kundli_sync_invoked`, but cannot
+  split the engine's calls (registration pulls vs other data requests): the engine logs nothing per request and
+  `[AstroKundli] outgoing` is a multi-line object dump. Owner: reading-dev. Done: `queueLog({ event: 'lambda_invocation',
+  reason: <source> })` first thing in `POST /events`, and `queueLog({ event: 'engine_call', reason:
+  'registration'|'digest'|'reading'|'request', type })` beside each engine invoke; the admin page fills its engine
+  columns with no admin change (its Logs Insights query already counts both names).
+- **P1 · Admin Lambda calls page needs IAM before it can read AWS.** Role `aiadastra-admin-api-exec` lacks
+  `cloudwatch:GetMetricData`, `events:ListRuleNamesByTarget`, `logs:StartQuery`, `logs:GetQueryResults`/`StopQuery`.
+  Exact policy in `docs/admin/13-usage-lambda-calls.md` §5. Owner: deploy session (Sachin's typed yes). Done: the
+  deployed page shows November's totals and they match the Lambda console's Monitor tab.
