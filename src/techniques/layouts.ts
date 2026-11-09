@@ -66,6 +66,11 @@ export const LAYOUTS = {
     columns: ['technique', 'claim', 'evidence', 'polarity', 'weight', 'about'],
     description: "A synthesizer's input: one row per finding from the techniques below it, with the evidence keys it cites, its side, its weight and who it is about",
   },
+  person_pack: {
+    id: 'person_pack',
+    columns: ['age_band', 'gender', 'role', 'facts', 'declined', 'confirms', 'mood', 'hash'],
+    description: "The person's own typed facts (doc 66 §4.2): age band, stated gender or none, role, the wizard's facts, declined keys, the last confirm answers, today's mood and the pack hash; never a chart value",
+  },
   text_in: {
     id: 'text_in',
     columns: ['field', 'text'],

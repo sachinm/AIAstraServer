@@ -33,13 +33,22 @@ export interface SelfReadingBuildEvent {
   board: ReadingBoardId;
   /** a fresh reading the person asked for (docs/billing/03): the day its question was held on, settled by this build */
   refreshDay?: string;
+  /** the clock the build was queued for (doc 66 §4.4): the marker carries it so a clock switch is not blocked */
+  clock?: string;
 }
 
-/** A fresh reading the person asked for, and the UTC day its question was held on. */
+/** A fresh reading the person asked for, and the UTC day its question was held on; the clock the build is queued for. */
 export interface BuildOptions {
   refreshDay?: string;
+  /**
+   * The reading clock the build is queued for (the kundli's resolved primary clock). The marker stores it: a build
+   * running on another clock does not block this one (a clock switch during a build, doc 66 §4.4), and a build whose
+   * clock was superseded leaves the newer marker alone when it lands.
+   */
+  clock?: string;
 }
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const CLOCK_RE = /^[a-z0-9_]{1,40}$/;
 
 function tokenOk(given: unknown): boolean {
   const want = getKundliDigestEventToken();
@@ -52,24 +61,30 @@ function tokenOk(given: unknown): boolean {
 /** The build event, or null (anything else, a wrong or missing token, or the token unset). */
 export function parseSelfReadingBuildEvent(body: unknown): SelfReadingBuildEvent | null {
   if (!body || typeof body !== 'object') return null;
-  const b = body as { source?: unknown; userId?: unknown; board?: unknown; token?: unknown; refreshDay?: unknown; 'detail-type'?: unknown; detail?: Record<string, unknown> };
+  const b = body as { source?: unknown; userId?: unknown; board?: unknown; token?: unknown; refreshDay?: unknown; clock?: unknown; 'detail-type'?: unknown; detail?: Record<string, unknown> };
   const d = b.detail && typeof b.detail === 'object' ? b.detail : null;
   let userId: unknown;
   let board: unknown;
   let token: unknown;
   let refreshDay: unknown;
-  if (b.source === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay] = [b.userId, b.board, b.token, b.refreshDay];
-  else if (d && b['detail-type'] === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay] = [d.userId, d.board, d.token, d.refreshDay];
+  let clock: unknown;
+  if (b.source === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay, clock] = [b.userId, b.board, b.token, b.refreshDay, b.clock];
+  else if (d && b['detail-type'] === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay, clock] = [d.userId, d.board, d.token, d.refreshDay, d.clock];
   else return null;
   if (!tokenOk(token)) return null;
   if (typeof userId !== 'string' || !ID_RE.test(userId)) return null;
   if (typeof board !== 'string' || !BOARDS.includes(board as ReadingBoardId)) return null;
-  return { userId, board: board as ReadingBoardId, ...(typeof refreshDay === 'string' && DAY_RE.test(refreshDay) ? { refreshDay } : {}) };
+  return {
+    userId,
+    board: board as ReadingBoardId,
+    ...(typeof refreshDay === 'string' && DAY_RE.test(refreshDay) ? { refreshDay } : {}),
+    ...(typeof clock === 'string' && CLOCK_RE.test(clock) ? { clock } : {}),
+  };
 }
 
 /** The event this Lambda sends itself. */
 export function selfReadingBuildEventPayload(userId: string, board: ReadingBoardId, opts: BuildOptions = {}): Record<string, unknown> {
-  return { source: SELF_READING_BUILD_SOURCE, userId, board, ...(opts.refreshDay ? { refreshDay: opts.refreshDay } : {}), token: getKundliDigestEventToken() ?? '' };
+  return { source: SELF_READING_BUILD_SOURCE, userId, board, ...(opts.refreshDay ? { refreshDay: opts.refreshDay } : {}), ...(opts.clock ? { clock: opts.clock } : {}), token: getKundliDigestEventToken() ?? '' };
 }
 
 export const markerArea = (board: ReadingBoardId): string => `${board}.reading`;
@@ -97,25 +112,39 @@ function startedAtOf(row: MarkerRow | null): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+function clockOf(row: MarkerRow | null): string | null {
+  const r = row?.result as { clock?: unknown } | null | undefined;
+  return typeof r?.clock === 'string' ? r.clock : null;
+}
+
+function stateOf(row: MarkerRow | null, now: Date): BuildMarkerState {
+  if (!row) return 'none';
+  const age = now.getTime() - startedAtOf(row);
+  if (row.status === 'building') return age > BUILD_STUCK_MS ? 'stuck' : 'building';
+  if (row.status === 'failed') return age < FAILED_COOLDOWN_MS ? 'failed_recently' : 'failed';
+  return 'ready';
+}
+
 /** What the marker says about today's build of this board for this kundli. Never throws. */
 export async function readBuildMarker(prisma: PrismaClient, kundliId: string, board: ReadingBoardId, now: Date): Promise<BuildMarkerState> {
+  return (await readBuildMarkerDetail(prisma, kundliId, board, now)).state;
+}
+
+/** The marker's state and the clock its build was queued for (null when the marker names none). Never throws. */
+export async function readBuildMarkerDetail(prisma: PrismaClient, kundliId: string, board: ReadingBoardId, now: Date): Promise<{ state: BuildMarkerState; clock: string | null }> {
   try {
-    const row = await (prisma as unknown as MarkerPrisma).areaBuild?.findUnique?.({ where: { kundli_id_area_as_of: { kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now) } } });
-    if (!row) return 'none';
-    const age = now.getTime() - startedAtOf(row);
-    if (row.status === 'building') return age > BUILD_STUCK_MS ? 'stuck' : 'building';
-    if (row.status === 'failed') return age < FAILED_COOLDOWN_MS ? 'failed_recently' : 'failed';
-    return 'ready';
+    const row = (await (prisma as unknown as MarkerPrisma).areaBuild?.findUnique?.({ where: { kundli_id_area_as_of: { kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now) } } })) ?? null;
+    return { state: stateOf(row, now), clock: clockOf(row) };
   } catch (e) {
     queueLogError({ event: 'reading_build_marker_read_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300) });
-    return 'none';
+    return { state: 'none', clock: null };
   }
 }
 
-async function writeBuildMarker(prisma: PrismaClient, userId: string, kundliId: string, board: ReadingBoardId, now: Date, status: 'building' | 'ready' | 'failed', error?: string): Promise<void> {
+async function writeBuildMarker(prisma: PrismaClient, userId: string, kundliId: string, board: ReadingBoardId, now: Date, status: 'building' | 'ready' | 'failed', error?: string, clock?: string): Promise<void> {
   try {
     const where = { kundli_id_area_as_of: { kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now) } };
-    const result = { started_at: now.toISOString() };
+    const result = { started_at: now.toISOString(), ...(clock ? { clock } : {}) };
     await (prisma as unknown as MarkerPrisma).areaBuild?.upsert?.({
       where,
       create: { user_id: userId, kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now), status, result, error: error ?? null },
@@ -175,6 +204,16 @@ async function maybeRunSelfV2(deps: QueueDeps, userId: string, kundliId: string,
 }
 
 /**
+ * False when the marker now belongs to a build queued on another clock (a clock switch while this build ran): this
+ * build then leaves the marker alone, so the newer build stays `building`. A build queued without a clock always owns it.
+ */
+async function stillOurs(prisma: PrismaClient, kundliId: string, board: ReadingBoardId, now: Date, opts: BuildOptions): Promise<boolean> {
+  if (!opts.clock) return true;
+  const { clock } = await readBuildMarkerDetail(prisma, kundliId, board, now);
+  return clock === null || clock === opts.clock;
+}
+
+/**
  * Runs one build to the end, marking the marker `ready` or `failed`. Never throws. A build with no `refreshDay` is the
  * board's first reading and costs nothing; one the person asked for commits the question held for it when the synthesis
  * is made, and gives it back when it is not (docs/billing/03).
@@ -187,14 +226,14 @@ export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundl
     const r = await (deps.build ?? defaultBuild)(selfDeps, userId, board, opts);
     const oracle = r.status === 'ok' ? r.reading.oracle : undefined;
     const failed = oracle !== undefined && (oracle.status === 'failed' || oracle.status === 'pending');
-    await writeBuildMarker(deps.prisma, userId, kundliId, board, now, failed ? 'failed' : 'ready', failed ? `oracle ${oracle.status}` : undefined);
+    if (await stillOurs(deps.prisma, kundliId, board, now, opts)) await writeBuildMarker(deps.prisma, userId, kundliId, board, now, failed ? 'failed' : 'ready', failed ? `oracle ${oracle.status}` : undefined, opts.clock);
     const made = r.status === 'ok' && oracle?.status === 'ok';
     if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, made);
     queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', refresh: opts.refreshDay ? (made ? 'charged' : 'given_back') : 'none', ms: Date.now() - t0 });
     await maybeRunSelfV2(deps, userId, kundliId, board, r.status === 'ok' ? r.reading.asOf : now.toISOString().slice(0, 10));
     return r;
   } catch (e) {
-    await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300));
+    if (await stillOurs(deps.prisma, kundliId, board, now, opts)) await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300), opts.clock);
     if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, false);
     queueLogError({ event: 'reading_build_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300), ms: Date.now() - t0 });
     return null;
@@ -209,15 +248,17 @@ export type QueueOutcome = 'invoked' | 'in_process' | 'already_building' | 'fail
  */
 export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, opts: BuildOptions = {}): Promise<QueueOutcome> {
   const now = (deps.now ?? (() => new Date()))();
-  const state = await readBuildMarker(deps.prisma, kundliId, board, now);
-  if (state === 'building') return 'already_building';
-  if (state === 'failed_recently') return 'failed_recently';
-  await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'building');
+  const marker = await readBuildMarkerDetail(deps.prisma, kundliId, board, now);
+  // a build marked on another clock (the person switched clocks since) does not hold this one back (doc 66 §4.4)
+  const otherClock = Boolean(opts.clock && marker.clock && marker.clock !== opts.clock);
+  if (marker.state === 'building' && !otherClock) return 'already_building';
+  if (marker.state === 'failed_recently' && !otherClock) return 'failed_recently';
+  await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'building', undefined, opts.clock);
   const onLambda = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME?.trim());
   if (onLambda || deps.invoke) {
     if (!getKundliDigestEventToken() && !deps.invoke) {
       queueLogError({ event: 'reading_build_queue_failed', kundli_id: kundliId, board, error: 'KUNDLI_DIGEST_EVENT_TOKEN unset' });
-      await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', 'no event token');
+      await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', 'no event token', opts.clock);
       return 'skipped';
     }
     try {
@@ -225,7 +266,7 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
       return 'invoked';
     } catch (e) {
       queueLogError({ event: 'reading_build_queue_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300) });
-      await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', 'invoke failed');
+      await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', 'invoke failed', opts.clock);
       return 'skipped';
     }
   }
@@ -237,6 +278,6 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
 export async function handleSelfReadingBuildEvent(event: SelfReadingBuildEvent, deps: QueueDeps): Promise<{ status: string; oracle: string }> {
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: event.userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli', oracle: 'off' };
-  const r = await runSelfReadingBuild(deps, event.userId, kundli.id, event.board, event.refreshDay ? { refreshDay: event.refreshDay } : {});
+  const r = await runSelfReadingBuild(deps, event.userId, kundli.id, event.board, { ...(event.refreshDay ? { refreshDay: event.refreshDay } : {}), ...(event.clock ? { clock: event.clock } : {}) });
   return { status: r?.status ?? 'failed', oracle: (r?.status === 'ok' ? r.reading.oracle?.status : undefined) ?? 'off' };
 }

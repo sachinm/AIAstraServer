@@ -75,16 +75,18 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     // stored under the two keys, and read back as the API reads it
     expect(r.stored).toEqual({ oracle: true, cards: true });
     expect(r.keys.oracle).toMatch(/^self\.v2\.oracle\|dv-1\|clock=vimsottari\|.*\|p=[0-9a-f]{24}$/);
-    expect(r.keys.cards).toMatch(/^self\.v2\.cards\|o=[0-9a-f]{24}\|profile=profile-hash-1\|p=[0-9a-f]{24}$/);
+    expect(r.keys.cards).toMatch(/^self\.v2\.cards\|clock=vimsottari\|o=[0-9a-f]{24}\|profile=profile-hash-1\|p=[0-9a-f]{24}$/);
     const ids = [...db.outputs.values()].map((x) => String(x.technique_id));
     expect(ids.filter((x) => x === 'self.v2.oracle' || x === 'self.v2.personalizer').sort()).toEqual(['self.v2.oracle', 'self.v2.personalizer']);
     // step 2: the ten sub-technique outputs and the eleven area briefs, keyed by the stamps
     const SUBS = ['self.sub.body_facts', 'self.sub.clock', 'self.sub.mind_facts', 'self.sub.periods', 'self.sub.presence_facts', 'self.sub.profile', 'self.sub.promise', 'self.sub.risk', 'self.sub.windows', 'self.sub.year'];
-    // every sub output goes to the store; those the catalogue gives a per-question freshness get no key (docs/TODOS.md)
-    expect([...r.layers.stored, ...r.layers.unkeyed].filter((x) => x.startsWith('self.sub.')).sort()).toEqual(SUBS);
-    expect(ids.filter((x) => x.startsWith('self.sub.')).sort()).toEqual(r.layers.stored.filter((x) => x.startsWith('self.sub.')).sort());
+    // every sub output and every area brief is keyed by the stamps and written (no per-question catalogue row is left)
+    expect(r.layers.unkeyed).toEqual([]);
+    expect(r.layers.stored.filter((x) => x.startsWith('self.sub.')).sort()).toEqual(SUBS);
+    expect(ids.filter((x) => x.startsWith('self.sub.')).sort()).toEqual(SUBS);
     expect(r.layers.failed).toEqual([]);
-    expect([...r.layers.stored, ...r.layers.unkeyed].filter((x) => /^self.v2./.test(x))).toHaveLength(11);
+    expect(r.layers.stored.filter((x) => /^self.v2./.test(x))).toHaveLength(11);
+    expect(r.gaps.join(' ')).not.toMatch(/no store key/);
     const latest = await readSelfV2Latest(db.prisma, 'k-v2');
     expect(latest.status).toBe('ok');
     expect(Object.keys(latest.cards!.cards)).toHaveLength(11);
@@ -93,6 +95,35 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     expect(latest.briefs).toHaveLength(11);
     expect(latest.builtAt).toMatch(/^\d{4}-/);
     expect(db.builds.get('k-v2|self.v2')!.status).toBe('ready');
+  });
+
+  it('a second build with unchanged stamps stores nothing new and re-runs no agent', async () => {
+    const log: string[] = [];
+    const { db, deps: d } = deps(log);
+    const r1 = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
+    const rows = db.outputs.size;
+    log.length = 0;
+    const r2 = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
+    expect(r2.status).toBe('ok');
+    expect(log.filter((x) => x.startsWith('call:'))).toEqual([]);
+    expect(r2.oracle!.cached).toBe(true);
+    expect(r2.cards!.cached).toBe(true);
+    expect(r2.stored).toEqual({ oracle: false, cards: false });
+    expect(r2.layers.stored).toEqual([]);
+    expect(r2.layers.cached.sort()).toEqual([...r1.layers.stored].sort());
+    expect(db.outputs.size).toBe(rows);
+  });
+
+  it('a stamp that fires re-keys only the outputs it can change', async () => {
+    const log: string[] = [];
+    const { db, deps: d } = deps(log);
+    await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
+    const base = makeCtx();
+    const next = { ...base, stamps: { ...base.stamps, subSubPeriod: '2027-02-20' } };
+    const r2 = await runSelfV2Build({ ...d, prisma: db.prisma }, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs({ ctx: next }) });
+    // sub-sub period: windows, risk, body facts, periods and the areas that refresh on it; the natal ones are hits
+    expect(r2.layers.stored.sort()).toEqual(['self.sub.body_facts', 'self.sub.periods', 'self.sub.risk', 'self.sub.windows'].sort());
+    expect(r2.layers.cached).toEqual(expect.arrayContaining(['self.sub.promise', 'self.v2.yogas', 'self.v2.lagna']));
   });
 
   it('a profile-only rebuild serves the stored Oracle (no family or Oracle call) and re-runs only the Personalizer', async () => {

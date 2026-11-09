@@ -8,6 +8,7 @@ import type { DigestView } from '../../digest/types.js';
 import type { TransitRangePayload } from '../../chartData/transitRange.js';
 import type { Gaps } from '../slices.js';
 import type { IsoDate } from '../v2types.js';
+import type { PressureInventoryDetail } from './pressure.js';
 
 export interface SubEnv {
   view: DigestView;
@@ -16,6 +17,8 @@ export interface SubEnv {
   sky: TransitRangePayload | null;
   asOf: IsoDate;
   g: Gaps;
+  /** the engine's pressure inventory on the primary clock, when stored (S3 prefers it; absent: degraded mode) */
+  pressure?: PressureInventoryDetail | null;
 }
 
 export const planetKey = (varga: string, p: string): string => `planet:${varga}.${p}`;

@@ -62,6 +62,13 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
 }
 
 /**
+ * Fact keys the person can store that are not facts about their life: `self.mood` is a tap for one day
+ * (`<mood>:<YYYY-MM-DD>`, read only through the profile pack's `moodFor`), so it never reaches the FACTS line or the
+ * technique matcher (doc 66 §4.2).
+ */
+export const NOT_A_READING_FACT: ReadonlySet<string> = new Set(['self.mood']);
+
+/**
  * The facts the person has confirmed (a confirmation time, a catalogue key), key → value, for the technique matcher
  * and the reading's FACTS line (docs/reading-engine/53 §4.3–§4.4). `declined` stays, so a caller can tell "rather not say"
  * from "not asked".
@@ -69,7 +76,7 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
 export async function confirmedFacts(prisma: PrismaClient, userId: string): Promise<Record<string, string>> {
   const { facts } = await readFacts(prisma, userId);
   const out: Record<string, string> = {};
-  for (const [k, f] of Object.entries(facts)) if (f.confirmed_at && FACT_CATALOG[k]) out[k] = f.value;
+  for (const [k, f] of Object.entries(facts)) if (f.confirmed_at && FACT_CATALOG[k] && !NOT_A_READING_FACT.has(k)) out[k] = f.value;
   return out;
 }
 

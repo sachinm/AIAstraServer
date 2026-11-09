@@ -943,12 +943,41 @@ export function isSelfV2BuildEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
+/**
+ * The engine's `pressure_inventory` pull for the Self v2 windows (docs/reading-engine/66 §4.3). Env
+ * `SELF_V2_PRESSURE_PULL`: '0' / 'false' / 'off' turns the pull off (S3 stays degraded); default on. A failed pull never
+ * fails the build.
+ */
+export function isSelfV2PressurePullEnabled(): boolean {
+  const raw = process.env.SELF_V2_PRESSURE_PULL?.trim().toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/** A stored pressure inventory older than this is pulled again. Env `SELF_V2_PRESSURE_MAX_AGE_DAYS` (1–60; default 7). */
+export function getSelfV2PressureMaxAgeDays(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_MAX_AGE_DAYS', 7, 1, 60);
+}
+
+/** After a failed pull, the next attempt waits this long. Env `SELF_V2_PRESSURE_RETRY_HOURS` (1–168; default 24). */
+export function getSelfV2PressureRetryHours(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_RETRY_HOURS', 24, 1, 168);
+}
+
+/** The pull's own time limit inside a build. Env `SELF_V2_PRESSURE_TIMEOUT_MS` (1000–60000; default 15000). */
+export function getSelfV2PressureTimeoutMs(): number {
+  return parseClampedIntEnv('SELF_V2_PRESSURE_TIMEOUT_MS', 15000, 1000, 60000);
+}
+
 /** The Self v2 Personalizer's model (docs/reading-engine/66 §4.1). Env: `SELF_PERSONALIZER_MODEL` (default gemini-3.1-flash-lite). */
 export function getSelfPersonalizerModel(): string {
   return process.env.SELF_PERSONALIZER_MODEL?.trim() || 'gemini-3.1-flash-lite';
 }
 
-/** Output cap of the Self v2 Personalizer. Env: `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (integer, 500–16000; default 2500). */
+/**
+ * Output cap of the Self v2 Personalizer. Env: `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (integer, 500–16000; default 5000).
+ * The hero plus eleven cards (headline, body ≤ 120 words, patterns, ladder, dates, sources) come to ≈ 3.5–4.5 k output
+ * tokens; a cap below that truncates the JSON and the whole card document fails validation (doc 66 §4.9).
+ */
 export function getSelfPersonalizerMaxOutputTokens(): number {
-  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 2500, 500, 16000);
+  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 5000, 500, 16000);
 }

@@ -56,6 +56,8 @@ export const SECTION_FRESHNESS: Record<Exclude<ContractSection, 'findings' | 'te
   panchang: 'daily',
   transit: 'transit',
   prashna: 'question',
+  /** the person pack: a key that reads it carries its hash (doc 66 §4.2), so it is as long-lived as natal */
+  person: 'natal',
 };
 
 /** User-turn fields that carry the question or its thread: an output that reads one is per question. */

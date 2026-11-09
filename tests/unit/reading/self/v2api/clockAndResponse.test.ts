@@ -85,8 +85,45 @@ describe('v2 response mapping', () => {
 
   it('profile: band, no gender, missing facts not stored and not declined', () => {
     const r = buildSelfV2Response({ status: 'ok', latest: latestFixture(), clock, profile: PROFILE });
-    expect(r.profile).toEqual({ ageBand: '36_45', hasGender: false, missing: ['family.children', 'self.focus'] });
+    expect(r.profile).toEqual({ ageBand: '36_45', hasGender: false, missing: ['family.children', 'self.focus'], role: 'public' });
     expect(r.nextCheck).toBe('2026-12-01');
+    expect(buildSelfV2Response({ status: 'ok', latest: latestFixture(), clock, profile: { ...PROFILE, role: 'practitioner' } }).profile.role).toBe('practitioner');
+  });
+
+  it('final integration fields: range lines per area, sub-chapter end, the supporting areas of the hero', () => {
+    const latest = latestFixture();
+    // no stored frame (a row from before the final integration): standing areas still say Always, the rest say nothing
+    let r = buildSelfV2Response({ status: 'ok', latest, clock, profile: PROFILE });
+    expect(r.subChapterEnds).toBeNull();
+    expect(r.areas.find((a) => a.id === 'lagna')).toMatchObject({ range: 'always', rangeLabel: 'Always' });
+    expect(r.areas.find((a) => a.id === 'chapter')).toMatchObject({ range: null, rangeLabel: '' });
+    latest.frame = {
+      asOf: '2026-11-09',
+      stamps: { digestVersion: 'd', clock: 'vimsottari', mainPeriod: null, subPeriod: null, subSubPeriod: null, skyWeek: null, year: null, profileHash: null, confirmHash: null },
+      periods: {
+        system: 'vimsottari',
+        previous: null,
+        running: { level: 1, lord: 'Ra', from: '2019-02-16', to: '2037-02-16', evidence: 'a1' },
+        next: null,
+        runningSub: { level: 2, lord: 'Ve', from: '2025-11-16', to: '2027-01-01', evidence: 'a2' },
+        runningSubSub: { level: 3, lord: 'Me', from: '2026-09-20', to: '2026-12-10', evidence: 'a3' },
+        subRelation: null,
+        boundaries: [],
+      },
+      year: { from: '2026-09-09', to: '2027-09-09', yearLagna: null, yearLord: null, shortClock: null, noCoverage: false },
+    };
+    latest.cards!.cards.stuck = { ...latest.cards!.cards.now!, areaId: 'stuck' };
+    latest.cards!.hero.question = { claimId: 'claim:chapter.turn', text: 'Did something turn?' };
+    r = buildSelfV2Response({ status: 'ok', latest, clock, profile: PROFILE });
+    expect(r.subChapterEnds).toBe('2027-01-01');
+    const by = Object.fromEntries(r.areas.map((a) => [a.id, a]));
+    expect(by.chapter).toMatchObject({ range: { from: '2025-11-16', to: '2027-01-01' }, rangeLabel: 'True until 1 Jan 2027' });
+    expect(by.now).toMatchObject({ range: { from: '2026-09-20', to: '2026-12-10' }, rangeLabel: 'True until 10 Dec 2026' });
+    expect(by.mind).toMatchObject({ range: { from: '2019-02-16', to: '2037-02-16' }, rangeLabel: 'True until 16 Feb 2037' });
+    expect(by.yogas).toMatchObject({ range: 'always', rangeLabel: 'Always' });
+    expect(by.year).toMatchObject({ range: { from: '2026-09-09', to: '2027-09-09' }, rangeLabel: 'This year: 9 Sep 2026 – 9 Sep 2027' });
+    expect(r.hero!.supporting).toEqual(['stuck', 'chapter']);
+    for (const a of r.areas) expect(a.floor).toEqual([]);
   });
 
   it('the hero question: the Personalizer wins, else the first missing fact', () => {

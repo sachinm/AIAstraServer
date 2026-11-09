@@ -4,14 +4,16 @@
  * - `technique_outputs`, technique `self.v2.oracle`: the validated Oracle document and the area briefs it was written
  *   over. Key (`digest_version` column): `self.v2.oracle|<digest>|clock=|main=|sub=|subsub=|sky=|year=|confirm=|in=<input
  *   hash>|p=<prompt hash>`.
- * - `technique_outputs`, technique `self.v2.personalizer`: the hero and cards. Key: `self.v2.cards|<oracle key hash>|
- *   profile=<profile hash>|p=<personalizer prompt hash>`, so a profile change re-runs the Personalizer only.
+ * - `technique_outputs`, technique `self.v2.personalizer`: the hero and cards, with the build frame (stamps, periods,
+ *   year) the API's range lines read. Key: `self.v2.cards|clock=<clock>|o=<oracle key hash>|profile=<profile hash>|
+ *   p=<personalizer prompt hash>`, so a profile change re-runs the Personalizer only, and a read can ask for one clock.
+ *   The Oracle key carries `|clock=<clock>|` too: after a clock switch the API reads only the new clock's build.
  * - `area_builds`, area `self.v2`: today's build marker (building, ready, failed), so the API can tell pending from failed.
  *
  * Written through `withTechniqueOutput` (the helper service.ts uses); read here newest first.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AreaBrief, OracleV2Output, PersonalCardDoc, SelfV2CardsResult, SelfV2OracleResult } from '../v2types.js';
+import type { AreaBrief, OracleV2Output, PersonalCardDoc, SelfV2CardsResult, SelfV2Frame, SelfV2OracleResult } from '../v2types.js';
 
 export const SELF_V2_ORACLE_TECHNIQUE = 'self.v2.oracle';
 export const SELF_V2_PERSONALIZER_TECHNIQUE = 'self.v2.personalizer';
@@ -30,6 +32,8 @@ export interface StoredSelfV2Cards {
   key: string;
   oracleKey: string;
   result: SelfV2CardsResult;
+  /** the build frame the API's range lines read (absent on rows stored before the final integration) */
+  frame?: SelfV2Frame;
 }
 
 export interface SelfV2Latest {
@@ -38,6 +42,7 @@ export interface SelfV2Latest {
   briefs: AreaBrief[] | null;
   builtAt: string | null;
   status: 'ok' | 'pending' | 'failed';
+  frame?: SelfV2Frame | null;
 }
 
 type Row = { output: unknown; created_at?: Date | string | null };
@@ -49,30 +54,30 @@ type StorePrisma = {
   };
 };
 
-async function latestRow(prisma: PrismaClient, kundliId: string, technique: string, keyPrefix: string): Promise<Row | null> {
+async function latestRow(prisma: PrismaClient, kundliId: string, technique: string, keyPrefix: string, clock?: string | null): Promise<Row | null> {
   const p = prisma as unknown as StorePrisma;
   // the Prisma delegate goes through the PII extension, which opens the sealed `output` column on read; no raw SQL here
   if (!p.techniqueOutput?.findFirst) return null;
-  return p.techniqueOutput.findFirst({ where: { kundli_id: kundliId, technique_id: technique, digest_version: { startsWith: keyPrefix } }, orderBy: { created_at: 'desc' } });
+  const key = clock ? { startsWith: keyPrefix, contains: `|clock=${clock}|` } : { startsWith: keyPrefix };
+  return p.techniqueOutput.findFirst({ where: { kundli_id: kundliId, technique_id: technique, digest_version: key }, orderBy: { created_at: 'desc' } });
 }
 
 const iso = (d: Date | string | null | undefined): string | null => (d ? (d instanceof Date ? d : new Date(d)).toISOString() : null);
 
 /**
  * The newest stored Self v2 build for a kundli, as the API serves it. `ok` when cards are stored; otherwise `failed` when
- * today's marker says the last build failed, else `pending`. Never throws.
+ * today's marker says the last build failed, else `pending`. With `clock`, only that clock's build is read (after a clock
+ * switch the old clock's cards are not served as the new one's). Never throws.
  */
-export async function readSelfV2Latest(
-  prisma: PrismaClient,
-  kundliId: string,
-): Promise<{ cards: PersonalCardDoc | null; oracle: OracleV2Output | null; briefs: AreaBrief[] | null; builtAt: string | null; status: 'ok' | 'pending' | 'failed' }> {
+export async function readSelfV2Latest(prisma: PrismaClient, kundliId: string, clock?: string | null): Promise<SelfV2Latest> {
   try {
     const [cardsRow, oracleRow, marker] = await Promise.all([
-      latestRow(prisma, kundliId, SELF_V2_PERSONALIZER_TECHNIQUE, 'self.v2.cards|'),
-      latestRow(prisma, kundliId, SELF_V2_ORACLE_TECHNIQUE, 'self.v2.oracle|'),
+      latestRow(prisma, kundliId, SELF_V2_PERSONALIZER_TECHNIQUE, 'self.v2.cards|', clock),
+      latestRow(prisma, kundliId, SELF_V2_ORACLE_TECHNIQUE, 'self.v2.oracle|', clock),
       (prisma as unknown as StorePrisma).areaBuild?.findFirst?.({ where: { kundli_id: kundliId, area: SELF_V2_MARKER_AREA }, orderBy: { as_of: 'desc' } }) ?? Promise.resolve(null),
     ]);
-    const cards = (cardsRow?.output as StoredSelfV2Cards | undefined)?.result?.doc ?? null;
+    const storedCards = cardsRow?.output as StoredSelfV2Cards | undefined;
+    const cards = storedCards?.result?.doc ?? null;
     const storedOracle = oracleRow?.output as StoredSelfV2Oracle | undefined;
     const status: SelfV2Latest['status'] = cards ? 'ok' : marker?.status === 'failed' ? 'failed' : 'pending';
     return {
@@ -81,10 +86,11 @@ export async function readSelfV2Latest(
       briefs: storedOracle?.briefs ?? null,
       builtAt: iso(cardsRow?.created_at ?? oracleRow?.created_at ?? null),
       status,
+      frame: storedCards?.frame ?? null,
     };
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'self v2 store read failed', error: (e as Error).message?.slice(0, 200) }));
-    return { cards: null, oracle: null, briefs: null, builtAt: null, status: 'pending' };
+    return { cards: null, oracle: null, briefs: null, builtAt: null, status: 'pending', frame: null };
   }
 }
 

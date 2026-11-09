@@ -33,8 +33,12 @@ export interface TechniqueSelectors {
   slots?: string[];
 }
 
-/** The digest sections (doc 53 §4.1) plus what a synthesizer or a text agent reads. */
-export type ContractSection = 'house' | 'planet' | 'yoga' | 'point' | 'annual' | 'star' | 'activation' | 'transit' | 'panchang' | 'prashna' | 'findings' | 'text';
+/**
+ * The digest sections (doc 53 §4.1) plus what a synthesizer or a text agent reads. `person` is the person's own typed
+ * facts (age band, stated gender, role, person_facts): not per question, since a store key that reads it carries the
+ * profile hash (docs/reading-engine/66 §4.2).
+ */
+export type ContractSection = 'house' | 'planet' | 'yoga' | 'point' | 'annual' | 'star' | 'activation' | 'transit' | 'panchang' | 'prashna' | 'person' | 'findings' | 'text';
 
 export interface ContractInput {
   section: ContractSection;

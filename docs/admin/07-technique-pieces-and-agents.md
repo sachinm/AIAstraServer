@@ -22,10 +22,10 @@ change, so it is not made again and its agent is skipped until the window ends.
 
 ## 1. Counts
 
-- 135 techniques, 125 distinct pieces, 49 of them shared by two or more techniques.
-- By kind: 12 reader (12 shared), 14 prompt (2 shared), 50 output (19 shared), 49 agent (16 shared).
-- 98 recipe families; 47 techniques share their recipe with at least one other.
-- Freshness: 33 natal, 10 annual, 31 dasha, 17 daily, 16 transit, 28 question. Scope: 123 same for every question, 12 per question.
+- 135 techniques, 126 distinct pieces, 50 of them shared by two or more techniques.
+- By kind: 13 reader (13 shared), 14 prompt (2 shared), 50 output (19 shared), 49 agent (16 shared).
+- 102 recipe families; 43 techniques share their recipe with at least one other.
+- Freshness: 34 natal, 11 annual, 39 dasha, 17 daily, 20 transit, 14 question. Scope: 124 same for every question, 11 per question.
 
 ## 2. The machinery
 
@@ -479,10 +479,10 @@ flowchart LR
     r_reader_findings_findings_in["findings as findings_in<br/>question"]
     r_reader_house_house_card["house as house_card<br/>natal"]
     r_reader_panchang_panchang_day["panchang as panchang_day<br/>daily"]
+    r_reader_person_person_pack["person as person_pack<br/>natal"]
     r_reader_planet_planet_card["planet as planet_card<br/>natal"]
     r_reader_point_point_row["point as point_row<br/>natal"]
     r_reader_star_star_profile["star as star_profile<br/>natal"]
-    r_reader_text_text_in["text as text_in<br/>question"]
     r_reader_transit_transit_row["transit as transit_row<br/>transit"]
     r_reader_yoga_yoga_row["yoga as yoga_row<br/>natal"]
   end
@@ -492,7 +492,7 @@ flowchart LR
     p_prompt_src_reading_prompts_personalizer_self_md[/"personalizer/self.md"/]
   end
   subgraph T["Techniques (one box per recipe family)"]
-    f_self_v2_12["self.v2.* (12)<br/>12 techniques<br/>self_v2.area_brief · question"]
+    f_self_v2_8["self.v2.* (8)<br/>8 techniques<br/>self_v2.area_brief · dasha"]
     f_lucky_3["lucky.* (3)<br/>3 techniques<br/>windows.v1 · daily"]
     f_self_2["self.* (2)<br/>2 techniques<br/>area_board.v1 · natal"]
     f_self_reading_2["self.reading.* (2)<br/>2 techniques<br/>self_panel.v1 · natal"]
@@ -518,20 +518,24 @@ flowchart LR
     f_self_reading_purview["self.reading.purview<br/>You reading: the whole-chart purview check (board.purview, Self instance)<br/>purview.v1 · question"]
     f_self_reading_year["self.reading.year<br/>You reading: This year (Tithi Pravesha and Varsha charts on the self)<br/>self_panel.v1 · annual"]
     f_self_reading_yogas["self.reading.yogas<br/>You reading: Gifts and knots (yogas and doshas on the self)<br/>self_panel.v1 · natal"]
-    f_self_sub_body_facts["self.sub.body_facts<br/>Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)<br/>self_v2.body_facts · question"]
+    f_self_sub_body_facts["self.sub.body_facts<br/>Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)<br/>self_v2.body_facts · transit"]
     f_self_sub_clock["self.sub.clock<br/>Self v2 S1: the primary dasha clock and its confirming clocks<br/>self_v2.clock_resolution · dasha"]
     f_self_sub_mind_facts["self.sub.mind_facts<br/>Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only<br/>self_v2.mind_facts · natal"]
     f_self_sub_periods["self.sub.periods<br/>Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries<br/>self_v2.period_frame · dasha"]
     f_self_sub_presence_facts["self.sub.presence_facts<br/>Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)<br/>self_v2.presence_facts · dasha"]
     f_self_sub_profile["self.sub.profile<br/>Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)<br/>self_v2.profile_pack · natal"]
     f_self_sub_promise["self.sub.promise<br/>Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags<br/>self_v2.promise_ledger · natal"]
-    f_self_sub_risk["self.sub.risk<br/>Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)<br/>self_v2.risk_ledger · question"]
+    f_self_sub_risk["self.sub.risk<br/>Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)<br/>self_v2.risk_ledger · transit"]
     f_self_sub_windows["self.sub.windows<br/>Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)<br/>self_v2.window_set · transit"]
     f_self_sub_year["self.sub.year<br/>Self v2 S9: the year frame from the stored annual row covering today<br/>self_v2.year_frame · annual"]
     f_self_transit["self.transit<br/>Transits over houses 1, 4 and 5 with the Moon<br/>area_board.v1 · transit"]
+    f_self_v2_body["self.v2.body<br/>Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)<br/>self_v2.area_brief · transit"]
     f_self_v2_hero["self.v2.hero<br/>You board v2: the hero (tone, one dated sentence, one question)<br/>self_v2_hero.v1 · dasha"]
+    f_self_v2_now["self.v2.now<br/>Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)<br/>self_v2.area_brief · transit"]
     f_self_v2_oracle["self.v2.oracle<br/>You board v2: Oracle over the ledgers and the area briefs<br/>self_v2_oracle.v1 · dasha"]
     f_self_v2_personalizer["self.v2.personalizer<br/>You board v2: Personalizer cards for this person<br/>self_v2_cards.v1 · dasha"]
+    f_self_v2_year["self.v2.year<br/>Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)<br/>self_v2.area_brief · annual"]
+    f_self_v2_yogas["self.v2.yogas<br/>Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)<br/>self_v2.area_brief · natal"]
     f_self_varga["self.varga<br/>Owning divisional chart of houses 1, 4 and 5 with the Moon<br/>area_board.v1 · natal"]
   end
   subgraph A["Agents"]
@@ -553,8 +557,9 @@ flowchart LR
     a_agent_self_reading_panel(["self.reading_panel<br/>code"])
     a_agent_self_sub(["self.sub<br/>code"])
   end
-  r_reader_findings_findings_in --> f_self_v2_12
-  f_self_v2_12 --- a_agent_self_reading_panel
+  r_reader_activation_activation_row --> f_self_v2_8
+  r_reader_planet_planet_card --> f_self_v2_8
+  f_self_v2_8 --- a_agent_self_reading_panel
   r_reader_panchang_panchang_day --> f_lucky_3
   f_lucky_3 --- a_agent_lucky_scenario_windows
   r_reader_house_house_card --> f_self_2
@@ -660,10 +665,11 @@ flowchart LR
   f_self_reading_year --- a_agent_self_reading_panel
   r_reader_yoga_yoga_row --> f_self_reading_yogas
   f_self_reading_yogas --- a_agent_self_reading_panel
-  r_reader_findings_findings_in --> f_self_sub_body_facts
+  r_reader_activation_activation_row --> f_self_sub_body_facts
   r_reader_house_house_card --> f_self_sub_body_facts
   r_reader_planet_planet_card --> f_self_sub_body_facts
   r_reader_point_point_row --> f_self_sub_body_facts
+  r_reader_transit_transit_row --> f_self_sub_body_facts
   f_self_sub_body_facts --- a_agent_self_sub
   r_reader_activation_activation_row --> f_self_sub_clock
   f_self_sub_clock --- a_agent_self_sub
@@ -680,12 +686,14 @@ flowchart LR
   r_reader_planet_planet_card --> f_self_sub_presence_facts
   r_reader_point_point_row --> f_self_sub_presence_facts
   f_self_sub_presence_facts --- a_agent_self_sub
-  r_reader_text_text_in --> f_self_sub_profile
+  r_reader_person_person_pack --> f_self_sub_profile
   f_self_sub_profile --- a_agent_self_sub
   r_reader_planet_planet_card --> f_self_sub_promise
   r_reader_yoga_yoga_row --> f_self_sub_promise
   f_self_sub_promise --- a_agent_self_sub
-  r_reader_findings_findings_in --> f_self_sub_risk
+  r_reader_activation_activation_row --> f_self_sub_risk
+  r_reader_transit_transit_row --> f_self_sub_risk
+  r_reader_yoga_yoga_row --> f_self_sub_risk
   f_self_sub_risk --- a_agent_self_sub
   r_reader_activation_activation_row --> f_self_sub_windows
   r_reader_planet_planet_card --> f_self_sub_windows
@@ -696,9 +704,18 @@ flowchart LR
   r_reader_house_house_card --> f_self_transit
   r_reader_transit_transit_row --> f_self_transit
   f_self_transit --- a_agent_area_self_board
+  r_reader_activation_activation_row --> f_self_v2_body
+  r_reader_planet_planet_card --> f_self_v2_body
+  r_reader_transit_transit_row --> f_self_v2_body
+  f_self_v2_body --- a_agent_self_reading_panel
   r_reader_activation_activation_row --> f_self_v2_hero
   p_prompt_src_reading_prompts_personalizer_self_md --> f_self_v2_hero
   f_self_v2_hero --- a_agent_self_personalizer
+  r_reader_activation_activation_row --> f_self_v2_now
+  r_reader_person_person_pack --> f_self_v2_now
+  r_reader_planet_planet_card --> f_self_v2_now
+  r_reader_transit_transit_row --> f_self_v2_now
+  f_self_v2_now --- a_agent_self_reading_panel
   r_reader_activation_activation_row --> f_self_v2_oracle
   r_reader_annual_annual_row --> f_self_v2_oracle
   r_reader_house_house_card --> f_self_v2_oracle
@@ -716,6 +733,11 @@ flowchart LR
   r_reader_activation_activation_row --> f_self_v2_personalizer
   p_prompt_src_reading_prompts_personalizer_self_md --> f_self_v2_personalizer
   f_self_v2_personalizer --- a_agent_self_personalizer
+  r_reader_annual_annual_row --> f_self_v2_year
+  r_reader_planet_planet_card --> f_self_v2_year
+  f_self_v2_year --- a_agent_self_reading_panel
+  r_reader_planet_planet_card --> f_self_v2_yogas
+  f_self_v2_yogas --- a_agent_self_reading_panel
   r_reader_house_house_card --> f_self_varga
   r_reader_planet_planet_card --> f_self_varga
   r_reader_point_point_row --> f_self_varga
@@ -765,24 +787,24 @@ flowchart LR
 | `self.sub.periods` | Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries | `activation/activation_row` primary clock L1-L2 over the life, L3 asOf ±12 months<br/>`planet/planet_card` D1 card of the main lord (dasha_charter) | code | `self_v2.period_frame` | `self.sub` |  | dasha · kundli |
 | `self.sub.windows` | Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands) | `activation/activation_row` primary clock L1-L3 asOf ±36 months<br/>`transit/transit_row` stored sky overlay covering asOf<br/>`planet/planet_card` D1 functional nature of period lords | code | `self_v2.window_set` | `self.sub` |  | transit · kundli |
 | `self.sub.promise` | Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags | `yoga/yoga_row` D1 yogas and doshas with class and details<br/>`planet/planet_card` D1 cards (house, owns, dasha_charter yogi flags) | code | `self_v2.promise_ledger` | `self.sub` |  | natal · kundli |
-| `self.sub.risk` | Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it) | `findings/findings_in` outputs of self.sub.periods, self.sub.windows, self.sub.promise in the build context | code | `self_v2.risk_ledger` | `self.sub` |  | question · kundli |
+| `self.sub.risk` | Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it) | `activation/activation_row` S2 periods and S3 primary-clock rows live at asOf (read from the build context)<br/>`transit/transit_row` S3 stored sky overlay rows live at asOf (read from the build context)<br/>`yoga/yoga_row` S4 knots and graces naming the same planet (read from the build context) | code | `self_v2.risk_ledger` | `self.sub` |  | transit · kundli |
 | `self.sub.mind_facts` | Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only | `planet/planet_card` D1/D9 Moon, Mercury, Jupiter, Rahu, Saturn, Ketu, 4th and 5th lords<br/>`house/house_card` D1 h4, h5<br/>`yoga/yoga_row` D1 yogas naming the Moon<br/>`star/star_profile` star profile | code | `self_v2.mind_facts` | `self.sub` |  | natal · kundli |
-| `self.sub.body_facts` | Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon) | `house/house_card` D1 h1, h6, h8; D30 h1<br/>`planet/planet_card` D1 lagna lord, Su, Mo, Ma, Sa<br/>`point/point_row` D1 A6<br/>`findings/findings_in` outputs of self.sub.windows in the build context | code | `self_v2.body_facts` | `self.sub` |  | question · kundli |
+| `self.sub.body_facts` | Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon) | `house/house_card` D1 h1, h6, h8; D30 h1<br/>`planet/planet_card` D1 lagna lord, Su, Mo, Ma, Sa<br/>`point/point_row` D1 A6<br/>`activation/activation_row` running L1-L3 periods of the primary clock on SELF_V2_BODY_HOUSES<br/>`transit/transit_row` S3 live overlay rows over lagna and Moon (read from the build context) | code | `self_v2.body_facts` | `self.sub` |  | transit · kundli |
 | `self.sub.presence_facts` | Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care) | `house/house_card` D1 h1, h2, h4<br/>`planet/planet_card` D1/D9 Venus, lagna lord, Moon<br/>`point/point_row` D1 AL<br/>`activation/activation_row` primary clock L1-L2 | code | `self_v2.presence_facts` | `self.sub` |  | dasha · kundli |
 | `self.sub.year` | Self v2 S9: the year frame from the stored annual row covering today | `annual/annual_row` VP D1 rows with mudda periods | code | `self_v2.year_frame` | `self.sub` |  | annual · kundli |
-| `self.sub.profile` | Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood) | `text/text_in` auth and person_facts of the user | code | `self_v2.profile_pack` | `self.sub` |  | natal · question |
-| `self.v2.now` | Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.stuck` | Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.chapter` | Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.diagnosis` | Self v2 area: In short (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.lagna` | Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.mind` | Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.body` | Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.drive` | Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.presence` | Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.yogas` | Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.chapters` | Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
-| `self.v2.year` | Self v2 area: This year (selection over the self.sub outputs into an AreaBrief) | `findings/findings_in` outputs of self.sub.* in the build context | code | `self_v2.area_brief` | `self.reading_panel` |  | question · kundli |
+| `self.sub.profile` | Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood) | `person/person_pack` auth (birth date, gender, role) and person_facts of the user | code | `self_v2.profile_pack` | `self.sub` |  | natal · kundli |
+| `self.v2.now` | Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context)<br/>`transit/transit_row` self.sub.windows sky rows (build context)<br/>`person/person_pack` self.sub.profile confirms (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | transit · kundli |
+| `self.v2.stuck` | Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.chapter` | Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.diagnosis` | Self v2 area: In short (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.lagna` | Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.mind` | Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.body` | Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context)<br/>`transit/transit_row` self.sub.windows sky rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | transit · kundli |
+| `self.v2.drive` | Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.presence` | Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.yogas` | Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | natal · kundli |
+| `self.v2.chapters` | Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`activation/activation_row` self.sub.periods and self.sub.windows dasha rows (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | dasha · kundli |
+| `self.v2.year` | Self v2 area: This year (selection over the self.sub outputs into an AreaBrief) | `planet/planet_card` D1 cards behind the self.sub outputs (build context)<br/>`annual/annual_row` self.sub.year frame (build context) | code | `self_v2.area_brief` | `self.reading_panel` |  | annual · kundli |
 | `self.v2.oracle` | You board v2: Oracle over the ledgers and the area briefs | `house/house_card` D1 and divisional house cards 1..12 (the family.rasi and family.varga packs)<br/>`planet/planet_card` D1 and divisional planet cards with avasthas and dasha_charter<br/>`yoga/yoga_row` D1 yogas, doshas and cancellations behind the promise ledger<br/>`point/point_row` D1/D9 chara karakas, arudha padas and special lagnas<br/>`star/star_profile` Moon star, lagna star, gandanta<br/>`annual/annual_row` the running year chart and its short clock (S9)<br/>`activation/activation_row` the reading clock L1-L3, its boundaries and the windows around today (S2, S3) | `oracle/self-areas-v2.md` | `self_v2_oracle.v1` | `self.oracle.v2`, `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky` |  | dasha · kundli |
 | `self.v2.personalizer` | You board v2: Personalizer cards for this person | `activation/activation_row` the windows summary around today (S3): heaviest now, eases at, next support from | `personalizer/self.md` | `self_v2_cards.v1` | `self.personalizer` |  | dasha · kundli |
 | `self.v2.hero` | You board v2: the hero (tone, one dated sentence, one question) | `activation/activation_row` the six-month window strip and the easing date (S3) | `personalizer/self.md` | `self_v2_hero.v1` | `self.personalizer` |  | dasha · kundli |
@@ -1129,17 +1151,18 @@ flowchart LR
 
 | Kind | Piece | Freshness | Used by | Areas | Filters |
 |---|---|---|---|---|---|
-| reader | `planet/planet_card` | natal | 65 of 135 | general, self, love, work | 43 |
+| reader | `planet/planet_card` | natal | 77 of 135 | general, self, love, work | 44 |
+| reader | `activation/activation_row` | dasha | 60 of 135 | general, self, love, work | 38 |
 | reader | `house/house_card` | natal | 59 of 135 | general, self, love, work | 39 |
-| reader | `activation/activation_row` | dasha | 48 of 135 | general, self, love, work | 35 |
 | reader | `point/point_row` | natal | 32 of 135 | general, self, love, work | 24 |
-| reader | `yoga/yoga_row` | natal | 30 of 135 | general, self, love, work | 17 |
-| reader | `findings/findings_in` | question | 28 of 135 | general, self, love, work | 13 |
-| reader | `annual/annual_row` | annual | 22 of 135 | general, self, love, work | 13 |
+| reader | `yoga/yoga_row` | natal | 31 of 135 | general, self, love, work | 18 |
+| reader | `annual/annual_row` | annual | 23 of 135 | general, self, love, work | 14 |
+| reader | `transit/transit_row` | transit | 21 of 135 | general, self, love, work | 11 |
 | reader | `panchang/panchang_day` | daily | 17 of 135 | self, love, work | 3 |
-| reader | `transit/transit_row` | transit | 17 of 135 | general, self, love, work | 8 |
+| reader | `findings/findings_in` | question | 14 of 135 | general, self, love, work | 10 |
 | reader | `star/star_profile` | natal | 14 of 135 | general, self, love, work | 8 |
-| reader | `text/text_in` | question | 5 of 135 | general, self | 4 |
+| reader | `text/text_in` | question | 4 of 135 | general | 3 |
+| reader | `person/person_pack` | natal | 2 of 135 | self | 2 |
 | reader | `prashna/prashna_card` | question | 2 of 135 | general | 2 |
 | prompt | `oracle/self.md` |  | 3 of 135 | self, love, work |  |
 | prompt | `personalizer/self.md` |  | 2 of 135 | self |  |
@@ -1260,7 +1283,7 @@ flowchart LR
 | Family | Techniques | Readers | Prompt | Output | Agents | Freshness |
 |---|---|---|---|---|---|---|
 | `lucky.* (13)` | 13 | `panchang/panchang_day` | code | `windows.v1` | `lucky.scenario_windows` | daily |
-| `self.v2.* (12)` | 12 | `findings/findings_in` | code | `self_v2.area_brief` | `self.reading_panel` | question |
+| `self.v2.* (8)` | 8 | `activation/activation_row`, `planet/planet_card` | code | `self_v2.area_brief` | `self.reading_panel` | dasha |
 | `work.* (5)` | 5 | `activation/activation_row`, `house/house_card`, `transit/transit_row` | code | `career_map.v1` | `area.career_inputs`, `area.career_map` | transit |
 | `love.* (3)` | 3 | `findings/findings_in` | code | `board_subarea.v1` | `area.love_board` | question |
 | `love.reading.* (3)` | 3 | `house/house_card`, `planet/planet_card`, `point/point_row` | code | `board_panel.v1` | `love.reading_panel` | natal |
@@ -1329,20 +1352,24 @@ flowchart LR
 | `self.reading.purview` | 1 | `activation/activation_row`, `findings/findings_in`, `planet/planet_card`, `yoga/yoga_row` | code | `purview.v1` | `self.reading_panel` | question |
 | `self.reading.year` | 1 | `annual/annual_row` | code | `self_panel.v1` | `self.reading_panel` | annual |
 | `self.reading.yogas` | 1 | `yoga/yoga_row` | code | `self_panel.v1` | `self.reading_panel` | natal |
-| `self.sub.body_facts` | 1 | `findings/findings_in`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `self_v2.body_facts` | `self.sub` | question |
+| `self.sub.body_facts` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card`, `point/point_row`, `transit/transit_row` | code | `self_v2.body_facts` | `self.sub` | transit |
 | `self.sub.clock` | 1 | `activation/activation_row` | code | `self_v2.clock_resolution` | `self.sub` | dasha |
 | `self.sub.mind_facts` | 1 | `house/house_card`, `planet/planet_card`, `star/star_profile`, `yoga/yoga_row` | code | `self_v2.mind_facts` | `self.sub` | natal |
 | `self.sub.periods` | 1 | `activation/activation_row`, `planet/planet_card` | code | `self_v2.period_frame` | `self.sub` | dasha |
 | `self.sub.presence_facts` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `self_v2.presence_facts` | `self.sub` | dasha |
-| `self.sub.profile` | 1 | `text/text_in` | code | `self_v2.profile_pack` | `self.sub` | natal |
+| `self.sub.profile` | 1 | `person/person_pack` | code | `self_v2.profile_pack` | `self.sub` | natal |
 | `self.sub.promise` | 1 | `planet/planet_card`, `yoga/yoga_row` | code | `self_v2.promise_ledger` | `self.sub` | natal |
-| `self.sub.risk` | 1 | `findings/findings_in` | code | `self_v2.risk_ledger` | `self.sub` | question |
+| `self.sub.risk` | 1 | `activation/activation_row`, `transit/transit_row`, `yoga/yoga_row` | code | `self_v2.risk_ledger` | `self.sub` | transit |
 | `self.sub.windows` | 1 | `activation/activation_row`, `planet/planet_card`, `transit/transit_row` | code | `self_v2.window_set` | `self.sub` | transit |
 | `self.sub.year` | 1 | `annual/annual_row` | code | `self_v2.year_frame` | `self.sub` | annual |
 | `self.transit` | 1 | `house/house_card`, `transit/transit_row` | code | `area_board.v1` | `area.self_board` | transit |
+| `self.v2.body` | 1 | `activation/activation_row`, `planet/planet_card`, `transit/transit_row` | code | `self_v2.area_brief` | `self.reading_panel` | transit |
 | `self.v2.hero` | 1 | `activation/activation_row` | `personalizer/self.md` | `self_v2_hero.v1` | `self.personalizer` | dasha |
+| `self.v2.now` | 1 | `activation/activation_row`, `person/person_pack`, `planet/planet_card`, `transit/transit_row` | code | `self_v2.area_brief` | `self.reading_panel` | transit |
 | `self.v2.oracle` | 1 | `activation/activation_row`, `annual/annual_row`, `house/house_card`, `planet/planet_card`, `point/point_row`, `star/star_profile`, `yoga/yoga_row` | `oracle/self-areas-v2.md` | `self_v2_oracle.v1` | `family.dasha`, `family.rasi`, `family.sky`, `family.varga`, `family.year`, `self.oracle.v2` | dasha |
 | `self.v2.personalizer` | 1 | `activation/activation_row` | `personalizer/self.md` | `self_v2_cards.v1` | `self.personalizer` | dasha |
+| `self.v2.year` | 1 | `annual/annual_row`, `planet/planet_card` | code | `self_v2.area_brief` | `self.reading_panel` | annual |
+| `self.v2.yogas` | 1 | `planet/planet_card` | code | `self_v2.area_brief` | `self.reading_panel` | natal |
 | `self.varga` | 1 | `house/house_card`, `planet/planet_card`, `point/point_row` | code | `area_board.v1` | `area.self_board` | natal |
 | `work.annual_family` | 1 | `annual/annual_row` | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | annual |
 | `work.conditional_family` | 1 | `activation/activation_row` | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | dasha |
@@ -1367,12 +1394,12 @@ the same stored output.
 
 | Freshness | Window the output is stored for | Techniques | Same for every question | Per question |
 |---|---|---|---|---|
-| natal | open: valid until the digest version or the contract changes | 33 | 27 | 6 |
-| annual | the running year chart (fallback `TECHNIQUE_ANNUAL_FALLBACK_DAYS`, default 90 days) | 10 | 9 | 1 |
-| dasha | the running dasha period (fallback `TECHNIQUE_DASHA_FALLBACK_DAYS`, default 30 days) | 31 | 30 | 1 |
+| natal | open: valid until the digest version or the contract changes | 34 | 29 | 5 |
+| annual | the running year chart (fallback `TECHNIQUE_ANNUAL_FALLBACK_DAYS`, default 90 days) | 11 | 10 | 1 |
+| dasha | the running dasha period (fallback `TECHNIQUE_DASHA_FALLBACK_DAYS`, default 30 days) | 39 | 38 | 1 |
 | daily | the local day at the place (UTC day when no place is given) | 17 | 17 | 0 |
-| transit | a `TECHNIQUE_TRANSIT_WINDOW_HOURS` window aligned to the clock (default 2 hours) | 16 | 15 | 1 |
-| question | not reusable: made for each question | 28 | 25 | 3 |
+| transit | a `TECHNIQUE_TRANSIT_WINDOW_HOURS` window aligned to the clock (default 2 hours) | 20 | 19 | 1 |
+| question | not reusable: made for each question | 14 | 11 | 3 |
 
 ## 11. Where to standardise next
 
@@ -1381,17 +1408,18 @@ Reader pieces applied with many different filters: each filter is free text toda
 
 | Reader piece | Distinct filters |
 |---|---|
-| `planet/planet_card` | 43 |
+| `planet/planet_card` | 44 |
 | `house/house_card` | 39 |
-| `activation/activation_row` | 35 |
+| `activation/activation_row` | 38 |
 | `point/point_row` | 24 |
-| `yoga/yoga_row` | 17 |
-| `annual/annual_row` | 13 |
-| `findings/findings_in` | 13 |
+| `yoga/yoga_row` | 18 |
+| `annual/annual_row` | 14 |
+| `transit/transit_row` | 11 |
+| `findings/findings_in` | 10 |
 | `star/star_profile` | 8 |
-| `transit/transit_row` | 8 |
-| `text/text_in` | 4 |
 | `panchang/panchang_day` | 3 |
+| `text/text_in` | 3 |
+| `person/person_pack` | 2 |
 | `prashna/prashna_card` | 2 |
 
 Pieces used by one technique only (candidates to fold into a shared piece, or genuinely special):
