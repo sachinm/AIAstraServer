@@ -246,3 +246,10 @@ export const BANNED_LINE_WORDS: RegExp[] = [
 export function redactBannedWords(text: string): string {
   return BANNED_LINE_WORDS.reduce((t, re) => t.replace(new RegExp(re.source, 'gi'), 'traditional calculations'), text);
 }
+
+const INTERNAL_ENGINE_RE = /\b(aiastra_radha|pyjhora|jhora|radha)\b/gi;
+
+/** An engine name in model text is replaced, so it never shows (SOUL.md §1). */
+export function redactEngineTerms(text: string): string {
+  return text.replace(INTERNAL_ENGINE_RE, 'traditional calculations');
+}

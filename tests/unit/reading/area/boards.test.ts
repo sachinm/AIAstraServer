@@ -31,8 +31,14 @@ function fakePrisma() {
       updateMany: async ({ where }: any) => (queued.push(where.id), { count: 1 }),
     },
     areaBuild: {
+      findFirst: async ({ where }: any) => builds.filter((b) => b.kundli_id === where.kundli_id && b.area === where.area && (b.status ?? 'ready') === where.status).sort((a, b) => iso(b.as_of).localeCompare(iso(a.as_of)))[0] ?? null,
       findUnique: async ({ where }: any) => builds.find((b) => b.kundli_id === where.kundli_id_area_as_of.kundli_id && b.area === where.kundli_id_area_as_of.area && iso(b.as_of) === iso(where.kundli_id_area_as_of.as_of)) ?? null,
-      upsert: async ({ create }: any) => (builds.push(create), create),
+      upsert: async ({ create }: any) => {
+        const i = builds.findIndex((b) => b.kundli_id === create.kundli_id && b.area === create.area && iso(b.as_of) === iso(create.as_of));
+        if (i >= 0) builds.splice(i, 1);
+        builds.push(create);
+        return create;
+      },
     },
     personFact: {
       findUnique: async ({ where }: any) => facts.get(`${where.user_id_key.user_id}:${where.user_id_key.key}`) ?? null,
@@ -191,7 +197,13 @@ describe('the board services', () => {
     expect(activationFor).toHaveBeenCalledTimes(2);
     expect(db.techniqueOutputs.size).toBe(1);
 
-    // Next day (2026-11-06): area_builds misses for the new as_of date, but technique_outputs hits within the dasha window!
+    // Next day: offline first (docs/billing/03) serves the board made yesterday as it is, nothing rebuilt
+    const served = await getSelfBoard(deps(db, { activationFor, now: () => new Date('2026-11-06T12:00:00Z') }), 'u1');
+    expect(served).toMatchObject({ status: 'ok', cached: true, built_at: '2026-11-05' });
+    expect(activationFor).toHaveBeenCalledTimes(2);
+
+    // With no stored board (cleared), technique_outputs still hits within the dasha window
+    db.builds.length = 0;
     const day2 = await getSelfBoard(deps(db, { activationFor, now: () => new Date('2026-11-06T12:00:00Z') }), 'u1');
     expect(day2.status).toBe('ok');
     if (day2.status !== 'ok') return;
@@ -206,6 +218,12 @@ describe('the board services', () => {
 
 describe('area routes for You and Love', () => {
   const db = fakePrisma();
+  const USAGE = { code: 'free', used: 1, limit: 20, remaining: 19 };
+  const gate = {
+    reserveBoardRefresh: vi.fn(async () => ({ ok: true as const, ticket: { id: 'q1', periodStart: null, userId: 'u1' } })),
+    settleBoardRefresh: vi.fn(async () => undefined),
+    getStatus: vi.fn(async () => USAGE as any),
+  };
   let server: ReturnType<express.Express['listen']>;
   let base = '';
   beforeAll(async () => {
@@ -213,7 +231,7 @@ describe('area routes for You and Love', () => {
     const app = express();
     app.use(express.json());
     const d = deps(db);
-    registerAreaRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, now: () => NOW, boards: { loadDigest: d.loadDigest, activationFor: d.activationFor, loadTransit: d.loadTransit, queueDigest: async () => undefined } });
+    registerAreaRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, now: () => NOW, boards: { loadDigest: d.loadDigest, activationFor: d.activationFor, loadTransit: d.loadTransit, queueDigest: async () => undefined }, gate });
     server = app.listen(0);
     await new Promise((r) => server.once('listening', r));
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -253,6 +271,25 @@ describe('area routes for You and Love', () => {
       expect(['demanding', 'easing', 'steady', 'closing', 'open']).toContain(r.json.board.tone.tone);
       expect(r.json.checks).toEqual({});
     }
+  });
+  it('opening a board never takes a question; the first reading is made free and then served as it is (docs/billing/03)', async () => {
+    const again = await call('GET', '/api/area/self', 'u1');
+    expect(again.json.cached).toBe(true);
+    expect(again.json.usage).toBeUndefined();
+    expect(typeof again.json.refresh_due).toBe('boolean');
+    expect(gate.reserveBoardRefresh).not.toHaveBeenCalled();
+  });
+  it('a fresh reading before the reading is due is refused and costs nothing', async () => {
+    const r = await call('POST', '/api/boards/love/refresh', 'u1');
+    const shown = await call('GET', '/api/area/love', 'u1');
+    if (shown.json.refresh_due) {
+      expect(r.status).toBe(200);
+    } else {
+      expect(r.status).toBe(409);
+      expect(r.json.code).toBe('not_due');
+      expect(gate.reserveBoardRefresh).not.toHaveBeenCalled();
+    }
+    expect((await call('POST', '/api/boards/nope/refresh', 'u1')).status).toBe(400);
   });
   it('POST /api/area/:area/checks for self and love; an unknown area is 404', async () => {
     expect((await call('POST', '/api/area/self/checks', 'u1', { month: '2026-03', side: 'test', answer: 'yes' })).status).toBe(204);

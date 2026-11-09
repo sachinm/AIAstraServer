@@ -38,6 +38,12 @@ export interface QuestionTicket {
 export type CheckResult = { ok: true } | { ok: false; usage: PlanStatus };
 export type ReserveResult = { ok: true; ticket: QuestionTicket } | { ok: false; usage: PlanStatus };
 
+/** The boards a person can ask a fresh reading of (docs/billing/03); the Work board's map is `/api/area/career`. */
+export type BoardCharge = 'self' | 'love' | 'work';
+
+/** One fresh reading per board per UTC day: a double tap or a retry the same day is the same question. */
+export const boardRefreshKey = (board: BoardCharge, day: string): string => `board:${board}:refresh:${day}`;
+
 const FREE_TICKET = (userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
 
 export class QuestionGate {
@@ -193,6 +199,28 @@ export class QuestionGate {
       if (ticket.periodStart) await this.store.giveBackQuestion(ticket.userId, ticket.periodStart);
     } catch (err) {
       console.error('[plans] release failed:', (err as Error).message);
+    }
+  }
+
+  /**
+   * A fresh reading the person asked for takes one question (docs/billing/03). Held now, settled when the reading is
+   * made: `settleBoardRefresh` commits it, or gives it back when the build failed. At the limit nothing is held.
+   */
+  reserveBoardRefresh(userId: string, board: BoardCharge, day: string): Promise<ReserveResult> {
+    return this.reserve(userId, { key: boardRefreshKey(board, day) });
+  }
+
+  /** Settles the question held for this board's fresh reading today, once; a later call finds it settled. Never throws. */
+  async settleBoardRefresh(userId: string, board: BoardCharge, day: string, ok: boolean): Promise<void> {
+    if (!this.enabled) return;
+    try {
+      const row = await this.store.findUsage(userId, boardRefreshKey(board, day));
+      if (!row || row.status !== 'reserved') return;
+      const ticket: QuestionTicket = { id: row.id, periodStart: row.period_start, userId };
+      if (ok) await this.commit(ticket);
+      else await this.release(ticket);
+    } catch (err) {
+      console.error('[plans] board refresh settle failed:', (err as Error).message);
     }
   }
 

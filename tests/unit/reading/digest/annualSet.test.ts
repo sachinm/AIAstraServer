@@ -74,6 +74,34 @@ describe('annual set', () => {
     expect(n).toBe(0);
     expect(r0).toMatchObject({ requested: 0, remaining: 210 });
     const r1 = await ensureAnnualSet({ repo, fetcher: async () => { throw new Error('engine down'); } }, 'k1', { year: 2026, maxCalls: 2, concurrency: 1 });
-    expect(r1).toMatchObject({ requested: 2, fetched: 0, failed: 2, remaining: 210 });
+    expect(r1).toMatchObject({ requested: 2, fetched: 0, failed: 2, remaining: 210, yearsCompleted: [] });
+  });
+
+  it('failed rows back off for six hours, then are tried again', async () => {
+    const repo = memRepo();
+    const tried: string[] = [];
+    const down = async (_r: unknown, type: string) => { tried.push(type); throw new Error('engine down'); };
+    await ensureAnnualSet({ repo, fetcher: down }, 'k1', { year: 2026, maxCalls: 2, concurrency: 1 });
+    expect(tried).toHaveLength(2);
+    // the two failed keys wait; the next two missing keys go instead
+    const later = await ensureAnnualSet({ repo, fetcher: down }, 'k1', { year: 2026, maxCalls: 2, concurrency: 1, now: () => Date.now() + 60 * 60_000 });
+    expect(later).toMatchObject({ requested: 2, backedOff: 2 });
+    expect(tried).toEqual(['annual.tithi_pravesha', 'annual.tithi_pravesha', 'annual.tithi_pravesha', 'annual.varsha']);
+    const n = tried.length;
+    const after = await ensureAnnualSet({ repo, fetcher: async () => ({ ok: true }) }, 'k1', { year: 2026, maxCalls: 4, concurrency: 1, now: () => Date.now() + 7 * 3_600_000 });
+    expect(after).toMatchObject({ requested: 4, fetched: 4, backedOff: 0 });
+    expect(tried).toHaveLength(n);
+  });
+
+  it('reports a year as completed only on the run that fills its last key', async () => {
+    const repo = memRepo();
+    const fetcher = async () => ({ ok: true });
+    const a = await ensureAnnualSet({ repo, fetcher }, 'k1', { year: 2026, maxCalls: 6, concurrency: 1 });
+    expect(a.yearsCompleted).toEqual([]);
+    const b = await ensureAnnualSet({ repo, fetcher }, 'k1', { year: 2026, maxCalls: 24, concurrency: 1 });
+    // keys 7..30: finishes 2026 (keys 1-10), 2027 (11-20) and 2025 (21-30)
+    expect(b.yearsCompleted).toEqual([2026, 2027, 2025]);
+    const c = await ensureAnnualSet({ repo, fetcher }, 'k1', { year: 2026, maxCalls: 0 });
+    expect(c.yearsCompleted).toEqual([]);
   });
 });

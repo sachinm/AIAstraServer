@@ -1080,3 +1080,385 @@ flowchart LR
     GATE -->|"MISS"| S1
     S4 --> OUT
 ```
+
+---
+
+# Self board v2 (docs/reading-engine/66 §4.8): sub-techniques and area selections
+
+---
+
+## Page 26 of 47 — `self.sub.clock`: Self v2 S1: the primary dasha clock and its confirming clocks
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:dasha.applicable`, `dasha:all served systems` |
+| **Inputs** | `activation/activation_row` (systems present and their family; dasha.applicable) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.clock_resolution` |
+| **Code** | `src/reading/self/sub/clock.ts subClock; src/reading/self/clock.ts resolveClock` |
+
+1. Read kundlis.preferred_dasha and the systems present in kundli_activation with their family (defaultSystemsPresent: a conditional system the engine does not mark applicable comes back as family other)
+2. resolveClock: the preferred system when it has periods, else the first SELF_CLOCK_CONDITIONAL_ORDER system of family conditional (reason conditional_applies), else vimsottari (default)
+3. confirming = SELF_CONFIRM_SYSTEMS present, minus the primary; applicable = every present system whose family is not other; notApplicable = the rest, reason not_marked_applicable_by_engine
+
+---
+
+## Page 27 of 47 — `self.sub.periods`: Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:primary clock L1-L3`, `natal:dasha charter` |
+| **Inputs** | `activation/activation_row` (primary clock L1-L2 over the life, L3 asOf ±12 months) · `planet/planet_card` (D1 card of the main lord (dasha_charter)) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.period_frame` |
+| **Code** | `src/reading/self/sub/periods.ts subPeriods, charterRelation; slices.ts mdSpine, runningChain` |
+
+1. mdSpine and runningChain over the stored activation rows of the primary clock at asOf: previous, running and next level-1 period, the running level-2 and level-3 period
+2. subRelation: the main lord D1 card dashaCharter.fruition[sub lord] as the engine stored it: 6/8 when isShadAshtaka68, 2/12 when isDwirdwadasha212, else its fruitionClass; null and a gap when not stored (rasi clocks have none)
+3. boundaries: the from/to of the three main periods, of every sub period of the running main period and of the running sub-sub period, de-duplicated, sorted
+4. No running level-1 period: the frame is null and a gap is recorded
+
+---
+
+## Page 28 of 47 — `self.sub.windows`: Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:primary clock L1-L3`, `transit:stored sky overlay`, `natal:functional nature` |
+| **Inputs** | `activation/activation_row` (primary clock L1-L3 asOf ±36 months) · `transit/transit_row` (stored sky overlay covering asOf) · `planet/planet_card` (D1 functional nature of period lords) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.window_set` |
+| **Code** | `src/reading/self/sub/windows.ts subWindows, windowRows` |
+
+1. Rows: every primary-clock activation row overlapping asOf ±36 months (matters from its stored houses through SELF.matters) and the sky overlay ingresses of SELF_V2_WINDOW_TRANSIT_PLANETS (house_from_lagna, house_from_moon as stored), Sade Sati and dhaiya spans
+2. Polarity: the period lord D1 card functional label through FUNCTIONAL_POLARITY (malefic presses, benefic supports, neutral mixed); transits and sign periods mixed; strength 2 for every row (the engine stores no grade); degraded true with gaps
+3. strip = rows overlapping asOf ±6 months; heaviestNow = the live pressing row by strength then soonest end; easesAt = its end when stored; nextSupportFrom = the first supporting row starting after asOf
+4. startedLast12m = rows that started in the last 12 months; endingNext6m = rows ending in the next 6 months; byMatter groups the strip; since/until only where the stored row has them
+
+---
+
+## Page 29 of 47 — `self.sub.promise`: Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:yogas`, `natal:doshas`, `natal:dasha charter` |
+| **Inputs** | `yoga/yoga_row` (D1 yogas and doshas with class and details) · `planet/planet_card` (D1 cards (house, owns, dasha_charter yogi flags)) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.promise_ledger` |
+| **Code** | `src/reading/self/sub/promise.ts subPromise; src/reading/self/v2words.ts PROMISE_KIND_BY_CLASS, SELF_MATTERS, SELF_PEOPLE` |
+
+1. Each D1 yoga/dosha row (varga rows left out): kind from its stored class through PROMISE_KIND_BY_CLASS (cancellation grace; dosha, affliction knot; raja, mahapurusha, dhana, viparita gift); rows with no such class are left out with a gap
+2. Duplicates by name and kind are dropped; matter = SELF.matters of the first stored house, who = SELF.people of every stored house; evidence = the yoga key and its planets
+3. A knot whose stored dosha details say hasExceptions adds a grace that cancels it
+4. A planet whose D1 dashaCharter isYogi adds a gift, isAvayogi a knot, on the matter of its stored house; strength 2 (the engine stores no grade) with a gap
+
+---
+
+## Page 30 of 47 — `self.sub.risk`: Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `dasha:primary clock`, `transit:stored sky overlay`, `natal:yogas` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.periods, self.sub.windows, self.sub.promise in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.risk_ledger` |
+| **Code** | `src/reading/self/sub/risk.ts subRisk; src/reading/self/v2words.ts RISK_WHAT` |
+
+1. Join of S2, S3 and S4 only: every S3 row live at asOf whose polarity presses and that has a planet and stored houses
+2. matter = its first matter; what = RISK_WHAT[planet]; from = planet, first stored house, window id and the yoga id of an S4 knot naming the same planet; who = SELF.people of its houses
+3. since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot
+4. top3 = the three rows with the highest engine strength, then the soonest until
+
+---
+
+## Page 31 of 47 — `self.sub.mind_facts`: Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `divisional:D1`, `divisional:D9`, `natal:yogas`, `nakshatra:star profile` |
+| **Inputs** | `planet/planet_card` (D1/D9 Moon, Mercury, Jupiter, Rahu, Saturn, Ketu, 4th and 5th lords) · `house/house_card` (D1 h4, h5) · `yoga/yoga_row` (D1 yogas naming the Moon) · `star/star_profile` (star profile) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.mind_facts` |
+| **Code** | `src/reading/self/sub/mind.ts subMindFacts` |
+
+1. feeling: Moon D1 and D9 cards, the star profile, D1 yoga rows naming the Moon; thinking: Mercury D1 and D9, the 5th; peace: the 4th and its lord card; judgement: the 5th lord card and Jupiter
+2. candidatePatterns: the stored D1 house of each SELF_V2_MIND_PATTERN_PLANETS planet, and every planet in the Moon card aspectedBy
+3. A missing card or house is a gap, never a default; the Oracle names the pattern
+
+---
+
+## Page 32 of 47 — `self.sub.body_facts`: Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `divisional:D1`, `divisional:D30`, `jaimini:A6`, `dasha:primary clock`, `transit:stored sky overlay` |
+| **Inputs** | `house/house_card` (D1 h1, h6, h8; D30 h1) · `planet/planet_card` (D1 lagna lord, Su, Mo, Ma, Sa) · `point/point_row` (D1 A6) · `findings/findings_in` (outputs of self.sub.windows in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.body_facts` |
+| **Code** | `src/reading/self/sub/body.ts subBodyFacts` |
+
+1. footing: h1, lagna lord, Sun; wear: h6, h8, Mars, Saturn, A6; shape: D30 h1, Moon (evidence keys; a missing row is a gap)
+2. liveLords: the running L1-L3 periods of the primary clock whose stored activation houses include SELF_V2_BODY_HOUSES
+3. liveTransits: S3 live overlay rows of SELF_V2_BODY_TRANSIT_PLANETS with stored house_from_lagna or house_from_moon 1, and Sade Sati
+4. sensitive: the engine flag only; none is stored, so false with a gap
+
+---
+
+## Page 33 of 47 — `self.sub.presence_facts`: Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `divisional:D1`, `divisional:D9`, `jaimini:AL`, `dasha:primary clock` |
+| **Inputs** | `house/house_card` (D1 h1, h2, h4) · `planet/planet_card` (D1/D9 Venus, lagna lord, Moon) · `point/point_row` (D1 AL) · `activation/activation_row` (primary clock L1-L2) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.presence_facts` |
+| **Code** | `src/reading/self/sub/presence.ts subPresenceFacts` |
+
+1. bearing: h1 and the lagna lord; style: planets the h1 card lists as occupants and graha drishti; adornment: Venus D1 and D9; face: h2; publicVsPrivate: AL, Moon, h4
+2. bestWindow: the most recent completed L1 or L2 period of the primary clock whose lord is in SELF_V2_PRESENCE_PLANETS or is the lagna lord
+3. liveCare: the running sub period when its lord is one of them
+
+---
+
+## Page 34 of 47 — `self.sub.year`: Self v2 S9: the year frame from the stored annual row covering today
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `annual:Varshaphal mudda` |
+| **Inputs** | `annual/annual_row` (VP D1 rows with mudda periods) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.year_frame` |
+| **Code** | `src/reading/self/sub/year.ts subYear; panels/year.ts runningMudda` |
+
+1. runningMudda: the stored VP D1 annual row whose mudda periods cover asOf; its span is the year, the running mudda period the short clock
+2. yearLagna and yearLord are evidence keys only when the row stores them, else null with a gap
+3. No stored row covers asOf: noCoverage true, nothing taken from another year
+
+---
+
+## Page 35 of 47 — `self.sub.profile`: Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:none (person facts)` |
+| **Inputs** | `text/text_in` (auth and person_facts of the user) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.profile_pack` |
+| **Code** | `src/reading/self/sub/profile.ts subProfile; src/reading/person/profile.ts loadProfilePack` |
+
+1. loadProfilePack: auth (birth date, gender, role) and person_facts in two reads
+2. Age is calendar arithmetic over the typed birth date, banded by SELF_AGE_BANDS; gender null when not stated; declined keys listed; the last five confirm answers; the mood of today only; a stable hash
+
+---
+
+## Page 36 of 47 — `self.v2.now`: Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/now.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): heaviest live window, eases date, next support, six-month strip (non-mixed rows), running sub-sub period, the ledger top3
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon six_months_each_way; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.now
+
+---
+
+## Page 37 of 47 — `self.v2.stuck`: Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/stuck.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): heaviest live window, pressing windows started in the last 12 months still running, every live ledger row, standing knots, mind candidate patterns
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon live_plus_standing; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.stuck
+
+---
+
+## Page 38 of 47 — `self.v2.chapter`: Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/chapter.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): running sub period, its charter relation to the main lord, non-mixed strip windows inside it, the live ledger rows
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon sub_period; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.chapter
+
+---
+
+## Page 39 of 47 — `self.v2.diagnosis`: Self v2 area: In short (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/diagnosis.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing keys, the ledger top row, running main and sub period
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon sub_period; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.diagnosis
+
+---
+
+## Page 40 of 47 — `self.v2.lagna`: Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/lagna.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing and public/private keys, promise entries on self_and_body
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.lagna
+
+---
+
+## Page 41 of 47 — `self.v2.mind`: Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/mind.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): feeling, thinking, peace and judgement keys, candidate patterns, promise entries and ledger rows on ideas and home
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.mind
+
+---
+
+## Page 42 of 47 — `self.v2.body`: Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/body.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): footing, wear and shape keys, live lords on body houses, live transits, ledger rows on body, work load and the sudden
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon live_plus_standing; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.body
+
+---
+
+## Page 43 of 47 — `self.v2.drive`: Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/drive.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): promise entries, ledger rows and live non-mixed windows on effort, career, gains, money and ideas
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.drive
+
+---
+
+## Page 44 of 47 — `self.v2.presence`: Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/presence.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing, style, adornment, face and public/private keys, the best past window, the live care line
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.presence
+
+---
+
+## Page 45 of 47 — `self.v2.yogas`: Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/yogas.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): every promise entry, gifts then knots then graces
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.yogas
+
+---
+
+## Page 46 of 47 — `self.v2.chapters`: Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/chapters.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): previous, running and next main period, running sub period, L1/L2 boundaries inside the running main period
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon chapter; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.chapters
+
+---
+
+## Page 47 of 47 — `self.v2.year`: Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` |
+| **Charts Declared** | `natal:self.sub outputs` |
+| **Inputs** | `findings/findings_in` (outputs of self.sub.* in the build context) |
+| **Agent** | `self.reading_panel` (code, `system: 'none'`) |
+| **Output** | `self_v2.area_brief` |
+| **Code** | `src/reading/self/areas/year.ts; areas/index.ts buildAreaBriefs` |
+
+1. Pure selection over ctx.sub (no database, no digest read): the year frame lagna, year lord and short clock; nothing when noCoverage
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon twelve_months; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.year

@@ -880,6 +880,15 @@ export function isSelfReadingModelEnabled(): boolean {
  * Maximum cumulative USD spend permitted for Self reading AI sub-agent/Lineman/Oracle runs before halting for user confirmation.
  * Env: `SELF_READING_MAX_SPEND_USD` (default 1.00 USD).
  */
+/**
+ * The Oracle returns the dashboard's area document (docs/reading-engine/65) instead of the essay + PANEL_SYNTHESIS text:
+ * On by default since Phase B renders it; `SELF_ORACLE_AREAS=0` returns to the essay path.
+ */
+export function isSelfOracleAreasEnabled(): boolean {
+  const raw = process.env.SELF_ORACLE_AREAS?.trim().toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'no');
+}
+
 export function getSelfReadingMaxSpendUsd(): number {
   const raw = Number(process.env.SELF_READING_MAX_SPEND_USD);
   if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);
@@ -893,4 +902,15 @@ export function getSelfReadingMaxSpendUsd(): number {
 export function getSelfOracleMaxOutputTokens(): number {
   const n = Number(process.env.SELF_ORACLE_MAX_OUTPUT_TOKENS ?? '');
   return Number.isFinite(n) && n >= 1000 && n <= 32000 ? Math.floor(n) : 8000;
+}
+
+/**
+ * The AES-256 key the web build encrypts the loading veil's illustrations with (docs/loading-overlay/01 §4.1):
+ * OVERLAY_ART_KEY, exactly 64 hex chars. Null when unset or malformed; the route then answers 404 and the veil shows
+ * its lines alone. The same value must be in the web build's env (Amplify) for the ciphertext to match.
+ */
+export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | null {
+  const raw = env.OVERLAY_ART_KEY?.trim();
+  if (!raw || !/^[0-9a-fA-F]{64}$/.test(raw)) return null;
+  return Buffer.from(raw, 'hex');
 }

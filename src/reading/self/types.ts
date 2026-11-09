@@ -125,8 +125,11 @@ export interface SelfPanel {
   validUntil?: string;
   /** BUILD-GAPS BG-14: the Oracle's plan for this panel (summary, dated steps, a calendar of prospective dates from stored windows) */
   plan?: PanelPlan;
-  /** the Oracle's prose for this panel: the section of its reading whose heading names the panel (doc 64 §4) */
-  synthesis?: string;
+  /** docs/reading-engine/65: the Oracle's area for this panel (headline, prose, dates, actions); the card when present */
+  area?: import('./areaDoc.js').OracleArea;
+  /** ok: `area` is the card; pending: the synthesis is being built (code lines under the veil); withheld: the Oracle
+   * had nothing grounded for this area; failed: the Oracle failed; off: the model layer is off (code lines are the card) */
+  areaStatus?: 'ok' | 'pending' | 'withheld' | 'failed' | 'off';
 }
 
 /** One dated step of a panel plan. */
@@ -219,6 +222,12 @@ export interface SelfOraclePayload {
   panelLines?: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
   /** BG-14: the Oracle's PANEL_PLAN and PANEL_CALENDAR blocks, per panel */
   panelPlans?: Partial<Record<BoardPanelId, PanelPlan>>;
+  /** docs/reading-engine/65: the dashboard as the Oracle returned it, one validated area per panel (SELF_ORACLE_AREAS=1) */
+  areas?: import('./areaDoc.js').OracleAreaDoc;
+  /** staff only: what the area validator dropped or withheld */
+  areaGaps?: string[];
+  /** whether each stage found its prompt prefix in the Gemini cache: stage agent id → cached tokens */
+  cacheWarm?: Record<string, number>;
   /** AI-determined validity horizon ('YYYY-MM-DD' or 'always') per panel and overall ('overall') */
   validUntil?: Partial<Record<BoardPanelId | 'overall', string>>;
   stages?: SelfOracleStageSummary[];

@@ -2,7 +2,7 @@
  * The reading build as a background event (docs/reading-engine/64 §4): the token-guarded event, one build at a time per
  * kundli and board through the `area_builds` marker, a failed build not retried for half an hour, a stuck one run again.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BUILD_STUCK_MS,
   FAILED_COOLDOWN_MS,
@@ -116,5 +116,36 @@ describe('self-reading-build event', () => {
     const f = fakePrisma();
     expect(await handleSelfReadingBuildEvent({ userId: 'u9', board: 'self' }, { prisma: f.prisma })).toEqual({ status: 'no_kundli', oracle: 'off' });
     expect(await handleSelfReadingBuildEvent({ userId: 'u1', board: 'self' }, { prisma: f.prisma, build: async () => okReading('ok'), now: () => NOW })).toEqual({ status: 'ok', oracle: 'ok' });
+  });
+});
+
+describe('a fresh reading the person asked for settles its question (docs/billing/03)', () => {
+  const reading = (status: 'ok' | 'failed' | 'pending'): SelfReadingResult =>
+    ({ status: 'ok', built_at: '2026-11-08', cached: false, reading: { asOf: '2026-11-08', panels: [], oracle: { status } } }) as unknown as SelfReadingResult;
+
+  it('a first reading settles nothing; a fresh one commits when made and gives the question back when not', async () => {
+    const settleBoardRefresh = vi.fn(async () => undefined);
+    const gate = { settleBoardRefresh };
+    const f = fakePrisma();
+    const seen: unknown[] = [];
+    const build = async (_d: unknown, _u: string, _b: unknown, opts: unknown) => (seen.push(opts), reading('ok'));
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build, now: () => NOW }, 'u1', 'k1', 'self');
+    expect(settleBoardRefresh).not.toHaveBeenCalled();
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build, now: () => NOW }, 'u1', 'k1', 'self', { refreshDay: '2026-11-08' });
+    expect(settleBoardRefresh).toHaveBeenLastCalledWith('u1', 'self', '2026-11-08', true);
+    expect(seen).toEqual([{}, { refreshDay: '2026-11-08' }]);
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => reading('failed'), now: () => NOW }, 'u1', 'k1', 'self', { refreshDay: '2026-11-08' });
+    expect(settleBoardRefresh).toHaveBeenLastCalledWith('u1', 'self', '2026-11-08', false);
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => { throw new Error('boom'); }, now: () => NOW }, 'u1', 'k1', 'self', { refreshDay: '2026-11-08' });
+    expect(settleBoardRefresh).toHaveBeenLastCalledWith('u1', 'self', '2026-11-08', false);
+    expect(settleBoardRefresh).toHaveBeenCalledTimes(3);
+  });
+
+  it('the event carries the day its question was held on, and only a well-formed day', () => {
+    process.env.KUNDLI_DIGEST_EVENT_TOKEN = 'tok';
+    const payload = selfReadingBuildEventPayload('u1', 'self', { refreshDay: '2026-11-08' });
+    expect(parseSelfReadingBuildEvent(payload)).toEqual({ userId: 'u1', board: 'self', refreshDay: '2026-11-08' });
+    expect(parseSelfReadingBuildEvent({ ...payload, refreshDay: 'soon' })).toEqual({ userId: 'u1', board: 'self' });
+    expect(parseSelfReadingBuildEvent(selfReadingBuildEventPayload('u1', 'love'))).toEqual({ userId: 'u1', board: 'love' });
   });
 });

@@ -1371,6 +1371,26 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
   background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
   they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P1 · Rotate the kundli-sync-sweep event token.** 2026-11-09: the EventBridge rule `kundli-sync-sweep` carries the
+  token in its input in plain text, and the deploy session printed it into its tool output while reading the rules.
+  Owner: deploy session, with Sachin's yes. Done: a new token in the Lambda env and in both sweep rules' input; the old
+  one refused by `/events`.
+- **P2 · No schedule runs the LLM cache sweep.** 2026-11-09: no EventBridge rule targets `aiastra-server-api` with the
+  cache-sweep event, while `READING_EXPLICIT_CACHE=1` is set on the Lambda, so explicit Gemini caches and reader findings
+  are swept only by the in-process timer of a warm container. Owner: deploy session. Done: a daily rule sending the
+  cache-sweep event, or a note that the TTL alone is enough.
+- **Fixed 2026-11-09 (verify after deploy) · P1 · The digest sweep rebuilds every ready kundli 10-14 times a day.** 2026-11-09, from agent_runs: in 24 h,
+  351 `digest.build` runs (about 58 min of build time) across 32 ready kundlis, while the sweep itself fires on time
+  every 5 min. Cause: `runDigestSweep` tops up the annual set of 3 random ready kundlis per sweep and calls
+  `markDigestInputsChanged` whenever a top-up fetched any row; the next sweep rebuilds that digest. 450 top-ups fetched
+  6,193 rows and failed 243 (sets average 126 of 210 wanted, 70 remaining), so most kundlis are marked stale again
+  every few hours. Each rebuild re-reads 860 rows and moves the digest version the reading store keys on, which can
+  also invalidate stored Oracle readings. Owner: reading-dev. Done: a top-up marks stale only when it completes a year
+  the digest reads (or once per day per kundli), failed items back off, and builds per kundli per day drop to at most
+  one or two.
+  Fix: `ensureAnnualSet` reports `yearsCompleted` and backs failed rows off 6 h (`ANNUAL_FAILED_BACKOFF_MS`, the
+  store's own retry is 60 s); `runDigestSweep` marks stale only when a year completed. Check after deploy: `digest.build`
+  runs per kundli per day from agent_runs should fall to 0-2.
 - **P2 · Admin web `src/lib/themeCss.test.ts` fails to load on admin `develop` (d34221f):** "SyntaxError: Invalid or
   unexpected token", no tests run. Seen 2026-11-08 night in the main checkout and in `wt/admin-loads` after merging
   develop; from the theme work (`feat/admin-theme`), not the Dashboard loads branch. Owner: the theme session. Done: the
@@ -1378,3 +1398,262 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · The dossier's `trigger` has no `event` value.** The background build writes its dossier with `trigger:
   'request'`; a lab reader cannot tell a page-queued build from an in-request one. Owner: reading-dev. Done:
   `DossierInput.trigger` gains `'event'` and `buildEvent.ts` passes it.
+- **P2 · The API logs no reason per invocation and no line per engine call** (`server.ts` `POST /events`,
+  `src/lib/astroKundliClient.ts`). Admin › Usage › Lambda calls (admin doc 13) splits web vs background vs each sweep
+  from AWS metrics, and the self-invokes from `digest_built` / `reading_build_*` / `kundli_sync_invoked`, but cannot
+  split the engine's calls (registration pulls vs other data requests): the engine logs nothing per request and
+  `[AstroKundli] outgoing` is a multi-line object dump. Owner: reading-dev. Done: `queueLog({ event: 'lambda_invocation',
+  reason: <source> })` first thing in `POST /events`, and `queueLog({ event: 'engine_call', reason:
+  'registration'|'digest'|'reading'|'request', type })` beside each engine invoke; the admin page fills its engine
+  columns with no admin change (its Logs Insights query already counts both names).
+- **P1 · Admin Lambda calls page needs IAM before it can read AWS.** Role `aiadastra-admin-api-exec` lacks
+  `cloudwatch:GetMetricData`, `events:ListRuleNamesByTarget`, `logs:StartQuery`, `logs:GetQueryResults`/`StopQuery`.
+  Exact policy in `docs/admin/13-usage-lambda-calls.md` §5. Owner: deploy session (Sachin's typed yes). Done: the
+  deployed page shows November's totals and they match the Lambda console's Monitor tab.
+
+## Filed 2026-11-09 by the loading overlay build (docs/loading-overlay/01–03, web and server `feat/loading-overlay`)
+
+- **P2 · Nano Banana could not draw a correct house chart in 8 calls (2026-11-09, docs/loading-overlay/03 §Log).**
+  Both runs (full prompts, then text-free boards) broke the content rules: wrong house numbers, misspelt names, wrong
+  geometry on three of four boards. The veil ships the exact code-drawn SVG charts restyled after the generated look.
+  Owner: Sachin decides whether to try again (new yes needed; a different approach would be: generate backgrounds only
+  and composite the board, glyphs and names in code, which `sharp` renders correctly here). Done: four images that pass
+  the checklist in 03 §Acceptance, or the decision to keep the drawn set.
+- **(resolved 2026-11-09) P1 · Every Gemini key in the server `.env` is rejected** — Sachin supplied a key in chat for
+  the illustrations and asked for it to be revoked afterwards; the `.env` keys are still invalid. Original text follows.
+- **P1 (was) · The four Nano Banana illustrations are not generated: every Gemini key in the server `.env` is rejected.**
+  Sachin typed yes on 2026-11-09 (4 images + up to 4 retries, ≈ $0.16–0.32). `GEMINI_API_KEY`, `GEMINI_API_KEY_SACHIN`
+  and `GEMINI_API_KEY_NISHA` all answer `400 API_KEY_INVALID` (4 image calls + 3 free model-list probes, nothing
+  billed; log in `docs/loading-overlay/art/log.md`). The live paid key sits only in the Lambda env, which this machine
+  cannot read. Owner: Sachin (a valid key in the server `.env`), then any session runs
+  `node docs/loading-overlay/generate-art.mjs --web <web checkout>` and `npm run art:encrypt`. Until then the veil shows
+  the SVG placeholders (`AIAstra_WEB/art/overlay/`). Done: four `.webp` files pass the checklist in 03 §Acceptance.
+- **P1 · `OVERLAY_ART_KEY` must be set in two places before the art shows on staging:** the API Lambda
+  `aiastra-server-api` env and the Amplify build env of `AIAstra_WEB` (same 64 hex chars, `openssl rand -hex 32`).
+  Unset: `GET /api/assets/overlay-key` answers 404 and the veil shows its lines alone (by design). Owner: deploy session
+  (Sachin's typed yes). Done: a signed-in page on staging shows a chart behind the loading line.
+- **P2 · The veil has no art before sign-in** (session restore on `/`, `/signin`): the key needs a session. Decided in
+  docs/loading-overlay/01 §5; revisit only if the restore wait grows. Owner: web-dev.
+- **P2 · `tests/unit/env.test.ts` › `isAstroKundliConfigured returns false when base URL is empty` fails in a worktree
+  with the main checkout's `.env` copied in** (the test reads the real env). Pre-existing, unrelated to this build.
+  Owner: server-dev. Done: the test stubs its env.
+- **P2 · Web `src/routes.tsx` imported `boardsEnabled` without using it, failing `npm run typecheck` on `develop`
+  9f6b89d.** Removed on `feat/loading-overlay`. Owner: none (fixed). Noted so the theme/boards session knows.
+- **P3 · `OracleVeil` keeps its `offset` prop for callers but no longer uses it** (each veil picks a random line).
+  Remove the prop and the `useOracleLine` offsets in `SelfReading.tsx` when that file is next touched. Owner: web-dev.
+- **P2 · Web `src/pages/welcome/WelcomeWizard.test.tsx` › "falls back to null when @mediapipe/tasks-vision is
+  unavailable" passes only where `node_modules` lacks the package.** In a fresh `npm ci` worktree the package is
+  present, `FilesetResolver` hangs on the wasm fetch in jsdom and the test times out at 30 s; in the older
+  `AIAstra_WEB-known-bugs` worktree it passes. Owner: web-dev. Done: the test mocks the import instead of relying on the
+  package being absent.
+- **P2 · Web `src/lib/theme.test.ts` › "theme-light.css is up to date" fails to load on `develop` 9f6b89d** (SyntaxError
+  importing `scripts/gen-light-theme.mjs` through `pathToFileURL`), the same class as the admin `themeCss.test.ts`
+  failure already filed. Pre-existing; seen on the untouched develop worktree too. Owner: the theme session. Done: the
+  test imports the generator in a way vitest accepts on Windows.
+- **P3 · Admin web `overlayArt.ts` is off under vitest** (`import.meta.env.MODE === 'test'`) because the page tests read
+  the first recorded fetch; its own test turns it on. Owner: admin-dev. Done: the page tests pick their request by URL
+  and the guard goes.
+
+## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
+
+- **Superseded 2026-11-09 by doc 03 (offline-first boards).** Opening a board never costs a question; only a fresh
+  reading the person asks for, once "good until" has passed, takes one; each board's first reading is free. Boards always
+  show their last reading, at the limit too (Sachin's decision kept). See `docs/billing/03-offline-first-boards.md`.
+- **P2 · A served older You synthesis may not match today's code panels.** Offline first serves the newest stored
+  synthesis even when its key (answers, clock, year, prompt version) differs from today's. Its areas are per panel, so
+  they still fit, but a prompt or shape change could show an older card shape until the person refreshes. Found
+  2026-11-09 building doc 03. Done: decided acceptable, or the fallback limited to the same prompt version.
+- **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
+  top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
+  (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
+- **P2 · Web checks that fail on web `develop` without this change.** `src/components/AskModal.test.tsx` (2 tests: the
+  conversation list order, "Old" not found; "Unpin My nature" not found), `src/lib/theme.test.ts` (SyntaxError on the
+  dynamic import of `scripts/gen-light-theme.mjs` under vitest on Windows), and `tsc -b`: `src/routes.tsx(24,1)`
+  `boardsEnabled` declared but never read. Found 2026-11-09. Done: all three green on web `develop`.
+- **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
+  gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
+- **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
+  pushed. Owner: deploy session (server first, then web). Done: a free staging account opening a new board sees the count
+  move by one, and opening it again does not.
+
+## Filed 2026-11-09 by the You board v2 review, server side (docs/reading-engine/66 §12, audit `docs/research/research_notes/Self screen design patterns/server_self_board_audit.md`)
+
+Server facts from `develop` 2026-11-09; each item fact (seen in code) or inference.
+
+- **P1 · The Self Oracle receives nothing about the person but the clock, today and the confirm answers.** `oracle.ts:589-606`:
+  no gender (`Auth.gender` exists), no age or age band (not computed anywhere), no `person_facts` beyond `self.confirm.*`
+  (`service.ts:198-203`), no tone or shade, no mood, no declined-topic check on this path; no expertise field exists
+  (`novice` is a role, `src/auth/roles.ts`). Fact. Owner: reading-dev (doc 66 §4.1–4.2). Done: the profile pack built from
+  `auth`, `person_facts`, `area_checks`, `declined_topics` and consumed by the Personalizer; a test shows two profiles get
+  two cards from one Oracle document.
+- **P1 · The Oracle prose is asked to carry chart terms, and the card shows the prose.** `prompts/generated.ts:16`
+  (`oracle/self-areas`: "the chart terms and the classical rule named inside the prose" in `paragraphs`); web
+  `SelfReading.tsx:475-481`. Fact. Owner: reading-dev. Done: Personalizer card face in plain words; Oracle prose under
+  Chart details (doc 66 §4.1).
+- **P1 · Node derives astrological values in eight places on the Self path** (CLAUDE.md: not even a lookup). Rasi-period
+  lord lookup `houseLayers.ts:394-401` (co-lords of Scorpio and Aquarius ignored); karaka→planet join by sign, house and
+  dispositor `:166-174`; transit house from a sign→house map `oracle.ts:325-351`; "over natal Moon" by sign comparison
+  `oracle.ts:352`; activated houses `digest/activation.ts:134-147`; tone and shade scoring with regex-classified dignities,
+  avasthas and taras `houseLayers.ts:125-130, 539-540`; sensitive passage `service.ts:727-730`, `purview.ts:233`; chapter
+  agreement by month distance `panels/chapters.ts:20`. Fact. Owner: engine + reading-dev (doc 66 §4.3). Done: the engine's
+  `pressure_inventory` and `dasha.applicable` supply every window, lord, polarity and strength; Node selects and formats
+  only; the eight sites deleted or reduced to row selection.
+- **P1 · `boardFocusInstruction` for self still asks for PANEL_SYNTHESIS lines while `self-areas.md` demands JSON only.**
+  Both go to the lineman and the Oracle in areas mode (`oracle.ts:772, 1162`). Fact. Owner: reading-dev. Done: one
+  instruction per mode; a test asserts no PANEL_ text in the areas-mode brief.
+- **P1 · Claim ids are lost on the way to the card.** The prompt asks for `claim:<id>`; the validator keeps only keys in
+  `allKeys` (`areaDoc.ts:251-253`); `claimIds = area.evidence.filter((k) => !k.includes(':'))` (`oracle.ts:1276`) drops every
+  prefixed id, so headline lines and plan steps carry empty or fallback ids (`service.ts:553-559`). Fact; net effect
+  inference. Owner: reading-dev. Done: `claim:` keys resolve against the panel claims and survive to `claimIds`; a test.
+- **P2 · Every transit line cites `{house:D1.h1}`** whatever house the transit is in (`oracle.ts:352`). Fact. Done: the
+  engine row id of the ingress is the evidence.
+- **P2 · The lineman prompt hard-codes one person's years.** `R15-self.md:17-18` ("2025, 2026, 2027", "prior to the Oct
+  2026 return", "covering Nov 2026"), `oracle/self.md` likewise, the family.year header says "2025/2026/2027"
+  (`oracle.ts:289`). The October return is one person's Tithi Pravesha. Fact. Owner: reading-dev. Done: years and the return
+  date come from `asOf` and the stored annual rows; a test on a second kundli.
+- **P2 · The prompts name data the packs do not carry.** Sade Sati (named among the transits, not in the sky pack; spans
+  used only as validator windows `service.ts:719-722`); D60 "root karma" (only h1 and planets sent); D20/D24 (named in the
+  mind and atma rules, unread); Patyayini (sent only if stored as an annual dasha); BAV, transit bindus and house from the
+  Moon (in the layouts, not in the packs). D10 is sent and no Self panel reads it. `digestSlices.ts` is used by chat only.
+  Fact. Owner: reading-dev. Done: one data vocabulary per path (the prompt names only what the packs carry) and the
+  `pressure_inventory` for the transit and Sade Sati windows.
+- **P2 · The year pack labels the first annual period active when none covers today** (`oracle.ts:~312`, `?? d.periods[0]`).
+  Fact. Done: no active period → the pack says so and the year area is withheld for the live line.
+- **P2 · Three certainty vocabularies on one card.** Claims `fact/confirmed/likely/split` (`types.ts:53`), lines
+  `fact/strong/moderate/possible` (`:23`), areas `strong/likely/possible` (prompt), chat four tiers. Fact. Done: one set
+  of three words on every card (doc 66 §4.7); the others internal.
+- **P2 · Clock switches are free, unbounded and unlogged on the server.** One charge per board per day
+  (`buildEvent.ts:153-156`, `questionGate.ts:46`), each distinct clock a full Oracle build (~60 s, ~$0.05, inference from
+  the replay); a confirm answer also changes the key (`ans=`, `oracle.ts:765`) and rebuilds; no per-user spend cap; no
+  audit row (`service.ts:289-297`, `selfReadingRoutes.ts:85-98`); a switch during a build waits (`already_building`) and
+  after a failed build waits up to 30 min (`buildEvent.ts:172-177`, inference). Fact/inference as marked. Owner: server +
+  web. Done: doc 66 §4.4 (consent, `board:self:<day>:clock:<system>` charge, `clock_viewed` event, applicability list,
+  confirm answers re-run the Personalizer only).
+- **P2 · `budget_exceeded` Oracle results are stored and served until the running period ends** (`oracle.ts:980-995`).
+  Fact/inference. Done: not stored; the area falls back and the dossier records the gap.
+- **P2 · The catalogue has drifted from the code.** `self.reading.oracle` cites prompt `oracle/self.md` and the functions
+  `runFamilySubAgents` and `runSelfLineman`, which do not exist (default prompt is `oracle/self-areas`); `SELF_PLANNED`
+  lists D4, D7, D60 which `area/self.ts:15` does not read; the section comment says "planned" while every row is `built`
+  (`catalog.ts:455, 626-628, 1621-1650`). Fact. Owner: reading-dev. Done: rows match the code; the contracts test checks
+  that every cited function exists.
+- **P2 · `self.mind_shade` cannot be written through `writeFacts`** (not in `FACT_CATALOG`, `profile/facts.ts:11-20`), so
+  the Self shade tie-break (`shadeResolver.ts:593-596, 1095-1109`) never fires for real users; only the research QA sets
+  it. Fact. Done: retired by the inventory (doc 66 §4.3) or added to the catalogue.
+- **P2 · The lineman still receives the full packs** (126 k prompt tokens, `oracle.ts:999-1001`), against docs 64–65
+  ("findings and claims only"); most of the gap to the 15 s target. Fact. Done: lineman on findings and claims; replay
+  under 20 s wall.
+- **P3 · The sections stream does not serve /you**; `GET /api/self/reading` still runs uncached code panels on each open
+  (`pageTiming.ts:666-740`, `service.ts:331-363`). Fact. Done: panels served from the store or the stream.
+- **P3 · The area board and the reading are two surfaces that share only the digest** and can disagree about "now"; the
+  area board ignores `preferred_dasha`. Fact (shared digest), inference (disagreement). Done: one build writes hero and
+  areas (doc 66 §4.1).
+
+## Filed 2026-11-09 by the You board v2 review (docs/reading-engine/66, web audit `docs/research/research_notes/Self screen design patterns/web_self_board_audit.md`)
+
+Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known-bugs`); each item says fact (seen in code) or inference.
+
+- **P1 · Internal technique ids are shown to every user.** `self.activation · Present Tone Consensus` on the tone card
+  (`AreaBoardView.tsx:480-482`), `self.focus · Companion Fact Selector` (`:457-459`), badges on Now/Holds/Presses/Ahead/
+  Questions and on the wizard (`WelcomeWizard.tsx:17-25`). Fact. Owner: web. Done: no technique id or agent label on a
+  consumer screen; a test greps the rendered You page for `self.` and `·  Consensus`.
+- **P1 · Chart terms and vote counts on the first screen.** "Timing Clocks 3 supporting · 2 testing of 7 clocks", "Core
+  Strength", "Key Horizon", "Primary pressure" (`AreaBoardView.tsx:487-507`); "Read on your Vimshottari clock"
+  (`SelfReading.tsx:215`); "Confirmed by Vimshottari and Chara" on the chapters face (`:572-576`). Breaks doc 45 §3.3.
+  Fact. Owner: web + server (doc 66 §4.7 hero). Done: hero per doc 66 (tone word, one sentence, strip, question).
+- **P1 · The Oracle is told to put chart terms in the card prose.** `oracle/self-areas` asks for "the chart terms and the
+  classical rule named inside the prose" in `paragraphs` (`src/reading/prompts/generated.ts:16`), and the web renders
+  `paragraphs` on the card face (`SelfReading.tsx:475-481`); only the headline is term-free. This is the disconnect
+  Sachin saw on 2026-11-09. Fact. Owner: reading-dev (doc 66 §4.1 Personalizer). Done: the card face is written by the
+  Personalizer in plain words; the Oracle prose sits under Chart details.
+- **P1 · The clock switch has no confirmation, no cost line, no explanation, ignores failure, and changes Love and Work
+  too.** `SelfReading.tsx:204-209`, `:284-316`; `PUT /api/self/clock` writes `kundli.preferred_dasha`
+  (`service.ts:733-740`) which `getBoardReading` uses for self, love and work (`:268-277`); the list is every system with
+  stored periods (`src/reading/self/clock.ts:34`, up to ~40), no applicability shown, no per-system line; a new clock is
+  a new paid synthesis (keys `service.ts:355`, `oracle.ts:284`); logging is one client `track('chip_select')`, no server
+  audit row. Fact (paid call per switch: inference from the keys). Owner: web + server. Done: doc 66 §4.4 (consent
+  sheet with the cost, applicability from the engine, `board:self:<day>:clock:<system>` charge, `clock_viewed` event,
+  the per-board clock or a notice that all three boards change).
+- **P2 · Staging shows "Choose your dasha" and "… Dasha" labels that exist in no branch.** The code says "Choose your
+  clock" and strips "dasha" from labels (`SelfReading.tsx:288`, `words.ts:102-148`); `release-candidate-staging` has no
+  Your reading tab. Sachin's screenshot of 2026-11-09 shows the dasha wording, so staging serves a build that is not
+  `develop`. Fact for code, inference for staging. Owner: deploy session. Done: the build staging serves identified and
+  `develop` deployed.
+- **P2 · Sixteen destinations on one page.** Question card + tone card + seven top tabs stack above the nine-area panel;
+  the modular rule (doc 45 rule 11) holds only inside Your reading. Fact for order. Owner: web (doc 66 §4.6: three groups,
+  ten areas, the seven tabs retired). Done: the You page is hero + chips/rail + one card.
+- **P2 · Board polling gives up silently** after 10 × 30 s; the veil never lifts and no Retry shows
+  (`AreaBoardView.tsx:386-393`). Fact. Owner: web. Done: a "Still working… Retry" line after the last poll.
+- **P2 · Oracle failure is silent on the card.** `failed` / `budget_exceeded` fall back to code lines with no word to the
+  person (`SelfReading.tsx:136`, `:348`). Fact. Owner: web. Done: one line "The full reading did not finish; here is
+  what the chart says for sure" on the affected card.
+- **P2 · Personal facts never reach the reading.** Gender (collected at birth details) is unused; `self.focus`, work,
+  love, children do not reach Your reading; nothing collects mood, the problem on arrival, or an expertise level (the
+  role `novice` is every new account, `src/auth/roles.ts`). Fact. Owner: reading-dev (doc 66 §4.2 profile pack). Done:
+  the profile pack built and consumed by the Personalizer; a test shows two profiles get two cards from one Oracle doc.
+- **P2 · `self.focus` is asked two ways.** The wizard stores up to three (doc 52), the board asks a single choice from a
+  different option list and overwrites it. Fact / inference. Owner: web + server. Done: one question, one key, one
+  option list; the board reads, it does not re-ask while fresh.
+- **P3 · Two build stamps with different dates** (`ReadingStamp` at top, `builtLine` at bottom). Fact. Owner: web.
+- **P3 · Millisecond timings, claim ids, evidence keys and purview jargon under Chart details** (`SelfReading.tsx:
+  392-416`, `:545`; `purview.ts:95`). Behind a tap but visible to any user. Fact. Owner: web + server. Done: Chart
+  details shows placements, periods and rules in words; ids and timings only for `student`/`astrologer`/`researcher`
+  roles or the admin Lab.
+- **P3 · `clock.reason`, `clock.confirming`, `panel.lead`, `oracle.text` are never rendered**; the reason the chart chose
+  its clock is lost to the person. Fact. Owner: web. Done: the clock sheet shows "the one your chart qualifies for:
+  <reason>".
+- **P3 · The tone card ignores `preferred_dasha`** so it can disagree with the reading after a clock switch. Inference.
+  Owner: server. Done: hero and areas read the same clock (doc 66 §4.1 hero from the same build).
+- **P3 · No shared carousel component.** Scroll-snap, chips and dots are copied into five web files; no colour tokens
+  (Tailwind utilities only), no custom font. Fact. Owner: web. Done: one `Carousel` and one `Chips` component used by
+  You, Love, Work and Lucky times.
+
+## Filed 2026-11-09 by the Self v2 contracts build (doc 66 §13, branch `feat/self-v2-contracts`)
+
+- **P3 · The local Prisma client is stale.** `npx tsc --noEmit` on `develop` fails only on `src/auth/terms.ts(86,15)`:
+  `terms_version` is in `prisma/schema.prisma:70` but not in the generated client. Found 2026-11-09; not caused by this
+  branch. Owner: a Haiku sub-agent (AGENTS.md: `prisma generate` is an install step). Done: `npx prisma generate` run in
+  the main checkout and tsc clean.
+- **Status · Self v2 step 1 (contracts) merged.** `src/reading/self/v2types.ts` (hero + eleven areas, refresh triggers,
+  the pressure inventory, the ten `self.sub.*` outputs, `SelfBuildContext`, `AreaBrief`, `AgentSlice`, `OracleInput`,
+  `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
+  `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
+  and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
+- **P2 · Web `.env.development` points at the old Render API (`https://aiastraserver.onrender.com`), which answers 503**
+  (checked 2026-11-09 from a local dev server: sign-in shows "Something went wrong"). Local `npm run dev` therefore
+  cannot sign in. The live API is the CloudFront/Lambda origin in `.env.staging`. Owner: web-dev. Done: dev points at
+  a local server (`http://localhost:3000`, as the file's own comment says) or at staging with its CORS allowing the
+  dev origin.
+
+
+## Filed 2026-11-09 by Self v2 step 1b (branch feat/self-v2-subtechniques)
+
+- **P2 · S3 windows run degraded until the engine stores a pressure grade.** `src/reading/self/sub/windows.ts`: no
+  `kundli_pressure` table and no 1–3 strength in any stored row, so every window is strength 2, transits and Sade Sati
+  are polarity `mixed`, and dasha polarity is the period lord's stored functional-nature label through
+  `FUNCTIONAL_POLARITY` (`v2words.ts`). `heaviestNow`, `top3` and the hero strip therefore order only by end date. Fact
+  (gaps `windows: ... degraded` on every build). Owner: engine `feat/pressure-inventory` (doc 66 §13 step 2). Done:
+  S3 reads `kundli_pressure` rows when present and the two gaps disappear.
+- **P2 · No engine sensitive-passage flag.** S7 `bodyFacts.sensitive` is always false with a gap; the v1 service still
+  decides it in Node (`service.ts isSensitive`: Ketu sub period or Saturn on 8 and 12), which doc 66 §12 lists as a
+  Node derivation. Fact. Owner: engine pass (doc 66 §4.3) then server. Done: the engine stores the flag, S7 reads it,
+  and `isSensitive` is deleted.
+- **P3 · No engine strength grade for yogas; no yoga → grace link beyond dosha exceptions.** S4 entries are all strength 2,
+  and a cancellation yoga (e.g. Neecha Bhanga) holds a risk only by naming the same planet (S5 joins on
+  `planet:D1.<p>` evidence). The stored `yearLord` is also absent on the research kundli's VP rows, so S9 `yearLord` is
+  null with a gap. Fact (fixture `tests/fixtures/self/research-calibration.json`). Owner: engine pass. Done: the engine
+  stores a grade, the knot a cancellation cancels, and the year lord.
+- **P3 · `self.sub.*` spans run under agent `self.reading_panel`.** `src/reading/self/sub/index.ts` `SUB_AGENT`: step
+  1b may not edit `src/agents/registry.ts`. Owner: the agents lane (`feat/self-v2-agents`). Done: a `self.sub` code
+  agent row, `SUB_AGENT` and the catalogue rows' `agents` switched to it, and `src/reading/self/sub/index.ts` added to
+  `CALL_SITES` in `tests/unit/techniques/summaries.test.ts` (its own test in `tests/unit/reading/self/v2` covers it
+  until then).
+- **P3 · Sub-technique and area outputs are not yet written to `technique_outputs`.** `runSelfSubTechniques` fills
+  `ctx.sub` and `ctx.stamps` and areas carry `refreshStamp`, but no `withTechniqueOutput` store under `self.sub.<name>`
+  / `self.area.<id>` keyed by the stamps (doc 66 §4.8 step 2), so a boundary rebuild still reruns all ten. Owner: the
+  build-order lane (`runSelfReadingBuild`). Done: store keys from the stamps; only the fired sub-techniques rerun.
+- **P3 · Catalogue ids differ from `SELF_V2_AREAS[].technique`.** Areas are registered as `self.v2.<area>` (to avoid the
+  existing `self.reading.<x>` rows), while `v2types.ts SELF_V2_AREAS` names `self.now`, `self.stuck`, … Owner: whoever
+  next edits `v2types.ts` (contracts lane). Done: one id per area in both places.
+- **P3 · S5 does not yet drop declined matters.** Doc 66 §4.8 says S10's declined facts remove matters from S5, but
+  declined keys are fact keys (`love.status`), not matters, and no reviewed fact-key → matter table exists. Owner: Sachin
+  (words table) then server. Done: a reviewed table and S5 filtering by it.

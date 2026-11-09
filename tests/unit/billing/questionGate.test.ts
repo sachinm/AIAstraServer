@@ -403,3 +403,45 @@ describe('region', () => {
     expect(pickRegion({ billingCountry: 'IN', country: 'US', requested: 'US' })).toBe('IN');
   });
 });
+
+describe('a fresh reading the person asks for (docs/billing/03)', () => {
+  it('holds one question, commits it when made, and a second ask the same day is the same question', async () => {
+    const { store, gate } = setup();
+    const r = await gate.reserveBoardRefresh('u1', 'self', '2026-11-15');
+    expect(r.ok).toBe(true);
+    expect(used(store)).toBe(1);
+    expect((await gate.reserveBoardRefresh('u1', 'self', '2026-11-15')).ok).toBe(true);
+    expect(used(store)).toBe(1);
+    await gate.settleBoardRefresh('u1', 'self', '2026-11-15', true);
+    await gate.settleBoardRefresh('u1', 'self', '2026-11-15', false);
+    expect(used(store)).toBe(1);
+    expect(store.usage.find((x) => x.key === 'board:self:refresh:2026-11-15')?.status).toBe('committed');
+    expect((await gate.reserveBoardRefresh('u1', 'love', '2026-11-15')).ok).toBe(true);
+    expect(used(store)).toBe(2);
+  });
+
+  it('a build that failed gives the question back, and asking again is charged again', async () => {
+    const { store, gate } = setup();
+    await gate.reserveBoardRefresh('u1', 'work', '2026-11-15');
+    await gate.settleBoardRefresh('u1', 'work', '2026-11-15', false);
+    expect(used(store)).toBe(0);
+    await gate.reserveBoardRefresh('u1', 'work', '2026-11-15');
+    expect(used(store)).toBe(1);
+  });
+
+  it('at the limit nothing is held; staff and limits off are never charged', async () => {
+    const { store, gate } = setup(() => NOW, { PLAN_FREE_QUESTIONS: '1', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv);
+    expect(await ask(gate)).toBe(true);
+    const r = await gate.reserveBoardRefresh('u1', 'love', '2026-11-15');
+    expect(r.ok).toBe(false);
+    expect(used(store)).toBe(1);
+    expect(store.usage.some((x) => x.key.startsWith('board:'))).toBe(false);
+    const staff = setup();
+    staff.store.role = 'admin';
+    expect((await staff.gate.reserveBoardRefresh('u1', 'self', '2026-11-15')).ok).toBe(true);
+    expect(used(staff.store)).toBeUndefined();
+    const off = new QuestionGate(new MemoryPlanStore(), { enabled: false, now: () => NOW, env: ENV });
+    expect((await off.reserveBoardRefresh('u1', 'self', '2026-11-15')).ok).toBe(true);
+    await off.settleBoardRefresh('u1', 'self', '2026-11-15', true);
+  });
+});

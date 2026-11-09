@@ -13,8 +13,11 @@ const runs: any[] = [];
 const prisma: any = {
   kundli: { findFirst: async ({ where }: any) => (where.user_id === 'u1' ? { id: 'k1' } : null) },
   areaBuild: {
+    findFirst: async ({ where }: any) => builds.filter((b) => b.kundli_id === where.kundli_id && b.area === where.area && (b.status ?? 'ready') === where.status).sort((a, b) => iso(b.as_of).localeCompare(iso(a.as_of)))[0] ?? null,
     findUnique: async ({ where }: any) => builds.find((b) => b.kundli_id === where.kundli_id_area_as_of.kundli_id && iso(b.as_of) === iso(where.kundli_id_area_as_of.as_of)) ?? null,
     upsert: async ({ create }: any) => {
+      const i = builds.findIndex((b) => b.kundli_id === create.kundli_id && b.area === create.area && iso(b.as_of) === iso(create.as_of));
+      if (i >= 0) builds.splice(i, 1);
       builds.push(create);
       return create;
     },
@@ -34,6 +37,13 @@ const prisma: any = {
   agentRun: { create: async ({ data }: any) => runs.push(data) },
 };
 const loadInputs = vi.fn(async () => loadG1TimelineInputs());
+const USAGE = { code: 'free', used: 1, limit: 20, remaining: 19 };
+const gate = {
+  reserveBoardRefresh: vi.fn(async (): Promise<any> => ({ ok: true, ticket: { id: 'q1', periodStart: null, userId: 'u1' } })),
+  settleBoardRefresh: vi.fn(async () => undefined),
+  getStatus: vi.fn(async () => USAGE as any),
+};
+let NOW = new Date('2026-10-24T12:00:00Z');
 let server: ReturnType<express.Express['listen']>;
 let base = '';
 
@@ -41,7 +51,7 @@ beforeAll(async () => {
   resetAgentRegistryState();
   const app = express();
   app.use(express.json());
-  expect(registerAreaRoutes(app, { prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, loadInputs, now: () => new Date('2026-10-24T12:00:00Z') })).toBe(true);
+  expect(registerAreaRoutes(app, { prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, loadInputs, now: () => NOW, gate })).toBe(true);
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -68,8 +78,18 @@ describe('area routes', () => {
     expect(a.json.cached).toBe(false);
     expect(a.json.map.present.tone).toBeTruthy();
     expect(a.json.work).toBeNull();
+    // docs/billing/03: the first map is made free; opening it again serves it and costs nothing
+    expect(a.json.usage).toBeUndefined();
+    expect(a.json.refresh_due).toBe(false);
     const b = await call('GET', '/api/area/career', 'u1');
     expect(b.json.cached).toBe(true);
+    expect(b.json.usage).toBeUndefined();
+    // §10: when the reading was made and the last day it holds come back on both, the same on the stored one
+    expect(typeof a.json.made_at).toBe('string');
+    expect(a.json.valid_until === null || a.json.valid_until >= '2026-10-24').toBe(true);
+    expect([b.json.made_at, b.json.valid_until]).toEqual([a.json.made_at, a.json.valid_until]);
+    expect(b.json.map.validity).toBeUndefined();
+    expect(gate.reserveBoardRefresh).not.toHaveBeenCalled();
     expect(loadInputs).toHaveBeenCalledTimes(1);
     expect(runs.map((r) => r.agent_id)).toEqual(['area.career_inputs', 'area.career_map']);
     expect(runs.every((r) => r.module === 'area' && r.status === 'ok')).toBe(true);
@@ -80,6 +100,39 @@ describe('area routes', () => {
     expect(charts.some((c) => c.type.startsWith('dasha.'))).toBe(true);
     for (const c of charts.filter((x) => x.type === 'transit_contacts')) expect(c.variant).toMatch(/^\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}$/);
   });
+  it('offline first: past "good until" the old map is still served; a fresh one only on request, one question (docs/billing/03)', async () => {
+    const first = await call('GET', '/api/area/career', 'u1');
+    const notDue = await call('POST', '/api/boards/work/refresh', 'u1');
+    expect(notDue.status).toBe(409);
+    expect(notDue.json).toMatchObject({ code: 'not_due', valid_until: first.json.valid_until });
+    expect(gate.reserveBoardRefresh).not.toHaveBeenCalled();
+    if (first.json.valid_until === null) return; // a map with no end is never due
+    const builtTimes = loadInputs.mock.calls.length;
+    NOW = new Date(`${first.json.valid_until}T12:00:00Z`);
+    NOW.setUTCDate(NOW.getUTCDate() + 1);
+    const later = await call('GET', '/api/area/career', 'u1');
+    expect(later.json).toMatchObject({ cached: true, made_at: first.json.made_at, refresh_due: true });
+    expect(loadInputs.mock.calls.length).toBe(builtTimes);
+
+    gate.reserveBoardRefresh.mockResolvedValueOnce({ ok: false, usage: { ...USAGE, used: 20, remaining: 0 } });
+    const full = await call('POST', '/api/boards/work/refresh', 'u1');
+    expect(full.status).toBe(402);
+    expect(full.json.code).toBe('quota_exhausted');
+    expect(loadInputs.mock.calls.length).toBe(builtTimes);
+
+    const fresh = await call('POST', '/api/boards/work/refresh', 'u1');
+    expect(fresh.status).toBe(200);
+    expect(fresh.json.usage).toEqual(USAGE);
+    expect(fresh.json.map.present.tone).toBeTruthy();
+    expect(gate.reserveBoardRefresh).toHaveBeenLastCalledWith('u1', 'work', NOW.toISOString().slice(0, 10));
+    expect(gate.settleBoardRefresh).toHaveBeenLastCalledWith('u1', 'work', NOW.toISOString().slice(0, 10), true);
+    expect(loadInputs.mock.calls.length).toBe(builtTimes + 1);
+    const after = await call('GET', '/api/area/career', 'u1');
+    expect(after.json.made_at).not.toBe(first.json.made_at);
+    expect(after.json.refresh_due).toBe(false);
+    NOW = new Date('2026-10-24T12:00:00Z');
+  });
+
   it('work status: rejects an unknown value; once set, the map hides what does not fit', async () => {
     expect((await call('PUT', '/api/profile/work-status', 'u1', { value: 'astronaut' })).status).toBe(400);
     expect((await call('PUT', '/api/profile/work-status', 'u1', { value: 'own_business' })).status).toBe(204);

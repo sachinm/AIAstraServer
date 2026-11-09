@@ -16,6 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { getKundliDigestEventToken } from '../../config/env.js';
 import { queueLog, queueLogError } from '../../lib/queueLogger.js';
+import { questionGate, type QuestionGate } from '../../billing/questionGate.js';
 import { getBoardReading, type SelfDeps, type SelfReadingResult } from './service.js';
 import type { ReadingBoardId } from './types.js';
 
@@ -30,7 +31,15 @@ const ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 export interface SelfReadingBuildEvent {
   userId: string;
   board: ReadingBoardId;
+  /** a fresh reading the person asked for (docs/billing/03): the day its question was held on, settled by this build */
+  refreshDay?: string;
 }
+
+/** A fresh reading the person asked for, and the UTC day its question was held on. */
+export interface BuildOptions {
+  refreshDay?: string;
+}
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function tokenOk(given: unknown): boolean {
   const want = getKundliDigestEventToken();
@@ -43,23 +52,24 @@ function tokenOk(given: unknown): boolean {
 /** The build event, or null (anything else, a wrong or missing token, or the token unset). */
 export function parseSelfReadingBuildEvent(body: unknown): SelfReadingBuildEvent | null {
   if (!body || typeof body !== 'object') return null;
-  const b = body as { source?: unknown; userId?: unknown; board?: unknown; token?: unknown; 'detail-type'?: unknown; detail?: Record<string, unknown> };
+  const b = body as { source?: unknown; userId?: unknown; board?: unknown; token?: unknown; refreshDay?: unknown; 'detail-type'?: unknown; detail?: Record<string, unknown> };
   const d = b.detail && typeof b.detail === 'object' ? b.detail : null;
   let userId: unknown;
   let board: unknown;
   let token: unknown;
-  if (b.source === SELF_READING_BUILD_SOURCE) [userId, board, token] = [b.userId, b.board, b.token];
-  else if (d && b['detail-type'] === SELF_READING_BUILD_SOURCE) [userId, board, token] = [d.userId, d.board, d.token];
+  let refreshDay: unknown;
+  if (b.source === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay] = [b.userId, b.board, b.token, b.refreshDay];
+  else if (d && b['detail-type'] === SELF_READING_BUILD_SOURCE) [userId, board, token, refreshDay] = [d.userId, d.board, d.token, d.refreshDay];
   else return null;
   if (!tokenOk(token)) return null;
   if (typeof userId !== 'string' || !ID_RE.test(userId)) return null;
   if (typeof board !== 'string' || !BOARDS.includes(board as ReadingBoardId)) return null;
-  return { userId, board: board as ReadingBoardId };
+  return { userId, board: board as ReadingBoardId, ...(typeof refreshDay === 'string' && DAY_RE.test(refreshDay) ? { refreshDay } : {}) };
 }
 
 /** The event this Lambda sends itself. */
-export function selfReadingBuildEventPayload(userId: string, board: ReadingBoardId): Record<string, unknown> {
-  return { source: SELF_READING_BUILD_SOURCE, userId, board, token: getKundliDigestEventToken() ?? '' };
+export function selfReadingBuildEventPayload(userId: string, board: ReadingBoardId, opts: BuildOptions = {}): Record<string, unknown> {
+  return { source: SELF_READING_BUILD_SOURCE, userId, board, ...(opts.refreshDay ? { refreshDay: opts.refreshDay } : {}), token: getKundliDigestEventToken() ?? '' };
 }
 
 export const markerArea = (board: ReadingBoardId): string => `${board}.reading`;
@@ -119,11 +129,13 @@ async function writeBuildMarker(prisma: PrismaClient, userId: string, kundliId: 
 export interface QueueDeps {
   prisma: PrismaClient;
   /** the build that runs off Lambda (tests replace it) */
-  build?: (deps: SelfDeps, userId: string, board: ReadingBoardId) => Promise<SelfReadingResult>;
+  build?: (deps: SelfDeps, userId: string, board: ReadingBoardId, opts: BuildOptions) => Promise<SelfReadingResult>;
   /** the async self-invoke on Lambda (tests replace it) */
   invoke?: (payload: Record<string, unknown>) => Promise<void>;
   self?: Omit<SelfDeps, 'prisma'>;
   now?: () => Date;
+  /** settles the question held for a fresh reading the person asked for (docs/billing/03; tests replace it) */
+  gate?: Pick<QuestionGate, 'settleBoardRefresh'>;
 }
 
 let lambdaClient: LambdaClient | null = null;
@@ -135,22 +147,30 @@ async function defaultInvoke(payload: Record<string, unknown>): Promise<void> {
   await lambdaClient.send(new InvokeCommand({ FunctionName: fn, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify(payload)) }), { abortSignal: AbortSignal.timeout(2_000) });
 }
 
-const defaultBuild = (deps: SelfDeps, userId: string, board: ReadingBoardId) => getBoardReading(deps, userId, board, { trigger: 'request' });
+const defaultBuild = (deps: SelfDeps, userId: string, board: ReadingBoardId, opts: BuildOptions) =>
+  getBoardReading(deps, userId, board, { trigger: 'request', ...(opts.refreshDay ? { refresh: true } : {}) });
 
-/** Runs one build to the end, marking the marker `ready` or `failed`. Never throws. */
-export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId): Promise<SelfReadingResult | null> {
+/**
+ * Runs one build to the end, marking the marker `ready` or `failed`. Never throws. A build with no `refreshDay` is the
+ * board's first reading and costs nothing; one the person asked for commits the question held for it when the synthesis
+ * is made, and gives it back when it is not (docs/billing/03).
+ */
+export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, opts: BuildOptions = {}): Promise<SelfReadingResult | null> {
   const now = (deps.now ?? (() => new Date()))();
   const selfDeps: SelfDeps = { prisma: deps.prisma, ...(deps.self ?? {}) };
   const t0 = Date.now();
   try {
-    const r = await (deps.build ?? defaultBuild)(selfDeps, userId, board);
+    const r = await (deps.build ?? defaultBuild)(selfDeps, userId, board, opts);
     const oracle = r.status === 'ok' ? r.reading.oracle : undefined;
     const failed = oracle !== undefined && (oracle.status === 'failed' || oracle.status === 'pending');
     await writeBuildMarker(deps.prisma, userId, kundliId, board, now, failed ? 'failed' : 'ready', failed ? `oracle ${oracle.status}` : undefined);
-    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', ms: Date.now() - t0 });
+    const made = r.status === 'ok' && oracle?.status === 'ok';
+    if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, made);
+    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', refresh: opts.refreshDay ? (made ? 'charged' : 'given_back') : 'none', ms: Date.now() - t0 });
     return r;
   } catch (e) {
     await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300));
+    if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, false);
     queueLogError({ event: 'reading_build_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300), ms: Date.now() - t0 });
     return null;
   }
@@ -162,7 +182,7 @@ export type QueueOutcome = 'invoked' | 'in_process' | 'already_building' | 'fail
  * Queue one board's reading build for a person unless one is running or failed in the last half hour. Marks the marker
  * `building` first, so the next poll sees it even before the invocation starts. Never throws, never waits for the build.
  */
-export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId): Promise<QueueOutcome> {
+export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, opts: BuildOptions = {}): Promise<QueueOutcome> {
   const now = (deps.now ?? (() => new Date()))();
   const state = await readBuildMarker(deps.prisma, kundliId, board, now);
   if (state === 'building') return 'already_building';
@@ -176,7 +196,7 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
       return 'skipped';
     }
     try {
-      await (deps.invoke ?? defaultInvoke)(selfReadingBuildEventPayload(userId, board));
+      await (deps.invoke ?? defaultInvoke)(selfReadingBuildEventPayload(userId, board, opts));
       return 'invoked';
     } catch (e) {
       queueLogError({ event: 'reading_build_queue_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300) });
@@ -184,7 +204,7 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
       return 'skipped';
     }
   }
-  void runSelfReadingBuild(deps, userId, kundliId, board);
+  void runSelfReadingBuild(deps, userId, kundliId, board, opts);
   return 'in_process';
 }
 
@@ -192,6 +212,6 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
 export async function handleSelfReadingBuildEvent(event: SelfReadingBuildEvent, deps: QueueDeps): Promise<{ status: string; oracle: string }> {
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: event.userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 'no_kundli', oracle: 'off' };
-  const r = await runSelfReadingBuild(deps, event.userId, kundli.id, event.board);
+  const r = await runSelfReadingBuild(deps, event.userId, kundli.id, event.board, event.refreshDay ? { refreshDay: event.refreshDay } : {});
   return { status: r?.status ?? 'failed', oracle: (r?.status === 'ok' ? r.reading.oracle?.status : undefined) ?? 'off' };
 }
