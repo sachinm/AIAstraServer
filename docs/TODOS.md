@@ -1371,6 +1371,15 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
   background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
   they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P1 · The digest sweep rebuilds every ready kundli 10-14 times a day.** 2026-11-09, from agent_runs: in 24 h,
+  351 `digest.build` runs (about 58 min of build time) across 32 ready kundlis, while the sweep itself fires on time
+  every 5 min. Cause: `runDigestSweep` tops up the annual set of 3 random ready kundlis per sweep and calls
+  `markDigestInputsChanged` whenever a top-up fetched any row; the next sweep rebuilds that digest. 450 top-ups fetched
+  6,193 rows and failed 243 (sets average 126 of 210 wanted, 70 remaining), so most kundlis are marked stale again
+  every few hours. Each rebuild re-reads 860 rows and moves the digest version the reading store keys on, which can
+  also invalidate stored Oracle readings. Owner: reading-dev. Done: a top-up marks stale only when it completes a year
+  the digest reads (or once per day per kundli), failed items back off, and builds per kundli per day drop to at most
+  one or two.
 - **P2 · Admin web `src/lib/themeCss.test.ts` fails to load on admin `develop` (d34221f):** "SyntaxError: Invalid or
   unexpected token", no tests run. Seen 2026-11-08 night in the main checkout and in `wt/admin-loads` after merging
   develop; from the theme work (`feat/admin-theme`), not the Dashboard loads branch. Owner: the theme session. Done: the
