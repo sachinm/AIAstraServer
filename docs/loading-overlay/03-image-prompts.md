@@ -91,3 +91,12 @@ for the generated files is the only code-free step.
   server `.env`'s `GEMINI_API_KEY`: 4 calls, all `400 API_KEY_INVALID`, no image, nothing billed. A free model-list
   probe showed `GEMINI_API_KEY_SACHIN` and `GEMINI_API_KEY_NISHA` are invalid too. Waiting on a valid key (TODOS).
   Per-call rows: `art/log.md`.
+- 2026-11-09, later: Sachin pasted a key in chat for the illustrations only (to be revoked after). Run 1, the four full
+  prompts: all four images came back with wrong or duplicated house numbers (5, 5, 11, 14, 17, 18), misspelt nakshatra
+  names, a stray "f7857", Rahu as a word → rejected, kept as `art/rejected-1/*.webp`. Run 2, the four approved retries
+  with text-free prompts (geometry and atmosphere only, exact text to be composited in code): South light is a correct
+  board; South dark adds corner diagonals; both North boards have wrong inner geometry → kept as `art/plain/*.webp`.
+  **8 calls in all, the approved cap; about $0.32.** Decision: the shipped art is the code-drawn SVG set
+  (`AIAstra_WEB/scripts/draw-overlay-placeholders.mjs`), restyled after the generated look (ivory vignette with indigo
+  lines by day, midnight violet vignette with glowing lavender lines by night), because every numeral, glyph and name
+  must be exact and the image model cannot be relied on for that. Another image run needs a new yes.

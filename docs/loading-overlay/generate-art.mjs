@@ -9,8 +9,10 @@ import sharp from 'sharp';
 
 const MODEL = process.env.GEMINI_IMAGE_MODEL_ID || 'gemini-2.5-flash-image';
 const MAX_CALLS = 8;
-const OUT = 'docs/loading-overlay/art';
+const OUT = process.argv.includes('--plain') ? 'docs/loading-overlay/art/plain' : 'docs/loading-overlay/art';
 const args = process.argv.slice(2);
+/** --plain: geometry and atmosphere only, no numerals, letters or symbols; the exact text is composited afterwards. */
+const plain = args.includes('--plain');
 const only = (args.includes('--only') ? args[args.indexOf('--only') + 1] : '').split(',').filter(Boolean);
 const web = args.includes('--web') ? args[args.indexOf('--web') + 1] : '';
 
@@ -27,12 +29,27 @@ const NORTH = `The chart is the North Indian style: a square with both diagonals
 const LIGHT = `Background pale ivory (#f7f5ff), lines deep indigo (#3b2a7a), numerals slate, graha symbols warm gold (#b45309), rashi symbols indigo, nakshatra names soft grey-violet. Morning light, airy.`;
 const DARK = `Background deep midnight (#0b0a1f) with the faintest violet vignette, lines pale lavender (#d8b4fe) with a gentle glow, numerals lavender-white, graha symbols pale gold (#fde68a), rashi symbols lavender, nakshatra names muted violet. Quiet night, luminous.`;
 
-const JOBS = [
-  { name: 'south-light', prompt: `${SHARED} ${SOUTH} ${LIGHT}` },
-  { name: 'south-dark', prompt: `${SHARED} ${SOUTH} ${DARK}` },
-  { name: 'north-light', prompt: `${SHARED} ${NORTH} ${LIGHT}` },
-  { name: 'north-dark', prompt: `${SHARED} ${NORTH} ${DARK}` },
-].filter((j) => only.length === 0 || only.includes(j.name));
+const PLAIN_SHARED = `A premium, minimal illustration of an empty Vedic astrology house chart as pure geometry: fine, even line work with a soft hand-inked feel, centred with generous margins, on a plain background. Absolutely no text, no numerals, no letters, no symbols, no glyphs, no planets, nothing inside any cell: only the chart's lines and a quiet atmosphere. Apple-grade restraint: thin lines, exact spacing, no texture noise, no people, no logos.`;
+const PLAIN_SOUTH = `The chart is the South Indian style: one square divided into a 4 × 4 grid whose central 2 × 2 block is a single open square, so twelve outer cells run around the edge.`;
+const PLAIN_NORTH = `The chart is the North Indian style: one square with both diagonals drawn corner to corner and an inner diamond joining the midpoints of the four sides, giving four central diamonds and eight corner triangles.`;
+const PLAIN_LIGHT = `Background pale ivory (#f7f5ff) with a soft morning-light vignette, lines deep indigo (#3b2a7a). Airy.`;
+const PLAIN_DARK = `Background deep midnight (#0b0a1f) with the faintest violet vignette, lines pale lavender (#d8b4fe) with a gentle glow. Quiet night, luminous.`;
+
+const JOBS = (
+  plain
+    ? [
+        { name: 'south-light', prompt: `${PLAIN_SHARED} ${PLAIN_SOUTH} ${PLAIN_LIGHT}` },
+        { name: 'south-dark', prompt: `${PLAIN_SHARED} ${PLAIN_SOUTH} ${PLAIN_DARK}` },
+        { name: 'north-light', prompt: `${PLAIN_SHARED} ${PLAIN_NORTH} ${PLAIN_LIGHT}` },
+        { name: 'north-dark', prompt: `${PLAIN_SHARED} ${PLAIN_NORTH} ${PLAIN_DARK}` },
+      ]
+    : [
+        { name: 'south-light', prompt: `${SHARED} ${SOUTH} ${LIGHT}` },
+        { name: 'south-dark', prompt: `${SHARED} ${SOUTH} ${DARK}` },
+        { name: 'north-light', prompt: `${SHARED} ${NORTH} ${LIGHT}` },
+        { name: 'north-dark', prompt: `${SHARED} ${NORTH} ${DARK}` },
+      ]
+).filter((j) => only.length === 0 || only.includes(j.name));
 
 const key = envKey();
 mkdirSync(OUT, { recursive: true });
