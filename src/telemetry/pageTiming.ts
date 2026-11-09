@@ -40,6 +40,11 @@ export const CANONICAL_PAGE_ROUTES = [
   '/dashboard/charts',
   '/dashboard/mantras',
   '/dashboard/remedies',
+  '/dashboard/you',
+  '/dashboard/love',
+  '/dashboard/work',
+  '/dashboard/today',
+  '/dashboard/lucky',
   '/profile',
   '/profile/plan',
   '/profile/settings',
@@ -162,7 +167,20 @@ export function normalizePagePath(
   if (cleanRoute.startsWith('/api/profile')) {
     return { pagePath: '/profile', routePattern: '/profile' };
   }
-  if (cleanRoute.startsWith('/api/lucky') || cleanRoute.startsWith('/api/area') || cleanRoute.startsWith('/api/life-reading')) {
+  // the boards (docs/reading-engine/66 §4.6): a call without X-Astra-Page is credited to its own board, not to Charts
+  if (cleanRoute.startsWith('/api/self') || cleanRoute.startsWith('/api/area/self')) {
+    return { pagePath: '/dashboard/you', routePattern: '/dashboard/you' };
+  }
+  if (cleanRoute.startsWith('/api/area/love')) {
+    return { pagePath: '/dashboard/love', routePattern: '/dashboard/love' };
+  }
+  if (cleanRoute.startsWith('/api/area/career') || cleanRoute.startsWith('/api/area/work')) {
+    return { pagePath: '/dashboard/work', routePattern: '/dashboard/work' };
+  }
+  if (cleanRoute.startsWith('/api/lucky')) {
+    return { pagePath: '/dashboard/lucky', routePattern: '/dashboard/lucky' };
+  }
+  if (cleanRoute.startsWith('/api/area') || cleanRoute.startsWith('/api/life-reading')) {
     return { pagePath: '/dashboard/charts', routePattern: '/dashboard/charts' };
   }
   if (cleanRoute.startsWith('/api/assistant')) {
