@@ -1,0 +1,36 @@
+{
+  "id": "a",
+  "label": "woman, 25–35, own business with staff, single, focus career and money",
+  "pack": {
+    "ageBand": "25_35",
+    "gender": "woman",
+    "role": "public",
+    "facts": {
+      "work": {
+        "status": "own_business",
+        "level": "owner_staff"
+      },
+      "love": "single",
+      "focus": [
+        "career",
+        "money"
+      ]
+    },
+    "declined": [],
+    "lastConfirms": [],
+    "mood": null,
+    "hash": "4bacfb26cbbe34a3"
+  },
+  "status": "failed",
+  "doc": null,
+  "raw": null,
+  "cardStatus": {},
+  "gaps": [
+    "personalizer: no card document (finish MAX_TOKENS, 9992 chars)"
+  ],
+  "scan": [],
+  "rawScan": [],
+  "datesOutside": [],
+  "finishReason": "MAX_TOKENS",
+  "wordCounts": {}
+}

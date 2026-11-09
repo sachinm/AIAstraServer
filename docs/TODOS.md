@@ -1814,3 +1814,37 @@ have these tests clear the vars they depend on).
   strength, transits mixed. Owner: Sachin with the deploy session. Done: a written engine release path in `AGENTS.md` or
   `docs/ops/`, the export live on the engine Lambda, and the server's pull storing a `kundli_data` `pressure_inventory`
   row for one test kundli.
+
+## Filed 2026-11-09 by the Self v2 live replay
+
+Source: `docs/reading-engine/66-replay-2026-11-09-self-v2.md` (11 paid calls, $0.12, kundli `c584c0a3`, three synthetic
+profiles). Owner: the next Self v2 agents/validator branch unless noted.
+- **P1 · Personalizer truncates at the output cap when it thinks.** Profiles a and b hit `MAX_TOKENS` with output
+  plus about 2.2 k thought tokens equal to 5,000 (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). The whole card document is
+  lost. `src/reading/self/v2/personalizer.ts` passes `thinking: 'low'`. Done: thinking off (or cap about 8 k, or the
+  cards split over two calls), and a replay of profiles a and b returns `STOP`.
+- **P1 · The Personalizer validator drops a whole date when its label holds a chart term** ("Ketu detachment", "Mars
+  sub-period"): 9 of 11 cards lost their dates (`personalizerValidate.ts`). Done: the label is redacted or rewritten and
+  the date kept, with a test.
+- **P1 · The Personalizer ignores the profile's facts:** a retired person aged 60 and over got "executive
+  responsibility", "public pitches" and "workplace friction". Done: a prompt rule and example, plus a validator check
+  for career words when `work.status` is retired or between_jobs.
+- **P2 · Sentence/source alignment drops most body sentences:** 21 sentences on 11 cards, bodies of 12–42 words.
+  Done: a `{text, source}` sentence array in the schema, or lenient matching.
+- **P2 · `CHART_TERMS` misses "nodal axis", "sub-period", "karmic", "combinations", "annual cycle"; `MEDICAL_WORDS`
+  misses "inflammatory", "digestive", "nervous system" and diet advice.** These reached profile c's cards.
+- **P2 · Date pairs are not checked.** The Oracle invented 1–7-day "relief" spans (2026-12-12..13, 12-13..15, 12-13..19)
+  that pass `inStoredWindow` because each day lies inside the year span. The Personalizer paired an action start with a
+  chapter end. Done: pair checks in both validators.
+- **P2 · Double-prefixed evidence keys** `risk:risk:…` and `promise:promise:…` in the Oracle slice
+  (`src/reading/self/v2/slices.ts`, `` b.k(`risk:${r.id}`) `` where `r.id` already starts `risk:`; the same for promise).
+- **P2 · The Oracle costs 2.5× the §4.9 estimate.** 34.6 k provider tokens per call against 15.5 k by chars/4; 38.6 %
+  cached. Done: the stable part of the suffix moves into the prefix, and the Lab uses `countTokens`.
+- **P3 · The Oracle reports 0 thinking tokens** on gemini-3.8-flash with thinking `low`; unverified whether
+  `thoughtsTokenCount` is missing. Needs one tiny paid call with Sachin's yes.
+- **P3 · An Oracle self-contradiction is not caught:** "Saturn's tenth aspect onto this Moon" against the pattern's
+  (correct) third aspect from the 7th onto the 9th. Aspect claims are not checked against the digest.
+- **P3 · Sub-techniques take 9.1 s from this machine** (estimate 0.3 s). Check on the Lambda before acting.
+- **P3 · The 14-word headline cap withholds In short** (18-word headline); give the schema a length hint.
+- **P3 · Replay brief listed `19b210cd…` as a kundli.** It is the user id of `c584c0a3`, so doc 66 §13's "two stored
+  dossiers" are one chart. Choose a second test kundli for the next replay.

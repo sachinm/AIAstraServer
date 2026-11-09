@@ -1,0 +1,37 @@
+{
+  "id": "b",
+  "label": "man, 46–60, employed senior leader, married, grown children, focus career and family",
+  "pack": {
+    "ageBand": "46_60",
+    "gender": "man",
+    "role": "public",
+    "facts": {
+      "work": {
+        "status": "yes",
+        "level": "senior_leader"
+      },
+      "love": "married",
+      "children": "grown",
+      "focus": [
+        "career",
+        "family"
+      ]
+    },
+    "declined": [],
+    "lastConfirms": [],
+    "mood": null,
+    "hash": "e6351db69e700e46"
+  },
+  "status": "failed",
+  "doc": null,
+  "raw": null,
+  "cardStatus": {},
+  "gaps": [
+    "personalizer: no card document (finish MAX_TOKENS, 9368 chars)"
+  ],
+  "scan": [],
+  "rawScan": [],
+  "datesOutside": [],
+  "finishReason": "MAX_TOKENS",
+  "wordCounts": {}
+}
