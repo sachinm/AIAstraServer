@@ -1410,3 +1410,26 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   `cloudwatch:GetMetricData`, `events:ListRuleNamesByTarget`, `logs:StartQuery`, `logs:GetQueryResults`/`StopQuery`.
   Exact policy in `docs/admin/13-usage-lambda-calls.md` §5. Owner: deploy session (Sachin's typed yes). Done: the
   deployed page shows November's totals and they match the Lambda console's Monitor tab.
+
+## Filed 2026-11-09 by the loading overlay build (docs/loading-overlay/01–03, web and server `feat/loading-overlay`)
+
+- **P1 · The four Nano Banana illustrations are not generated: every Gemini key in the server `.env` is rejected.**
+  Sachin typed yes on 2026-11-09 (4 images + up to 4 retries, ≈ $0.16–0.32). `GEMINI_API_KEY`, `GEMINI_API_KEY_SACHIN`
+  and `GEMINI_API_KEY_NISHA` all answer `400 API_KEY_INVALID` (4 image calls + 3 free model-list probes, nothing
+  billed; log in `docs/loading-overlay/art/log.md`). The live paid key sits only in the Lambda env, which this machine
+  cannot read. Owner: Sachin (a valid key in the server `.env`), then any session runs
+  `node docs/loading-overlay/generate-art.mjs --web <web checkout>` and `npm run art:encrypt`. Until then the veil shows
+  the SVG placeholders (`AIAstra_WEB/art/overlay/`). Done: four `.webp` files pass the checklist in 03 §Acceptance.
+- **P1 · `OVERLAY_ART_KEY` must be set in two places before the art shows on staging:** the API Lambda
+  `aiastra-server-api` env and the Amplify build env of `AIAstra_WEB` (same 64 hex chars, `openssl rand -hex 32`).
+  Unset: `GET /api/assets/overlay-key` answers 404 and the veil shows its lines alone (by design). Owner: deploy session
+  (Sachin's typed yes). Done: a signed-in page on staging shows a chart behind the loading line.
+- **P2 · The veil has no art before sign-in** (session restore on `/`, `/signin`): the key needs a session. Decided in
+  docs/loading-overlay/01 §5; revisit only if the restore wait grows. Owner: web-dev.
+- **P2 · `tests/unit/env.test.ts` › `isAstroKundliConfigured returns false when base URL is empty` fails in a worktree
+  with the main checkout's `.env` copied in** (the test reads the real env). Pre-existing, unrelated to this build.
+  Owner: server-dev. Done: the test stubs its env.
+- **P2 · Web `src/routes.tsx` imported `boardsEnabled` without using it, failing `npm run typecheck` on `develop`
+  9f6b89d.** Removed on `feat/loading-overlay`. Owner: none (fixed). Noted so the theme/boards session knows.
+- **P3 · `OracleVeil` keeps its `offset` prop for callers but no longer uses it** (each veil picks a random line).
+  Remove the prop and the `useOracleLine` offsets in `SelfReading.tsx` when that file is next touched. Owner: web-dev.

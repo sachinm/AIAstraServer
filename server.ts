@@ -34,6 +34,7 @@ import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerSelfReadingRoutes } from './src/routes/selfReadingRoutes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
+import { registerAssetRoutes } from './src/routes/assetRoutes.js';
 import { registerResearchRoutes } from './src/routes/researchRoutes.js';
 import { pageTimingMiddleware, registerPageTimingRoutes } from './src/telemetry/pageTiming.js';
 import { assertOwnAccount } from './src/graphql/rbac.js';
@@ -349,6 +350,8 @@ registerAdminLabRoutes(app, { prisma });
 registerLifeReadingRoutes(app, { prisma, requireUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
+// the loading veil's art key for signed-in sessions (docs/loading-overlay/01 §4.1)
+registerAssetRoutes(app, { requireUser });
 // page execution timing beacon & progressive dashboard section streaming (docs/admin/08)
 registerPageTimingRoutes(app, { prisma, optionalUser, requireUser });
 // research staging & Self dashboard QA routes (docs/admin/09)
