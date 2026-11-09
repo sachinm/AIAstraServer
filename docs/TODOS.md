@@ -1418,12 +1418,13 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   Also confirm the rate: each of You, Love and Work costs one question per day it is opened, so a daily free user uses
   about 3 a day and runs out of 20 in about a week before asking anything. Owner: Sachin. Done: the rule confirmed, or the
   key changed (`boardChargeKey` in `src/billing/questionGate.ts`, e.g. one per day across boards).
-- **P2 · The You reading's background synthesis charges, but the web learns of it only on focus or reload.** The charge
-  runs in the `self-reading-build` invocation, which has no response to carry `usage`. The You reading client lives on
-  web `feat/self-reading-oracle-veil` (not on web `develop`); when it lands, call `refreshPlan()` when the polled Oracle
-  turns from `pending` to `ok`, and show the same "Made … · Good until …" stamp as the area boards from the reading's
-  `validUntil` and dossier date (doc 02 §10). Owner: web session that merges that branch. Done: the "N of 20" line moves
-  within one poll and the stamp shows.
+- **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
+  top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
+  (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
+- **P2 · Web checks that fail on web `develop` without this change.** `src/components/AskModal.test.tsx` (2 tests: the
+  conversation list order, "Old" not found; "Unpin My nature" not found), `src/lib/theme.test.ts` (SyntaxError on the
+  dynamic import of `scripts/gen-light-theme.mjs` under vitest on Windows), and `tsc -b`: `src/routes.tsx(24,1)`
+  `boardsEnabled` declared but never read. Found 2026-11-09. Done: all three green on web `develop`.
 - **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
   gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
 - **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
