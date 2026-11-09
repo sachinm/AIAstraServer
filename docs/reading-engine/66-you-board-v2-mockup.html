@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Self board v2 mockup</title>
+<style>
+:root{
+  color-scheme:dark;
+  --page:#06051a;--bg:#0b0a1f;--surface:#15142e;--surface2:#1c1b3a;--line:#2b2a52;--text:#f2f1fc;--muted:#b4b2d4;--dim:#8785ad;
+  --brand:#b9a6ff;--brand-soft:rgba(185,166,255,.16);
+  --teal:#4fd1c0;--teal-soft:rgba(79,209,192,.15);
+  --rose:#f58bb3;--rose-soft:rgba(245,139,179,.15);
+  --gold:#ecc04f;--gold-soft:rgba(236,192,79,.15);
+  --ok:#5fd39a;--ok-soft:rgba(95,211,154,.15);
+  --g1:#a78bfa;--g2:#f472b6;
+  --shadow:0 12px 48px rgba(0,0,0,.55);
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    color-scheme:light;
+    --page:#e7e6f2;--bg:#f6f5fc;--surface:#fff;--surface2:#f1effb;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;--dim:#6f6d94;
+    --brand:#5b21b6;--brand-soft:rgba(91,33,182,.1);--teal:#0a7a6d;--teal-soft:rgba(10,122,109,.1);
+    --rose:#b0306a;--rose-soft:rgba(176,48,106,.1);--gold:#7f5800;--gold-soft:rgba(127,88,0,.12);
+    --ok:#1f7a4c;--ok-soft:rgba(31,122,76,.12);--g1:#6d28d9;--g2:#be185d;--shadow:0 12px 48px rgba(40,30,90,.18);
+  }
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --page:#e7e6f2;--bg:#f6f5fc;--surface:#fff;--surface2:#f1effb;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;--dim:#6f6d94;
+  --brand:#5b21b6;--brand-soft:rgba(91,33,182,.1);--teal:#0a7a6d;--teal-soft:rgba(10,122,109,.1);
+  --rose:#b0306a;--rose-soft:rgba(176,48,106,.1);--gold:#7f5800;--gold-soft:rgba(127,88,0,.12);
+  --ok:#1f7a4c;--ok-soft:rgba(31,122,76,.12);--g1:#6d28d9;--g2:#be185d;--shadow:0 12px 48px rgba(40,30,90,.18);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.5;overflow-x:hidden}
+h1,h2,h3,h4,p,ul{margin:0}ul{padding:0;list-style:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+svg{display:block}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 16px 64px}
+.lede{max-width:860px;color:var(--muted);margin:6px 0 22px}
+.lede b{color:var(--text)}
+.sec{margin:44px 0 12px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:14px}
+.note{font-size:14px;color:var(--muted);padding:12px 14px;border-left:3px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0}
+.note b{color:var(--text)}
+
+/* shared pieces */
+.k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.ident{display:flex;align-items:center;gap:12px}
+.avatar{width:44px;height:44px;border-radius:50%;flex:none;background:
+  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'><circle cx='22' cy='16' r='9' fill='rgba(255,255,255,.88)'/><ellipse cx='22' cy='38' rx='15' ry='10' fill='rgba(255,255,255,.88)'/></svg>") center/cover,
+  linear-gradient(135deg,var(--g1),var(--g2));box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--teal)}
+.title{font-size:30px;line-height:1;font-weight:800;letter-spacing:-.02em}
+@supports (background-clip:text){.title{background:linear-gradient(90deg,var(--g1),var(--g2));-webkit-background-clip:text;background-clip:text;color:transparent}}
+.sub{font-size:12px;color:var(--dim);font-weight:600;margin-top:3px}
+.tone{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--teal);background:var(--teal-soft);padding:4px 10px;border-radius:999px}
+.tone i{width:8px;height:8px;border-radius:50%;background:var(--teal);display:inline-block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;min-height:0}
+.card .scroll{overflow:auto;min-height:0;flex:1;padding-right:6px;scrollbar-width:thin}
+.range{font-size:12px;color:var(--dim);margin-top:2px}
+.head{font-size:18px;font-weight:800;line-height:1.3;margin:8px 0 6px}
+.body{color:var(--muted);font-size:15px}
+.body+.body{margin-top:8px}
+.pat{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.pat li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;background:var(--surface2);border-radius:12px;padding:10px 12px;font-size:14px}
+.pat li b{display:block;font-size:14px}
+.pat li span{color:var(--muted)}
+.pat .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:14px;font-weight:800}
+.ic.r{background:var(--rose-soft);color:var(--rose)}.ic.g{background:var(--gold-soft);color:var(--gold)}.ic.t{background:var(--teal-soft);color:var(--teal)}
+.ladder{margin-top:10px;display:grid;gap:6px}
+.ladder li{display:grid;grid-template-columns:84px 1fr;gap:10px;font-size:14px;padding:8px 10px;border-radius:10px;background:var(--surface2)}
+.ladder li b{font-size:12px;letter-spacing:.04em;text-transform:uppercase;align-self:center}
+.ladder li:nth-child(1) b{color:var(--ok)}.ladder li:nth-child(2) b{color:var(--teal)}.ladder li:nth-child(3) b{color:var(--gold)}.ladder li:nth-child(4) b{color:var(--rose)}
+.ladder li span{color:var(--muted)}
+.dates{margin-top:10px;display:grid;gap:4px;font-size:13px}
+.dates li{display:grid;grid-template-columns:1fr auto;gap:8px;padding:6px 0;border-top:1px solid var(--line);color:var(--muted)}
+.dates li b{color:var(--text);font-weight:600}
+.details{margin-top:10px;font-size:13px;color:var(--dim);display:flex;justify-content:space-between;flex:none}
+.q{background:var(--surface2);border-radius:14px;padding:12px}
+.q p{font-size:15px;font-weight:600}
+.q .opts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.q .opts button{border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600}
+.q .opts button.y{background:var(--teal-soft);border-color:transparent;color:var(--teal)}
+.chip{flex:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;color:var(--muted);background:var(--surface)}
+.chip.on{background:var(--teal-soft);color:var(--teal);border-color:transparent;font-weight:800}
+.chip .n{display:inline-block;min-width:18px;height:18px;border-radius:9px;background:var(--rose);color:#fff;font-size:11px;text-align:center;line-height:18px;margin-left:6px}
+.chip.grp{border:0;background:none;color:var(--dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:7px 6px 7px 0;font-weight:700}
+.dots{display:flex;gap:6px;justify-content:center;align-items:center}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--teal);width:18px;border-radius:3px}
+.arrow{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--muted);font-size:18px;background:var(--surface)}
+.small{font-size:13px;color:var(--muted)}
+
+/* ===== Frame A: iPad / Surface landscape, no page scroll ===== */
+.tab{width:100%;max-width:1180px;aspect-ratio:1180/820;background:var(--bg);border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-rows:52px 56px auto 1fr 34px;padding:0 0 0;gap:0;margin:0 auto}
+.app{display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--line);background:var(--page);font-size:13px;color:var(--muted)}
+.app .logo{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--brand);font-size:15px}
+.app .usage{display:flex;align-items:center;gap:10px}.app .usage .track{width:160px;height:4px;border-radius:2px;background:var(--line);position:relative}.app .usage .track i{position:absolute;left:0;top:0;bottom:0;width:15%;border-radius:2px;background:var(--brand)}
+.app .nav{display:flex;align-items:center;gap:10px}.app .nav span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-weight:600}.app .nav .pill{background:var(--brand-soft);color:var(--brand);border-color:transparent}.app .nav .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--g1),var(--g2))}
+.tab .inner{display:contents}
+.tab .bar,.tab .hero,.tab .deck{margin:0 22px}.tab .hero{margin-top:10px}.tab .deck{margin-top:12px;margin-bottom:8px}
+.tab .appfoot{display:flex;justify-content:center;align-items:center;gap:14px;border-top:1px solid var(--line);background:var(--page);font-size:11px;color:var(--dim)}
+.tab .bar{display:flex;align-items:center;justify-content:space-between}
+.tab .bar .right{display:flex;gap:18px;align-items:center;font-size:13px;color:var(--muted)}
+.tab .bar .right b{color:var(--text)}
+.hero{display:grid;grid-template-columns:1.25fr 1fr .9fr;gap:18px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px 18px}
+.hero h2{font-size:22px;line-height:1.25;font-weight:800;margin:8px 0 4px}
+.hero p{color:var(--muted);font-size:15px}
+.strip .lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:2px}
+.why{font-size:13px;color:var(--brand);font-weight:600;margin-top:6px}
+.deck{display:grid;grid-template-rows:auto 1fr;gap:10px;min-height:0}
+.chips{display:flex;gap:8px;overflow:hidden;align-items:center}
+.rail{display:grid;grid-template-columns:1fr;gap:12px;align-items:stretch;min-height:0}
+.rail .arrow{align-self:center}
+.cards{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 28px)/3);gap:14px;overflow:hidden;min-height:0}
+.cards .card{min-height:0}
+.cards .card.peek{opacity:.55}
+.tab .foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim)}
+
+/* ===== Frame B: Duo two-fold ===== */
+.duo{display:grid;grid-template-columns:1fr 22px 1fr;max-width:1180px;margin:0 auto;aspect-ratio:1180/760;border-radius:28px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line);background:var(--page)}
+.duo .hinge{background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.15),rgba(0,0,0,.5))}
+.pane{background:var(--bg);padding:16px 18px;display:grid;grid-template-rows:auto 1fr auto;gap:12px;min-height:0;overflow:hidden}
+.pane.left{grid-template-rows:56px auto 1fr}
+.pane .stackq{display:grid;gap:10px;min-height:0;overflow:hidden}
+.list{display:grid;gap:6px;overflow:auto;min-height:0;scrollbar-width:thin}
+.list button{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;font-size:15px;font-weight:600;color:var(--muted);background:var(--surface);border:1px solid var(--line)}
+.list button.on{background:var(--teal-soft);color:var(--teal);border-color:transparent;font-weight:800}
+.list .grp{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:700;padding:8px 2px 0}
+.pane .card{height:100%}
+
+/* ===== sheet ===== */
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;max-width:520px}
+.sheet h3{font-size:18px;font-weight:800;margin-bottom:6px}
+.sheet p{color:var(--muted);font-size:14px}
+.sheet .cost{margin:12px 0;padding:10px 12px;border-radius:12px;background:var(--gold-soft);color:var(--gold);font-weight:700;font-size:14px}
+.sheet .opt{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-top:8px;font-size:14px}
+.sheet .opt span{color:var(--dim);font-size:12px}
+.sheet .opt.off{opacity:.5}
+.cta{margin-top:12px;display:flex;gap:8px}
+.cta button{flex:1;border-radius:12px;padding:10px;font-weight:700;font-size:14px;border:1px solid var(--line)}
+.cta .pri{background:var(--teal);color:#06051a;border-color:transparent}
+.two{display:grid;grid-template-columns:minmax(0,520px) 1fr;gap:24px;align-items:start}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.tbl th{color:var(--dim);font-size:12px;letter-spacing:.06em;text-transform:uppercase;border-top:0}
+.tbl td:first-child{font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 style="font-size:28px;font-weight:800">Self board v2: the screens</h1>
+<p class="lede">Companion to doc 66. Tablet and desktop first (iPad, Surface, laptop), then the two-fold Duo; the phone is not the design target for now. Four rules shape every frame: <b>the title is the person</b> (their selfie beside the word Self); <b>one voice, plain words</b> above the fold with chart terms only under "Chart details"; <b>no page scroll</b>: the screen is one fixed grid and the only scroll is inside a card that needs it; <b>cards swipe left and right</b> in a carousel with chips, arrows and dots. The horizon is the one the person asked for: six months back to six ahead on the hero, the sub-period for what is live, the whole chapter once, never a day or a week on this board.</p>
+
+<div class="sec">1 · iPad / Surface landscape: app header and footer pinned, the board between them, a three-card carousel. Nothing scrolls but the inside of a card</div>
+<div class="tab">
+  <div class="app">
+    <div class="logo">✦ AdAstra AI</div>
+    <div class="usage"><span><b style="color:var(--text)">3</b> of 20 questions used</span><span class="track"><i></i></span><span style="color:var(--brand);font-weight:600">Upgrade</span></div>
+    <div class="nav"><span>Happy Hour(s)</span><span>General Reading</span><span class="pill">Personalize</span><span class="av"></span></div>
+  </div>
+  <div class="bar">
+    <div class="ident"><div class="avatar" role="img" aria-label="Your photo"></div><div><div class="title">Self</div><div class="sub">Read on your Kaala clock · <u>Change</u> · built 9 Nov, next check 1 Jan</div></div></div>
+    <div class="right"><span class="arrow">‹</span><div class="dots"><i></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="arrow">›</span></div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <span class="tone"><i></i>Easing</span>
+      <h2>The heavy stretch since May is lifting. From 1 Dec you have room to start something.</h2>
+      <p>Money and effort carried the weight. Most of your chart agrees on the date.</p>
+      <div class="why">Why we think so ›</div>
+    </div>
+    <div class="strip">
+      <div class="k">Six months back · six ahead</div>
+      <svg viewBox="0 0 360 54" width="100%" height="54" role="img" aria-label="Six months back to six months ahead"><line x1="8" y1="30" x2="352" y2="30" stroke="var(--line)" stroke-width="2"/><rect x="8" y="24" width="176" height="12" rx="6" fill="var(--rose)" opacity=".55"/><rect x="184" y="24" width="64" height="12" rx="6" fill="var(--gold)" opacity=".6"/><rect x="248" y="24" width="104" height="12" rx="6" fill="var(--teal)" opacity=".7"/><line x1="190" y1="12" x2="190" y2="48" stroke="var(--text)" stroke-width="2"/><text x="190" y="9" fill="var(--text)" font-size="10" text-anchor="middle" font-weight="700">today</text><text x="248" y="52" fill="var(--muted)" font-size="10" text-anchor="middle">1 Dec</text></svg>
+      <div class="lbl"><span>May</span><span>Nov</span><span>May 2027</span></div>
+      <ul class="dates" style="margin-top:6px"><li><b>Pressure eases</b><span>12 Dec 2026</span></li><li><b>Sub-chapter ends</b><span>1 Jan 2027</span></li></ul>
+    </div>
+    <div class="q"><p>Has work felt heavier than usual since around May?</p><div class="opts"><button class="y">Yes</button><button>Partly</button><button>No</button><button>Rather not say</button></div><p class="small" style="margin-top:8px;font-weight:400">One question per visit. Your answer sharpens the board.</p></div>
+  </div>
+
+  <div class="deck">
+    <div class="chips">
+      <span class="chip grp">Now</span><span class="chip">Right now</span><span class="chip on">Where you get stuck<span class="n">2</span></span><span class="chip">This chapter</span>
+      <span class="chip grp" style="margin-left:8px">You</span><span class="chip">In short</span><span class="chip">Who you are</span><span class="chip">How you think</span><span class="chip">Body &amp; energy</span><span class="chip">Drive &amp; ambition</span><span class="chip">How you come across</span><span class="chip">Gifts &amp; knots</span>
+      <span class="chip grp" style="margin-left:8px">Time</span><span class="chip">Chapters</span><span class="chip">This year</span>
+    </div>
+    <div class="rail">
+      <div class="cards">
+        <div class="card">
+          <div class="k">Where you get stuck</div><div class="range">True until 1 Jan 2027</div>
+          <div class="scroll">
+            <div class="head">Ideas outrun their footing, and you fund the gap yourself.</div>
+            <p class="body">The heaviest pull this stretch is on money and effort; it eases on 12 Dec. Beneath it sits a standing pattern you will recognise.</p>
+            <ul class="pat">
+              <li><span class="ic r">!</span><div><b>You speculate past the evidence.</b><span>Ideas run ahead of the ground under them, strongest in this chapter, until Feb 2028.</span></div></li>
+              <li><span class="ic g">~</span><div><b>You carry other people's load.</b><span>Your judgement spends itself on partners before it spends on you.</span></div></li>
+            </ul>
+            <ul class="dates"><li><b>Heaviest</b><span>5 May – 12 Dec 2026</span></li><li><b>Standing</b><span>until Feb 2028</span></li></ul>
+          </div>
+          <div class="details"><span>Chart details ›</span><span>Strong</span></div>
+        </div>
+        <div class="card">
+          <div class="k">This chapter · growth edge</div><div class="range">16 Nov 2025 – 1 Jan 2027</div>
+          <div class="scroll">
+            <div class="head">This sub-chapter is teaching you to price your effort.</div>
+            <p class="body">What comes in goes out again to obligations and fixes. The lesson of the period is contracts, boundaries and finishing what is open before you open more.</p>
+            <ul class="ladder">
+              <li><b>Best</b><span>Audit every agreement and outflow; close two open loops a month.</span></li>
+              <li><b>Practical</b><span>No new partnership terms until the review in December.</span></li>
+              <li><b>Drift</b><span>Saying yes to one more thing; the cost lands in January.</span></li>
+              <li><b>Floor</b><span>Do not fund anyone else's shortfall before 1 Jan 2027.</span></li>
+            </ul>
+            <ul class="dates"><li><b>Review window</b><span>1 – 12 Dec 2026</span></li><li><b>Next sub-chapter</b><span>from 1 Jan 2027</span></li></ul>
+          </div>
+          <div class="details"><span>Chart details ›</span><span>Likely</span></div>
+        </div>
+        <div class="card peek">
+          <div class="k">How you come across</div><div class="range">Always · with what is live until 1 Jan 2027</div>
+          <div class="scroll">
+            <div class="head">Put together for the room, loose at home; and you looked your best when you felt most yourself, around 2019 to 2021.</div>
+            <p class="body">In public you dress for the role: considered, classic, a little formal, and people read you as the steady one before you speak. At home the care drops; comfort wins and you do not mind. Lately the public polish has slipped a notch, not from taste but from the weight of this stretch; it comes back as the pressure lifts in December.</p>
+            <ul class="pat">
+              <li><span class="ic t">✓</span><div><b>Your best-dressed years</b><span>2019 to 2021, when you felt most on your own ground.</span></div></li>
+              <li><span class="ic g">~</span><div><b>Now</b><span>Effort goes to others first; the mirror is last. Expected until 1 Jan 2027.</span></div></li>
+            </ul>
+            <div class="q" style="margin-top:10px"><p>Does that match: sharper for events, easy at home, and less bothered lately?</p><div class="opts"><button class="y">Yes, that's me</button><button>Partly</button><button>No</button></div></div>
+          </div>
+          <div class="details"><span>Chart details ›</span><span>Likely</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="appfoot"><span>For education and entertainment only, not advice. You are responsible for your decisions.</span><span>© 2026 AdAstra AI (vedic-astrology.app)</span><span><u>Terms</u> · <u>Privacy</u></span></div>
+</div>
+<div class="notes">
+  <div class="note"><b>The title is the person.</b> The selfie from the wizard (doc 52) with the word Self; no photo yet shows the Ganesh avatar and a one-tap "Add your photo". The clock line sits under the title, small, and opens the consent sheet (§4).</div>
+  <div class="note"><b>App header and footer stay, anchored to the viewport.</b> The header already carries the question counter, Happy Hour(s), General Reading, Personalize and the avatar; the footer carries the disclaimer, Terms and Privacy. The board lives between them and repeats none of it: its own row is the selfie, Self, the clock line with the build date, and the carousel controls.</div>
+  <div class="note"><b>One fixed grid, five rows.</b> App header 52 px, board row 56 px, hero, the carousel filling the rest, the app footer 34 px. The frame never scrolls; a card whose text is longer than its slot scrolls inside its own body, header and footer pinned. Doc 45 rule 11 holds for the whole page, not only inside one tab.</div>
+  <div class="note"><b>The hero is the shade.</b> Tone word, one plain sentence naming the life area and the date, the six-month strip, the confirm question. Gone: the internal id, "Present Tone Consensus", "7 clocks", "Your chart is divided". A split verdict is withheld, never shown.</div>
+  <div class="note"><b>Three visible, one in focus.</b> Three cards across at 1180 px (four at 1440, two at 1024 portrait); the rightmost is dimmed as the "peek" that invites the swipe. Chips are grouped Now · You · Time; a red count marks what is new since the last visit.</div>
+</div>
+
+<div class="sec">2 · Surface Duo / two-fold: the left screen holds you, the right screen holds the card</div>
+<div class="duo">
+  <div class="pane left">
+    <div class="ident"><div class="avatar"></div><div><div class="title" style="font-size:26px">Self</div><div class="sub">Kaala clock · <u>Change</u> · built 9 Nov</div></div></div>
+    <div class="hero" style="grid-template-columns:1fr;gap:10px;padding:14px">
+      <div><span class="tone"><i></i>Easing</span><h2 style="font-size:19px">The heavy stretch since May is lifting. From 1 Dec you have room to start.</h2><p style="font-size:14px">Money and effort carried the weight.</p></div>
+      <svg viewBox="0 0 360 40" width="100%" height="40"><line x1="8" y1="22" x2="352" y2="22" stroke="var(--line)" stroke-width="2"/><rect x="8" y="16" width="176" height="12" rx="6" fill="var(--rose)" opacity=".55"/><rect x="184" y="16" width="64" height="12" rx="6" fill="var(--gold)" opacity=".6"/><rect x="248" y="16" width="104" height="12" rx="6" fill="var(--teal)" opacity=".7"/><line x1="190" y1="6" x2="190" y2="38" stroke="var(--text)" stroke-width="2"/><text x="248" y="38" fill="var(--muted)" font-size="10" text-anchor="middle">1 Dec</text></svg>
+      <div class="q" style="padding:10px"><p style="font-size:14px">Has work felt heavier since around May?</p><div class="opts"><button class="y">Yes</button><button>Partly</button><button>No</button></div></div>
+    </div>
+    <div class="list">
+      <div class="grp">Now</div><button>Right now</button><button class="on">Where you get stuck <span class="chip n" style="padding:0;border:0;background:var(--rose);color:#fff;min-width:18px;height:18px;line-height:18px;border-radius:9px;font-size:11px;text-align:center">2</span></button><button>This chapter</button>
+      <div class="grp">You</div><button>In short</button><button>Who you are</button><button>How you think</button><button>Body &amp; energy</button><button>Drive &amp; ambition</button><button>How you come across</button><button>Gifts &amp; knots</button>
+      <div class="grp">Time</div><button>Chapters</button><button>This year</button>
+    </div>
+  </div>
+  <div class="hinge"></div>
+  <div class="pane">
+    <div style="display:flex;justify-content:space-between;align-items:center"><div class="dots"><i></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div style="display:flex;gap:8px"><span class="arrow">‹</span><span class="arrow">›</span></div></div>
+    <div class="card">
+      <div class="k">How you think</div><div class="range">Always · with what is live until 1 Jan 2027</div>
+      <div class="scroll">
+        <div class="head">You feel first and reason second, then research your way back to steady ground.</div>
+        <p class="body">Your feelings run deep and quick to alarm, and they settle through digging into what is really going on. You decide best after you have looked under the surface, and worst when you are rushed.</p>
+        <div class="k" style="margin-top:12px">Patterns you repeat</div>
+        <ul class="pat">
+          <li><span class="ic r">!</span><div><b>You speculate past the evidence.</b><span>Ideas run ahead of the ground under them, strongest in this chapter, until Feb 2028.</span></div></li>
+          <li><span class="ic g">~</span><div><b>You carry other people's load.</b><span>Your judgement spends itself on partners before it spends on you.</span></div></li>
+          <li><span class="ic t">✓</span><div><b>You recover through structure.</b><span>Routine and written reflection are how you have always come back.</span></div></li>
+        </ul>
+        <ul class="ladder">
+          <li><b>Best</b><span>Decide after a written look under the surface; sleep on anything new.</span></li>
+          <li><b>Practical</b><span>One trusted person holds the numbers before you commit.</span></li>
+          <li><b>Drift</b><span>Fast yeses when alarmed; the regret arrives in weeks.</span></li>
+          <li><b>Floor</b><span>No money decision in the same hour as the news that prompted it.</span></li>
+        </ul>
+      </div>
+      <div class="details"><span>Chart details ›</span><span>Strong</span></div>
+    </div>
+    <div class="small" style="text-align:center">Swipe across the hinge to move cards; the left screen stays.</div>
+  </div>
+</div>
+<div class="notes">
+  <div class="note"><b>Two screens, two jobs.</b> Left: who you are and where you are (selfie, hero, question, the area list). Right: one card at a time, swiped left and right. The hinge never splits a card. Folded to one screen the Duo falls back to the carousel of §1 at two cards.</div>
+  <div class="note"><b>Spanning rule.</b> Hero and list are the "stay" pane; the card is the "move" pane. Chart details opens as a sheet over the right pane only, so the person keeps their place.</div>
+  <div class="note"><b>Same data, same contract.</b> Both frames render the same `PersonalCardDoc` per area; only the shell differs. One `Carousel` and one `Chips` component serve Self, Love, Work and Lucky times (today the scroll-snap code is copied into five files).</div>
+</div>
+
+<div class="sec">3 · Desktop 1440 and iPad portrait: the same grid at four and two cards</div>
+<div class="notes" style="margin-top:0">
+  <div class="note"><b>1440 px and up.</b> Four cards across (three in focus, one peek); the hero gains a fourth column with "What to do this month" (the ladder's Best and Practical lines for the ranked area). Still no page scroll.</div>
+  <div class="note"><b>1024 portrait (iPad upright, Surface portrait).</b> Two cards across; the hero's question moves under the sentence; chips collapse to the three group names with the active area's name, tap to expand. Still no page scroll.</div>
+  <div class="note"><b>Phone (later).</b> One card across with the hero collapsed to the tone word and sentence; we are not designing for it now.</div>
+</div>
+
+<div class="sec">4 · The clock switch asks first and is counted</div>
+<div class="two">
+<div class="sheet">
+  <h3>Read your board on a different clock?</h3>
+  <p>Your board is written on the Kaala clock, the one your chart qualifies for. Reading it on another clock rebuilds every area with that clock's dates, on Self, Love and Work.</p>
+  <div class="cost">Uses 1 of your 20 questions this month</div>
+  <div class="opt"><div>Vimshottari<br><span>The standard clock, read from your Moon's star</span></div><span>Applies</span></div>
+  <div class="opt"><div>Yogini<br><span>A 36-year cycle, strong for timing of events</span></div><span>Applies</span></div>
+  <div class="opt off"><div>Dwisaptati Sama<br><span>Only when the lagna lord sits in the 7th or 1st</span></div><span>Does not apply to your chart</span></div>
+  <div class="cta"><button>Not now</button><button class="pri">Rebuild on Yogini · 1 question</button></div>
+</div>
+<div class="notes" style="margin-top:0;grid-template-columns:1fr">
+  <div class="note"><b>Consent and the ledger.</b> The sheet names the cost before the tap; the tap reserves a question with the key <code>board:self:&lt;day&gt;:clock:&lt;system&gt;</code> (one charge per system per day, a repeat is free) and writes a <code>clock_viewed</code> event (user, from, to, charged yes/no). The counter ticks within a second of the board appearing.</div>
+  <div class="note"><b>Applicability from the engine.</b> Conditional clocks the engine marks as not applying are greyed with the reason in one line and cannot be selected; the list is the clocks that apply plus the two confirming ones, not every system with stored periods. The default is the clock the engine qualifies as primary for this chart, never Vimshottari by habit.</div>
+  <div class="note"><b>Says what else changes.</b> Because the preferred clock is per kundli, the sheet says Love and Work are rebuilt too.</div>
+</div>
+</div>
+
+<div class="sec">5 · What each area is built from, and how often it is rebuilt</div>
+<table class="tbl">
+<tr><th>Area</th><th>Reads (engine rows only)</th><th>Horizon shown</th><th>Rebuilt when</th></tr>
+<tr><td>Right now (hero)</td><td>Running main, sub and sub-sub period lords on the primary clock and the houses they own and sit in; slow transits over lagna, Moon and lagna lord; Sade Sati phase; the engine's pressure inventory windows</td><td>6 months back to 6 ahead</td><td>Sub-sub period boundary, transit snapshot (weekly), a confirm answer</td></tr>
+<tr><td>Where you get stuck</td><td>Heaviest live affliction with its release date; standing afflictions; repeated patterns from Moon, Mercury, Rahu, Saturn placements and avasthas</td><td>Live window + standing</td><td>Sub-period boundary</td></tr>
+<tr><td>This chapter</td><td>Running sub-period lord, its relation to the main lord, houses activated; the growth ladder</td><td>Sub-period</td><td>Sub-period boundary</td></tr>
+<tr><td>In short</td><td>Lagna lord, running tension, present sub-period</td><td>Sub-period</td><td>Sub-period boundary</td></tr>
+<tr><td>Who you are</td><td>Lagna, lagna lord dignity and avastha, Arudha Lagna, D9 lagna</td><td>Always</td><td>Chapter change or digest version</td></tr>
+<tr><td>How you think</td><td>Moon, Mercury, 4th and 5th frames, lunar yogas, Neecha Bhanga; patterns</td><td>Always + live</td><td>Chapter change</td></tr>
+<tr><td>Body &amp; energy</td><td>1st, 6th, 8th, lagna lord, Sun, Moon, Mars, Saturn; D30 shape; live lord on body houses; Saturn and Mars transits</td><td>Live window + standing</td><td>Sub-period boundary, transit snapshot</td></tr>
+<tr><td>Drive &amp; ambition</td><td>3rd, 10th, 11th, Mars, Sun, Saturn, Rahu; Atmakaraka and Karakamsa (what you are really after); Amatyakaraka; D10 lagna; Dhana yogas; 5th and Rahu for risk appetite</td><td>Always + live</td><td>Chapter change</td></tr>
+<tr><td>How you come across</td><td>1st house frame and lagna lord (bearing, build); planets in and aspecting the 1st (the style they lend); Venus by sign, house, dignity and avastha (adornment, taste, care); 2nd house (face and voice); Arudha Lagna against the Moon and 4th (public polish against private ease); periods of Venus and the lagna lord on the primary clock (when you looked your best, when the care drops)</td><td>Always + live, with one past window named</td><td>Chapter change; the live line at the sub-period boundary</td></tr>
+<tr><td>Gifts &amp; knots</td><td>Yoga rows paired: the gift and the knot it becomes under pressure</td><td>Always</td><td>Digest version</td></tr>
+<tr><td>Chapters</td><td>Previous, running, next main period with the sub-period strip</td><td>Whole chapter</td><td>Main period boundary only</td></tr>
+<tr><td>This year</td><td>Year chart, year lord, running short clock</td><td>12 months</td><td>Year boundary</td></tr>
+</table>
+<p class="small" style="margin-top:10px">"Your soul's aim" is folded into Drive &amp; ambition. "How you come across" is the affirming card: it names a past window the person can check ("your best-dressed years") and a public/private contrast, and asks for a yes; a yes is the fastest way to earn the right to say harder things elsewhere. Nothing on this board is shown at a day or week grain; that is the Today and Lucky times boards.</p>
+</div>
+</body>
+</html>
