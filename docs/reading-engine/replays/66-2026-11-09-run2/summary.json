@@ -1,0 +1,285 @@
+{
+  "asOf": "2026-11-09",
+  "dry": false,
+  "wallMs": 72734,
+  "calls": [
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.sky",
+      "callId": "family:family.sky",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5142,
+      "promptTokens": 2252,
+      "cachedTokens": 2139,
+      "outputTokens": 662,
+      "thoughtTokens": 948,
+      "costUsd": 0.002497,
+      "worstUsd": 0.003088,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.varga",
+      "callId": "family:family.varga",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5271,
+      "promptTokens": 6104,
+      "cachedTokens": 6035,
+      "outputTokens": 639,
+      "thoughtTokens": 903,
+      "costUsd": 0.002481,
+      "worstUsd": 0.003176,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.year",
+      "callId": "family:family.year",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5455,
+      "promptTokens": 69924,
+      "cachedTokens": 69769,
+      "outputTokens": 548,
+      "thoughtTokens": 1085,
+      "costUsd": 0.004232,
+      "worstUsd": 0.004433,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.dasha",
+      "callId": "family:family.dasha",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 6153,
+      "promptTokens": 3633,
+      "cachedTokens": 3522,
+      "outputTokens": 654,
+      "thoughtTokens": 1342,
+      "costUsd": 0.00311,
+      "worstUsd": 0.003127,
+      "status": "ok",
+      "finishReason": "MAX_TOKENS",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.rasi",
+      "callId": "family:family.rasi",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 6707,
+      "promptTokens": 5319,
+      "cachedTokens": 5162,
+      "outputTokens": 951,
+      "thoughtTokens": 1005,
+      "costUsd": 0.003102,
+      "worstUsd": 0.003192,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.c",
+      "model": "gemini-3.8-flash",
+      "wallMs": 24132,
+      "promptTokens": 34953,
+      "cachedTokens": 31371,
+      "outputTokens": 3063,
+      "thoughtTokens": 0,
+      "costUsd": 0.016526,
+      "worstUsd": 0.037013,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.a",
+      "model": "gemini-3.8-flash",
+      "wallMs": 24566,
+      "promptTokens": 34958,
+      "cachedTokens": 31371,
+      "outputTokens": 3362,
+      "thoughtTokens": 0,
+      "costUsd": 0.017651,
+      "worstUsd": 0.037019,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.b",
+      "model": "gemini-3.8-flash",
+      "wallMs": 25824,
+      "promptTokens": 34959,
+      "cachedTokens": 31371,
+      "outputTokens": 3402,
+      "thoughtTokens": 0,
+      "costUsd": 0.017801,
+      "worstUsd": 0.037017,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.c",
+      "agent": "self.personalizer",
+      "callId": "personalizer.c:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 10384,
+      "promptTokens": 8949,
+      "cachedTokens": 8550,
+      "outputTokens": 4075,
+      "thoughtTokens": 0,
+      "costUsd": 0.006426,
+      "worstUsd": 0.012515,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.b",
+      "agent": "self.personalizer",
+      "callId": "personalizer.b:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 11557,
+      "promptTokens": 8807,
+      "cachedTokens": 8550,
+      "outputTokens": 4121,
+      "thoughtTokens": 0,
+      "costUsd": 0.00646,
+      "worstUsd": 0.012439,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.a",
+      "agent": "self.personalizer",
+      "callId": "personalizer.a:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 12200,
+      "promptTokens": 8828,
+      "cachedTokens": 8550,
+      "outputTokens": 4303,
+      "thoughtTokens": 0,
+      "costUsd": 0.006738,
+      "worstUsd": 0.01245,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    }
+  ],
+  "spentUsd": 0.087023,
+  "storageEstUsd": 0.063274,
+  "storageTokens": 126548,
+  "cacheDelete": {
+    "deleted": 7,
+    "failed": 15,
+    "memoryCleared": 7,
+    "lifetimeMin": 1.04
+  },
+  "capWaits": [],
+  "stageCount": {
+    "family": 5,
+    "oracle": 3,
+    "personalizer": 3
+  },
+  "refusals": [],
+  "blockedWrites": [
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe"
+  ],
+  "explicitCache": true,
+  "cacheStats": {
+    "created": 7,
+    "adopted": 0,
+    "hits": 11,
+    "misses": 0,
+    "extended": 0,
+    "errors": 0
+  },
+  "env": {
+    "READING_EXPLICIT_CACHE": "1",
+    "SELF_V2_BUILD": "1",
+    "SELF_V2_PRESSURE_PULL": "0"
+  },
+  "models": {
+    "reader": "gemini-3.1-flash-lite",
+    "oracle": "gemini-3.8-flash",
+    "personalizer": "gemini-3.1-flash-lite"
+  },
+  "caps": {
+    "oracleMaxOut": 8000,
+    "personalizerMaxOut": 8000,
+    "personalizerRetryMaxOut": 12000
+  },
+  "prompts": {
+    "bundle": "67e23846108f",
+    "oracle": "oracle/self-areas-v2 d4a10513aa231e477bcda3d4",
+    "personalizer": "personalizer/self 22c214f69e3e387291776b6c"
+  },
+  "oracleCalls": [
+    {
+      "call": "oracle.a",
+      "areas": [
+        "diagnosis",
+        "stuck",
+        "chapter",
+        "chapters"
+      ]
+    },
+    {
+      "call": "oracle.b",
+      "areas": [
+        "lagna",
+        "mind",
+        "drive",
+        "presence"
+      ]
+    },
+    {
+      "call": "oracle.c",
+      "areas": [
+        "body",
+        "yogas",
+        "year"
+      ]
+    }
+  ]
+}
