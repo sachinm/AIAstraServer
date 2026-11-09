@@ -1371,6 +1371,14 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
   background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
   they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P1 · Rotate the kundli-sync-sweep event token.** 2026-11-09: the EventBridge rule `kundli-sync-sweep` carries the
+  token in its input in plain text, and the deploy session printed it into its tool output while reading the rules.
+  Owner: deploy session, with Sachin's yes. Done: a new token in the Lambda env and in both sweep rules' input; the old
+  one refused by `/events`.
+- **P2 · No schedule runs the LLM cache sweep.** 2026-11-09: no EventBridge rule targets `aiastra-server-api` with the
+  cache-sweep event, while `READING_EXPLICIT_CACHE=1` is set on the Lambda, so explicit Gemini caches and reader findings
+  are swept only by the in-process timer of a warm container. Owner: deploy session. Done: a daily rule sending the
+  cache-sweep event, or a note that the TTL alone is enough.
 - **P1 · The digest sweep rebuilds every ready kundli 10-14 times a day.** 2026-11-09, from agent_runs: in 24 h,
   351 `digest.build` runs (about 58 min of build time) across 32 ready kundlis, while the sweep itself fires on time
   every 5 min. Cause: `runDigestSweep` tops up the annual set of 3 random ready kundlis per sweep and calls
