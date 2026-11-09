@@ -87,7 +87,7 @@ describe('catalog', () => {
     expect(CHART_TYPE_BY_ID.get('transit_contacts')).toMatchObject({ radhaType: 'transit_contacts', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('prashna')).toMatchObject({ radhaType: 'prashna', family: 'prashna', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')?.fixedParams).toEqual({ system: 'tithi_ashtottari' });
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range', 'daily_grade', 'muhurta', 'transit_ashtakavarga']);
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range', 'daily_grade', 'muhurta', 'transit_ashtakavarga', 'pressure_inventory']);
     expect(chartDataTypeIds()).not.toContain('prashna');
     expect(chartDataTypeIds()).not.toContain('transit');
     expect(chartDataTypeIds()).not.toContain('transit_contacts');
@@ -144,7 +144,13 @@ describe('catalog', () => {
         ['daily_grade', 'muhurta', 'transit_ashtakavarga', 'reading_tables', 'avasthas'].includes(id));
     const seedRow = (t: (typeof BUILTIN_CHART_TYPES)[number], label = t.label) =>
       `('${t.id}', '${t.family}', '${t.radhaType}', '${t.changeClass}', '${t.tier}', '${t.variantKind}', ${t.served}, ${t.calcVersion == null ? 'NULL' : `'${t.calcVersion}'`}, ${t.legacyColumn ? `'${t.legacyColumn}'` : 'NULL'}, ${t.sortOrder}, '${label}')`;
-    for (const t of BUILTIN_CHART_TYPES) {
+    // pressure_inventory (Self v2, doc 66 §4.3) has no seed migration by design: the loader creates its row on the first
+    // pull (src/reading/self/sub/pressure.ts ensureTypeRow), so it is checked there instead of in a migration.
+    const loaderSeeded = ['pressure_inventory'];
+    const pressureSrc = readFileSync(path.resolve('src/reading/self/sub/pressure.ts'), 'utf8');
+    expect(pressureSrc).toMatch(/async function ensureTypeRow[\s\S]*chartDataType\.upsert/);
+    for (const id of loaderSeeded) for (const sql of [m7, m9, m11, m12, m14, m15, m16, m17, m34]) expect(sql).not.toContain(`('${id}', `);
+    for (const t of BUILTIN_CHART_TYPES.filter((x) => !loaderSeeded.includes(x.id))) {
       const sql = isM34(t.id) ? m34 : isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
       expect(sql).toContain(seedRow(t, m14Relabel[t.id] ?? t.label));
       if (m14Relabel[t.id]) {

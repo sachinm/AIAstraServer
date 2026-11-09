@@ -1780,3 +1780,29 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 - **P3 · The `pressure_inventory` chart type row is created by the loader** (`chart_data_types`, served false) the first
   time a pull is attempted, because `kundli_data.data_type` has a foreign key and no migration was allowed. The catalog
   sync marks it served once the engine lists the type. Owner: none needed; noted for whoever reads the table.
+
+## Filed 2026-11-09 by the Self v2 regression check (branch fix/self-v2-test-regressions)
+
+Ten tests in seven files fail on `9595614` (the last commit before any Self v2 code) as well as on `c5f0c77`, alone and
+inside the full suite alike; they are not Self v2 regressions and were left as they are. Likely shared cause for the
+env-driven ones: `tests/setup.ts` runs `dotenv.config()`, so the worktree's local `.env` (rebuilt from the Lambda:
+`ASTROKUNDLI_TRANSPORT`, `GEMINI_MAX_OUTPUT_TOKENS`, `GEMINI_THINKING_*`, `READING_EXPLICIT_CACHE`, model ids) leaks into
+tests that assume those vars are unset. Owner: whoever next touches tests/setup.ts (load `.env` only outside vitest, or
+have these tests clear the vars they depend on).
+- **P2 · `tests/unit/astroKundliExportSpacing.test.ts`, all four "keeps the (start) spacing ..." cases:**
+  `expected ~250 to be greater than or equal to 1090`. Fails on 9595614 too.
+- **P2 · `tests/unit/env.test.ts` > isAstroKundliConfigured > "returns false when base URL is empty for current env":**
+  `expected true to be false` (lambda transport from `.env` wins over the empty base URL). Fails on 9595614 too.
+- **P2 · `tests/unit/geminiChatService.test.ts` > "uses GEMINI_MAX_OUTPUT_TOKENS when set":** `expected undefined to be
+  4096`. Fails on 9595614 too.
+- **P2 · `tests/unit/reading/promptCache.test.ts` > "is off by default: no cache created, full prompt sent":** `expected
+  [ { …(5) } ] to have a length of +0 but got 1` (`READING_EXPLICIT_CACHE` set in `.env`). Fails on 9595614 too.
+- **P2 · `tests/unit/reading/run.test.ts` > "sends the thinking config in the request body ...":** expected
+  `{ thinkingBudget: 2048, … }`, received `{ thinkingLevel: 'medium', … }`. Fails on 9595614 too.
+- **P2 · `tests/unit/reading/clarify.test.ts` > "falls back to the rule question on error, junk, a long question or
+  unsafe wording":** expected "Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?", received
+  "Shall I look until 7 Sep 2027, or a different stretch of time?". Fails on 9595614 too. Already fixed on develop by
+  `c9db440` (clears the planner's in-memory clarify cache in `beforeEach`); not repeated on this branch.
+- **P2 · `tests/unit/reading/annualPrashna.test.ts` > model planner > "a ruled-out question never reaches the model; bad
+  model output keeps the rules":** `expected true to be false`. Fails on 9595614 too. Same clarify-cache cause, already
+  fixed on develop by `c9db440`.
