@@ -42,7 +42,7 @@ describe('kundli-digest event token guard', () => {
 
 describe('handling', () => {
   const ok = { status: 'ready' as const, rows: 10, activation: 5, ms: 1 };
-  const topUpOk = { wanted: 210, present: 200, requested: 10, fetched: 0, failed: 0, remaining: 10 };
+  const topUpOk = { wanted: 210, present: 200, requested: 10, fetched: 0, failed: 0, remaining: 10, backedOff: 0, yearsCompleted: [] as number[] };
 
   it('one kundli: tops up the annual set (capped) then builds, and logs both runs', async () => {
     const f = fakeDigestPrisma({ kundlis: [{ id: 'k1' }] });
@@ -57,7 +57,7 @@ describe('handling', () => {
     expect(f.calls.agentRuns).toBe(2);
   });
 
-  it('the sweep builds candidates one after another, stops at the budget, and marks stale after a top-up that stored rows', async () => {
+  it('the sweep builds candidates one after another, stops at the budget, and marks stale only after a top-up that completed a year', async () => {
     const f = fakeDigestPrisma({ kundlis: [{ id: 'r1', digest_status: 'ready' }] });
     let t = 0;
     const built: string[] = [];
@@ -79,9 +79,15 @@ describe('handling', () => {
     // 75 s used of 60: no time left for top-ups
     expect(res.topUps).toEqual([]);
 
+    // rows fetched but no year completed: the digest stays ready (no rebuild per fetched row)
     t = 0;
     const res2 = await runDigestSweep({ prisma: f.prisma as never, now: () => t, maxMs: 60_000, find: async () => ['a'], build: async () => ok, topUpCandidates: async () => ['r1'], topUp: async () => ({ ...topUpOk, fetched: 3 }) });
-    expect(res2.topUps).toEqual([{ kundliId: 'r1', fetched: 3, remaining: 10 }]);
+    expect(res2.topUps).toEqual([{ kundliId: 'r1', fetched: 3, remaining: 10, yearsCompleted: [] }]);
+    expect(f.kundlis.get('r1')!.digest_status).toBe('ready');
+
+    // a year completed: stale, so the next sweep rebuilds it once
+    t = 0;
+    await runDigestSweep({ prisma: f.prisma as never, now: () => t, maxMs: 60_000, find: async () => [], build: async () => ok, topUpCandidates: async () => ['r1'], topUp: async () => ({ ...topUpOk, fetched: 3, yearsCompleted: [2027] }) });
     expect(f.kundlis.get('r1')!.digest_status).toBe('stale');
 
     t = 0;

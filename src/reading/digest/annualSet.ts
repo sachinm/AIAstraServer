@@ -36,6 +36,24 @@ export function annualSetKeys(year: number, span = ANNUAL_SPAN_YEARS): string[] 
   return keys;
 }
 
+/** The year of an annual key ('annual.varsha@2027;divisional_chart_factor=9' -> 2027) */
+function keyYear(k: string): number {
+  return Number(/@(\d{4})/.exec(k)?.[1]);
+}
+
+/** Years complete after this run that were not complete before it. */
+function completedYears(keys: string[], before: Record<string, ChartItem>, got: Record<string, ChartItem>): number[] {
+  const years = new Map<number, { before: boolean; after: boolean }>();
+  for (const k of keys) {
+    const y = keyYear(k);
+    const was = before[k]?.status === 'ready';
+    const is = was || got[k]?.status === 'ready';
+    const cur = years.get(y) ?? { before: true, after: true };
+    years.set(y, { before: cur.before && was, after: cur.after && is });
+  }
+  return [...years].filter(([, v]) => v.after && !v.before).map(([y]) => y);
+}
+
 export interface AnnualSetResult {
   wanted: number;
   present: number;
@@ -45,7 +63,14 @@ export interface AnnualSetResult {
   failed: number;
   /** still missing after this run (the next run continues) */
   remaining: number;
+  /** failed rows left alone this run because they tried within ANNUAL_FAILED_BACKOFF_MS */
+  backedOff: number;
+  /** years whose every key is ready now and was not before this run: the only change the digest needs a rebuild for */
+  yearsCompleted: number[];
 }
+
+/** A failed annual row is retried at most this often (the store's own rule is a minute, which the 5-minute sweep hit every time) */
+export const ANNUAL_FAILED_BACKOFF_MS = 6 * 3_600_000;
 
 /**
  * Top up one kundli's annual set: read what is stored (no engine call), then fetch at most `maxCalls` missing keys.
@@ -61,7 +86,14 @@ export async function ensureAnnualSet(
   const maxCalls = Math.max(0, Math.floor(opts.maxCalls ?? annualMaxCalls()));
   const stored = await ensureChartData(deps, kundliId, keys, { ...opts, noFetch: true });
   const missing = keys.filter((k) => stored[k]?.status !== 'ready');
-  const batch = missing.slice(0, maxCalls);
+  const now = opts.now?.() ?? Date.now();
+  const coolingDown = (k: string) => {
+    const it = stored[k];
+    if (!it || (it.status !== 'failed' && it.status !== 'unsupported') || !it.triedAt) return false;
+    return now - Date.parse(it.triedAt) < ANNUAL_FAILED_BACKOFF_MS;
+  };
+  const due = missing.filter((k) => !coolingDown(k));
+  const batch = due.slice(0, maxCalls);
   let got: Record<string, ChartItem> = {};
   if (batch.length) got = await ensureChartData(deps, kundliId, batch, { ...opts, noFetch: false, concurrency: opts.concurrency ?? 1 });
   const fetched = batch.filter((k) => got[k]?.status === 'ready' && got[k]?.source === 'radha').length;
@@ -73,5 +105,7 @@ export async function ensureAnnualSet(
     fetched,
     failed: batch.filter((k) => got[k] && got[k]!.status !== 'ready').length,
     remaining: missing.length - nowReady,
+    backedOff: missing.length - due.length,
+    yearsCompleted: completedYears(keys, stored, got),
   };
 }

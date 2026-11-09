@@ -28,6 +28,8 @@ export interface ChartItem {
   source: ItemSource;
   payload: unknown;
   error?: string;
+  /** when a failed or unsupported row last tried (ISO), so callers can back off */
+  triedAt?: string;
 }
 
 export interface RowKey {
@@ -183,7 +185,7 @@ function toItem(key: string, id: string, variant: string, row: StoredRow | undef
   if (!row) return { key, id, variant, status: 'missing', source: null, payload: null };
   if (row.status === 'ready') return { key, id, variant, status: 'ready', source: 'db', payload: row.payload };
   if (row.status === 'fetching') return { key, id, variant, status: 'missing', source: null, payload: null, error: 'still fetching' };
-  return { key, id, variant, status: row.status, source: null, payload: null, ...(row.error ? { error: row.error } : {}) };
+  return { key, id, variant, status: row.status, source: null, payload: null, ...(row.error ? { error: row.error } : {}), ...(row.fetchedAt ? { triedAt: row.fetchedAt.toISOString() } : {}) };
 }
 
 async function pool<T>(items: T[], n: number, run: (t: T) => Promise<void>): Promise<void> {

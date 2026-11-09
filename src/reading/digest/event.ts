@@ -82,7 +82,7 @@ async function runTopUp(deps: DigestEventDeps, kundliId: string, maxCalls: numbe
   try {
     return await withAgentRun(deps.prisma, 'digest.annual_set', { task: 'annual-top-up', technique: 'digest.annual_set', kundliId, input: { max_calls: maxCalls } }, async () => {
       const r = await (deps.topUp ?? defaultTopUp)(deps.prisma, kundliId, maxCalls);
-      return { value: r, output: { wanted: r.wanted, present: r.present, requested: r.requested, fetched: r.fetched, failed: r.failed, remaining: r.remaining, writes: [`kundli_charts:${r.fetched}`] } };
+      return { value: r, output: { wanted: r.wanted, present: r.present, requested: r.requested, fetched: r.fetched, failed: r.failed, remaining: r.remaining, backed_off: r.backedOff, years_completed: r.yearsCompleted, writes: [`kundli_charts:${r.fetched}`] } };
     });
   } catch (err) {
     queueLogError({ event: 'digest_annual_topup_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });
@@ -141,7 +141,7 @@ export async function findDigestCandidates(prisma: PrismaClient, batch: number, 
 export interface DigestSweepResult {
   candidates: number;
   built: Array<{ kundliId: string; status: string; rows: number; activation: number; ms: number }>;
-  topUps: Array<{ kundliId: string; fetched: number; remaining: number }>;
+  topUps: Array<{ kundliId: string; fetched: number; remaining: number; yearsCompleted: number[] }>;
   stoppedForBudget: boolean;
 }
 
@@ -179,9 +179,10 @@ export async function runDigestSweep(deps: DigestEventDeps & { find?: typeof fin
       if (calls <= 0) break;
       const r = await runTopUp(deps, id, calls);
       if (!r) continue;
-      out.topUps.push({ kundliId: id, fetched: r.fetched, remaining: r.remaining });
-      // new year rows: the digest's annual section is behind, so the next sweep rebuilds it
-      if (r.fetched > 0) await markDigestInputsChanged(deps.prisma, id);
+      out.topUps.push({ kundliId: id, fetched: r.fetched, remaining: r.remaining, yearsCompleted: r.yearsCompleted ?? [] });
+      // A year became complete: the digest's annual section is behind, so the next sweep rebuilds it. Rows of a year
+      // still being filled, and retried failures, wait (a rebuild per fetched row rebuilt every kundli 10-14 times a day).
+      if (r.yearsCompleted?.length) await markDigestInputsChanged(deps.prisma, id);
     }
   }
   queueLog({ event: 'digest_sweep_done', candidates: out.candidates, built: out.built.length, top_ups: out.topUps.length, stopped_for_budget: out.stoppedForBudget });

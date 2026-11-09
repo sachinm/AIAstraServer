@@ -1379,7 +1379,7 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   cache-sweep event, while `READING_EXPLICIT_CACHE=1` is set on the Lambda, so explicit Gemini caches and reader findings
   are swept only by the in-process timer of a warm container. Owner: deploy session. Done: a daily rule sending the
   cache-sweep event, or a note that the TTL alone is enough.
-- **P1 · The digest sweep rebuilds every ready kundli 10-14 times a day.** 2026-11-09, from agent_runs: in 24 h,
+- **Fixed 2026-11-09 (verify after deploy) · P1 · The digest sweep rebuilds every ready kundli 10-14 times a day.** 2026-11-09, from agent_runs: in 24 h,
   351 `digest.build` runs (about 58 min of build time) across 32 ready kundlis, while the sweep itself fires on time
   every 5 min. Cause: `runDigestSweep` tops up the annual set of 3 random ready kundlis per sweep and calls
   `markDigestInputsChanged` whenever a top-up fetched any row; the next sweep rebuilds that digest. 450 top-ups fetched
@@ -1388,6 +1388,9 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   also invalidate stored Oracle readings. Owner: reading-dev. Done: a top-up marks stale only when it completes a year
   the digest reads (or once per day per kundli), failed items back off, and builds per kundli per day drop to at most
   one or two.
+  Fix: `ensureAnnualSet` reports `yearsCompleted` and backs failed rows off 6 h (`ANNUAL_FAILED_BACKOFF_MS`, the
+  store's own retry is 60 s); `runDigestSweep` marks stale only when a year completed. Check after deploy: `digest.build`
+  runs per kundli per day from agent_runs should fall to 0-2.
 - **P2 · Admin web `src/lib/themeCss.test.ts` fails to load on admin `develop` (d34221f):** "SyntaxError: Invalid or
   unexpected token", no tests run. Seen 2026-11-08 night in the main checkout and in `wt/admin-loads` after merging
   develop; from the theme work (`feat/admin-theme`), not the Dashboard loads branch. Owner: the theme session. Done: the
