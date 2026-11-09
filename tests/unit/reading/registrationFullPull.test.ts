@@ -200,8 +200,9 @@ describe('registration set (full pull)', () => {
     expect(plan.skipped.map((t) => t.id)).toEqual(['dasha.brahma']);
     expect(plan.requested.map((t) => t.id)).not.toContain('prashna');
     // the whole catalog minus the moving types (transit, transit_contacts, prashna, transit_range, daily_grade, muhurta,
-    // transit_ashtakavarga) and dasha.brahma
-    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 8);
+    // transit_ashtakavarga, pressure_inventory) and dasha.brahma
+    expect(plan.requested.map((t) => t.id)).not.toContain('pressure_inventory');
+    expect(plan.requested.length).toBe(BUILTIN_CHART_TYPES.length - 9);
   });
 
   it('the gate ends at the last type the completion rule needs (first tier + legacy columns)', () => {
