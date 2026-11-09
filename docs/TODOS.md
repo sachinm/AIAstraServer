@@ -1453,3 +1453,23 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P3 · Admin web `overlayArt.ts` is off under vitest** (`import.meta.env.MODE === 'test'`) because the page tests read
   the first recorded fetch; its own test turns it on. Owner: admin-dev. Done: the page tests pick their request by URL
   and the guard goes.
+
+## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
+
+- **P1 · Decision for Sachin: what a fresh board does at the question limit.** Built as recommended in
+  `docs/billing/02-board-builds-count.md` §9: the board is still built and shown, and the counter stays at the limit.
+  Also confirm the rate: each of You, Love and Work costs one question per day it is opened, so a daily free user uses
+  about 3 a day and runs out of 20 in about a week before asking anything. Owner: Sachin. Done: the rule confirmed, or the
+  key changed (`boardChargeKey` in `src/billing/questionGate.ts`, e.g. one per day across boards).
+- **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
+  top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
+  (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
+- **P2 · Web checks that fail on web `develop` without this change.** `src/components/AskModal.test.tsx` (2 tests: the
+  conversation list order, "Old" not found; "Unpin My nature" not found), `src/lib/theme.test.ts` (SyntaxError on the
+  dynamic import of `scripts/gen-light-theme.mjs` under vitest on Windows), and `tsc -b`: `src/routes.tsx(24,1)`
+  `boardsEnabled` declared but never read. Found 2026-11-09. Done: all three green on web `develop`.
+- **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
+  gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
+- **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
+  pushed. Owner: deploy session (server first, then web). Done: a free staging account opening a new board sees the count
+  move by one, and opening it again does not.

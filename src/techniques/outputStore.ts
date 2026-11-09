@@ -191,6 +191,8 @@ export interface TechniqueOutputResult<T> {
   cached: boolean;
   cacheKey: string | null;
   window: ValidityWindow;
+  /** when this output was made: the stored row's `created_at` on a hit, the call's time when made now */
+  madeAt: Date;
 }
 
 let storeWarned = false;
@@ -421,6 +423,7 @@ export async function withTechniqueOutput<T>(
             cached: true,
             cacheKey,
             window: hitWindow,
+            madeAt: existing.created_at ? asDate(existing.created_at) : input.context.now,
           };
         }
         expiredExisting = true;
@@ -486,6 +489,7 @@ export async function withTechniqueOutput<T>(
     cached: false,
     cacheKey,
     window: effectiveWindow,
+    madeAt: input.context.now,
   };
 }
 

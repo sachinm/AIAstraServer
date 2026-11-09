@@ -206,6 +206,8 @@ describe('the board services', () => {
 
 describe('area routes for You and Love', () => {
   const db = fakePrisma();
+  const USAGE = { code: 'free', used: 1, limit: 20, remaining: 19 };
+  const gate = { chargeBoard: vi.fn(async () => 'charged' as const), getStatus: vi.fn(async () => USAGE as any) };
   let server: ReturnType<express.Express['listen']>;
   let base = '';
   beforeAll(async () => {
@@ -213,7 +215,7 @@ describe('area routes for You and Love', () => {
     const app = express();
     app.use(express.json());
     const d = deps(db);
-    registerAreaRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, now: () => NOW, boards: { loadDigest: d.loadDigest, activationFor: d.activationFor, loadTransit: d.loadTransit, queueDigest: async () => undefined } });
+    registerAreaRoutes(app, { prisma: db.prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, now: () => NOW, boards: { loadDigest: d.loadDigest, activationFor: d.activationFor, loadTransit: d.loadTransit, queueDigest: async () => undefined }, gate });
     server = app.listen(0);
     await new Promise((r) => server.once('listening', r));
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -253,6 +255,13 @@ describe('area routes for You and Love', () => {
       expect(['demanding', 'easing', 'steady', 'closing', 'open']).toContain(r.json.board.tone.tone);
       expect(r.json.checks).toEqual({});
     }
+  });
+  it('a board built fresh takes one question and returns the usage; a stored one costs nothing (docs/billing/02)', async () => {
+    expect(gate.chargeBoard.mock.calls).toEqual([['u1', 'self', NOW.toISOString().slice(0, 10)], ['u1', 'love', NOW.toISOString().slice(0, 10)]]);
+    const again = await call('GET', '/api/area/self', 'u1');
+    expect(again.json.cached).toBe(true);
+    expect(again.json.usage).toBeUndefined();
+    expect(gate.chargeBoard).toHaveBeenCalledTimes(2);
   });
   it('POST /api/area/:area/checks for self and love; an unknown area is 404', async () => {
     expect((await call('POST', '/api/area/self/checks', 'u1', { month: '2026-03', side: 'test', answer: 'yes' })).status).toBe(204);

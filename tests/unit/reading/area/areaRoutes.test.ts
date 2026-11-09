@@ -34,6 +34,8 @@ const prisma: any = {
   agentRun: { create: async ({ data }: any) => runs.push(data) },
 };
 const loadInputs = vi.fn(async () => loadG1TimelineInputs());
+const USAGE = { code: 'free', used: 1, limit: 20, remaining: 19 };
+const gate = { chargeBoard: vi.fn(async () => 'charged' as const), getStatus: vi.fn(async () => USAGE as any) };
 let server: ReturnType<express.Express['listen']>;
 let base = '';
 
@@ -41,7 +43,7 @@ beforeAll(async () => {
   resetAgentRegistryState();
   const app = express();
   app.use(express.json());
-  expect(registerAreaRoutes(app, { prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, loadInputs, now: () => new Date('2026-10-24T12:00:00Z') })).toBe(true);
+  expect(registerAreaRoutes(app, { prisma, requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) || null), enabled: true, loadInputs, now: () => new Date('2026-10-24T12:00:00Z'), gate })).toBe(true);
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -68,8 +70,18 @@ describe('area routes', () => {
     expect(a.json.cached).toBe(false);
     expect(a.json.map.present.tone).toBeTruthy();
     expect(a.json.work).toBeNull();
+    // docs/billing/02: the fresh Work map takes one question and returns the usage; the stored one costs nothing
+    expect(a.json.usage).toEqual(USAGE);
     const b = await call('GET', '/api/area/career', 'u1');
     expect(b.json.cached).toBe(true);
+    expect(b.json.usage).toBeUndefined();
+    // §10: when the reading was made and the last day it holds come back on both, the same on the stored one
+    expect(typeof a.json.made_at).toBe('string');
+    expect(a.json.valid_until === null || a.json.valid_until >= '2026-10-24').toBe(true);
+    expect([b.json.made_at, b.json.valid_until]).toEqual([a.json.made_at, a.json.valid_until]);
+    expect(b.json.map.validity).toBeUndefined();
+    expect(gate.chargeBoard).toHaveBeenCalledTimes(1);
+    expect(gate.chargeBoard).toHaveBeenCalledWith('u1', 'work', '2026-10-24');
     expect(loadInputs).toHaveBeenCalledTimes(1);
     expect(runs.map((r) => r.agent_id)).toEqual(['area.career_inputs', 'area.career_map']);
     expect(runs.every((r) => r.module === 'area' && r.status === 'ok')).toBe(true);

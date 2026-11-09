@@ -6,6 +6,8 @@
  *   PUT  /api/profile/work-status          { value: yes|between_jobs|own_business|studying } → 204 | 400
  *   GET  /api/area/self                    the You board (docs/reading-engine/54 §3) → 200 ok | 404 no_kundli | 202 preparing
  *   GET  /api/area/love                    the Love board, same shape
+ *   A board built fresh in the request takes one question, once per board per day (docs/billing/02); its 200 then
+ *   carries `usage`, the plan status after the charge. A board is never refused for the question limit.
  *   POST /api/area/:area/checks            area career|self|love; { month: 'YYYY-MM', side: support|test,
  *                                          answer: yes|partly|no|skip } → 204 | 400 | 404 unknown area
  */
@@ -17,6 +19,7 @@ import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js
 import { getSelfBoard } from '../reading/area/selfService.js';
 import { getLoveBoard } from '../reading/area/loveService.js';
 import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area/shadeResolver.js';
+import { questionGate, type BoardCharge, type PlanStatus, type QuestionGate } from '../billing/questionGate.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -27,6 +30,8 @@ export interface AreaRouteDeps {
   now?: () => Date;
   /** tests: the Self and Love boards' digest, activation, sky and queue readers */
   boards?: Omit<BoardDeps, 'prisma' | 'now'>;
+  /** tests: the question gate a fresh board is charged to (docs/billing/02) */
+  gate?: Pick<QuestionGate, 'chargeBoard' | 'getStatus'>;
 }
 
 export function isAreaEnabled(): boolean {
@@ -36,6 +41,15 @@ export function isAreaEnabled(): boolean {
 export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): boolean {
   if (!(deps.enabled ?? isAreaEnabled())) return false;
   const svc: CareerDeps = { prisma: deps.prisma, loadInputs: deps.loadInputs, now: deps.now };
+  const gate = deps.gate ?? questionGate(deps.prisma);
+  /** A board built in this request takes one question (once per board per day); a stored one costs nothing. */
+  const charge = async (userId: string, board: BoardCharge, r: { cached: boolean; built_at: string }): Promise<{ usage?: PlanStatus }> => {
+    if (r.cached) return {};
+    const outcome = await gate.chargeBoard(userId, board, r.built_at);
+    if (outcome === 'off') return {};
+    const usage = await gate.getStatus(userId);
+    return usage ? { usage } : {};
+  };
 
   app.get('/api/area/career', async (req, res) => {
     const userId = await deps.requireUser(req, res);
@@ -44,7 +58,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       const r = await getCareer(svc, userId);
       if (r.status === 'no_kundli') return res.status(404).json({ error: 'no_kundli' });
       if (r.status === 'no_data') return res.status(202).json({ error: 'not_ready', notes: r.notes });
-      return res.json({ ...r, checks: await checksFor(deps.prisma, userId) });
+      return res.json({ ...r, checks: await checksFor(deps.prisma, userId), ...(await charge(userId, 'work', r)) });
     } catch (e) {
       console.error('[area]', (e as Error).message);
       return res.status(500).json({ error: 'area_failed' });
@@ -67,7 +81,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
         const r = await get(boardDeps, userId);
         if (r.status === 'no_kundli') return res.status(404).json({ status: 'no_kundli', error: 'no_kundli' });
         if (r.status === 'preparing') return res.status(202).json({ status: 'preparing' });
-        return res.json({ ...r, checks: await checksFor(deps.prisma, userId, area) });
+        return res.json({ ...r, checks: await checksFor(deps.prisma, userId, area), ...(await charge(userId, area, r)) });
       } catch (e) {
         console.error(`[area:${area}]`, (e as Error).message);
         return res.status(500).json({ error: 'area_failed' });

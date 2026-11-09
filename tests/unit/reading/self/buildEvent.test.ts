@@ -2,7 +2,7 @@
  * The reading build as a background event (docs/reading-engine/64 §4): the token-guarded event, one build at a time per
  * kundli and board through the `area_builds` marker, a failed build not retried for half an hour, a stuck one run again.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BUILD_STUCK_MS,
   FAILED_COOLDOWN_MS,
@@ -116,5 +116,24 @@ describe('self-reading-build event', () => {
     const f = fakePrisma();
     expect(await handleSelfReadingBuildEvent({ userId: 'u9', board: 'self' }, { prisma: f.prisma })).toEqual({ status: 'no_kundli', oracle: 'off' });
     expect(await handleSelfReadingBuildEvent({ userId: 'u1', board: 'self' }, { prisma: f.prisma, build: async () => okReading('ok'), now: () => NOW })).toEqual({ status: 'ok', oracle: 'ok' });
+  });
+});
+
+describe('a fresh synthesis takes one question (docs/billing/02)', () => {
+  const reading = (status: 'ok' | 'failed' | 'pending', cached = false): SelfReadingResult =>
+    ({ status: 'ok', built_at: '2026-11-08', cached: false, reading: { asOf: '2026-11-08', panels: [], oracle: { status, cached } } }) as unknown as SelfReadingResult;
+
+  it('charges the board for the day when the Oracle wrote it now, and nothing for a stored, failed or thrown build', async () => {
+    const chargeBoard = vi.fn(async () => 'charged' as const);
+    const gate = { chargeBoard };
+    const f = fakePrisma();
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => reading('ok'), now: () => NOW }, 'u1', 'k1', 'love');
+    expect(chargeBoard).toHaveBeenCalledTimes(1);
+    expect(chargeBoard).toHaveBeenCalledWith('u1', 'love', '2026-11-08');
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => reading('ok', true), now: () => NOW }, 'u1', 'k1', 'self');
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => reading('failed'), now: () => NOW }, 'u1', 'k1', 'self');
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => reading('pending'), now: () => NOW }, 'u1', 'k1', 'self');
+    await runSelfReadingBuild({ prisma: f.prisma, gate, build: async () => { throw new Error('boom'); }, now: () => NOW }, 'u1', 'k1', 'self');
+    expect(chargeBoard).toHaveBeenCalledTimes(1);
   });
 });

@@ -403,3 +403,47 @@ describe('region', () => {
     expect(pickRegion({ billingCountry: 'IN', country: 'US', requested: 'US' })).toBe('IN');
   });
 });
+
+describe('fresh board builds (docs/billing/02)', () => {
+  it('a fresh board takes one question, once per board per day, shared with questions', async () => {
+    const { store, gate } = setup();
+    expect(await gate.chargeBoard('u1', 'self', '2026-11-15')).toBe('charged');
+    expect(await gate.chargeBoard('u1', 'self', '2026-11-15')).toBe('free');
+    expect(await gate.chargeBoard('u1', 'love', '2026-11-15')).toBe('charged');
+    expect(await gate.chargeBoard('u1', 'work', '2026-11-15')).toBe('charged');
+    expect(await ask(gate)).toBe(true);
+    expect(used(store)).toBe(4);
+    expect(await gate.chargeBoard('u1', 'self', '2026-11-16')).toBe('charged');
+    expect(used(store)).toBe(5);
+    expect(await gate.getStatus('u1')).toMatchObject({ used: 5, limit: 20, remaining: 15 });
+  });
+
+  it('two invocations of one build at once count it once', async () => {
+    const { store, gate } = setup();
+    const r = await Promise.all([gate.chargeBoard('u1', 'self', '2026-11-15'), gate.chargeBoard('u1', 'self', '2026-11-15')]);
+    expect(r.filter((x) => x === 'charged')).toHaveLength(1);
+    expect(used(store)).toBe(1);
+  });
+
+  it('at the limit the board is not counted and the counter stays at the limit', async () => {
+    const { store, gate } = setup(() => NOW, { PLAN_FREE_QUESTIONS: '2', PLAN_PLUS_QUESTIONS: '100' } as NodeJS.ProcessEnv);
+    expect(await ask(gate)).toBe(true);
+    expect(await gate.chargeBoard('u1', 'love', '2026-11-15')).toBe('charged');
+    expect(await gate.chargeBoard('u1', 'work', '2026-11-15')).toBe('at_limit');
+    expect(used(store)).toBe(2);
+    expect(store.usage.some((r) => r.key === 'board:work:2026-11-15')).toBe(false);
+  });
+
+  it('staff, limits off and a database error never count a board', async () => {
+    const { store, gate } = setup();
+    store.role = 'admin';
+    expect(await gate.chargeBoard('u1', 'self', '2026-11-15')).toBe('free');
+    expect(used(store)).toBeUndefined();
+    const off = new QuestionGate(new MemoryPlanStore(), { enabled: false, now: () => NOW, env: ENV });
+    expect(await off.chargeBoard('u1', 'self', '2026-11-15')).toBe('off');
+    const down = setup();
+    down.store.failing = true;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await down.gate.chargeBoard('u1', 'self', '2026-11-15')).toBe('free');
+  });
+});
