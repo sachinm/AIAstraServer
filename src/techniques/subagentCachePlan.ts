@@ -167,6 +167,10 @@ const TECHNIQUE_TO_SUBAGENTS: Readonly<Record<string, SubAgentId[]>> = {
     'lineman.work',
     'oracle.work',
   ],
+  // You board v2 (docs/reading-engine/66 §4.8 Layer 3)
+  'self.v2.oracle': ['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky', 'self.oracle'],
+  'self.v2.personalizer': ['self.personalizer'],
+  'self.v2.hero': ['self.personalizer'],
 };
 
 /** Maps a technique ID to its `SubAgentId[]` in `SUBAGENT_DIGEST_SPECS`. */
@@ -459,6 +463,62 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
         ],
         invalidationAndRecycleSweep: [
           '45m per-individual inactivity recycler (`recycleIndividualCaches` preserves unexpired natal `family.*` rows and `llm` `technique_outputs` while evicting expired windows and Gemini `cachedContents`)',
+        ],
+      },
+    };
+  }
+
+  // 4b. You board v2 agents (`self.v2.oracle`, `self.v2.personalizer`, `self.v2.hero`; docs/reading-engine/66 §4.8)
+  if (t.id === 'self.v2.oracle' || t.id === 'self.v2.personalizer' || t.id === 'self.v2.hero') {
+    const isOracle = t.id === 'self.v2.oracle';
+    return {
+      techniqueId: t.id,
+      title: t.title,
+      board: t.board,
+      category: t.category,
+      status: t.status,
+      recipe,
+      subAgents,
+      subAgentSpecs,
+      llmCacheUpload: {
+        usesLlmCache: true,
+        cacheStore: 'gemini_cached_contents+llm_cache_entries',
+        cacheKeyFormula: isOracle
+          ? 'sha256(model | system(oracle/self-areas-v2) | cachedPrefix(family.rasi + family.varga natal packs + S4 promise ledger)); one region per family pack too'
+          : 'sha256(model | system(personalizer/self) | cachedPrefix(the validated Oracle document, stable per Oracle key))',
+        systemPromptPiece: recipe.prompt,
+        cachedPrefixReaderPieces: readerPieces,
+        digestSections,
+        perRequestSuffixFields: userFields,
+        ttlSeconds: 1800,
+      },
+      outputCache: {
+        primaryTable: isOracle ? 'reading_findings_cache+technique_outputs' : 'technique_outputs',
+        cacheKeyFormula: isOracle
+          ? 'reading_findings_cache(family.<layer>) + techniqueCacheKey(self.v2.oracle, digest_version = self.v2.oracle|<digest>|clock|main|sub|subsub|sky|year|confirm|in=<input hash>|pre=<prefix hash>|p=<prompt hash>)'
+          : 'techniqueCacheKey(self.v2.personalizer, digest_version = self.v2.cards|o=<oracle key hash>|profile=<profile hash>|p=<prompt hash>)',
+        freshness: recipe.freshness,
+        scope: recipe.scope,
+        outputPiece: recipe.output,
+        recycledEvery45m: true,
+      },
+      processes: {
+        preRunDataPreparation: [
+          'kundli-digest worker (`POST /events` -> `buildDigest` writes `kundli_digest` + `kundli_activation`)',
+          'Self v2 sub-techniques (`self.sub.*`) fill one `SelfBuildContext`; the area techniques select eleven `AreaBrief`s (no database read)',
+        ],
+        preRunCacheUploadAndWarm: [
+          isOracle
+            ? '`runSelfV2Build` builds every slice from the context (`buildSelfV2Slices`) and `warmPrefixes` creates the five family and the Oracle regions in parallel via `ensurePromptCache` (each with its `llm_cache_entries` row) before the first agent call (READING_EXPLICIT_CACHE=1)'
+            : '`runSelfV2Build` warms the Personalizer region (the Oracle document) via `warmPrefixes` before its call; on a profile-only rebuild the stored Oracle is the same, so the region is a hit',
+        ],
+        liveRequestExecution: [
+          isOracle
+            ? 'Family readers ×5 in parallel (reading_findings_cache), then three parallel Oracle calls over the warm prefix (`runOracleV2`), merged and validated; only an ok document is stored'
+            : 'One Personalizer call (`runPersonalizer`) over the Oracle document and the profile pack, validated (`validatePersonalDoc`); the API reads `readSelfV2Latest`',
+        ],
+        invalidationAndRecycleSweep: [
+          '`informIndividualCacheUsed` after each agent call; `recycleIndividualCaches` deletes the person\'s regions, findings and technique outputs after READING_CACHE_RECYCLE_MINUTES (45) of inactivity; `runScheduledSweep` is the safety net',
         ],
       },
     };

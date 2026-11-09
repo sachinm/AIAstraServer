@@ -933,3 +933,22 @@ export function isSelfV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
 export function getSelfV2FactKeys(): string[] {
   return listEnv('SELF_V2_FACT_KEYS', ['work.status', 'love.status', 'family.children', 'self.focus']);
 }
+
+/**
+ * Self board v2 (docs/reading-engine/66 §4.8): the self build event also runs `runSelfV2Build` after the existing build.
+ * Env: `SELF_V2_BUILD=1` turns it on; default off. The board charge stays the existing one per board per day.
+ */
+export function isSelfV2BuildEnabled(): boolean {
+  const raw = process.env.SELF_V2_BUILD?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+/** The Self v2 Personalizer's model (docs/reading-engine/66 §4.1). Env: `SELF_PERSONALIZER_MODEL` (default gemini-3.1-flash-lite). */
+export function getSelfPersonalizerModel(): string {
+  return process.env.SELF_PERSONALIZER_MODEL?.trim() || 'gemini-3.1-flash-lite';
+}
+
+/** Output cap of the Self v2 Personalizer. Env: `SELF_PERSONALIZER_MAX_OUTPUT_TOKENS` (integer, 500–16000; default 2500). */
+export function getSelfPersonalizerMaxOutputTokens(): number {
+  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 2500, 500, 16000);
+}

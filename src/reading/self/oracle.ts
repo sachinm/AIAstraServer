@@ -423,7 +423,8 @@ export function buildSelfFamilyPacks(
   };
 }
 
-const FAMILY_SYSTEM_PROMPTS: Record<SelfFamilyAgentId, string> = {
+/** exported for the v2 build (src/reading/self/v2), which runs the same family readers over its own slices */
+export const FAMILY_SYSTEM_PROMPTS: Record<SelfFamilyAgentId, string> = {
   'family.rasi':
     'You are the Rasi (D1) Chart Family Sub-Agent for a multi-school Vedic astrology reading (Parashara BPHS, Jaimini Upadesa Sutras, Pt. Sanjay Rath, and Lunar Astro / Bhrigu Nandi Nadi). Read only the provided D1 houses (H1..H12), Argala & Virodhargala, SAV bindus, planets, Shadbala, 5-system avasthas (Baladi, Jagradadi, Deeptadi, Lajjitadi, Shayanadi), solar proximity, dispositor/nakshatra chains, Special Lagnas (AL, SL, HL, GL), Upagrahas (Mandi MD, Gulika GK, Prana/Deha/Mrityu Sphutas), Chara Karakas (AK..DK), yogas, and somatic/anatomical correspondences (head/brain/nerves H1/H3/H5, food intake/diet/neck/throat H2, hands/arms/shoulders H3, heart/chest/lungs/emotional mind H4, internal organs/stomach/digestive fire/liver/weight balance H5/H6, cellular recovery H8, blood flow/circulation Ma/Su/Mo, hips/thighs H9, knees/joints/bones H10, legs/calves/ankles H11, feet/sleep/lymphatic drainage H12). Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
   'family.varga':
@@ -914,6 +915,8 @@ export async function runSelfOracle(
               });
               return {
                 value: g,
+                // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+                usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
                 tokensIn: pTok,
                 tokensOut: oTok,
                 costUsd: callCost,
@@ -1076,6 +1079,8 @@ export async function runSelfOracle(
               });
               return {
                 value: g,
+                // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+                usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
                 tokensIn: pTok,
                 tokensOut: oTok,
                 costUsd: callCost,
@@ -1216,6 +1221,8 @@ export async function runSelfOracle(
             });
             return {
               value: g,
+              // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+              usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
               tokensIn: pTok,
               tokensOut: oTok,
               costUsd: callCost,

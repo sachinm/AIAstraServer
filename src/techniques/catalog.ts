@@ -1897,7 +1897,7 @@ const selfV2Row = (
   algorithm,
   source: SELF_V2_SOURCE,
   code,
-  agents: ['self.reading_panel'],
+  agents: [id.startsWith('self.sub.') ? 'self.sub' : 'self.reading_panel'],
   accuracy: 'area_checks:self',
   selectors: { boards: ['you'], subjects: ['general_life_direction'], houses, vargas },
   contract: codeContract(inputs, output),
@@ -2094,7 +2094,97 @@ const SELF_V2: TechniqueDef[] = [
   ),
 ];
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2];
+// ---------------------------------------------------------------------------------------------------------------------
+// Self v2 agents (doc 66 §4.8)
+// Layer 3 of the You board v2: the Oracle (three calls over one cached natal prefix), the Personalizer and the hero it
+// writes. The sub-techniques and areas (Layers 1–2) are another block, appended by their own lane.
+// ---------------------------------------------------------------------------------------------------------------------
+const SELF_V2_AGENTS_SOURCE = 'docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers';
+const SELF_V2_NATAL_INPUTS: ContractInput[] = [
+  inp('house', 'D1 and divisional house cards 1..12 (the family.rasi and family.varga packs)', 'house_card'),
+  inp('planet', 'D1 and divisional planet cards with avasthas and dasha_charter', 'planet_card'),
+  inp('yoga', 'D1 yogas, doshas and cancellations behind the promise ledger', 'yoga_row'),
+  inp('point', 'D1/D9 chara karakas, arudha padas and special lagnas', 'point_row'),
+  inp('star', 'Moon star, lagna star, gandanta', 'star_profile'),
+  inp('annual', 'the running year chart and its short clock (S9)', 'annual_row'),
+  inp('activation', 'the reading clock L1-L3, its boundaries and the windows around today (S2, S3)', 'activation_row'),
+];
+const SELF_V2_AGENTS: TechniqueDef[] = [
+  {
+    id: 'self.v2.oracle',
+    title: 'You board v2: Oracle over the ledgers and the area briefs',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('natal', 'D1'), c('divisional', 'D9'), c('divisional', 'D10'), c('divisional', 'D30'), c('dasha', 'reading clock'), c('annual', 'year chart'), c('transit', 'sky overlay')],
+    algorithm: [
+      'Builds every agent slice from the build context and the rows the sub-techniques loaded (no database read): the five family packs (family.sky padded past 1,024 tokens with its window rows) and the Oracle prefix (the family.rasi and family.varga natal packs plus the whole promise ledger), stable per digest version',
+      'Warms every prefix in parallel in the explicit cache before the first agent call; each region has its llm_cache_entries row and the 45-minute recycler is informed after each call',
+      'Runs the five family readers in parallel, read through reading_findings_cache',
+      'Runs the Oracle as three parallel calls of three or four areas each over the same cached prefix, the suffix carrying the clock, periods, windows summary, the twelve heaviest risk-ledger rows, the eight strongest promise entries, the mind, body, presence and year facts, the eleven area briefs, the family findings and the confirms',
+      'Merges the three JSON documents and validates them with the area validator: every evidence key from the input (claim ids keep their claim: prefix), every date inside a period, window or year span the input carries, caps; up to three patterns for mind and stuck',
+      'Stores only a complete, validated document in technique_outputs, keyed by digest version, clock, boundary stamps, input hash and prompt hash',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/build.ts runSelfV2Build; src/reading/self/v2/oracle.ts runOracleV2; src/reading/self/v2/slices.ts buildSelfV2Slices',
+    agents: ['self.oracle.v2', 'family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: { inputs: SELF_V2_NATAL_INPUTS, system: 'src/reading/prompts/oracle/self-areas-v2.md', user: ['TODAY', 'FACTS'], output: 'self_v2_oracle.v1' },
+  },
+  {
+    id: 'self.v2.personalizer',
+    title: 'You board v2: Personalizer cards for this person',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('dasha', 'reading clock'), c('transit', 'windows around today')],
+    algorithm: [
+      'Takes the validated Oracle document as the cached prefix (stable per Oracle key) and the profile pack (age band, stated gender or none, role, facts, declined topics, last confirms, mood) with the windows summary as the suffix',
+      'Writes one card per area (headline, two or three short paragraphs, patterns, the four-step ladder best, practical, drift, floor, dates copied from the Oracle) in plain second person, JSON by schema',
+      'Validates every headline and body sentence against a source (an Oracle paragraph id or evidence key), every date against the Oracle document, and rejects chart terms, engine names, internal ids, medical words and, when no gender is stated, gendered words; a card with no body is withheld and the Oracle headline, redacted, stands in',
+      'Stores the hero and cards in technique_outputs under the Oracle key, the profile hash and the prompt hash, so a profile change re-runs only this step',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/personalizer.ts runPersonalizer; src/reading/self/v2/personalizerValidate.ts validatePersonalDoc',
+    agents: ['self.personalizer'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: {
+      inputs: [inp('activation', 'the windows summary around today (S3): heaviest now, eases at, next support from', 'activation_row')],
+      system: 'src/reading/prompts/personalizer/self.md',
+      user: ['TODAY', 'FACTS'],
+      output: 'self_v2_cards.v1',
+    },
+  },
+  {
+    id: 'self.v2.hero',
+    title: 'You board v2: the hero (tone, one dated sentence, one question)',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('dasha', 'reading clock'), c('transit', 'windows around today')],
+    algorithm: [
+      'The Personalizer writes the tone (demanding, heavy, mixed, easing, steady or open), one sentence naming the life area and the date it changes, and one yes-or-no question on the strongest dated claim of the live areas',
+      'Code fills the six-month window strip, the easing date and the next check from the stored windows',
+      'The question is kept only when its claim id is in the Oracle document; the hero is withheld when the live areas are missing, all only possible, or split between strong and possible',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v2/personalizerValidate.ts validateHero, heroSplit',
+    agents: ['self.personalizer'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: {
+      inputs: [inp('activation', 'the six-month window strip and the easing date (S3)', 'activation_row')],
+      system: 'src/reading/prompts/personalizer/self.md',
+      user: ['TODAY', 'FACTS'],
+      output: 'self_v2_hero.v1',
+    },
+  },
+];
+
+
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2, ...SELF_V2_AGENTS];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

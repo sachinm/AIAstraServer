@@ -34,8 +34,8 @@ export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'ac
 export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null }
 export interface SelfV2SubResult { ctx: SelfBuildContext; loaded: SelfV2Loaded; gaps: string[]; ms: Record<string, number> }
 
-/** the code agent the spans run under; a dedicated `self.sub` registry row belongs to the agents lane (registry.ts) */
-const SUB_AGENT = 'self.reading_panel';
+/** the code agent the spans run under (`self.sub`, src/agents/registry.ts) */
+const SUB_AGENT = 'self.sub';
 /** level 3 is read for the primary clock in asOf −12 m … +12 m (S3's "started in the last year" and the strip) */
 const SHORT_MONTHS = 12;
 

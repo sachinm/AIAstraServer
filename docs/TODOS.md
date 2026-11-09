@@ -1709,3 +1709,57 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 - **P3 · Web: the Personalize wizard modal is mounted twice** (`TopNavigation.tsx` with local state, and
   `pages/you/v2/SelfBoardV2.tsx`). Owner: web. Done: one modal opened through shared state.
 - **P3 · Web: `tsc -b` leaves `tsconfig.*.tsbuildinfo` files that are not gitignored.** Owner: web. Done: ignored.
+
+## Filed 2026-11-09 by Self v2 step 1c/3/4 (branch feat/self-v2-agents)
+
+- **Status · Self v2 steps 1c, 3, 4 built, not live.** `src/reading/self/v2/` (slices, cache warm-up, Oracle ×3,
+  Personalizer + validator, build order, store) behind `SELF_V2_BUILD=1` (default off). No paid call has been made; every
+  test mocks Gemini. The first live replay needs Sachin's yes (doc 66 §13: ≈ $0.15 for two dossiers × three profiles).
+- **P2 · `OracleAreaDoc` is typed on the v1 panel ids.** `areaDoc.ts` (`OracleArea.id`, `validateAreaDoc` `panelIds`,
+  `oracleAreaSchema`) takes `BoardPanelId`; the v2 ids (stuck, chapter, drive, presence, now) are cast through
+  `asPanelIds` in `src/reading/self/v2/oracle.ts`. Works at run time (the validator compares strings). Owner:
+  reading-dev. Done: `areaDoc.ts` generic over the area id type, the cast removed.
+- **P2 · Explicit cache storage is billed per hour and the five family packs are cached explicitly.** The v2 build keeps
+  the v1 behaviour (`warmPrefixes` warms the five family packs, the Oracle prefix, then the Personalizer prefix; each
+  region has its `llm_cache_entries` row). Coordinator asked to keep explicit caching to the Oracle and Personalizer
+  prefixes. Owner: reading-dev with Sachin. Done: storage cost per region-hour priced from the Lab replay; if the family
+  packs do not pay back their storage on a warm rebuild, warm only `self.oracle` and `self.personalizer` and let the
+  families use implicit caching.
+- **P1 · Agent runs logged zero tokens on the v1 Self/Love/Work reading path.** `runSelfOracle` returned
+  `tokensIn`/`tokensOut` from its `withAgentRun` callbacks, but `withAgentRun` reads only `usage`, so `agent_runs`
+  stored 0 prompt, cached, output and thought tokens for every family reader, lineman and Oracle run (fixed in
+  `src/reading/self/oracle.ts`: `usage` now passed; the v2 path passes it too). Not verified: whether Gemini 3.x returns
+  `thoughtsTokenCount` at all with `includeThoughts: false` (the Lab's stage summaries also read 0). Owner: reading-dev.
+  Done: one stored replay shows non-zero `thought_tokens`, or `gemini.ts toUsage` is changed to the field Gemini sends.
+- **P2 · The Personalizer's 2,500-token default cap is tight.** Hero + eleven cards (headline, body ≤ 120 words,
+  patterns, ladder, dates, sources) is ≈ 3.5–4.5 k output tokens; at 2,500 the JSON may truncate and the whole card
+  document fails (not stored). Default kept as asked (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). Owner: reading-dev. Done:
+  the first replay's output token count decides the default (or the Personalizer splits into two calls).
+- **P2 · A partial Oracle (one of three calls failed) is not stored and no cards are written.** The next build re-runs
+  all three calls. Owner: reading-dev. Done: store the two good calls' areas under their own keys and re-run only the
+  failed call, if replays show partials happen.
+- **P2 · The Personalizer's per-sentence source rule is strict.** `sources` must align one-to-one with headline + body
+  sentences; a model that cites per paragraph loses sentences. Owner: reading-dev. Done: the replay's drop rate per
+  card under 10 %, or the rule relaxed to per paragraph.
+- **P3 · Personalizer validator word lists are constants.** `CHART_TERMS`, `GENDERED_WORDS`, `MEDICAL_WORDS` in
+  `src/reading/self/v2/personalizerValidate.ts`; the hero's live areas (`LIVE_AREAS`) too. AGENTS.md asks for
+  configurable selections in `src/config/env.ts`. Owner: reading-dev. Done: env-backed lists with these defaults.
+- **P3 · `readSelfV2Latest` serves the newest stored cards even past their window.** It does not check `valid_to`; the
+  API lane should queue a rebuild when `builtAt` is older than the running sub-sub period. Owner: API lane. Done: the
+  route compares and queues.
+- **P3 · `docs/admin/07-technique-pieces-and-agents.md` regenerated on this branch** after the merge with 1b; a later
+  catalogue change on develop needs it regenerated again (`npx tsx scripts/write-technique-pieces-doc.ts`).
+- **P2 · Fourteen step-2 outputs get no store key.** `storeLayerOutputs` (`src/reading/self/v2/build.ts`) hands every
+  `self.sub.*` output and every area brief to `withTechniqueOutput`, but the catalogue rows `self.sub.risk`,
+  `self.sub.body_facts`, `self.sub.profile` and all eleven `self.v2.<area>` rows read a `findings` input with no
+  synthesizer upstream, so `techniqueFreshness` makes them per-question and `techniqueCacheKey` returns null: nothing is
+  written (the build reports them in `layers.unkeyed` and a gap). Fact (unit test output 2026-11-09). Owner: reading-dev
+  (catalogue rows from step 1b). Done: those rows read `activation`/digest sections (or name their upstream as
+  synthesizer) so they key by the stamps; the build test asserts `unkeyed` is empty.
+- **P3 · Only family.sky is padded to the 1,024-token cache minimum.** On a sparse chart (the unit fixture) family.varga,
+  family.dasha and family.year prefixes come out at ≈ 880, 190 and 30 tokens, below the minimum, so their explicit regions
+  are refused and the calls go uncached. Owner: reading-dev. Done: pad or merge the short family packs, measured on the
+  two stored dossiers.
+- **P3 · `tests/unit/reading/cacheRecycle45m.test.ts` "executes scheduled per-individual recycle…" timed out once
+  (45 s) under a parallel run on 2026-11-09 and passed on the rerun.** Flaky under load. Owner: reading-dev. Done: the
+  test uses fake timers end to end.
