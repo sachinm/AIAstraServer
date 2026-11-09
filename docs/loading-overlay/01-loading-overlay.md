@@ -214,3 +214,20 @@ Ship Phases A and B now on `develop` (placeholders included, lines-only until th
 `OVERLAY_ART_KEY` in both environments), and generate the four Nano Banana images in one batch of 4 (retries only for a
 file that breaks a content rule) the moment Sachin's yes arrives. Key via the authenticated endpoint, ciphertext on the
 web CDN, decrypted art cached in IndexedDB.
+
+## Addendum 2026-11-09: protection of the art (Sachin: "encrypted, cryptically named, decrypted, cannot be copied")
+
+- **Never in the bundle.** The chart drawing lives in `scripts/chartBoard.mjs` (web and admin), used only at build time.
+  The app ships no plaintext chart.
+- **Cryptic names.** The build writes `public/_a/<sha256(key ‖ version ‖ file)[0..20]>.bin` and a compact index
+  `public/_a/i.json` (`v`, and per file `s` style initial, `t` 1 for dark, `m` type, `p` path). Nothing on the wire says
+  chart, style or theme; a key rotation renames every file.
+- **Decrypted in memory, painted on a canvas.** Web Crypto AES-GCM on each show; the result is drawn onto a `<canvas>`
+  (no "Save image as", no drag, context menu blocked on the veil) and the object URL is revoked on unmount.
+- **Ciphertext-only cache.** IndexedDB keeps the encrypted bytes, never the image; the key is fetched per page load from
+  `GET /api/assets/overlay-key` (admin: `/api/admin/assets/overlay-key`) and held in memory as a non-extractable key.
+- **Without the key** (signed out, or `OVERLAY_ART_KEY` unset) the chart's place shows an empty glass slab.
+- **Limits, stated plainly:** no web page can stop a screenshot, and a determined person with dev tools and a session can
+  still capture the decoded pixels. These steps stop casual copying and keep the files unreadable at rest and on the CDN.
+- Layout after review: the veil is a floating frosted panel at 90% of the viewport for page-level waits (72-74% tint,
+  14 px blur), brand line in the header's own classes, quip as plain text, 3D board and glass tiles.
