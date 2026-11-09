@@ -1066,8 +1066,9 @@ decisions (the 12 planets in `docs/product/landing-cosmic-skies.md`, and Google/
   - P2: the "Your reading" tab sits inside `AreaBoardView`, so when `/api/area/self` is preparing, unavailable or failed
     the whole page shows the board's message and the reading cannot be reached. Done: the reading tab renders on its
     own status.
-  - P3: `src/components/AskModal.test.tsx` fails 2 tests on `develop` ("Unable to find an element with the text: Old").
-  - P3: `npm run typecheck` fails on `develop`: `src/routes.tsx(24,1) 'boardsEnabled' is declared but never read`.
+  - Fixed 2026-11-09: `src/components/AskModal.test.tsx` failed because the sidebar now opens collapsed (206b350); the
+    tests press Expand all first.
+  - Fixed on `develop` by 2026-11-09: `src/routes.tsx` `boardsEnabled` typecheck error (tsc -b is clean).
   - P2: `npm ci` reports 21 audit findings (2 critical, 2 high). Done: triaged and upgraded or accepted with a note.
 
 ## Filed 2026-11-08 by the You reading research-grade build (docs 60–62, branch `feat/self-dashboard-guru-reading`)
@@ -1172,7 +1173,9 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
   4. **Paksha Bala (BG-07):** `kaala_parts.paksha` in `natal_export._build_shadbala` (only the six shadbala totals are kept);
      the digest also does not read `facts.panchanga` tithi and paksha yet.
 - **D20 and D24 cards (BG-07, BG-08) are not in the dossier's default chart list,** so mind/atma cannot read them. Status: open. Done: the digest builds D20/D24 cards for a cohort kundli and the panels cite them.
-- **Two clarify tests fail on `develop`, unrelated to BUILD-GAPS.** `tests/unit/reading/clarify.test.ts:157` expects
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`):** the clarify and annual-prashna tests failed because `planner.ts` keeps model replies in an in-memory
+  `clarifyCache` keyed by question, so a case was answered by the one before it. Both describe blocks now call
+  `clearClarifyCache()` in `beforeEach`. Was: **Two clarify tests fail on `develop`, unrelated to BUILD-GAPS.** `tests/unit/reading/clarify.test.ts:157` expects
   "Your Saturn–Ketu period runs until 7 Sep 2027. Which period should I look at?" and gets "Shall I look until 7 Sep 2027,
   or a different stretch of time?"; `tests/unit/reading/annualPrashna.test.ts` "a ruled-out question never reaches the model"
   fails the same way. Neither file was touched on this branch. Status: open. Done: the wording and the tests agree.
@@ -1226,7 +1229,7 @@ Plan: `docs/admin/11-admin-observatory-visitors-and-drill-down.md`. Built the sa
 - **P3 — The Terms of Use page must contain the no-reproduction clause** ("won't copy, record, or reproduce anything
   seen in the app") at version `2026-11-08` (`src/auth/terms.ts` `CURRENT_TERMS_VERSION`). Holder: web session /
   Sachin for the wording. Done: the Terms page carries the clause and its version date matches.
-- **P2 — Three reading unit tests fail on this branch without touching anything it changed** (found 2026-11-08 running
+- **Clarify and prashna part fixed 2026-11-09 (cache between cases, see above); R14 order-dependence still open.** **P2 — Three reading unit tests fail on this branch without touching anything it changed** (found 2026-11-08 running
   `npm run test:unit` in `wt/server-alerts-consent`; none of them import requestMeta, accountEvents, emailService,
   ownerAlerts, terms or the GraphQL schema). `tests/unit/reading/annualPrashna.test.ts:224` ("a ruled-out question
   never reaches the model": expected false, got true) and `tests/unit/reading/clarify.test.ts` ("falls back to the rule
@@ -1459,22 +1462,30 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **Superseded 2026-11-09 by doc 03 (offline-first boards).** Opening a board never costs a question; only a fresh
   reading the person asks for, once "good until" has passed, takes one; each board's first reading is free. Boards always
   show their last reading, at the limit too (Sachin's decision kept). See `docs/billing/03-offline-first-boards.md`.
-- **P2 · A served older You synthesis may not match today's code panels.** Offline first serves the newest stored
-  synthesis even when its key (answers, clock, year, prompt version) differs from today's. Its areas are per panel, so
-  they still fit, but a prompt or shape change could show an older card shape until the person refreshes. Found
-  2026-11-09 building doc 03. Done: decided acceptable, or the fallback limited to the same prompt version.
+- **Accepted by Sachin 2026-11-09: a served older You synthesis may not match today's code panels.** Offline first
+  serves the newest stored synthesis even when its key (answers, clock, year, prompt version) differs from today's, so a
+  prompt or shape change can show an older card layout until the person asks for a fresh reading. Sachin: fine, no users
+  yet. Revisit before launch.
 - **P3 · The You reading's own "Built …, next check …" line sits at the bottom of that page.** The board stamp at the
   top (doc 02 §10) covers the You board, and the page re-reads the question count when the background synthesis lands
   (web `feat/board-quota`). If Sachin wants the reading's own dates at its top too, move `builtLine` up. Owner: web.
-- **P2 · Web checks that fail on web `develop` without this change.** `src/components/AskModal.test.tsx` (2 tests: the
-  conversation list order, "Old" not found; "Unpin My nature" not found), `src/lib/theme.test.ts` (SyntaxError on the
-  dynamic import of `scripts/gen-light-theme.mjs` under vitest on Windows), and `tsc -b`: `src/routes.tsx(24,1)`
-  `boardsEnabled` declared but never read. Found 2026-11-09. Done: all three green on web `develop`.
-- **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
-  gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
-- **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
-  pushed. Owner: deploy session (server first, then web). Done: a free staging account opening a new board sees the count
-  move by one, and opening it again does not.
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`):** web `develop` checks: `AskModal.test.tsx` (sidebar opens collapsed; tests expand first),
+  `theme.test.ts` (the generator's `#!` line with a CRLF ending broke its import under vitest on Windows; the line is
+  removed, the script is run as `node scripts/gen-light-theme.mjs`), and `tsc -b` (already clean).
+- **Fixed 2026-11-09 (branch `fix/develop-red-tests`), found in the same run:** web `theme-light.css` was really stale on
+  `develop` (regenerated); web `WelcomeWizard.test.tsx` "falls back to null when @mediapipe/tasks-vision is unavailable"
+  hung 30 s once the package is installed (jsdom waits on its wasm), so the test now mocks the package as missing; server
+  `oracle/self-areas-v2.md` and `personalizer/self.md` (Self v2) named the engine inside their own "never name it" line,
+  which `tests/unit/reading/oracle/units.test.ts` forbids; reworded without the names and `generated.ts` re-embedded
+  (PROMPT_VERSION changes, so those prompts' stored outputs are rebuilt on the next fresh reading).
+- **P2 · `src/reading/prompts/method.md` and `persona.md` still name the engine in their prohibition line** ("such as
+  Radha or pyjhora"). The test only checks `readers/` and `oracle/`. A model that is told the names can repeat them.
+  Done: reworded like the Self v2 prompts and the test widened to every prompt, or kept on purpose with a note.
+- **Closed by doc 03: a board charge keyed by user and day.** Charges are now only for fresh readings the person asks
+  for; a new kundli's first boards are free by design.
+- **P2 · Offline-first boards not deployed yet.** Merged and pushed to `origin/develop` in both repos; deploy brief sent to
+  the deploy session 2026-11-09. Done: a free staging account opening a board twice sees the count unchanged, and a fresh
+  reading after "good until" moves it by one.
 
 ## Filed 2026-11-09 by the You board v2 review, server side (docs/reading-engine/66 §12, audit `docs/research/research_notes/Self screen design patterns/server_self_board_audit.md`)
 
