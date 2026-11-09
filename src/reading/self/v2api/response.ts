@@ -177,7 +177,7 @@ export interface BuildResponseInput {
   refresh?: SelfV2RefreshView | null;
 }
 
-export const NO_REFRESH: Readonly<SelfV2RefreshView> = Object.freeze({ madeAt: null, validUntil: null, due: false });
+export const NO_REFRESH: Readonly<SelfV2RefreshView> = Object.freeze({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
 
 export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
   const missing = missingFacts(i.profile, i.factKeys);
@@ -194,7 +194,7 @@ export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
     areas: areaViews(i.latest, i.floors),
     profile: { ageBand: i.profile.ageBand, hasGender: i.profile.gender !== null, missing, role: i.profile.role ?? 'public' },
     subChapterEnds: i.latest.frame?.periods?.runningSub?.to ?? null,
-    refresh: i.refresh ? { ...i.refresh } : { ...NO_REFRESH },
+    refresh: i.refresh ? { ...NO_REFRESH, ...i.refresh } : { ...NO_REFRESH },
   };
 }
 

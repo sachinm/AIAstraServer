@@ -1,7 +1,8 @@
 /**
  * A fresh You reading the person asked for (docs/billing/03) with SELF_V2_BUILD=1: the v2 build is forced under a new
  * store key, and the question held for it is committed only when the v2 build (the one the v2 page serves) is ok,
- * given back when it fails. No model runs: every build is a stub.
+ * given back when it fails. The v1 build makes its code panels only (fix/self-v2-single-build). No model runs: every
+ * build is a stub.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runSelfReadingBuild } from '../../../../../src/reading/self/buildEvent.js';
@@ -55,10 +56,10 @@ describe('self refresh with SELF_V2_BUILD=1', () => {
     }
   });
 
-  it('a v1 synthesis that fails gives the question back even when the v2 build is ok', async () => {
+  it('the v1 synthesis is not made (code panels only), so its status does not decide the charge: the v2 build does', async () => {
     const r = run('ok', 'failed');
     await r.done;
-    expect(r.settleBoardRefresh).toHaveBeenCalledWith('u1', 'self', '2026-11-09', false);
+    expect(r.settleBoardRefresh).toHaveBeenCalledWith('u1', 'self', '2026-11-09', true);
   });
 
   it('a first reading (no refresh) is neither forced nor settled', async () => {

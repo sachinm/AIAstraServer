@@ -8,7 +8,7 @@ import { questionGate, type BoardChargeOutcome, type PlanStatus, type QuestionGa
 import { SELF_CONFIRM_PREFIX, SELF_CONFIRM_ANSWERS, writeFacts } from '../../../profile/facts.js';
 import { loadProfilePack } from '../../person/profile.js';
 import { defaultQueueDigest } from '../../area/boardService.js';
-import { queueSelfReadingBuild, type QueueOutcome } from '../buildEvent.js';
+import { queueSelfReadingBuild, readBuildMarker, type BuildMarkerState, type QueueOutcome } from '../buildEvent.js';
 import { parseApplicability, resolveClockV2, type ApplicabilityRow, type ClockResolutionV2, type SystemPresence } from '../clock.js';
 import { defaultSystemsPresent } from '../service.js';
 import type { Mood, ProfilePack, SelfV2AreaId, SelfV2RefreshView, SelfV2Response } from '../v2types.js';
@@ -35,16 +35,27 @@ export interface SelfV2Deps {
   floors?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<Partial<Record<SelfV2AreaId, string[]>>>;
   /** the board's refresh dates (default: selfBoardDates, the rule the v1 board and POST /api/boards/self/refresh use) */
   refreshDates?: (prisma: PrismaClient, kundliId: string, today: string) => Promise<BoardValidity | null>;
+  /** today's You build marker (default: readBuildMarker, the `self.reading` row the build event marks) */
+  buildMarker?: (prisma: PrismaClient, kundliId: string, now: Date) => Promise<BuildMarkerState>;
   now?: () => Date;
 }
 
-/** The `refresh` block of GET /api/self/v2. A read that fails shows nothing due (never a button that 409s). */
-async function refreshView(deps: SelfV2Deps, kundliId: string, today: string): Promise<SelfV2RefreshView | null> {
-  const d = await (deps.refreshDates ?? selfBoardDates)(deps.prisma, kundliId, today).catch((e) => {
-    console.warn('[self:v2] refresh dates failed:', (e as Error).message);
-    return null;
-  });
-  return d ? { madeAt: d.made_at, validUntil: d.valid_until, due: d.refresh_due } : null;
+/**
+ * The `refresh` block of GET /api/self/v2. A read that fails shows nothing due (never a button that 409s). `building` and
+ * `failed` come from today's You build marker: a fresh reading that failed is shown at once, not after the poll times out.
+ * A build marked stuck (dead) is neither; the page's own timeout covers it.
+ */
+async function refreshView(deps: SelfV2Deps, kundliId: string, today: string, now: Date): Promise<SelfV2RefreshView> {
+  const [d, marker] = await Promise.all([
+    (deps.refreshDates ?? selfBoardDates)(deps.prisma, kundliId, today).catch((e) => {
+      console.warn('[self:v2] refresh dates failed:', (e as Error).message);
+      return null;
+    }),
+    (deps.buildMarker ?? ((p, k, n) => readBuildMarker(p, k, 'self', n)))(deps.prisma, kundliId, now).catch(() => 'none' as const),
+  ]);
+  const building = marker === 'building';
+  const failed = marker === 'failed' || marker === 'failed_recently';
+  return d ? { madeAt: d.made_at, validUntil: d.valid_until, due: d.refresh_due, building, failed } : { madeAt: null, validUntil: null, due: false, building, failed };
 }
 
 const dayOf = (d: Date): string => d.toISOString().slice(0, 10);
@@ -82,14 +93,15 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   const prisma = deps.prisma;
   const kundli = await latestKundli(prisma, userId);
   if (!kundli) return { body: noKundliResponse(), queued: null };
-  const asOf = dayOf((deps.now ?? (() => new Date()))());
+  const now = (deps.now ?? (() => new Date()))();
+  const asOf = dayOf(now);
   const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
   const [latest, profile, floors, refresh] = await Promise.all([
     // only the board clock's build: after a switch the old clock's cards are not served as the new one's
     (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
     (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf),
     deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({}),
-    refreshView(deps, kundli.id, asOf),
+    refreshView(deps, kundli.id, asOf, now),
   ]);
 
   const nothingStored = !latest.cards && !latest.oracle;

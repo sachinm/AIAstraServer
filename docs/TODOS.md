@@ -1918,10 +1918,6 @@ region costs about $1 per million tokens per hour.
 
 ## Filed 2026-11-09: Self v2 pipeline gaps (review of the build flow, doc 66 §4.8)
 
-- **P1 · Every build pays twice when `SELF_V2_BUILD=1`.** `runSelfReadingBuild` runs the v1 path (lineman + v1 Oracle,
-  ≈ $0.055) and then `runSelfV2Build`; the v2 page never reads the v1 output. Owner: server. Done: with the v2 build on,
-  the v1 Oracle and lineman are skipped for the self board (code panels may stay as the floor); a test asserts no v1
-  model call when the flag is on. Must ship before the flag is set on staging.
 - **P1 · "Right now" goes stale silently.** Offline-first means no rebuild until the person taps Fresh reading, but the
   hero's "since" and "eases" dates and the strip are relative to the build date, and the `sky_week` stamp never fires on
   its own. Owner: server + web. Done: the hero shows "as of <build date>"; when a stored window boundary has passed, the
@@ -1949,20 +1945,19 @@ region costs about $1 per million tokens per hour.
 
 ## Filed 2026-11-09 by the Self v2 refresh button
 
-- **P2 · A failed fresh v2 build is not visible to the page.** `GET /api/self/v2` keeps serving the earlier cards with
-  `status: 'ok'` while a refresh build runs and after it fails (the v2 marker only records ready/failed, and
-  `readSelfV2Latest` reports `ok` whenever cards exist). The web polls until `builtAt` moves and, after six minutes, shows
-  "Still working… Retry"; the question is given back by the build. Done: add `refresh.building` / `refresh.failed`
-  (from the `self.reading` marker of today plus the `self.v2` marker) so the page can say "That did not work" at once.
-- **P2 · A self refresh with SELF_V2_BUILD=1 pays for two Oracles.** The refresh build runs the v1 synthesis
-  (`getBoardReading` with `refresh: true`, needed because the v1 synthesis owns `valid_until`) and then the forced v2
-  build. Done: once v2 owns the page, take the dates from the v2 Oracle and skip the v1 synthesis on refresh.
 - **P3 · A forced store write keeps the old `created_at`.** `insertStoredRow` upserts on `cache_key` without touching
   `created_at`, so a forced v1 refresh under an unchanged key leaves `made_at` (synthesisValidity) on the old day. The v2
   build sidesteps it with `|fresh=<day>` in its key. Done: set `created_at = now()` in the replace branch.
-- **P3 · Two fresh v2 builds on the same day share one key** (`|fresh=<day>`); the second overwrites the first row
-  (forced) and keeps its `created_at`, so the page's `builtAt` does not move. Only reachable when a refresh is due again
-  the same day (a reading whose `valid_until` is already past when made).
+- **P3 · Two fresh v2 builds on the same day share one key** (`|fresh=<day>`) when the first one succeeded; the second
+  overwrites the first row (forced) and keeps its `created_at`, so the page's `builtAt` does not move. Only reachable
+  when a refresh is due again the same day (a reading whose `valid_until` is already past when made). A retry after a
+  failed fresh build already gets its own key (`|fresh=<day>.r<hhmmss>`, fix/self-v2-single-build).
+- **P2 · With `SELF_V2_BUILD=1` the old You page (`GET /api/self/reading`) queues a build on every open.** The self
+  build no longer makes a v1 synthesis (fix/self-v2-single-build), so the v1 Oracle stays `pending` for a kundli with no
+  stored v1 synthesis, and the route queues a build whenever the marker is not `building` or `failed_recently`. Each
+  such build is cheap (code panels, then a v2 build that hits its store: no model call) but is a Lambda invocation per
+  open. Owner: server + web. Done: under the flag the old page is retired, or the route serves the code panels with
+  the v1 Oracle `off` and does not queue when today's marker is `ready`.
 - **P2 · The full unit suite is red on develop without this branch** (10 of 2292 with the worktree's `.env`):
   `astroKundliExportSpacing` (4), `env.test` isAstroKundliConfigured, `geminiChatService` GEMINI_MAX_OUTPUT_TOKENS,
   `promptCache` "off by default", and `reading/run.test.ts`, which fails a different 1–3 tests on each run (also alone).
