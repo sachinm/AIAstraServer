@@ -184,6 +184,14 @@ needs Sachin's typed yes there):
 }
 ```
 
+**Scope of the IAM change (Sachin, 2026-11-09): admin only.** The policy goes on exactly one principal, the admin
+Lambda's own execution role `aiadastra-admin-api-exec` (admin repo, `docs/02-deploy.md` §3). It does not go on, and
+must not be copied to: the main API's execution role (`aiastra-server-api`), the engine's role, the web's Amplify
+service roles (`aiastra-web`, `aiadastra-admin-web`), the GitHub deploy role `aiadastra-admin-github-deploy`, or any
+shared or managed policy. It is an inline policy on that role only, so nothing the server or web run as gains
+CloudWatch, Logs or EventBridge read access. The admin web (a browser SPA) holds no AWS credentials at all; only the
+admin API Lambda reads AWS.
+
 (`GetMetricData` and `GetQueryResults` have no resource-level permissions, hence `*`.) No env var is required: the
 defaults name the live functions.
 
