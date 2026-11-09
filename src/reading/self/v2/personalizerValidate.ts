@@ -9,16 +9,19 @@
  * Words and patterns only; nothing astrological is computed.
  */
 import type { AreaDate } from '../areaDoc.js';
-import { getSelfV2BodyAdviceWords, getSelfV2NotWorkingStatuses, getSelfV2RoleWordsNotWorking } from '../../../config/env.js';
+import { getSelfV2BodyAdviceWords, getSelfV2NotWorkingStatuses, getSelfV2OracleEchoFlag, getSelfV2RoleWordsNotWorking } from '../../../config/env.js';
+import { MATTER_PLAIN, mattersOfClaim } from '../v2words.js';
 import { wordCount } from '../words.js';
 import type {
   CardStatus,
   HeroDoc,
   LadderSteps,
+  Matter,
   OracleV2Output,
   PersonalCard,
   PersonalCardDoc,
   PersonalizerInput,
+  PersonalizerMetrics,
   PersonalPattern,
   SelfV2AreaId,
   StatedGender,
@@ -27,9 +30,19 @@ import type {
 } from '../v2types.js';
 import { SELF_V2_AREAS } from '../v2types.js';
 import { claimKeysOf } from './oracle.js';
+import { oracleEcho, seniorStageWordsFor } from './profileFit.js';
 import { paragraphId } from './slices.js';
 
 export const HEADLINE_MAX_WORDS = 14;
+/**
+ * The plain line a withheld card shows when no safe stand-in headline exists (doc 66 replay run 2, failure 3): never a
+ * redacted Oracle headline with gaps in it.
+ */
+export const WITHHELD_LINE = 'Not enough in your chart to say this with confidence.';
+/** a withheld card's Oracle stand-in may run a little longer than a written headline, never past this */
+export const STAND_IN_MAX_WORDS = 22;
+/** the fewest ladder steps a card keeps after failing steps are dropped (run 2 failure 5) */
+export const LADDER_MIN_STEPS = 2;
 export const BODY_MAX_WORDS = 120;
 export const BODY_PARAGRAPHS_MAX = 3;
 export const PATTERNS_MAX = 3;
@@ -211,6 +224,8 @@ export interface TextCheckContext {
   roleWords?: RegExp | null;
   /** extra words this card may not carry (the body card's diet and medicine table) */
   cardWords?: RegExp | null;
+  /** career-stage words the person's band and level do not allow (profileFit.ts `seniorStageWordsFor`) */
+  stageWords?: RegExp | null;
 }
 
 /** Why a piece of card text may not stand, or null when it may. */
@@ -222,6 +237,7 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
   if (MEDICAL_WORDS.test(text)) return `medical word (${text.match(MEDICAL_WORDS)?.[0] ?? ''})`;
   if (c.cardWords?.test(text)) return `diet or medicine advice (${text.match(c.cardWords)?.[0] ?? ''})`;
   if (c.roleWords?.test(text) && !PAST_ROLE.test(text)) return `role word against the stated work status (${text.match(c.roleWords)?.[0] ?? ''})`;
+  if (c.stageWords?.test(text)) return `career-stage word the profile does not state (${text.match(c.stageWords)?.[0] ?? ''})`;
   if (c.gender === null && GENDERED_WORDS.test(text)) return `gendered word with no stated gender (${text.match(GENDERED_WORDS)?.[0] ?? ''})`;
   const bad = daysIn(text).find((d) => !c.dates.days.has(d));
   if (bad) return `date ${bad} is not in the Oracle document`;
@@ -233,11 +249,37 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
   return null;
 }
 
-/** Chart terms and engine names replaced, for an Oracle headline standing in for a withheld card. */
+/**
+ * The sentences of a text that carry no chart term or engine name; a sentence that carries one is dropped whole, never
+ * cut and patched with an ellipsis (doc 66 replay run 2, failure 3: "A disciplined … calls for"). '' when none stands.
+ */
 export function redactChartTerms(text: string): string {
-  let t = text.replace(new RegExp(ENGINE_NAMES.source, 'gi'), 'the calculations');
-  for (const re of CHART_TERMS) t = t.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), '…');
-  return t.replace(/(…\s*){2,}/g, '… ').replace(/\s{2,}/g, ' ').trim();
+  return sentencesOf(text)
+    .filter((s) => !ENGINE_NAMES.test(s) && !CHART_TERMS.some((re) => re.test(s)))
+    .join(' ')
+    .trim();
+}
+
+/**
+ * The headline a withheld card shows (doc 66 replay run 2, failure 3): the Oracle headline's sentences that pass the same
+ * checks a written card passes (chart terms, engine names, internal ids, medical words, the body card's words, role and
+ * career-stage words for this profile, gendered words when no gender is stated, dates), within STAND_IN_MAX_WORDS; else
+ * the plain WITHHELD_LINE. Never an ellipsis.
+ */
+export function standInHeadline(oracleHeadline: string, ctx: TextCheckContext): string {
+  const kept = sentencesOf(oracleHeadline).filter((s) => !s.includes('…') && !textProblem(s, ctx));
+  const text = kept.join(' ').trim();
+  return text && wordCount(text) <= STAND_IN_MAX_WORDS ? text : WITHHELD_LINE;
+}
+
+/**
+ * A headline in place of one that cannot stand (doc 66 replay run 2, failure 4): the first body sentence that passes
+ * every check and is at most HEADLINE_MAX_WORDS words, or null. The body keeps that sentence only when it would
+ * otherwise be left empty.
+ */
+export function headlineFromBody(body: readonly string[]): string | null {
+  for (const p of body) for (const s of sentencesOf(p)) if (wordCount(s) <= HEADLINE_MAX_WORDS) return s;
+  return null;
 }
 
 export const sentencesOf = (paragraph: string): string[] =>
@@ -290,6 +332,34 @@ export interface PersonalizerValidation {
   doc: PersonalCardDoc;
   cardStatus: Partial<Record<SelfV2AreaId, CardStatus>>;
   gaps: string[];
+  metrics: PersonalizerMetrics;
+}
+
+/** an Oracle area's own text (headline and paragraphs), the measure an Oracle echo is taken against */
+const oracleAreaText = (a: { headline: string; paragraphs: readonly string[] }): string => [a.headline, ...a.paragraphs].join(' ');
+
+/**
+ * The Oracle-echo metric (run 2 failure 1): per delivered card, the share of its headline and body trigrams that copy
+ * its Oracle area. Logged per build; a card over SELF_V2_ORACLE_ECHO_FLAG is flagged in the gaps, never dropped.
+ */
+export function personalizerMetrics(doc: PersonalCardDoc, oracle: OracleV2Output, ok: readonly SelfV2AreaId[]): PersonalizerMetrics {
+  const oracleEchoBy: PersonalizerMetrics['oracleEcho'] = {};
+  for (const id of ok) {
+    const c = doc.cards[id];
+    const a = oracle.doc.areas[id as keyof typeof oracle.doc.areas];
+    if (!c || !a) continue;
+    oracleEchoBy[id] = Math.round(oracleEcho([c.headline, ...c.body].join(' '), oracleAreaText(a)) * 1000) / 1000;
+  }
+  const vals = Object.entries(oracleEchoBy) as Array<[SelfV2AreaId, number]>;
+  const flag = getSelfV2OracleEchoFlag();
+  const max = vals.reduce<[SelfV2AreaId | null, number]>((m, [id, v]) => (v > m[1] ? [id, v] : m), [null, 0]);
+  return {
+    oracleEcho: oracleEchoBy,
+    echoMean: vals.length ? Math.round((vals.reduce((n, [, v]) => n + v, 0) / vals.length) * 1000) / 1000 : 0,
+    echoMax: max[1],
+    echoMaxArea: max[0],
+    flagged: vals.filter(([, v]) => v > flag).map(([id]) => id),
+  };
 }
 
 /** Parses the Personalizer's JSON; null when it is not the document's shape. */
@@ -336,6 +406,7 @@ export function validatePersonalDoc(
   const gender = input.profile.gender;
   const cardCtx: TextCheckContext = { gender, dates: oDates };
   const roleWords = roleWordsFor(input.profile.facts);
+  const stageWords = seniorStageWordsFor(input.profile);
   const bodyWords = bodyAdviceWords();
   const cards: PersonalCardDoc['cards'] = {};
   const cardStatus: PersonalizerValidation['cardStatus'] = {};
@@ -354,11 +425,12 @@ export function validatePersonalDoc(
       continue;
     }
     seen.add(areaId);
-    const ctx: TextCheckContext = { ...cardCtx, roleWords, cardWords: areaId === 'body' ? bodyWords : null };
+    const ctx: TextCheckContext = { ...cardCtx, roleWords, stageWords, cardWords: areaId === 'body' ? bodyWords : null };
     const rawParagraphs = arr(c.body).slice(0, BODY_PARAGRAPHS_MAX + 2).map((p) => sentencesOf(str(p)));
     const aligned = alignSources(arr(c.sources).map(str), rawParagraphs.map((p) => p.length), sources);
     const valid = (s: string | null): string | null => (s && sources.has(s) ? s : null);
     const kept: string[] = [];
+    const bodySentenceSources: Array<[string, string]> = [];
     // headline: sentence 0
     let headline = str(c.headline);
     const hSrc = valid(aligned.headline);
@@ -366,7 +438,7 @@ export function validatePersonalDoc(
     if (hProblem) {
       gaps.push(`${areaId}: headline dropped (${hProblem})`);
       headline = '';
-    } else kept.push(hSrc!);
+    }
     // body: each sentence with the source the alignment gave it
     const body: string[] = [];
     let words = 0;
@@ -385,16 +457,41 @@ export function validatePersonalDoc(
         }
         words += wordCount(s);
         keptSentences.push(s);
-        kept.push(src!);
+        bodySentenceSources.push([s, src!]);
       }
       if (keptSentences.length && body.length < BODY_PARAGRAPHS_MAX) body.push(keptSentences.join(' '));
     }
 
-    if (!headline || !body.length) {
-      gaps.push(`${areaId}: withheld (${!headline ? 'no headline' : 'no body'} survived); the Oracle headline stands in`);
+    // a headline that cannot stand never withholds a card whose body passes (run 2 failure 4): the first passing body
+    // sentence of at most 14 words takes its place, and leaves the body when the body keeps other sentences
+    if (!headline && body.length) {
+      const fromBody = headlineFromBody(body);
+      if (fromBody) {
+        headline = fromBody;
+        const rest = body.map((p) => sentencesOf(p).filter((x) => x !== fromBody).join(' ')).filter(Boolean);
+        if (rest.length) {
+          body.splice(0, body.length, ...rest);
+          // the moved sentence's source leads the card's sources
+          const i = bodySentenceSources.findIndex(([x]) => x === fromBody);
+          if (i >= 0) {
+            kept.push(bodySentenceSources[i]![1]);
+            bodySentenceSources.splice(i, 1);
+          }
+        }
+        gaps.push(`${areaId}: headline replaced by the first body sentence that passes (${wordCount(fromBody)} words)`);
+      } else {
+        headline = areaTitle(areaId);
+        gaps.push(`${areaId}: headline replaced by the area title (no body sentence of at most ${HEADLINE_MAX_WORDS} words)`);
+      }
+    } else if (headline) kept.push(hSrc!);
+    kept.push(...bodySentenceSources.map(([, src]) => src));
+
+    if (!body.length) {
+      const standIn = standInHeadline(oArea.headline, ctx);
+      gaps.push(`${areaId}: withheld (no body survived); ${standIn === WITHHELD_LINE ? 'the plain withheld line stands in' : 'the checked Oracle headline stands in'}`);
       cards[areaId] = {
         areaId,
-        headline: redactChartTerms(oArea.headline),
+        headline: standIn,
         body: [],
         patterns: [],
         ladder: null,
@@ -436,10 +533,19 @@ export function validatePersonalDoc(
     let ladder: LadderSteps | null = null;
     const l = obj(c.ladder);
     if (Object.keys(l).length) {
+      // each step is checked on its own: a failing step is dropped (left empty), the ladder stands while at least
+      // LADDER_MIN_STEPS steps pass (doc 66 replay run 2, failure 5: one "meals" step took the whole body ladder)
       const steps: LadderSteps = { best: str(l.best), practical: str(l.practical), drift: str(l.drift), floor: str(l.floor) };
-      const bad = (Object.entries(steps) as Array<[keyof LadderSteps, string]>).find(([, t]) => !t || textProblem(t, ctx));
-      if (bad) gaps.push(`${areaId}: ladder dropped (${bad[0]}: ${bad[1] ? textProblem(bad[1], ctx) : 'empty'})`);
-      else ladder = steps;
+      for (const k of Object.keys(steps) as Array<keyof LadderSteps>) {
+        const problem = !steps[k] ? 'empty' : textProblem(steps[k], ctx);
+        if (problem) {
+          if (steps[k]) gaps.push(`${areaId}: ladder step ${k} dropped (${problem})`);
+          steps[k] = '';
+        }
+      }
+      const standing = Object.values(steps).filter(Boolean).length;
+      if (standing >= LADDER_MIN_STEPS) ladder = steps;
+      else gaps.push(`${areaId}: ladder dropped (${standing} of 4 steps passed; at least ${LADDER_MIN_STEPS} needed)`);
     }
 
     const dates: AreaDate[] = [];
@@ -469,12 +575,16 @@ export function validatePersonalDoc(
     if (!cards[id]) {
       const a = oracle.doc.areas[id as keyof typeof oracle.doc.areas]!;
       gaps.push(`${id}: no card returned; withheld, the Oracle headline stands in`);
-      cards[id] = { areaId: id, headline: redactChartTerms(a.headline), body: [], patterns: [], ladder: null, dates: [], certainty: a.certainty, sources: [] };
+      const missingCtx: TextCheckContext = { ...cardCtx, roleWords, stageWords, cardWords: id === 'body' ? bodyWords : null };
+      cards[id] = { areaId: id, headline: standInHeadline(a.headline, missingCtx), body: [], patterns: [], ladder: null, dates: [], certainty: a.certainty, sources: [] };
       cardStatus[id] = 'withheld';
     }
   }
 
-  return { doc: { hero: validateHero(parsed.hero, input, strip, gaps), cards }, cardStatus, gaps };
+  const doc: PersonalCardDoc = { hero: validateHero(parsed.hero, input, strip, gaps), cards };
+  const metrics = personalizerMetrics(doc, oracle, (Object.entries(cardStatus) as Array<[SelfV2AreaId, CardStatus]>).filter(([, st]) => st === 'ok').map(([id]) => id));
+  for (const id of metrics.flagged) gaps.push(`${id}: flag: the card repeats ${Math.round((metrics.oracleEcho[id] ?? 0) * 100)} % of the Oracle's word sequences (not dropped)`);
+  return { doc, cardStatus, gaps, metrics };
 }
 
 /** The hero: tone from the six words, one sentence and a sub line, one question on a dated claim, withheld when split. */
@@ -482,9 +592,14 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
   const oracle = input.oracle;
   const w = input.windows;
   const windowDays = [w.easesAt, w.nextSupportFrom, w.heaviestNow?.from, w.heaviestNow?.to].filter((d): d is string => Boolean(d));
+  // the `now` brief's dates and rows are the hero's ground too (run 1 failure 14)
+  const nowDays = [
+    ...(input.now?.dates ?? []).flatMap((d) => [d.from, d.to]),
+    ...(input.now?.ledger ?? []).flatMap((r) => [r.since, r.until]).filter((d): d is string => Boolean(d)),
+  ];
   const o = oracleDates(oracle);
-  const heroDates = frameOf([...o.days, ...windowDays]);
-  const c: TextCheckContext = { gender: input.profile.gender, dates: heroDates, roleWords: roleWordsFor(input.profile.facts) };
+  const heroDates = frameOf([...o.days, ...windowDays, ...nowDays]);
+  const c: TextCheckContext = { gender: input.profile.gender, dates: heroDates, roleWords: roleWordsFor(input.profile.facts), stageWords: seniorStageWordsFor(input.profile) };
   const toneRaw = str(raw.tone) as Tone;
   const tone: Tone = TONES.includes(toneRaw) ? toneRaw : 'mixed';
   if (!TONES.includes(toneRaw)) gaps.push(`hero: tone ${toneRaw || 'missing'} is not one of the six; mixed used`);
@@ -500,21 +615,22 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
     gaps.push(`hero: sub line dropped (${subP})`);
     sub = '';
   }
-  const claims = new Set(claimKeysOf(oracle));
+  const claims = new Set([...claimKeysOf(oracle), ...(input.now?.claims ?? []).map((x) => x.id)]);
   const q = obj(raw.question);
   const qClaimRaw = str(q.claimId) || str(raw.questionClaimId);
   const qClaim = qClaimRaw && !qClaimRaw.startsWith('claim:') ? `claim:${qClaimRaw}` : qClaimRaw;
   const qText = str(q.text) || str(raw.questionText);
   let question: HeroDoc['question'] = null;
   if (qClaim && qText) {
-    const qp = !claims.has(qClaim) ? `claim ${qClaim} is not in the Oracle document` : textProblem(qText, c);
+    const qp = !claims.has(qClaim) ? `claim ${qClaim} is not in the Oracle document` : (textProblem(qText, c) ?? questionMatterProblem(qClaim, qText, input));
     if (qp) gaps.push(`hero: question dropped (${qp})`);
     else question = { claimId: qClaim, text: qText };
   }
   const focus = input.profile.facts?.focus ?? [];
   if (sentence && focus.length && !focusNamed(`${sentence} ${sub}`, focus)) gaps.push(`hero: names none of the stated focus (${focus.join(', ')})`);
   const split = heroSplit(oracle);
-  const nextCheck = [w.easesAt, w.nextSupportFrom].filter((d): d is string => Boolean(d) && d! > w.asOf).sort()[0] ?? null;
+  // only real days: an area's 'always' is never a date to check on (run 1 failure 14)
+  const nextCheck = [w.easesAt, w.nextSupportFrom].filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > w.asOf).sort()[0] ?? null;
   return {
     tone,
     sentence,
@@ -525,4 +641,25 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
     question,
     withheld: split || !sentence || raw.withheld === true,
   };
+}
+
+/**
+ * The hero question must test its own claim (doc 66 replay run 2, failure 6): the text names at least one of the claim's
+ * life matters in plain words (`MATTER_PLAIN`), read from the claim id or, for the code-built hero claim, from its S5
+ * row. Null when it does; else why the question is dropped (the API then asks the first missing fact).
+ */
+export function questionMatterProblem(claimId: string, text: string, input: Pick<PersonalizerInput, 'heroClaim' | 'profile'>): string | null {
+  const matters: Matter[] = [...new Set([...(input.heroClaim?.claimId === claimId ? input.heroClaim.matters : []), ...mattersOfClaim(claimId)])];
+  if (!matters.length) return `claim ${claimId} names no life matter; the question cannot be checked`;
+  const hasChildren = Boolean(input.profile.facts?.children && input.profile.facts.children !== 'none');
+  const words = matters.flatMap((m) => [...MATTER_PLAIN[m].words, ...(hasChildren ? (MATTER_PLAIN[m].childWords ?? []) : [])]);
+  if (!wordsMatcher(words)?.test(text)) return `the question names none of its claim's matters (${matters.join(', ')})`;
+  // one thing at a time: a word that belongs only to another life matter (the person's focus or job, say) is not asked
+  const own = new Set(words.map((w) => w.toLowerCase()));
+  const others = (Object.keys(MATTER_PLAIN) as Matter[])
+    .filter((m) => !matters.includes(m))
+    .flatMap((m) => [...MATTER_PLAIN[m].words, ...(MATTER_PLAIN[m].childWords ?? [])])
+    .filter((w) => !own.has(w.toLowerCase()));
+  const other = wordsMatcher(others)?.exec(text)?.[0];
+  return other ? `the question also asks about another life matter (${other})` : null;
 }

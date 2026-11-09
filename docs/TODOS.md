@@ -1888,30 +1888,68 @@ region costs about $1 per million tokens per hour.
   for the word "executive". Other stand-ins show redaction gaps: "A disciplined … calls for", "wealth … resolve".
   Done: the stand-in goes through `textProblem` with the profile's role words; it never contains "…"; it falls back
   to the area title. A test covers it (`personalizerValidate.ts`).
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** the stand-in passes `textProblem` with the profile, role, career-stage and body words, never carries "…" (redaction drops the sentence), else shows "Not enough in your chart to say this with confidence." (`standInHeadline`, test `run2Findings.test.ts`).
 - **P1 · The cards are barely personalised.** Drive, chapters and body read nearly word for word the same for all
   three profiles. Profile a (25–35, founder) gets "seasoned professional", "experienced guide" and "mentorship and
   advisory leadership". Profile c (retired) gets "Maintain a crisp and formal style in all meetings" and "assertive
   labor to secure your assets". Done: prompt examples per age band and work status; role words "meetings", "labor"
   and "professional"; an age-band list for under 36; a flag when a card copies more than about 60 % of an Oracle
   paragraph.
+  **DONE in code, not yet measured live (fix/self-v2-run2-findings):** band register and work-level examples in THE PERSON, focus as the Now-card lens, career-stage words gated by band and level (`SELF_V2_SENIOR_STAGE_*`), "meetings/labor/professional" role words, an Oracle-echo metric per build (flag over 0.6); golden distinctness max Jaccard 0.231 vs 0.586 on run 2.
 - **P2 · Six of 33 cards withheld for headline length or chart terms.** Over 14 words: a stuck, a chapter, c lagna.
   Chart terms "yogas" and "annual cycle": a yogas, a year, c year. Done: shorten or redact the headline instead of
   withholding the card, add a schema `maxLength` hint, and add a prompt line naming "yoga" and "annual cycle".
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** a failing headline falls back to the first passing body sentence of ≤ 14 words, else the area title; the card is never withheld for its headline alone (all six run 2 cards now deliver on replay).
 - **P2 · The hero question does not check its claim.** All three cite `stuck.heaviest_now:presses:ideas_and_children+…`
   but ask about "your business", "career and family life" or "health and spiritual practice". Done: the question
   names the claim's own plain-word areas, with a flag when it does not.
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** code builds the question frame from the S5 row (`heroClaimFrame`, draft on one matter); the validator drops a question that names none of its claim's matters or also names another (all three run 2 questions now drop; the API asks the missing fact).
 - **P2 · Family readers are cut at the cap.** `family.dasha` ended with `MAX_TOKENS` (654 out + 1,342 thought against
   2,000). Its finding stopped mid-sentence, had no `VALID_UNTIL`, and went into the Oracle as it was. Done: a cut
   finding is dropped as a gap, and the readers' cap goes to about 3,000 or their thinking to `low`.
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** cap 4,000 (`SELF_FAMILY_MAX_OUTPUT_TOKENS`, v1 and v2); a `MAX_TOKENS` finding passes only complete sentences with a note (or nothing), is gapped and never cached.
 - **P2 · The body card writes diet advice for every profile** ("meals" ×3, "dietary", "nervous system"). The drop
   then takes the whole ladder. "Nervous depletion" and "Nervous exhaustion is a source of friction until
   12 Dec 2026" pass. Done: a body-card prompt line, those two phrases added to `SELF_V2_BODY_ADVICE_WORDS`, and a drop
   of the step only (see the P3 filed by fix/self-v2-replay-findings).
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** ladder steps are checked one by one (the ladder stands with ≥ 2 steps); "nervous depletion/exhaustion" added; the prompt limits the body card to heat, dryness, heaviness, fluids, rest and pace.
 - **P3 · Expired cache regions cannot be deleted.** `deleteOne` gets HTTP 403 for a region that has already expired.
   The row keeps `deleted_at = null`, so the sweeper retries it for ever. This test person has 15 such rows from
   earlier today, and each per-individual delete spends about 0.5 s on each one. Done: treat 403 or 404 on a row past
   `expires_at` as deleted (`src/reading/llm/promptCache.ts`).
+  **DONE 2026-11-09 (fix/self-v2-run2-findings):** HTTP 403/404 on a region past `expires_at` marks the row deleted on every delete path (`goneOnDelete`, test `tests/unit/reading/llm/cacheSweepExpired403.test.ts`).
 - **P3 · The sub-techniques still take 9.0 s** from this machine; the parallel Layer 0 gained nothing (9.1 s in run 1).
   Done: count the database round trips and time them on the Lambda before changing code.
+  **PARTLY DONE (fix/self-v2-run2-findings):** every Layer 0 read is timed (`sub.load.*` in the build ms map) and the profile read moved into Layer 0; the database side still unmeasured: read `sub.load.*` on the next live run and on the Lambda.
 - **P3 · The Oracle still reports 0 thought tokens** on gemini-3.8-flash at `low` (3 of 3 calls). This is unchanged
   from run 1 and needs one tiny paid call with a yes.
+  **PARTLY DONE (fix/self-v2-run2-findings):** an absent `thoughtsTokenCount` is now recorded as not reported (`thoughtTokensReported: false`, null in the Lab); the run 2 record kept only the mapped 0, so whether 3.8-flash reports it at `low` still needs one tiny paid call with a yes.
+
+## Filed 2026-11-09 by fix/self-v2-run2-findings
+
+Owner: the next Self v2 branch unless noted.
+- **P2 · Distinctness is measured on hand-written goldens only.** `run2Findings.test.ts` asserts the three profiles'
+  cards share ≤ 25 % of their words (token Jaccard) on golden documents written to the new prompt (max 0.231; run 2's
+  raw output: 0.586). Whether the model now writes like the goldens needs run 3 (paid, needs a yes); read the per-build
+  `self.v2 personalizer metrics` log line (Oracle echo mean/max, flagged cards) there.
+- **P2 · Saturn's aspect number cannot be checked (run 1 failure 9).** The digest's planet rows carry `aspectsTo`
+  (houses) and `aspectedBy` (planets), and house rows `aspectedGraha` / `aspectedRasi`, but no aspect ordinal ("third",
+  "tenth"). Checking "Saturn's tenth aspect onto the Moon" would need Node to derive the house offset, which the
+  Radha-only rule forbids. Engine pass (owner: Radha lane): store the aspect number per `aspectedBy` entry; then the
+  Oracle validator can check aspect claims by lookup.
+- **P2 · The web shows an empty ladder step.** The validator now drops a failing ladder step and leaves it `''` (the
+  ladder stands with ≥ 2 steps). `AreaCard.tsx` (AIAstra_WEB `pages/you/v2`) renders all four rows; it should skip an
+  empty step. Owner: web lane.
+- **P2 · A withheld stand-in card reads as `ok` in the API.** `v2api/response.ts` `areaStatus` returns `ok` whenever a
+  card object exists, and the validator stores a withheld card (stand-in headline, empty body). The status should come
+  from `cardStatus`. Owner: the API lane (that file was off limits to this branch).
+- **P3 · Headline fallback when no body sentence fits.** The brief asked for the withheld line; this branch uses the area
+  title instead when the body passes (a confident body under "Not enough in your chart…" contradicts itself). One line in
+  `validatePersonalDoc` to switch if Sachin prefers the withheld line.
+- **P3 · The hero question check is strict.** A question that names a word of another life matter is dropped (run 2's c:
+  "health and spiritual practice"); the words tables (`MATTER_PLAIN`, reviewed-by-Sachin header) decide. Watch run 3
+  for over-dropping; the API then asks the missing fact.
+- **P3 · Sub-technique load: what could not be confirmed offline.** The reads are one round each and `loadDigest` is
+  already memoised (per kundli and built-at, `MEMO_MS`); the activation read takes only the primary and confirming
+  clocks. What is slow on the live DB (digest row size, Render latency, the pressure pull) is unknown until a live run
+  reads `sub.load.*`.

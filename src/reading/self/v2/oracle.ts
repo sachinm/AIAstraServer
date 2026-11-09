@@ -262,8 +262,14 @@ export function timingOf(agent: SelfV2AgentTiming['agent'], call: string, model:
     outputTokens,
     thoughtTokens,
     costUsd: res ? round6(usageCostUsd({ model, promptTokens, cachedTokens, outputTokens, thoughtTokens })) : 0,
+    // run 2: a provider usage without a thought count is "not reported" (the Lab shows it so), never a measured 0
+    ...(u && u.thoughtTokensReported !== undefined ? { thoughtTokensReported: u.thoughtTokensReported } : {}),
   };
 }
+
+/** The thought count as the Lab and the reports show it: null when the provider did not report one (run 2, failure 10). */
+export const reportedThoughtTokens = (t: Pick<SelfV2AgentTiming, 'thoughtTokens' | 'thoughtTokensReported'>): number | null =>
+  t.thoughtTokensReported === false ? null : t.thoughtTokens;
 
 /**
  * Runs the three Oracle calls in parallel over one warm prefix, merges and validates. Never throws: a call that throws
@@ -309,7 +315,7 @@ export async function runOracleV2(
             return {
               value: g,
               usage: { model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0 },
+              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
             };
           },
         );

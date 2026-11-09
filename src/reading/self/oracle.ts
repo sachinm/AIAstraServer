@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
+import { getSelfFamilyMaxOutputTokens, getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
 import { latestStoredOutput, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -28,7 +28,7 @@ import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import { runningMudda, runningTp } from './panels/year.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
-import { clockLabel, MAX_LINE_WORDS, redactEngineTerms, wordCount } from './words.js';
+import { clockLabel, completeSentencesOf, CUT_FINDING_NOTE, MAX_LINE_WORDS, redactEngineTerms, wordCount } from './words.js';
 import { areaCertaintyToLine, areaDocToText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from './areaDoc.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
 import { LOVE_PANEL_IDS, SELF_PANEL_IDS, WORK_PANEL_IDS } from './types.js';
@@ -898,7 +898,8 @@ export async function runSelfOracle(
                 system: FAMILY_SYSTEM_PROMPTS[familyId],
                 parts: [pack.prefix, pack.dynamic],
                 thinking: 'medium',
-                maxOutputTokens: 2000,
+                // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
+                maxOutputTokens: getSelfFamilyMaxOutputTokens(),
                 cachePrefix: true,
                 cacheOwner: owner,
               });
@@ -927,7 +928,10 @@ export async function runSelfOracle(
           );
           const ms = Math.round((performance.now() - tStart) * 100) / 100;
           const st = summarizeCall(familyId, readerModel, res, ms);
-          const cleanFinding = redactEngineTerms(res.text);
+          // a finding cut at the cap keeps only its complete sentences (doc 66 replay run 2, failure 7)
+          const cut = res.finishReason === 'MAX_TOKENS';
+          const kept = cut ? completeSentencesOf(res.text) : res.text;
+          const cleanFinding = redactEngineTerms(cut && kept ? [kept, CUT_FINDING_NOTE].join('\n') : kept);
 
           const parsed = parseLinemanClaims(cleanFinding, new Set(pack.keys));
           const lineman: SelfOracleLinemanRecord = {
@@ -960,7 +964,8 @@ export async function runSelfOracle(
               ms,
             },
           };
-          await saveDbReaderCache(prisma, {
+          // a cut finding is never cached: the next build asks again under the higher cap
+          if (!cut) await saveDbReaderCache(prisma, {
             cacheKey,
             kundliId,
             userId,

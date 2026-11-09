@@ -1024,6 +1024,15 @@ export function getSelfV2RoleWordsNotWorking(): string[] {
     'clients',
     'payroll',
     'quarterly',
+    // doc 66 replay run 2 (2026-11-09): job words that reached the retired profile outside the list
+    'meetings',
+    'meeting',
+    'labor',
+    'labour',
+    'professional',
+    'professionals',
+    'workday',
+    'office',
   ]);
 }
 
@@ -1064,5 +1073,81 @@ export function getSelfV2BodyAdviceWords(): string[] {
     'diagnosis',
     'dose',
     'hydration',
+    // doc 66 replay run 2 (2026-11-09): "nervous depletion" and "nervous exhaustion" passed on the body card
+    'nervous depletion',
+    'nervous exhaustion',
   ]);
+}
+
+// ── Self v2 run 2 fixes (docs/reading-engine/66-replay-2026-11-09-self-v2-run2.md) ─
+
+/**
+ * Output cap of the Self v2 family readers (and the v1 Self family readers). Env `SELF_FAMILY_MAX_OUTPUT_TOKENS`
+ * (integer, 1000–16000; default 4000). Measured on run 2 (2026-11-09): `family.dasha` stopped at `MAX_TOKENS` with
+ * 654 out + 1,342 thought = 1,996 of the old fixed 2,000 (thought tokens count against the cap on Gemini 3.x); the
+ * longest complete reader was `family.rasi` at 951 + 1,005 = 1,956. 4,000 is twice the longest measured finish.
+ */
+export function getSelfFamilyMaxOutputTokens(): number {
+  return parseClampedIntEnv('SELF_FAMILY_MAX_OUTPUT_TOKENS', 4000, 1000, 16000);
+}
+
+/*
+ * Career-stage words (doc 66 replay run 2, failure 2: a 25–35 founder told she has "the aura of an experienced guide or
+ * seasoned professional" and to anchor her ambitions in "mentorship and advisory leadership").
+ *
+ * reviewed by Sachin before release; vocabulary, not derivation
+ *
+ * The words name a stage of a long career. They may stand on a card only when the person's age band is one of
+ * `SELF_V2_SENIOR_STAGE_BANDS`, or when `work.level` is one of `SELF_V2_SENIOR_STAGE_LEVELS` and the band is not one of
+ * `SELF_V2_JUNIOR_BANDS`. Words and the person's own answers only; nothing astrological.
+ */
+
+/** Env `SELF_V2_SENIOR_STAGE_WORDS` (comma list; whole-word, case-insensitive). */
+export function getSelfV2SeniorStageWords(): string[] {
+  return listEnv('SELF_V2_SENIOR_STAGE_WORDS', [
+    'seasoned',
+    'veteran',
+    'experienced guide',
+    'experienced professional',
+    'established leader',
+    'mentor',
+    'mentors',
+    'mentoring',
+    'mentorship',
+    'advisory',
+    'advisory leadership',
+    'elder statesman',
+    'succession',
+    'decades of experience',
+    'senior leader',
+    'executive leadership',
+    'executive judgment',
+    'executive resolve',
+    'gravitas',
+  ]);
+}
+
+/** Bands where career-stage words may stand whatever the level. Env `SELF_V2_SENIOR_STAGE_BANDS`. */
+export function getSelfV2SeniorStageBands(): string[] {
+  return listEnv('SELF_V2_SENIOR_STAGE_BANDS', ['46_60', '60_plus']);
+}
+
+/** Work levels that allow career-stage words outside the junior bands. Env `SELF_V2_SENIOR_STAGE_LEVELS`. */
+export function getSelfV2SeniorStageLevels(): string[] {
+  return listEnv('SELF_V2_SENIOR_STAGE_LEVELS', ['manager', 'senior_leader', 'several_businesses']);
+}
+
+/** Bands where career-stage words never stand, whatever the level. Env `SELF_V2_JUNIOR_BANDS`. */
+export function getSelfV2JuniorBands(): string[] {
+  return listEnv('SELF_V2_JUNIOR_BANDS', ['under_25', '25_35']);
+}
+
+/**
+ * The runtime "Oracle echo" flag (doc 66 replay run 2, failure 1): a card whose body repeats more than this share of the
+ * Oracle area's word trigrams is flagged in the build's gaps (never dropped). Env `SELF_V2_ORACLE_ECHO_FLAG` (0–1,
+ * default 0.6).
+ */
+export function getSelfV2OracleEchoFlag(): number {
+  const n = Number(process.env.SELF_V2_ORACLE_ECHO_FLAG?.trim());
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.6;
 }

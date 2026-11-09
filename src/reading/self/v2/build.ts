@@ -17,7 +17,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getSelfReadingMaxSpendUsd } from '../../../config/env.js';
+import { getSelfFamilyMaxOutputTokens, getSelfReadingMaxSpendUsd } from '../../../config/env.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
 import { canonicalJson } from '../../../techniques/pieces.js';
 import { informIndividualCacheUsed } from '../../llm/cacheSweep.js';
@@ -26,6 +26,7 @@ import type { ensurePromptCache } from '../../llm/promptCache.js';
 import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../../oracle/prewarm.js';
 import { PROMPT_VERSION } from '../../prompts/generated.js';
 import { redactEngineTerms } from '../oracle.js';
+import { completeSentencesOf, CUT_FINDING_NOTE } from '../words.js';
 import { SELF_V2_REFRESH } from '../v2types.js';
 import type {
   AreaBrief,
@@ -232,7 +233,8 @@ async function runFamilyReaders(
   deps: SelfV2BuildDeps & { callGemini: NonNullable<SelfV2BuildDeps['callGemini']> },
   ctx: SelfBuildContext,
   fam: FamilySlices,
-): Promise<{ findings: Array<{ family: string; text: string }>; timings: SelfV2AgentTiming[] }> {
+): Promise<{ findings: Array<{ family: string; text: string }>; timings: SelfV2AgentTiming[]; gaps: string[] }> {
+  const gaps: string[] = [];
   const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
   const outs = await Promise.all(
     FAMILY_IDS.map(async (id: SelfV2FamilyAgentId) => {
@@ -262,20 +264,27 @@ async function runFamilyReaders(
               system: slice.system,
               parts: [slice.prefix, slice.suffix],
               thinking: 'medium',
-              maxOutputTokens: 2000,
+              // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
+              maxOutputTokens: getSelfFamilyMaxOutputTokens(),
               cachePrefix: true,
               cacheOwner: slice.cacheOwner,
             });
             return {
               value: g,
               usage: { model: slice.model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0 },
+              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, finish: g.finishReason ?? null, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
             };
           },
         );
         markAgentUsed(slice, deps.informUsed);
-        const text = redactEngineTerms(res.text);
+        // a finding cut at the output cap (MAX_TOKENS) never reaches the Oracle as it is: only its complete sentences,
+        // with a note, or nothing; it is never cached (doc 66 replay run 2, failure 7)
+        const cut = res.finishReason === 'MAX_TOKENS';
+        const kept = cut ? completeSentencesOf(res.text) : res.text;
+        if (cut) gaps.push(`${id}: cut at the output cap (MAX_TOKENS); ${kept ? `${kept.length} of ${res.text.length} chars kept, complete sentences only` : 'no complete sentence; not passed to the Oracle'}`);
+        const text = kept ? redactEngineTerms(cut ? [kept, CUT_FINDING_NOTE].join('\n') : kept) : '';
         const timing = timingOf(id, id, slice.model, res, since(t0), 'ok');
+        if (cut) return { family: id, text, timing };
         const stored: HeldReader = {
           finding: { reader: id, rawText: text } as unknown as HeldReader['finding'],
           usage: { node: id, model: slice.model, promptTokens: timing.promptTokens, cachedTokens: timing.cachedTokens, outputTokens: timing.outputTokens, thoughtTokens: timing.thoughtTokens, ms: timing.ms },
@@ -299,7 +308,7 @@ async function runFamilyReaders(
       }
     }),
   );
-  return { findings: outs.filter((o) => o.text).map((o) => ({ family: o.family, text: o.text })), timings: outs.map((o) => o.timing) };
+  return { findings: outs.filter((o) => o.text).map((o) => ({ family: o.family, text: o.text })), timings: outs.map((o) => o.timing), gaps };
 }
 
 /** Runs one Self v2 build to the end (doc 66 §4.8). Never throws. */
@@ -395,6 +404,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         const fr = await runFamilyReaders(d, ctx, fam);
         ms.families = since(tf);
         agents.push(...fr.timings);
+        gaps.push(...fr.gaps);
         familyFindings = fr.findings;
         const familySpend = round6(fr.timings.reduce((n, x) => n + x.costUsd, 0));
         const built = buildOracleSlice(ctx, fam.packs, briefs, familyFindings);
@@ -443,7 +453,8 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     }
 
     // 7–8: the Personalizer over the Oracle document; its prefix warmed first
-    const p = buildPersonalizerSlice(ctx, oracle.output);
+    // the hero rests on the `now` brief (its S3/S5 rows and dates); no Oracle call writes it (run 1 failure 14)
+    const p = buildPersonalizerSlice(ctx, oracle.output, briefs);
     out.slices = sliceTable([...FAMILY_IDS.map((id) => fam.slices[id]), oracleSlice, p.slice]);
     const cardsKey = cardsStoreKey(ctx, oracleKey);
     out.keys.cards = cardsKey;
@@ -468,6 +479,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         const r = await runPersonalizer({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: spent, maxSpendUsd }, ctx, p.slice, p.input, ctx.sub.windows?.strip ?? []);
         if (r.call) agents.push(r.call);
         step('personalizer.validated');
+        if (r.metrics) logPersonalizerMetrics(ctx, r.metrics);
         const result: SelfV2CardsResult = { ...r, cached: false };
         const frame: SelfV2Frame = { asOf: ctx.asOf, stamps: ctx.stamps, periods: ctx.sub.periods ?? null, year: ctx.sub.year ?? null };
         return {
@@ -493,6 +505,11 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
   } finally {
     ms.total = since(tAll);
   }
+}
+
+/** The per-build Oracle-echo metric (doc 66 replay run 2, failure 1): one log line, never a reject. */
+function logPersonalizerMetrics(ctx: SelfBuildContext, m: NonNullable<SelfV2CardsResult['metrics']>): void {
+  console.log(JSON.stringify({ msg: 'self.v2 personalizer metrics', kundliId: ctx.kundliId, profile: ctx.sub.profile?.hash ?? null, echoMean: m.echoMean, echoMax: m.echoMax, echoMaxArea: m.echoMaxArea, flagged: m.flagged }));
 }
 
 function sliceTable(slices: readonly PreparedAgentSlice[]): SelfV2BuildResult['slices'] {

@@ -197,6 +197,8 @@ function toUsage(o: GeminiCallOptions, last: GeminiChunk | null, ms: number): Us
     cachedTokens: u.cachedContentTokenCount ?? 0,
     outputTokens: u.candidatesTokenCount ?? 0,
     thoughtTokens: u.thoughtsTokenCount ?? 0,
+    // doc 66 replay run 2: the Oracle on 3.8-flash at `low` showed 0 thought tokens; an absent field is "not reported"
+    thoughtTokensReported: typeof u.thoughtsTokenCount === 'number',
     ms,
   };
 }

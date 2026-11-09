@@ -85,8 +85,9 @@ describe('replay 66 · Personalizer validator on profile c (retired, 60+, focus 
     const pairs = new Set(Object.values(oracleOut.doc.areas).flatMap((a) => (a ? a.dates.map((d) => `${d.from}|${d.to}`) : [])));
     for (const c of Object.values(v.doc.cards)) for (const d of c?.dates ?? []) expect(pairs.has(`${d.from}|${d.to}`)).toBe(true);
     const kept = Object.values(v.doc.cards).filter((c) => c?.dates.length).length;
-    // every shown card whose date is an Oracle window keeps it (2 of 11 kept a date on the replay, both action spans)
-    expect(kept).toBe(5);
+    // every shown card whose date is an Oracle window keeps it (2 of 11 kept a date on the replay, both action spans);
+    // since run 2 a card is no longer withheld for its headline alone, so more cards (and their dates) stand
+    expect(kept).toBeGreaterThanOrEqual(5);
   });
 
   it('6 · a card date that is an action span or a joined pair is dropped (lagna 2026-11-09..2034-10-22, presence 2026-11-09..2026-12-12)', () => {
@@ -122,7 +123,8 @@ describe('replay 66 · Personalizer validator on profile c (retired, 60+, focus 
   it('the validated document has no gendered word; only cards whose headline breaks a rule are withheld', () => {
     // diagnosis: 16-word headline; stuck "Karmic friction", yogas "combinations … nodal axis", year "annual cycle"
     const withheld = Object.entries(v.cardStatus).filter(([, s]) => s === 'withheld').map(([id]) => id).sort();
-    expect(withheld).toEqual(['diagnosis', 'stuck', 'year', 'yogas']);
+    // since run 2 a failing headline falls back to a body sentence: only yogas, whose body did not survive, is withheld
+    expect(withheld).toEqual(['yogas']);
     expect(faceText(v.doc).join(' ')).not.toMatch(/\b(he|she|his|her|him)\b/i);
   });
 });
@@ -131,8 +133,8 @@ describe('replay 66 · Personalizer prompt carries the person', () => {
   it('4 · THE PERSON states age band, work status, love, children and focus, and forbids job words for a retired person', () => {
     const s = personalizerSuffix(inputFor(profileC), REPLAY_ASOF);
     for (const line of ['age band: 60 and over', 'work status: retired (no current job)', 'love status: not stated', 'children: not stated', 'focus: health, spirituality']) expect(s).toContain(line);
-    expect(s).toMatch(/Never write of a workplace, colleagues, a team, a boss, clients, pitches, promotion, executive duties/);
-    expect(s).toMatch(/Focus first: the hero and the first card you write speak to health and spirituality/);
+    expect(s).toMatch(/Never write of a workplace, colleagues, a team, a boss, clients, pitches, meetings, labor, promotion, executive duties/);
+    expect(s).toMatch(/Focus first: health and spirituality leads the hero, and is the lens of the Now group cards/);
     const b = load<ProfileRun>('c584c0a3-personalizer-b.json');
     const sb = personalizerSuffix(inputFor(b), REPLAY_ASOF);
     expect(sb).toContain('work level: senior_leader');

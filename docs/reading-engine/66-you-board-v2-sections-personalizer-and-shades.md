@@ -443,6 +443,18 @@ derived from the replay's per-call costs); no call has been made since.
 | Sub-techniques + briefs | ≈ 300 ms | **9.1 s** (database round trips from a laptop) | ≈ 10 sequential round trips cut to ≈ 6 (Layer 0 in one round, run logs awaited once at the end): a 150 ms-per-trip simulation runs under 1 s (test `replayFindings.test.ts`); the database side (digest row size, Render latency) cannot be checked offline; on the Lambda next to the database it should be well under 1.5 s |
 | One cold build, one profile | ≈ $0.075–0.08, ≈ 35 s | ≈ $0.107 + ≈ $0.004 storage, ≈ 61 s | ≈ $0.074 + storage, ≈ 50–55 s from a laptop |
 
+**Measured on the second v2 replay (run 2, 2026-11-09, after `fix/self-v2-replay-findings`; report
+`66-replay-2026-11-09-self-v2-run2.md`).** One build, kundli `c584c0a3`, three synthetic profiles, 11 model calls, 0
+retries, 0 refusals.
+
+| Step | Expected after the run 1 fixes | Measured run 2 |
+|---|---|---|
+| Family readers ×5 | unchanged | $0.0154, 6.7 s; `family.dasha` stopped at `MAX_TOKENS` (654 out + 1,342 thought against the fixed 2,000). Cap now 4,000 (`SELF_FAMILY_MAX_OUTPUT_TOKENS`); a cut finding passes only complete sentences, is never cached (branch `fix/self-v2-run2-findings`) |
+| Oracle ×3 | ≈ 85 % cached, ≈ $0.052 | **89.7 % cached** (31.4 k of 35.0 k per call); **$0.0520**; 26.2 s; 0 thought tokens reported (whether the provider reports the field at `low` is still unverified: the timings now record "not reported" instead of 0 when the field is absent) |
+| Personalizer (3 profiles) | ≈ $0.006 and ≈ 9–11 s each; a retry when cut | **3 of 3 `STOP`** on the first call at the 8,000 cap; 4.1–4.3 k out, 0 thought (`minimal`); $0.0196 for the three; 10.4–12.2 s |
+| Sub-techniques + briefs | ≈ 6 round trips, well under 1.5 s on the Lambda | **9.0 s** from a laptop (run 1: 9.1 s): the parallel Layer 0 gained nothing measurable. Per-read timings now land in the build's `ms` (`sub.load.digest`, `…kundli`, `…systems`, `…sky`, `…profile`, `…applicability`, `…activation`, `…pressure`); the profile read moved into Layer 0. Not yet measured on the Lambda |
+| One build, three profiles | — | **$0.087 for 11 calls** (`priceFor`) + **≈ $0.002 storage** (126,548 cached tokens × $1 / M / h × 1.04 min; the regions were deleted after the run) ≈ **$0.089**, against a $0.15 cap; 72.7 s wall (58.9 s of build steps, ≈ 14 s deleting cache rows, 15 of which failed with HTTP 403 on expired regions: now treated as gone) |
+
 Token estimate: the Lab now shows chars / 2.2 (`estProviderTokens`; the replay's 74.6 k chars of Oracle input were
 34.6 k provider tokens); chars / 4 stays only as the conservative padding bound for the 1,024-token cache minimum.
 
