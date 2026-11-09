@@ -7,6 +7,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
+import { storedValidity, validityOf, type ReadingValidity } from './validity.js';
 import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
@@ -45,7 +46,7 @@ export interface AreaSpec {
 export type AreaBoardResult =
   | { status: 'no_kundli' }
   | { status: 'preparing' }
-  | { status: 'ok'; built_at: string; cached: boolean; focus: string | null; ask: boolean; board: AreaBoardBody };
+  | ({ status: 'ok'; built_at: string; cached: boolean; focus: string | null; ask: boolean; board: AreaBoardBody } & ReadingValidity);
 
 const DECLINED = 'declined';
 
@@ -171,6 +172,7 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
 
   const cached = await prisma.areaBuild.findUnique({ where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: spec.area, as_of: asOfDate } } });
   let built: BuiltBoard | null = cached?.status === 'ready' ? (cached.result as unknown as BuiltBoard) : null;
+  let validity = built ? storedValidity(cached?.result, cached?.created_at, asOf) : null;
   let fresh = false;
   if (!built) {
     const view = await (deps.loadDigest ?? realLoadDigest)(prisma, kundli.id);
@@ -234,15 +236,17 @@ export async function getAreaBoard(deps: BoardDeps, spec: AreaSpec, userId: stri
       },
     );
     built = out.value;
+    validity = validityOf(out, asOf);
+    const stored = { ...built, validity } as unknown as object;
     await prisma.areaBuild
       .upsert({
         where: { kundli_id_area_as_of: { kundli_id: kundli.id, area: spec.area, as_of: asOfDate } },
-        create: { user_id: userId, kundli_id: kundli.id, area: spec.area, as_of: asOfDate, status: 'ready', result: built as unknown as object },
-        update: { status: 'ready', result: built as unknown as object, error: null },
+        create: { user_id: userId, kundli_id: kundli.id, area: spec.area, as_of: asOfDate, status: 'ready', result: stored },
+        update: { status: 'ready', result: stored, error: null },
       })
       .catch(() => undefined);
     fresh = !out.cached;
   }
   const shaped = shapeBoard(built, spec, fact);
-  return { status: 'ok', built_at: asOf, cached: !fresh, focus: shaped.focus, ask: fact === null, board: shaped.board };
+  return { status: 'ok', built_at: asOf, cached: !fresh, focus: shaped.focus, ask: fact === null, board: shaped.board, ...(validity ?? storedValidity(null, null, asOf)) };
 }

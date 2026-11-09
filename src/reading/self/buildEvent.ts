@@ -16,6 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { getKundliDigestEventToken } from '../../config/env.js';
 import { queueLog, queueLogError } from '../../lib/queueLogger.js';
+import { questionGate, type QuestionGate } from '../../billing/questionGate.js';
 import { getBoardReading, type SelfDeps, type SelfReadingResult } from './service.js';
 import type { ReadingBoardId } from './types.js';
 
@@ -124,6 +125,8 @@ export interface QueueDeps {
   invoke?: (payload: Record<string, unknown>) => Promise<void>;
   self?: Omit<SelfDeps, 'prisma'>;
   now?: () => Date;
+  /** the question gate a fresh synthesis is charged to (docs/billing/02; tests replace it) */
+  gate?: Pick<QuestionGate, 'chargeBoard'>;
 }
 
 let lambdaClient: LambdaClient | null = null;
@@ -147,7 +150,11 @@ export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundl
     const oracle = r.status === 'ok' ? r.reading.oracle : undefined;
     const failed = oracle !== undefined && (oracle.status === 'failed' || oracle.status === 'pending');
     await writeBuildMarker(deps.prisma, userId, kundliId, board, now, failed ? 'failed' : 'ready', failed ? `oracle ${oracle.status}` : undefined);
-    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', ms: Date.now() - t0 });
+    // a synthesis written now (not read from the store) takes one question, once per board per day; a failed one none
+    const charged = r.status === 'ok' && oracle?.status === 'ok' && !oracle.cached
+      ? await (deps.gate ?? questionGate(deps.prisma)).chargeBoard(userId, board, r.reading.asOf)
+      : 'none';
+    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', charged, ms: Date.now() - t0 });
     return r;
   } catch (e) {
     await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300));

@@ -38,7 +38,14 @@ export interface QuestionTicket {
 export type CheckResult = { ok: true } | { ok: false; usage: PlanStatus };
 export type ReserveResult = { ok: true; ticket: QuestionTicket } | { ok: false; usage: PlanStatus };
 
-const FREE_TICKET = (userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
+/** The boards a fresh build is charged to; the Work board's map is built by `/api/area/career`. */
+export type BoardCharge = 'self' | 'love' | 'work';
+/** off: limits off; free: exempt, or this board was already charged today; at_limit: not counted, the board is served */
+export type BoardChargeOutcome = 'charged' | 'free' | 'at_limit' | 'off';
+
+export const boardChargeKey = (board: BoardCharge, day: string): string => `board:${board}:${day}`;
+
+const FREE_TICKET =(userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
 
 export class QuestionGate {
   constructor(
@@ -194,6 +201,20 @@ export class QuestionGate {
     } catch (err) {
       console.error('[plans] release failed:', (err as Error).message);
     }
+  }
+
+  /**
+   * A board built fresh today takes one question (docs/billing/02). The key is one per board per UTC day, so a retry, a
+   * re-run build or a second invocation is free. At the limit the board is still served and nothing is counted, so
+   * the counter never passes the limit. Never throws.
+   */
+  async chargeBoard(userId: string, board: BoardCharge, day: string): Promise<BoardChargeOutcome> {
+    if (!this.enabled) return 'off';
+    const held = await this.reserve(userId, { key: boardChargeKey(board, day) });
+    if (!held.ok) return 'at_limit';
+    if (!held.ticket.id) return 'free';
+    await this.commit(held.ticket);
+    return 'charged';
   }
 
   private partsSince(): Date {

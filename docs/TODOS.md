@@ -1410,3 +1410,22 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   `cloudwatch:GetMetricData`, `events:ListRuleNamesByTarget`, `logs:StartQuery`, `logs:GetQueryResults`/`StopQuery`.
   Exact policy in `docs/admin/13-usage-lambda-calls.md` §5. Owner: deploy session (Sachin's typed yes). Done: the
   deployed page shows November's totals and they match the Lambda console's Monitor tab.
+
+## Filed 2026-11-09 by the board-quota build (docs/billing/02, branch `feat/board-quota`)
+
+- **P1 · Decision for Sachin: what a fresh board does at the question limit.** Built as recommended in
+  `docs/billing/02-board-builds-count.md` §9: the board is still built and shown, and the counter stays at the limit.
+  Also confirm the rate: each of You, Love and Work costs one question per day it is opened, so a daily free user uses
+  about 3 a day and runs out of 20 in about a week before asking anything. Owner: Sachin. Done: the rule confirmed, or the
+  key changed (`boardChargeKey` in `src/billing/questionGate.ts`, e.g. one per day across boards).
+- **P2 · The You reading's background synthesis charges, but the web learns of it only on focus or reload.** The charge
+  runs in the `self-reading-build` invocation, which has no response to carry `usage`. The You reading client lives on
+  web `feat/self-reading-oracle-veil` (not on web `develop`); when it lands, call `refreshPlan()` when the polled Oracle
+  turns from `pending` to `ok`, and show the same "Made … · Good until …" stamp as the area boards from the reading's
+  `validUntil` and dossier date (doc 02 §10). Owner: web session that merges that branch. Done: the "N of 20" line moves
+  within one poll and the stamp shows.
+- **P2 · A board charge is keyed by user and day only, not by kundli.** A person who replaces their kundli the same day
+  gets the new board's first build free. Acceptable for now. Done: decided, or `kundliId` added to the key.
+- **P2 · Board charges are not deployed.** Server and web `feat/board-quota` merged to local `develop` 2026-11-09, not
+  pushed. Owner: deploy session (server first, then web). Done: a free staging account opening a new board sees the count
+  move by one, and opening it again does not.
