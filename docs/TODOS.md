@@ -1308,3 +1308,28 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P3 · The three snapshots were built on two engine commits.** 4feca3ca and 858f2f20 say `8191a38`, b4a777a6 says
   `b66869a` (built the day before). Fine if both commits agree on transits; not checked. Owner: reading-dev. Done: one
   commit, or a note that the two agree.
+
+## Filed 2026-11-08 (night) by the Self reading loading session (docs/reading-engine/64, branch `fix/self-reading-background-build`)
+
+- **P1 · The admin Techniques Lab hides an Oracle failure.** `api/src/labAdapter.ts oracleOf` maps a dossier's
+  `oracle` to the "Oracle's answer" block only when text exists; a dossier with `oracle.status = 'failed'` (today's
+  `de1bc2b9`, `5ea12dca` for kundli c584c0a3) shows no Oracle section, no error, no time, so the 163 s and 300 s Gemini
+  time-outs were invisible to Sachin. Owner: admin repo. Done: the build row and the Oracle block show status
+  (`ok | failed | budget_exceeded | pending`), the failing stage, its error text and ms from `audit.steps.oracleMs`
+  and the `agent_runs` row (`self.reading_oracle`, status failed, error "Gemini call timed out after 60000ms").
+- **P1 · `agent_runs` for Gemini stages record zero tokens and zero cost.** `self.reading_oracle` and `lineman.self`
+  rows for the 7:36 am build have `prompt_tokens = 0`, `est_cost_usd = 0` while the dossier's stages record 45,110 /
+  43,414 prompt tokens and $0.05 / $0.013. `withAgentRun` is given `tokensIn/tokensOut/costUsd` by the Oracle stage; the
+  columns stay 0, so the Agents page and any spend cap read from `agent_runs` under-count. Owner: reading-dev. Done:
+  the row carries the tokens and cost the stage summary carries.
+- **P1 · The Oracle essay is produced and never shown (until this branch).** `reading.oracle.text` (11,516 chars,
+  35 s, $0.05 per build) was not rendered by the web; only PANEL_SYNTHESIS lines reached the page, and the
+  `panelPlans` parsed 0 plans on the 7:36 am build (the prompt's PANEL_PLAN format was not followed by the model).
+  This branch renders `panel.plan` and the essay; the prompt rewrite (doc 64 Phase 3) decides whether the essay stays.
+  Owner: reading-dev. Done: Phase 3 shipped or the essay moved to `narrator.self`.
+- **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
+  background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
+  they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P2 · The dossier's `trigger` has no `event` value.** The background build writes its dossier with `trigger:
+  'request'`; a lab reader cannot tell a page-queued build from an in-request one. Owner: reading-dev. Done:
+  `DossierInput.trigger` gains `'event'` and `buildEvent.ts` passes it.

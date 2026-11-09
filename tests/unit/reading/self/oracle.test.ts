@@ -107,3 +107,29 @@ describe('self oracle', () => {
     expect(res.panelLines?.lagna?.length).toBeGreaterThan(0);
   });
 });
+
+describe('self oracle, cached_only mode (docs/reading-engine/64 §4)', () => {
+  it('answers pending without a model call when nothing is stored, and stores nothing', async () => {
+    process.env.SELF_READING_MODEL = '1';
+    const { callGemini } = await import('../../../../src/reading/llm/gemini.js');
+    (callGemini as unknown as { mockClear: () => void }).mockClear();
+    const stored: unknown[] = [];
+    const view = digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' });
+    const res = await runSelfOracle(reading, {}, {
+      prisma: {
+        techniqueOutput: { findUnique: async () => null, upsert: async ({ create }: { create: unknown }) => { stored.push(create); return create; }, updateMany: async () => ({ count: 0 }) },
+        readingFindingsCache: { findUnique: async () => null, upsert: async ({ create }: { create: unknown }) => create, updateMany: async () => ({ count: 0 }) },
+        agentRegistry: { upsert: async () => ({}) },
+        agentRun: { create: async () => ({}) },
+      } as never,
+      userId: 'u1',
+      kundliId: 'k1',
+      view,
+      activation: FIX.activation,
+      mode: 'cached_only',
+    });
+    expect(res.status).toBe('pending');
+    expect(callGemini).not.toHaveBeenCalled();
+    expect(stored).toHaveLength(0);
+  });
+});

@@ -178,7 +178,7 @@ technique's context hash: a clock change makes new keys (§4.2 `PUT /api/self/cl
 `self.reading.*` outputs). Then `shape(facts)`: a claim the person answered `no` to is marked `withheld` with "You told us
 this did not fit"; the confirm question skips answered claims. Concurrency: panels run with `Promise.all`; each panel is
 pure CPU under 5 ms on stored rows; the request reads the digest (memoised 60 s by `loadDigest`) and one activation
-query. Timeouts: the route aborts at 10 s with 503 `reading_slow`. Failures: a panel that throws is returned as
+query. Timeouts: since doc 64 the route never waits on the Oracle: it reads the store and answers `202 stage=reading` while the background build runs (the old 10 s `503 reading_slow` is gone). Failures: a panel that throws is returned as
 `{ status: 'failed' }` and logged; the others still render.
 
 **Validity windows** (doc 56 freshness from each contract): lagna, mind, atma, yogas → natal (open until digest

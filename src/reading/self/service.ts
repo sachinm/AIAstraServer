@@ -246,6 +246,11 @@ export interface SelfReadingOptions {
   only?: BoardPanelId;
   /** build as of this day (lab), YYYY-MM-DD; default today */
   asOf?: string;
+  /**
+   * `cached_only` (the page request, docs/reading-engine/64 §4): the Oracle is read from the store only; with nothing
+   * stored for today the reading comes back with `oracle.status = 'pending'` and no model runs. Default `build`.
+   */
+  oracleMode?: 'build' | 'cached_only';
 }
 
 export async function getSelfReading(deps: SelfDeps, userId: string, opts: SelfReadingOptions = {}): Promise<SelfReadingResult> {
@@ -525,6 +530,7 @@ export async function getBoardReading(
     only: opts.only,
     codeVersion: SELF_READING_VERSION,
     runningSpan: periodSpan('chapters'),
+    mode: opts.oracleMode ?? 'build',
   };
   const oracle: SelfOracleResult = await runSelfOracle(baseReading, answers, oracleCtx);
   const oracleTotalMs = lap();
@@ -608,7 +614,8 @@ export async function getBoardReading(
   const targetScope = opts.only ?? 'all';
   const fresh = panels.some((p) => !p.cached) || (oracle.status === 'ok' && !oracle.cached);
   let dossierId: string | null = null;
-  if (fresh || opts.trigger === 'manual') {
+  // a pending Oracle means the background build is about to write this dossier itself; the page request writes none
+  if ((fresh && oracle.status !== 'pending') || opts.trigger === 'manual') {
     const dIn: DossierInput = {
       kundliId: kundli.id,
       board,

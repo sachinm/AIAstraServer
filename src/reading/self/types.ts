@@ -197,7 +197,8 @@ export interface SelfOracleLinemanRecord {
 }
 
 export interface SelfOraclePayload {
-  status: 'off' | 'ok' | 'failed' | 'budget_exceeded';
+  /** `pending`: no stored synthesis covers today and the caller asked for the store only (the build runs in the background) */
+  status: 'off' | 'ok' | 'failed' | 'budget_exceeded' | 'pending';
   text?: string;
   output?: string;
   brief?: string;
