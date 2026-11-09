@@ -44,6 +44,8 @@ export type BoardCharge = 'self' | 'love' | 'work';
 export type BoardChargeOutcome = 'charged' | 'free' | 'at_limit' | 'off';
 
 export const boardChargeKey = (board: BoardCharge, day: string): string => `board:${board}:${day}`;
+/** A clock switch on the Self board (docs/reading-engine/66 §4.4): one question per system per UTC day. */
+export const clockChargeKey = (day: string, system: string): string => `${boardChargeKey('self', day)}:clock:${system}`;
 
 const FREE_TICKET =(userId: string): QuestionTicket => ({ id: null, periodStart: null, userId });
 
@@ -215,6 +217,24 @@ export class QuestionGate {
     if (!held.ticket.id) return 'free';
     await this.commit(held.ticket);
     return 'charged';
+  }
+
+  /**
+   * Takes one question under `key` and commits it at once, with chargeBoard's rules: a repeat of the key is free, at the
+   * limit nothing is counted (the action still proceeds), exempt roles and limits off are never charged. Never throws.
+   */
+  async chargeKey(userId: string, key: string): Promise<BoardChargeOutcome> {
+    if (!this.enabled) return 'off';
+    const held = await this.reserve(userId, { key });
+    if (!held.ok) return 'at_limit';
+    if (!held.ticket.id) return 'free';
+    await this.commit(held.ticket);
+    return 'charged';
+  }
+
+  /** A Self board clock switch (docs/reading-engine/66 §4.4, billing/02 §9): `board:self:<day>:clock:<system>`. */
+  async chargeClock(userId: string, day: string, system: string): Promise<BoardChargeOutcome> {
+    return this.chargeKey(userId, clockChargeKey(day, system));
   }
 
   private partsSince(): Date {

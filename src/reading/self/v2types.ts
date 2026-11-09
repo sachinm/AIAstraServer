@@ -513,3 +513,46 @@ export interface PersonalCardDoc {
 }
 
 export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed';
+
+// ---------------------------------------------------------------------------------------------------------------------
+// API additions (step 5): GET /api/self/v2 (docs/reading-engine/66 §4.5). The web mirrors this type exactly.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type SelfV2Status = 'ok' | 'pending' | 'preparing' | 'no_kundli';
+
+export interface SelfV2ClockView {
+  /** the clock the board is read on */
+  system: string;
+  label: string;
+  /** ClockResolution['reason'] */
+  reason: string;
+  /** one plain line saying why this clock */
+  reasonLine: string;
+  /** the clocks the person may switch to: the ones that apply plus the configured confirming clocks */
+  applicable: Array<{ system: string; label: string; line: string }>;
+  /** conditional clocks the engine says do not apply (or did not check): greyed, unselectable, with the reason */
+  notApplicable: Array<{ system: string; label: string; reason: string }>;
+}
+
+export interface SelfV2AreaView {
+  id: SelfV2AreaId;
+  group: SelfV2Group;
+  title: string;
+  status: CardStatus;
+  card: PersonalCard | null;
+  /** the code lines of the matching legacy panel, when available */
+  floor: string[];
+  /** "Chart details": the Oracle's own text for this area, engine names redacted */
+  details: { headline?: string; paragraphs?: string[]; evidence: string[]; certainty?: string };
+}
+
+export interface SelfV2Response {
+  status: SelfV2Status;
+  builtAt: string | null;
+  nextCheck: string | null;
+  clock: SelfV2ClockView;
+  hero: HeroDoc | null;
+  areas: SelfV2AreaView[];
+  profile: { ageBand: AgeBand | null; hasGender: boolean; missing: string[] };
+  usage?: unknown;
+}

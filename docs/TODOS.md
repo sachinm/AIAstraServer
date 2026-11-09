@@ -1614,3 +1614,34 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
   `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
   and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
+
+## Filed 2026-11-09 by Self v2 steps 5/6/8 (branch feat/self-v2-api)
+
+- **P1 · GET /api/self/v2 stays `pending` until the v2 build is wired.** The route queues the Self build through
+  `queueSelfReadingBuild` (the helper GET /api/self/reading uses), and that event still runs the legacy
+  `getBoardReading`, which writes nothing `readSelfV2Latest` reads. The store reader is loaded from
+  `src/reading/self/v2/store.ts` by a guarded dynamic import (`src/reading/self/v2api/storeContract.ts`); while that
+  module is absent every GET answers `pending`. Fact (code read). Owner: the integrator merging `feat/self-v2-agents`.
+  Done: the `self-reading-build` event (or a v2 event) runs the v2 build and writes the store; a GET after it returns
+  `ok` with cards.
+- **P2 · A clock switch during a running Self build does not rebuild on the new clock.** `PUT /api/self/v2/clock`
+  writes `preferred_dasha` and calls `queueSelfReadingBuild`, which answers `already_building` while today's marker is
+  `building`; the running build read the old clock, and once it lands `ready` nothing queues another, so the board shows
+  the old clock's cards until the next day. Fact (code read, `buildEvent.ts` marker per kundli/board/day). Owner:
+  integrator / agents lane. Done: the marker or the store key carries the clock, so a switch queues a build on the new
+  clock even when one is running.
+- **P2 · `self.mood` is now a `FACT_CATALOG` key, so `confirmedFacts()` returns it.** The reading FACTS line and the
+  technique matcher (`src/profile/facts.ts` `confirmedFacts`) will see `self.mood = heavy:2026-11-09`, and
+  `PUT /api/profile/facts` accepts it (validated: `<heavy|mixed|fine>:<YYYY-MM-DD>`). Inference about the effect on
+  prompts. Owner: reading-dev. Done: `confirmedFacts` drops `self.mood` (or maps it through `moodFor` for today only).
+- **P3 · `clock_viewed` is written server side only.** `src/analytics/events.ts` `EVENT_NAMES` does not list it, so the
+  web cannot send it through `/api/events`; the row comes from `PUT /api/self/v2/clock` (`analytics_events`: event
+  `clock_viewed`, surface `self`, target = system, props `kundli_id, from, to, charged, outcome`). Fact. Owner: whoever
+  needs a web-side view event. Done: add the name if the web sends one.
+- **P3 · `floor` lines are empty on GET /api/self/v2.** The legacy panels' code lines are optional (`SelfV2Deps.floors`)
+  and not wired, because reading them means running the legacy board. Fact. Owner: integrator. Done: the v2 build
+  stores the code lines per area and `floors` reads them.
+- **Note for the web (`feat/self-v2-page`).** The hero question for a missing fact has `claimId = fact.<key>`
+  (`work.status`, `love.status`, `family.children`, `self.focus`); its answer goes to `PUT /api/profile/facts` with the
+  wizard's options (doc 52 §3, `src/reading/self/v2api/words.ts` `FACT_QUESTIONS`), not to `/api/self/v2/confirm`. The
+  v2 clock switch is `PUT /api/self/v2/clock` (v1 `PUT /api/self/clock` is unchanged).
