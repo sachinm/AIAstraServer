@@ -1,0 +1,271 @@
+{
+  "asOf": "2026-11-09",
+  "dry": false,
+  "wallMs": 63529,
+  "calls": [
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.varga",
+      "callId": "family:family.varga",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5533,
+      "promptTokens": 6104,
+      "cachedTokens": 6035,
+      "outputTokens": 636,
+      "thoughtTokens": 884,
+      "costUsd": 0.002448,
+      "worstUsd": 0.009958,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.dasha",
+      "callId": "family:family.dasha",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5659,
+      "promptTokens": 3633,
+      "cachedTokens": 3522,
+      "outputTokens": 729,
+      "thoughtTokens": 1115,
+      "costUsd": 0.002882,
+      "worstUsd": 0.009626,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.year",
+      "callId": "family:family.year",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 5718,
+      "promptTokens": 69924,
+      "cachedTokens": 69769,
+      "outputTokens": 509,
+      "thoughtTokens": 1204,
+      "costUsd": 0.004352,
+      "worstUsd": 0.016809,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.rasi",
+      "callId": "family:family.rasi",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 6401,
+      "promptTokens": 5319,
+      "cachedTokens": 5162,
+      "outputTokens": 871,
+      "thoughtTokens": 977,
+      "costUsd": 0.00294,
+      "worstUsd": 0.009912,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "family",
+      "agent": "family.sky",
+      "callId": "family:family.sky",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 6406,
+      "promptTokens": 2252,
+      "cachedTokens": 2139,
+      "outputTokens": 555,
+      "thoughtTokens": 1212,
+      "costUsd": 0.002732,
+      "worstUsd": 0.009457,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.c",
+      "model": "gemini-3.8-flash",
+      "wallMs": 21491,
+      "promptTokens": 34634,
+      "cachedTokens": 13385,
+      "outputTokens": 2195,
+      "thoughtTokens": 0,
+      "costUsd": 0.025172,
+      "worstUsd": 0.05329,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.b",
+      "model": "gemini-3.8-flash",
+      "wallMs": 26205,
+      "promptTokens": 34640,
+      "cachedTokens": 13385,
+      "outputTokens": 3028,
+      "thoughtTokens": 0,
+      "costUsd": 0.0283,
+      "worstUsd": 0.053292,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "oracle",
+      "agent": "self.oracle",
+      "callId": "oracle:self.oracle.v2.oracle.a",
+      "model": "gemini-3.8-flash",
+      "wallMs": 27031,
+      "promptTokens": 34639,
+      "cachedTokens": 13385,
+      "outputTokens": 3682,
+      "thoughtTokens": 0,
+      "costUsd": 0.030752,
+      "worstUsd": 0.053294,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.a",
+      "agent": "self.personalizer",
+      "callId": "personalizer.a:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 12152,
+      "promptTokens": 7718,
+      "cachedTokens": 7504,
+      "outputTokens": 2854,
+      "thoughtTokens": 2130,
+      "costUsd": 0.007717,
+      "worstUsd": 0.012303,
+      "status": "ok",
+      "finishReason": "MAX_TOKENS",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.c",
+      "agent": "self.personalizer",
+      "callId": "personalizer.c:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 12403,
+      "promptTokens": 7716,
+      "cachedTokens": 7504,
+      "outputTokens": 4023,
+      "thoughtTokens": 110,
+      "costUsd": 0.00644,
+      "worstUsd": 0.012303,
+      "status": "ok",
+      "finishReason": "STOP",
+      "cacheUsed": true
+    },
+    {
+      "kundli": "c584c0a3",
+      "stage": "personalizer.b",
+      "agent": "self.personalizer",
+      "callId": "personalizer.b:self.personalizer",
+      "model": "gemini-3.1-flash-lite",
+      "wallMs": 13621,
+      "promptTokens": 7720,
+      "cachedTokens": 7504,
+      "outputTokens": 2687,
+      "thoughtTokens": 2297,
+      "costUsd": 0.007718,
+      "worstUsd": 0.012304,
+      "status": "ok",
+      "finishReason": "MAX_TOKENS",
+      "cacheUsed": true
+    }
+  ],
+  "spentUsd": 0.121454,
+  "storageEstUsd": 0.02734,
+  "refusals": [],
+  "blockedWrites": [
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe",
+    "$executeRawUnsafe"
+  ],
+  "explicitCache": true,
+  "cacheStats": {
+    "created": 7,
+    "adopted": 0,
+    "hits": 11,
+    "misses": 0,
+    "extended": 0,
+    "errors": 0
+  },
+  "env": {
+    "READING_EXPLICIT_CACHE": "1",
+    "SELF_V2_BUILD": "1",
+    "SELF_V2_PRESSURE_PULL": "0"
+  },
+  "models": {
+    "reader": "gemini-3.1-flash-lite",
+    "oracle": "gemini-3.8-flash",
+    "personalizer": "gemini-3.1-flash-lite"
+  },
+  "caps": {
+    "oracleMaxOut": 8000,
+    "personalizerMaxOut": 5000
+  },
+  "prompts": {
+    "bundle": "1cea7c334572",
+    "oracle": "oracle/self-areas-v2 22173307d2e523974df3d06e",
+    "personalizer": "personalizer/self b419b2903328af0052871061"
+  },
+  "oracleCalls": [
+    {
+      "call": "oracle.a",
+      "areas": [
+        "diagnosis",
+        "stuck",
+        "chapter",
+        "chapters"
+      ]
+    },
+    {
+      "call": "oracle.b",
+      "areas": [
+        "lagna",
+        "mind",
+        "drive",
+        "presence"
+      ]
+    },
+    {
+      "call": "oracle.c",
+      "areas": [
+        "body",
+        "yogas",
+        "year"
+      ]
+    }
+  ]
+}
