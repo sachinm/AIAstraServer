@@ -593,6 +593,19 @@ export interface SelfV2Response {
   /** the running sub period's end date (S2 `runningSub.to`), for "Sub-chapter ends"; null when not known */
   subChapterEnds?: string | null;
   usage?: unknown;
+  /**
+   * The fresh-reading control (docs/billing/03): when the board's reading was made, its last good day and whether the
+   * person may ask for a fresh one. The same rule as GET /api/area/self and POST /api/boards/self/refresh
+   * (`selfBoardDates`), so v1 and v2 agree. All null and `due: false` when no reading has been made yet.
+   */
+  refresh: SelfV2RefreshView;
+}
+
+/** GET /api/self/v2 `refresh` (appended 2026-11-09 for the Get a fresh reading button). */
+export interface SelfV2RefreshView {
+  madeAt: string | null;
+  validUntil: string | null;
+  due: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -85,6 +85,11 @@ export interface SelfV2BuildArgs {
   userId: string;
   kundliId: string;
   asOf: string;
+  /**
+   * A fresh reading the person asked for (docs/billing/03): its day goes into the Oracle key (and so the cards key), so the
+   * new reading is stored as a new row and served as the newest; absent, keys are unchanged.
+   */
+  refreshDay?: string;
   /** the sub-techniques and area briefs (doc 66 §4.8 Layers 1–2); default: src/reading/self/sub and areas */
   subs?: SelfV2Subs;
 }
@@ -109,9 +114,9 @@ const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /** The Oracle's store key: the digest version, the clock and every boundary stamp, the input and the prompt. */
-export function oracleStoreKey(ctx: SelfBuildContext, oracleSlice: PreparedAgentSlice, inputHash: string): string {
+export function oracleStoreKey(ctx: SelfBuildContext, oracleSlice: PreparedAgentSlice, inputHash: string, refreshDay?: string): string {
   const s = ctx.stamps;
-  return [
+  const key = [
     'self.v2.oracle',
     s.digestVersion,
     `clock=${s.clock}`,
@@ -125,6 +130,7 @@ export function oracleStoreKey(ctx: SelfBuildContext, oracleSlice: PreparedAgent
     `pre=${oracleSlice.prefixHash}`,
     `p=${promptHash(SELF_V2_ORACLE_PROMPT)}`,
   ].join('|');
+  return refreshDay && /^\d{4}-\d{2}-\d{2}$/.test(refreshDay) ? `${key}|fresh=${refreshDay}` : key;
 }
 
 /** The cards' store key: the clock (so a read can ask for one clock), the Oracle key, the profile hash and the prompt. */
@@ -369,7 +375,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     out.layers = storedLayers;
 
     const inputHash = shortHash(canonicalJson({ ...first.input, familyFindings: [] }));
-    const oracleKey = oracleStoreKey(ctx, first.slice, inputHash);
+    const oracleKey = oracleStoreKey(ctx, first.slice, inputHash, args.refreshDay);
     out.keys.oracle = oracleKey;
     const runningPeriod = runningPeriodOf(ctx);
 

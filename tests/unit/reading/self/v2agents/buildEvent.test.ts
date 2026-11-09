@@ -26,7 +26,7 @@ describe('the self build event runs the v2 build behind SELF_V2_BUILD=1 (doc 66 
     expect(v2Build).not.toHaveBeenCalled();
   });
 
-  it('on: runs after the self build and its settlement, never for love or work; the v2 build settles nothing itself', async () => {
+  it('on: runs after the self build and before its settlement, never for love or work; the v2 build settles nothing itself', async () => {
     process.env.SELF_V2_BUILD = '1';
     const order: string[] = [];
     const settleBoardRefresh = vi.fn(async () => {
@@ -36,8 +36,8 @@ describe('the self build event runs the v2 build behind SELF_V2_BUILD=1 (doc 66 
     const v2Build = vi.fn(async () => (order.push('v2'), { status: 'ok' }));
     const r = await runSelfReadingBuild({ prisma: prisma(), build: async () => (order.push('build'), reading()), now: () => NOW, gate: { settleBoardRefresh }, v2Build }, 'u1', 'k1', 'self', { refreshDay: '2026-11-09' });
     expect(r?.status).toBe('ok');
-    expect(order).toEqual(['build', 'settle', 'v2']);
-    expect(v2Build).toHaveBeenCalledWith(expect.anything(), 'u1', 'k1', '2026-11-09');
+    expect(order).toEqual(['build', 'v2', 'settle']);
+    expect(v2Build).toHaveBeenCalledWith(expect.anything(), 'u1', 'k1', '2026-11-09', { refreshDay: '2026-11-09' });
     expect(settleBoardRefresh).toHaveBeenCalledTimes(1);
     await runSelfReadingBuild({ prisma: prisma(), build: async () => reading(), now: () => NOW, v2Build }, 'u1', 'k1', 'love');
     expect(v2Build).toHaveBeenCalledTimes(1);

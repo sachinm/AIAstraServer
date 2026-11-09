@@ -5,7 +5,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { latestStoredOutput } from '../../techniques/outputStore.js';
-import { refreshDue, type ReadingValidity } from '../area/validity.js';
+import { latestReadyBuild, refreshDue, storedValidity, type ReadingValidity } from '../area/validity.js';
 import type { SelfOracleResult } from './oracle.js';
 import type { ReadingBoardId } from './types.js';
 
@@ -21,4 +21,22 @@ export async function synthesisValidity(prisma: PrismaClient, kundliId: string, 
   const valid_until =
     said && DAY_RE.test(said) ? said : said === 'always' ? null : last.validTo ? new Date(last.validTo.getTime() - 1).toISOString().slice(0, 10) : null;
   return { made_at: last.madeAt.toISOString(), valid_until, refresh_due: refreshDue(valid_until, today) };
+}
+
+/**
+ * The You board's dates and whether a fresh reading may be asked for (docs/billing/03). One rule for
+ * GET /api/area/self, POST /api/boards/self/refresh and GET /api/self/v2, so the v1 and v2 pages agree: the synthesis's
+ * own dates once one is made, else the area reading's. `area` is the area reading's dates when the caller already has
+ * them; without it the newest ready `self` area build is read (nothing is built). Null when neither exists.
+ */
+export async function selfBoardDates(prisma: PrismaClient, kundliId: string, today: string, area?: ReadingValidity | null): Promise<BoardValidity | null> {
+  const made = await synthesisValidity(prisma, kundliId, 'self', today);
+  if (made) return made;
+  let v: ReadingValidity | null = area ? { made_at: area.made_at, valid_until: area.valid_until } : null;
+  if (!v) {
+    const row = await latestReadyBuild(prisma, kundliId, 'self');
+    if (!row) return null;
+    v = storedValidity(row.result, row.created_at, row.as_of.toISOString().slice(0, 10));
+  }
+  return { ...v, refresh_due: refreshDue(v.valid_until, today) };
 }
