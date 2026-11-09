@@ -1413,7 +1413,15 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 
 ## Filed 2026-11-09 by the loading overlay build (docs/loading-overlay/01–03, web and server `feat/loading-overlay`)
 
-- **P1 · The four Nano Banana illustrations are not generated: every Gemini key in the server `.env` is rejected.**
+- **P2 · Nano Banana could not draw a correct house chart in 8 calls (2026-11-09, docs/loading-overlay/03 §Log).**
+  Both runs (full prompts, then text-free boards) broke the content rules: wrong house numbers, misspelt names, wrong
+  geometry on three of four boards. The veil ships the exact code-drawn SVG charts restyled after the generated look.
+  Owner: Sachin decides whether to try again (new yes needed; a different approach would be: generate backgrounds only
+  and composite the board, glyphs and names in code, which `sharp` renders correctly here). Done: four images that pass
+  the checklist in 03 §Acceptance, or the decision to keep the drawn set.
+- **(resolved 2026-11-09) P1 · Every Gemini key in the server `.env` is rejected** — Sachin supplied a key in chat for
+  the illustrations and asked for it to be revoked afterwards; the `.env` keys are still invalid. Original text follows.
+- **P1 (was) · The four Nano Banana illustrations are not generated: every Gemini key in the server `.env` is rejected.**
   Sachin typed yes on 2026-11-09 (4 images + up to 4 retries, ≈ $0.16–0.32). `GEMINI_API_KEY`, `GEMINI_API_KEY_SACHIN`
   and `GEMINI_API_KEY_NISHA` all answer `400 API_KEY_INVALID` (4 image calls + 3 free model-list probes, nothing
   billed; log in `docs/loading-overlay/art/log.md`). The live paid key sits only in the Lambda env, which this machine
@@ -1433,3 +1441,15 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   9f6b89d.** Removed on `feat/loading-overlay`. Owner: none (fixed). Noted so the theme/boards session knows.
 - **P3 · `OracleVeil` keeps its `offset` prop for callers but no longer uses it** (each veil picks a random line).
   Remove the prop and the `useOracleLine` offsets in `SelfReading.tsx` when that file is next touched. Owner: web-dev.
+- **P2 · Web `src/pages/welcome/WelcomeWizard.test.tsx` › "falls back to null when @mediapipe/tasks-vision is
+  unavailable" passes only where `node_modules` lacks the package.** In a fresh `npm ci` worktree the package is
+  present, `FilesetResolver` hangs on the wasm fetch in jsdom and the test times out at 30 s; in the older
+  `AIAstra_WEB-known-bugs` worktree it passes. Owner: web-dev. Done: the test mocks the import instead of relying on the
+  package being absent.
+- **P2 · Web `src/lib/theme.test.ts` › "theme-light.css is up to date" fails to load on `develop` 9f6b89d** (SyntaxError
+  importing `scripts/gen-light-theme.mjs` through `pathToFileURL`), the same class as the admin `themeCss.test.ts`
+  failure already filed. Pre-existing; seen on the untouched develop worktree too. Owner: the theme session. Done: the
+  test imports the generator in a way vitest accepts on Windows.
+- **P3 · Admin web `overlayArt.ts` is off under vitest** (`import.meta.env.MODE === 'test'`) because the page tests read
+  the first recorded fetch; its own test turns it on. Owner: admin-dev. Done: the page tests pick their request by URL
+  and the guard goes.
