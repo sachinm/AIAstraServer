@@ -1875,3 +1875,26 @@ profiles). Owner: the next Self v2 agents/validator branch unless noted.
   order; only the hero is checked (a gap, never a drop). Owner: the UI lane, if focus should reorder the cards.
 - **P3 · One role word or diet word drops the whole ladder** (the four steps are one object). Done: drop only the step
   and show three, or ask the Personalizer to rewrite.
+
+## Filed 2026-11-09 by the Self v2 refresh button
+
+- **P2 · A failed fresh v2 build is not visible to the page.** `GET /api/self/v2` keeps serving the earlier cards with
+  `status: 'ok'` while a refresh build runs and after it fails (the v2 marker only records ready/failed, and
+  `readSelfV2Latest` reports `ok` whenever cards exist). The web polls until `builtAt` moves and, after six minutes, shows
+  "Still working… Retry"; the question is given back by the build. Done: add `refresh.building` / `refresh.failed`
+  (from the `self.reading` marker of today plus the `self.v2` marker) so the page can say "That did not work" at once.
+- **P2 · A self refresh with SELF_V2_BUILD=1 pays for two Oracles.** The refresh build runs the v1 synthesis
+  (`getBoardReading` with `refresh: true`, needed because the v1 synthesis owns `valid_until`) and then the forced v2
+  build. Done: once v2 owns the page, take the dates from the v2 Oracle and skip the v1 synthesis on refresh.
+- **P3 · A forced store write keeps the old `created_at`.** `insertStoredRow` upserts on `cache_key` without touching
+  `created_at`, so a forced v1 refresh under an unchanged key leaves `made_at` (synthesisValidity) on the old day. The v2
+  build sidesteps it with `|fresh=<day>` in its key. Done: set `created_at = now()` in the replace branch.
+- **P3 · Two fresh v2 builds on the same day share one key** (`|fresh=<day>`); the second overwrites the first row
+  (forced) and keeps its `created_at`, so the page's `builtAt` does not move. Only reachable when a refresh is due again
+  the same day (a reading whose `valid_until` is already past when made).
+- **P2 · The full unit suite is red on develop without this branch** (10 of 2292 with the worktree's `.env`):
+  `astroKundliExportSpacing` (4), `env.test` isAstroKundliConfigured, `geminiChatService` GEMINI_MAX_OUTPUT_TOKENS,
+  `promptCache` "off by default", and `reading/run.test.ts`, which fails a different 1–3 tests on each run (also alone).
+  `replayFindings` "sub-technique round trips" and `specialistFailures` fail only under full-suite load. Same set
+  failing with this branch's changes stashed. Done: tests that read env vars stub them instead of inheriting `.env`;
+  the timing test asserts call rounds, not wall time.

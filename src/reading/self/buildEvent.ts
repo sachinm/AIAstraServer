@@ -165,8 +165,11 @@ export interface QueueDeps {
   now?: () => Date;
   /** settles the question held for a fresh reading the person asked for (docs/billing/03; tests replace it) */
   gate?: Pick<QuestionGate, 'settleBoardRefresh'>;
-  /** the Self v2 build run after the self build when SELF_V2_BUILD=1 (docs/reading-engine/66 §4.8; tests replace it) */
-  v2Build?: (prisma: PrismaClient, userId: string, kundliId: string, asOf: string) => Promise<{ status: string; ms?: Record<string, number> }>;
+  /**
+   * the Self v2 build run after the self build when SELF_V2_BUILD=1 (docs/reading-engine/66 §4.8; tests replace it).
+   * `refreshDay`: a fresh reading the person asked for; the build is forced and stored under a new key for that day.
+   */
+  v2Build?: (prisma: PrismaClient, userId: string, kundliId: string, asOf: string, opts?: { refreshDay?: string }) => Promise<{ status: string; ms?: Record<string, number> }>;
 }
 
 let lambdaClient: LambdaClient | null = null;
@@ -182,24 +185,28 @@ const defaultBuild = (deps: SelfDeps, userId: string, board: ReadingBoardId, opt
   getBoardReading(deps, userId, board, { trigger: 'request', ...(opts.refreshDay ? { refresh: true } : {}) });
 
 /** The Self v2 build, loaded only when the flag is on (the v2 modules stay out of the event path otherwise). */
-async function defaultV2Build(prisma: PrismaClient, userId: string, kundliId: string, asOf: string): Promise<{ status: string; ms?: Record<string, number> }> {
+async function defaultV2Build(prisma: PrismaClient, userId: string, kundliId: string, asOf: string, opts: { refreshDay?: string } = {}): Promise<{ status: string; ms?: Record<string, number> }> {
   const { runSelfV2Build } = await import('./v2/build.js');
-  return runSelfV2Build({ prisma }, { userId, kundliId, asOf });
+  return runSelfV2Build({ prisma, ...(opts.refreshDay ? { force: true } : {}) }, { userId, kundliId, asOf, ...(opts.refreshDay ? { refreshDay: opts.refreshDay } : {}) });
 }
 
 /**
  * SELF_V2_BUILD=1: after the self build, the v2 build runs in the same invocation (docs/reading-engine/66 §4.8). It never
- * charges (the board's one charge per day stays with the build above) and never fails the build event. The current
- * lineman path is untouched; it is retired only for the v2 path.
+ * charges by itself and never fails the build event. On a fresh reading the person asked for (`refreshDay`) it is
+ * forced and stored under a new key, so the v2 page shows a new reading; the caller then settles the question on both
+ * builds (the v2 page is served by this build). The current lineman path is untouched. Returns the v2 build's status,
+ * or null when the v2 build does not run for this board.
  */
-async function maybeRunSelfV2(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, asOf: string): Promise<void> {
-  if (board !== 'self' || !isSelfV2BuildEnabled() || !isSelfReadingModelEnabled()) return;
+async function maybeRunSelfV2(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, asOf: string, refreshDay?: string): Promise<string | null> {
+  if (board !== 'self' || !isSelfV2BuildEnabled() || !isSelfReadingModelEnabled()) return null;
   const t0 = Date.now();
   try {
-    const v2 = await (deps.v2Build ?? defaultV2Build)(deps.prisma, userId, kundliId, asOf);
-    queueLog({ event: 'self_v2_build_done', kundli_id: kundliId, status: v2.status, ms: Date.now() - t0 });
+    const v2 = await (deps.v2Build ?? defaultV2Build)(deps.prisma, userId, kundliId, asOf, refreshDay ? { refreshDay } : {});
+    queueLog({ event: 'self_v2_build_done', kundli_id: kundliId, status: v2.status, refresh: Boolean(refreshDay), ms: Date.now() - t0 });
+    return v2.status;
   } catch (e) {
     queueLogError({ event: 'self_v2_build_failed', kundli_id: kundliId, error: (e as Error).message?.slice(0, 300), ms: Date.now() - t0 });
+    return 'failed';
   }
 }
 
@@ -216,7 +223,8 @@ async function stillOurs(prisma: PrismaClient, kundliId: string, board: ReadingB
 /**
  * Runs one build to the end, marking the marker `ready` or `failed`. Never throws. A build with no `refreshDay` is the
  * board's first reading and costs nothing; one the person asked for commits the question held for it when the synthesis
- * is made, and gives it back when it is not (docs/billing/03).
+ * is made, and gives it back when it is not (docs/billing/03). With SELF_V2_BUILD=1 the self board's v2 build serves the
+ * page, so the question is committed only when the v2 build is `ok` too, after it has run.
  */
 export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, opts: BuildOptions = {}): Promise<SelfReadingResult | null> {
   const now = (deps.now ?? (() => new Date()))();
@@ -227,10 +235,10 @@ export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundl
     const oracle = r.status === 'ok' ? r.reading.oracle : undefined;
     const failed = oracle !== undefined && (oracle.status === 'failed' || oracle.status === 'pending');
     if (await stillOurs(deps.prisma, kundliId, board, now, opts)) await writeBuildMarker(deps.prisma, userId, kundliId, board, now, failed ? 'failed' : 'ready', failed ? `oracle ${oracle.status}` : undefined, opts.clock);
-    const made = r.status === 'ok' && oracle?.status === 'ok';
+    const v2 = await maybeRunSelfV2(deps, userId, kundliId, board, r.status === 'ok' ? r.reading.asOf : now.toISOString().slice(0, 10), opts.refreshDay);
+    const made = r.status === 'ok' && oracle?.status === 'ok' && (v2 === null || v2 === 'ok');
     if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, made);
-    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', refresh: opts.refreshDay ? (made ? 'charged' : 'given_back') : 'none', ms: Date.now() - t0 });
-    await maybeRunSelfV2(deps, userId, kundliId, board, r.status === 'ok' ? r.reading.asOf : now.toISOString().slice(0, 10));
+    queueLog({ event: 'reading_build_done', kundli_id: kundliId, board, status: r.status, oracle: oracle?.status ?? 'off', v2: v2 ?? 'off', refresh: opts.refreshDay ? (made ? 'charged' : 'given_back') : 'none', ms: Date.now() - t0 });
     return r;
   } catch (e) {
     if (await stillOurs(deps.prisma, kundliId, board, now, opts)) await writeBuildMarker(deps.prisma, userId, kundliId, board, now, 'failed', (e as Error).message?.slice(0, 300), opts.clock);
