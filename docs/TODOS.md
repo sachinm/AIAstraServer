@@ -1614,3 +1614,8 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
   `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
   and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
+- **P2 · Web `.env.development` points at the old Render API (`https://aiastraserver.onrender.com`), which answers 503**
+  (checked 2026-11-09 from a local dev server: sign-in shows "Something went wrong"). Local `npm run dev` therefore
+  cannot sign in. The live API is the CloudFront/Lambda origin in `.env.staging`. Owner: web-dev. Done: dev points at
+  a local server (`http://localhost:3000`, as the file's own comment says) or at staging with its CORS allowing the
+  dev origin.
