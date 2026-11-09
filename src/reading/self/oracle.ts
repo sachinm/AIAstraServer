@@ -1254,6 +1254,6 @@ export async function runSelfOracle(
     return stored.cached ? { ...stored.value, cached: true } : stored.value;
   } catch (e) {
     console.error('[self:oracle]', (e as Error).message);
-    return { status: 'failed', calls: 0, maxSpendUsd, capUsd: maxSpendUsd };
+    return { status: 'failed', error: redactEngineTerms(String((e as Error).message ?? e)).slice(0, 300), calls: 0, maxSpendUsd, capUsd: maxSpendUsd };
   }
 }
