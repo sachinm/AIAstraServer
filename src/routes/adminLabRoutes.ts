@@ -12,6 +12,7 @@
  *   GET  /api/admin-lab/runs/:id                                → the stored dossier
  *   GET  /api/admin-lab/dossiers?userId=&board=                 → the person's dossiers, newest first
  *   GET  /api/admin-lab/chart-data/:userId?part=&years=         → every stored chart row, opened (./adminChartData.ts)
+ *   GET  /api/admin-lab/loads/:userId?board=&limit=             → the latest builds with their agent runs and answers (./adminLoads.ts)
  */
 import { timingSafeEqual } from 'node:crypto';
 import type express from 'express';
@@ -19,6 +20,7 @@ import type { PrismaClient } from '@prisma/client';
 import { getBoardReading, type SelfDeps } from '../reading/self/service.js';
 import { stripBirthFields } from '../reading/self/dossier.js';
 import { chartDataHandler } from './adminChartData.js';
+import { loadsHandler } from './adminLoads.js';
 import {
   SELF_PANEL_IDS,
   LOVE_PANEL_IDS,
@@ -154,6 +156,8 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
 
   // Chart Data Review (QA, Sachin 2026-11-08): the stored engine rows of one person, opened, as stored
   app.get('/api/admin-lab/chart-data/:userId', guard, chartDataHandler({ prisma: deps.prisma }));
+  // Dashboard loads (docs/admin/12): the latest builds of a person's board with every agent run and answer under them
+  app.get('/api/admin-lab/loads/:userId', guard, loadsHandler({ prisma: deps.prisma }));
 
   app.post('/api/admin-lab/run', guard, async (req, res) => {
     const b = (req.body ?? {}) as { userId?: unknown; board?: unknown; technique?: unknown; force?: unknown; asOf?: unknown };

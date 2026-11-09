@@ -1308,3 +1308,69 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 - **P3 · The three snapshots were built on two engine commits.** 4feca3ca and 858f2f20 say `8191a38`, b4a777a6 says
   `b66869a` (built the day before). Fine if both commits agree on transits; not checked. Owner: reading-dev. Done: one
   commit, or a note that the two agree.
+- **Sumit readings: "one elevation per Jupiter cycle" is contradicted by his record.** 2026-11-08, Sachin: promotions in
+  2018 and 2021, neither under Jupiter on his 10th (last Aug 2016 – Sep 2017). The stored clocks show both came when the
+  10th lord Mercury or the 11th lord Venus ran as sub-lord in two or more systems (2018: career clock Sa/Me, Vim
+  Ju/Sa/Me, Narayana Leo/Virgo; 2021: Vim Ju/Me, Kaala Sa/Me, Karaka Sa/Me, TA Sa/Ve, career clock Sa/Ve, Yogini Ra/Ju,
+  graha double transit on his 11th Apr 2021 – Apr 2022). The 2 Nov readings also call Ju/Me 2020–22 "service-and-friction
+  years", which his record refutes. Fix: in the career module (docs/reading-engine/42, 43) weight the 10th/11th lord as
+  sub-lord across clocks above the Jupiter-on-10th transit; correct the two sentences when the Sumit readings are next
+  regenerated (not before; Sachin asked for no rewrite now). Owner: reading-dev.
+- **Engine yoga list says `bhadra_yoga: present=false` for Sumit's D1; the readings say Bhadra by definition.** 2026-11-08.
+  Mercury own-sign Virgo at 15°18′ in the 10th from a Sagittarius lagna is a kendra, so the classical Pancha Mahapurusha
+  rule is met; the engine's rule may require the kendra from the Moon, a strength threshold, or exact moolatrikona
+  degrees. One for the engine-rule-verifier (doc 46 §D.2). Owner: reading-dev.
+- **Sumit: job-change signature differs from promotion signature, worth a rule in the career module.** 2026-11-08, from
+  Sachin's record (jobs changed Oct 2002 and Oct 2013; promotions 2018 and 2021 inside the same company). Stored clocks:
+  both job changes ran the Sun (9th lord) as the career-clock sub-lord (Ve/Su 2002, Sa/Su 2013), a Rahu pratyantar or
+  antardasha in Vimshottari (Ra/Ju/Ra began 15 Oct 2002; Ra/Mo/Ra Sep–Dec 2013), a rasi-dasha turnover in the preceding
+  Aug/Sep (Sudasa into Virgo Aug 2002; Narayana into Sagittarius and Drig Virgo/Sagittarius Sep 2013), and Saturn or
+  Jupiter entering his 7th, 11th from the Moon (Saturn Aug 2002; Jupiter Jun 2013). Both promotions instead ran Mercury
+  or Venus as sub-lord with no 7th-house entry. Fix: encode "10th/11th lord sub-lord = step inside; 9th lord + Rahu +
+  7th-house entry = new institution" as a chart-specific hypothesis in docs/reading-engine/42–43 and test it on the other
+  research kundlis before it is generalised. Owner: reading-dev.
+
+- [ ] (2026-11-08, transit overlay) `kundli_transit_overlays` range rows for Sumit (`75b0d618-…`) carry only `bodies` + `sade_sati` per month for 2026–2029; no `double_transit`, `ingresses` or `stations` fields in the stored payload, so the Sumit career check used placements and the `contacts` rows only. Regenerate the 2026–2029 overlay with the current engine version (with `--step day`) so double transit and ingress dates come from the engine, not from reading the monthly sign table.
+- [ ] (2026-11-08, verification) Sumit career back-test used nine dated events (Dec 1999, Jan 2001, Nov 2002, 2004-05, 2006-07, 2009-10, Oct 2013, 2017-18, 2021). Annual D10 exists only from 2016 and the 2020 Tithi Pravesha chart was not pulled, so the 2021 promotion's year chart is only half checked. Candidate chart-specific rules to test on other charts: (a) Yogini mahadasha start within ~12 weeks of a career event (3 of 5 starts since 1999), (b) career clock (Chathuraaseethi Sama) sub-lord Mercury/Venus or MD Venus for promotions, Sun sub-lord + Vimshottari Rahu sub-period + slow planet entering the 7th for employer change, (c) Jupiter entering the 10th sign preceded a promotion by 1–12 months (2004, 2016–17).
+
+## Filed 2026-11-08 by the theme setting build (web `feat/theme-setting`, admin `feat/admin-theme`)
+
+- [ ] (planned, Sachin 2026-11-08) Web theme phase 2: Light / System on the public pages (landing, sign-in, sign-up,
+  pricing, legal). Phase 1 themes only `/dashboard`, `/profile`, `/welcome`; public pages are forced dark. Scope and
+  hooks in the web repo's `docs/theme/phase-2-public-pages.md`. Own branch and merge.
+- [ ] (P3, web `develop` 06dea9c) `npm run typecheck` fails on `src/routes.tsx(24,1)`: `boardsEnabled` imported but
+  never read.
+- [ ] (P2, web `develop` 06dea9c) `src/components/AskModal.test.tsx`: two tests fail on `develop` ("the conversation
+  list groups by category, General Reading first", "pinned threads sit above every category; the pin button toggles").
+- [ ] (P3, web) `src/pages/welcome/WelcomeWizard.test.tsx` "falls back to null when @mediapipe/tasks-vision is
+  unavailable" times out at 30 s in a fresh `npm ci` worktree (`wt/web-theme`) but passes in `AIAstra_WEB-known-bugs`:
+  `loadDetector()` seems to load the real package when it is installed. The test should mock the import.
+- [ ] (P3, web) Light mode is a generated remap (`scripts/gen-light-theme.mjs` -> `src/theme-light.css`) of the
+  dark-first colour classes. New colour classes need a re-run (a unit test fails while the file is stale). New inline
+  colour styles (`style={{ color: '#fff' }}`) are not covered; prefer classes.
+
+## Filed 2026-11-08 (night) by the Self reading loading session (docs/reading-engine/64, branch `fix/self-reading-background-build`)
+
+- **P1 · The admin Techniques Lab hides an Oracle failure.** Fixed on admin branch `feat/admin-engine-loads`
+  (2026-11-08 night, not merged or deployed): the Lab shows a failed Oracle with its status and error, and the new
+  Engine › Dashboard loads page (docs/admin/12) shows every build with its agent runs, errors and answers. Done when
+  merged, both deployed, and Sachin's 21:20 build shows "Oracle failed · Gemini call timed out after 60000ms".
+- **P3 · Local admin `api` typecheck reports `send` missing on `SecretsManagerClient`** (scripts/admin-accounts.ts,
+  src/config.ts) in worktree `wt/admin-loads` after an interrupted `npm ci` was finished with `npm install`; lockfile and
+  SDK version unchanged, tests pass. Owner: whoever next runs CI on the branch. Done: a clean CI typecheck.
+- **P1 · `agent_runs` for Gemini stages record zero tokens and zero cost.** `self.reading_oracle` and `lineman.self`
+  rows for the 7:36 am build have `prompt_tokens = 0`, `est_cost_usd = 0` while the dossier's stages record 45,110 /
+  43,414 prompt tokens and $0.05 / $0.013. `withAgentRun` is given `tokensIn/tokensOut/costUsd` by the Oracle stage; the
+  columns stay 0, so the Agents page and any spend cap read from `agent_runs` under-count. Owner: reading-dev. Done:
+  the row carries the tokens and cost the stage summary carries.
+- **P1 · The Oracle essay is produced and never shown (until this branch).** `reading.oracle.text` (11,516 chars,
+  35 s, $0.05 per build) was not rendered by the web; only PANEL_SYNTHESIS lines reached the page, and the
+  `panelPlans` parsed 0 plans on the 7:36 am build (the prompt's PANEL_PLAN format was not followed by the model).
+  This branch renders `panel.plan` and the essay; the prompt rewrite (doc 64 Phase 3) decides whether the essay stays.
+  Owner: reading-dev. Done: Phase 3 shipped or the essay moved to `narrator.self`.
+- **P2 · Page-open builds of the reading run the Oracle inside a frozen Lambda container.** Fixed on this branch by the
+  background event; the Love and Work reading routes (doc 63 §13) must mount the same `cached_only` + queue pattern when
+  they are added, or they will repeat the 10 s 503 and the frozen-timer failure. Owner: reading-dev.
+- **P2 · The dossier's `trigger` has no `event` value.** The background build writes its dossier with `trigger:
+  'request'`; a lab reader cannot tell a page-queued build from an in-request one. Owner: reading-dev. Done:
+  `DossierInput.trigger` gains `'event'` and `buildEvent.ts` passes it.

@@ -106,7 +106,16 @@ export interface SelfOracleContext {
   only?: BoardPanelId;
   codeVersion?: string;
   runningSpan?: DateSpan | null;
+  /**
+   * `cached_only` (the page request): serve a stored synthesis that covers today, otherwise answer `{ status: 'pending' }`
+   * without a model call and without storing anything; the background build (`buildEvent.ts`) runs the default `build`.
+   */
+  mode?: 'build' | 'cached_only';
 }
+
+/** Gemini time-outs for the stages that run in the background build (never inside a page request). */
+export const LINEMAN_TIMEOUT_MS = 90_000;
+export const ORACLE_TIMEOUT_MS = 150_000;
 
 const INTERNAL_ENGINE_RE = /\b(aiastra_radha|pyjhora|jhora|radha)\b/gi;
 
@@ -755,6 +764,11 @@ export async function runSelfOracle(
         forceRefresh: Boolean(ctx.force),
       },
       async () => {
+        // the page asked for the store only: nothing covers today, so say so and run no model (the sentinel is not stored)
+        if (ctx.mode === 'cached_only') {
+          const pending: SelfOracleResult = { status: 'pending', calls: 0, maxSpendUsd, capUsd: maxSpendUsd, cached: false };
+          return { value: pending, skipStore: true };
+        }
         let spentUsd = 0;
         let calls = 0;
         const stages: SelfOracleStageSummary[] = [];
@@ -1013,6 +1027,7 @@ export async function runSelfOracle(
                 parts: [linemanPrefix, linemanDynamic],
                 thinking: 'medium',
                 maxOutputTokens: 3500,
+                timeoutMs: LINEMAN_TIMEOUT_MS,
                 cachePrefix: true,
                 cacheOwner: owner,
               });
@@ -1141,6 +1156,7 @@ export async function runSelfOracle(
               ],
               thinking: 'medium',
               maxOutputTokens: getSelfOracleMaxOutputTokens(),
+              timeoutMs: ORACLE_TIMEOUT_MS,
               cachePrefix: true,
               cacheOwner: owner,
             });
@@ -1238,6 +1254,6 @@ export async function runSelfOracle(
     return stored.cached ? { ...stored.value, cached: true } : stored.value;
   } catch (e) {
     console.error('[self:oracle]', (e as Error).message);
-    return { status: 'failed', calls: 0, maxSpendUsd, capUsd: maxSpendUsd };
+    return { status: 'failed', error: redactEngineTerms(String((e as Error).message ?? e)).slice(0, 300), calls: 0, maxSpendUsd, capUsd: maxSpendUsd };
   }
 }

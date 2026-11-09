@@ -197,7 +197,10 @@ export interface SelfOracleLinemanRecord {
 }
 
 export interface SelfOraclePayload {
-  status: 'off' | 'ok' | 'failed' | 'budget_exceeded';
+  /** `pending`: no stored synthesis covers today and the caller asked for the store only (the build runs in the background) */
+  status: 'off' | 'ok' | 'failed' | 'budget_exceeded' | 'pending';
+  /** `failed`: the stage error (a Gemini time-out, a quota refusal), for the admin; never shown to the person */
+  error?: string;
   text?: string;
   output?: string;
   brief?: string;

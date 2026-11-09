@@ -48,6 +48,7 @@ import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.
 import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kundliSyncWorker.js';
 import { handleKundliDigestEvent, parseKundliDigestEvent } from './src/reading/digest/event.js';
+import { handleSelfReadingBuildEvent, parseSelfReadingBuildEvent } from './src/reading/self/buildEvent.js';
 import {
   logChatProviderError,
   publicMessageFromChatProviderError,
@@ -91,6 +92,9 @@ app.post('/events', async (req, res) => {
   // the kundli digest (docs/reading-engine/53 §4.7): one kundli, or the sweep; token-guarded like kundli-sync
   const digest = parseKundliDigestEvent(req.body);
   if (digest) return res.json(await handleKundliDigestEvent(digest, { prisma }));
+  // one person's reading build (docs/reading-engine/64 §4): queued by the reading route, runs to the end here
+  const readingBuild = parseSelfReadingBuildEvent(req.body);
+  if (readingBuild) return res.json(await handleSelfReadingBuildEvent(readingBuild, { prisma }));
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();

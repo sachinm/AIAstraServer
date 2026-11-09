@@ -46,11 +46,23 @@ function fakePrisma() {
     },
     agentRegistry: { upsert: async () => ({}) },
     agentRun: { create: async ({ data }: any) => runs.push(data) },
+    readingFindingsCache: { findUnique: async () => null, upsert: async ({ create }: any) => create, updateMany: async () => ({ count: 0 }) },
+    areaBuild: {
+      findUnique: async ({ where }: any) => markers.get(`${where.kundli_id_area_as_of.kundli_id}|${where.kundli_id_area_as_of.area}`) ?? null,
+      upsert: async ({ where, create, update }: any) => {
+        const k = `${where.kundli_id_area_as_of.kundli_id}|${where.kundli_id_area_as_of.area}`;
+        const next = markers.has(k) ? { ...markers.get(k), ...update } : create;
+        markers.set(k, next);
+        return next;
+      },
+    },
   };
-  return { prisma, facts, outputs, runs, kundli };
+  const markers = new Map<string, any>();
+  return { prisma, facts, outputs, runs, kundli, markers };
 }
 
 const f = fakePrisma();
+const invokes: unknown[] = [];
 let base = '';
 let server: ReturnType<express.Express['listen']>;
 
@@ -61,6 +73,7 @@ beforeAll(() => {
     prisma: f.prisma,
     enabled: true,
     requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) ?? null),
+    queue: { invoke: async (p) => { invokes.push(p); }, now: () => new Date('2026-11-07T12:00:00Z') },
     self: {
       now: () => new Date('2026-11-07T12:00:00Z'),
       loadDigest: async () => digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' }),
@@ -123,5 +136,36 @@ describe('GET /api/self/reading', () => {
     expect(ch.find((c: any) => c.kind === 'running')).toMatchObject({ lord: 'Mo', from: '2018-03-16' });
     expect((await put(null)).status).toBe(200);
     expect(f.kundli.preferred_dasha).toBeNull();
+  });
+});
+
+describe('GET /api/self/reading with the model layer on (docs/reading-engine/64 §4)', () => {
+  afterAll(() => { delete process.env.SELF_READING_MODEL; });
+  it('never runs the Oracle in the request: it queues one background build and answers 202 stage=reading, once', async () => {
+    process.env.SELF_READING_MODEL = '1';
+    const r1 = await get('u1');
+    expect(r1.status).toBe(202);
+    expect(await r1.json()).toMatchObject({ status: 'preparing', stage: 'reading', build: 'invoked' });
+    expect(invokes).toHaveLength(1);
+    expect(invokes[0]).toMatchObject({ source: 'self-reading-build', userId: 'u1', board: 'self' });
+    expect(f.markers.get('k1|self.reading')).toMatchObject({ status: 'building' });
+    // the next poll finds the build running and does not queue another
+    const r2 = await get('u1');
+    expect(r2.status).toBe(202);
+    expect(await r2.json()).toMatchObject({ status: 'preparing', stage: 'reading', build: 'already_building' });
+    expect(invokes).toHaveLength(1);
+    // no Oracle output was stored by the page requests
+    expect([...f.outputs.keys()].some((k) => k.includes('oracle'))).toBe(false);
+  });
+  it('a build that failed just now is served as the code panels with the Oracle marked failed, not as an error', async () => {
+    process.env.SELF_READING_MODEL = '1';
+    f.markers.set('k1|self.reading', { status: 'failed', result: { started_at: '2026-11-07T11:50:00Z' }, error: 'oracle failed' });
+    const r = await get('u1');
+    expect(r.status).toBe(200);
+    const j = await r.json();
+    expect(j.status).toBe('ok');
+    expect(j.reading.panels.length).toBe(9);
+    expect(j.reading.oracle.status).toBe('failed');
+    expect(invokes).toHaveLength(1);
   });
 });
