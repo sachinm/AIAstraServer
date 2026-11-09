@@ -1875,3 +1875,43 @@ profiles). Owner: the next Self v2 agents/validator branch unless noted.
   order; only the hero is checked (a gap, never a drop). Owner: the UI lane, if focus should reorder the cards.
 - **P3 · One role word or diet word drops the whole ladder** (the four steps are one object). Done: drop only the step
   and show three, or ask the Personalizer to rewrite.
+
+## Filed 2026-11-09 by the Self v2 live replay, run 2
+
+Source: `docs/reading-engine/66-replay-2026-11-09-self-v2-run2.md`. The run made 11 paid calls costing $0.087, plus
+about $0.002 of storage. It read kundli `c584c0a3` for three synthetic profiles. Owner: the next Self v2 validator or
+prompt branch unless noted. The run 1 items "Re-run the replay for profiles a and b" and "Measure the storage cost per
+region-hour" are **DONE** by this run: 3 of 3 Personalizers returned `STOP`, the Oracle was 89.7 % cached, and each
+region costs about $1 per million tokens per hour.
+- **P1 · A withheld card's stand-in headline skips the profile and redaction checks.** On profile c, the lagna stand-in
+  showed "executive leadership and professional gravitas" to a retired person. That headline had just been dropped
+  for the word "executive". Other stand-ins show redaction gaps: "A disciplined … calls for", "wealth … resolve".
+  Done: the stand-in goes through `textProblem` with the profile's role words; it never contains "…"; it falls back
+  to the area title. A test covers it (`personalizerValidate.ts`).
+- **P1 · The cards are barely personalised.** Drive, chapters and body read nearly word for word the same for all
+  three profiles. Profile a (25–35, founder) gets "seasoned professional", "experienced guide" and "mentorship and
+  advisory leadership". Profile c (retired) gets "Maintain a crisp and formal style in all meetings" and "assertive
+  labor to secure your assets". Done: prompt examples per age band and work status; role words "meetings", "labor"
+  and "professional"; an age-band list for under 36; a flag when a card copies more than about 60 % of an Oracle
+  paragraph.
+- **P2 · Six of 33 cards withheld for headline length or chart terms.** Over 14 words: a stuck, a chapter, c lagna.
+  Chart terms "yogas" and "annual cycle": a yogas, a year, c year. Done: shorten or redact the headline instead of
+  withholding the card, add a schema `maxLength` hint, and add a prompt line naming "yoga" and "annual cycle".
+- **P2 · The hero question does not check its claim.** All three cite `stuck.heaviest_now:presses:ideas_and_children+…`
+  but ask about "your business", "career and family life" or "health and spiritual practice". Done: the question
+  names the claim's own plain-word areas, with a flag when it does not.
+- **P2 · Family readers are cut at the cap.** `family.dasha` ended with `MAX_TOKENS` (654 out + 1,342 thought against
+  2,000). Its finding stopped mid-sentence, had no `VALID_UNTIL`, and went into the Oracle as it was. Done: a cut
+  finding is dropped as a gap, and the readers' cap goes to about 3,000 or their thinking to `low`.
+- **P2 · The body card writes diet advice for every profile** ("meals" ×3, "dietary", "nervous system"). The drop
+  then takes the whole ladder. "Nervous depletion" and "Nervous exhaustion is a source of friction until
+  12 Dec 2026" pass. Done: a body-card prompt line, those two phrases added to `SELF_V2_BODY_ADVICE_WORDS`, and a drop
+  of the step only (see the P3 filed by fix/self-v2-replay-findings).
+- **P3 · Expired cache regions cannot be deleted.** `deleteOne` gets HTTP 403 for a region that has already expired.
+  The row keeps `deleted_at = null`, so the sweeper retries it for ever. This test person has 15 such rows from
+  earlier today, and each per-individual delete spends about 0.5 s on each one. Done: treat 403 or 404 on a row past
+  `expires_at` as deleted (`src/reading/llm/promptCache.ts`).
+- **P3 · The sub-techniques still take 9.0 s** from this machine; the parallel Layer 0 gained nothing (9.1 s in run 1).
+  Done: count the database round trips and time them on the Lambda before changing code.
+- **P3 · The Oracle still reports 0 thought tokens** on gemini-3.8-flash at `low` (3 of 3 calls). This is unchanged
+  from run 1 and needs one tiny paid call with a yes.

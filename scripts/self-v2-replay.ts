@@ -4,7 +4,14 @@
  * (family readers, Personalizer) and gemini-3.8-flash (Oracle); about 22 calls; about $0.20. Hard cap: no call that
  * could take total spend over $0.40, never more than 30 model calls.
  *
- *   npx tsx scripts/self-v2-replay.ts [--dry] [--kundli <id>]... [--out <report.md>]
+ * Run 2 (`--run2`): approved by Sachin in chat on 2026-11-09 ("Yes, rerun it") for one build (c584c0a3, asOf
+ * 2026-11-09), three profiles, about $0.07, the same key and models. Hard cap: total spend (calls by `priceFor` plus the
+ * explicit-cache storage estimate) $0.15 and at most 16 model calls: 5 family + 3 Oracle + 3 Personalizer + up to 3
+ * Personalizer retries on MAX_TOKENS. A call whose worst case would pass the cap waits for calls in flight to settle and
+ * is refused if it still would. The cache regions are deleted at the end of the run (the recycler's own delete), so the
+ * storage estimate uses their real lifetime.
+ *
+ *   npx tsx scripts/self-v2-replay.ts [--dry] [--run2] [--kundli <id>]... [--out <report.md>]
  *
  * Per kundli: sub-techniques (S1–S10) → eleven area briefs → slices → explicit-cache warm-up (family ×5 + Oracle prefix)
  * → family readers ×5 (parallel) → Oracle ×3 (parallel) + validator → Personalizer ×3 over the SAME Oracle document, one
@@ -33,13 +40,13 @@ const { buildFamilySlices, buildOracleSlice, buildPersonalizerSlice, FAMILY_IDS,
 const { warmPrefixes } = await import('../src/reading/self/v2/cache.js');
 const { runOracleV2, ORACLE_V2_CALLS } = await import('../src/reading/self/v2/oracle.js');
 const { runPersonalizer } = await import('../src/reading/self/v2/personalizer.js');
-const { CHART_TERMS, ENGINE_NAMES, INTERNAL_ID, GENDERED_WORDS, MEDICAL_WORDS, parsePersonalDoc, oracleDates, daysIn } = await import('../src/reading/self/v2/personalizerValidate.js');
+const { CHART_TERMS, ENGINE_NAMES, INTERNAL_ID, GENDERED_WORDS, MEDICAL_WORDS, parsePersonalDoc, oracleDates, daysIn, roleWordsFor, bodyAdviceWords, focusNamed } = await import('../src/reading/self/v2/personalizerValidate.js');
 const { redactEngineTerms } = await import('../src/reading/self/oracle.js');
 const { callGemini: realCallGemini } = await import('../src/reading/llm/gemini.js');
 const { usageCostUsd, priceFor } = await import('../src/reading/llm/models.js');
-const { explicitCacheEnabled, cacheStats } = await import('../src/reading/llm/promptCache.js');
+const { explicitCacheEnabled, cacheStats, deleteIndividualCaches } = await import('../src/reading/llm/promptCache.js');
 const { buildProfilePack } = await import('../src/reading/person/profile.js');
-const { getSelfOracleMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerModel } = await import('../src/config/env.js');
+const { getSelfOracleMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, getSelfPersonalizerModel } = await import('../src/config/env.js');
 const { PROMPT_VERSION } = await import('../src/reading/prompts/generated.js');
 
 type GeminiCallOptions = import('../src/reading/llm/gemini.js').GeminiCallOptions;
@@ -52,24 +59,38 @@ type ProfilePack = import('../src/reading/self/v2types.js').ProfilePack;
 // ------------------------------------------------------------------------------------------------ arguments and caps
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry');
+const RUN2 = argv.includes('--run2');
 const kundliArgs: string[] = [];
 for (let i = 0; i < argv.length; i++) if (argv[i] === '--kundli' && argv[i + 1]) kundliArgs.push(argv[++i]!);
 const outIdx = argv.indexOf('--out');
-const REPORT = outIdx >= 0 && argv[outIdx + 1] ? argv[outIdx + 1]! : 'docs/reading-engine/66-replay-2026-11-09-self-v2.md';
-const RAW_DIR = 'docs/reading-engine/replays/66-2026-11-09';
+const REPORT = outIdx >= 0 && argv[outIdx + 1] ? argv[outIdx + 1]! : RUN2 ? 'docs/reading-engine/66-replay-2026-11-09-self-v2-run2.md' : 'docs/reading-engine/66-replay-2026-11-09-self-v2.md';
+const RAW_DIR = RUN2 ? 'docs/reading-engine/replays/66-2026-11-09-run2' : 'docs/reading-engine/replays/66-2026-11-09';
 const AS_OF = '2026-11-09';
-const KUNDLIS = kundliArgs.length ? kundliArgs : ['c584c0a3-841b-451b-a2ed-f5709c5fb31d'];
+const KUNDLIS = RUN2 ? ['c584c0a3-841b-451b-a2ed-f5709c5fb31d'] : kundliArgs.length ? kundliArgs : ['c584c0a3-841b-451b-a2ed-f5709c5fb31d'];
 
-const CAP_USD = 0.4;
-const MAX_CALLS = 30;
+const CAP_USD = RUN2 ? 0.15 : 0.4;
+const MAX_CALLS = RUN2 ? 16 : 30;
+/** run 2: calls allowed per stage (5 family + 3 Oracle + 3 Personalizer + up to 3 Personalizer retries) */
+const STAGE_LIMITS: Record<string, number> = RUN2 ? { family: 5, oracle: 3, personalizer: 3, 'personalizer.retry': 3 } : {};
+const stageCount: Record<string, number> = {};
 /** explicit cache storage, $ per 1M tokens per hour: not in PRICES; Google's published Flash-class rate, an estimate */
 const STORAGE_USD_PER_MTOK_HOUR = 1.0;
 const TTL_HOURS = (Number(process.env.READING_EXPLICIT_CACHE_TTL_SECONDS) >= 60 ? Number(process.env.READING_EXPLICIT_CACHE_TTL_SECONDS) : 1800) / 3600;
-/** a thinking allowance on top of maxOutputTokens for the worst case (thoughts bill at the output rate) */
-const THINK_ALLOW: Record<string, number> = { off: 0, low: 2048, medium: 4096, high: 8192 };
+/**
+ * Run 2 reserves storage for this many hours: the regions are deleted at the end of the run (about 2 minutes); the
+ * reservation is five times that. Run 1 reserved the full TTL.
+ */
+const STORAGE_RESERVE_HOURS = RUN2 ? 10 / 60 : TTL_HOURS;
+/**
+ * Run 1: a thinking allowance on top of maxOutputTokens. Run 2: none, because on Gemini 2.5 and 3.x the thought tokens
+ * count against maxOutputTokens (run 1: 2,854 out + 2,130 thought stopped at a 5,000 cap), so maxOutputTokens bounds
+ * output plus thought.
+ */
+const THINK_ALLOW: Record<string, number> = RUN2 ? {} : { off: 0, low: 2048, medium: 4096, high: 8192 };
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-const est = (s: string) => Math.ceil(s.length / 4);
+/** run 1 used chars/4, which undercounted the Oracle slice 1.9×; run 2 uses the Lab's provider estimate, chars/2.2 */
+const est = (s: string) => Math.ceil(s.length / (RUN2 ? 2.2 : 4));
 
 // ------------------------------------------------------------------------------------------------ guarded Prisma
 const BLOCKED_MODELS = new Set(['techniqueOutput', 'areaBuild', 'readingFindingsCache', 'readingDossier']);
@@ -130,29 +151,56 @@ let storageEst = 0;
 let callCount = 0;
 const refusals: string[] = [];
 
-function worstCase(o: GeminiCallOptions): number {
+/** agents whose cached prefix was warmed into a live region: their prefix bills at the cached rate */
+const warmedPrefix = new Set<string>();
+
+function worstCase(o: GeminiCallOptions, agent: string): number {
   const p = priceFor(o.model);
   if (!p) return Infinity; // an unpriced model is never called
-  const inTok = est([o.system ?? '', ...o.parts].join('\n'));
+  const cachedPart = RUN2 && o.cachePrefix && warmedPrefix.has(agent) ? est([o.system ?? '', o.parts[0] ?? ''].join('\n')) : 0;
+  const inTok = est([o.system ?? '', ...o.parts].join('\n')) - cachedPart;
   const outTok = (o.maxOutputTokens ?? 8192) + (THINK_ALLOW[o.thinking ?? 'off'] ?? 0);
-  return (inTok * p.in + outTok * p.out) / 1e6;
+  return (inTok * p.in + cachedPart * p.cached + outTok * p.out) / 1e6;
 }
+
+/** settles when any call in flight settles */
+const inFlight = new Set<Promise<unknown>>();
+const capWaits: string[] = [];
 
 function guardedCall(kundli: string, stage: string, agent: string) {
   return async (o: GeminiCallOptions): Promise<GeminiResult> => {
-    const callId = `${stage}:${o.node}`;
-    const worst = worstCase(o);
+    // a retry of the same stage and node gets its own id
+    const baseId = `${stage}:${o.node}`;
+    const attempt = callRows.filter((c) => c.callId === baseId || c.callId.startsWith(`${baseId}#`)).length;
+    const callId = attempt ? `${baseId}#${attempt + 1}` : baseId;
+    const stageKey = stage.startsWith('personalizer') ? (attempt ? 'personalizer.retry' : 'personalizer') : stage;
+    const worst = worstCase(o, agent);
     if (callCount + 1 > MAX_CALLS) {
       refusals.push(`${callId}: refused, call ${callCount + 1} would pass the ${MAX_CALLS}-call cap`);
       throw new Error('replay call cap reached');
+    }
+    if (STAGE_LIMITS[stageKey] !== undefined && (stageCount[stageKey] ?? 0) + 1 > STAGE_LIMITS[stageKey]!) {
+      refusals.push(`${callId}: refused, ${stageKey} call ${(stageCount[stageKey] ?? 0) + 1} would pass its limit of ${STAGE_LIMITS[stageKey]}`);
+      throw new Error('replay stage cap reached');
+    }
+    // wait for calls in flight while the worst case would pass the cap; refuse when nothing is left to wait for
+    let waited = false;
+    while (spent + reserved + storageEst + worst > CAP_USD && inFlight.size) {
+      waited = true;
+      await Promise.race(inFlight);
     }
     if (spent + reserved + storageEst + worst > CAP_USD) {
       refusals.push(`${callId}: refused, spent ${round6(spent)} + in flight ${round6(reserved)} + storage est ${round6(storageEst)} + worst case ${round6(worst)} > cap ${CAP_USD}`);
       throw new Error('replay spend cap reached');
     }
+    if (waited) capWaits.push(`${callId}: waited for calls in flight (worst case ${round6(worst)})`);
     callCount += 1;
+    stageCount[stageKey] = (stageCount[stageKey] ?? 0) + 1;
     reserved += worst;
     const t0 = performance.now();
+    let settle!: () => void;
+    const flight = new Promise<void>((res) => (settle = res));
+    inFlight.add(flight);
     try {
       const r = await realCallGemini(o);
       const cost = usageCostUsd(r.usage);
@@ -181,6 +229,8 @@ function guardedCall(kundli: string, stage: string, agent: string) {
       throw e;
     } finally {
       reserved -= worst;
+      inFlight.delete(flight);
+      settle();
     }
   };
 }
@@ -214,7 +264,13 @@ interface ScanHit {
   match: string;
   text: string;
 }
-function scanText(where: string, text: string, genderStated: boolean): ScanHit[] {
+interface ScanOpts {
+  genderStated: boolean;
+  roleWords: RegExp | null;
+}
+const BODY_ADVICE = bodyAdviceWords();
+function scanText(where: string, text: string, opts: ScanOpts): ScanHit[] {
+  const genderStated = opts.genderStated;
   const hits: ScanHit[] = [];
   if (!text) return hits;
   const add = (kind: string, m: RegExpMatchArray | null) => {
@@ -226,13 +282,15 @@ function scanText(where: string, text: string, genderStated: boolean): ScanHit[]
   add('technique id', text.match(TECH_ID));
   add('medical word', text.match(MEDICAL_WORDS));
   if (!genderStated) add('gendered word', text.match(GENDERED_WORDS));
+  if (opts.roleWords) add('role word', text.match(opts.roleWords));
+  if (BODY_ADVICE) add('body advice word', text.match(BODY_ADVICE));
   return hits;
 }
-function scanDoc(doc: PersonalCardDoc | { hero: Record<string, unknown>; cards: unknown[] } | null, genderStated: boolean, prefix: string): ScanHit[] {
+function scanDoc(doc: PersonalCardDoc | { hero: Record<string, unknown>; cards: unknown[] } | null, opts: ScanOpts, prefix: string): ScanHit[] {
   if (!doc) return [];
   const hits: ScanHit[] = [];
   const walk = (v: unknown, path: string) => {
-    if (typeof v === 'string') hits.push(...scanText(path, v, genderStated));
+    if (typeof v === 'string') hits.push(...scanText(path, v, opts));
     else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`));
     else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) if (!['sources', 'source', 'areaId', 'strip', 'claimId', 'questionClaimId', 'tone', 'kind', 'from', 'to', 'since', 'until', 'certainty', 'easesAt', 'nextCheck'].includes(k)) walk(x, `${path}.${k}`);
   };
@@ -275,6 +333,8 @@ interface ProfileRun {
   rawScan: ScanHit[];
   datesOutside: string[];
   finishReason: string | null;
+  attempts: Array<{ callId: string; finishReason: string | null; outputTokens: number; thoughtTokens: number; costUsd: number }>;
+  heroNamesFocus: boolean | null;
   wordCounts: Record<string, { headline: number; body: number }>;
 }
 interface KundliRun {
@@ -291,8 +351,11 @@ interface KundliRun {
   oracle: { status: string; gaps: string[]; withheld: string[]; output: OracleV2Output | null; calls: unknown[]; spentUsd: number } | null;
   profiles: ProfileRun[];
   ledger: Array<{ name: string; model: string; kundli: boolean; user: boolean; expires: string }>;
+  cacheDelete?: { deleted: number; failed: number; memoryCleared: number; lifetimeMin: number; ownDeleted: number; ownTotal: number } | null;
 }
 
+let warmStartedAt = 0;
+let storageTokens = 0;
 const rawPrisma = new PrismaClient();
 const prisma = guardPrisma(rawPrisma);
 const tAll = performance.now();
@@ -338,10 +401,12 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
 
   // warm: family ×5 + Oracle prefix (storage reserved against the cap first)
   const toWarm = [...FAMILY_IDS.map((id) => fam.slices[id]), first.slice];
-  storageEst += toWarm.reduce((n, s) => n + ((s.estTokens.prefix + est(s.system)) * STORAGE_USD_PER_MTOK_HOUR * TTL_HOURS) / 1e6, 0);
+  storageEst += toWarm.reduce((n, s) => n + ((est(s.prefix) + est(s.system)) * STORAGE_USD_PER_MTOK_HOUR * STORAGE_RESERVE_HOURS) / 1e6, 0);
   t = performance.now();
+  if (!warmStartedAt) warmStartedAt = Date.now();
   const warmed = await warmPrefixes(toWarm);
   lap('warm', t);
+  for (const w of warmed) if (w.name) warmedPrefix.add(w.agent);
   run.warmed.push(...warmed.map((w) => ({ agent: w.agent, name: w.name, ms: Math.round(w.ms), model: w.model })));
 
   // 4 family readers ×5 (no reading_findings_cache: a cold, measured run)
@@ -367,7 +432,7 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
   run.slices.push({ agent: 'self.oracle (with findings)', prefixTokens: built.slice.estTokens.prefix, suffixTokens: built.slice.estTokens.suffix, model: built.slice.model });
   t = performance.now();
   const oracleCall = guardedCall(kshort, 'oracle', 'self.oracle');
-  const o = await runOracleV2({ prisma, callGemini: oracleCall, informUsed: noInform, spentUsd: familySpend, maxSpendUsd: CAP_USD }, ctx, built.slice);
+  const o = await runOracleV2({ prisma, callGemini: oracleCall, informUsed: noInform, spentUsd: familySpend, maxSpendUsd: CAP_USD }, ctx, built.slice, briefs);
   lap('oracle', t);
   run.oracle = { status: o.status, gaps: o.gaps, withheld: o.withheld, output: o.output, calls: o.calls, spentUsd: o.spentUsd };
   if (!o.output) {
@@ -380,10 +445,11 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
   const packs = PROFILES.map((p) => ({ p, pack: buildProfilePack(p.src, AS_OF) }));
   const firstP = buildPersonalizerSlice(ctxFor(packs[0]!.pack), o.output);
   run.slices.push({ agent: 'self.personalizer', prefixTokens: firstP.slice.estTokens.prefix, suffixTokens: firstP.slice.estTokens.suffix, model: firstP.slice.model });
-  storageEst += ((firstP.slice.estTokens.prefix + est(firstP.slice.system)) * STORAGE_USD_PER_MTOK_HOUR * TTL_HOURS) / 1e6;
+  storageEst += ((est(firstP.slice.prefix) + est(firstP.slice.system)) * STORAGE_USD_PER_MTOK_HOUR * STORAGE_RESERVE_HOURS) / 1e6;
   t = performance.now();
   const wp = await warmPrefixes([firstP.slice]);
   lap('warm.personalizer', t);
+  for (const w of wp) if (w.name) warmedPrefix.add(w.agent);
   run.warmed.push(...wp.map((w) => ({ agent: w.agent, name: w.name, ms: Math.round(w.ms), model: w.model })));
   t = performance.now();
   run.profiles = await Promise.all(
@@ -393,9 +459,12 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
       if (ps.slice.prefixHash !== firstP.slice.prefixHash) throw new Error('personalizer prefix differs between profiles');
       const spentNow = round6(spent);
       const r = await runPersonalizer({ prisma, callGemini: guardedCall(kshort, `personalizer.${p.id}`, 'self.personalizer'), informUsed: noInform, spentUsd: spentNow, maxSpendUsd: CAP_USD }, c2, ps.slice, ps.input, ctx.sub.windows?.strip ?? []);
-      const raw = rawTexts.get(`personalizer.${p.id}:self.personalizer`) ?? '';
-      const rawDoc = raw ? parsePersonalDoc(raw) : null;
-      const row = callRows.find((c) => c.callId === `personalizer.${p.id}:self.personalizer` && c.kundli === kshort);
+      const baseId = `personalizer.${p.id}:self.personalizer`;
+      const rows = callRows.filter((c) => (c.callId === baseId || c.callId.startsWith(`${baseId}#`)) && c.kundli === kshort);
+      const row = rows[rows.length - 1];
+      const raw = (row && rawTexts.get(row.callId)) ?? '';
+      const rawDoc = raw && row?.finishReason !== 'MAX_TOKENS' ? parsePersonalDoc(raw) : null;
+      const scanOpts: ScanOpts = { genderStated: pack.gender !== null, roleWords: roleWordsFor(ps.input.profile.facts) };
       const wc = (s: string) => s.split(/\s+/).filter(Boolean).length;
       const wordCounts: ProfileRun['wordCounts'] = {};
       for (const [id, c] of Object.entries(r.doc?.cards ?? {})) if (c) wordCounts[id] = { headline: wc(c.headline), body: wc(c.body.join(' ')) };
@@ -409,10 +478,12 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
         raw: rawDoc,
         cardStatus: r.cardStatus as Record<string, string>,
         gaps: r.gaps,
-        scan: scanDoc(r.doc, pack.gender !== null, `${p.id}`),
-        rawScan: scanDoc(rawDoc as never, pack.gender !== null, `${p.id}.raw`),
+        scan: scanDoc(r.doc, scanOpts, `${p.id}`),
+        rawScan: scanDoc(rawDoc as never, scanOpts, `${p.id}.raw`),
         datesOutside: datesOutside(r.doc, o.output!),
         finishReason: row?.finishReason ?? null,
+        attempts: rows.map((c) => ({ callId: c.callId, finishReason: c.finishReason, outputTokens: c.outputTokens, thoughtTokens: c.thoughtTokens, costUsd: c.costUsd })),
+        heroNamesFocus: r.doc && ps.input.profile.facts?.focus?.length ? focusNamed(`${r.doc.hero.sentence} ${r.doc.hero.sub}`, ps.input.profile.facts.focus) : null,
         wordCounts,
       } satisfies ProfileRun;
     }),
@@ -430,10 +501,38 @@ async function runKundli(kundliId: string): Promise<KundliRun> {
   return run;
 }
 
+/** run 2: delete this person's regions now (the recycler's own delete), then price storage on their real lifetime */
+async function deleteRegions(run: KundliRun, userId: string, kundliId: string): Promise<void> {
+  if (!RUN2 || !run.warmed.some((w) => w.name)) return;
+  const r = await deleteIndividualCaches({ userId, kundliId }).catch(() => ({ deleted: 0, failed: -1, memoryCleared: 0 }));
+  const lifetimeMin = warmStartedAt ? (Date.now() - warmStartedAt) / 60000 : 0;
+  // judge this run's own regions by their ledger rows: the individual's older rows (expired regions) may fail to delete
+  const own = [...new Set(run.warmed.map((w) => w.name).filter((n): n is string => Boolean(n)))];
+  const ownRows = await rawPrisma.llmCacheEntry.findMany({ where: { name: { in: own } }, select: { deleted_at: true } }).catch(() => []);
+  const ownDeleted = ownRows.filter((x) => x.deleted_at).length;
+  run.cacheDelete = { ...r, lifetimeMin: Math.round(lifetimeMin * 100) / 100, ownDeleted, ownTotal: own.length };
+  // the region sizes as the provider counted them: the largest cached count seen per agent
+  const size = new Map<string, number>();
+  for (const c of callRows) {
+    const key = c.stage.startsWith('personalizer') ? 'self.personalizer' : c.agent;
+    size.set(key, Math.max(size.get(key) ?? 0, c.cachedTokens));
+  }
+  const tokens = [...size.values()].reduce((n, x) => n + x, 0);
+  storageTokens = tokens;
+  // deleted: the real lifetime; a failed delete lives to the TTL
+  const hours = own.length && ownDeleted === own.length ? lifetimeMin / 60 : TTL_HOURS;
+  storageEst = (tokens * STORAGE_USD_PER_MTOK_HOUR * hours) / 1e6;
+}
+
 try {
   for (const kid of KUNDLIS) {
     try {
-      runs.push(await runKundli(kid));
+      const kr = await runKundli(kid);
+      runs.push(kr);
+      if (RUN2) {
+        const k = await rawPrisma.kundli.findUnique({ where: { id: kid }, select: { user_id: true } });
+        if (k) await deleteRegions(kr, k.user_id, kid);
+      }
     } catch (e) {
       runs.push({ kundliId: kid.slice(0, 8), status: `failed: ${String((e as Error).message).slice(0, 300)}`, subGaps: [], ms: {}, slices: [], warmed: [], briefs: [], windowsDegraded: null, pressureSource: '', familyFindings: [], oracle: null, profiles: [], ledger: [] });
     }
@@ -451,13 +550,17 @@ const summary = {
   calls: callCount,
   spentUsd: round6(spent),
   storageEstUsd: round6(storageEst),
+  storageTokens,
+  cacheDelete: runs[0]?.cacheDelete ?? null,
+  capWaits,
+  stageCount,
   refusals,
   blockedWrites,
   explicitCache: explicitCacheEnabled(),
   cacheStats: { ...cacheStats },
   env: { READING_EXPLICIT_CACHE: process.env.READING_EXPLICIT_CACHE ?? '(unset)', SELF_V2_BUILD: process.env.SELF_V2_BUILD, SELF_V2_PRESSURE_PULL: process.env.SELF_V2_PRESSURE_PULL },
   models: { reader: runs[0]?.slices[0]?.model ?? null, oracle: runs[0]?.slices.find((s) => s.agent === 'self.oracle')?.model ?? null, personalizer: getSelfPersonalizerModel() },
-  caps: { oracleMaxOut: getSelfOracleMaxOutputTokens(), personalizerMaxOut: getSelfPersonalizerMaxOutputTokens() },
+  caps: { oracleMaxOut: getSelfOracleMaxOutputTokens(), personalizerMaxOut: getSelfPersonalizerMaxOutputTokens(), personalizerRetryMaxOut: getSelfPersonalizerRetryMaxOutputTokens() },
   prompts: { bundle: PROMPT_VERSION, oracle: `${SELF_V2_ORACLE_PROMPT} ${promptHash(SELF_V2_ORACLE_PROMPT)}`, personalizer: `${SELF_V2_PERSONALIZER_PROMPT} ${promptHash(SELF_V2_PERSONALIZER_PROMPT)}` },
   oracleCalls: ORACLE_V2_CALLS,
 };
@@ -486,7 +589,12 @@ function renderReport(): string {
   L.push(`Models: family readers ${summary.models.reader}, Oracle ${summary.models.oracle}, Personalizer ${summary.models.personalizer} · Oracle out cap ${summary.caps.oracleMaxOut}, Personalizer out cap ${summary.caps.personalizerMaxOut}`);
   L.push(`Prompts: bundle ${summary.prompts.bundle} · ${summary.prompts.oracle} · ${summary.prompts.personalizer}`);
   L.push(`Env: READING_EXPLICIT_CACHE=${summary.env.READING_EXPLICIT_CACHE} (from .env) · SELF_V2_BUILD=1 · SELF_V2_PRESSURE_PULL=0 · storage dry (blocked writes attempted: ${blockedWrites.length ? blockedWrites.join(', ') : 'none'})`);
-  L.push(`Cache helper: ${JSON.stringify(summary.cacheStats)}`, '');
+  L.push(`Cache helper: ${JSON.stringify(summary.cacheStats)}`);
+  if (RUN2) {
+    L.push(`Storage: ${storageTokens} cached tokens (provider count, largest per region) × $${STORAGE_USD_PER_MTOK_HOUR}/Mtok/h × lifetime ${summary.cacheDelete ? `${summary.cacheDelete.lifetimeMin} min (this run's regions deleted at the end: ${summary.cacheDelete.ownDeleted} of ${summary.cacheDelete.ownTotal}; all of the person's rows: ${summary.cacheDelete.deleted} deleted, ${summary.cacheDelete.failed} failed)` : 'TTL (not deleted)'}`);
+    L.push(`Calls per stage: ${JSON.stringify(stageCount)} · cap waits: ${capWaits.length ? capWaits.join('; ') : 'none'}`);
+  }
+  L.push('');
   L.push('<!-- ANALYSIS -->', '');
   L.push('## Stages (every model call)', '', '| kundli | stage | agent | call | model | wall ms | prompt | cached | out | thought | cost $ | worst-case $ | status | finish |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|');
   for (const c of callRows) L.push(`| ${c.kundli} | ${c.stage} | ${c.agent} | ${c.callId} | ${c.model} | ${c.wallMs} | ${c.promptTokens} | ${c.cachedTokens} | ${c.outputTokens} | ${c.thoughtTokens} | ${c.costUsd} | ${c.worstUsd} | ${c.status} | ${c.finishReason ?? ''} |`);
@@ -532,6 +640,7 @@ function renderReport(): string {
       L.push('', `### Profile ${p.id}: ${p.label}`, '');
       L.push(`Pack: band ${p.pack.ageBand}, gender ${p.pack.gender ?? 'not stated'}, reader ${p.pack.role}, facts ${JSON.stringify(p.pack.facts)} · status ${p.status} · finish ${p.finishReason ?? '—'}`);
       L.push(`Card status: ${Object.entries(p.cardStatus).map(([k, v]) => `${k} ${v}`).join(', ') || '—'}`);
+      L.push(`Attempts: ${p.attempts.map((a) => `${a.callId} finish ${a.finishReason ?? '—'}, out ${a.outputTokens} + thought ${a.thoughtTokens}, $${a.costUsd}`).join('; ') || '—'} · hero names the stated focus: ${p.heroNamesFocus === null ? 'n/a' : p.heroNamesFocus}`);
       L.push(`Validator gaps (${p.gaps.length}):`, ...p.gaps.map((g) => `- ${g}`));
       L.push(`Scan of the validated hero and cards (${p.scan.length} hits):`, ...p.scan.map((h) => `- ${h.where}: ${h.kind} "${h.match}" in "${h.text}"`));
       L.push(`Scan of the raw model output before the validator (${p.rawScan.length} hits):`, ...p.rawScan.slice(0, 40).map((h) => `- ${h.where}: ${h.kind} "${h.match}"`));
