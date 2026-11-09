@@ -146,6 +146,48 @@ The admin panel's Techniques and Agents pages read what is registered and tagged
 - **Summaries** (`input` and `output` of a run) hold counts, ids, tones and scores only: never birth data, names, places
   or question text. `tests/unit/techniques/summaries.test.ts` checks the call sites.
 
+## Board and technique machinery: how every change is made (Sachin, 2026-11-09)
+
+This is the modus operandi for any change to a dashboard (Self, Love, Work, Today, Lucky times) and for adding or
+editing a technique. The machinery runs very fast, does as much as it can in code, and spends model tokens only on
+cached prefixes. The worked example is docs/reading-engine/66 §4.8.
+
+1. **Sub-techniques run once; areas select.** Everything a board's areas share is a sub-technique (`<board>.sub.<name>`)
+   that runs once per build over one build context, reads the stored engine rows once, and writes its typed output to
+   `technique_outputs` under a key that carries the digest version, the clock and the boundary stamps that can change it.
+   An area technique is a pure selection over sub-technique outputs into an `AreaBrief`; no area reads the database, and a
+   test asserts it. A boundary rebuild runs only the sub-techniques whose stamp fired.
+2. **Code first, model second.** Before any model call the code produces the ledgers the model would otherwise rediscover:
+   what the chart promises and threatens (gift, knot, grace, with its source row), and what is live now (what could go
+   wrong, from where, from who, since when, until when, and what holds it), with dates from the engine's windows. The
+   model reasons over the ledger and the briefs, confirms or rejects with evidence, adds what code cannot (patterns,
+   interactions, counsel), and never recomputes a date. Node still derives nothing astrological: ledgers join engine rows
+   with reviewed words tables, nothing more.
+3. **Types first, then registration.** Every sub-technique and every model agent has its `Input` and `Output` types
+   exported from the board's `types.ts` before any code uses it, a validator (Zod or `responseSchema`), an `AGENTS` row
+   (`src/agents/registry.ts`) for an agent, a `TECHNIQUES` row (`src/techniques/catalog.ts`) with `selectors` and
+   `contract` for a technique, and summaries that hold counts, ids, tones and scores only. The contracts test fails on a
+   row without them; a plan that adds an agent lists its types in the deliverable.
+4. **Every agent has a slice and a cache plan, prepared before it runs.** Each agent's input is built from the build
+   context (never from the database) as a stable prefix (≥ 1,024 tokens; pad a short family with rows it may legitimately
+   read) plus a variable suffix. The slice is registered in `SUBAGENT_DIGEST_SPECS` (`src/reading/oracle/digestSlices.ts`)
+   and `src/techniques/subagentCachePlan.ts`, with `cachePrefix: true` and `cacheOwner: { userId, kundliId }` and the stable
+   individual prefix in `parts[0]`. The build warms every agent's prefix in parallel before the first agent call
+   (`READING_EXPLICIT_CACHE=1`), and the Lab shows cached versus total tokens per agent for every build.
+5. **Every cache region is in the ledger so the 45-minute sweep can remove it.** A created region (Gemini explicit cache
+   or any provider's) exists only with its `llm_cache_entries` row (`name`, `provider`, `user_id`, `kundli_id`,
+   `prefix_hash`, `model`, `created_at`, `last_used_at`, `expires_at`); reusable outputs go to `reading_findings_cache` or
+   `technique_outputs`. After each use the agent calls `informIndividualCacheUsed({ userId, kundliId })`
+   (`src/reading/llm/cacheSweep.ts`), and `recycleIndividualCaches` deletes the individual's regions and rows after
+   `READING_CACHE_RECYCLE_MINUTES` (45) of inactivity; `runScheduledSweep` is the safety net. A region whose id is not in
+   the ledger is a defect: file it and fix it before merge.
+6. **Budgets are stated and measured.** A board plan states, and the build logs per agent: wall time, prompt tokens,
+   cached tokens, output tokens and cost. Targets unless the plan says otherwise: code layers under 1 s, cold build under
+   30 s, a rebuild that changes only the person's profile under 10 s, cached share of model input above 70 % on a warm
+   build. A change that misses its budget is not merged; a replay in the Lab is the gate.
+7. **No paid call without a yes.** Every phase states key, model, call count and cost, and runs its first replay on
+   stored dossiers in the Lab before any live build (docs/reading-engine/65 §9).
+
 ## Tracking files
 
 - `docs/TODOS.md`: every open finding, by priority (see above).
@@ -182,5 +224,17 @@ Not a horoscope, not a dashboard of categories. Every screen, answer and agent f
 4. **Confirmed answers are evidence.** A "yes, I left my job in March" becomes a ledger event and a calibration point;
    the method's accuracy is measured from these, never claimed.
 5. **Digested words, no chart terms on a first screen** (docs/reading-engine/45 §3.3), and never the engine's name.
+6. **Tilt the board: facts first, then one question, never a guess (Sachin, 2026-11-09).** Before any board or answer
+   is written, the person's known facts are gathered and handed to the agent that writes it: age band from the birth
+   date, stated gender or none, role, the wizard's facts (work, love, children, focus, place), the last confirm
+   answers, declined topics, and the present shade (what presses and supports now, since when, eases when, from the
+   engine's dated windows; docs/reading-engine/66 §4.3). Where a fact the reading needs is missing, the board asks one
+   plain question for it (one tap, stored once) instead of guessing; a mood tap is offered, never assumed. Readings are
+   written for the person the facts describe: the Oracle reads the chart in its own register, a second agent writes the
+   card for this person (docs/reading-engine/66 §4.1), and neither invents a fact the person did not give.
+7. **An action that costs a question says so first.** Anything that spends the account's monthly questions beyond the
+   open of a board (a fresh rebuild the person triggers, a clock switch, a re-read on another system) shows the cost
+   before the tap ("Uses 1 of your 20 questions this month"), proceeds only on the tap, and is logged with what was
+   viewed (docs/reading-engine/66 §4.4, docs/billing/02).
 
 Code that adds a category, a question or a prediction is checked against these before it ships.
