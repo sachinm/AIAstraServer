@@ -1614,3 +1614,36 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
   `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
   `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
   and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
+
+## Filed 2026-11-09 by Self v2 step 1b (branch feat/self-v2-subtechniques)
+
+- **P2 · S3 windows run degraded until the engine stores a pressure grade.** `src/reading/self/sub/windows.ts`: no
+  `kundli_pressure` table and no 1–3 strength in any stored row, so every window is strength 2, transits and Sade Sati
+  are polarity `mixed`, and dasha polarity is the period lord's stored functional-nature label through
+  `FUNCTIONAL_POLARITY` (`v2words.ts`). `heaviestNow`, `top3` and the hero strip therefore order only by end date. Fact
+  (gaps `windows: ... degraded` on every build). Owner: engine `feat/pressure-inventory` (doc 66 §13 step 2). Done:
+  S3 reads `kundli_pressure` rows when present and the two gaps disappear.
+- **P2 · No engine sensitive-passage flag.** S7 `bodyFacts.sensitive` is always false with a gap; the v1 service still
+  decides it in Node (`service.ts isSensitive`: Ketu sub period or Saturn on 8 and 12), which doc 66 §12 lists as a
+  Node derivation. Fact. Owner: engine pass (doc 66 §4.3) then server. Done: the engine stores the flag, S7 reads it,
+  and `isSensitive` is deleted.
+- **P3 · No engine strength grade for yogas; no yoga → grace link beyond dosha exceptions.** S4 entries are all strength 2,
+  and a cancellation yoga (e.g. Neecha Bhanga) holds a risk only by naming the same planet (S5 joins on
+  `planet:D1.<p>` evidence). The stored `yearLord` is also absent on the research kundli's VP rows, so S9 `yearLord` is
+  null with a gap. Fact (fixture `tests/fixtures/self/research-calibration.json`). Owner: engine pass. Done: the engine
+  stores a grade, the knot a cancellation cancels, and the year lord.
+- **P3 · `self.sub.*` spans run under agent `self.reading_panel`.** `src/reading/self/sub/index.ts` `SUB_AGENT`: step
+  1b may not edit `src/agents/registry.ts`. Owner: the agents lane (`feat/self-v2-agents`). Done: a `self.sub` code
+  agent row, `SUB_AGENT` and the catalogue rows' `agents` switched to it, and `src/reading/self/sub/index.ts` added to
+  `CALL_SITES` in `tests/unit/techniques/summaries.test.ts` (its own test in `tests/unit/reading/self/v2` covers it
+  until then).
+- **P3 · Sub-technique and area outputs are not yet written to `technique_outputs`.** `runSelfSubTechniques` fills
+  `ctx.sub` and `ctx.stamps` and areas carry `refreshStamp`, but no `withTechniqueOutput` store under `self.sub.<name>`
+  / `self.area.<id>` keyed by the stamps (doc 66 §4.8 step 2), so a boundary rebuild still reruns all ten. Owner: the
+  build-order lane (`runSelfReadingBuild`). Done: store keys from the stamps; only the fired sub-techniques rerun.
+- **P3 · Catalogue ids differ from `SELF_V2_AREAS[].technique`.** Areas are registered as `self.v2.<area>` (to avoid the
+  existing `self.reading.<x>` rows), while `v2types.ts SELF_V2_AREAS` names `self.now`, `self.stuck`, … Owner: whoever
+  next edits `v2types.ts` (contracts lane). Done: one id per area in both places.
+- **P3 · S5 does not yet drop declined matters.** Doc 66 §4.8 says S10's declined facts remove matters from S5, but
+  declined keys are fact keys (`love.status`), not matters, and no reviewed fact-key → matter table exists. Owner: Sachin
+  (words table) then server. Done: a reviewed table and S5 filtering by it.

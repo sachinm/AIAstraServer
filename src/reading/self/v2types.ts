@@ -513,3 +513,30 @@ export interface PersonalCardDoc {
 }
 
 export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed';
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 1b additions (step 1b, branch feat/self-v2-subtechniques): the window rows S3 keeps beside its `WindowSet` selections,
+// so S5 and S7 can join on the planet and houses the engine stated without reading the database again.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** one dated window as S3 read it: an activation row of the primary clock or a stored sky overlay row */
+export interface WindowRow extends WindowRef {
+  kind: PressureKind;
+  /** the period lord or the transiting planet as the engine wrote it; null for a rasi period */
+  planet: string | null;
+  /** dasha level, when kind = dasha */
+  level?: 1 | 2 | 3;
+  /** D1 houses as stored (activation `houses`, overlay `house_from_lagna`) */
+  houses: number[];
+  /** overlay `house_from_moon`, when stored */
+  houseFromMoon: number | null;
+  /** false when the stored row starts or ends outside the stored range: "since" / "until" is not said */
+  sinceKnown: boolean;
+  untilKnown: boolean;
+  evidence: EvidenceKey[];
+}
+
+/** S3 output with its rows (assignable to `WindowSet`) */
+export interface WindowSetDetail extends WindowSet {
+  rows: WindowRow[];
+}
