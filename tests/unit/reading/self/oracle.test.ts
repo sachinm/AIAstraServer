@@ -133,3 +133,44 @@ describe('self oracle, cached_only mode (docs/reading-engine/64 §4)', () => {
     expect(stored).toHaveLength(0);
   });
 });
+
+describe('tidyOracleParagraph', () => {
+  it('removes citations with the backticks the model wraps them in, stray spaces before punctuation, and rules', async () => {
+    const { tidyOracleParagraph, validateSelfText } = await import('../../../../src/reading/self/oracle.js');
+    expect(tidyOracleParagraph('Jupiter sits in the 7th `{planet:D1.Ju}`. Then more `` .')).toBe('Jupiter sits in the 7th. Then more.');
+    expect(tidyOracleParagraph('---')).toBe('');
+    const v = validateSelfText('A line `{planet:D1.Ju}`\n\n---\n\nB line {planet:D1.Ju} .', new Set(['planet:D1.Ju']));
+    expect(v.text).toBe('A line\n\n\n\nB line.');
+  });
+});
+
+describe('splitOracleSections', () => {
+  it('gives each panel the section whose heading names it; a joint heading feeds both panels; text before any heading is In short', async () => {
+    const { splitOracleSections } = await import('../../../../src/reading/self/oracle.js');
+    const titles = { diagnosis: 'In short', chapters: 'Your chapters', lagna: 'Who you are', atma: "Your soul's aim", mind: 'Your mind', body: 'Your body', yogas: 'Gifts and knots', struggle: 'What you struggle with', year: 'This year' };
+    const text = [
+      'Opening words.',
+      'In short (Diagnosis & Core Architecture)',
+      'Your life is steered ``. Second sentence.',
+      '---',
+      "Who you are & Your soul's aim",
+      'Identity paragraph.',
+      'Your mind & Brain',
+      'Mind paragraph.',
+      '### Gifts and knots & What you struggle with',
+      '- **Dhana Yoga**: a gift.',
+      'This year',
+      'Year paragraph.',
+    ].join('\n\n');
+    const s = splitOracleSections(text, titles, ['diagnosis', 'chapters', 'lagna', 'mind', 'body', 'atma', 'yogas', 'struggle', 'year']);
+    expect(s.diagnosis).toBe('Opening words.\n\nYour life is steered. Second sentence.');
+    expect(s.lagna).toBe('Identity paragraph.');
+    expect(s.atma).toBe('Identity paragraph.');
+    expect(s.mind).toBe('Mind paragraph.');
+    expect(s.yogas).toBe('- **Dhana Yoga**: a gift.');
+    expect(s.struggle).toBe('- **Dhana Yoga**: a gift.');
+    expect(s.year).toBe('Year paragraph.');
+    expect(s.chapters).toBeUndefined();
+    expect(s.body).toBeUndefined();
+  });
+});

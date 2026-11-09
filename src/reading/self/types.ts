@@ -125,6 +125,8 @@ export interface SelfPanel {
   validUntil?: string;
   /** BUILD-GAPS BG-14: the Oracle's plan for this panel (summary, dated steps, a calendar of prospective dates from stored windows) */
   plan?: PanelPlan;
+  /** the Oracle's prose for this panel: the section of its reading whose heading names the panel (doc 64 §4) */
+  synthesis?: string;
 }
 
 /** One dated step of a panel plan. */
