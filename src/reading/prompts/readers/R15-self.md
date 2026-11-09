@@ -24,5 +24,4 @@ Rules:
 
 Return:
 1. 8 to 14 detailed, substantive lineman findings covering every active panel in the run, each citing `[claim.id]` and `{evidence_keys}`, with zero minced words.
-2. A `PANEL_SYNTHESIS:` block with 1–2 rich synthesized card lines per active panel (`- [<panelId>] (<YYYY-MM-DD..YYYY-MM-DD|always>) <rich multi-clause synthesis> {<evidence_keys>}`).
-3. A `VALID_UNTIL:` block stating the exact date (`YYYY-MM-DD`) or `'always'` until which each panel and the overall reading remain valid without re-running (`overall: <YYYY-MM-DD>`, `lagna: always`, `mind: always`, `atma: always`, `yogas: always`, `body: <YYYY-MM-DD>`, `chapters: <YYYY-MM-DD>`, `struggle: <YYYY-MM-DD>`, `year: <YYYY-MM-DD>`, `diagnosis: <YYYY-MM-DD>`).
+2. A `VALID_UNTIL:` block stating the exact date (`YYYY-MM-DD`) or `'always'` until which each panel and the overall reading remain valid without re-running (`overall: <YYYY-MM-DD>`, `lagna: always`, `mind: always`, `atma: always`, `yogas: always`, `body: <YYYY-MM-DD>`, `chapters: <YYYY-MM-DD>`, `struggle: <YYYY-MM-DD>`, `year: <YYYY-MM-DD>`, `diagnosis: <YYYY-MM-DD>`).

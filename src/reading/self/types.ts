@@ -219,6 +219,12 @@ export interface SelfOraclePayload {
   panelLines?: Partial<Record<BoardPanelId, Array<{ text: string; claimIds: string[]; range?: LineRange; certainty?: LineCertainty; detail?: string }>>>;
   /** BG-14: the Oracle's PANEL_PLAN and PANEL_CALENDAR blocks, per panel */
   panelPlans?: Partial<Record<BoardPanelId, PanelPlan>>;
+  /** docs/reading-engine/65: the dashboard as the Oracle returned it, one validated area per panel (SELF_ORACLE_AREAS=1) */
+  areas?: import('./areaDoc.js').OracleAreaDoc;
+  /** staff only: what the area validator dropped or withheld */
+  areaGaps?: string[];
+  /** whether each stage found its prompt prefix in the Gemini cache: stage agent id → cached tokens */
+  cacheWarm?: Record<string, number>;
   /** AI-determined validity horizon ('YYYY-MM-DD' or 'always') per panel and overall ('overall') */
   validUntil?: Partial<Record<BoardPanelId | 'overall', string>>;
   stages?: SelfOracleStageSummary[];

@@ -880,6 +880,15 @@ export function isSelfReadingModelEnabled(): boolean {
  * Maximum cumulative USD spend permitted for Self reading AI sub-agent/Lineman/Oracle runs before halting for user confirmation.
  * Env: `SELF_READING_MAX_SPEND_USD` (default 1.00 USD).
  */
+/**
+ * The Oracle returns the dashboard's area document (docs/reading-engine/65) instead of the essay + PANEL_SYNTHESIS text:
+ * `SELF_ORACLE_AREAS=1`. Off by default until Phase B renders it.
+ */
+export function isSelfOracleAreasEnabled(): boolean {
+  const raw = process.env.SELF_ORACLE_AREAS?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 export function getSelfReadingMaxSpendUsd(): number {
   const raw = Number(process.env.SELF_READING_MAX_SPEND_USD);
   if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);

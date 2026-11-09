@@ -531,6 +531,10 @@ export async function getBoardReading(
     codeVersion: SELF_READING_VERSION,
     runningSpan: periodSpan('chapters'),
     mode: opts.oracleMode ?? 'build',
+    boundaries,
+    windows,
+    panelTitles: { diagnosis: DIAGNOSIS_TITLE, ...Object.fromEntries(Object.entries(metaMap).map(([id, m]) => [id, m.title])) } as Partial<Record<BoardPanelId, string>>,
+    panelOrder,
   };
   const oracle: SelfOracleResult = await runSelfOracle(baseReading, answers, oracleCtx);
   const oracleTotalMs = lap();

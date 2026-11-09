@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfReadingModelEnabled } from '../../config/env.js';
+import { getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -28,7 +28,10 @@ import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import { runningMudda, runningTp } from './panels/year.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
-import { clockLabel, MAX_LINE_WORDS, wordCount } from './words.js';
+import { clockLabel, MAX_LINE_WORDS, redactEngineTerms, wordCount } from './words.js';
+import { areaCertaintyToLine, areaDocToText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from './areaDoc.js';
+import { ensurePromptCache } from '../llm/promptCache.js';
+import { LOVE_PANEL_IDS, SELF_PANEL_IDS, WORK_PANEL_IDS } from './types.js';
 import type {
   BoardPanelId,
   ConfirmAnswer,
@@ -111,17 +114,19 @@ export interface SelfOracleContext {
    * without a model call and without storing anything; the background build (`buildEvent.ts`) runs the default `build`.
    */
   mode?: 'build' | 'cached_only';
+  /** docs/reading-engine/65: stored boundaries and windows the area validator checks dates against */
+  boundaries?: ReadonlySet<string>;
+  windows?: ReadonlyArray<{ from: string; to: string }>;
+  /** the board's panel titles and order, for the area document's text form */
+  panelTitles?: Partial<Record<BoardPanelId, string>>;
+  panelOrder?: readonly BoardPanelId[];
 }
 
 /** Gemini time-outs for the stages that run in the background build (never inside a page request). */
 export const LINEMAN_TIMEOUT_MS = 90_000;
 export const ORACLE_TIMEOUT_MS = 150_000;
 
-const INTERNAL_ENGINE_RE = /\b(aiastra_radha|pyjhora|jhora|radha)\b/gi;
-
-export function redactEngineTerms(text: string): string {
-  return text.replace(INTERNAL_ENGINE_RE, 'traditional calculations');
-}
+export { redactEngineTerms };
 
 const shortHash = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 24);
 
@@ -897,6 +902,9 @@ export async function runSelfOracle(
             };
           }
 
+          // the pack goes to the Gemini cache first, and the call waits for it (Sachin, 2026-11-08): the reader then runs on
+          // the cached prefix; with READING_EXPLICIT_CACHE off this returns at once and the call goes uncached
+          await ensurePromptCache(readerModel, FAMILY_SYSTEM_PROMPTS[familyId], pack.prefix, owner).catch(() => null);
           const tStart = performance.now();
           const res = await withAgentRun(
             prisma,
@@ -1056,6 +1064,8 @@ export async function runSelfOracle(
             summary: linemanFindings.slice(0, 240),
           });
         } else {
+          // the packs go to the Gemini cache before the lineman runs (Sachin, 2026-11-08)
+          await ensurePromptCache(readerModel, PROMPTS['readers/R15-self'] ?? '', linemanPrefix, owner).catch(() => null);
           const tLineman = performance.now();
           const linemanRes = await withAgentRun(
             prisma,
@@ -1182,6 +1192,18 @@ export async function runSelfOracle(
 
         // Stage 3: Board Oracle Synthesizer (`self.reading_oracle` / `love.reading_oracle` / `work.reading_oracle`)
         const compiledBrief = `${boardFocusInstruction}\n\n${brief.text}\n\n## LINEMAN SYNTHESIS BRIEF (${linemanAgentId})\n${linemanFindings}\n\n## FAMILY SUB-AGENT FINDINGS\n${familyBundleText}`;
+        // docs/reading-engine/65: the Oracle returns the dashboard's area document (JSON by schema) over the stable natal
+        // packs as the cached prefix; the legacy path keeps the essay + PANEL_SYNTHESIS text
+        const areasOn = isSelfOracleAreasEnabled();
+        const boardPanelIds: readonly BoardPanelId[] = ctx.panelOrder ?? (board === 'love' ? LOVE_PANEL_IDS : board === 'work' ? WORK_PANEL_IDS : SELF_PANEL_IDS);
+        const oracleSystem = (areasOn ? PROMPTS['oracle/self-areas'] : PROMPTS['oracle/self']) ?? '';
+        const natalPrefix = (['family.rasi', 'family.varga'] as const).filter((id) => activeFamilyIds.includes(id)).map((id) => packs[id].prefix).join('\n\n') || linemanPrefix;
+        const oraclePrefix = areasOn ? natalPrefix : linemanPrefix;
+        const oracleParts = areasOn
+          ? [oraclePrefix, `${compiledBrief}\n\nReturn the JSON document only, one entry per area of this board (${boardPanelIds.join(', ')}).`]
+          : [oraclePrefix, `${compiledBrief}\n\nCite evidence keys in {braces} at the end of each paragraph, include PANEL_SYNTHESIS lines, and end with VALID_UNTIL: <YYYY-MM-DD|always>.`];
+        // the Oracle's prefix goes to the Gemini cache first too
+        await ensurePromptCache(oracleModel, oracleSystem, oraclePrefix, owner).catch(() => null);
         const tOracle = performance.now();
         const oracleRes = await withAgentRun(
           prisma,
@@ -1197,16 +1219,14 @@ export async function runSelfOracle(
             const g = await callGemini({
               model: oracleModel,
               node: `${board}.oracle`,
-              system: PROMPTS['oracle/self'] ?? '',
-              parts: [
-                linemanPrefix,
-                `${compiledBrief}\n\nCite evidence keys in {braces} at the end of each paragraph, include PANEL_SYNTHESIS lines, and end with VALID_UNTIL: <YYYY-MM-DD|always>.`,
-              ],
-              thinking: 'medium',
-              maxOutputTokens: getSelfOracleMaxOutputTokens(),
+              system: oracleSystem,
+              parts: oracleParts,
+              thinking: areasOn ? 'low' : 'medium',
+              maxOutputTokens: areasOn ? Math.min(getSelfOracleMaxOutputTokens(), 3000) : getSelfOracleMaxOutputTokens(),
               timeoutMs: ORACLE_TIMEOUT_MS,
               cachePrefix: true,
               cacheOwner: owner,
+              ...(areasOn ? { responseSchema: oracleAreaSchema(boardPanelIds) } : {}),
             });
             const pTok = g.usage?.promptTokens ?? 0;
             const cTok = g.usage?.cachedTokens ?? 0;
@@ -1234,6 +1254,113 @@ export async function runSelfOracle(
         stages.push(oracleStage);
         spentUsd = Math.round((spentUsd + oracleStage.costUsd) * 1e6) / 1e6;
         calls += 1;
+        const cacheWarm: Record<string, number> = Object.fromEntries(stages.map((s) => [s.agentId, s.cachedTokens]));
+        const totalTokensAll = stages.reduce(
+          (acc, s) => ({
+            prompt: acc.prompt + (s.promptTokens ?? 0),
+            cached: acc.cached + s.cachedTokens,
+            output: acc.output + s.outputTokens,
+            thought: acc.thought + (s.thoughtTokens ?? 0),
+          }),
+          { prompt: 0, cached: 0, output: 0, thought: 0 },
+        );
+
+        if (areasOn) {
+          const parsedDoc = parseAreaDoc(oracleRes.text);
+          if (!parsedDoc) {
+            const failed: SelfOracleResult = {
+              status: 'failed',
+              error: 'the Oracle returned no area document',
+              linemen,
+              linemanFindings,
+              familyFindings,
+              tokens: totalTokensAll,
+              ms: oracleMs,
+              calls,
+              modelCalls: calls,
+              cached: false,
+              spentUsd,
+              costUsd: spentUsd,
+              maxSpendUsd,
+              capUsd: maxSpendUsd,
+              spentTodayUsd: spentUsd,
+              stages,
+              cacheWarm,
+            };
+            return { value: failed, summary: { status: 'failed', calls, spentUsd }, skipStore: true };
+          }
+          const validation = validateAreaDoc(parsedDoc, {
+            panelIds: boardPanelIds,
+            allowedKeys: allKeys,
+            boundaries: ctx.boundaries ?? new Set<string>(),
+            windows: ctx.windows ?? [],
+            asOf: reading.asOf,
+          });
+          const titles: Partial<Record<BoardPanelId, string>> = ctx.panelTitles ?? {};
+          const docText = areaDocToText(validation.doc, titles, boardPanelIds);
+          const panelLines: NonNullable<SelfOraclePayload['panelLines']> = {};
+          const panelPlans: NonNullable<SelfOraclePayload['panelPlans']> = {};
+          const validUntil: NonNullable<SelfOraclePayload['validUntil']> = { overall: validation.doc.validUntil };
+          for (const area of Object.values(validation.doc.areas)) {
+            if (!area) continue;
+            const claimIds = area.evidence.filter((k) => !k.includes(':'));
+            panelLines[area.id] = [
+              {
+                text: area.headline,
+                claimIds,
+                ...(area.validUntil !== 'always' ? { range: { from: reading.asOf, to: area.validUntil } } : {}),
+                certainty: areaCertaintyToLine(area.certainty),
+                detail: 'Oracle area headline',
+              },
+            ];
+            panelPlans[area.id] = {
+              summary: '',
+              steps: area.actions.map((x) => ({ text: x.text, range: { from: x.from, to: x.to }, claimIds })),
+              calendar: area.dates.map((d) => ({ from: d.from, to: d.to, label: d.label, claimIds, inWindow: true })),
+            };
+            validUntil[area.id] = area.validUntil;
+          }
+          const resultAreas: SelfOracleResult = {
+            status: 'ok',
+            text: docText,
+            output: docText,
+            brief: compiledBrief,
+            promptName: 'oracle/self-areas',
+            promptVersion: PROMPT_VERSION,
+            model: oracleModel,
+            validator: { verdict: validation.withheld.length ? 'rejected' : 'ok', issues: validation.gaps.slice(0, 40) },
+            tokens: totalTokensAll,
+            ms: oracleMs,
+            linemen,
+            linemanFindings,
+            linemanBrief: compiledBrief,
+            familyFindings,
+            panelLines,
+            panelPlans,
+            validUntil,
+            areas: validation.doc,
+            areaGaps: validation.gaps,
+            cacheWarm,
+            dropped: validation.withheld.length,
+            calls,
+            modelCalls: calls,
+            cached: false,
+            spentUsd,
+            costUsd: spentUsd,
+            maxSpendUsd,
+            capUsd: maxSpendUsd,
+            spentTodayUsd: spentUsd,
+            stages,
+          };
+          const overall = validation.doc.validUntil;
+          const refined: DateSpan | null =
+            overall !== 'always' && overall > reading.asOf ? { from: ctx.runningSpan?.from ?? new Date(`${reading.asOf}T00:00:00Z`), to: new Date(`${overall}T00:00:00Z`) } : null;
+          return {
+            value: resultAreas,
+            summary: { status: 'ok', calls, areas: Object.keys(validation.doc.areas).length, withheld: validation.withheld.length, spentUsd },
+            ...(refined ? { context: { runningPeriod: refined } } : {}),
+          };
+        }
 
         const structured = parseOracleStructuredBlocks(`${linemanFindings}\n\n${oracleRes.text}`, allKeys);
         const strippedRaw = oracleRes.text
@@ -1282,6 +1409,7 @@ export async function runSelfOracle(
           capUsd: maxSpendUsd,
           spentTodayUsd: spentUsd,
           stages,
+          cacheWarm,
         };
         const aiValidTo = structured.validUntil[scopeKey === 'all' ? 'overall' : scopeKey] ?? structured.validUntil.overall;
         const refinedPeriod: DateSpan | null =
