@@ -914,3 +914,22 @@ export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | nu
   if (!raw || !/^[0-9a-fA-F]{64}$/.test(raw)) return null;
   return Buffer.from(raw, 'hex');
 }
+
+/**
+ * Self board v2 routes (docs/reading-engine/66 §4.5). Env `SELF_V2_ENABLED`: '1' on, '0' off; unset follows
+ * `AREA_ENABLED` like the other board routes.
+ */
+export function isSelfV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const v = env.SELF_V2_ENABLED?.trim();
+  if (v === '1') return true;
+  if (v === '0') return false;
+  return env.AREA_ENABLED?.trim() === '1';
+}
+
+/**
+ * The person facts the Self Personalizer benefits from, in the order the board asks for a missing one (doc 66 §2,
+ * doc 52 §3). Env `SELF_V2_FACT_KEYS` (comma list of `FACT_CATALOG` keys).
+ */
+export function getSelfV2FactKeys(): string[] {
+  return listEnv('SELF_V2_FACT_KEYS', ['work.status', 'love.status', 'family.children', 'self.focus']);
+}

@@ -32,6 +32,7 @@ import { registerLuckyRoutes } from './src/routes/luckyRoutes.js';
 import { registerAreaRoutes } from './src/routes/areaRoutes.js';
 import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerSelfReadingRoutes } from './src/routes/selfReadingRoutes.js';
+import { registerSelfV2Routes } from './src/routes/selfV2Routes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { registerAssetRoutes } from './src/routes/assetRoutes.js';
@@ -345,6 +346,8 @@ registerLuckyRoutes(app, {
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
 registerAreaRoutes(app, { prisma, requireUser });
 registerSelfReadingRoutes(app, { prisma, requireUser });
+// Self board v2 (docs/reading-engine/66 §4.5): mounted when SELF_V2_ENABLED=1 (unset: follows AREA_ENABLED)
+registerSelfV2Routes(app, { prisma, requireUser });
 registerAdminLabRoutes(app, { prisma });
 // life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
 registerLifeReadingRoutes(app, { prisma, requireUser });
