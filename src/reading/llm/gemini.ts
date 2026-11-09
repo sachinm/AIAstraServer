@@ -15,7 +15,13 @@ import { traceModelCall, type ModelCallTags } from '../metrics/trace.js';
 import type { Usage } from '../types.js';
 import { cacheNameFor, invalidateCache, type CacheOwner } from './promptCache.js';
 
-export type Thinking = 'off' | 'low' | 'medium' | 'high';
+/**
+ * `minimal` is the lowest a model allows: on Gemini 3.x Flash and Flash-Lite it is sent as `thinkingLevel: minimal`
+ * (the level that thinks least; it may still think a little), on 3.x Pro (no minimal level) as `low`, on 2.x as a zero
+ * budget. `off` keeps its old mapping (`low` on 3.x) so existing callers do not change. On Gemini 3.x the thought
+ * tokens count against `maxOutputTokens` (doc 66 replay 2026-11-09: 2,854 out + 2,130 thought hit a 5,000 cap).
+ */
+export type Thinking = 'off' | 'minimal' | 'low' | 'medium' | 'high';
 
 export interface GeminiCallOptions {
   model: string;
@@ -83,7 +89,9 @@ function apiKey(): string {
   return key;
 }
 
-const BUDGETS: Record<Thinking, number> = { off: 0, low: 512, medium: 2048, high: 6144 };
+const BUDGETS: Record<Thinking, number> = { off: 0, minimal: 0, low: 512, medium: 2048, high: 6144 };
+/** Gemini 3.x Flash and Flash-Lite accept `thinkingLevel: minimal`; Pro does not */
+const allowsMinimal = (model: string): boolean => /gemini-3[.\d]*-flash/.test(model);
 const isLegacyThinking = (model: string): boolean => /gemini-2\./.test(model);
 
 /** True when a call with this thinking setting still spends thought tokens (3.x maps `off` to `low`, so it always thinks). */
@@ -132,7 +140,8 @@ export function safeErrorText(err: unknown, max = 200): string {
 
 export function thinkingConfigFor(model: string, thinking: Thinking, includeThoughts = false): Record<string, unknown> {
   // 2.x with a zero budget has nothing to summarise; 3.x maps `off` to `low`, so it still thinks
-  if (isLegacyThinking(model)) return { thinkingBudget: BUDGETS[thinking], includeThoughts: includeThoughts && thinking !== 'off' };
+  if (isLegacyThinking(model)) return { thinkingBudget: BUDGETS[thinking], includeThoughts: includeThoughts && BUDGETS[thinking] > 0 };
+  if (thinking === 'minimal') return { thinkingLevel: allowsMinimal(model) ? 'minimal' : 'low', includeThoughts };
   return { thinkingLevel: thinking === 'off' ? 'low' : thinking, includeThoughts };
 }
 

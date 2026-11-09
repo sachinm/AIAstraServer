@@ -16,9 +16,9 @@ import { usageCostUsd } from '../../llm/models.js';
 import { cleanAreaText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from '../areaDoc.js';
 import { inStoredWindow } from '../audit.js';
 import type { BoardPanelId } from '../types.js';
-import type { OraclePattern, OracleV2Output, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, SelfV2AreaId, SelfV2OracleResult, WindowRef } from '../v2types.js';
+import type { AreaBrief, OraclePattern, OracleV2Output, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, SelfV2AreaId, SelfV2OracleResult, WindowRef } from '../v2types.js';
 import { markAgentUsed } from './cache.js';
-import { promptHash, SELF_V2_ORACLE_PROMPT } from './slices.js';
+import { normaliseEvidenceKey, promptHash, SELF_V2_ORACLE_PROMPT } from './slices.js';
 
 /** the areas the Oracle writes: the eleven v2 areas (the hero is the Personalizer's) */
 export const ORACLE_V2_AREAS: readonly SelfV2AreaId[] = ['diagnosis', 'stuck', 'chapter', 'chapters', 'lagna', 'mind', 'drive', 'presence', 'body', 'yogas', 'year'];
@@ -80,8 +80,22 @@ export function callInstruction(areas: readonly SelfV2AreaId[]): string {
   ].join('\n');
 }
 
-/** The dated windows S2, S3 and S9 carry (and the S7/S8 engine spans the prompt asks about): the validator's frame. */
-export function storedWindowsOf(ctx: SelfBuildContext): { boundaries: Set<string>; windows: Array<{ from: string; to: string }> } {
+/** The validator's date frame: the days and windows of the input, and the exact spans and edges a date may name. */
+export interface StoredFrame {
+  boundaries: Set<string>;
+  windows: Array<{ from: string; to: string }>;
+  /** exact stored spans, `from|to`: every window, consecutive period boundaries of one level, the briefs' dates */
+  spans: Set<string>;
+  /** every boundary and every window or brief-date edge */
+  endpoints: Set<string>;
+}
+
+/**
+ * The dated windows S2, S3 and S9 carry (and the S7/S8 engine spans the prompt asks about), plus the briefs' dates: the
+ * validator's frame. A date must be one of `spans` exactly (doc 66 replay failure 8: made-up 1–7-day spans passed
+ * because each day lay inside the year span).
+ */
+export function storedWindowsOf(ctx: SelfBuildContext, briefs: readonly Pick<AreaBrief, 'dates'>[] = []): StoredFrame {
   const boundaries = new Set<string>();
   const windows: Array<{ from: string; to: string }> = [];
   const span = (x: { from: string; to: string } | null | undefined) => {
@@ -110,7 +124,39 @@ export function storedWindowsOf(ctx: SelfBuildContext): { boundaries: Set<string
   for (const r of s.body?.liveTransits ?? []) span(r);
   span(s.presence?.bestWindow);
   day(s.presence?.liveCare?.until);
-  return { boundaries, windows };
+  const spans = new Set(windows.map((w) => `${w.from}|${w.to}`));
+  const endpoints = new Set([...boundaries, ...windows.flatMap((w) => [w.from, w.to])]);
+  // a sub-period ahead is the span between two consecutive boundaries of its level
+  const byLevel = new Map<number, string[]>();
+  for (const b of s.periods?.boundaries ?? []) byLevel.set(b.level, [...(byLevel.get(b.level) ?? []), b.date]);
+  for (const days of byLevel.values()) {
+    const sorted = [...new Set(days)].sort();
+    for (let i = 1; i < sorted.length; i++) spans.add(`${sorted[i - 1]}|${sorted[i]}`);
+  }
+  for (const b of briefs) {
+    for (const d of b.dates) {
+      if (!d.from || !d.to) continue;
+      spans.add(`${d.from}|${d.to}`);
+      endpoints.add(d.from);
+      endpoints.add(d.to);
+      windows.push({ from: d.from, to: d.to });
+    }
+  }
+  return { boundaries, windows, spans, endpoints };
+}
+
+/** Every evidence key of a call's raw areas and patterns with one prefix (`risk:risk:x` → `risk:x`), inline keys too. */
+export function normaliseCallKeys(p: ParsedCall): ParsedCall {
+  const keys = (v: unknown) => (Array.isArray(v) ? v.map((k) => (typeof k === 'string' ? normaliseEvidenceKey(k.trim()) : k)) : v);
+  const inline = (t: unknown) => (typeof t === 'string' ? t.replace(/\{([^{}]+)\}/g, (_m, k: string) => `{${normaliseEvidenceKey(k.trim())}}`) : t);
+  const fix = (o: unknown) => {
+    if (!o || typeof o !== 'object') return o;
+    const r = { ...(o as Record<string, unknown>) };
+    if ('evidence' in r) r.evidence = keys(r.evidence);
+    if (Array.isArray(r.paragraphs)) r.paragraphs = r.paragraphs.map(inline);
+    return r;
+  };
+  return { ...p, areas: p.areas.map(fix), patterns: p.patterns.map(fix) };
 }
 
 type ParsedCall = { areas: unknown[]; validUntil: string; patterns: unknown[] };
@@ -137,11 +183,14 @@ export function mergeOracleCalls(parsed: ReadonlyArray<ParsedCall | null>): Pars
   return { areas: ok.flatMap((p) => p.areas), validUntil: days[0] ?? 'always', patterns: ok.flatMap((p) => p.patterns) };
 }
 
-/** ≤ 3 patterns for mind and stuck, each with evidence from the input and dates inside a stored window. */
+/**
+ * ≤ 3 patterns for mind and stuck, each with evidence from the input and dates inside a stored window; with `spans`, a
+ * pattern dated at both ends must name a stored span exactly (otherwise its dates are dropped, the pattern kept).
+ */
 export function validatePatterns(
   raw: readonly unknown[],
   allowedKeys: ReadonlySet<string>,
-  frame: { boundaries: ReadonlySet<string>; windows: ReadonlyArray<{ from: string; to: string }> },
+  frame: { boundaries: ReadonlySet<string>; windows: ReadonlyArray<{ from: string; to: string }>; spans?: ReadonlySet<string> },
 ): { patterns: OraclePattern[]; gaps: string[] } {
   const gaps: string[] = [];
   const patterns: OraclePattern[] = [];
@@ -168,7 +217,14 @@ export function validatePatterns(
       gaps.push(`${areaId}: a pattern without behaviour, mechanism or known evidence dropped`);
       continue;
     }
-    patterns.push({ areaId, behaviour, mechanism, since: dateOk(String(o.since ?? '').trim()), until: dateOk(String(o.until ?? '').trim()), evidence });
+    let since = dateOk(String(o.since ?? '').trim());
+    let until = dateOk(String(o.until ?? '').trim());
+    if (since && until && frame.spans && !frame.spans.has(`${since}|${until}`)) {
+      gaps.push(`${areaId}: pattern span ${since}..${until} is not a stored span; its dates dropped`);
+      since = null;
+      until = null;
+    }
+    patterns.push({ areaId, behaviour, mechanism, since, until, evidence });
     if (patterns.length === PATTERNS_MAX) break;
   }
   return { patterns, gaps };
@@ -213,10 +269,15 @@ export function timingOf(agent: SelfV2AgentTiming['agent'], call: string, model:
  * Runs the three Oracle calls in parallel over one warm prefix, merges and validates. Never throws: a call that throws
  * or returns no document is a gap, all three failing is `failed`, a spend over the cap is `budget_exceeded`.
  */
-export async function runOracleV2(deps: OracleV2Deps, ctx: SelfBuildContext, slice: PreparedAgentSlice): Promise<Omit<SelfV2OracleResult, 'familyFindings' | 'cached'>> {
+export async function runOracleV2(
+  deps: OracleV2Deps,
+  ctx: SelfBuildContext,
+  slice: PreparedAgentSlice,
+  briefs: readonly Pick<AreaBrief, 'dates'>[] = [],
+): Promise<Omit<SelfV2OracleResult, 'familyFindings' | 'cached'>> {
   const pHash = promptHash(SELF_V2_ORACLE_PROMPT);
   const model = slice.model;
-  const allowed = new Set(slice.keys);
+  const allowed = new Set(slice.keys.map(normaliseEvidenceKey));
   const results = await Promise.all(
     ORACLE_V2_CALLS.map(async ({ call, areas }) => {
       const t0 = performance.now();
@@ -253,7 +314,8 @@ export async function runOracleV2(deps: OracleV2Deps, ctx: SelfBuildContext, sli
           },
         );
         markAgentUsed(slice, deps.informUsed);
-        const parsed = parseCall(res.text);
+        const p = parseCall(res.text);
+        const parsed = p ? normaliseCallKeys(p) : null;
         return { call, areas, parsed, timing: timingOf('self.oracle', call, model, res, performance.now() - t0, parsed ? 'ok' : 'failed'), error: parsed ? null : `no area document (finish ${res.finishReason ?? 'unknown'}, ${res.text.length} chars)` };
       } catch (e) {
         return { call, areas, parsed: null, timing: timingOf('self.oracle', call, model, null, performance.now() - t0, 'failed'), error: String((e as Error).message ?? e).slice(0, 200) };
@@ -268,8 +330,16 @@ export async function runOracleV2(deps: OracleV2Deps, ctx: SelfBuildContext, sli
   if (results.every((r) => !r.parsed)) return { ...base, status: 'failed', output: null, gaps, withheld: [] };
 
   const merged = mergeOracleCalls(results.map((r) => r.parsed));
-  const frame = storedWindowsOf(ctx);
-  const validation = validateAreaDoc(merged, { panelIds: asPanelIds(ORACLE_V2_AREAS), allowedKeys: allowed, boundaries: frame.boundaries, windows: frame.windows, asOf: ctx.asOf });
+  const frame = storedWindowsOf(ctx, briefs);
+  const validation = validateAreaDoc(merged, {
+    panelIds: asPanelIds(ORACLE_V2_AREAS),
+    allowedKeys: allowed,
+    boundaries: frame.boundaries,
+    windows: frame.windows,
+    asOf: ctx.asOf,
+    spans: frame.spans,
+    endpoints: frame.endpoints,
+  });
   const pv = validatePatterns(merged.patterns, allowed, frame);
   const output: OracleV2Output = { doc: validation.doc, patterns: pv.patterns };
   const partial = results.some((r) => !r.parsed);

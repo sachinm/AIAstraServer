@@ -111,8 +111,8 @@ describe('the build marker carries the clock', () => {
 });
 
 describe('Personalizer output cap (doc 66 §4.9)', () => {
-  it('defaults to 5000 tokens (hero + eleven cards ≈ 3.5–4.5 k) and stays clamped', () => {
-    expect(getSelfPersonalizerMaxOutputTokens()).toBe(5000);
+  it('defaults to 8000 tokens (hero + eleven cards ≈ 4 k plus thought, doc 66 replay) and stays clamped', () => {
+    expect(getSelfPersonalizerMaxOutputTokens()).toBe(8000);
     process.env.SELF_PERSONALIZER_MAX_OUTPUT_TOKENS = '2500';
     expect(getSelfPersonalizerMaxOutputTokens()).toBe(2500);
     process.env.SELF_PERSONALIZER_MAX_OUTPUT_TOKENS = '99999';

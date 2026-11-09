@@ -417,7 +417,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         }
         step('oracle');
         const to = performance.now();
-        const r = await runOracleV2({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: familySpend, maxSpendUsd }, ctx, oracleSlice);
+        const r = await runOracleV2({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: familySpend, maxSpendUsd }, ctx, oracleSlice, briefs);
         ms.oracle = since(to);
         agents.push(...r.calls);
         const result: SelfV2OracleResult = { ...r, familyFindings, cached: false };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPersonalizerSlice, buildSelfV2Slices, claimKey, estTokens, MIN_CACHE_TOKENS, topRisk, toSelfClock } from '../../../../../src/reading/self/v2/slices.js';
+import { buildPersonalizerSlice, buildSelfV2Slices, claimKey, estProviderTokens, MIN_CACHE_TOKENS, topRisk, toSelfClock } from '../../../../../src/reading/self/v2/slices.js';
 import type { OracleV2Output } from '../../../../../src/reading/self/v2types.js';
 import { ACTIVATION, makeBriefs, makeCtx, makeProfile, makeView } from './fixtures.js';
 
@@ -31,20 +31,21 @@ describe('Self v2 slices (doc 66 §4.8 Layer 3)', () => {
     for (const sl of [...Object.values(s.families), s.oracle]) {
       expect(sl.cacheOwner).toEqual({ userId: 'u-v2', kundliId: 'k-v2' });
       expect(sl.prefixHash).toMatch(/^[0-9a-f]{24}$/);
-      expect(sl.estTokens.prefix).toBe(estTokens(sl.prefix));
+      expect(sl.estTokens.prefix).toBe(estProviderTokens(sl.prefix));
     }
     expect(s.oracle.agent).toBe('self.oracle');
   });
 
-  it('the Oracle prefix is the natal slice plus the promise ledger, at least 1,024 tokens, with no date of today in it', () => {
+  it('the Oracle prefix is the natal slice, the promise ledger and the reading frame, at least 1,024 tokens, with no TODAY stamp in it', () => {
     const s = buildSelfV2Slices(makeCtx(), loaded, makeBriefs());
     expect(s.oracle.estTokens.prefix).toBeGreaterThanOrEqual(MIN_CACHE_TOKENS);
     expect(s.oracle.prefix).toContain('# FAMILY PACK: family.rasi');
     expect(s.oracle.prefix).toContain('# FAMILY PACK: family.varga');
     expect(s.oracle.prefix).toContain('{promise:p1}');
-    expect(s.oracle.prefix).not.toContain('2026-11-09');
-    // the suffix carries the dated part
-    for (const part of ['TODAY: 2026-11-09', '## RISK LEDGER', '{risk:r1}', '## AREA BRIEFS', '{claim:stuck.work_load}', '## CONFIRMS']) expect(s.oracle.suffix).toContain(part);
+    expect(s.oracle.prefix).not.toContain('TODAY:');
+    // the reading frame is cached with the natal slice (doc 66 replay failure 12); the suffix is the per-build part
+    for (const part of ['## RISK LEDGER', '{risk:r1}', '## AREA BRIEFS', '{claim:stuck.work_load}']) expect(s.oracle.prefix).toContain(part);
+    for (const part of ['TODAY: 2026-11-09', '## FAMILY FINDINGS', '## CONFIRMS']) expect(s.oracle.suffix).toContain(part);
     expect(s.oracle.keys).toEqual(expect.arrayContaining(['planet:D1.Sa', 'risk:r1', 'promise:p1', claimKey('stuck.work_load'), 'activation:vimsottari/2/Ve@2025-11-16']));
   });
 

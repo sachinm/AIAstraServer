@@ -98,6 +98,13 @@ export interface AreaValidationContext {
   windows: ReadonlyArray<{ from: string; to: string }>;
   /** today, YYYY-MM-DD; a validUntil in the past is dropped */
   asOf: string;
+  /**
+   * When given (the v2 Oracle, doc 66 replay failure 8), exact stored spans as `from|to`: a `dates` entry must be one
+   * of them, not merely lie inside a window ("2026-12-12..2026-12-13" sat inside the year span and was made up).
+   */
+  spans?: ReadonlySet<string>;
+  /** with `spans`: the days an action may start or end on (stored period and window edges; an action may also start today) */
+  endpoints?: ReadonlySet<string>;
 }
 
 export interface AreaValidation {
@@ -227,6 +234,10 @@ export function validateAreaDoc(parsed: { areas: unknown[]; validUntil: string }
         gaps.push(`${id}: date ${from}..${to} (${label.slice(0, 40)}) is outside every stored window`);
         continue;
       }
+      if (ctx.spans && !ctx.spans.has(`${from}|${to}`)) {
+        gaps.push(`${id}: date ${from}..${to} (${label.slice(0, 40)}) is not a stored span`);
+        continue;
+      }
       dates.push({ from, to, label });
       if (dates.length === DATES_MAX) break;
     }
@@ -240,6 +251,10 @@ export function validateAreaDoc(parsed: { areas: unknown[]; validUntil: string }
       if (!dayOk(from) || !dayOk(to) || !text || to < from) continue;
       if (!windowOk(from) || !windowOk(to)) {
         gaps.push(`${id}: action ${from}..${to} is outside every stored window`);
+        continue;
+      }
+      if (ctx.spans && ctx.endpoints && !((from === ctx.asOf || ctx.endpoints.has(from)) && ctx.endpoints.has(to))) {
+        gaps.push(`${id}: action ${from}..${to} does not start today or on a stored edge and end on one`);
         continue;
       }
       actions.push({ from, to, text });

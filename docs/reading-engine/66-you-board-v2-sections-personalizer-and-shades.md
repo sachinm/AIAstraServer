@@ -430,6 +430,22 @@ has run against a provider yet; the first replay (doc 66 §13, needs Sachin's ye
 | Personalizer | (none in v1) | ≈ 8 k in / ≈ 2–4 k out ≈ $0.005–0.008; ≈ 8–12 s |
 | One build | 72 s; $0.055 warm, ≈ $0.09 cold | cold ≈ $0.075–0.08 and ≈ 35 s; warm ≈ $0.04 and ≈ 28 s; profile-only ≈ $0.005 and ≈ 10 s |
 
+**Measured on the first v2 replay (2026-11-09, kundli `c584c0a3`, doc 66 replay report), next to the estimate, and
+what the fixes of branch `fix/self-v2-replay-findings` should change.** The "after the fixes" column is arithmetic on the
+replay's own token counts and the 2026-11-09 prices (3.8-flash ≈ $0.75 / M input, $0.075 / M cached, $3.75 / M out,
+derived from the replay's per-call costs); no call has been made since.
+
+| Step | v2 estimate | Measured 2026-11-09 | Expected after the fixes (not yet measured) |
+|---|---|---|---|
+| Family readers ×5 | ≈ $0.037 cold | 87.2 k in, 99.3 % cached, 3.3 k out + 5.4 k thought; $0.0154; 6.4 s | unchanged |
+| Oracle ×3 | each ≈ 11 k in (≈ 8 k cached), ≈ 2.2 k out; ≈ $0.033; ≈ 17–20 s | each 34.6 k in, 13.4 k cached (**38.6 %**), 2.2–3.7 k out, 0 thought reported; **$0.0842**; 27.4 s | the reading frame moves into the cached prefix: each ≈ 29.4 k of 34.6 k cached (**≈ 85 %**, target ≥ 70 %), ≈ $0.006 input per call instead of ≈ $0.017; step ≈ **$0.052**; wall unchanged (output-bound). The larger region costs more storage per hour (not in `PRICES`). |
+| Personalizer (per profile) | ≈ 8 k in, ≈ 2–4 k out; $0.005–0.008; 8–12 s | 7.7 k in (97 % cached), 2.7–4.0 k out + 0.1–2.3 k thought; $0.0064–0.0077; 12.2–13.6 s; **2 of 3 cut at `MAX_TOKENS`** | thinking `minimal` (≈ 0.1–0.3 k thought), cap 8,000, one retry at 12,000 on `MAX_TOKENS`: ≈ $0.006 and ≈ 9–11 s per profile; a retry doubles that profile's cost when it happens |
+| Sub-techniques + briefs | ≈ 300 ms | **9.1 s** (database round trips from a laptop) | ≈ 10 sequential round trips cut to ≈ 6 (Layer 0 in one round, run logs awaited once at the end): a 150 ms-per-trip simulation runs under 1 s (test `replayFindings.test.ts`); the database side (digest row size, Render latency) cannot be checked offline; on the Lambda next to the database it should be well under 1.5 s |
+| One cold build, one profile | ≈ $0.075–0.08, ≈ 35 s | ≈ $0.107 + ≈ $0.004 storage, ≈ 61 s | ≈ $0.074 + storage, ≈ 50–55 s from a laptop |
+
+Token estimate: the Lab now shows chars / 2.2 (`estProviderTokens`; the replay's 74.6 k chars of Oracle input were
+34.6 k provider tokens); chars / 4 stays only as the conservative padding bound for the 1,024-token cache minimum.
+
 Notes, each one a caveat on the table:
 
 - **Explicit cache storage is billed per hour and is not in `PRICES`.** The v2 build warms the five family packs, the
@@ -440,8 +456,10 @@ Notes, each one a caveat on the table:
   (`withAgentRun` reads only `usage`); fixed 2026-11-09 in `src/reading/self/oracle.ts`, and the v2 path passes it.
   Whether Gemini 3.x returns `thoughtsTokenCount` with `includeThoughts: false` is still unverified, so the Oracle's
   thinking cost may be missing from the measured row.
-- **The Personalizer's output cap is 5,000 tokens** (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, raised from 2,500): the
-  hero and eleven cards come to ≈ 3.5–4.5 k output tokens, and a truncated JSON fails the whole card document.
+- **The Personalizer's output cap is 8,000 tokens** (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, raised from 5,000 after
+  the replay): profile c's complete document was 4,023 output tokens, and on Gemini 3.x thought tokens count against
+  the cap. A `MAX_TOKENS` finish is retried once at `SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS` (12,000); a cut
+  document is never stored.
 
 **Slice sizes on the fixtures (chars / 4, `estTokens`; not provider counts).**
 

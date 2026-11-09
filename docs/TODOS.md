@@ -1823,28 +1823,55 @@ profiles). Owner: the next Self v2 agents/validator branch unless noted.
   plus about 2.2 k thought tokens equal to 5,000 (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`). The whole card document is
   lost. `src/reading/self/v2/personalizer.ts` passes `thinking: 'low'`. Done: thinking off (or cap about 8 k, or the
   cards split over two calls), and a replay of profiles a and b returns `STOP`.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** thinking `minimal`, cap 8,000, one retry at 12,000, a cut document never stored; the replay of a and b (needs a yes) is still to run.
 - **P1 · The Personalizer validator drops a whole date when its label holds a chart term** ("Ketu detachment", "Mars
   sub-period"): 9 of 11 cards lost their dates (`personalizerValidate.ts`). Done: the label is redacted or rewritten and
   the date kept, with a test.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** the label becomes the area title and the date stays (only exact Oracle windows).
 - **P1 · The Personalizer ignores the profile's facts:** a retired person aged 60 and over got "executive
   responsibility", "public pitches" and "workplace friction". Done: a prompt rule and example, plus a validator check
   for career words when `work.status` is retired or between_jobs.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** THE PERSON lists each fact and its bans; env role-words table drops the sentence; hero not naming the focus is flagged.
 - **P2 · Sentence/source alignment drops most body sentences:** 21 sentences on 11 cards, bodies of 12–42 words.
   Done: a `{text, source}` sentence array in the schema, or lenient matching.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** `alignSources` reads per sentence, body-only, per paragraph or card-level; 0 drops on the replay.
 - **P2 · `CHART_TERMS` misses "nodal axis", "sub-period", "karmic", "combinations", "annual cycle"; `MEDICAL_WORDS`
   misses "inflammatory", "digestive", "nervous system" and diet advice.** These reached profile c's cards.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** terms added; body card diet/medicine list `SELF_V2_BODY_ADVICE_WORDS`.
 - **P2 · Date pairs are not checked.** The Oracle invented 1–7-day "relief" spans (2026-12-12..13, 12-13..15, 12-13..19)
   that pass `inStoredWindow` because each day lies inside the year span. The Personalizer paired an action start with a
   chapter end. Done: pair checks in both validators.
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** Oracle dates must be a stored span, actions start today or on an edge; card dates an Oracle window.
 - **P2 · Double-prefixed evidence keys** `risk:risk:…` and `promise:promise:…` in the Oracle slice
   (`src/reading/self/v2/slices.ts`, `` b.k(`risk:${r.id}`) `` where `r.id` already starts `risk:`; the same for promise).
+  **DONE 2026-11-09 (fix/self-v2-replay-findings):** `riskKey`/`promiseKey`, keys normalised on write, on the model's output and on read.
 - **P2 · The Oracle costs 2.5× the §4.9 estimate.** 34.6 k provider tokens per call against 15.5 k by chars/4; 38.6 %
   cached. Done: the stable part of the suffix moves into the prefix, and the Lab uses `countTokens`.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** the reading frame is in the cached prefix (≈ 85 % projected), the Lab estimates chars / 2.2; `countTokens` is not wired (filed below).
 - **P3 · The Oracle reports 0 thinking tokens** on gemini-3.8-flash with thinking `low`; unverified whether
   `thoughtsTokenCount` is missing. Needs one tiny paid call with Sachin's yes.
 - **P3 · An Oracle self-contradiction is not caught:** "Saturn's tenth aspect onto this Moon" against the pattern's
   (correct) third aspect from the 7th onto the 9th. Aspect claims are not checked against the digest.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** the Oracle prompt now reads aspects only from the input's aspect fields; the validator check is filed below.
 - **P3 · Sub-techniques take 9.1 s from this machine** (estimate 0.3 s). Check on the Lambda before acting.
+  **PARTLY DONE 2026-11-09 (fix/self-v2-replay-findings):** Layer 0 in one parallel round, run logs awaited once; the database side is unmeasured offline.
 - **P3 · The 14-word headline cap withholds In short** (18-word headline); give the schema a length hint.
 - **P3 · Replay brief listed `19b210cd…` as a kundli.** It is the user id of `c584c0a3`, so doc 66 §13's "two stored
   dossiers" are one chart. Choose a second test kundli for the next replay.
+
+## Filed 2026-11-09 by fix/self-v2-replay-findings
+
+- **P2 · Re-run the replay for profiles a and b** (2 Personalizer calls, ≈ $0.012, needs Sachin's yes) and one
+  Oracle replay to measure the cached share of the new prefix (target ≥ 70 %, projected ≈ 85 %) and the sub-technique
+  wall time against the 1.5 s target. Not done: no paid call allowed on this branch.
+- **P3 · Gemini `countTokens` is not in the client** (`src/reading/llm/gemini.ts`). The Lab estimates chars / 2.2. Done:
+  a free `countTokens` call in the Lab only, never on a build's path.
+- **P3 · An aspect claim cannot be checked against the input in Node** without counting houses (forbidden: Radha is the
+  only source). Done: the engine exports each aspect with its count (3rd/7th/10th) per planet pair; then the Oracle
+  validator flags an area that names an aspect absent from the evidence. Prompt rule added meanwhile.
+- **P3 · The Oracle prefix now changes per build** (it carries the reading frame), so a region lives for one build and
+  its storage is larger (≈ 29 k tokens instead of 13 k). Measure the storage cost per region-hour on the next replay.
+- **P3 · "First card speaks to the focus" is only a prompt rule.** Cards are keyed by area and shown in the board's
+  order; only the hero is checked (a gap, never a drop). Owner: the UI lane, if focus should reorder the cards.
+- **P3 · One role word or diet word drops the whole ladder** (the four steps are one object). Done: drop only the step
+  and show three, or ask the Personalizer to rewrite.

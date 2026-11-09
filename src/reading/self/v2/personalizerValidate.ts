@@ -9,6 +9,7 @@
  * Words and patterns only; nothing astrological is computed.
  */
 import type { AreaDate } from '../areaDoc.js';
+import { getSelfV2BodyAdviceWords, getSelfV2NotWorkingStatuses, getSelfV2RoleWordsNotWorking } from '../../../config/env.js';
 import { wordCount } from '../words.js';
 import type {
   CardStatus,
@@ -24,6 +25,7 @@ import type {
   Tone,
   WindowRef,
 } from '../v2types.js';
+import { SELF_V2_AREAS } from '../v2types.js';
 import { claimKeysOf } from './oracle.js';
 import { paragraphId } from './slices.js';
 
@@ -49,6 +51,10 @@ export const CHART_TERMS: readonly RegExp[] = [
   /\b(lagna|ascendant|dashas?|mahadasha|antardasha|pratyantardasha|bhukti|nakshatras?|rasi|rashi|navamsa|navamsha|dasamsa|trimsamsa|vargas?|yogas?|doshas?|transits?|retrograde|combust(ion)?|exalted|exaltation|debilitat\w*|neecha|uccha)\b/i,
   /\b(vimshottari|vimsottari|narayana|chara|yogini|ashtottari|kalachakra|tithi|pravesha|varshaphal|varsha|mudda|patyayini|gochara|sade\s*sati|ashtakavarga|bindus?|shadbala|avasthas?|argala|arudha|upapada|karakamsa|atmakaraka|amatyakaraka|karakas?|kendra|trikona|dusthana|kala\s*sarpa|kemadruma|panchang)\b/i,
   /\b(planet|planets|zodiac|horoscope|astrolog\w*|divided)\b/i,
+  // doc 66 replay 2026-11-09 failure 6: period and node words that passed the scan
+  /\bsub[-\s]?(sub[-\s]?)?(periods?|cycles?)\b|\bperiod\s+lords?\b|\bmajor\s+period\b/i,
+  /\b(nodal|lunar\s+nodes?|karmic|karma|combinations)\b/i,
+  /\b(annual\s+(chart|cycle|framework)|solar\s+return)\b/i,
   /\d+\s*°|\b\d+\s+degrees?\b/i,
   /\b\d+\s+(of\s+\d+\s+)?(clocks|systems)\b/i,
 ];
@@ -60,7 +66,59 @@ export const ENGINE_NAMES = /\b(aiastra_radha|pyjhora|jhora|radha)\b/i;
 export const INTERNAL_ID = /\{|\}|\b(claim|planet|house|point|yoga|activation|annual|window|risk|promise|star):[\w.@/-]+/i;
 
 /** medical words (doc 61 §3): the body card speaks of energy and wear, never a diagnosis */
-export const MEDICAL_WORDS = /\b(diagnos\w*|disease|illness|disorder|syndrome|tumou?r|cancerous|diabet\w*|surgery|surgical|infection|chronic|medication|prescription|symptoms?|clinical|patholog\w*|psychiatric)\b/i;
+export const MEDICAL_WORDS = /\b(diagnos\w*|disease|illness|disorder|syndrome|tumou?r|cancerous|diabet\w*|surgery|surgical|infection|chronic|medications?|prescription|symptoms?|clinical|patholog\w*|psychiatric|supplements?)\b/i;
+
+const escapeRe = (w: string): string => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+/** a whole-word, case-insensitive matcher over a reviewed words table; null for an empty table */
+export const wordsMatcher = (words: readonly string[]): RegExp | null =>
+  words.length ? new RegExp(`\\b(${words.map(escapeRe).join('|')})\\b`, 'i') : null;
+
+/**
+ * Diet, food and medicine words the body card may not carry (doc 61 §3: energy and wear, never diet or medicine
+ * advice). Env `SELF_V2_BODY_ADVICE_WORDS`.
+ */
+export const bodyAdviceWords = (): RegExp | null => wordsMatcher(getSelfV2BodyAdviceWords());
+
+/** the past-role markers that let a role word stand for a person no longer in that work ("in your former role") */
+const PAST_ROLE = /\b(former|formerly|past|previous|previously|used to|once|retired|retirement|earlier|years of work)\b/i;
+
+/**
+ * Role words that contradict the person's stated work status (doc 66 replay failure 5), or null when the status allows
+ * them. Env `SELF_V2_ROLE_WORDS_NOT_WORKING` and `SELF_V2_NOT_WORKING_STATUSES`.
+ */
+export function roleWordsFor(facts: PersonalizerInput['profile']['facts'] | undefined): RegExp | null {
+  const status = facts?.work?.status?.trim().toLowerCase();
+  if (!status || !getSelfV2NotWorkingStatuses().map((x) => x.toLowerCase()).includes(status)) return null;
+  return wordsMatcher(getSelfV2RoleWordsNotWorking());
+}
+
+/**
+ * The plain words that show a sentence speaks to a stated focus (`self.focus` values). A reviewed words table, used to
+ * flag a hero that does not lead with the person's focus; it never drops text.
+ */
+export const FOCUS_WORDS: Readonly<Record<string, readonly string[]>> = {
+  career: ['work', 'career', 'job', 'business', 'craft'],
+  money: ['money', 'income', 'savings', 'spending', 'finances', 'financial', 'wealth', 'earn'],
+  love: ['love', 'partner', 'heart', 'relationship', 'together'],
+  family: ['family', 'home', 'children', 'parents', 'household'],
+  health: ['health', 'body', 'energy', 'rest', 'sleep', 'strength', 'vitality', 'pace'],
+  spirituality: ['meaning', 'faith', 'inner', 'spirit', 'spiritual', 'prayer', 'quiet', 'reflection', 'purpose', 'peace'],
+  home: ['home', 'house', 'household', 'family'],
+  learning: ['study', 'learning', 'learn', 'course', 'skill'],
+  travel: ['travel', 'journey', 'trip', 'abroad', 'move'],
+  creativity: ['creative', 'creativity', 'ideas', 'making', 'craft', 'art'],
+};
+
+/** true when the text names one of the stated focus areas in plain words (an unknown focus key counts as named) */
+export function focusNamed(text: string, focus: readonly string[]): boolean {
+  return focus.some((f) => {
+    const words = FOCUS_WORDS[f.toLowerCase()];
+    return !words || Boolean(wordsMatcher(words)?.test(text));
+  });
+}
+
+/** the area's display title: the neutral label for a date whose own label could not stand */
+export const areaTitle = (id: string): string => SELF_V2_AREAS.find((a) => a.id === id)?.title ?? 'This stretch';
 
 /** gendered words: only when the person stated a gender */
 export const GENDERED_WORDS = /\b(he|she|him|her|hers|his|himself|herself|man|woman|men|women|male|female|lady|ladies|gentleman|girl|boy|guy|masculine|feminine|manhood|womanhood|husband|wife|boyfriend|girlfriend)\b/i;
@@ -109,19 +167,27 @@ function frameOf(dates: Iterable<string>, pairs: Iterable<[string, string]> = []
   return f;
 }
 
-/** Every date the Oracle document carries: area dates and actions, patterns, validUntil days. */
+/**
+ * Every date the Oracle document carries: area dates and actions, patterns, validUntil days. `pairs` holds only the
+ * Oracle's dated windows (area `dates` and pattern spans), never an action's span: a card date is a window the Oracle
+ * named, copied exactly (doc 66 replay failure 8: "2026-11-09 → 2026-12-12: Current composure period" was an action).
+ */
 export function oracleDates(out: OracleV2Output): DateFrame {
   const days: string[] = [];
   const pairs: Array<[string, string]> = [];
   for (const a of Object.values(out.doc.areas)) {
     if (!a) continue;
-    for (const d of [...a.dates, ...a.actions]) {
+    for (const d of a.dates) {
       days.push(d.from, d.to);
       pairs.push([d.from, d.to]);
     }
+    for (const d of a.actions) days.push(d.from, d.to);
     if (a.validUntil !== 'always') days.push(a.validUntil);
   }
-  for (const p of out.patterns) for (const d of [p.since, p.until]) if (d) days.push(d);
+  for (const p of out.patterns) {
+    for (const d of [p.since, p.until]) if (d) days.push(d);
+    if (p.since && p.until) pairs.push([p.since, p.until]);
+  }
   if (out.doc.validUntil !== 'always') days.push(out.doc.validUntil);
   return frameOf(days, pairs);
 }
@@ -141,6 +207,10 @@ export function oracleSources(out: OracleV2Output): Set<string> {
 export interface TextCheckContext {
   gender: StatedGender | null;
   dates: DateFrame;
+  /** role words the person's stated work status contradicts (roleWordsFor); a past-role sentence may still use them */
+  roleWords?: RegExp | null;
+  /** extra words this card may not carry (the body card's diet and medicine table) */
+  cardWords?: RegExp | null;
 }
 
 /** Why a piece of card text may not stand, or null when it may. */
@@ -150,6 +220,8 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
   const term = CHART_TERMS.find((re) => re.test(text));
   if (term) return `chart term (${text.match(term)?.[0] ?? ''})`;
   if (MEDICAL_WORDS.test(text)) return `medical word (${text.match(MEDICAL_WORDS)?.[0] ?? ''})`;
+  if (c.cardWords?.test(text)) return `diet or medicine advice (${text.match(c.cardWords)?.[0] ?? ''})`;
+  if (c.roleWords?.test(text) && !PAST_ROLE.test(text)) return `role word against the stated work status (${text.match(c.roleWords)?.[0] ?? ''})`;
   if (c.gender === null && GENDERED_WORDS.test(text)) return `gendered word with no stated gender (${text.match(GENDERED_WORDS)?.[0] ?? ''})`;
   const bad = daysIn(text).find((d) => !c.dates.days.has(d));
   if (bad) return `date ${bad} is not in the Oracle document`;
@@ -173,6 +245,40 @@ export const sentencesOf = (paragraph: string): string[] =>
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+export interface AlignedSources {
+  /** how the card's `sources` were read against its sentences */
+  mode: 'per_sentence' | 'body_only' | 'per_paragraph' | 'headline_and_paragraphs' | 'card';
+  headline: string | null;
+  /** [paragraph][sentence] */
+  body: Array<Array<string | null>>;
+}
+
+/**
+ * Lines the card's `sources` up with its sentences (doc 66 replay failure 3: 21 sentences dropped because the model gave
+ * one source per body sentence without the headline, or one per paragraph, and the strict one-per-sentence reading
+ * shifted every source by one). In order:
+ * - one per sentence (headline first): read in order; a source not in the Oracle drops its sentence;
+ * - one per body sentence: the headline takes the card's first valid source;
+ * - one per paragraph, or the headline then one per paragraph: every sentence of a paragraph takes its paragraph's;
+ * - any other count: every sentence takes the card's first valid source. A card none of whose sources is in the
+ *   Oracle document stays unsourced and is dropped (the truly unsourced case).
+ */
+export function alignSources(srcs: readonly string[], sentencesPerParagraph: readonly number[], known: ReadonlySet<string>): AlignedSources {
+  const n = sentencesPerParagraph.reduce((a, b) => a + b, 0);
+  const paras = sentencesPerParagraph.length;
+  const firstValid = srcs.find((s) => known.has(s)) ?? null;
+  const byParagraph = (offset: number) => sentencesPerParagraph.map((k, i) => Array.from({ length: k }, () => srcs[offset + i] ?? null));
+  const positional = (offset: number) => {
+    let i = offset;
+    return sentencesPerParagraph.map((k) => Array.from({ length: k }, () => srcs[i++] ?? null));
+  };
+  if (srcs.length === n + 1) return { mode: 'per_sentence', headline: srcs[0] ?? null, body: positional(1) };
+  if (srcs.length === n && n > 0) return { mode: 'body_only', headline: firstValid, body: positional(0) };
+  if (srcs.length === paras && paras > 0) return { mode: 'per_paragraph', headline: firstValid, body: byParagraph(0) };
+  if (srcs.length === paras + 1 && paras > 0) return { mode: 'headline_and_paragraphs', headline: srcs[0] ?? null, body: byParagraph(1) };
+  return { mode: 'card', headline: firstValid, body: sentencesPerParagraph.map((k) => Array.from({ length: k }, () => firstValid)) };
+}
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {});
@@ -229,6 +335,8 @@ export function validatePersonalDoc(
   const oDates = oracleDates(oracle);
   const gender = input.profile.gender;
   const cardCtx: TextCheckContext = { gender, dates: oDates };
+  const roleWords = roleWordsFor(input.profile.facts);
+  const bodyWords = bodyAdviceWords();
   const cards: PersonalCardDoc['cards'] = {};
   const cardStatus: PersonalizerValidation['cardStatus'] = {};
   const seen = new Set<string>();
@@ -246,29 +354,27 @@ export function validatePersonalDoc(
       continue;
     }
     seen.add(areaId);
-    const srcs = arr(c.sources).map(str);
-    let si = 0;
-    const takeSource = (): string | null => {
-      const s = srcs[si++] ?? '';
-      return sources.has(s) ? s : null;
-    };
+    const ctx: TextCheckContext = { ...cardCtx, roleWords, cardWords: areaId === 'body' ? bodyWords : null };
+    const rawParagraphs = arr(c.body).slice(0, BODY_PARAGRAPHS_MAX + 2).map((p) => sentencesOf(str(p)));
+    const aligned = alignSources(arr(c.sources).map(str), rawParagraphs.map((p) => p.length), sources);
+    const valid = (s: string | null): string | null => (s && sources.has(s) ? s : null);
     const kept: string[] = [];
     // headline: sentence 0
     let headline = str(c.headline);
-    const hSrc = takeSource();
-    const hProblem = !headline ? 'empty' : !hSrc ? 'no source in the Oracle document' : wordCount(headline) > HEADLINE_MAX_WORDS ? `over ${HEADLINE_MAX_WORDS} words` : textProblem(headline, cardCtx);
+    const hSrc = valid(aligned.headline);
+    const hProblem = !headline ? 'empty' : !hSrc ? 'no source in the Oracle document' : wordCount(headline) > HEADLINE_MAX_WORDS ? `over ${HEADLINE_MAX_WORDS} words` : textProblem(headline, ctx);
     if (hProblem) {
       gaps.push(`${areaId}: headline dropped (${hProblem})`);
       headline = '';
     } else kept.push(hSrc!);
-    // body: each sentence in order, sources[1..]
+    // body: each sentence with the source the alignment gave it
     const body: string[] = [];
     let words = 0;
-    for (const rawP of arr(c.body).slice(0, BODY_PARAGRAPHS_MAX + 2)) {
+    for (const [pi, sentences] of rawParagraphs.entries()) {
       const keptSentences: string[] = [];
-      for (const s of sentencesOf(str(rawP))) {
-        const src = takeSource();
-        const problem = !src ? 'no source in the Oracle document' : textProblem(s, cardCtx);
+      for (const [si, s] of sentences.entries()) {
+        const src = valid(aligned.body[pi]?.[si] ?? null);
+        const problem = !src ? 'no source in the Oracle document' : textProblem(s, ctx);
         if (problem) {
           gaps.push(`${areaId}: a body sentence dropped (${problem})`);
           continue;
@@ -316,7 +422,9 @@ export function validatePersonalDoc(
             ? 'no source in the Oracle document'
             : [since, until].some((d) => d && !oDates.days.has(d))
               ? 'a date not in the Oracle document'
-              : textProblem(text, cardCtx);
+              : since && until && !oDates.pairs.has(`${since}|${until}`)
+                ? `the span ${since}..${until} is not a window of the Oracle document`
+                : textProblem(text, ctx);
       if (problem) {
         gaps.push(`${areaId}: a pattern dropped (${problem})`);
         continue;
@@ -329,8 +437,8 @@ export function validatePersonalDoc(
     const l = obj(c.ladder);
     if (Object.keys(l).length) {
       const steps: LadderSteps = { best: str(l.best), practical: str(l.practical), drift: str(l.drift), floor: str(l.floor) };
-      const bad = (Object.entries(steps) as Array<[keyof LadderSteps, string]>).find(([, t]) => !t || textProblem(t, cardCtx));
-      if (bad) gaps.push(`${areaId}: ladder dropped (${bad[0]}: ${bad[1] ? textProblem(bad[1], cardCtx) : 'empty'})`);
+      const bad = (Object.entries(steps) as Array<[keyof LadderSteps, string]>).find(([, t]) => !t || textProblem(t, ctx));
+      if (bad) gaps.push(`${areaId}: ladder dropped (${bad[0]}: ${bad[1] ? textProblem(bad[1], ctx) : 'empty'})`);
       else ladder = steps;
     }
 
@@ -339,15 +447,16 @@ export function validatePersonalDoc(
       const d = obj(rawD);
       const from = str(d.from);
       const to = str(d.to) || from;
-      const label = str(d.label);
+      let label = str(d.label);
       if (!oDates.pairs.has(`${from}|${to}`)) {
-        gaps.push(`${areaId}: date ${from}..${to} is not in the Oracle document; dropped`);
+        gaps.push(`${areaId}: date ${from}..${to} is not a window of the Oracle document; dropped`);
         continue;
       }
-      const problem = !label ? 'no label' : textProblem(label, cardCtx);
+      // the date stands on the Oracle; only its words can fail: a label that cannot stand becomes the area's title
+      const problem = !label ? 'no label' : textProblem(label, ctx);
       if (problem) {
-        gaps.push(`${areaId}: date ${from}..${to} dropped (${problem})`);
-        continue;
+        gaps.push(`${areaId}: date ${from}..${to} label replaced (${problem})`);
+        label = areaTitle(areaId);
       }
       dates.push({ from, to, label });
     }
@@ -375,7 +484,7 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
   const windowDays = [w.easesAt, w.nextSupportFrom, w.heaviestNow?.from, w.heaviestNow?.to].filter((d): d is string => Boolean(d));
   const o = oracleDates(oracle);
   const heroDates = frameOf([...o.days, ...windowDays]);
-  const c: TextCheckContext = { gender: input.profile.gender, dates: heroDates };
+  const c: TextCheckContext = { gender: input.profile.gender, dates: heroDates, roleWords: roleWordsFor(input.profile.facts) };
   const toneRaw = str(raw.tone) as Tone;
   const tone: Tone = TONES.includes(toneRaw) ? toneRaw : 'mixed';
   if (!TONES.includes(toneRaw)) gaps.push(`hero: tone ${toneRaw || 'missing'} is not one of the six; mixed used`);
@@ -402,6 +511,8 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
     if (qp) gaps.push(`hero: question dropped (${qp})`);
     else question = { claimId: qClaim, text: qText };
   }
+  const focus = input.profile.facts?.focus ?? [];
+  if (sentence && focus.length && !focusNamed(`${sentence} ${sub}`, focus)) gaps.push(`hero: names none of the stated focus (${focus.join(', ')})`);
   const split = heroSplit(oracle);
   const nextCheck = [w.easesAt, w.nextSupportFrom].filter((d): d is string => Boolean(d) && d! > w.asOf).sort()[0] ?? null;
   return {
