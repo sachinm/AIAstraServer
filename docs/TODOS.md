@@ -1806,3 +1806,11 @@ have these tests clear the vars they depend on).
 - **P2 · `tests/unit/reading/annualPrashna.test.ts` > model planner > "a ruled-out question never reaches the model; bad
   model output keeps the rules":** `expected true to be false`. Fails on 9595614 too. Same clarify-cache cause, already
   fixed on develop by `c9db440`.
+
+## Filed 2026-11-09 by the Self v2 release
+
+- **P2 · The engine (AIAstra_Radha) has no documented release path.** The deploy session would not ship engine develop
+  `9a4fb5d` (the `pressure_inventory` export) without one. Until it ships, the Self v2 windows run degraded: equal
+  strength, transits mixed. Owner: Sachin with the deploy session. Done: a written engine release path in `AGENTS.md` or
+  `docs/ops/`, the export live on the engine Lambda, and the server's pull storing a `kundli_data` `pressure_inventory`
+  row for one test kundli.
