@@ -158,6 +158,25 @@ the audit and the fallback, never as the card. Start A tomorrow with the Lab rep
 7:36 am and the 21:20 builds), so the first judgment of the new prompt costs ten cents and no live page changes until
 the replay reads right.
 
+## 9b. Phase A result (2026-11-09, branch `feat/self-oracle-areas`, report `65-replay-2026-11-09-self-19b210cd.md`)
+
+- **It works.** The Oracle returned all nine areas as JSON by schema; every area validated with a headline, 2–3
+  paragraphs, dates and actions; the prose is one voice per area, names the classical rule (lagna lord in the 7th,
+  Venus 2nd from Rahu as a 2/12 relation, Neecha Bhanga by Mars, Dhana Yoga of the 2nd and 5th lords, Kala Sarpa,
+  Atmakaraka Sun with Karakamsa Virgo), stays inside the running Rahu Mahadasha and names only the next lord.
+- **Gaps the validator caught:** four areas put a 1900–2099 placeholder span under lifelong statements (dropped; the
+  prompt now forbids it); two areas cited claim ids without the `claim:` prefix (dropped; the prompt now shows the form).
+- **Caches, as Sachin asked:** every stage warmed its prefix first; the lineman ran on 98k of 126k tokens cached, the
+  Oracle on 12k of 41k; the family readers' packs cached too except `family.sky` (882 tokens, under Gemini's 1,024
+  minimum). `READING_EXPLICIT_CACHE=1` must be set on the Lambda for this to happen live; it is not today.
+- **Time and cost:** Oracle 44.6 s for 5,908 output tokens at thinking low; whole build 59 s cold, 72 s with the lineman
+  re-run. $0.060 (first run, truncated at a 3,000-token cap) + $0.055 (second) = $0.115 against the $0.10 approved.
+- **Two defects found and fixed on the way:** the Oracle store key lacked the prompt version (a prompt change served
+  the old essay); the lineman's cache key changes with the Oracle key, so it re-ran once.
+- **Still open for the 15 s target (doc 64):** the Oracle's 6k-token answer is the floor of its time. Phase C option:
+  three parallel Oracle calls of three areas each over the same cached prefix (≈ 15 s wall, same cost), or a smaller
+  answer with the paragraphs capped at three.
+
 ## 10. Decisions this plan changes
 
 - Doc 62's "one to three lines, 22 words" card becomes the **headline** rule; the body is two to four paragraphs.
