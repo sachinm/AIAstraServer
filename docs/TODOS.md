@@ -1602,3 +1602,15 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 - **P3 · No shared carousel component.** Scroll-snap, chips and dots are copied into five web files; no colour tokens
   (Tailwind utilities only), no custom font. Fact. Owner: web. Done: one `Carousel` and one `Chips` component used by
   You, Love, Work and Lucky times.
+
+## Filed 2026-11-09 by the Self v2 contracts build (doc 66 §13, branch `feat/self-v2-contracts`)
+
+- **P3 · The local Prisma client is stale.** `npx tsc --noEmit` on `develop` fails only on `src/auth/terms.ts(86,15)`:
+  `terms_version` is in `prisma/schema.prisma:70` but not in the generated client. Found 2026-11-09; not caused by this
+  branch. Owner: a Haiku sub-agent (AGENTS.md: `prisma generate` is an install step). Done: `npx prisma generate` run in
+  the main checkout and tsc clean.
+- **Status · Self v2 step 1 (contracts) merged.** `src/reading/self/v2types.ts` (hero + eleven areas, refresh triggers,
+  the pressure inventory, the ten `self.sub.*` outputs, `SelfBuildContext`, `AreaBrief`, `AgentSlice`, `OracleInput`,
+  `PersonalizerInput`, `PersonalCardDoc`, `HeroDoc`) and `src/reading/person/profile.ts` (profile pack, age bands from
+  `SELF_AGE_BANDS`, gender null = neutral, practitioner roles, mood per day, hash). Next: steps 1b and 1c in parallel,
+  and the engine export (needs Sachin's OK). The `self.mood` fact key is read but not yet in `FACT_CATALOG` (step 8).
