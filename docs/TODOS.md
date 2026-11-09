@@ -1311,12 +1311,13 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
 
 ## Filed 2026-11-08 (night) by the Self reading loading session (docs/reading-engine/64, branch `fix/self-reading-background-build`)
 
-- **P1 · The admin Techniques Lab hides an Oracle failure.** `api/src/labAdapter.ts oracleOf` maps a dossier's
-  `oracle` to the "Oracle's answer" block only when text exists; a dossier with `oracle.status = 'failed'` (today's
-  `de1bc2b9`, `5ea12dca` for kundli c584c0a3) shows no Oracle section, no error, no time, so the 163 s and 300 s Gemini
-  time-outs were invisible to Sachin. Owner: admin repo. Done: the build row and the Oracle block show status
-  (`ok | failed | budget_exceeded | pending`), the failing stage, its error text and ms from `audit.steps.oracleMs`
-  and the `agent_runs` row (`self.reading_oracle`, status failed, error "Gemini call timed out after 60000ms").
+- **P1 · The admin Techniques Lab hides an Oracle failure.** Fixed on admin branch `feat/admin-engine-loads`
+  (2026-11-08 night, not merged or deployed): the Lab shows a failed Oracle with its status and error, and the new
+  Engine › Dashboard loads page (docs/admin/12) shows every build with its agent runs, errors and answers. Done when
+  merged, both deployed, and Sachin's 21:20 build shows "Oracle failed · Gemini call timed out after 60000ms".
+- **P3 · Local admin `api` typecheck reports `send` missing on `SecretsManagerClient`** (scripts/admin-accounts.ts,
+  src/config.ts) in worktree `wt/admin-loads` after an interrupted `npm ci` was finished with `npm install`; lockfile and
+  SDK version unchanged, tests pass. Owner: whoever next runs CI on the branch. Done: a clean CI typecheck.
 - **P1 · `agent_runs` for Gemini stages record zero tokens and zero cost.** `self.reading_oracle` and `lineman.self`
   rows for the 7:36 am build have `prompt_tokens = 0`, `est_cost_usd = 0` while the dossier's stages record 45,110 /
   43,414 prompt tokens and $0.05 / $0.013. `withAgentRun` is given `tokensIn/tokensOut/costUsd` by the Oracle stage; the
