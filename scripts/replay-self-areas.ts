@@ -4,7 +4,10 @@
  * a markdown report for Sachin to read. A paid model run: the family readers, the lineman and the Oracle (about $0.08
  * per kundli); run only with his yes.
  *
- *   npx tsx scripts/replay-self-areas.ts <userId> [board] [out.md]
+ *   npx tsx scripts/replay-self-areas.ts <userId> [board] [out.md] [force]
+ *
+ * Without `force` the family readers and the lineman come from the findings cache when they have run on this prompt
+ * version, so a rerun after an Oracle failure costs the Oracle call only.
  *
  * Env (set for the run): SELF_READING_MODEL=1 SELF_ORACLE_AREAS=1 READING_EXPLICIT_CACHE=1 and the usual DATABASE_URL /
  * GEMINI_API_KEY from .env. The stored output lands under the new prompt version's key, so the live server (older
@@ -17,14 +20,15 @@ import { getBoardReading } from '../src/reading/self/service.js';
 import type { ReadingBoardId } from '../src/reading/self/types.js';
 
 async function main(): Promise<void> {
-  const [userId, boardArg = 'self', outArg] = process.argv.slice(2);
+  const [userId, boardArg = 'self', outArg, forceArg] = process.argv.slice(2);
+  const force = forceArg === 'force';
   if (!userId) throw new Error('usage: replay-self-areas.ts <userId> [board] [out.md]');
   const board = boardArg as ReadingBoardId;
   for (const k of ['SELF_READING_MODEL', 'SELF_ORACLE_AREAS']) if (process.env[k] !== '1') throw new Error(`${k}=1 required`);
   const prisma = new PrismaClient();
   const t0 = Date.now();
   try {
-    const r = await getBoardReading({ prisma }, userId, board, { trigger: 'manual', force: true });
+    const r = await getBoardReading({ prisma }, userId, board, { trigger: 'manual', force });
     const ms = Date.now() - t0;
     if (r.status !== 'ok') {
       console.log(JSON.stringify({ status: r.status, ms }));

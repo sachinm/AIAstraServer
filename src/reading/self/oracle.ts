@@ -794,7 +794,9 @@ export async function runSelfOracle(
   const answersKey = shortHash(JSON.stringify(Object.entries(answers).sort(([a], [b]) => a.localeCompare(b))));
   const mudda = runningMudda(view, reading.asOf);
   const tpRow = runningTp(view, reading.asOf, mudda?.row.year);
-  const oracleDigestVersion = `${view.version}|board=${board}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? PROMPT_VERSION}`;
+  // the prompt bundle version and the output shape are part of the key: a prompt change, or switching to the area
+  // document, never serves an output written under the old prompt (doc 65 Phase A found the opposite)
+  const oracleDigestVersion = `${view.version}|board=${board}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? 'code'}|p=${PROMPT_VERSION}|shape=${isSelfOracleAreasEnabled() ? 'areas' : 'essay'}`;
 
   const boardFocusInstruction =
     board === 'love'
@@ -1222,7 +1224,8 @@ export async function runSelfOracle(
               system: oracleSystem,
               parts: oracleParts,
               thinking: areasOn ? 'low' : 'medium',
-              maxOutputTokens: areasOn ? Math.min(getSelfOracleMaxOutputTokens(), 3000) : getSelfOracleMaxOutputTokens(),
+              // nine areas × 2–4 paragraphs with dates and actions is 3–5k tokens of JSON; a cap under that truncates it
+              maxOutputTokens: areasOn ? Math.max(getSelfOracleMaxOutputTokens(), 6000) : getSelfOracleMaxOutputTokens(),
               timeoutMs: ORACLE_TIMEOUT_MS,
               cachePrefix: true,
               cacheOwner: owner,
@@ -1268,9 +1271,10 @@ export async function runSelfOracle(
         if (areasOn) {
           const parsedDoc = parseAreaDoc(oracleRes.text);
           if (!parsedDoc) {
+            const raw = oracleRes.text;
             const failed: SelfOracleResult = {
               status: 'failed',
-              error: 'the Oracle returned no area document',
+              error: `the Oracle returned no area document (finish ${oracleRes.finishReason ?? 'unknown'}, ${raw.length} chars; head "${raw.slice(0, 80).replace(/\s+/g, ' ')}" tail "${raw.slice(-80).replace(/\s+/g, ' ')}")`,
               linemen,
               linemanFindings,
               familyFindings,
