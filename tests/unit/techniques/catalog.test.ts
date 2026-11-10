@@ -10,7 +10,8 @@ beforeEach(() => resetTechniqueSeedState());
 describe('technique catalogue', () => {
   it('ids are unique and look like <category or board>.<name>', () => {
     expect(new Set(TECHNIQUES.map((t) => t.id)).size).toBe(TECHNIQUES.length);
-    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life|research)\.[a-z0-9_.]+$/);
+    // `reading.` is the clock layer shared by the Self, Love and Work boards (docs/reading-engine/70 §4.1 layers 2–3)
+    for (const t of TECHNIQUES) expect(t.id).toMatch(/^(work|love|self|lucky|general|digest|life|research|reading)\.[a-z0-9_.]+$/);
   });
 
   it('every category, board, status and chart source is valid', () => {
@@ -135,10 +136,10 @@ describe('technique catalogue', () => {
     for (const id of ['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year', 'clock', 'purview', 'audit', 'oracle']) {
       expect(techniqueById(`work.reading.${id}`)?.status, `work.reading.${id}`).toBe('built');
     }
-    // 135 built (including self/love/work reading panels, stage checks, oracle synthesizers and the 22 Self v2 rows of doc 66 §4.8, and the 3 Self v2 agent rows); 0 planned
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(135);
+    // 135 built (including self/love/work reading panels, stage checks, oracle synthesizers and the 22 Self v2 rows of doc 66 §4.8, and the 3 Self v2 agent rows, and the 2 clock-layer rows of doc 70); 0 planned
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(138);
     expect(TECHNIQUES.filter((t) => t.status === 'planned').map((t) => t.id)).toEqual([]);
-    expect(TECHNIQUES).toHaveLength(135);
+    expect(TECHNIQUES).toHaveLength(138);
   });
 
   it('the work families and the house-state layers are built', () => {

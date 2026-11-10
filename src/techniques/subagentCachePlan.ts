@@ -171,6 +171,7 @@ const TECHNIQUE_TO_SUBAGENTS: Readonly<Record<string, SubAgentId[]>> = {
   'self.v2.oracle': ['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky', 'self.oracle'],
   'self.v2.personalizer': ['self.personalizer'],
   'self.v2.hero': ['self.personalizer'],
+  'self.v3.cards': ['self.oracle', 'self.personalizer'],
 };
 
 /** Maps a technique ID to its `SubAgentId[]` in `SUBAGENT_DIGEST_SPECS`. */
@@ -469,7 +470,7 @@ export function buildTechniqueSubAgentCachePlan(t: TechniqueDef): TechniqueSubAg
   }
 
   // 4b. You board v2 agents (`self.v2.oracle`, `self.v2.personalizer`, `self.v2.hero`; docs/reading-engine/66 §4.8)
-  if (t.id === 'self.v2.oracle' || t.id === 'self.v2.personalizer' || t.id === 'self.v2.hero') {
+  if (t.id === 'self.v2.oracle' || t.id === 'self.v2.personalizer' || t.id === 'self.v2.hero' || t.id === 'self.v3.cards') {
     const isOracle = t.id === 'self.v2.oracle';
     return {
       techniqueId: t.id,

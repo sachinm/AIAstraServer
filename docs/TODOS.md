@@ -2134,6 +2134,12 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   web `src/components/LoadingVeil.tsx`), against the no-planet-words rule for user-facing text.
 - **P3:** the first "Reading your chart…" and "chart still being prepared" veils have no bar (no board yet to read
   `build` from); the 5 s bar delay restarts per veil.
+- **P2 (2026-11-09, Self v2 Chart details):** the "Who you are · Chart details" sheet prints empty brackets where chart
+  names were stripped ("Your chart rises in Pisces (), ... ruled by Jupiter ()"). The redaction removes the bracketed
+  term and leaves the brackets. Seen on staging in Sachin's screenshot. Fix in the details redaction step.
+- **P2 (2026-11-09, Self v2 layout):** at about 970 px wide the four-across cards are about 190 px and lines wrap after
+  three or four words; the date list sits at the bottom of every card. Answered by the plan in
+  `docs/reading-engine/68-self-board-v3-your-cards-your-months.md` (Phases A and B approved 2026-11-09; in progress on `feat/self-v3`).
 
 ## Filed 2026-11-09 by the dasha-deep worker go-live
 
@@ -2150,3 +2156,176 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 - **P2 · The first real worker invocation is not yet confirmed.** It needs a signed-in board open on staging, then a
   `dasha_deep_focus_invoked` log on the API and a `dasha_deep_pull` (or `dasha_deep_queued`) log on the worker.
   [deploy session] Done when both logs are seen for one kundli and its level-4 rows are in `kundli_activation`.
+
+## Filed 2026-11-09 by the Self v3 build (branch `feat/self-v3`, docs/reading-engine/68 Phases A and B)
+
+- **P2 · Phase B replay: confirm the two fixes live.** The first replay (2 builds, $0.17,
+  `docs/reading-engine/68-replay-2026-11-09-self-v3.md`) kept 4 and 9 of 11 cards. The Personalizer repair call and the
+  evidence-key aliases that answer it are unit-tested only. One more live build, about $0.10, needs Sachin's yes.
+  Done when a live build keeps all eleven cards.
+- **P2 · With `SELF_V3_BUILD=1` a build pays for v2 and v3.** The v3 step runs after a v2 build that served the page,
+  over the same context and natal prefix, so the Oracle and Personalizer run twice. GET /api/self/v3 still queues and
+  reads progress through the v2 store and marker. Cutover step: when v3 is the default, drop the v2 Oracle and
+  Personalizer steps from the build and key GET's queue logic on the v3 row. Done when one build calls one Oracle set.
+- **P2 · The other clocks' tones are stored-only.** The year frame reads `pressure_inventory` for the confirming and
+  applicable clocks only when a row is already stored; it never pulls at build time (the account's Lambda concurrency
+  is 10). Most charts will show agreement from the reading clock and the year chart only. Pull them in the background
+  (the deep-level worker or the digest), one at a time. Done when a fresh kundli has rows for each confirming clock.
+- **P2 · Build time and the progress bar.** The v3 step adds an estimated 30 to 60 s in the same invocation after v2,
+  and `BUILD_STAGES` has no v3 stage, so the bar sits at its last v2 stage. Check the build Lambda's timeout and add a
+  stage. Done when a timed staging build stays under the timeout and the bar moves during v3.
+- **P3 · A section change re-runs the whole v3 step.** The store key carries the sections hash, so switching the ladder
+  on re-runs the Oracle too. Split the key: Oracle by frame and prefix, Personalizer by profile and sections.
+- **P3 · "Suggested for you" is the registry's fixed eight.** The `suggest` seam (from what presses now and the
+  person's stated focus) is not built. Done when the suggested set follows the strongest pressure rows' matters.
+- **P3 · A unit test reached the real model-cache endpoint.** The first v3 step test called the real
+  `ensurePromptCache` through `warmPrefixes` (no fake passed). It failed with "model not found", so nothing was
+  created or charged. The test now passes a fake. Consider a vitest setup that blocks outbound network.
+- **Not deployed:** migration `20261109180000_board_layout_m47` is not applied anywhere, and `SELF_V3_ENABLED` and
+  `SELF_V3_BUILD` are not set on any Lambda. Goes through the deploy session with Sachin's yes.
+- **P2 · Web v3 board not looked at in a browser.** Branch `feat/self-v3` in AIAstra_WEB (f1cfc31) passes typecheck and
+  637 unit tests but has not been opened at iPad, phone or Duo size. Check that a card does not scroll inside at tablet
+  width with the default sections, and that the 40 px peek shows. [web] Done with screenshots at 1180, 768 and 375 px.
+- **P3 · Web v3 gaps.** Duo draws two cards across rather than splitting at the hinge (Template 3 not built); chip
+  edit mode has no Cancel (press Edit again to back out); a v2-filled card shows the same body for every period.
+- **P3 · Web lint baseline.** `eslint .` in AIAstra_WEB reports 28 errors in files the v3 work did not touch (for
+  example `no-explicit-any` in `SelfBoardV2.test.tsx`, `YouPage.test.tsx`, `SelfReading.test.tsx`).
+- **P2 · Staging registries seeded from this branch.** Running `npx tsx scripts/write-techniques-doc.ts` in the
+  worktree, with the server `.env` copied in, seeded `technique_registry` and `agent_registry` on the Render staging
+  database (54 agents, 136 techniques). It upserts, so the only new rows are `self.v3.cards` and `self.oracle.v3`; the
+  Admin catalogue shows them before the branch is deployed. Nothing was deleted. The copied `.env` was removed from
+  the worktree. Either leave them (they arrive with the deploy) or delete the two rows. [Sachin] Done when decided.
+- **P3 · The doc script writes to whatever `DATABASE_URL` is set.** `scripts/write-techniques-doc.ts` seeds the
+  registries whenever `DATABASE_URL` is present, so regenerating a doc in a worktree with a copied `.env` writes to
+  staging. Make the seed opt-in (`--seed`). Done when the doc regenerates without touching a database by default.
+
+## Filed 2026-11-09 by doc 70 (five clocks, a reading per card; branch `feat/self-v3`)
+
+- **P1 · open · Only one clock was ever read.** Plan: `docs/reading-engine/70-five-clocks-and-card-by-card-readings.md`.
+  Phase 1 code is in (2026-11-10): `resolveReadingClocks()` (`src/reading/self/clock.ts`, env `READING_CLOCK_ORDER`,
+  `READING_CLOCKS`, `READING_CLOCKS_MIN`), the v3 step reads that set, `ensurePressureInventories()`
+  (`src/reading/self/sub/pressure.ts`) runs from the sync worker after a complete sync; unit tests in
+  `tests/unit/reading/self/v3/clockSet.test.ts`. On the test kundli the set is Vimshottari, Narayana, the year,
+  Dwisaptati Sama, Yogini, but only Dwisaptati is stored: the three other pulls failed locally (no AWS credentials may
+  invoke the engine Lambda from this machine). Report: `docs/reading-engine/70-phase1-clock-rows-2026-11-10.md`. Owner:
+  this branch. Done: the three rows pulled on staging and the frame lists five clocks.
+- **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** Checked 2026-11-10 on the
+  test kundli's Dwisaptati inventory: the 7 `annual:TP<year>` rows run 353 to 384 days and all 54 year sub-period rows
+  fall inside their year, so the pressure rows do not show the 108-year problem. The separate
+  `annual.tithi_pravesha_dasha` row still does (the build reports "TP2026 year dasha is a lifetime dasha"), so the P0
+  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled.
+- **P3 · open · The failed `pressure_inventory` row for `system=kaala` on staging.** Its error column reads
+  `validation_error: Invalid export type: pressure_inventory`, written 2026-11-10 00:38 UTC, before the engine that serves
+  the export went live (the Dwisaptati row was pulled at 05:03 UTC, calc version 2). Kaala is no longer selectable for
+  that kundli, so nothing asks for it again. No engine fix needed. Done: the row is replaced if kaala is ever pulled.
+- **P1 · open · A pull that fails on the caller's side blocks that clock for 24 h.** `loadPressureInventory`
+  (`src/reading/self/sub/pressure.ts`) stores every failure as a `failed` row with `fetch_started_at`, and no build or sync
+  pulls that clock again for `SELF_V2_PRESSURE_RETRY_HOURS` (24). On 2026-11-10 12:44 UTC the doc 70 check run from a
+  laptop without AWS credentials wrote `failed` rows for Vimshottari, Narayana and Yogini on kundli c584c0a3 (test data),
+  so those three are not pulled on staging until 2026-11-11 12:44 UTC. Fix: do not store failures that are not the
+  engine's answer (credentials, network, timeout), or retry those after minutes; and give staff a re-pull that skips
+  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row.
+- **P2 · open · The sync sweep never pulls inventories for kundlis whose chart is already complete.** The sweep
+  (`findIncompleteKundlis`) only picks kundlis with a missing registration row, and the new pull runs only after a sync
+  run. A kundli synced before 2026-11-10, or one whose inventory went stale after 7 days, gets its clocks only when a
+  build pulls them (15 s each, in the build). Fix: a sweep step that picks kundlis with a missing or stale clock-set
+  inventory. Owner: this branch or doc 70 Phase 2. Done: a test kundli with complete charts gets its four rows from the
+  sweep.
+- **P2 · open · At first sync the clock set may miss the conditional clock.** The set is read from `kundli_activation`
+  and `dasha.applicable`; at the first sync these may not be stored yet, so the set falls back to the non-conditional
+  systems and the spine (Vimshottari by default). The conditional clock's inventory is then pulled only by the first
+  build. Done: the sync pulls the set again after the digest lands, or the digest worker calls
+  `ensurePressureInventories`.
+- **P3 · open · Questions for the engine harness from the 2026-11-10 rows.** (a) No Dwisaptati period row has polarity
+  `supports` (46 presses, 6 mixed): check whether a dasha row can be `supports` at all. (b) No `sade_sati` or `station`
+  row in the 2023-11 to 2029-11 window for c584c0a3. (c) Sign-dasha rows (Narayana, Chara) not checked yet. (d) The
+  inventory is 82.5 KB as JSON, not 21 KB as doc 70 says (21 KB is likely the compressed size). Owner: engine lane, doc
+  70 step 2.
+- **P2 · open · Each `pressure_inventory` call recomputes the clock-independent rows.** Five clocks is five sky scans
+  and five sets of year charts. Engine pass E1 in doc 70 §6: accept a list of systems and compute the shared rows once.
+- **P2 · open · No weighted order of dasha systems from the engine.** The clock set's order is a server list
+  (`src/config/env.ts:834-835`). Which clocks carry most weight for a birth is astrology; engine pass E2 in doc 70 §6.
+- **P3 · open · Doc 68 §4.9 and doc 69 §4.1 are superseded by doc 70** (budget; one call per board). The two docs still
+  carry the old text.
+- **P1 · open · Doc 70 Phase 2 (slices, clock readers, ledger) is built behind `READING_CLOCK_LAYER=1` and not wired.**
+  Code: `src/reading/slices/` (renderers, `writeSlices`, `readSlices`), `src/reading/clocks/` (`readClocks`,
+  `countConcordance`, `runConcordance`, `runClockLayer`); migration `20261110100000_kundli_slices_m48` (table
+  `kundli_slices`) is written, not applied, and `prisma generate` has not been run for it (the store reads the delegate
+  through a loose type, so it works once the client has it). Nothing renders or writes slices yet: the sync worker
+  after `ensurePressureInventories` should call `renderSliceSet` + `writeSlices`, and the build should read slices
+  (doc 70 step 3 "build reads slices"; prep under 1 s not measured on real rows). Owner: doc 70 Phase 3. Done: slices
+  written at sync for the test kundli, two runs give the same hashes, and `runClockLayer` called from the event.
+- **P2 · open · The frame slice does not carry each clock's rows per span (doc 70 §4.1 table says it does).** The frame
+  slice sits in every reader's cached prefix; listing each clock's rows there would let a reader see the other clocks,
+  against doc 70 §9. Each clock's rows per span are in its own `clock.<system>` slice (BY SPAN index) instead. Decision
+  for Sachin to confirm; the doc table needs the same change. Owner: doc 70.
+- **P2 · open · Count edge cases decided in code, for Sachin's review** (`src/reading/clocks/concordance.ts` header):
+  3 heavy + 1 light is confirmed (with `opposed=1`, not contested); 3 heavy + 3 light is contested; 2 heavy + 1 mixed is
+  leaning (mixed opposes nothing); 2 heavy + 2 mixed and heavy + mixed are `single` (nothing agreed, nothing stated).
+  Done: Sachin confirms or changes the rules; tests in `tests/unit/reading/clocks/concordance.test.ts` follow.
+- **P2 · open · The clock-layer agents have no `SUBAGENT_DIGEST_SPECS` / `subagentCachePlan` entry of their own.**
+  `reading.clock` and `reading.concordance` use one prefix (the common system prompt + natal.core, sky.window, year.tp,
+  frame) warmed by `warmPrefixes`; the cache plan falls back to the generic plan for `reading.clock.sheet` and
+  `reading.concordance`, which does not describe this prefix. Owner: doc 70 Phase 3, when the layer is wired. Done: a
+  plan branch naming the shared slices, and the Lab shows cached vs total tokens for the five readers.
+- **P3 · open · Clock-layer prompts never run against a model.** `prompts/common/reader-system.md`,
+  `prompts/clock/reader.md`, `prompts/concordance.md` are tested only with a fake model. Word limits (cell 25 words,
+  ledger 30) and the "rows of two polarities allow only mixed" tone rule may drop many cells live. Done: the doc 70
+  Phase 2 replay (one kundli, needs Sachin's yes on key, count and cost) reports drop rates per check.
+
+## Filed 2026-11-09 by the backfill disk-full incident
+
+Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of each item in brackets.
+
+- **Incident (record).** `scripts/backfill-dasha-levels.ts --dry-run=false` on 33 kundlis filled the Render Postgres
+  disk to 100 %: `kundli_activation` reached 553 MB (31k–47k level-3 rows per kundli across 47 dasha types, about double
+  doc 67's ~20k estimate; ≈ 16.8 MB per kundli including indexes). Postgres could not write WAL and the API went down
+  until Sachin raised the disk to 5 GB. 8 kundlis failed on the disk-full error, and the script then rebuilt their
+  `kundli_activation` rows from the failed pull: the failed types' `kundli_data` rows had become `failed`, the rebuild
+  read only `ready` trees, and the levels 1–3 band of every system was deleted and re-inserted without them. Afterwards,
+  on Sachin's instruction, 29 kundlis were deleted and 4 kept.
+- ~~**P0 · The backfill stripped activation rows after a failed pull.**~~ Fixed on `fix/backfill-safety`: per kundli
+  and per dasha type, only a type whose pull came back as a complete tree this run (and was stored) is replaced
+  (delete + insert of that kundli's levels 1–3 for exactly those systems, one transaction); a failed, locked, empty or
+  unstored pull keeps its rows; all failed writes nothing; a kundli with any failed type is not marked done, so a rerun
+  retries it. The digest rebuild had the same pattern (`writeDigest` deleted every level-1–3 row): it now keeps the rows
+  of a system whose tree is `failed` or `fetching` (`heldDashaSystems`). The deep worker already replaced only the
+  systems that answered.
+- ~~**P0 · No disk guard on bulk activation writes.**~~ Fixed on `fix/backfill-safety`: `src/reading/digest/diskGuard.ts`
+  reads `pg_database_size(current_database())` and the measured bytes per row (`pg_total_relation_size` ÷ `count(*)`,
+  fallback 350 B) and refuses when size + estimate > `DB_DISK_LIMIT_BYTES` × `DB_DISK_MAX_FILL` (default 0.7). The
+  backfill checks before the run, before every kundli's write and after every kundli; a wet run refuses when
+  `DB_DISK_LIMIT_BYTES` is unset. The deep worker checks before writing and marks the marker `deferred_disk` (retried
+  after an hour) instead of writing past it.
+- **P1 · Run the backfill only after setting `DB_DISK_LIMIT_BYTES` and reading the dry-run byte estimate.**
+  `DB_DISK_LIMIT_BYTES=5368709120` for the 5 GB Render disk; the dry run prints rows × bytes per row per kundli, the
+  total, the database size and the threshold. [deploy / ops session] Done when the next run's dry-run numbers are in its
+  log and fit under the threshold.
+- **P1 · Storage decision for Sachin: lifelong level 3 for every system costs ≈ 16.8 MB per kundli.** Doc 67 §6.2
+  recommends level 3 lifelong only for the primary clock and the configured confirming clocks, every other system
+  levels 1–2 lifelong plus level 3 within ±2 years (about 70–80 % fewer rows, ≈ 3–5 MB per kundli), tunable by
+  `DASHA_L3_LIFELONG_SYSTEMS`, `DASHA_L3_WINDOW_YEARS`, `DASHA_LIFELONG_OTHER_MAX_LEVEL` (reserved, not built).
+  [Sachin] Done when he picks an option; then it is built before the backfill runs on more kundlis.
+- **P1 · Set `DB_DISK_LIMIT_BYTES` on the API and the dasha-deep worker Lambdas.** Without it the deep worker's guard
+  is off (it logs `dasha_deep_disk_guard_unset` on every run). [deploy session] Done when both functions have it and
+  the log line is gone.
+- **P2 · A failed re-pull downgrades a `ready` `kundli_data` row to `failed`.** `claim` sets `fetching`, and `complete`
+  with `failed` keeps the old payload but sets the status, so `loadDigestInputs` (status `ready` only) no longer sees
+  that tree until the next good pull. The activation rows are now kept (above), but the digest's other uses of the tree
+  lose it meanwhile. [server] Done when a failed re-pull of a row that had a ready payload leaves it `ready` (with the
+  error recorded) or readers fall back to the stored payload.
+- **P2 · Disk freed by deletes needs a vacuum.** Replacing rows leaves dead tuples until autovacuum; after the 29
+  kundlis were deleted the disk is not smaller until a `VACUUM` of `kundli_activation` (a `VACUUM FULL` needs as much
+  free space again and locks the table). [ops, with Sachin's yes] Done when the table's size matches its live rows.
+- **P3 · A dasha system that stops being served keeps its activation rows after a digest rebuild if its tree row is left
+  `failed`.** Only rows of systems with no stored tree at all are dropped. [server] Done when retired systems are
+  removed explicitly.
+
+## Decided 2026-11-09: dasha level-3 storage
+
+- **DECIDED · Every dasha system keeps levels 1–3 for the whole life** (Sachin, 2026-11-09: "Keep every system"). The
+  storage cut in docs/reading-engine/67 §6.2 is not built. Cost: about 16.8 MB per kundli (measured 2026-11-09).
+- **P2 · Database capacity for lifelong level 3.** At ~16.8 MB per kundli and the disk guard's 70% of the 5 GB Render
+  disk, the database holds roughly 150–200 kundlis beside the other tables before the guard stops writes. Owner: Sachin
+  (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
+  for the expected user count (or a decision to revisit §6.2 then).

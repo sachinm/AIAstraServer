@@ -1,0 +1,377 @@
+{
+  "kundli": "c584c0a3-841b-451b-a2ed-f5709c5fb31d",
+  "asOf": "2026-11-10",
+  "promptVersion": "9eb606f50bb6",
+  "explicitCache": true,
+  "builds": [
+    {
+      "build": 1,
+      "status": "partial",
+      "cards": 4,
+      "spans": 3,
+      "prepMs": 10110,
+      "ms": {
+        "frame": 426.84,
+        "warm": 2378.24,
+        "oracle": 31741.35,
+        "personalizer": 15625.21,
+        "step": 49751.37,
+        "total": 50525.54
+      },
+      "calls": 6,
+      "costUsd": 0.076607,
+      "issues": [
+        {
+          "stage": "personalizer",
+          "area": "chapters",
+          "check": "other",
+          "message": "chapters: confirm dropped: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.c"
+        },
+        {
+          "stage": "personalizer",
+          "area": "chapters",
+          "check": "other",
+          "message": "chapters: span s2 asks: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.c"
+        },
+        {
+          "stage": "personalizer",
+          "area": "year",
+          "check": "other",
+          "message": "year: span s1 asks: role word against the stated work status (your job)",
+          "callId": "v3.personalizer.c"
+        },
+        {
+          "stage": "personalizer",
+          "area": "lagna",
+          "check": "other",
+          "message": "lagna: line: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.b"
+        },
+        {
+          "stage": "personalizer",
+          "area": "lagna",
+          "check": "other",
+          "message": "lagna: span s1 obstacle: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.b"
+        },
+        {
+          "stage": "personalizer",
+          "area": "presence",
+          "check": "other",
+          "message": "presence: span s2 asks: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.b"
+        },
+        {
+          "stage": "personalizer",
+          "area": "yogas",
+          "check": "other",
+          "message": "yogas: span s1 obstacle: role word against the stated work status (your job)",
+          "callId": "v3.personalizer.b"
+        },
+        {
+          "stage": "personalizer",
+          "area": "mind",
+          "check": "other",
+          "message": "mind: span s1 obstacle: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.a"
+        },
+        {
+          "stage": "personalizer",
+          "area": "diagnosis",
+          "check": "chart_term",
+          "message": "diagnosis: span s1 obstacle: chart term (Divided)",
+          "callId": "v3.personalizer.a"
+        },
+        {
+          "stage": "personalizer",
+          "area": "diagnosis",
+          "check": "other",
+          "message": "diagnosis: span s3 asks: role word against the stated work status (professional)",
+          "callId": "v3.personalizer.a"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "build": 2,
+      "status": "partial",
+      "cards": 9,
+      "spans": 3,
+      "prepMs": 8632,
+      "ms": {
+        "frame": 383.39,
+        "warm": 2.19,
+        "oracle": 67112.2,
+        "personalizer": 16185.44,
+        "step": 83303.99,
+        "total": 83998.94
+      },
+      "calls": 7,
+      "costUsd": 0.095685,
+      "issues": [
+        {
+          "stage": "oracle",
+          "area": "body",
+          "check": "unknown_evidence_key",
+          "message": "body: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "body",
+          "check": "unknown_evidence_key",
+          "message": "body: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "mind",
+          "check": "unknown_evidence_key",
+          "message": "mind: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "mind",
+          "check": "unknown_evidence_key",
+          "message": "mind: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "stuck",
+          "check": "unknown_evidence_key",
+          "message": "stuck: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "stuck",
+          "check": "unknown_evidence_key",
+          "message": "stuck: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "diagnosis",
+          "check": "unknown_evidence_key",
+          "message": "diagnosis: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "diagnosis",
+          "check": "unknown_evidence_key",
+          "message": "diagnosis: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "year",
+          "check": "unknown_evidence_key",
+          "message": "year: span s2: unknown evidence key annual:TP2026/2/Me@2027-06-01",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "oracle",
+          "area": "year",
+          "check": "unknown_evidence_key",
+          "message": "year: span s3: unknown evidence key annual:TP2026/2/Me@2027-06-01",
+          "callId": null,
+          "areaStatus": "repaired"
+        },
+        {
+          "stage": "personalizer",
+          "area": "chapter",
+          "check": "other",
+          "message": "chapter: span s2 asks: role word against the stated work status (your career)",
+          "callId": "v3.personalizer.c"
+        },
+        {
+          "stage": "personalizer",
+          "area": "year",
+          "check": "chart_term",
+          "message": "year: line: chart term (annual cycle)",
+          "callId": "v3.personalizer.c"
+        }
+      ],
+      "gaps": []
+    }
+  ],
+  "cacheCleanup": {
+    "deleted": 2,
+    "failed": 0,
+    "memoryCleared": 7
+  },
+  "calls": [
+    {
+      "build": 1,
+      "node": "self.oracle.v3.v3.oracle.c",
+      "ms": 24371,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35949,
+      "cachedTokens": 34764,
+      "outputTokens": 2993,
+      "thoughtTokens": 0,
+      "costUsd": 0.0147198,
+      "finish": "STOP"
+    },
+    {
+      "build": 1,
+      "node": "self.oracle.v3.v3.oracle.b",
+      "ms": 27572,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35953,
+      "cachedTokens": 34764,
+      "outputTokens": 3550,
+      "thoughtTokens": 0,
+      "costUsd": 0.016811549999999998,
+      "finish": "STOP"
+    },
+    {
+      "build": 1,
+      "node": "self.oracle.v3.v3.oracle.a",
+      "ms": 31340,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35951,
+      "cachedTokens": 34764,
+      "outputTokens": 4126,
+      "thoughtTokens": 0,
+      "costUsd": 0.01897005,
+      "finish": "STOP"
+    },
+    {
+      "build": 1,
+      "node": "self.personalizer.v3.v3.personalizer.c",
+      "ms": 12455,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 4229,
+      "cachedTokens": 0,
+      "outputTokens": 1137,
+      "thoughtTokens": 0,
+      "costUsd": 0.0074355,
+      "finish": "STOP"
+    },
+    {
+      "build": 1,
+      "node": "self.personalizer.v3.v3.personalizer.b",
+      "ms": 14381,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 4346,
+      "cachedTokens": 0,
+      "outputTokens": 1530,
+      "thoughtTokens": 0,
+      "costUsd": 0.008997,
+      "finish": "STOP"
+    },
+    {
+      "build": 1,
+      "node": "self.personalizer.v3.v3.personalizer.a",
+      "ms": 15231,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 4453,
+      "cachedTokens": 0,
+      "outputTokens": 1689,
+      "thoughtTokens": 0,
+      "costUsd": 0.0096735,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.oracle.v3.v3.oracle.c",
+      "ms": 21442,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35949,
+      "cachedTokens": 34764,
+      "outputTokens": 2816,
+      "thoughtTokens": 0,
+      "costUsd": 0.014056049999999999,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.oracle.v3.v3.oracle.b",
+      "ms": 28202,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35953,
+      "cachedTokens": 34764,
+      "outputTokens": 3589,
+      "thoughtTokens": 0,
+      "costUsd": 0.0169578,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.oracle.v3.v3.oracle.a",
+      "ms": 34373,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 35951,
+      "cachedTokens": 34764,
+      "outputTokens": 4206,
+      "thoughtTokens": 0,
+      "costUsd": 0.01927005,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.oracle.v3.v3.oracle.repair",
+      "ms": 31850,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 36278,
+      "cachedTokens": 34764,
+      "outputTokens": 4390,
+      "thoughtTokens": 0,
+      "costUsd": 0.0202053,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.personalizer.v3.v3.personalizer.c",
+      "ms": 9894,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 3984,
+      "cachedTokens": 0,
+      "outputTokens": 910,
+      "thoughtTokens": 0,
+      "costUsd": 0.0064005,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.personalizer.v3.v3.personalizer.b",
+      "ms": 13969,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 4458,
+      "cachedTokens": 0,
+      "outputTokens": 1562,
+      "thoughtTokens": 0,
+      "costUsd": 0.009201,
+      "finish": "STOP"
+    },
+    {
+      "build": 2,
+      "node": "self.personalizer.v3.v3.personalizer.a",
+      "ms": 15704,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 4402,
+      "cachedTokens": 0,
+      "outputTokens": 1678,
+      "thoughtTokens": 0,
+      "costUsd": 0.009594,
+      "finish": "STOP"
+    }
+  ],
+  "totalUsd": 0.172292,
+  "swallowedWrites": 6
+}

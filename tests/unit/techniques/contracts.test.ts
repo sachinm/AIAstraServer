@@ -65,8 +65,8 @@ describe('every technique is a contract (doc 53 §4.3)', () => {
 
   it('code techniques have system none and an output type', () => {
     // board techniques are code, except the Self/Love/Work reading model layers (docs/reading-engine/58 §4.1, 63)
-    // and the You board v2 agents (docs/reading-engine/66 §4.8 Layer 3)
-    const MODEL_ON_BOARDS = new Set(['self.reading.oracle', 'love.reading.oracle', 'work.reading.oracle', 'self.v2.oracle', 'self.v2.personalizer', 'self.v2.hero']);
+    // and the You board v2 agents (docs/reading-engine/66 §4.8 Layer 3) and the v3 cards step (docs/reading-engine/68)
+    const MODEL_ON_BOARDS = new Set(['self.reading.oracle', 'love.reading.oracle', 'work.reading.oracle', 'self.v2.oracle', 'self.v2.personalizer', 'self.v2.hero', 'self.v3.cards', 'reading.clock.sheet', 'reading.concordance']);
     for (const t of TECHNIQUES.filter((x) => (x.board !== 'chat' || x.id.startsWith('digest.')) && !MODEL_ON_BOARDS.has(x.id))) {
       expect(t.contract.system, t.id).toBe('none');
       expect(t.contract.user, t.id).toEqual([]);

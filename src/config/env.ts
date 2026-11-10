@@ -851,6 +851,27 @@ export function getSelfConfirmSystems(): string[] {
   return listEnv('SELF_CONFIRM_SYSTEMS', SELF_CONFIRM_DEFAULT);
 }
 
+// ── The reading's clock set (docs/reading-engine/70 §4.1) ─
+
+/**
+ * The clock set's order (catalogue dasha ids). Two slot words: `tithi_pravesha` is the year (never pulled; its rows ride
+ * in every inventory) and `conditional` is the first conditional clock the engine says applies. Until the engine exports
+ * a weighted order (doc 70 E2) this list is the weighting. Env: `READING_CLOCK_ORDER`.
+ */
+export function getReadingClockOrder(): string[] {
+  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional', 'yogini', 'chara']);
+}
+
+/** Clocks in the set, the year counted as one. Env `READING_CLOCKS` (default 5, 3..6). */
+export function getReadingClocks(): number {
+  return parseClampedIntEnv('READING_CLOCKS', 5, 3, 6);
+}
+
+/** Fewer clocks than this with dated rows is a gap; a reading waits for the next pull. Env `READING_CLOCKS_MIN` (default 3, 1..6). */
+export function getReadingClocksMin(): number {
+  return parseClampedIntEnv('READING_CLOCKS_MIN', 3, 1, 6);
+}
+
 /** How near (months) a confirming clock's main period must start to the chapter's start to agree on the shift. Env: `SELF_CHAPTER_BOUNDARY_MONTHS` (default 18, 6..36). */
 export function getSelfChapterBoundaryMonths(): number {
   return parseClampedIntEnv('SELF_CHAPTER_BOUNDARY_MONTHS', 18, 6, 36);
@@ -919,6 +940,21 @@ export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | nu
  * Self board v2 routes (docs/reading-engine/66 §4.5). Env `SELF_V2_ENABLED`: '1' on, '0' off; unset follows
  * `AREA_ENABLED` like the other board routes.
  */
+/** Self board v3 build step (doc 68 Phase B): the v3 Oracle and Personalizer run after a v2 build that served; off unless 1. */
+export function isSelfV3BuildEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_V3_BUILD?.trim() === '1';
+}
+
+/** The clock layer (doc 70 §4.1 layers 2–3: clock readers and the concordance ledger); off unless READING_CLOCK_LAYER=1. */
+export function isReadingClockLayerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.READING_CLOCK_LAYER?.trim() === '1';
+}
+
+/** Self board v3 routes (docs/reading-engine/68): on only when SELF_V3_ENABLED=1 and the v2 board is on. */
+export function isSelfV3Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_V3_ENABLED?.trim() === '1' && isSelfV2Enabled(env);
+}
+
 export function isSelfV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const v = env.SELF_V2_ENABLED?.trim();
   if (v === '1') return true;

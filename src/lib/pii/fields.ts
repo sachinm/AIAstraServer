@@ -135,6 +135,8 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
     owner: { via: 'kundli_id' },
     fields: { output: json },
   },
+  // M48 (docs/reading-engine/70 §4.1 Layer 1): rendered chart text and its evidence keys; slice_id and hash stay plain
+  KundliSlice: { table: 'kundli_slices', owner: { via: 'kundli_id' }, fields: { text, keys: json } },
   ReadingTrace: { table: 'reading_traces', owner: { via: 'user_id' }, fields: { question: text, error: text } },
   PrashnaCast: { table: 'prashna_casts', owner: { via: 'user_id' }, fields: { payload: json, place_resolved: text, coords: pendingText } },
   // sealed JSON {category, date, date_precision, place, attributes}; the plain columns are dropped in M28

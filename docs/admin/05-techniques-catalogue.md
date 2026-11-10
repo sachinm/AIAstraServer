@@ -6,7 +6,7 @@ with `npx tsx scripts/write-techniques-doc.ts` after the catalogue changes.
 
 Every row is a contract (doc 53 §4.3): *Selected when* says which questions or boards choose it; *Contract* says what it reads, in which table layout, under which prompt, and what it returns.
 
-Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Reading: 22); 110 built, 0 partly built, 0 planned. Agents registered: 49.
+Counts: 136 techniques (Self (You board): 58, Love: 27, Work: 29, General Reading: 22); 136 built, 0 partly built, 0 planned. Agents registered: 54.
 
 ## Summary
 
@@ -40,9 +40,35 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 | `self.reading.oracle` | You reading: AI family sub-agents, Self Lineman, and Self Oracle synthesis | self | You board | Built | panel claims (natal), D1 (divisional), D9 (divisional), D10 (divisional), D30 (divisional), reading clock (dasha), Tithi Pravesha (annual), sky overlay (transit) | `self.reading_oracle`, `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`, `lineman.self` | area_checks:self |
 | `self.reading.purview` | You reading: the whole-chart purview check (board.purview, Self instance) | self | You board | Built | D1 (divisional), D9 (divisional), yogas (natal), reading clock (dasha), gandanta (nakshatra) | `self.reading_panel` | area_checks:self |
 | `self.reading.struggle` | You reading: What you struggle with (afflictions on the self with release dates from the reading clock) | self | You board | Built | D1 (divisional), dignities (natal), avasthas (natal), benefic malefic (natal), house counts (natal), reading clock L1-L3 (dasha) | `self.reading_panel` | area_checks:self |
-| `self.reading.year` | You reading: This year (Tithi Pravesha and Varsha charts on the self) | self | You board | Built | Tithi Pravesha (annual), varsha (annual), mudda (annual) | `self.reading_panel` | area_checks:self |
+| `self.reading.year` | You reading: This year (the Tithi Pravesha year; Varsha confirms) | self | You board | Built | Tithi Pravesha (annual), tithi pravesha dasha (annual), varsha (annual), mudda (annual) | `self.reading_panel` | area_checks:self |
 | `self.reading.yogas` | You reading: Gifts and knots (yogas and doshas on the self) | self | You board | Built | yogas (natal), doshas (natal) | `self.reading_panel` | area_checks:self |
+| `self.sub.body_facts` | Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon) | self | You board | Built | D1 (divisional), D30 (divisional), A6 (jaimini), primary clock (dasha), stored sky overlay (transit) | `self.sub` | area_checks:self |
+| `self.sub.clock` | Self v2 S1: the primary dasha clock and its confirming clocks | self | You board | Built | dasha.applicable (dasha), all served systems (dasha) | `self.sub` | area_checks:self |
+| `self.sub.mind_facts` | Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only | self | You board | Built | D1 (divisional), D9 (divisional), yogas (natal), star profile (nakshatra) | `self.sub` | area_checks:self |
+| `self.sub.periods` | Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries | self | You board | Built | primary clock L1-L3 (dasha), dasha charter (natal) | `self.sub` | area_checks:self |
+| `self.sub.presence_facts` | Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care) | self | You board | Built | D1 (divisional), D9 (divisional), AL (jaimini), primary clock (dasha) | `self.sub` | area_checks:self |
+| `self.sub.profile` | Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood) | self | You board | Built | none (person facts) (natal) | `self.sub` | area_checks:self |
+| `self.sub.promise` | Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags | self | You board | Built | yogas (natal), doshas (natal), dasha charter (natal) | `self.sub` | area_checks:self |
+| `self.sub.risk` | Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it) | self | You board | Built | primary clock (dasha), stored sky overlay (transit), yogas (natal) | `self.sub` | area_checks:self |
+| `self.sub.windows` | Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands) | self | You board | Built | primary clock L1-L3 (dasha), stored sky overlay (transit), functional nature (natal) | `self.sub` | area_checks:self |
+| `self.sub.year` | Self v2 S9: the year frame from the Tithi Pravesha year whose return moment has passed | self | You board | Built | Tithi Pravesha (annual), tithi pravesha dasha (annual), Varshaphal mudda (annual) | `self.sub` | area_checks:self |
 | `self.transit` | Transits over houses 1, 4 and 5 with the Moon | self | You board | Built | Transit contacts (transit), Double transit (transit), Sade Sati (transit), eclipses (transit), transit ashtakavarga (ashtakavarga) | `area.self_board` | area_checks:self |
+| `self.v2.body` | Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.chapter` | Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.chapters` | Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.diagnosis` | Self v2 area: In short (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.drive` | Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.hero` | You board v2: the hero (tone, one dated sentence, one question) | self | You board | Built | reading clock (dasha), windows around today (transit) | `self.personalizer` | area_checks:self |
+| `self.v2.lagna` | Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.mind` | Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.now` | Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.oracle` | You board v2: Oracle over the ledgers and the area briefs | self | You board | Built | D1 (natal), D9 (divisional), D10 (divisional), D30 (divisional), reading clock (dasha), year chart (annual), sky overlay (transit) | `self.oracle.v2`, `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky` | area_checks:self |
+| `self.v2.personalizer` | You board v2: Personalizer cards for this person | self | You board | Built | reading clock (dasha), windows around today (transit) | `self.personalizer` | area_checks:self |
+| `self.v2.presence` | Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.stuck` | Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.year` | Self v2 area: This year (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v2.yogas` | Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief) | self | You board | Built | self.sub outputs (natal) | `self.reading_panel` | area_checks:self |
+| `self.v3.cards` | You board v3: span-led cards for the next twelve months | self | You board | Built | D1 (natal), D9 (divisional), reading clock (dasha), confirming clocks (dasha), year chart (annual), Saturn passage (transit) | `self.oracle.v3`, `self.personalizer` | area_checks:self |
 | `self.varga` | Owning divisional chart of houses 1, 4 and 5 with the Moon | self | You board | Built | D1 (divisional), D9 (divisional), D20 (divisional), D24 (divisional), D12 (divisional), D4 (divisional), D7 (divisional), D60 (divisional) | `area.self_board` | area_checks:self |
 | `love.activation` | Activation of house 7 by every dasha system | love | Love board | Built | Vimshottari (dasha), conditional (dasha), Narayana (dasha), Chara (dasha), karaka (dasha), tithi pravesha dasha (annual), Yogini (dasha), Tithi Ashtottari (dasha), D9 (divisional), D7 (divisional), D30 (divisional) | `area.love_board` | area_checks:love |
 | `love.affliction` | Afflictions on house 7 | love | Love board | Built | facts (natal), dignities (natal), aspects (natal), doshas (natal), avasthas (natal), house counts (natal) | `area.love_board` | area_checks:love |
@@ -754,7 +780,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 1. houseFrame D1 h1: sign, lord, occupants, graha and rasi drishti, SAV, cusp star
 2. planetChain of the lagna lord: D1 house (where the self is lived), dignity and avastha ripeness (how it is held), conjunctions; D9 card
-3. Claims: lord_house, lord_state, lord_company, on_self (occupants; graha drishti split into helped / pressed by the engine functional nature), star (cusp star lord), seen (AL house), moon_lagna (the D1 house the Moon occupies, read as a frame), inner (D9 h1 lord house)
+3. Claims: lord_house, lord_state, lord_company, on_self (occupants; graha drishti split into helped / pressed by the engine functional nature), star (cusp star lord), seen (AL house), seen_fit (lagna-to-AL from the engine label of the AL house), moon_lagna (the D1 house the Moon occupies, read as a frame), inner (D9 h1 lord house)
 4. A missing field drops its claim and records a gap; no default value is ever printed
 
 **Selected when:** board is you; subject is general life direction; about houses 1; in D1, D9
@@ -780,6 +806,8 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 1. planetChain Mo: house, dignity (with a cancellation row lifting debility), conjunctions and aspects, star lord
 2. planetChain Me (thinking): house and dignity
 3. houseFrame D1 h3 (courage and effort), h4 (what peace depends on, SAV against the chart mean), h5 (intelligence): where each lord sits, occupants
+4. Moon yogas (BG-07): the engine rows for Sunapha, Anapha, Durudhara and Kemadruma when present; Durudhara is worded over Sunapha and Anapha
+5. pointOf D1 A4 (home and peace as seen) and A5 (ideas as seen): the house the engine counts from the lagna
 
 **Selected when:** board is you; subject is general life direction; about houses 3, 4, 5; in D1, D9
 
@@ -787,7 +815,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 | Reads | As | Prompt | User turn | Output | Synthesizer |
 |---|---|---|---|---|---|
-| planet · D1 and D9 cards of Mo, Me<br>house · D1 h3, h4, h5 and every D1 house (sav column)<br>yoga · cancellation rows naming Mo | planet_card<br>house_card<br>yoga_row | `none` | — | self_panel.v1 | — |
+| planet · D1 and D9 cards of Mo, Me<br>house · D1 h3, h4, h5 and every D1 house (sav column)<br>yoga · cancellation rows naming Mo; the Moon yoga rows<br>point · D1 A4, A5 | planet_card<br>house_card<br>yoga_row<br>point_row | `none` | — | self_panel.v1 | — |
 
 **Source:** docs/reading-engine/58; BPHS (lagna, lords, karakatva, avasthas ch. 45); Jaimini (chara karakas, karakamsa, arudha lagna); PVR Narasimha Rao, Integrated Approach (dasha delivery, conditional dashas)  
 **Code:** `src/reading/self/panels/mind.ts mindPanel`  
@@ -866,17 +894,18 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 **Code:** `src/reading/self/panels/struggle.ts strugglePanel; slices.ts runningChain`  
 **Agents:** `self.reading_panel`
 
-### You reading: This year (Tithi Pravesha and Varsha charts on the self) — `self.reading.year`
+### You reading: This year (the Tithi Pravesha year; Varsha confirms) — `self.reading.year`
 
 **Built** · board: You board · accuracy: area_checks:self
 
-**Reads:** Tithi Pravesha (annual), varsha (annual), mudda (annual)
+**Reads:** Tithi Pravesha (annual), tithi pravesha dasha (annual), varsha (annual), mudda (annual)
 
 **Algorithm:**
 
-1. The VP D1 row whose Mudda periods cover today picks the year
-2. TP D1 row of that year: the house holding the natal lagna lord and its dignity there, its company; the year h1 lord house
-3. The running Mudda lord as the short clock of the year; withheld when no year row covers today
+1. Tithi Pravesha led (doc 66 §4.10): runningTithiPravesha picks the TP D1 row whose return moment has passed (tp_start ≤ the person's local now < tp_end; before the return of this year the previous year's TP is in force; never the calendar birthday, never the Varsha year in its place)
+2. That TP D1 row: the house holding the natal lagna lord and its dignity there, its company; the year h1 lord house; claims range over the TP year
+3. The TP year dasha period covering today is the short clock, only when the engine bounds it to the year (no rescaling in Node); the Varsha Mudda period is named in the detail as confirmation only
+4. Withheld (gap) when no TP year covers today; tp_start not stored falls back to a bounded TP year-dasha span with a gap
 
 **Selected when:** board is you; subject is general life direction; about houses 1; in D1
 
@@ -884,10 +913,10 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 | Reads | As | Prompt | User turn | Output | Synthesizer |
 |---|---|---|---|---|---|
-| annual · TP and VP D1 of the running year | annual_row | `none` | — | self_panel.v1 | — |
+| annual · TP D1 rows with tp_start/tp_end (or valid_from/valid_to) and the TP year dasha; VP D1 Mudda of today | annual_row | `none` | — | self_panel.v1 | — |
 
 **Source:** docs/reading-engine/58; BPHS (lagna, lords, karakatva, avasthas ch. 45); Jaimini (chara karakas, karakamsa, arudha lagna); PVR Narasimha Rao, Integrated Approach (dasha delivery, conditional dashas)  
-**Code:** `src/reading/self/panels/year.ts yearPanel, runningMudda`  
+**Code:** `src/reading/self/panels/year.ts yearPanel; src/reading/annual/tithiPravesha.ts runningTithiPravesha`  
 **Agents:** `self.reading_panel`
 
 ### You reading: Gifts and knots (yogas and doshas on the self) — `self.reading.yogas`
@@ -900,6 +929,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 1. yogasTouching: present D1 yoga and dosha rows naming the lagna lord, Mo, Su or the AK planet, or houses 1, 4, 5, 9; one row per name
 2. Gift or knot from the engine class (raja, dhana, viparita, cancellation are gifts; dosha and affliction are knots); gifts first; a manglik row only when it touches house 1
+3. Ranking (BG-09): within gifts and within knots, by the mean of the stored avasthaMultipliers.effective, raised by half when a planet is the running main or sub period lord of the reading clock
 
 **Selected when:** board is you; subject is general life direction; about houses 1, 4, 5, 9; in D1
 
@@ -912,6 +942,253 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 **Source:** docs/reading-engine/58; BPHS (lagna, lords, karakatva, avasthas ch. 45); Jaimini (chara karakas, karakamsa, arudha lagna); PVR Narasimha Rao, Integrated Approach (dasha delivery, conditional dashas)  
 **Code:** `src/reading/self/panels/yogas.ts yogasPanel; slices.ts yogasTouching`  
 **Agents:** `self.reading_panel`
+
+### Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon) — `self.sub.body_facts`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** D1 (divisional), D30 (divisional), A6 (jaimini), primary clock (dasha), stored sky overlay (transit)
+
+**Algorithm:**
+
+1. footing: h1, lagna lord, Sun; wear: h6, h8, Mars, Saturn, A6; shape: D30 h1, Moon (evidence keys; a missing row is a gap)
+2. liveLords: the running L1-L3 periods of the primary clock whose stored activation houses include SELF_V2_BODY_HOUSES
+3. liveTransits: S3 live overlay rows of SELF_V2_BODY_TRANSIT_PLANETS with stored house_from_lagna or house_from_moon 1, and Sade Sati
+4. sensitive: the engine flag only; none is stored, so false with a gap
+
+**Selected when:** board is you; subject is general life direction; about houses 1, 6, 8; in D1, D30
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 h1, h6, h8; D30 h1<br>planet · D1 lagna lord, Su, Mo, Ma, Sa<br>point · D1 A6<br>activation · running L1-L3 periods of the primary clock on SELF_V2_BODY_HOUSES<br>transit · S3 live overlay rows over lagna and Moon (read from the build context) | house_card<br>planet_card<br>point_row<br>activation_row<br>transit_row | `none` | — | self_v2.body_facts | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/body.ts subBodyFacts`  
+**Agents:** `self.sub`
+
+### Self v2 S1: the primary dasha clock and its confirming clocks — `self.sub.clock`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** dasha.applicable (dasha), all served systems (dasha)
+
+**Algorithm:**
+
+1. Read kundlis.preferred_dasha and the systems present in kundli_activation with their family (defaultSystemsPresent: a conditional system the engine does not mark applicable comes back as family other)
+2. resolveClock: the preferred system when it has periods, else the first SELF_CLOCK_CONDITIONAL_ORDER system of family conditional (reason conditional_applies), else vimsottari (default)
+3. confirming = SELF_CONFIRM_SYSTEMS present, minus the primary; applicable = every present system whose family is not other; notApplicable = the rest, reason not_marked_applicable_by_engine
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · systems present and their family; dasha.applicable | activation_row | `none` | — | self_v2.clock_resolution | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/clock.ts subClock; src/reading/self/clock.ts resolveClock`  
+**Agents:** `self.sub`
+
+### Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only — `self.sub.mind_facts`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** D1 (divisional), D9 (divisional), yogas (natal), star profile (nakshatra)
+
+**Algorithm:**
+
+1. feeling: Moon D1 and D9 cards, the star profile, D1 yoga rows naming the Moon; thinking: Mercury D1 and D9, the 5th; peace: the 4th and its lord card; judgement: the 5th lord card and Jupiter
+2. candidatePatterns: the stored D1 house of each SELF_V2_MIND_PATTERN_PLANETS planet, and every planet in the Moon card aspectedBy
+3. A missing card or house is a gap, never a default; the Oracle names the pattern
+
+**Selected when:** board is you; subject is general life direction; about houses 4, 5; in D1, D9
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1/D9 Moon, Mercury, Jupiter, Rahu, Saturn, Ketu, 4th and 5th lords<br>house · D1 h4, h5<br>yoga · D1 yogas naming the Moon<br>star · star profile | planet_card<br>house_card<br>yoga_row<br>star_profile | `none` | — | self_v2.mind_facts | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/mind.ts subMindFacts`  
+**Agents:** `self.sub`
+
+### Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries — `self.sub.periods`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** primary clock L1-L3 (dasha), dasha charter (natal)
+
+**Algorithm:**
+
+1. mdSpine and runningChain over the stored activation rows of the primary clock at asOf: previous, running and next level-1 period, the running level-2 and level-3 period
+2. subRelation: the main lord D1 card dashaCharter.fruition[sub lord] as the engine stored it: 6/8 when isShadAshtaka68, 2/12 when isDwirdwadasha212, else its fruitionClass; null and a gap when not stored (rasi clocks have none)
+3. boundaries: the from/to of the three main periods, of every sub period of the running main period and of the running sub-sub period, de-duplicated, sorted
+4. No running level-1 period: the frame is null and a gap is recorded
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · primary clock L1-L2 over the life, L3 asOf ±12 months<br>planet · D1 card of the main lord (dasha_charter) | activation_row<br>planet_card | `none` | — | self_v2.period_frame | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/periods.ts subPeriods, charterRelation; slices.ts mdSpine, runningChain`  
+**Agents:** `self.sub`
+
+### Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care) — `self.sub.presence_facts`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** D1 (divisional), D9 (divisional), AL (jaimini), primary clock (dasha)
+
+**Algorithm:**
+
+1. bearing: h1 and the lagna lord; style: planets the h1 card lists as occupants and graha drishti; adornment: Venus D1 and D9; face: h2; publicVsPrivate: AL, Moon, h4
+2. bestWindow: the most recent completed L1 or L2 period of the primary clock whose lord is in SELF_V2_PRESENCE_PLANETS or is the lagna lord
+3. liveCare: the running sub period when its lord is one of them
+
+**Selected when:** board is you; subject is general life direction; about houses 1, 2, 4; in D1, D9
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 h1, h2, h4<br>planet · D1/D9 Venus, lagna lord, Moon<br>point · D1 AL<br>activation · primary clock L1-L2 | house_card<br>planet_card<br>point_row<br>activation_row | `none` | — | self_v2.presence_facts | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/presence.ts subPresenceFacts`  
+**Agents:** `self.sub`
+
+### Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood) — `self.sub.profile`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** none (person facts) (natal)
+
+**Algorithm:**
+
+1. loadProfilePack: auth (birth date, gender, role) and person_facts in two reads
+2. Age is calendar arithmetic over the typed birth date, banded by SELF_AGE_BANDS; gender null when not stated; declined keys listed; the last five confirm answers; the mood of today only; a stable hash
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| person · auth (birth date, gender, role) and person_facts of the user | person_pack | `none` | — | self_v2.profile_pack | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/profile.ts subProfile; src/reading/person/profile.ts loadProfilePack`  
+**Agents:** `self.sub`
+
+### Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags — `self.sub.promise`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** yogas (natal), doshas (natal), dasha charter (natal)
+
+**Algorithm:**
+
+1. Each D1 yoga/dosha row (varga rows left out): kind from its stored class through PROMISE_KIND_BY_CLASS (cancellation grace; dosha, affliction knot; raja, mahapurusha, dhana, viparita gift); rows with no such class are left out with a gap
+2. Duplicates by name and kind are dropped; matter = SELF.matters of the first stored house, who = SELF.people of every stored house; evidence = the yoga key and its planets
+3. A knot whose stored dosha details say hasExceptions adds a grace that cancels it
+4. A planet whose D1 dashaCharter isYogi adds a gift, isAvayogi a knot, on the matter of its stored house; strength 2 (the engine stores no grade) with a gap
+
+**Selected when:** board is you; subject is general life direction; about houses 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| yoga · D1 yogas and doshas with class and details<br>planet · D1 cards (house, owns, dasha_charter yogi flags) | yoga_row<br>planet_card | `none` | — | self_v2.promise_ledger | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/promise.ts subPromise; src/reading/self/v2words.ts PROMISE_KIND_BY_CLASS, SELF_MATTERS, SELF_PEOPLE`  
+**Agents:** `self.sub`
+
+### Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it) — `self.sub.risk`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** primary clock (dasha), stored sky overlay (transit), yogas (natal)
+
+**Algorithm:**
+
+1. Join of S2, S3 and S4 only: every S3 row live at asOf whose polarity presses and that has a planet and stored houses
+2. matter = its first matter; what = RISK_WHAT[planet]; from = planet, first stored house, window id and the yoga id of an S4 knot naming the same planet; who = SELF.people of its houses
+3. since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot
+4. top3 = the three rows with the highest engine strength, then the soonest until
+5. An engine annual row (the Tithi Pravesha year) that presses on a matter is a risk row like any other, with from.chart = year
+
+**Selected when:** board is you; subject is general life direction; about houses 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · S2 periods and S3 primary-clock rows live at asOf (read from the build context)<br>transit · S3 stored sky overlay rows live at asOf (read from the build context)<br>yoga · S4 knots and graces naming the same planet (read from the build context) | activation_row<br>transit_row<br>yoga_row | `none` | — | self_v2.risk_ledger | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/risk.ts subRisk; src/reading/self/v2words.ts RISK_WHAT`  
+**Agents:** `self.sub`
+
+### Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands) — `self.sub.windows`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** primary clock L1-L3 (dasha), stored sky overlay (transit), functional nature (natal)
+
+**Algorithm:**
+
+1. Rows: every primary-clock activation row overlapping asOf ±36 months (matters from its stored houses through SELF.matters) and the sky overlay ingresses of SELF_V2_WINDOW_TRANSIT_PLANETS (house_from_lagna, house_from_moon as stored), Sade Sati and dhaiya spans
+2. Polarity: the period lord D1 card functional label through FUNCTIONAL_POLARITY (malefic presses, benefic supports, neutral mixed); transits and sign periods mixed; strength 2 for every row (the engine stores no grade); degraded true with gaps
+3. strip = rows overlapping asOf ±6 months; heaviestNow = the live pressing row by strength then soonest end; easesAt = its end when stored; nextSupportFrom = the first supporting row starting after asOf
+4. startedLast12m = rows that started in the last 12 months; endingNext6m = rows ending in the next 6 months; byMatter groups the strip; since/until only where the stored row has them
+5. Engine calc_version 2: pressure_inventory kind annual rows (the Tithi Pravesha year window with its year lord and the houses the year lagna activates; level-2 year periods) and kind return rows (Saturn and Jupiter returns) are windows too, kept in degraded mode as well since they hold on every clock
+
+**Selected when:** board is you; subject is general life direction; about houses 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · primary clock L1-L3 asOf ±36 months<br>transit · stored sky overlay covering asOf<br>planet · D1 functional nature of period lords | activation_row<br>transit_row<br>planet_card | `none` | — | self_v2.window_set | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/windows.ts subWindows, windowRows`  
+**Agents:** `self.sub`
+
+### Self v2 S9: the year frame from the Tithi Pravesha year whose return moment has passed — `self.sub.year`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** Tithi Pravesha (annual), tithi pravesha dasha (annual), Varshaphal mudda (annual)
+
+**Algorithm:**
+
+1. Tithi Pravesha led (doc 66 §4.10): runningTithiPravesha picks the TP D1 row whose return moment has passed (tp_start ≤ the person's local now < tp_end; before the return of this year the previous year's TP is in force; never the calendar birthday, never the Varsha year in its place); from/to = the TP year (tp_start -> tp_end), tpStart/tpEnd the exact moments when stored
+2. yearLagna = the TP row lagna; yearLord = the TP row year lord when stored, else the engine annual pressure row (level 1) covering today; null with a gap otherwise
+3. shortClock = the TP year dasha period covering today, only when the engine bounds that dasha to the year; confirmClock = the Varsha Mudda period covering today (confirms only)
+4. No TP year covers asOf (or tp_start not stored and no bounded TP year dasha covers it): noCoverage true; the Varsha year is never used in its place
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| annual · TP D1 rows with tp_start/tp_end (or valid_from/valid_to) and the TP year dasha; VP D1 Mudda; pressure_inventory annual rows | annual_row | `none` | — | self_v2.year_frame | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/sub/year.ts subYear; src/reading/annual/tithiPravesha.ts runningTithiPravesha`  
+**Agents:** `self.sub`
 
 ### Transits over houses 1, 4 and 5 with the Moon — `self.transit`
 
@@ -937,6 +1214,396 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 **Source:** docs/reading-engine/46 §B.5; 53 §4.5; 54 §3  
 **Code:** `src/reading/area/houseLayers.ts transitLayer; self.ts SELF; boardService.ts getAreaBoard`  
 **Agents:** `area.self_board`
+
+### Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief) — `self.v2.body`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): footing, wear and shape keys, live lords on body houses, live transits, ledger rows on body, work load and the sudden
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon live_plus_standing; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.body
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context)<br>transit · self.sub.windows sky rows (build context) | planet_card<br>activation_row<br>transit_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/body.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief) — `self.v2.chapter`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): running sub period, its charter relation to the main lord, non-mixed strip windows inside it, the live ledger rows
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon sub_period; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.chapter
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/chapter.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief) — `self.v2.chapters`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): previous, running and next main period, running sub period, L1/L2 boundaries inside the running main period
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon chapter; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.chapters
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/chapters.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: In short (selection over the self.sub outputs into an AreaBrief) — `self.v2.diagnosis`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing keys, the ledger top row, running main and sub period
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon sub_period; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.diagnosis
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/diagnosis.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief) — `self.v2.drive`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): promise entries, ledger rows and live non-mixed windows on effort, career, gains, money and ideas
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.drive
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/drive.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### You board v2: the hero (tone, one dated sentence, one question) — `self.v2.hero`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** reading clock (dasha), windows around today (transit)
+
+**Algorithm:**
+
+1. The Personalizer writes the tone (demanding, heavy, mixed, easing, steady or open), one sentence naming the life area and the date it changes, and one yes-or-no question on the strongest dated claim of the live areas
+2. Code fills the six-month window strip, the easing date and the next check from the stored windows
+3. The question is kept only when its claim id is in the Oracle document; the hero is withheld when the live areas are missing, all only possible, or split between strong and possible
+
+**Selected when:** board is you; subject is general life direction
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · the six-month window strip and the easing date (S3) | activation_row | `src/reading/prompts/personalizer/self.md` | TODAY, FACTS | self_v2_hero.v1 | — |
+
+**Source:** docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers  
+**Code:** `src/reading/self/v2/personalizerValidate.ts validateHero, heroSplit`  
+**Agents:** `self.personalizer`
+
+### Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief) — `self.v2.lagna`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing and public/private keys, promise entries on self_and_body
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.lagna
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/lagna.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief) — `self.v2.mind`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): feeling, thinking, peace and judgement keys, candidate patterns, promise entries and ledger rows on ideas and home
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.mind
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/mind.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief) — `self.v2.now`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): heaviest live window, eases date, next support, six-month strip (non-mixed rows), running sub-sub period, the ledger top3
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon six_months_each_way; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.now
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context)<br>transit · self.sub.windows sky rows (build context)<br>person · self.sub.profile confirms (build context) | planet_card<br>activation_row<br>transit_row<br>person_pack | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/now.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### You board v2: Oracle over the ledgers and the area briefs — `self.v2.oracle`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** D1 (natal), D9 (divisional), D10 (divisional), D30 (divisional), reading clock (dasha), year chart (annual), sky overlay (transit)
+
+**Algorithm:**
+
+1. Builds every agent slice from the build context and the rows the sub-techniques loaded (no database read): the five family packs (family.sky padded past 1,024 tokens with its window rows) and the Oracle prefix (the family.rasi and family.varga natal packs plus the whole promise ledger), stable per digest version
+2. Warms every prefix in parallel in the explicit cache before the first agent call; each region has its llm_cache_entries row and the 45-minute recycler is informed after each call
+3. Runs the five family readers in parallel, read through reading_findings_cache
+4. Runs the Oracle as three parallel calls of three or four areas each over the same cached prefix, the suffix carrying the clock, periods, windows summary, the twelve heaviest risk-ledger rows, the eight strongest promise entries, the mind, body, presence and year facts, the eleven area briefs, the family findings and the confirms
+5. Merges the three JSON documents and validates them with the area validator: every evidence key from the input (claim ids keep their claim: prefix), every date inside a period, window or year span the input carries, caps; up to three patterns for mind and stuck
+6. Stores only a complete, validated document in technique_outputs, keyed by digest version, clock, boundary stamps, input hash and prompt hash
+
+**Selected when:** board is you; subject is general life direction
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| house · D1 and divisional house cards 1..12 (the family.rasi and family.varga packs)<br>planet · D1 and divisional planet cards with avasthas and dasha_charter<br>yoga · D1 yogas, doshas and cancellations behind the promise ledger<br>point · D1/D9 chara karakas, arudha padas and special lagnas<br>star · Moon star, lagna star, gandanta<br>annual · the running year chart and its short clock (S9)<br>activation · the reading clock L1-L3, its boundaries and the windows around today (S2, S3) | house_card<br>planet_card<br>yoga_row<br>point_row<br>star_profile<br>annual_row<br>activation_row | `src/reading/prompts/oracle/self-areas-v2.md` | TODAY, FACTS | self_v2_oracle.v1 | — |
+
+**Source:** docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers  
+**Code:** `src/reading/self/v2/build.ts runSelfV2Build; src/reading/self/v2/oracle.ts runOracleV2; src/reading/self/v2/slices.ts buildSelfV2Slices`  
+**Agents:** `self.oracle.v2`, `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`
+
+### You board v2: Personalizer cards for this person — `self.v2.personalizer`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** reading clock (dasha), windows around today (transit)
+
+**Algorithm:**
+
+1. Takes the validated Oracle document as the cached prefix (stable per Oracle key) and the profile pack (age band, stated gender or none, role, facts, declined topics, last confirms, mood) with the windows summary as the suffix
+2. Writes one card per area (headline, two or three short paragraphs, patterns, the four-step ladder best, practical, drift, floor, dates copied from the Oracle) in plain second person, JSON by schema
+3. Validates every headline and body sentence against a source (an Oracle paragraph id or evidence key), every date against the Oracle document, and rejects chart terms, engine names, internal ids, medical words and, when no gender is stated, gendered words; a card with no body is withheld and the Oracle headline, redacted, stands in
+4. Stores the hero and cards in technique_outputs under the Oracle key, the profile hash and the prompt hash, so a profile change re-runs only this step
+
+**Selected when:** board is you; subject is general life direction
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · the windows summary around today (S3): heaviest now, eases at, next support from | activation_row | `src/reading/prompts/personalizer/self.md` | TODAY, FACTS | self_v2_cards.v1 | — |
+
+**Source:** docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers  
+**Code:** `src/reading/self/v2/personalizer.ts runPersonalizer; src/reading/self/v2/personalizerValidate.ts validatePersonalDoc`  
+**Agents:** `self.personalizer`
+
+### Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief) — `self.v2.presence`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): bearing, style, adornment, face and public/private keys, the best past window, the live care line
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always_plus_live; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.presence
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/presence.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief) — `self.v2.stuck`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): heaviest live window, pressing windows started in the last 12 months still running, every live ledger row, standing knots, mind candidate patterns
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon live_plus_standing; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.stuck
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>activation · self.sub.periods and self.sub.windows dasha rows (build context) | planet_card<br>activation_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/stuck.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: This year (selection over the self.sub outputs into an AreaBrief) — `self.v2.year`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): the Tithi Pravesha year frame (return moment passed): lagna, year lord, TP short clock and the Varsha Mudda confirming clock; nothing when noCoverage
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon twelve_months; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.year
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context)<br>annual · self.sub.year frame (build context) | planet_card<br>annual_row | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/year.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief) — `self.v2.yogas`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** self.sub outputs (natal)
+
+**Algorithm:**
+
+1. Pure selection over ctx.sub (no database, no digest read): every promise entry, gifts then knots then graces
+2. Claims carry a fact tag, evidence keys and a range; dates carry a label tag; ledger and promise ids are listed; no prose for the person
+3. Horizon always; refreshStamp = the clock plus the stamps of SELF_V2_REFRESH.yogas
+
+**Selected when:** board is you; subject is general life direction; about houses 1; in D1
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| planet · D1 cards behind the self.sub outputs (build context) | planet_card | `none` | — | self_v2.area_brief | — |
+
+**Source:** docs/reading-engine/66 §4.3, §4.8; BPHS (lords, karakatva, functional nature, avasthas); PVR Narasimha Rao, Integrated Approach (dasha delivery, charter); words tables src/reading/self/v2words.ts  
+**Code:** `src/reading/self/areas/yogas.ts; areas/index.ts buildAreaBriefs`  
+**Agents:** `self.reading_panel`
+
+### You board v3: span-led cards for the next twelve months — `self.v3.cards`
+
+**Built** · board: You board · accuracy: area_checks:self
+
+**Reads:** D1 (natal), D9 (divisional), reading clock (dasha), confirming clocks (dasha), year chart (annual), Saturn passage (transit)
+
+**Algorithm:**
+
+1. Builds the year frame from stored pressure_inventory rows only: the next twelve months cut on the reading clock level-3 (else level-2) period edges and the Tithi Pravesha year edge, neighbours with the same copied tone merged, at most six spans
+2. Copies each span tone from the engine polarity of the period row covering its first day (presses heavy, mixed mixed, supports light) and counts the other clocks (the year chart rows and the stored inventories of the confirming and applicable clocks) that share it
+3. Runs the Oracle as three parallel calls over the v2 natal prefix with the year frame as the suffix; validates each card (every span answered once with the frame tone, heavy never build, light never get_through, evidence keys and dates from the input, a knot as well as a gift) and re-asks failed cards once
+4. Runs the Personalizer once per Oracle call, in parallel, over the Oracle cards and the person; validates the line, asks, obstacle and the if-then step with the v2 text checks
+5. Stores the cards beside the frame in technique_outputs, keyed by clock, frame, Oracle prefix, profile, sections and prompt hashes
+
+**Selected when:** board is you; subject is general life direction
+
+**Contract:**
+
+| Reads | As | Prompt | User turn | Output | Synthesizer |
+|---|---|---|---|---|---|
+| activation · the year frame spans from the stored pressure inventories | activation_row | `src/reading/prompts/oracle/self-cards-v3.md` | TODAY, FACTS | self_v3_cards.v1 | — |
+
+**Source:** docs/reading-engine/66 §4.1, §4.8; BPHS (lordship, dignity, avasthas, dasha-lord rules); Jaimini (karakas, arudhas); SOUL.md four tiers  
+**Code:** `src/reading/self/v3/build.ts runSelfV3Cards; src/reading/self/v3/yearFrame.ts buildYearFrameV3; src/reading/self/v3/oracle.ts runOracleV3; src/reading/self/v3/personalizer.ts runPersonalizerV3`  
+**Agents:** `self.oracle.v3`, `self.personalizer`
 
 ### Owning divisional chart of houses 1, 4 and 5 with the Moon — `self.varga`
 
@@ -1431,6 +2098,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 **Algorithm:**
 
 1. board.year on house 7, Venus, the natal L7 and the UL sign; Vivaha and Preethi sahams when stored
+2. The year is the running Tithi Pravesha (tp_start ≤ now < tp_end; before the return of this year the previous year's TP); short clock = the TP year dasha when bounded; Varsha Mudda confirms only
 
 **Selected when:** board is love; about houses 7; in D1
 
@@ -1438,10 +2106,10 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 | Reads | As | Prompt | User turn | Output | Synthesizer |
 |---|---|---|---|---|---|
-| annual · TP and VP D1 of the running year | annual_row | `none` | — | board_year.v1 | — |
+| annual · the running TP D1 year (tp_start ≤ now < tp_end) and its year dasha when bounded; VP D1 Mudda as confirmation | annual_row | `none` | — | board_year.v1 | — |
 
 **Source:** docs/reading-engine/59; BPHS (bhava, karakas); Jaimini (DK, UL, AmK, A10, karakamsa); docs 42-46  
-**Code:** `src/reading/self/panels/love.ts loveYearPanel`  
+**Code:** `src/reading/self/panels/love.ts loveYearPanel; src/reading/annual/tithiPravesha.ts runningTithiPravesha`  
 **Agents:** `love.reading_panel`
 
 ### Strain and reconciling — `love.reconcile`
@@ -1947,9 +2615,9 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 **Algorithm:**
 
-1. Read the Tithi Pravesha or Varsha chart covering the current month from the digest annual set
+1. Tithi Pravesha led (doc 66 §4.10): runningTithiPravesha picks the TP D1 row whose return moment has passed (tp_start ≤ the person's local now < tp_end; before the return of this year the previous year's TP is in force; never the calendar birthday, never the Varsha year in its place)
 2. Grade the year chart's houses 10, 6 and 1 (lord in the house or kendra/trikona without debility supports; in a dusthana or debilitated tests)
-3. Read the houses of the rajya and karma sahams (kendra supports, dusthana tests) and any running year dasha lord covering the month
+3. Read the houses of the rajya and karma sahams (kendra supports, dusthana tests) and the TP year dasha lord covering the month, only when the engine bounds that dasha to the year
 4. Cast one vote (support, test or neutral) as the annual family of the present tone
 
 **Selected when:** board is work; subject is career work; about houses 10, 6, 1, 2, 11; in D1, D10
@@ -1958,10 +2626,10 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 | Reads | As | Prompt | User turn | Output | Synthesizer |
 |---|---|---|---|---|---|
-| annual · TP current year, D1 and D10, houses 10,6,1,2,11; rajya and karma sahams; year dasha running this month | annual_row | `none` | — | family_vote.v1 | `work.present_tone` |
+| annual · the running TP year (tp_start ≤ now < tp_end), D1 and D10, houses 10,6,1,2,11; rajya and karma sahams; TP year dasha running this month when bounded to the year | annual_row | `none` | — | family_vote.v1 | `work.present_tone` |
 
 **Source:** docs/reading-engine/43 §8.1 (family 5); 46 §B.6; 53 §4.5  
-**Code:** `src/reading/area/career.ts workAnnualVote, presentState; careerService.ts getCareer`  
+**Code:** `src/reading/area/career.ts workAnnualVote, presentState; careerService.ts getCareer; src/reading/annual/tithiPravesha.ts runningTithiPravesha`  
 **Agents:** `area.career_inputs`, `area.career_map`
 
 ### Conditional clock — `work.conditional_family`
@@ -2383,6 +3051,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 **Algorithm:**
 
 1. board.year on house 10, the natal L10, Saturn and A10; Karma and Labha sahams when stored
+2. The year is the running Tithi Pravesha (tp_start ≤ now < tp_end; before the return of this year the previous year's TP); short clock = the TP year dasha when bounded; Varsha Mudda confirms only
 
 **Selected when:** board is work; about houses 10; in D1
 
@@ -2390,10 +3059,10 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 
 | Reads | As | Prompt | User turn | Output | Synthesizer |
 |---|---|---|---|---|---|
-| annual · TP and VP D1 of the running year | annual_row | `none` | — | board_year.v1 | — |
+| annual · the running TP D1 year (tp_start ≤ now < tp_end) and its year dasha when bounded; VP D1 Mudda as confirmation | annual_row | `none` | — | board_year.v1 | — |
 
 **Source:** docs/reading-engine/59; BPHS (bhava, karakas); Jaimini (DK, UL, AmK, A10, karakamsa); docs 42-46  
-**Code:** `src/reading/self/panels/work.ts workYearPanel`  
+**Code:** `src/reading/self/panels/work.ts workYearPanel; src/reading/annual/tithiPravesha.ts runningTithiPravesha`  
 **Agents:** `work.reading_panel`
 
 ### Job security by month — `work.security_grade`
@@ -2550,6 +3219,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 3. The model returns structured findings whose claims cite evidence ids in the pack
 4. Output that is not JSON is repaired once; a timeout, parse, schema, model or no-data failure is recorded and the synthesizer goes on without it
 5. Runs when the graph or the digest has the Tithi Pravesha / Varsha year charts (current, previous and next year in D1, D9, D10), their year dashas, sahams, muntha, year lord and Tajaka yogas for the question
+6. The current year is the running Tithi Pravesha (packs/digestSource.ts annualFromDigest and oracle/digestSlices.ts through runningTithiPravesha: the TP whose return moment has passed, tp_start <= now < tp_end; before the return of this year the previous year's TP); Varsha and Mudda only confirm (prompts/annual.md carries the rule)
 
 **Special:** Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha, year lord and Tajaka yogas when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months (so the oracle reader R11 runs only then too). Reads the digest when it is ready for base and the multi-year annual set
 
@@ -3066,6 +3736,7 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 | `area.career_map` | Career map builder | code | area / career | — | — |
 | `area.love_board` | Love board builder | code | area / love | — | — |
 | `area.self_board` | You board builder | code | area / self | — | — |
+| `dasha.deep_pull` | Deep dasha levels puller | engine_pull | digest / activation | engine:dasha | — |
 | `digest.activation` | Activation calendar builder | code | digest / activation | — | — |
 | `digest.annual_set` | Annual set puller | engine_pull | digest / annual | engine:annual | — |
 | `digest.build` | Kundli digest builder | code | digest / build | — | — |
@@ -3107,8 +3778,12 @@ Counts: 110 techniques (Self (You board): 32, Love: 27, Work: 29, General Readin
 | `research.self_dashboard_builder` | Research Self Dashboard QA builder | code | area / research_self | — | — |
 | `research.technical_verifier` | Independent Technical Verifier Agent | code | area / research_verifier | — | — |
 | `research.work_dashboard_builder` | Research Work Dashboard QA builder | code | area / research_work | — | — |
+| `self.oracle.v2` | You board v2 Oracle | llm | self / v2 | gemini-3.8-flash | $0.750000 / $3.750000 |
+| `self.oracle.v3` | You board v3 Oracle | llm | self / v3 | gemini-3.8-flash | $0.750000 / $3.750000 |
+| `self.personalizer` | You board v2 Personalizer | llm | self / v2 | gemini-3.8-flash | $0.750000 / $3.750000 |
 | `self.reading_oracle` | You reading oracle | llm | self / reading | gemini-3.8-flash | $0.750000 / $3.750000 |
 | `self.reading_panel` | You reading panel | code | self / reading | — | — |
+| `self.sub` | You board v2 sub-techniques | code | self / v2 | — | — |
 | `work.reading_oracle` | Work reading oracle | llm | work / reading | gemini-3.8-flash | $0.750000 / $3.750000 |
 | `work.reading_panel` | Work reading panel | code | work / reading | — | — |
 
