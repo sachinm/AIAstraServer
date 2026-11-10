@@ -13,7 +13,7 @@ import type { PrismaClient, Prisma } from '@prisma/client';
 import { SIGN_NAMES } from '../facts/constants.js';
 import { lordCode } from '../timeline/dashas.js';
 import { ARUDHA_ARGALA_VARGAS, AVASTHA_VARGAS, VARGA_FACTORS } from '../chartData/catalog.js';
-import { buildActivationRows, LIFELONG_MAX_LEVEL, type ActivationRowInput } from './activation.js';
+import { buildActivationRows, dashaSystemOfKey, LIFELONG_MAX_LEVEL, type ActivationRowInput } from './activation.js';
 import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
 import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type DoshaDetails, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
 
@@ -1431,9 +1431,11 @@ async function doBuild(prisma: PrismaClient, kundliId: string, opts: DigestBuild
     if (items.dignities == null && items[FACTS_ITEM] == null) throw new DigestInputError('no D1 tables stored for this kundli');
     const rows = buildDigestRows(items, { kundliId, calcVersions });
     const today = opts.today ?? new Date().toISOString().slice(0, 10);
-    const activation = buildActivationRows(items, rows, { today });
+    const held = await heldDashaSystems(prisma, kundliId);
+    // a system whose tree is mid-pull or failed keeps the activation rows it has (never strip on failure, 2026-11-09)
+    const activation = buildActivationRows(items, rows, { today }).filter((a) => !held.has(a.system));
     const builtAt = new Date();
-    await writeDigest(prisma, kundliId, rows, activation, builtAt);
+    await writeDigest(prisma, kundliId, rows, activation, builtAt, held);
     await deleteKundliTechniqueOutputs(prisma, kundliId).catch(() => 0);
     await (prisma as unknown as { areaBuild?: { deleteMany?: (args: { where: { kundli_id: string } }) => Promise<unknown> } }).areaBuild
       ?.deleteMany?.({ where: { kundli_id: kundliId } })
@@ -1447,7 +1449,27 @@ async function doBuild(prisma: PrismaClient, kundliId: string, opts: DigestBuild
   }
 }
 
-async function writeDigest(prisma: PrismaClient, kundliId: string, rows: DigestRowInput[], activation: ActivationRowInput[], builtAt: Date): Promise<void> {
+/**
+ * The dasha systems whose stored tree is `failed` or `fetching` (a re-pull that did not finish, e.g. on the 2026-11-09
+ * disk-full error): loadDigestInputs reads only `ready` trees, so without this a rebuild would delete those systems'
+ * activation rows and insert none. A system with no stored row at all (a birth-details change deletes kundli_data) is
+ * not held: its rows go.
+ */
+export async function heldDashaSystems(prisma: PrismaClient, kundliId: string): Promise<Set<string>> {
+  const rows = await prisma.kundliData.findMany({
+    where: { kundli_id: kundliId, ayanamsa: 'LAHIRI', variant: '', data_type: { startsWith: 'dasha.' }, status: { in: ['failed', 'fetching'] } },
+    select: { data_type: true, status: true },
+  });
+  const held = new Set<string>();
+  for (const r of rows as Array<{ data_type: string; status?: string }>) {
+    if (r.status !== 'failed' && r.status !== 'fetching') continue;
+    const system = dashaSystemOfKey(r.data_type);
+    if (system) held.add(system);
+  }
+  return held;
+}
+
+async function writeDigest(prisma: PrismaClient, kundliId: string, rows: DigestRowInput[], activation: ActivationRowInput[], builtAt: Date, held: ReadonlySet<string> = new Set()): Promise<void> {
   const ops: Prisma.PrismaPromise<unknown>[] = [prisma.kundliDigest.deleteMany({ where: { kundli_id: kundliId } })];
   for (let i = 0; i < rows.length; i += BATCH) {
     ops.push(
@@ -1458,7 +1480,8 @@ async function writeDigest(prisma: PrismaClient, kundliId: string, rows: DigestR
     );
   }
   // lifelong levels only: the deep rows (4–6) belong to the dasha-deep worker and survive a digest rebuild (doc 67)
-  ops.push(prisma.kundliActivation.deleteMany({ where: { kundli_id: kundliId, level: { lte: LIFELONG_MAX_LEVEL } } }));
+  // ... and the held systems (tree failed or mid-pull) keep theirs too
+  ops.push(prisma.kundliActivation.deleteMany({ where: { kundli_id: kundliId, level: { lte: LIFELONG_MAX_LEVEL }, ...(held.size ? { NOT: { system: { in: [...held] } } } : {}) } }));
   for (let i = 0; i < activation.length; i += BATCH) {
     ops.push(
       prisma.kundliActivation.createMany({

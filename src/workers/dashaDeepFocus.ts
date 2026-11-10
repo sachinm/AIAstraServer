@@ -164,7 +164,8 @@ export async function findDeepSweepCandidates(prisma: PrismaClient, now: number,
       if (m.status === 'queued') return true;
       if (m.status === 'fetching') return !m.fetch_started_at || now - m.fetch_started_at.getTime() > DEEP_LEASE_MS;
       if (m.status === 'dispatched') return !m.fetch_started_at || now - m.fetch_started_at.getTime() > DEEP_SLOT_LIVE_MS;
-      if (m.status === 'failed') return !m.fetched_at || now - m.fetched_at.getTime() > DEEP_FAILED_RETRY_HOURS * HOUR;
+      // deferred_disk (the disk guard stopped the write): retried like a failed run
+      if (m.status === 'failed' || m.status === 'deferred_disk') return !m.fetched_at || now - m.fetched_at.getTime() > DEEP_FAILED_RETRY_HOURS * HOUR;
       return !m.valid_to || m.valid_to < cover || !m.fetched_at || now - m.fetched_at.getTime() > DEEP_MAX_AGE_DAYS * DAY;
     })
     .sort((a, b) => {

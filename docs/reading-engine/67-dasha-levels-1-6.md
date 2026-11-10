@@ -426,9 +426,29 @@ The measure is a row in `kundli_activation`: about 190 B of heap plus three inde
 - level 2: about 60 rows
 - level 3: about 430 rows (a pratyantar averages about 60 days)
 
-That is about 500 rows per system, so about **20k rows, or about 7 MB, per kundli**. Today a kundli has about 6k rows:
-six systems at level 3 plus the rest at level 2. The backfill therefore adds about 14k rows and 5 MB per kundli. For the
-24 research kundlis, about 120 MB.
+That was the estimate: about 500 rows per system, so about 20k rows, or about 7 MB, per kundli. **It was wrong by more
+than double.** Measured on 2026-11-09, when `scripts/backfill-dasha-levels.ts --dry-run=false` ran on 33 kundlis:
+
+- **Level-3 rows: 31k–47k per kundli across 47 dasha types**, not ~20k in all. Vimsottari is one of the smallest
+  systems; the sign dashas (chara, narayana, kaala, sudasa, kendradhi_rasi, …) have 2.5k–5.8k level-3 periods each over
+  the engine tree (engine doc `AIAstra_Radha/docs/dasha-levels.md`, Measurements: 66k level-3 periods over 43 systems
+  for one chart), so ~500 a system undercounted them several times over.
+- **`kundli_activation` reached 553 MB for 33 kundlis, about 16.8 MB per kundli including indexes** (about 48k rows at
+  ~350 B; the measured bytes per row is 16.8 MB ÷ the kundli's rows, about 330–480 B).
+- The Render Postgres disk filled to 100 %. Postgres could not write WAL, the API went down until Sachin raised the
+  disk to 5 GB, and 8 kundlis failed on the disk-full error (see docs/TODOS.md, "Filed 2026-11-09 by the backfill
+  disk-full incident").
+
+Per kundli the backfill therefore adds about **30k–45k rows, ≈ 11–16 MB**, not 14k rows and 5 MB. Deletes do not free
+disk until a vacuum, so a rerun over kundlis that already have rows needs the same room again.
+
+**Guards since the incident** (branch `fix/backfill-safety`): the backfill and the deep worker replace only the systems
+whose pull came back complete (a failed pull keeps its rows; all failed writes nothing), the digest rebuild keeps the rows
+of a system whose tree is `failed` or `fetching`, and a disk guard (`src/reading/digest/diskGuard.ts`) reads
+`pg_database_size(current_database())` and refuses a write when size + rows × measured bytes per row
+(`pg_total_relation_size('kundli_activation') / count(*)`, fallback 350 B) would pass `DB_DISK_LIMIT_BYTES` ×
+`DB_DISK_MAX_FILL` (default 0.7). A wet backfill refuses without `DB_DISK_LIMIT_BYTES` (5368709120 for the 5 GB disk);
+the dry run prints the byte estimate (50k rows per kundli unless the stored trees give more).
 
 **Deep window (455 days), level 4 (the default), focused kundlis only.**
 
@@ -445,6 +465,48 @@ six systems at level 3 plus the rest at level 2. The backfill therefore adds abo
 
 Raise to 6 only with `DASHA_DEEP_SYSTEMS` narrowed to the systems the boards read, and after checking the Render
 Postgres plan.
+
+### 6.2 Storage options (decision for Sachin, 2026-11-09)
+
+At 16.8 MB per kundli, the 5 GB disk at 0.7 fill holds about 200 kundlis with lifelong level 3 for every system, before
+anything else grows. Nothing below is implemented; it is the plan, tunable by env.
+
+Per-system counts from the engine doc (one chart, the engine's whole tree; the server keeps birth to +30 years, which
+the incident measured at about 0.47–0.71 of these level-3 counts):
+
+| | L1 | L2 | L3 |
+| --- | --- | --- | --- |
+| All 43 systems | 585 | 6,054 | 66,041 |
+| Primary + confirming clocks (vimsottari 729, narayana 2,592, chara 3,312, yogini 1,536, karaka 512, tithi_ashtottari 512; a conditional primary adds 343–1,536) | – | – | 9,193–10,729 |
+| The other ~36 systems | – | – | about 55k–57k |
+
+Options:
+
+1. **Level 3 lifelong for every system (today).** 31k–47k level-3 rows, ≈ 16.8 MB per kundli. About 200 kundlis on
+   the 5 GB disk at 0.7 fill.
+2. **Recommended: level 3 lifelong only for the primary clock and the configured confirming clocks; every other system
+   levels 1–2 lifelong plus level 3 within ±2 years of today.** The other systems' level 3 in a 4-year window is about
+   4 / 70 years (a 40-year-old's calendar) ≈ 6 % of their level-3 rows: about 3.3k of ~56k in engine units. Level 3
+   kept: about 9.2k–10.7k + 3.3k ≈ 12.5k–14k of 66k engine units, about **79–81 % fewer level-3 rows**. Measured:
+   31k–47k level-3 rows become about 6k–10k; with levels 1–2 (~3k–5k) a kundli holds about 9k–15k rows, **≈ 3–5 MB
+   instead of 16.8 MB (about 70–80 % less)**. 33 kundlis: about 110–170 MB instead of 553 MB; about 700–1,100
+   kundlis on the 5 GB disk at 0.7 fill.
+   The window rolls: the ±2-year level-3 rows must be rebuilt as today moves (yearly is enough with a 2-year margin;
+   the kundli-sync sweep can do it the way it rolls the deep window).
+3. **Level 3 only in the window for every system, including the clocks.** Smallest (≈ 2 MB per kundli), but the Self
+   board's chapter boundaries and the confirming clocks read level 3 across a lifetime; it would degrade them.
+4. **A bigger disk only.** Works for the research set; it moves the wall without changing the 16.8 MB per kundli.
+
+Env vars option 2 would use (names reserved, not read by any code yet):
+
+| Env | Meaning | Default when built |
+| --- | --- | --- |
+| `DASHA_L3_LIFELONG_SYSTEMS` | systems kept at level 3 lifelong, besides the kundli's primary clock | the `SELF_CONFIRM_SYSTEMS` list (vimsottari, narayana, chara, yogini, karaka, tithi_ashtottari) |
+| `DASHA_L3_WINDOW_YEARS` | years either side of today that every other system keeps level 3 | 2 |
+| `DASHA_LIFELONG_OTHER_MAX_LEVEL` | the lifelong depth of every other system | 2 |
+
+Recommendation: option 2, decided by Sachin before the backfill runs on more kundlis. Until then, run the backfill only
+with `DB_DISK_LIMIT_BYTES` set and after reading the dry run's byte estimate.
 
 **Indexes.** Every query filters by `kundli_id` and `level`, and the worker and the backfill delete one level band per
 kundli. Without the new index, a lifelong query over a kundli with deep rows walks the deep rows through the range

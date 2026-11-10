@@ -12,7 +12,9 @@ describe('digest status transitions', () => {
     const seen: string[] = [];
     const f = fakeDigestPrisma({ kundlis: [{ id: 'k1' }], data, dossier: fx.items.facts, onReadData: () => seen.push(String(f.kundlis.get('k1')!.digest_status)) });
     const r = await buildDigest(f.prisma as never, 'k1', { today: '2026-11-06' });
-    expect(seen).toEqual(['building']);
+    // the stored rows and the held dasha systems (failed / fetching trees) are both read while building
+    expect(seen.length).toBeGreaterThan(0);
+    expect(new Set(seen)).toEqual(new Set(['building']));
     expect(r.status).toBe('ready');
     expect(r.rows).toBe(f.digest.length);
     expect(r.activation).toBe(f.activation.length);
