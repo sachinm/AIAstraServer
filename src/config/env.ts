@@ -919,6 +919,11 @@ export function overlayArtKey(env: NodeJS.ProcessEnv = process.env): Buffer | nu
  * Self board v2 routes (docs/reading-engine/66 §4.5). Env `SELF_V2_ENABLED`: '1' on, '0' off; unset follows
  * `AREA_ENABLED` like the other board routes.
  */
+/** Self board v3 routes (docs/reading-engine/68): on only when SELF_V3_ENABLED=1 and the v2 board is on. */
+export function isSelfV3Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_V3_ENABLED?.trim() === '1' && isSelfV2Enabled(env);
+}
+
 export function isSelfV2Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const v = env.SELF_V2_ENABLED?.trim();
   if (v === '1') return true;
