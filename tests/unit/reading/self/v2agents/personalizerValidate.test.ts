@@ -63,7 +63,9 @@ describe('Personalizer validator (doc 66 §4.1)', () => {
 
   it('rejects an engine name', () => {
     const v = run(card({ headline: 'Radha says work is heavy.' }));
-    expect(v.cardStatus.diagnosis).toBe('withheld');
+    // run 2: the headline goes, the card stays with a passing body sentence as its headline
+    expect(v.cardStatus.diagnosis).toBe('ok');
+    expect(v.doc.cards.diagnosis!.headline).not.toMatch(/radha/i);
     expect(v.gaps.join(' ')).toMatch(/engine name/);
     expect(textProblem('pyjhora shows it', { gender: 'man', dates: { days: new Set(), months: new Set(), years: new Set(), pairs: new Set() } })).toBe('engine name');
   });
@@ -99,7 +101,10 @@ describe('Personalizer validator (doc 66 §4.1)', () => {
 
   it('caps the headline at 14 words and the body at 120', () => {
     const long = run(card({ headline: 'You carry a great deal at work right now and it is more than anyone sees today.' }));
-    expect(long.cardStatus.diagnosis).toBe('withheld');
+    // run 2: a long headline is replaced by the first passing body sentence of at most 14 words
+    expect(long.cardStatus.diagnosis).toBe('ok');
+    expect(long.doc.cards.diagnosis!.headline).toBe('You carry more at work than you are thanked for.');
+    expect(long.doc.cards.diagnosis!.body).toEqual(['It eases after 20 Feb 2027.', 'Finish one thing a week.']);
     const words = Array.from({ length: 70 }, () => 'work').join(' ');
     const body = run(card({ body: [`${words}.`, `${words}.`], sources: ['diagnosis.p1', 'diagnosis.p1', 'diagnosis.p2'] }));
     expect(body.doc.cards.diagnosis!.body).toHaveLength(1);

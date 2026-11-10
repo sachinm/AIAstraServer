@@ -139,9 +139,26 @@ async function registryUp(): Promise<boolean> {
 
 // ---------------------------------------------------------------- Gemini cachedContents calls
 
+/** A provider delete that failed with an HTTP status (kept so the caller can read the status, not parse a message). */
+export class CacheDeleteError extends Error {
+  constructor(readonly status: number) {
+    super(`HTTP ${status}`);
+  }
+}
+
 async function geminiDelete(name: string, apiKey: string): Promise<void> {
   const res = await fetch(`${apiRoot()}/${name}?key=${encodeURIComponent(apiKey)}`, { method: 'DELETE', signal: AbortSignal.timeout(10_000) });
-  if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok && res.status !== 404) throw new CacheDeleteError(res.status);
+}
+
+/**
+ * True when a failed delete means the region is already gone (doc 66 replay run 2: 15 expired regions answered HTTP 403
+ * and their rows were retried for ever): HTTP 403 or 404 on a region whose row is past `expires_at`. A 403 on a live
+ * region stays an error (a key or permission problem).
+ */
+export function goneOnDelete(err: unknown, expiresAt: Date | null | undefined, now: Date = new Date()): boolean {
+  const status = err instanceof CacheDeleteError ? err.status : Number(/HTTP (\d{3})/.exec((err as Error)?.message ?? '')?.[1]);
+  return (status === 403 || status === 404) && Boolean(expiresAt) && expiresAt!.getTime() <= now.getTime();
 }
 
 async function geminiExtend(name: string, apiKey: string): Promise<string | undefined> {
@@ -353,14 +370,21 @@ export async function settlePromptCache(): Promise<void> {
 
 // ---------------------------------------------------------------- logout + sweeper
 
-/** Delete one cache at Gemini (404 counts as deleted) and mark its row. Returns false when the delete failed. */
-async function deleteOne(name: string, apiKey: string): Promise<boolean> {
+/**
+ * Delete one cache at Gemini (404 counts as deleted) and mark its row. A 403 or 404 on a region past its `expiresAt`
+ * also counts as deleted (the provider already dropped it). Returns false when the delete failed.
+ */
+async function deleteOne(name: string, apiKey: string, expiresAt?: Date | null): Promise<boolean> {
   forgetName(name);
   try {
     await geminiDelete(name, apiKey);
     await reg('markDeleted', undefined, (r) => r.markDeleted(name, new Date()));
     return true;
   } catch (err) {
+    if (goneOnDelete(err, expiresAt)) {
+      await reg('markDeleted', undefined, (r) => r.markDeleted(name, new Date()));
+      return true;
+    }
     const msg = (err as Error).message.slice(0, 200);
     await reg('markDeleteError', undefined, (r) => r.markDeleteError(name, msg));
     console.warn(JSON.stringify({ msg: 'llm cache delete failed; the sweeper retries', name, error: msg }));
@@ -403,11 +427,9 @@ export async function deleteIndividualCaches(
       unusedNamesOnInstance.add(e.name);
     }
   }
-  const names = new Set(
-    (await reg('listByIndividual', [] as CacheRow[], (r) => r.listByIndividual(owner, idleBefore)))
-      .map((r) => r.name)
-      .filter((name) => !(onlyUsed && !idleBefore && unusedNamesOnInstance.has(name))),
-  );
+  const listed = await reg('listByIndividual', [] as CacheRow[], (r) => r.listByIndividual(owner, idleBefore));
+  const expiresOf = new Map(listed.map((r) => [r.name, r.expiresAt] as const));
+  const names = new Set(listed.map((r) => r.name).filter((name) => !(onlyUsed && !idleBefore && unusedNamesOnInstance.has(name))));
   for (const e of entries.values()) {
     const match = (owner.userId && e.owner.userId === owner.userId) || (owner.kundliId && e.owner.kundliId === owner.kundliId);
     if (!match || !e.name) continue;
@@ -420,7 +442,7 @@ export async function deleteIndividualCaches(
   if (!apiKey || !names.size) return { deleted: 0, failed: 0, memoryCleared };
   let deleted = 0;
   let failed = 0;
-  for (const name of names) (await deleteOne(name, apiKey)) ? (deleted += 1) : (failed += 1);
+  for (const name of names) (await deleteOne(name, apiKey, expiresOf.get(name))) ? (deleted += 1) : (failed += 1);
   return { deleted, failed, memoryCleared };
 }
 
@@ -439,12 +461,14 @@ export async function deleteUserCaches(userId: string): Promise<{ deleted: numbe
     evictPromptCacheMemoryForIndividual({ userId });
     return { deleted: 0, failed: 0 };
   }
-  const names = new Set((await reg('listByUser', [] as CacheRow[], (r) => r.listByUser(userId))).map((r) => r.name));
+  const listed = await reg('listByUser', [] as CacheRow[], (r) => r.listByUser(userId));
+  const expiresOf = new Map(listed.map((r) => [r.name, r.expiresAt] as const));
+  const names = new Set(listed.map((r) => r.name));
   for (const e of entries.values()) if (e.owner.userId === userId && e.name) names.add(e.name);
   evictPromptCacheMemoryForIndividual({ userId });
   let deleted = 0;
   let failed = 0;
-  for (const name of names) (await deleteOne(name, apiKey)) ? (deleted += 1) : (failed += 1);
+  for (const name of names) (await deleteOne(name, apiKey, expiresOf.get(name))) ? (deleted += 1) : (failed += 1);
   if (names.size) console.log(JSON.stringify({ msg: 'llm caches deleted on logout', userId, deleted, failed }));
   return { deleted, failed };
 }
@@ -473,7 +497,7 @@ export async function sweepLlmCaches(opts: { idleMs?: number; now?: Date } = {})
       forgetName(row.name);
       await reg('markDeleted', undefined, (r) => r.markDeleted(row.name, now));
       out.expiredMarked += 1;
-    } else if (await deleteOne(row.name, apiKey)) out.idleDeleted += 1;
+    } else if (await deleteOne(row.name, apiKey, row.expiresAt)) out.idleDeleted += 1;
     else out.failed += 1;
   }
   if (!(await registryUp())) return out;

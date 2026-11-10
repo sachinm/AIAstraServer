@@ -12,6 +12,10 @@
  * parallel, at the end, instead of one awaited write per step on the critical path. The activation window stays the
  * whole life at levels 1–2 (S2 needs the previous and next main periods, S8 a best window anywhere in the past) plus
  * level 3 within a year of today: one query, a few hundred rows, so its cost is the round trip, not the rows.
+ *
+ * Run 2 (2026-11-09, still 9.0 s): every Layer 0 read is timed on its own in `ms` (`load.digest`, `load.kundli`,
+ * `load.systems`, `load.sky`, `load.profile`, `load.applicability` (S1), `load.activation`, `load.pressure`, and
+ * `load.activationRows`, a row count) so the next live run names the slow read; the profile read moved into Layer 0.
  */
 import { createHash } from 'node:crypto';
 import { withAgentRun, type ChartUsed } from '../../../agents/registry.js';
@@ -65,12 +69,22 @@ export async function runSelfSubTechniques(
   const g = gaps();
   const t0 = performance.now();
 
-  // Layer 0: one read per table, all in one parallel round
+  // each Layer 0 read timed on its own (doc 66 replay run 2: 9.0 s with no split; `load.<read>` in the build's ms map)
+  const timed = <T>(name: string, p: Promise<T>): Promise<T> => {
+    const t = performance.now();
+    return p.finally(() => {
+      ms[`load.${name}`] = round(performance.now() - t);
+    });
+  };
+  // Layer 0: one read per table, all in one parallel round; the profile (auth + person_facts) needs nothing else, so it
+  // starts here too instead of after the activation read (run 2: it was a third round on the critical path)
+  const profileP = timed('profile', subProfile(prisma, userId, asOf));
+  profileP.catch(() => undefined); // awaited inside its span below; never an unhandled rejection
   const [viewR, kundliR, presentR, skyR] = await Promise.allSettled([
-    (deps.loadDigest ?? realLoadDigest)(prisma, kundliId),
-    prisma.kundli.findUnique({ where: { id: kundliId }, select: { preferred_dasha: true } }).catch(() => null),
-    (deps.systemsPresent ?? defaultSystemsPresent)(prisma, kundliId),
-    (deps.loadTransit ?? defaultLoadTransit)(prisma, kundliId, asOf).catch(() => null),
+    timed('digest', (deps.loadDigest ?? realLoadDigest)(prisma, kundliId)),
+    timed('kundli', prisma.kundli.findUnique({ where: { id: kundliId }, select: { preferred_dasha: true } }).catch(() => null)),
+    timed('systems', (deps.systemsPresent ?? defaultSystemsPresent)(prisma, kundliId)),
+    timed('sky', (deps.loadTransit ?? defaultLoadTransit)(prisma, kundliId, asOf).catch(() => null)),
   ]);
   // the digest decides first: no digest is "preparing" whatever the other reads did; then a failed read throws as before
   if (viewR.status === 'rejected') throw viewR.reason;
@@ -107,11 +121,13 @@ export async function runSelfSubTechniques(
   const digestCharts = (sections: string[]): ChartUsed[] => sections.map((s) => ({ type: `digest.${s}`, variant: view.version }));
 
   // S1, then the activation read on its clock
+  const tClock = performance.now();
   const clock = (await span('clock', [{ type: 'kundli_activation', variant: preferred ?? 'default' }], () => subClock(preferred, present, g), (c: ClockResolution) => ({
     confirming: c.confirming.length,
     applicable: c.applicable.length,
     notApplicable: c.notApplicable.length,
   }))) as ClockResolution | undefined;
+  ms['load.applicability'] = round(performance.now() - tClock);
   if (!clock) {
     await Promise.allSettled(runLogs);
     return { status: 'preparing' };
@@ -120,10 +136,10 @@ export async function runSelfSubTechniques(
   const t1 = performance.now();
   const systems = [...new Set([clock.primary, ...clock.confirming])];
   // the engine's pressure inventory on the primary clock, beside the activation read; a failed pull is a gap, never a stop
-  const pressureP = (deps.loadPressure ?? ((p, k, s, a) => realLoadPressure(p, k, s, a)))(prisma, kundliId, clock.primary, asOf).catch(
+  const pressureP = timed('pressure', (deps.loadPressure ?? ((p, k, s, a) => realLoadPressure(p, k, s, a)))(prisma, kundliId, clock.primary, asOf)).catch(
     (e: Error): PressureLoad => ({ inventory: null, source: 'none', gaps: [`pressure_inventory: ${e.message?.slice(0, 120)}`] }),
   );
-  const activation = await (deps.activationFor ?? realActivationFor)(prisma, kundliId, {
+  const activation = await timed('activation', (deps.activationFor ?? realActivationFor)(prisma, kundliId, {
     from: addMonthsIso(asOf, -12 * 90),
     to: addMonthsIso(asOf, 12 * 40),
     systems,
@@ -132,7 +148,8 @@ export async function runSelfSubTechniques(
     shortTo: addMonthsIso(asOf, SHORT_MONTHS),
     shortSystems: [clock.primary],
     shortMaxLevel: 3,
-  });
+  }));
+  ms['load.activationRows'] = activation.length;
   const pressureLoad = await pressureP;
   for (const x of pressureLoad.gaps) g.add(x);
   const pressure = pressureLoad.inventory && pressureLoad.inventory.clock === clock.primary ? pressureLoad.inventory : null;
@@ -177,7 +194,7 @@ export async function runSelfSubTechniques(
       patterns: m.candidatePatterns.length,
     })),
     span('year', digestCharts(['annual']), () => subYear(env), (y) => ({ noCoverage: y.noCoverage, lord: y.shortClock?.lord ?? null })),
-    span('profile', [], () => subProfile(prisma, userId, asOf), (p) => ({ band: p.ageBand, role: p.role, declined: p.declined.length, confirms: p.lastConfirms.length, profileHash: p.hash })),
+    span('profile', [], () => profileP, (p) => ({ band: p.ageBand, role: p.role, declined: p.declined.length, confirms: p.lastConfirms.length, profileHash: p.hash })),
   ]);
 
   // S5 and S7 need S2, S3 and S4
