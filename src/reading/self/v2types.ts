@@ -10,6 +10,7 @@
  * carried through by id.
  */
 import type { OracleAreaDoc, AreaCertainty, AreaDate } from './areaDoc.js';
+import type { SelfV2BuildView } from './v2/progress.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Areas
@@ -599,6 +600,8 @@ export interface SelfV2Response {
    * (`selfBoardDates`), so v1 and v2 agree. All null and `due: false` when no reading has been made yet.
    */
   refresh: SelfV2RefreshView;
+  /** appended 2026-11-09 (docs/loading-overlay/05): today's build state, stage and progress for the bar and header */
+  build: SelfV2BuildView;
 }
 
 /** GET /api/self/v2 `refresh` (appended 2026-11-09 for the Get a fresh reading button). */

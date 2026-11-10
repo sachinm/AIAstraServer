@@ -137,13 +137,14 @@ export async function readBuildMarker(prisma: PrismaClient, kundliId: string, bo
 }
 
 /** The marker's state and the clock its build was queued for (null when the marker names none). Never throws. */
-export async function readBuildMarkerDetail(prisma: PrismaClient, kundliId: string, board: ReadingBoardId, now: Date): Promise<{ state: BuildMarkerState; clock: string | null }> {
+export async function readBuildMarkerDetail(prisma: PrismaClient, kundliId: string, board: ReadingBoardId, now: Date): Promise<{ state: BuildMarkerState; clock: string | null; startedAt: string | null }> {
   try {
     const row = (await (prisma as unknown as MarkerPrisma).areaBuild?.findUnique?.({ where: { kundli_id_area_as_of: { kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now) } } })) ?? null;
-    return { state: stateOf(row, now), clock: clockOf(row) };
+    const t = startedAtOf(row);
+    return { state: stateOf(row, now), clock: clockOf(row), startedAt: t ? new Date(t).toISOString() : null };
   } catch (e) {
     queueLogError({ event: 'reading_build_marker_read_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300) });
-    return { state: 'none', clock: null };
+    return { state: 'none', clock: null, startedAt: null };
   }
 }
 

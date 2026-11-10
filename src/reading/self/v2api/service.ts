@@ -8,7 +8,9 @@ import { questionGate, type BoardChargeOutcome, type PlanStatus, type QuestionGa
 import { SELF_CONFIRM_PREFIX, SELF_CONFIRM_ANSWERS, writeFacts } from '../../../profile/facts.js';
 import { loadProfilePack } from '../../person/profile.js';
 import { defaultQueueDigest } from '../../area/boardService.js';
-import { queueSelfReadingBuild, readBuildMarker, type BuildMarkerState, type QueueOutcome } from '../buildEvent.js';
+import { queueSelfReadingBuild, readBuildMarker, readBuildMarkerDetail, type BuildMarkerState, type QueueOutcome } from '../buildEvent.js';
+import { buildView, type QueueMarkerView, type SelfV2BuildView, type V2MarkerView } from '../v2/progress.js';
+import { readSelfV2Marker } from '../v2/store.js';
 import { parseApplicability, resolveClockV2, type ApplicabilityRow, type ClockResolutionV2, type SystemPresence } from '../clock.js';
 import { defaultSystemsPresent } from '../service.js';
 import type { Mood, ProfilePack, SelfV2AreaId, SelfV2RefreshView, SelfV2Response } from '../v2types.js';
@@ -37,6 +39,8 @@ export interface SelfV2Deps {
   refreshDates?: (prisma: PrismaClient, kundliId: string, today: string) => Promise<BoardValidity | null>;
   /** today's You build marker (default: readBuildMarker, the `self.reading` row the build event marks) */
   buildMarker?: (prisma: PrismaClient, kundliId: string, now: Date) => Promise<BuildMarkerState>;
+  /** the two markers the `build` progress view is made from (docs/loading-overlay/05); defaults read area_builds */
+  progressMarkers?: (prisma: PrismaClient, kundliId: string, now: Date) => Promise<{ queue: QueueMarkerView; v2: V2MarkerView }>;
   now?: () => Date;
 }
 
@@ -119,7 +123,24 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     // a rebuild is running over an earlier build: serve the earlier one, the page keeps polling
     status = latest.cards ? 'ok' : 'pending';
   }
-  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh }), queued };
+  const build = await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
+  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued };
+}
+
+async function defaultProgressMarkers(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ queue: QueueMarkerView; v2: V2MarkerView }> {
+  const [q, v2] = await Promise.all([readBuildMarkerDetail(prisma, kundliId, 'self', now), readSelfV2Marker(prisma, kundliId, now)]);
+  return { queue: { state: q.state, startedAt: q.startedAt }, v2 };
+}
+
+/** GET /api/self/v2 `build`. Never throws: a failed read is "no build". */
+async function progressFor(deps: SelfV2Deps, kundliId: string, now: Date, queuedNow: boolean): Promise<SelfV2BuildView> {
+  try {
+    const m = await (deps.progressMarkers ?? defaultProgressMarkers)(deps.prisma, kundliId, now);
+    return buildView(m.queue, m.v2, now, queuedNow);
+  } catch (e) {
+    console.warn('[self:v2] build progress read failed:', (e as Error).message);
+    return buildView({ state: 'none', startedAt: null }, { status: null, stage: null, stageAt: null }, now, queuedNow);
+  }
 }
 
 export type SwitchClockResult =

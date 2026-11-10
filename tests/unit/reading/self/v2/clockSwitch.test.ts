@@ -56,10 +56,10 @@ describe('the build marker carries the clock', () => {
     const invokes: any[] = [];
     const deps = { prisma: f.prisma, invoke: async (p: any) => void invokes.push(p), now: () => NOW };
     expect(await queueSelfReadingBuild(deps, 'u1', 'k1', 'self', { clock: 'vimsottari' })).toBe('invoked');
-    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toEqual({ state: 'building', clock: 'vimsottari' });
+    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toMatchObject({ state: 'building', clock: 'vimsottari' });
     expect(await queueSelfReadingBuild(deps, 'u1', 'k1', 'self', { clock: 'vimsottari' })).toBe('already_building');
     expect(await queueSelfReadingBuild(deps, 'u1', 'k1', 'self', { clock: 'yogini' })).toBe('invoked');
-    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toEqual({ state: 'building', clock: 'yogini' });
+    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toMatchObject({ state: 'building', clock: 'yogini' });
     expect(invokes.map((p) => p.clock)).toEqual(['vimsottari', 'yogini']);
     // a build queued with no clock (GET /api/self/reading) still waits on any running build
     expect(await queueSelfReadingBuild(deps, 'u1', 'k1', 'self')).toBe('already_building');
@@ -71,7 +71,7 @@ describe('the build marker carries the clock', () => {
     await queueSelfReadingBuild(deps, 'u1', 'k1', 'self', { clock: 'vimsottari' });
     await queueSelfReadingBuild(deps, 'u1', 'k1', 'self', { clock: 'yogini' });
     await runSelfReadingBuild({ prisma: f.prisma, build: async () => ok(), now: () => NOW }, 'u1', 'k1', 'self', { clock: 'vimsottari' });
-    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toEqual({ state: 'building', clock: 'yogini' });
+    expect(await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).toMatchObject({ state: 'building', clock: 'yogini' });
     await runSelfReadingBuild({ prisma: f.prisma, build: async () => ok(), now: () => NOW }, 'u1', 'k1', 'self', { clock: 'yogini' });
     expect((await readBuildMarkerDetail(f.prisma, 'k1', 'self', NOW)).state).toBe('ready');
   });

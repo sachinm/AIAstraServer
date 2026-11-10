@@ -4,6 +4,14 @@ Written 2026-11-09 after Sachin's screenshot of the Self v2 board: every card ve
 header showing only "Fresh reading from 13 Dec 2026 · Made 10 Nov 2026 · Good until 12 Dec 2026", and nothing saying
 whether a reading was being made, had failed, or had never started.
 
+## Status
+
+- 2026-11-09: server side built on `feat/self-v2-build-progress` (branched from `fix/self-v2-build-clock`):
+  `src/reading/self/v2/progress.ts` (stages, weights, `buildView`), stage writes in `build.ts`, `readSelfV2Marker`,
+  `build` on GET `/api/self/v2`. The page eases from `percent` toward `nextPercent` using `stageAt` and
+  `stageExpectedMs` (the API carries both). Web side on web branch `feat/self-v2-build-progress`.
+- Love and Work (step 5) not started.
+
 ## 1. Start (facts checked)
 
 - **What the screenshot was.** Kundli `c584c0a3` (the only one with Self v2 rows on the shared Render DB). Its stored
