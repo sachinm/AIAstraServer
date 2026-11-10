@@ -2,7 +2,8 @@
  * The v3 build step (docs/reading-engine/68 Phase B). Runs after a v2 build that served the page, over the same build
  * context, the same natal prefix and the same portrait, when SELF_V3_BUILD=1:
  *
- *   1  the year frame from the stored pressure inventories (the reading clock's, loaded by v2; the others stored only)
+ *   1  the year frame from the pressure inventories of the clock set (the reading clock's, loaded by v2; the others
+ *      pulled here when not stored: doc 70 Phase 1)
  *   2  the Oracle ×3 in parallel over the v2 natal prefix, the frame as the suffix; failed cards re-asked once
  *   3  the Personalizer ×(1–3) in parallel, one per Oracle call that kept a card
  *   4  every validator finding to `reading_validation_failures`; the cards with the frame to `technique_outputs`
@@ -20,7 +21,7 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import type { PressureInventoryDetail } from '../sub/pressure.js';
+import { loadPressureInventory, type PressureInventoryDetail } from '../sub/pressure.js';
 import { readLayout } from './layout.js';
 import { ORACLE_V3_CALLS, runOracleV3, SELF_V3_ORACLE_PROMPT } from './oracle.js';
 import { personalizerV3Call, personalizerV3Calls, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
@@ -65,6 +66,9 @@ export interface SelfV3StepResult {
   ms: Record<string, number>;
 }
 
+/** fewer clocks than this with dated rows is reported as a gap (doc 70 §4.1) */
+export const MIN_CLOCKS_READ = 3;
+
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
 
 export function v3StoreKey(ctx: SelfBuildContext, frame: YearFrameV3, oraclePrefixHash: string, portraitHash: string, sections: unknown): string {
@@ -97,7 +101,12 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
     // 1: the year frame
     let t = performance.now();
     const others = otherClocks(clock).slice(0, FRAME_MAX_OTHER_CLOCKS);
-    const load = deps.loadInventory ?? loadStoredInventory;
+    // doc 70 Phase 1: every clock of the set is pulled when it is not stored (or is stale), in parallel, 15 s each;
+    // a failed pull falls back to whatever row is stored, and a clock with neither is skipped by the frame
+    const load =
+      deps.loadInventory ??
+      (async (p: PrismaClient, k: string, system: string) =>
+        (await loadPressureInventory(p, k, system, ctx.asOf).catch(() => null))?.inventory ?? (await loadStoredInventory(p, k, system)));
     const inventories = await Promise.all(others.map(async (system) => ({ system, inventory: await load(deps.prisma, ctx.kundliId, system).catch(() => null) })));
     const frame = buildYearFrameV3({ asOf: ctx.asOf, clock, primary: i.pressure, others: inventories, year: ctx.sub.year ?? null });
     out.frame = frame;
@@ -107,6 +116,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       out.gaps.push(`v3: no year frame (${frame.clocksSkipped.map((c) => c.reason).join('; ')})`);
       return out;
     }
+    if (frame.clocksRead.length < MIN_CLOCKS_READ) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${MIN_CLOCKS_READ} wanted`);
     if (frame.degraded) out.gaps.push(`v3: frame degraded (clocks read: ${frame.clocksRead.join(', ')})`);
 
     const sections = await (deps.loadSections ?? (async (p, k) => (await readLayout(p, k)).sections))(deps.prisma, ctx.kundliId).catch(() => ({}));

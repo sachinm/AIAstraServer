@@ -2198,3 +2198,23 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 - **P3 · The doc script writes to whatever `DATABASE_URL` is set.** `scripts/write-techniques-doc.ts` seeds the
   registries whenever `DATABASE_URL` is present, so regenerating a doc in a worktree with a copied `.env` writes to
   staging. Make the seed opt-in (`--seed`). Done when the doc regenerates without touching a database by default.
+
+## Filed 2026-11-09 by doc 70 (five clocks, a reading per card; branch `feat/self-v3`)
+
+- **P1 · open · Only one clock was ever read.** Plan: `docs/reading-engine/70-five-clocks-and-card-by-card-readings.md`.
+  Phase 1 step 1 is in code (`src/reading/self/v3/build.ts`: the v3 step now pulls the inventory of every clock in the
+  set, 15 s each, in parallel) but has not run against the engine and has no test of the default loader. Owner: this
+  branch. Done: the test kundli's frame lists five clocks; the sync worker pulls them so no build waits.
+- **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** The P0 above ("the Tithi
+  Pravesha year dasha is a lifetime dasha") is about the stored `annual.tithi_pravesha_dasha` rows. The engine's
+  `develop` bounds the year tree to the year (reported by an agent reading `annual_export.py`, not verified on staging).
+  Doc 70 step 2 verifies the `annual:` rows inside `pressure_inventory` on the test kundlis. Done: every `annual:` row
+  falls inside its year.
+- **P2 · open · A failed `pressure_inventory` row for `system=kaala` on staging.** Seen 2026-11-09 by a read-only query
+  (one `ready` row `system=dwisatpathi`, 21 KB; one `failed` row `system=kaala`). Not investigated. Owner: doc 70 step 2.
+- **P2 · open · Each `pressure_inventory` call recomputes the clock-independent rows.** Five clocks is five sky scans
+  and five sets of year charts. Engine pass E1 in doc 70 §6: accept a list of systems and compute the shared rows once.
+- **P2 · open · No weighted order of dasha systems from the engine.** The clock set's order is a server list
+  (`src/config/env.ts:834-835`). Which clocks carry most weight for a birth is astrology; engine pass E2 in doc 70 §6.
+- **P3 · open · Doc 68 §4.9 and doc 69 §4.1 are superseded by doc 70** (budget; one call per board). The two docs still
+  carry the old text.
