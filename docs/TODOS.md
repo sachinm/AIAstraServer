@@ -2201,6 +2201,24 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 
 ## Filed 2026-11-09 by doc 70 (five clocks, a reading per card; branch `feat/self-v3`)
 
+- **P1 · open · The Phase 3 replay ran at $0.704, not $0.41, and the first card took 106 s.** Report:
+  `docs/reading-engine/70-phase3-replay-2026-11-10.md`. 50 calls; clock layer $0.155, cards $0.549 ($0.026 each, plan
+  $0.013). The clock layer (readers then a 44 s concordance) blocks every card. Fix: store the ledger per kundli and day
+  so only the first open pays; let the board cards show before the layer finishes; shrink the concordance input. Keep
+  `CARDS_READ_REST` off until then. Owner: this branch. Done: first card under 40 s on a warm ledger; all 21 cards under
+  $0.50.
+- **P1 · open · The new agents are not in the staging `agents` table.** The replay's `agent_runs` writes hit
+  `agent_runs_agent_fkey` for `reading.clock`, `reading.concordance` and the card agents. Runs on staging will not be
+  logged until the registry rows exist (migration or seed, same way as earlier agents). Owner: this branch. Done: a run
+  of the replay with storage on writes its `agent_runs` rows.
+- **P2 · open · Ledger still 28 of 36 confirmed after the heavy-tone stopgap.** Check whether the clocks truly agree or
+  share the engine's per-planet flags; see `docs/reading-engine/70-heavy-clocks-2026-11-10.md`. Done: the count on a
+  second kundli, and Sachin's decision on the word "confirmed" before a face shows it.
+- **P3 · open · Card Oracle cited evidence outside the frame.** `chapter` cited a row from before the frame; `mind` cited
+  no ledger cell in three spans; `yogas` and `learning` had a confirm dropped (dates outside the frame). All repaired or
+  dropped by the validators; prompt wording could stop it. Two clock sheets (Yogini, Tithi Pravesha year) were partial
+  on tones the cited rows did not allow.
+
 - **P1 · open · Only one clock was ever read.** Plan: `docs/reading-engine/70-five-clocks-and-card-by-card-readings.md`.
   Phase 1 code is in (2026-11-10): `resolveReadingClocks()` (`src/reading/self/clock.ts`, env `READING_CLOCK_ORDER`,
   `READING_CLOCKS`, `READING_CLOCKS_MIN`), the v3 step reads that set, `ensurePressureInventories()`
