@@ -2278,13 +2278,23 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   laptop without AWS credentials wrote `failed` rows for Vimshottari, Narayana and Yogini on kundli c584c0a3 (test data),
   so those three are not pulled on staging until 2026-11-11 12:44 UTC. Fix: do not store failures that are not the
   engine's answer (credentials, network, timeout), or retry those after minutes; and give staff a re-pull that skips
-  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row.
+  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row. **Fixed 2026-11-10 (doc
+  70 Phase 3):** `isEngineAnswer` (`sub/pressure.ts`) stores a `failed` row only for the engine's own refusal (an
+  HTTP error status other than 401/403/407/408/429, a validation error, a payload of the wrong shape); credentials,
+  network and timeout failures store nothing (test in `tests/unit/reading/self/v2/pressure.test.ts`). The staff
+  re-pull that skips the wait is not built (still open: delete the three `failed` rows on c584c0a3 by hand or wait
+  until 2026-11-11 12:44 UTC). Delete this entry when the branch merges.
 - **P2 · open · The sync sweep never pulls inventories for kundlis whose chart is already complete.** The sweep
   (`findIncompleteKundlis`) only picks kundlis with a missing registration row, and the new pull runs only after a sync
   run. A kundli synced before 2026-11-10, or one whose inventory went stale after 7 days, gets its clocks only when a
   build pulls them (15 s each, in the build). Fix: a sweep step that picks kundlis with a missing or stale clock-set
   inventory. Owner: this branch or doc 70 Phase 2. Done: a test kundli with complete charts gets its four rows from the
-  sweep.
+  sweep. **Built 2026-11-10 (doc 70 Phase 3):** `findKundlisMissingClocks` + `runClockSetPull`
+  (`src/services/kundliSyncWorker.ts`) run after the incomplete-kundli pass: digest-ready kundlis with fewer settled
+  inventories (ready and fresh, or failed within the retry wait) than `READING_CLOCKS - 1`. Unit-tested with fakes;
+  not run against a database yet. Side effect to watch: a kundli whose chart has fewer clock systems than that number
+  is picked on every sweep (the pulls then return at once, but it takes a batch slot). Done: one staging sweep log
+  (`clocks_pulled`) and the test kundli's rows.
 - **P2 · open · At first sync the clock set may miss the conditional clock.** The set is read from `kundli_activation`
   and `dasha.applicable`; at the first sync these may not be stored yet, so the set falls back to the non-conditional
   systems and the spine (Vimshottari by default). The conditional clock's inventory is then pulled only by the first
@@ -2304,6 +2314,14 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   (`src/config/env.ts:834-835`). Which clocks carry most weight for a birth is astrology; engine pass E2 in doc 70 §6.
 - **P3 · open · Doc 68 §4.9 and doc 69 §4.1 are superseded by doc 70** (budget; one call per board). The two docs still
   carry the old text.
+- **P1 · open · Doc 70 Phase 2 wiring: built 2026-11-10, not run live.** The sync worker now writes slices after
+  `ensurePressureInventories` (`writeSlicesAtSync`, `src/reading/slices/prepare.ts`), the v3 step reads stored slices
+  and writes back only changed ones (`prepareSlices`), and `runClockLayer` runs from the v3 step when
+  `READING_CLOCK_LAYER=1` (`src/reading/self/v3/build.ts`); tests in `tests/unit/reading/self/v3/clockWiring.test.ts`.
+  Still open: migration m48 is not applied and `prisma generate` was not run for it in the worktree (the store reads
+  the delegate through a loose type and reports `no kundli_slices store` until then); prep time on real rows not
+  measured. Done: the migration applied with the deploy, slices on the test kundli, two syncs give the same hashes.
+  Older text follows.
 - **P1 · open · Doc 70 Phase 2 (slices, clock readers, ledger) is built behind `READING_CLOCK_LAYER=1` and not wired.**
   Code: `src/reading/slices/` (renderers, `writeSlices`, `readSlices`), `src/reading/clocks/` (`readClocks`,
   `countConcordance`, `runConcordance`, `runClockLayer`); migration `20261110100000_kundli_slices_m48` (table

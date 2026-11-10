@@ -278,8 +278,8 @@ export function renderYearFrame(f: YearFrameV3, clockLabel: string): { text: str
   for (const s of f.spans) {
     const held = s.held === false ? ' held=no (no tone is shared by enough clocks; nothing dated may be stated for this span)' : '';
     lines.push(`${s.id} ${s.from}..${s.to} place=${s.place} tone=${s.tone} agree=${s.agree}/${s.of}${held} opens=${k(s.opensWith)}`);
-    lines.push(`  clocks: ${s.clocks.map((c) => `${c.system}=${c.tone}${c.polarity ? ` (engine ${c.polarity}, ${c.flags ?? 0} flags)` : ''} ${k(c.evidence)}`).join('; ')}`);
-    lines.push(`  rows: ${s.rows.length ? s.rows.map((r) => `${k(r.id)} ${r.tone ?? r.polarity} (engine ${r.polarity}) strength=${r.strength} matters=${r.matters.join(',')}`).join('; ') : 'none'}`);
+    lines.push(`  clocks: ${s.clocks.map((c) => `${c.system}=${c.tone}${c.polarity ? ` (row ${c.polarity}, ${c.flags ?? 0} flags)` : ''} ${k(c.evidence)}`).join('; ')}`);
+    lines.push(`  rows: ${s.rows.length ? s.rows.map((r) => `${k(r.id)} ${r.tone ?? r.polarity} (row ${r.polarity}) strength=${r.strength} matters=${r.matters.join(',')}`).join('; ') : 'none'}`);
   }
   lines.push(
     `SATURN PASSAGE: ${f.saturn.length ? f.saturn.map((x) => `${k(x.evidence)} ${x.from}..${x.to} house_from_moon=${x.houseFromMoon ?? 'unknown'}`).join('; ') : 'none stored'}`,

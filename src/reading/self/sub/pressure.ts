@@ -17,7 +17,7 @@ import {
   getSelfV2PressureTimeoutMs,
   isSelfV2PressurePullEnabled,
 } from '../../../config/env.js';
-import { fetchEngineExport } from '../../../lib/astroKundliClient.js';
+import { fetchEngineExport, RadhaHttpError } from '../../../lib/astroKundliClient.js';
 import { CHART_TYPE_BY_ID } from '../../chartData/catalog.js';
 import type { KundliRequest, RadhaFetcher } from '../../chartData/store.js';
 import type { Matter, Polarity, PressureBoundary, PressureInventory, PressureKind, PressureRow, Strength } from '../v2types.js';
@@ -211,6 +211,18 @@ async function ensureTypeRow(p: PressurePrisma): Promise<void> {
   });
 }
 
+/**
+ * True when a failed pull is the engine's own answer (it ran and said no: an HTTP error status other than an auth or
+ * throttle status, a validation error, a payload of the wrong shape). Anything else failed on the caller's side
+ * (credentials, network, a timeout, a missing birth request): such a failure is not stored, so it never blocks the next
+ * pull for SELF_V2_PRESSURE_RETRY_HOURS (docs/TODOS.md, doc 70: a laptop without credentials blocked three clocks 24 h).
+ */
+export function isEngineAnswer(e: unknown): boolean {
+  if (e instanceof RadhaHttpError) return ![401, 403, 407, 408, 429].includes(e.status);
+  const msg = String((e as Error)?.message ?? e);
+  return /not a pressure_inventory payload|validation_error|(invalid|unknown) (export )?type|(Radha|HTTP) ?[45]\d\d/i.test(msg) && !/(Radha|HTTP) ?(401|403|407|408|429)/i.test(msg);
+}
+
 function withTimeout<T>(p: Promise<T>, limitMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
@@ -286,8 +298,13 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
     return { inventory: m.inventory, source: 'pulled', gaps };
   } catch (e) {
     const error = String((e as Error).message ?? e).slice(0, 300);
+    if (!isEngineAnswer(e)) {
+      // failed on the caller's side: nothing is stored, the next build or sync asks again
+      gaps.push(`pressure_inventory: pull failed on the caller's side, not stored (${error.slice(0, 120)})`);
+      return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
+    }
     gaps.push(`pressure_inventory: pull failed (${error.slice(0, 120)})`);
-    // remember the attempt; an older payload is kept as it is
+    // the engine's own refusal: remember the attempt; an older payload is kept as it is
     await ensureTypeRow(p)
       .then(() =>
         p.kundliData?.upsert?.({

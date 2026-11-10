@@ -14,11 +14,16 @@ vi.mock('../../../../../src/services/kundliQueueService.js', async (importOrigin
   processOneKundliRow: vi.fn(async () => hook.result),
 }));
 
+vi.mock('../../../../../src/reading/chartData/registration.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../../src/reading/chartData/registration.js')>()),
+  loadRegistrationPlan: vi.fn(async () => ({ requested: [] })),
+}));
+
 import { resolveReadingClocks, type ApplicabilityRow, type ReadingClockSet, type SystemPresence } from '../../../../../src/reading/self/clock.js';
 import { ensurePressureInventories, type PressureInventoryDetail, type PressureLoad } from '../../../../../src/reading/self/sub/pressure.js';
 import { loadClockInventory } from '../../../../../src/reading/self/v3/build.js';
 import { otherClocks } from '../../../../../src/reading/self/v3/yearFrame.js';
-import { runKundliSync } from '../../../../../src/services/kundliSyncWorker.js';
+import { runKundliSync, runKundliSyncSweep } from '../../../../../src/services/kundliSyncWorker.js';
 
 const ENV = ['READING_CLOCK_ORDER', 'READING_CLOCKS', 'READING_CLOCKS_MIN', 'SELF_CLOCK_CONDITIONAL_ORDER', 'KUNDLI_QUEUE_LOG_FILE'];
 const saved: Record<string, string | undefined> = {};
@@ -221,5 +226,21 @@ describe('sync worker: the clock set inventories after a complete sync', () => {
       'k1',
     );
     expect(out).toMatchObject({ status: 'ran', gateComplete: true });
+  });
+});
+
+describe('sync sweep: complete kundlis with a missing or stale clock set', () => {
+  it('pulls the clock set of each kundli the sweep finds, under its lease', async () => {
+    const ensurePressure = vi.fn(async () => undefined);
+    const findClocks = vi.fn(async () => ['k1']);
+    await runKundliSyncSweep({ prisma: leasePrisma(), maxMs: 12 * 60_000, now: () => Date.parse('2026-11-10T08:00:00Z'), find: async () => [], findFacts: async () => [], findClocks, deepSweep: async () => undefined, ensurePressure, queue: { chart: {} as never } });
+    expect(findClocks).toHaveBeenCalled();
+    expect(ensurePressure).toHaveBeenCalledWith(expect.anything(), 'k1', '2026-11-10');
+  });
+  it('a sweep with too little budget left pulls nothing', async () => {
+    const ensurePressure = vi.fn(async () => undefined);
+    let t = 0;
+    await runKundliSyncSweep({ prisma: leasePrisma(), maxMs: 40_000, now: () => (t += 15_000), find: async () => [], findFacts: async () => [], findClocks: async () => ['k1'], deepSweep: async () => undefined, ensurePressure, queue: { chart: {} as never } });
+    expect(ensurePressure).not.toHaveBeenCalled();
   });
 });

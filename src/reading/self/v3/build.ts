@@ -4,6 +4,8 @@
  *
  *   1  the year frame from the pressure inventories of the reading clock set (doc 70 §4.1: the reading clock's, loaded
  *      by v2; the others stored at sync, pulled here only when missing)
+ *   1b with READING_CLOCK_LAYER=1 (doc 70 §4.1 layers 1–3): the slices (stored ones read, changed ones written back),
+ *      then the clock layer: one reader per clock, the code count and the agreed ledger
  *   2  the Oracle ×3 in parallel over the v2 natal prefix, the frame as the suffix; failed cards re-asked once
  *   3  the Personalizer ×(1–3) in parallel, one per Oracle call that kept a card
  *   4  every validator finding to `reading_validation_failures`; the cards with the frame to `technique_outputs`
@@ -21,7 +23,12 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getReadingClocksMin } from '../../../config/env.js';
+import { getReadingClocksMin, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { runClockLayer, type ClockLayerResult } from '../../clocks/run.js';
+import type { AgreedLedger } from '../../clocks/types.js';
+import { natalCoreFromPrefix, prepareSlices, type SliceSetReport } from '../../slices/prepare.js';
+import { renderSliceSet, type SliceInventory } from '../../slices/render.js';
+import type { RenderedSlice } from '../../slices/types.js';
 import type { ReadingClockSet } from '../clock.js';
 import { loadPressureInventory, loadReadingClockSet, type PressureInventoryDetail } from '../sub/pressure.js';
 import { readLayout } from './layout.js';
@@ -45,6 +52,11 @@ export interface SelfV3StepDeps {
   loadClockSet?: (prisma: PrismaClient, kundliId: string, spine: string) => Promise<ReadingClockSet | null>;
   /** test seam: the person's sections per card */
   loadSections?: (prisma: PrismaClient, kundliId: string) => Promise<Partial<Record<SelfCardId, SelfSectionId[]>>>;
+  /** overrides READING_CLOCK_LAYER (doc 70 §4.1 layers 1–3) */
+  clockLayer?: boolean;
+  /** test seams: the slice store and the clock layer */
+  prepareSlices?: typeof prepareSlices;
+  runClockLayer?: typeof runClockLayer;
 }
 
 export interface SelfV3StepInput {
@@ -68,6 +80,12 @@ export interface SelfV3StepResult {
   stored: boolean;
   key: string | null;
   ms: Record<string, number>;
+  /** doc 70 layers 1–3, when READING_CLOCK_LAYER=1: which slices were read as stored and which were written */
+  slices?: SliceSetReport & { count: number };
+  clockLayer?: Pick<ClockLayerResult, 'status' | 'prefixHash' | 'spentUsd'> & { sheets: Array<{ system: string; status: string; cells: number }>; byStatus: AgreedLedger['byStatus'] | null };
+  ledger?: AgreedLedger | null;
+  /** the slices the clock layer read (the cards read the same prefix and their matter slices) */
+  sliceSet?: RenderedSlice[];
 }
 
 /**
@@ -133,6 +151,32 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       out.gaps.push(`v3: no year frame (${frame.clocksSkipped.map((c) => c.reason).join('; ')})`);
       return out;
     }
+    // 1b: the slices and the clock layer (doc 70 §4.1 layers 1–3), behind READING_CLOCK_LAYER
+    if (deps.clockLayer ?? isReadingClockLayerEnabled()) {
+      const tl = performance.now();
+      const invs: SliceInventory[] = [{ system: frame.clock, inventory: i.pressure }, ...inventories].filter((x): x is SliceInventory => Boolean(x.inventory));
+      const fresh = [natalCoreFromPrefix(i.oracleSlice.prefix, ctx.stamps.digestVersion), ...renderSliceSet({ frame, inventories: invs, year: ctx.sub.year ?? null })];
+      const prepared = await (deps.prepareSlices ?? prepareSlices)(deps.prisma, ctx.kundliId, fresh);
+      out.slices = { ...prepared.report, count: prepared.slices.length };
+      out.sliceSet = prepared.slices;
+      ms.slices = since(tl);
+      const tc = performance.now();
+      const layer = await (deps.runClockLayer ?? runClockLayer)(
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true },
+        { ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf }, frame, slices: prepared.slices },
+      );
+      ms.clockLayer = since(tc);
+      out.agents.push(...(layer.timings as unknown as SelfV2AgentTiming[]));
+      out.ledger = layer.ledger;
+      out.clockLayer = {
+        status: layer.status,
+        prefixHash: layer.prefixHash,
+        spentUsd: layer.spentUsd,
+        sheets: layer.sheets.map((x) => ({ system: x.system, status: x.status, cells: x.cells.length })),
+        byStatus: layer.ledger?.byStatus ?? null,
+      };
+      if (layer.status !== 'ok') out.gaps.push(`v3: clock layer ${layer.status}${layer.issues.length ? ` (${layer.issues.slice(0, 3).map((x) => x.message).join('; ')})` : ''}`);
+    }
     const minClocks = getReadingClocksMin();
     if (frame.clocksRead.length < minClocks) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${minClocks} wanted`);
     if (frame.degraded) out.gaps.push(`v3: frame degraded (clocks read: ${frame.clocksRead.join(', ')})`);
@@ -176,7 +220,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
         const dates = new Set([...frameDates(frame), ...storedWindowsOf(ctx).endpoints]);
         const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
         const to = performance.now();
-        const oracle = await runOracleV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd }, ctx, slice, frame, dates, answers);
+        const oracle = await runOracleV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, spentUsd: out.clockLayer?.spentUsd ?? 0, maxSpendUsd: deps.maxSpendUsd }, ctx, slice, frame, dates, answers);
         ms.oracle = since(to);
         out.agents.push(...oracle.calls);
         out.issues.push(...oracle.issues);
