@@ -9,6 +9,7 @@
  * Status rules (doc 70 §4.1 table), and the cases the table leaves open, decided here:
  * - confirmed: three or more clocks give the same tone, and no other tone has as many. Dissent does not lower it
  *   (3 heavy + 1 light is confirmed heavy with `opposed = 1`): the doc's rule is "3 or more clocks give the same tone".
+ *   One dissenting clock is the limit: with two or more on the opposite tone (3 heavy + 2 light) the cell is contested.
  *   A tie of two tones at three or more is not an agreement: 3 heavy + 3 light is contested.
  * - contested: otherwise, when one clock says heavy and another says light ("heavy against light").
  *   So 2 heavy + 1 light is contested, never leaning.
@@ -58,7 +59,9 @@ export function statusOf(tally: Record<ClockTone, number>): { status: Concordanc
   const of = tally.heavy + tally.mixed + tally.light;
   const top = Math.max(tally.heavy, tally.mixed, tally.light);
   const atTop = TONES.filter((t) => tally[t] === top);
-  if (top >= 3 && atTop.length === 1) return { status: 'confirmed', tone: atTop[0]! };
+  const lead = atTop[0]!;
+  const against = lead === 'heavy' ? tally.light : lead === 'light' ? tally.heavy : 0;
+  if (top >= 3 && atTop.length === 1 && against <= 1) return { status: 'confirmed', tone: lead };
   if (tally.heavy > 0 && tally.light > 0) return { status: 'contested', tone: null };
   if (top === 2 && atTop.length === 1) return { status: 'leaning', tone: atTop[0]! };
   return { status: 'single', tone: of === 1 ? atTop[0]! : null };

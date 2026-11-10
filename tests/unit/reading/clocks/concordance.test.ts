@@ -24,6 +24,8 @@ describe('statusOf: the count rules (doc 70 §4.1)', () => {
     ['3 heavy + 1 light', tally(3, 0, 1), 'confirmed', 'heavy'],
     // a tie at three is no agreement, and it is heavy against light
     ['3 heavy + 3 light', tally(3, 0, 3), 'contested', null],
+    ['3 heavy + 2 light', tally(3, 0, 2), 'contested', null],
+    ['4 heavy + 2 light', tally(4, 0, 2), 'contested', null],
     ['2 heavy + 1 light: 2 agree but one opposes', tally(2, 0, 1), 'contested', null],
     ['1 heavy + 1 light', tally(1, 0, 1), 'contested', null],
     ['heavy, mixed, light', tally(1, 1, 1), 'contested', null],
