@@ -2198,3 +2198,12 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · A dasha system that stops being served keeps its activation rows after a digest rebuild if its tree row is left
   `failed`.** Only rows of systems with no stored tree at all are dropped. [server] Done when retired systems are
   removed explicitly.
+
+## Decided 2026-11-09: dasha level-3 storage
+
+- **DECIDED · Every dasha system keeps levels 1–3 for the whole life** (Sachin, 2026-11-09: "Keep every system"). The
+  storage cut in docs/reading-engine/67 §6.2 is not built. Cost: about 16.8 MB per kundli (measured 2026-11-09).
+- **P2 · Database capacity for lifelong level 3.** At ~16.8 MB per kundli and the disk guard's 70% of the 5 GB Render
+  disk, the database holds roughly 150–200 kundlis beside the other tables before the guard stops writes. Owner: Sachin
+  (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
+  for the expected user count (or a decision to revisit §6.2 then).

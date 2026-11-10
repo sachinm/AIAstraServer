@@ -569,3 +569,7 @@ kundli) off the request path and off kundlis nobody opens, and needs no new sche
 | Inline pull on the request | No. 30–60 s on a page open, and it adds engine load in the request path. |
 | Store the raw deep trees in `kundli_data` | No. It repeats levels 1–3 for every system. The activation rows are the store, and the engine is re-callable. |
 | A new EventBridge rule for the roll | Not needed. The kundli-sync sweep already runs every 15 min, and the step only invokes. |
+
+**Decision (Sachin, 2026-11-09): keep every system.** Every dasha system keeps levels 1–3 for the whole life; the
+storage options in §6.2 are not built. Capacity is watched instead (docs/TODOS.md, "Database capacity for lifelong
+level 3").
