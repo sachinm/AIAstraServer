@@ -53,6 +53,8 @@ export interface CardRunResult {
   card: SelfCardId;
   status: 'ok' | 'cached' | 'failed' | 'skipped_cap';
   content: SelfV3CardContent | null;
+  /** the validated Oracle card the content stands on (for the replay's checks; null when none) */
+  oracle?: OracleCardV3 | null;
   timings: SelfV2AgentTiming[];
   issues: ValidationIssue[];
   costUsd: number;

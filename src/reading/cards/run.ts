@@ -153,6 +153,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     const issues: ValidationIssue[] = [];
     let status: CardRunResult['status'] = 'failed';
     let content: SelfV3CardContent | null = null;
+    let oracleCard: StoredCardReading['oracle'] | null = null;
     try {
       const stored = await withTechniqueOutput<StoredCardReading | null>(
         deps.prisma,
@@ -190,6 +191,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       );
       if (stored.value) {
         content = stored.value.content;
+        oracleCard = stored.value.oracle;
         status = stored.cached ? 'cached' : 'ok';
       }
     } catch (e) {
@@ -200,7 +202,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     out.timings.push(...timings);
     out.issues.push(...issues);
     if (content) out.cards[id] = content;
-    out.results.push({ card: id, status, content, timings, issues, costUsd });
+    out.results.push({ card: id, status, content, oracle: oracleCard, timings, issues, costUsd });
     await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
       d.cards[id] = content ? { state: 'done', at: new Date().toISOString() } : { state: 'failed', at: new Date().toISOString(), error: issues.slice(0, 2).map((x) => x.message).join('; ').slice(0, 300) || 'not read' };
       d.spentUsd = round6(d.spentUsd + costUsd);
