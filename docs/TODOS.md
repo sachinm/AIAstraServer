@@ -2377,6 +2377,10 @@ Report: `docs/reading-engine/70-phase3-2026-11-10.md`. Everything below is built
   Joins the clock-layer cache-plan entry above. Done: plan rows and the Lab showing cached vs total per card agent.
 - **P3 · open · Web: doc 70 §4.3 items 3 and 5 not built.** The first ready card is not auto-selected, and the `+`
   picker does not mark cards ready or "about 15 seconds". Owner: web lane (`AIAstra_WEB` `src/pages/you/v3/`).
+- **P3 · open · `tests/unit/reading/specialistFailures.test.ts` "a time-out on a cached call is not retried uncached"
+  is flaky under full-suite load.** On 2026-11-10 it failed once in `npx vitest run` (2585 of 2586 passed; "expected []
+  to have a length of 1") and passed alone (18 of 18). Not touched by doc 70 (no change under `src/reading/llm`). Likely a
+  real-time timeout in the test racing a loaded machine. Done: the test uses fake timers or a wider margin.
 - **P3 · open · Love and Work card registries (doc 70 Phase 4).** `src/reading/cards/` is Self-only (`cards/self/`
   briefs, `self.cards` state row). Done: doc 70 step 10.
 
