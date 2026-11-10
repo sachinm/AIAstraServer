@@ -1166,3 +1166,56 @@ export function getSelfV2OracleEchoFlag(): number {
   const n = Number(process.env.SELF_V2_ORACLE_ECHO_FLAG?.trim());
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.6;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Dasha levels 1–6 (docs/reading-engine/67): levels 1–3 lifelong in the normal pull; the deep levels (4..N) in a window,
+// pulled only by the dasha-deep worker Lambda for a kundli in focus.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The worker Lambda the API invokes on focus (DASHA_DEEP_WORKER_FUNCTION). Unset = focus is a no-op (logged once). */
+export function getDashaDeepWorkerFunction(): string | undefined {
+  return process.env.DASHA_DEEP_WORKER_FUNCTION?.trim() || undefined;
+}
+
+/** True only on the worker function (DASHA_DEEP_WORKER=1): `/events` runs a dasha-deep-pull only there, never on the API. */
+export function isDashaDeepWorker(): boolean {
+  return process.env.DASHA_DEEP_WORKER === '1';
+}
+
+/** The deepest level the worker asks for (DASHA_DEEP_MAX_LEVEL, 4–6). Default 4 (Sachin, 2026-11-09: "levels 1-4 for now"). */
+export function getDashaDeepMaxLevel(): 4 | 5 | 6 {
+  return parseClampedIntEnv('DASHA_DEEP_MAX_LEVEL', 4, 4, 6) as 4 | 5 | 6;
+}
+
+/** Days before as_of the deep window starts (DASHA_DEEP_DAYS_BACK, 0–365; default 90). */
+export function getDashaDeepDaysBack(): number {
+  return parseClampedIntEnv('DASHA_DEEP_DAYS_BACK', 90, 0, 365);
+}
+
+/** Days after as_of the deep window ends (DASHA_DEEP_DAYS_AHEAD, 30–730; default 365). */
+export function getDashaDeepDaysAhead(): number {
+  return parseClampedIntEnv('DASHA_DEEP_DAYS_AHEAD', 365, 30, 730);
+}
+
+/** Dasha systems the worker pulls deep (DASHA_DEEP_SYSTEMS, comma list of catalogue names). Unset or `all` = every served system. */
+export function getDashaDeepSystems(): string[] | 'all' {
+  const raw = process.env.DASHA_DEEP_SYSTEMS?.trim();
+  if (!raw || raw.toLowerCase() === 'all') return 'all';
+  const list = raw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => /^[a-z_]+$/.test(s));
+  return list.length ? list : 'all';
+}
+
+/** Engine calls in flight inside one worker run (DASHA_DEEP_CONCURRENCY, 1–2; default 2). The export client still spaces them. */
+export function getDashaDeepConcurrency(): number {
+  return parseClampedIntEnv('DASHA_DEEP_CONCURRENCY', 2, 1, 2);
+}
+
+/** A focus fires the worker at most once per kundli in this many hours (DASHA_DEEP_FOCUS_HOURS, 1–48; default 6). */
+export function getDashaDeepFocusHours(): number {
+  return parseClampedIntEnv('DASHA_DEEP_FOCUS_HOURS', 6, 1, 48);
+}
+
+/** Kundlis one sweep sends to the worker at most (DASHA_DEEP_SWEEP_MAX, 0–100; default 10; 0 = sweep step off). */
+export function getDashaDeepSweepMax(): number {
+  return parseClampedIntEnv('DASHA_DEEP_SWEEP_MAX', 10, 0, 100);
+}

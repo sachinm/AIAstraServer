@@ -98,6 +98,7 @@ flowchart LR
   subgraph m_digest["digest"]
     a_digest_build(["digest.build<br/>code"])
     a_digest_annual_set(["digest.annual_set<br/>engine pull"])
+    a_dasha_deep_pull(["dasha.deep_pull<br/>engine pull"])
     a_digest_activation(["digest.activation<br/>code"])
   end
   subgraph m_self["self"]
@@ -221,6 +222,7 @@ flowchart LR
 | `area.career_map` | Career map builder | code | area/career | 9 | work |
 | `digest.build` | Kundli digest builder | code | digest/build | 1 | general |
 | `digest.annual_set` | Annual set puller | engine pull | digest/annual | 1 | general |
+| `dasha.deep_pull` | Deep dasha levels puller | engine pull | digest/activation | 0 | — |
 | `digest.activation` | Activation calendar builder | code | digest/activation | 1 | general |
 | `area.self_board` | You board builder | code | area/self | 10 | self |
 | `self.reading_panel` | You reading panel | code | self/reading | 24 | self |

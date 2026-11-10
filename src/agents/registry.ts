@@ -151,6 +151,15 @@ export const AGENTS: AgentDef[] = [
     description: 'Pulls the missing Tithi Pravesha and Varsha year charts (D1, D9, D10), year dashas and sahams for ten years back and ahead, a capped number per run',
   },
   {
+    id: 'dasha.deep_pull',
+    title: 'Deep dasha levels puller',
+    kind: 'engine_pull',
+    module: 'digest',
+    subModule: 'activation',
+    engineType: 'dasha',
+    description: 'The dasha-deep worker Lambda: for a kundli in focus, pulls every dasha system to level 4 (DASHA_DEEP_MAX_LEVEL, up to 6) inside a window of −90 to +365 days and rewrites its deep activation rows (doc 67)',
+  },
+  {
     id: 'digest.activation',
     title: 'Activation calendar builder',
     kind: 'code',

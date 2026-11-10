@@ -10,7 +10,7 @@ import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { latestReadyBuild, refreshDue, storedValidity, validityOf, type ReadingValidity } from './validity.js';
 import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
-import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
+import { activationFor as realActivationFor, type ActivationLevel, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
 import { queueDigestBuild } from '../digest/event.js';
 import type { DigestView } from '../digest/types.js';
@@ -24,7 +24,7 @@ import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resol
 export interface BoardDeps {
   prisma: PrismaClient;
   loadDigest?: (prisma: PrismaClient, kundliId: string) => Promise<DigestView | null>;
-  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: 1 | 2 | 3; shortTo?: string; shortMaxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
+  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; houses?: number[]; systems?: string[]; maxLevel?: ActivationLevel; shortTo?: string; shortMaxLevel?: ActivationLevel }) => Promise<ActivationRow[]>;
   /** the kundli's stored sky overlay covering asOf; null when none is stored (never fetched here) */
   loadTransit?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<TransitRangePayload | null>;
   /** ask the digest sweep to build this kundli */

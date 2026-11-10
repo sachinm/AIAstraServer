@@ -324,6 +324,7 @@ model KundliActivation {
   kundli         Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([kundli_id, from_date, to_date], map: "idx_kundli_activation_range")
+  @@index([kundli_id, level, from_date, to_date], map: "idx_kundli_activation_level_range")
   @@index([houses], map: "idx_kundli_activation_houses", type: Gin)
   @@map("kundli_activation")
 }

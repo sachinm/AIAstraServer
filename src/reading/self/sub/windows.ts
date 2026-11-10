@@ -48,12 +48,13 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
   const hi = addMonthsIso(env.asOf, WINDOW_RANGE_MONTHS);
   const rows: WindowRow[] = [];
   for (const r of env.activation) {
-    if (r.system !== clock.primary || !overlaps(r.from, r.to, lo, hi)) continue;
+    // the Self board reads levels 1–3 only (doc 67)
+    if (r.level > 3 || r.system !== clock.primary || !overlaps(r.from, r.to, lo, hi)) continue;
     const id = activationKey(r);
     rows.push({
       rowId: id,
       kind: 'dasha',
-      level: r.level,
+      level: r.level as 1 | 2 | 3,
       planet: r.lord,
       houses: [...r.houses],
       houseFromMoon: null,
