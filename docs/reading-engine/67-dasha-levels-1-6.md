@@ -65,6 +65,7 @@ is not merged yet.
 | `src/reading/chartData/catalog.ts` | Every non-legacy `dasha.<name>` gets `fixedParams { levels: 3 }`, except kalachakra. Adds `dasha.narayana.l3`. Adds `dasha.deep`, change class `moving`, which holds the worker's marker and focus rows. |
 | `src/workers/dashaDeep.ts` | The worker: the event parser, the freshness rule, the lock, the per-system pull, the band write and the marker. Also `handler` and `handleDashaDeepEvent`. |
 | `src/workers/dashaDeepFocus.ts` | The focus trigger (`withDashaDeepFocus`, `noteDashaDeepFocus`) and the sweep step (`runDashaDeepSweep`, `findDeepSweepCandidates`). |
+| `src/workers/dashaDeepSlots.ts` | The account-wide cap (`DASHA_DEEP_GLOBAL_MAX`, §5.2): the slot taken before every invoke and on worker start, under an advisory lock. |
 | `server.ts` | `/events` runs `dasha-deep-pull` only when `DASHA_DEEP_WORKER=1`. The chat stream, clarify, lucky, area, self, self v2, life reading and page-timing / sections-stream routes get the focus-wrapped `requireUser`. |
 | `src/services/kundliSyncWorker.ts` | The sweep calls `runDashaDeepSweep` at its end. |
 | `src/reading/digest/levelsBackfill.ts`, `scripts/backfill-dasha-levels.ts` | The backfill (§4.1). |
@@ -184,7 +185,9 @@ The migration has not been applied anywhere.
   3. Find the user's latest kundli (1 query).
   4. Read the `focus` row. If it was written in the last 6 h, stop: another container already fired.
   5. Upsert the `focus` row with `fetched_at = now`.
-  6. Call `lambda:InvokeFunction` with `InvocationType: 'Event'` and a 2 s abort.
+  6. Take a slot under the global cap (§5.2). A fresh window, a pull already live, or the cap reached means no invoke;
+     at the cap the marker says `queued`.
+  7. Call `lambda:InvokeFunction` with `InvocationType: 'Event'` and a 2 s abort.
 - Cost to the request: zero awaited work. Behind the request: about 3 queries and 1 invoke, at most once per 6 h per
   user per container.
 
@@ -196,7 +199,10 @@ The migration has not been applied anywhere.
     it failed more than 1 h ago, or its lock is older than its lease.
 - Oldest pull first, at most `DASHA_DEEP_SWEEP_MAX` (default 10) per sweep.
 - It invokes the worker with `reason: 'sweep'`. It never pulls anything itself.
-- Worker reserved concurrency is 2, so at most two kundlis are pulled at once across the whole account.
+- Queued kundlis (held back by the global cap, §5.2) come first, oldest focus first; then the rest, oldest pull first.
+  The sweep stops at the first kundli the cap holds back.
+- At most `DASHA_DEEP_GLOBAL_MAX` (default 1) pulls run at once across the whole account. This is a database cap, not
+  Lambda reserved concurrency (§5.2).
 
 **Consumers.**
 
@@ -287,7 +293,7 @@ Facts checked:
 | Handler | No `ImageConfig` override. The image CMD (`node docker-entrypoint.mjs` + Lambda Web Adapter) is the entry. The adapter hands the async invoke's payload to `POST /events`, and `server.ts` runs the pull there only because of `DASHA_DEEP_WORKER=1`. |
 | Timeout | 600 s |
 | Memory | 1024 MB |
-| Reserved concurrency | 2 |
+| Reserved concurrency | **None** (went live 2026-11-09 unreserved: the account limit is 10, see §5.2). The database cap `DASHA_DEEP_GLOBAL_MAX` replaces it. |
 | Function URL | None |
 | Async invoke config | `MaximumRetryAttempts = 0`, `MaximumEventAgeInSeconds = 3600`. The next focus or sweep retries. |
 | Role | `aiastra-api-lambda-exec` (same DB, Secrets Manager and engine access as the API), or a copy of it |
@@ -336,17 +342,48 @@ before the function exists. The `aiastra-github-deploy` role needs `lambda:Updat
 `lambda:GetFunction` on the new ARN.
 
 **Terraform:** add a `lambda_dasha_deep_worker` module, modelled on `lambda_server_api` minus the Function URL and the
-CloudFront permissions: log group, function shape, reserved concurrency, `aws_lambda_function_event_invoke_config`.
+CloudFront permissions: log group, function shape (no reserved concurrency while the account limit is 10),
+`aws_lambda_function_event_invoke_config`.
 Add the IAM statement above. Infra stays import-first: create with the CLI (with Sachin's typed yes), then import.
 
 **What the deploy session must do:**
 
 1. Create the function from the current API image. Use the settings and env vars above.
-2. Set the reserved concurrency and the async config.
+2. Set the async config. Leave reserved concurrency unset (§5.2).
 3. Add the IAM statement to `aiastra-api-lambda-exec` and to the deploy role.
 4. Set `DASHA_DEEP_WORKER_FUNCTION` on the API.
 5. Update the workflow.
 6. Commit the Terraform module and the imports.
+
+### 5.2 Account concurrency and the global cap (2026-11-09)
+
+- **The account's total Lambda concurrency limit is 10** (442728149528, us-east-1). Lambda always keeps 10 unreserved,
+  so no function can reserve any: the worker went live on staging on 2026-11-09 **without reserved concurrency**. Every
+  worker run takes a slot from the same pool as `aiastra-server-api`, the chart worker and the sweep, and one run can
+  last minutes.
+- The per-kundli marker lock only stops a double pull of one kundli. Several focused kundlis could start several
+  workers at once, so a **global cap** sits in front of every pull: at most `DASHA_DEEP_GLOBAL_MAX` (env, 1–10,
+  default 1) deep pulls are live account-wide. It uses the database and no new AWS (`src/workers/dashaDeepSlots.ts`):
+  - **Live** means a `dasha.deep@marker` row with status `dispatched` (the API invoked the worker) or `fetching` (the
+    worker is pulling) whose `fetch_started_at` is less than 15 min old.
+  - **Focus trigger and sweep step.** Before they invoke, each takes a slot (`acquire`, role `dispatch`):
+    - a marker whose window still serves today is `fresh`, and there is no invoke;
+    - this kundli's own live pull is `busy`, and there is no invoke;
+    - at the cap, the marker is set to `queued`, and there is no invoke;
+    - otherwise the marker is set to `dispatched`, then the invoke follows. A failed invoke sets the marker back to
+      `queued`.
+  - **The worker** takes the slot again on start (role `run`). It may take over its own `dispatched` marker and set it
+    to `fetching`. Over the cap, it exits before any engine call (`skipped`, `why: 'queued'`) and leaves the marker
+    `queued`.
+  - **The sweep** picks queued kundlis first, oldest focus first, and stops at the first one the cap holds back.
+  - **Race safety.** The count and the write run in one transaction behind `pg_advisory_xact_lock` on one constant key.
+    Two starters are serialised. The second starter's statements run after the lock is granted, and read committed gives
+    each statement a fresh snapshot, so they see the first starter's write: at cap 1, two concurrent starters cannot
+    both pass. Every `dispatched` / `fetching` write on a marker goes through this lock. `complete` (ready / failed) only
+    frees a slot.
+- **Raising the account concurrency is Sachin's** (Service Quotas, "Concurrent executions" for Lambda). After an
+  increase, the worker can get a reserved concurrency of 1–2, and `DASHA_DEEP_GLOBAL_MAX` can rise to match. Filed in
+  `docs/TODOS.md`.
 
 ## 6. Ingredients
 
@@ -363,6 +400,7 @@ Add the IAM statement above. Infra stays import-first: create with the CLI (with
 | `DASHA_DEEP_CONCURRENCY` | 2 | 1–2 |
 | `DASHA_DEEP_FOCUS_HOURS` | 6 | |
 | `DASHA_DEEP_SWEEP_MAX` | 10 | `0` turns the step off |
+| `DASHA_DEEP_GLOBAL_MAX` | 1 | 1–10; deep pulls live account-wide (§5.2); read on the API and the worker |
 
 The existing `KUNDLI_SYNC_EVENT_TOKEN` and `RADHA_MAX_CONCURRENT` also apply.
 
