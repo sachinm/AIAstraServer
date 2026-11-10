@@ -2272,3 +2272,60 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `prompts/clock/reader.md`, `prompts/concordance.md` are tested only with a fake model. Word limits (cell 25 words,
   ledger 30) and the "rows of two polarities allow only mixed" tone rule may drop many cells live. Done: the doc 70
   Phase 2 replay (one kundli, needs Sachin's yes on key, count and cost) reports drop rates per check.
+
+## Filed 2026-11-09 by the backfill disk-full incident
+
+Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of each item in brackets.
+
+- **Incident (record).** `scripts/backfill-dasha-levels.ts --dry-run=false` on 33 kundlis filled the Render Postgres
+  disk to 100 %: `kundli_activation` reached 553 MB (31k–47k level-3 rows per kundli across 47 dasha types, about double
+  doc 67's ~20k estimate; ≈ 16.8 MB per kundli including indexes). Postgres could not write WAL and the API went down
+  until Sachin raised the disk to 5 GB. 8 kundlis failed on the disk-full error, and the script then rebuilt their
+  `kundli_activation` rows from the failed pull: the failed types' `kundli_data` rows had become `failed`, the rebuild
+  read only `ready` trees, and the levels 1–3 band of every system was deleted and re-inserted without them. Afterwards,
+  on Sachin's instruction, 29 kundlis were deleted and 4 kept.
+- ~~**P0 · The backfill stripped activation rows after a failed pull.**~~ Fixed on `fix/backfill-safety`: per kundli
+  and per dasha type, only a type whose pull came back as a complete tree this run (and was stored) is replaced
+  (delete + insert of that kundli's levels 1–3 for exactly those systems, one transaction); a failed, locked, empty or
+  unstored pull keeps its rows; all failed writes nothing; a kundli with any failed type is not marked done, so a rerun
+  retries it. The digest rebuild had the same pattern (`writeDigest` deleted every level-1–3 row): it now keeps the rows
+  of a system whose tree is `failed` or `fetching` (`heldDashaSystems`). The deep worker already replaced only the
+  systems that answered.
+- ~~**P0 · No disk guard on bulk activation writes.**~~ Fixed on `fix/backfill-safety`: `src/reading/digest/diskGuard.ts`
+  reads `pg_database_size(current_database())` and the measured bytes per row (`pg_total_relation_size` ÷ `count(*)`,
+  fallback 350 B) and refuses when size + estimate > `DB_DISK_LIMIT_BYTES` × `DB_DISK_MAX_FILL` (default 0.7). The
+  backfill checks before the run, before every kundli's write and after every kundli; a wet run refuses when
+  `DB_DISK_LIMIT_BYTES` is unset. The deep worker checks before writing and marks the marker `deferred_disk` (retried
+  after an hour) instead of writing past it.
+- **P1 · Run the backfill only after setting `DB_DISK_LIMIT_BYTES` and reading the dry-run byte estimate.**
+  `DB_DISK_LIMIT_BYTES=5368709120` for the 5 GB Render disk; the dry run prints rows × bytes per row per kundli, the
+  total, the database size and the threshold. [deploy / ops session] Done when the next run's dry-run numbers are in its
+  log and fit under the threshold.
+- **P1 · Storage decision for Sachin: lifelong level 3 for every system costs ≈ 16.8 MB per kundli.** Doc 67 §6.2
+  recommends level 3 lifelong only for the primary clock and the configured confirming clocks, every other system
+  levels 1–2 lifelong plus level 3 within ±2 years (about 70–80 % fewer rows, ≈ 3–5 MB per kundli), tunable by
+  `DASHA_L3_LIFELONG_SYSTEMS`, `DASHA_L3_WINDOW_YEARS`, `DASHA_LIFELONG_OTHER_MAX_LEVEL` (reserved, not built).
+  [Sachin] Done when he picks an option; then it is built before the backfill runs on more kundlis.
+- **P1 · Set `DB_DISK_LIMIT_BYTES` on the API and the dasha-deep worker Lambdas.** Without it the deep worker's guard
+  is off (it logs `dasha_deep_disk_guard_unset` on every run). [deploy session] Done when both functions have it and
+  the log line is gone.
+- **P2 · A failed re-pull downgrades a `ready` `kundli_data` row to `failed`.** `claim` sets `fetching`, and `complete`
+  with `failed` keeps the old payload but sets the status, so `loadDigestInputs` (status `ready` only) no longer sees
+  that tree until the next good pull. The activation rows are now kept (above), but the digest's other uses of the tree
+  lose it meanwhile. [server] Done when a failed re-pull of a row that had a ready payload leaves it `ready` (with the
+  error recorded) or readers fall back to the stored payload.
+- **P2 · Disk freed by deletes needs a vacuum.** Replacing rows leaves dead tuples until autovacuum; after the 29
+  kundlis were deleted the disk is not smaller until a `VACUUM` of `kundli_activation` (a `VACUUM FULL` needs as much
+  free space again and locks the table). [ops, with Sachin's yes] Done when the table's size matches its live rows.
+- **P3 · A dasha system that stops being served keeps its activation rows after a digest rebuild if its tree row is left
+  `failed`.** Only rows of systems with no stored tree at all are dropped. [server] Done when retired systems are
+  removed explicitly.
+
+## Decided 2026-11-09: dasha level-3 storage
+
+- **DECIDED · Every dasha system keeps levels 1–3 for the whole life** (Sachin, 2026-11-09: "Keep every system"). The
+  storage cut in docs/reading-engine/67 §6.2 is not built. Cost: about 16.8 MB per kundli (measured 2026-11-09).
+- **P2 · Database capacity for lifelong level 3.** At ~16.8 MB per kundli and the disk guard's 70% of the 5 GB Render
+  disk, the database holds roughly 150–200 kundlis beside the other tables before the guard stops writes. Owner: Sachin
+  (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
+  for the expected user count (or a decision to revisit §6.2 then).

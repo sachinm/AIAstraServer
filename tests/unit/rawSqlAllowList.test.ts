@@ -32,6 +32,7 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'src/assistant/store.ts': 'public-page assistant log: no account, no personal table',
   'src/lib/dbCheck.ts': 'SELECT 1 at boot',
   'src/workers/dashaDeepSlots.ts': 'pg_advisory_xact_lock(constant) only; the marker count and write use the Prisma client',
+  'src/reading/digest/diskGuard.ts': 'disk guard: pg_database_size(current_database()), pg_total_relation_size(kundli_activation) and count(*); sizes only, reads no row value',
   'src/reading/prompts/registry.ts': 'system prompt rows: no personal data',
   'scripts/check-assistant-store.ts': 'assistant log check script: no personal table',
   'scripts/self-v3-replay.ts': 'doc 68 replay: finds one test kundli id by prefix and swallows raw writes (storage dry); reads no sealed value',
