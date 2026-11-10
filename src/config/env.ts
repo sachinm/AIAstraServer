@@ -968,7 +968,11 @@ export function getSelfV2PressureTimeoutMs(): number {
   return parseClampedIntEnv('SELF_V2_PRESSURE_TIMEOUT_MS', 15000, 1000, 60000);
 }
 
-/** The Self v2 Personalizer's model (docs/reading-engine/66 §4.1). Env: `SELF_PERSONALIZER_MODEL` (default gemini-3.1-flash-lite). */
+/**
+ * The Self v2 Personalizer's model (docs/reading-engine/66 §4.1, §4.9). Env: `SELF_PERSONALIZER_MODEL`; default the Oracle's
+ * model (`READING_MODEL_ORACLE`, today gemini-3.8-flash on the live Lambda), then `READING_MODEL_SYNTH`, then the chat model.
+ * gemini-3.6-flash is priced the same as 3.8-flash in src/reading/llm/models.ts, so it saves nothing.
+ */
 export function getSelfPersonalizerModel(): string {
   // Sachin 2026-11-09: the Personalizer builds the person's portrait and decides emphasis and register, so it runs on
   // the Oracle's model by default (the same chain as modelFor('oracle'): READING_MODEL_ORACLE → READING_MODEL_SYNTH →

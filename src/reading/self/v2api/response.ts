@@ -73,8 +73,10 @@ function oracleAreaFor(latest: SelfV2Latest, id: SelfV2AreaId): OracleArea | nul
   return null;
 }
 
-function areaStatus(latest: SelfV2Latest, card: PersonalCard | null): CardStatus {
+function areaStatus(latest: SelfV2Latest, card: PersonalCard | null, stale: boolean): CardStatus {
   if (card) return 'ok';
+  // the Oracle failed this area this build: the last good reading's card stands in, marked stale (2026-11-09)
+  if (stale) return 'stale';
   if (latest.status === 'pending') return 'pending';
   if (latest.status === 'failed') return 'failed';
   // a build landed and the Personalizer wrote no card for this area: withheld, never softened
@@ -131,8 +133,10 @@ export function areaRange(id: SelfV2AreaId, horizon: AreaHorizon, frame: SelfV2F
 export function areaViews(latest: SelfV2Latest, floors: Partial<Record<SelfV2AreaId, string[]>> = {}): SelfV2AreaView[] {
   const horizons = new Map((latest.briefs ?? []).map((b) => [b.areaId, b.horizon]));
   return SELF_V2_AREAS.map((a) => {
-    const card = latest.cards?.cards?.[a.id] ?? null;
-    const o = oracleAreaFor(latest, a.id);
+    const fresh = latest.cards?.cards?.[a.id] ?? null;
+    const stale = !fresh ? (latest.stale?.[a.id] ?? null) : null;
+    const card = fresh ?? stale?.card ?? null;
+    const o = stale ? stale.details : oracleAreaFor(latest, a.id);
     const details: SelfV2AreaView['details'] = o
       ? { headline: o.headline, paragraphs: [...o.paragraphs], evidence: [...o.evidence], certainty: o.certainty }
       : { evidence: [] };
@@ -140,7 +144,7 @@ export function areaViews(latest: SelfV2Latest, floors: Partial<Record<SelfV2Are
       id: a.id,
       group: a.group,
       title: a.title,
-      status: areaStatus(latest, card),
+      status: areaStatus(latest, fresh, Boolean(stale)),
       card: card ? redactDeep(card) : null,
       // Floor lines stay empty on the v2 board: they are the legacy panels' code lines, and reading them means running
       // the legacy board (getBoardReading) on every GET or storing its panels per build. The v2 build stores neither, so
@@ -195,6 +199,7 @@ export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
     profile: { ageBand: i.profile.ageBand, hasGender: i.profile.gender !== null, missing, role: i.profile.role ?? 'public' },
     subChapterEnds: i.latest.frame?.periods?.runningSub?.to ?? null,
     refresh: i.refresh ? { ...NO_REFRESH, ...i.refresh } : { ...NO_REFRESH },
+    quality: i.latest.quality ?? null,
   };
 }
 
@@ -210,5 +215,6 @@ export function noKundliResponse(): SelfV2Response {
     profile: { ageBand: null, hasGender: false, missing: [], role: 'public' },
     subChapterEnds: null,
     refresh: { ...NO_REFRESH },
+    quality: null,
   };
 }

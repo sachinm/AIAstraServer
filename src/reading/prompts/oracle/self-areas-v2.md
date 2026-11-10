@@ -29,3 +29,7 @@ The areas (each `id` is the area id; write only the areas this call names, and l
 Patterns. The `patterns` array (at most three in all, only for `mind` and `stuck`, only when this call writes them) names a behaviour the chart shows repeating: `behaviour` (what the person does, one plain sentence), `mechanism` (the chart mechanism behind it with its rule), `since` and `until` (dates from the input, or empty), `evidence` (keys from the input).
 
 Per area return: `headline` (one sentence, at most 22 words, no chart term); `paragraphs` (2 to 4, the whole of what the chart says about this area, collated into prose, nothing that belongs to another area); `dates` (every window the paragraphs name, `from`, `to`, a short `label`); `actions` (1 to 5 concrete things to do, each inside a dated window); `certainty` of the timing; `evidence` (the keys and claim ids the area rests on); `validUntil` (the boundary after which the area must be re-read). Top-level `validUntil` is the running sub-period's end, or the nearest boundary that changes the reading.
+
+## Repair pass (added 2026-11-09)
+
+When the last part of the input starts with REPAIR, an earlier answer for the named areas did not pass the checks. Write only those areas, all of them, as the schema asks; fix each listed reason (cite only evidence keys that are in the input, copy every date span exactly from the input, keep the caps) and change nothing else. Every rule above still holds.

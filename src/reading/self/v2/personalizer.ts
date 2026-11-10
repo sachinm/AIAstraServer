@@ -12,6 +12,7 @@ import type { PersonalizerInput, PreparedAgentSlice, SelfBuildContext, SelfV2Car
 import { markAgentUsed } from './cache.js';
 import { timingOf } from './oracle.js';
 import { parsePersonalDoc, TONES, validatePersonalDoc } from './personalizerValidate.js';
+import { ILLUSTRATION_SCHEMA } from './storyteller.js';
 import { promptHash, SELF_V2_PERSONALIZER_PROMPT } from './slices.js';
 
 export const PERSONALIZER_TIMEOUT_MS = 60_000;
@@ -41,6 +42,8 @@ export function personalizerSchema(areaIds: readonly string[]): Record<string, u
           questionClaimId: S('the claim id given under HERO QUESTION, exactly, or empty'),
           questionText: S('the HERO QUESTION draft rephrased in plain words: one yes/no question about its matter, or empty'),
           withheld: { type: 'BOOLEAN', description: 'true when the live areas disagree or are only possible' },
+          // storyteller (2026-11-09): optional
+          illustration: ILLUSTRATION_SCHEMA,
         },
         required: ['tone', 'sentence', 'sub', 'questionClaimId', 'questionText', 'withheld'],
       },
@@ -70,6 +73,8 @@ export function personalizerSchema(areaIds: readonly string[]): Record<string, u
               items: { type: 'OBJECT', properties: { from: S('YYYY-MM-DD'), to: S('YYYY-MM-DD'), label: S() }, required: ['from', 'to', 'label'] },
             },
             sources: { type: 'ARRAY', items: S(), description: 'one per sentence of headline then body, in order: an Oracle paragraph id or evidence key' },
+            // storyteller (2026-11-09): optional, one per card at most
+            illustration: ILLUSTRATION_SCHEMA,
           },
           required: ['areaId', 'headline', 'body', 'patterns', 'dates', 'sources'],
         },

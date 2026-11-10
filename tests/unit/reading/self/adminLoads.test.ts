@@ -5,7 +5,7 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { groupRuns, loadsHandler, oracleOf, runOf } from '../../../../src/routes/adminLoads.js';
+import { groupRuns, loadsHandler, oracleOf, runOf, validationBuildsOf } from '../../../../src/routes/adminLoads.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const NOW = new Date('2026-11-09T05:30:00Z');
@@ -51,6 +51,18 @@ const prisma: any = {
   readingDossier: { findMany: async ({ take }: any) => [...dossiers].sort((a, b) => b.created_at.getTime() - a.created_at.getTime()).slice(0, take) },
   agentRun: { findMany: async ({ where }: any) => runs.filter((r) => r.started_at >= where.started_at.gte) },
   areaBuild: { findUnique: async () => ({ status: 'failed', result: { started_at: '2026-11-09T05:17:39Z' }, error: 'oracle failed' }) },
+  // the Self v2 validator findings (2026-11-09)
+  readingValidationFailure: {
+    findMany: async ({ where }: any) =>
+      where.kundli_id === 'k1' && where.board === 'self'
+        ? [
+            { build_id: 'b2', created_at: T('2026-11-09T05:40:00Z'), stage: 'personalizer', area: 'stuck', check: 'chart_term', message: 'stuck: a body sentence dropped (chart term (Saturn))', area_status: null, model: 'gemini-3.8-flash', prompt_hash: 'pp', call_id: 'self.personalizer' },
+            { build_id: 'b2', created_at: T('2026-11-09T05:39:00Z'), stage: 'oracle', area: 'mind', check: 'withheld', message: 'mind: withheld (no headline survived)', area_status: 'failed', model: 'gemini-3.8-flash', prompt_hash: 'po', call_id: 'oracle.repair' },
+            { build_id: 'b2', created_at: T('2026-11-09T05:39:00Z'), stage: 'oracle', area: 'lagna', check: 'call_failed', message: 'lagna: oracle.b: mock timeout', area_status: 'repaired', model: 'gemini-3.8-flash', prompt_hash: 'po', call_id: 'oracle.b' },
+            { build_id: 'b1', created_at: T('2026-11-08T15:30:00Z'), stage: 'oracle', area: 'body', check: 'date_not_stored', message: 'body: date x is not a stored span', area_status: 'ok', model: 'gemini-3.8-flash', prompt_hash: 'po', call_id: 'oracle.c' },
+          ]
+        : [],
+  },
 };
 
 let base = '';
@@ -95,6 +107,11 @@ describe('GET loads/:userId', () => {
     // the run after the newest dossier belongs to no build yet
     expect(j.unassignedRuns.map((x: any) => x.id)).toEqual(['r5']);
     expect(j.marker).toEqual({ state: 'failed_recently', status: 'failed', startedAt: '2026-11-09T05:17:39Z', error: 'oracle failed' });
+    // the Self v2 builds' validator findings, newest build first
+    expect(j.validation.map((b: any) => b.buildId)).toEqual(['b2', 'b1']);
+    expect(j.validation[0]).toMatchObject({ repaired: ['lagna'], failed: ['mind'], counts: { oracle: 2, personalizer: 1 }, oracleAreas: { mind: 'failed', lagna: 'repaired' } });
+    expect(j.validation[0].promptHashes.sort()).toEqual(['po', 'pp']);
+    expect(j.validation[0].findings[1]).toEqual({ stage: 'oracle', area: 'mind', check: 'withheld', message: 'mind: withheld (no headline survived)', areaStatus: 'failed', callId: 'oracle.repair' });
   });
 });
 
@@ -110,6 +127,15 @@ describe('grouping and mapping', () => {
     expect(g.byDossier.get('a')!.map((r) => r.id)).toEqual(['x']);
     expect(g.byDossier.get('b')!.map((r) => r.id)).toEqual(['y']);
     expect(g.unassigned.map((r) => r.id)).toEqual(['z']);
+  });
+  it('validationBuildsOf groups findings per build, its earliest time first, and skips rows with no build id', () => {
+    const v = validationBuildsOf([
+      { build_id: 'x', created_at: T('2026-11-09T05:39:10Z'), stage: 'oracle', area: 'yogas', check: 'missing_area', message: 'm', area_status: 'repaired' },
+      { build_id: 'x', created_at: T('2026-11-09T05:39:00Z'), stage: 'oracle', area: 'year', check: 'json_schema', message: 'm', area_status: 'failed' },
+      { build_id: '', stage: 'oracle' },
+    ]);
+    expect(v).toHaveLength(1);
+    expect(v[0]).toMatchObject({ buildId: 'x', createdAt: '2026-11-09T05:39:00.000Z', repaired: ['yogas'], failed: ['year'] });
   });
   it('oracleOf keeps a stored error over a run error, and returns null without a status', () => {
     expect(oracleOf(null, [])).toBeNull();

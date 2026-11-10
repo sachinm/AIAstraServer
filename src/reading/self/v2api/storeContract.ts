@@ -14,7 +14,7 @@ export type SelfV2Latest = StoreLatest;
 /** `clock`: read only that clock's build (null or absent: the newest build on any clock) */
 export type ReadSelfV2Latest = (prisma: PrismaClient, kundliId: string, clock?: string | null) => Promise<SelfV2Latest>;
 
-export const NOTHING_STORED: Readonly<SelfV2Latest> = Object.freeze({ cards: null, oracle: null, briefs: null, builtAt: null, status: 'pending', frame: null });
+export const NOTHING_STORED: Readonly<SelfV2Latest> = Object.freeze({ cards: null, oracle: null, briefs: null, builtAt: null, status: 'pending', frame: null, stale: null, quality: null });
 
 /** The default reader: the build's store. */
 export const defaultReadSelfV2Latest: ReadSelfV2Latest = (prisma, kundliId, clock) => readSelfV2Latest(prisma, kundliId, clock);

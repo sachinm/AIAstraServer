@@ -84,8 +84,8 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 <p style="margin-left:162px;font-size:13px">Each runs once per build and is shared by every area. Node only selects and joins engine rows with reviewed words tables; it computes nothing astrological. Outputs are stored in <code>technique_outputs</code>, keyed by the boundary stamps that can change them, so an unchanged stamp is a cache hit.</p>
 <div class="down">↓</div>
 
-<div class="lane"><div class="lane-label">5 · Area briefs</div><div class="row">
-<div class="box c"><b>12 briefs: the hero plus 11 areas</b><small>Right now · Where you get stuck · This chapter · In short · Who you are · How you think · Body &amp; energy · Drive &amp; ambition · How you come across · Gifts &amp; knots · Chapters · This year. Each brief is a selection of fact tags, evidence keys, dates and ledger rows. No prose.</small></div>
+<div class="lane"><div class="lane-label">5 · Area work orders</div><div class="row">
+<div class="box c"><b>12 work orders: the hero plus 11 areas</b><small>Right now · Where you get stuck · This chapter · In short · Who you are · How you think · Body &amp; energy · Drive &amp; ambition · How you come across · Gifts &amp; knots · Chapters · This year. A work order is the Oracle's order for one area: the facts, evidence keys, dates and ledger rows it reads for that area, chosen in code. It also tells the validator which keys and dates the Oracle may use there. No prose. (In code the type is still <code>AreaBrief</code>.)</small></div>
 </div></div>
 <div class="down">↓</div>
 
@@ -113,16 +113,20 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 <p style="margin-left:162px;font-size:13px">Three parallel calls on gemini-3.8-flash over one shared cached prefix (natal slice, ledgers, briefs). Each writes its areas in the strict Vedic register as JSON: headline, paragraphs, dates, actions, certainty, evidence keys. It reads the risk ledger and confirms or rejects each row; it never recomputes a date. <b>Measured: 89.7% cached, about 27 s wall, $0.05.</b></p>
 <div class="down">↓</div>
 
-<div class="lane"><div class="lane-label">9 · Validate</div><div class="row">
-<div class="box c"><b>Oracle validator</b><small>Every evidence key must be in the input; every date must be an exact stored window; caps; engine names redacted. A failed or partial Oracle stores nothing.</small></div>
+<div class="lane"><div class="lane-label">9 · Validate</div><div class="row g4">
+<div class="box c"><b>Oracle validator</b><small>Every evidence key must be in the input; every date must be an exact stored window; caps; no area missing; engine names redacted.</small></div>
+<div class="box d"><b>Store every failure</b><small>Each finding (area, check, message, model, prompt, call) goes to <code>reading_validation_failures</code> with the build's id.</small></div>
+<div class="box m"><b>One repair pass</b><small>Failed areas only, one call over the same cached prefix, with a short "fix these" list. Validated again: ok, repaired or failed. Never a second repair.</small></div>
+<div class="box c"><b>Fall back</b><small>A still-failed area shows the last good reading's card, marked "From your last reading"; with none, it is withheld. The hero and 8 of 11 areas must stand, or the build is not charged and the page keeps the last reading.</small></div>
 </div></div>
+<p style="margin-left:162px;font-size:13px">The failures reach the <b>admin Lab</b> (Dashboard loads: per build, which areas were repaired or failed and why) and the page (<code>quality</code> and the <code>stale</code> status).</p>
 <div class="down">↓</div>
 
 <div class="lane"><div class="lane-label">10 · Personalizer</div><div class="row g2">
-<div class="box m"><b>Builds a portrait, then writes the cards</b><small>Being moved to the Oracle's model (gemini-3.8-flash). Reads the Oracle document plus the person portrait: personality, character, biography, birth place and current city, past month, mood, health, the state of career, love, self, home, family, business, health, fortune, work, gains and sacrifices, and the register (plain or technical).</small></div>
-<div class="box c"><b>Personalizer validator</b><small>Every sentence cites an Oracle paragraph; dates only from the Oracle; no chart terms, engine names, medical words; profile-fit words; gender words only when stated. A failing card shows "Not enough in your chart to say this with confidence."</small></div>
+<div class="box m"><b>Builds a portrait, then tells the story</b><small>On the Oracle's model, gemini-3.8-flash. Reads the Oracle document plus the person portrait: personality, character, biography, birth place and current city, past month, mood, health, the state of career, love, self, home, family, business, health, fortune, work, gains and sacrifices, and the register (plain or technical). The storyteller: per card, the Oracle point most likely to be misread gets one illustration of at most 40 words, an everyday example, an analogy or a modern reference fitted to this person, shown as "Think of it this way", "For example" or "Like…".</small></div>
+<div class="box c"><b>Personalizer validator</b><small>Every sentence cites an Oracle paragraph; dates only from the Oracle; no chart terms, engine names, medical words; profile-fit words; gender words only when stated. The illustration has its own rules: it must point at an Oracle paragraph, and carries no chart term, date, year or month name, medical word or profile misfit; a bad one is dropped alone. A failing card shows "Not enough in your chart to say this with confidence." Every drop is stored with the Oracle's failures.</small></div>
 </div></div>
-<p style="margin-left:162px;font-size:13px">Run 2 on flash-lite: 3 of 3 profiles, about 13 s each, about $0.007 each. <b>Estimate on the Oracle's model: about $0.02–0.03 per profile.</b> A profile change (wizard answer, mood, birthday) re-runs only this step.</p>
+<p style="margin-left:162px;font-size:13px">Run 2 on flash-lite: 3 of 3 profiles, about 13 s each, about $0.007 each. <b>Estimate on 3.8-flash: about $0.02–0.03 per profile</b> (3.6-flash costs the same, so no saving; a Pro model would be about 3×, for a later test only). A profile change (wizard answer, mood, birthday) re-runs only this step.</p>
 <div class="down">↓</div>
 
 <div class="lane"><div class="lane-label">11 · Store and serve</div><div class="row g3">
@@ -138,15 +142,16 @@ code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 <tr><td>Cache warm-up</td><td>none</td><td>0</td><td>—</td><td>3.4 s</td><td>about $0.002 storage</td></tr>
 <tr><td>Family readers</td><td>3.1-flash-lite</td><td>5</td><td>99%</td><td>about 6 s</td><td>$0.015</td></tr>
 <tr><td>Oracle</td><td>3.8-flash</td><td>3</td><td>89.7%</td><td>about 27 s</td><td>$0.05</td></tr>
-<tr><td>Personalizer, per profile</td><td>3.1-flash-lite now; 3.8-flash next</td><td>1</td><td>about 97%</td><td>about 13 s</td><td>$0.007 now; about $0.02–0.03 next</td></tr>
-<tr><td>Total, one profile</td><td></td><td>9</td><td></td><td>about 59 s</td><td>about $0.075 now; about $0.09–0.10 next</td></tr>
+<tr><td>Oracle repair (only when areas fail)</td><td>3.8-flash</td><td>0–1</td><td>same prefix</td><td>about 10 s (estimate)</td><td>about $0.01–0.02 (estimate)</td></tr>
+<tr><td>Personalizer, per profile</td><td>3.8-flash</td><td>1</td><td>about 97%</td><td>13 s on flash-lite; about 15–25 s (estimate)</td><td>about $0.02–0.03 (estimate)</td></tr>
+<tr><td>Total, one profile</td><td></td><td>9 (10 with a repair)</td><td></td><td>about 60–70 s</td><td>about $0.09–0.10 (estimate)</td></tr>
 </table>
-<p style="font-size:13px;margin-top:8px">Flash prices double on 1 Jan 2027. The v1 lineman and v1 Oracle (about $0.055) still run before v2 today; that double build is being removed before the switch goes on.</p>
+<p style="font-size:13px;margin-top:8px">Flash prices double on 1 Jan 2027. The double build is fixed: with the switch on, a Self build runs the v1 code panels only (no model call) and the v2 build is the reading.</p>
 
 <h2>What is not working yet</h2>
-<div class="note"><b>Double build.</b> With the switch on, the old Oracle and lineman run first and the new page never reads them. Fix in progress.</div>
 <div class="note"><b>9-second data load.</b> Expected under 1.5 s; per-query timing is being added to find the slow read on the live database.</div>
-<div class="note"><b>Engine pressure inventory not deployed.</b> Every window has equal strength until it ships; there is no documented engine release path.</div>
+<div class="note"><b>Engine pressure inventory not deployed.</b> Every window has equal strength until it ships. The engine does have a release path (<code>deploy-lambda.yml</code>); the inventory waits for a release.</div>
+<div class="note"><b>The admin Lab page does not draw the failures yet.</b> The server sends them in the Dashboard loads payload (<code>validation</code>); the admin page that shows them is still to build.</div>
 <div class="note"><b>Readings go stale between fresh taps.</b> "Since May" and "eases 12 Dec" are relative to the build date; the page needs an "as of" date and a nudge when a window has passed.</div>
 <div class="note"><b>Love and Work don't share the sub-techniques.</b> Clock, periods, windows, ledgers and profile are the same for all three boards.</div>
 </div></body></html>

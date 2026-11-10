@@ -251,13 +251,35 @@ export function geminiResult(text: string, usage: Partial<GeminiResult['usage']>
 }
 
 /** A Gemini mock that answers by node and records each call's node in `log`. */
-export function makeGemini(log: string[], opts: { failOracle?: string; personal?: (areas: string[]) => string; cost?: Partial<GeminiResult['usage']> } = {}) {
+export function makeGemini(
+  log: string[],
+  opts: {
+    failOracle?: string;
+    personal?: (areas: string[]) => string;
+    cost?: Partial<GeminiResult['usage']>;
+    /** the Oracle's JSON per call (a, b, c); default oracleCallJson */
+    oracle?: (call: string, areas: SelfV2AreaId[]) => string;
+    /** the repair call: throw, or answer with this JSON for its areas (default oracleCallJson) */
+    failRepair?: boolean;
+    repair?: (areas: SelfV2AreaId[]) => string;
+  } = {},
+) {
   return async (o: GeminiCallOptions): Promise<GeminiResult> => {
     log.push(`call:${o.node}`);
     if (o.node.startsWith('family.')) return geminiResult(`- ${o.node} finding {planet:D1.Sa}\nVALID_UNTIL: always`, opts.cost);
+    if (o.node === 'self.oracle.v2.oracle.repair') {
+      if (opts.failRepair) throw new Error('mock repair timeout');
+      const areas = (o.responseSchema as { properties: { areas: { items: { properties: { id: { enum: SelfV2AreaId[] } } } } } }).properties.areas.items.properties.id.enum;
+      log.push(`repair:${areas.join(',')}`);
+      return geminiResult(opts.repair ? opts.repair(areas) : oracleCallJson(areas), opts.cost);
+    }
     if (o.node.startsWith('self.oracle.v2.')) {
       const call = o.node.slice('self.oracle.v2.'.length);
       if (opts.failOracle === call) throw new Error('mock timeout');
+      if (opts.oracle) {
+        const areas = { a: ['diagnosis', 'stuck', 'chapter', 'chapters'], b: ['lagna', 'mind', 'drive', 'presence'], c: ['body', 'yogas', 'year'] }[call.slice(-1) as 'a' | 'b' | 'c'] as SelfV2AreaId[];
+        return geminiResult(opts.oracle(call, areas), opts.cost);
+      }
       const areas = { a: ['diagnosis', 'stuck', 'chapter', 'chapters'], b: ['lagna', 'mind', 'drive', 'presence'], c: ['body', 'yogas', 'year'] }[call.slice(-1) as 'a' | 'b' | 'c'] as SelfV2AreaId[];
       return geminiResult(oracleCallJson(areas), opts.cost);
     }
@@ -274,6 +296,7 @@ export function makePrisma() {
   const outputs = new Map<string, Record<string, unknown>>();
   const builds = new Map<string, Record<string, unknown>>();
   const cacheRows = new Map<string, Record<string, unknown>>();
+  const failures: Array<Record<string, unknown>> = [];
   const matches = (row: Record<string, unknown>, where: Record<string, unknown>): boolean =>
     Object.entries(where).every(([k, v]) => {
       if (k === 'OR') return (v as Array<Record<string, unknown>>).some((w) => matches(row, w));
@@ -308,6 +331,12 @@ export function makePrisma() {
       },
       findFirst: async ({ where }: { where: { kundli_id: string; area: string } }) => builds.get(`${where.kundli_id}|${where.area}`) ?? null,
     },
+    readingValidationFailure: {
+      createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => {
+        failures.push(...data);
+        return { count: data.length };
+      },
+    },
     llmCacheEntry: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => [...cacheRows.values()].find((r) => matches(r, where)) ?? null,
       findMany: async ({ where }: { where: Record<string, unknown> }) => [...cacheRows.values()].filter((r) => matches(r, where)),
@@ -319,5 +348,5 @@ export function makePrisma() {
       },
     },
   };
-  return { prisma: prisma as unknown as PrismaClient, outputs, builds, cacheRows };
+  return { prisma: prisma as unknown as PrismaClient, outputs, builds, cacheRows, failures };
 }
