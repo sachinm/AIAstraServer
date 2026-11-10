@@ -11,6 +11,7 @@
  * - `digestSection`: the `digest` pack section the deterministic readers read and cite. It is keyed so that an evidence
  *   id is `digest.<section>.<digest key>[.<field>]` (digest key `D9.h7` → `digest.house.D9.h7.lordDignity`).
  */
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
 import type { AnnualRow, DigestView, HouseCard, PlanetCard, PointRow, YogaRow } from '../digest/types.js';
 import type { ActivationRow } from '../digest/activation.js';
 import { PERSON_OF_SUBJECT, PERSON_SIGNIFIERS } from '../codeReaders/rules.js';
@@ -263,7 +264,9 @@ function annualFromDigest(view: DigestView, extra: OverlayDigestExtra): Record<s
   if (!wantedYears.length) return undefined;
   const rows = wantedYears.flatMap((y) => view.annual(y));
   if (!rows.length) return undefined;
-  const curYear = extra.asOf ? Number(extra.asOf.slice(0, 4)) : wantedYears[Math.floor(wantedYears.length / 2)]!;
+  // the running year is the Tithi Pravesha year whose return moment has passed (doc 66 §4.10), never the calendar year
+  const tpYear = extra.asOf ? runningTithiPravesha(view, extra.asOf).year : null;
+  const curYear = tpYear ?? wantedYears[Math.floor(wantedYears.length / 2)]!;
   const primary = rows.find((r) => r.year === curYear && r.kind === 'TP' && r.varga === 'D1') ?? rows.find((r) => r.year === curYear && r.varga === 'D1') ?? rows[0]!;
   const lagnaHouse = primary.houses.find((h) => h.house === 1);
   const bodies: Record<string, unknown> = {};

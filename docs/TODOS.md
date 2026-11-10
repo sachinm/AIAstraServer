@@ -24,6 +24,10 @@ re-applied by it.
   Chart Data Review checks (admin `feat/admin-chart-data-review`, check "a year dasha should fit its year") on
   2026-11-08. Owner: engine (Radha `annual.tithi_pravesha_dasha`). Done: the periods of each year row fall inside that
   year (compressed to the year), the admin Annual tab shows no "periods span N years" error.
+  Status (2026-11-09): engine fix in AIAstra_Radha `feat/dasha-levels-1-6` (with `tp_start`/`tp_end` on every TP year
+  row); server side done on `feat/tithi-pravesha-year` (doc 66 §4.10: `runningTithiPravesha` picks the TP whose return
+  moment has passed, never rescales a lifetime dasha and withholds the TP short clock until the dasha is bounded). Open
+  until the engine ships and the digests are rebuilt.
 
 - **12-person multi-age-group (`20s`–`70s`) live benchmark & 4-school review (`Self`, `Love`, `Work`).** Twenty-three of the 24 `ready` kundlis in PostgreSQL were built on `2026-11-06` before `PointRow.planet` (`AK.planet`, `AmK.planet`, `DK.planet`) and the `dasha.applicable` filter on `kundli_activation` were added (code backfills are now in `loadDigest` and `defaultSystemsPresent`, and all `love.reading.*` + `work.reading.*` panels are built and wired). Next session: run `buildDigest(prisma, kundliId)` for the 12-person cohort and execute the multi-age benchmark + independent review per [`docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md`](handoff/2026-11-08-techniques-lab-self-love-work-handoff.md) under the $1.00 spend cap. Status: open (handoff ready). Done: 12-person cohort benchmarked across `self`, `love`, and `work` with `>=95%` verifier pass.
 

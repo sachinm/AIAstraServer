@@ -35,7 +35,7 @@ import { activationKey, allRunningDashas, gaps, houseFrame, mdSpine, planetChain
 import type { BoardPanelId, ChapterConfirmation, PanelBody, SelfChapter, SelfClaim } from '../types.js';
 import { body, cardDetail, hasCancellation, pname, stateWords, type PanelInput } from './common.js';
 import { certaintyOf, confirmShift } from './chapters.js';
-import { activeTpAshtottariPeriod, runningMudda, runningTp } from './year.js';
+import { runningTithiPravesha } from '../../annual/tithiPravesha.js';
 import { struggleLead } from './struggle.js';
 
 export const LOVE_HOUSES: readonly number[] = [7, 5, 11, 2, 8, 4, 12];
@@ -785,20 +785,19 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
   const yearRange = (r: { from: string; to: string } | null) => r ?? ('always' as const);
   const g = gaps();
   const claims: SelfClaim[] = [];
-  const m = runningMudda(view, asOf);
-  const tp = runningTp(view, asOf, m?.row.year);
-  if (!m && !tp) {
-    g.add(`annual:VP covering ${asOf} missing`);
+  // the year is the Tithi Pravesha chart whose return moment has passed (doc 66 §4.10); Varsha (Mudda) only confirms
+  const run = runningTithiPravesha(view, asOf);
+  for (const x of run.gaps) g.add(x);
+  const tp = run.row;
+  const m = run.varsha;
+  if (!tp || run.year == null) {
+    g.add(`annual:TP covering ${asOf} missing`);
     return body('', [], g);
   }
-  const year = m?.row.year ?? tp!.year;
-  const tpYear = tp?.year ?? year;
+  const tpYear = run.year;
   const l7 = view.house('D1', 7)?.lord ?? 'Ve';
-  const mudda = m?.row.dashas.find((d) => d.system === 'mudda');
-  const span = mudda?.periods.length
-    ? { from: mudda.periods.map((p) => p.from).sort()[0]!, to: mudda.periods.map((p) => p.to).sort().at(-1)! }
-    : null;
-  const ta = activeTpAshtottariPeriod(tp, asOf, span);
+  const span = run.from && run.to ? { from: run.from, to: run.to } : null;
+  const ta = run.shortClock;
   const loveSahams = [...(tp?.sahams ?? []), ...(m?.row.sahams ?? [])].filter((s) =>
     /vivaha|preethi|priti|kali|kama/i.test(s.name),
   );
@@ -806,9 +805,7 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
     ? `; sahams ${loveSahams.map((s) => `${s.name} in ${s.sign ?? '?'} h${s.house ?? '?'}`).join(', ')}`
     : '';
   let lead = '';
-  if (!tp) {
-    g.add(`annual:TP${tpYear}.D1 missing`);
-  } else {
+  {
     const atL7 = l7 ? tp.houses.find((h) => h.occupants.some((o) => o.planet === l7)) : undefined;
     const occL7 = atL7?.occupants.find((o) => o.planet === l7);
     if (atL7 && occL7) {
@@ -851,18 +848,19 @@ export function loveYearPanel({ view, asOf }: PanelInput): PanelBody {
       });
     }
   }
-  for (const c of claims) c.range = yearRange(span ?? (ta ? { from: ta.from, to: ta.to } : null));
-  const shortClock = m ?? (ta ? { lord: ta.lord, from: ta.from, to: ta.to } : null);
+  for (const c of claims) c.range = yearRange(span);
+  // the year's short clock is the TP year dasha period (bounded to the year by the engine); Mudda only confirms
+  const shortClock = ta;
   if (shortClock && PLANET_FACULTY[shortClock.lord]) {
-    const evKey = m ? `annual:VP${year}.D1` : `annual:TP${tpYear}.D1`;
+    const evKey = `annual:TP${tpYear}.D1`;
     claims.push({
       id: 'year.short_clock',
       range: { from: shortClock.from, to: shortClock.to },
       line: `Until ${longDate(shortClock.to)} the year's short clock runs through ${PLANET_SHORT[shortClock.lord] ?? 'this period'}.`,
       text: `Until ${longDate(shortClock.to)} the year's short clock in love runs through ${PLANET_FACULTY[shortClock.lord]}.`,
-      detail: `${m ? `VP${year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}` : ''}${ta ? `${m ? '; ' : ''}TP${tpYear} tithi_ashtottari ${pname(ta.lord)} ${ta.from} → ${ta.to}` : ''}${sahamNote}`,
+      detail: `TP${tpYear} ${shortClock.system} ${pname(shortClock.lord)} ${shortClock.from} → ${shortClock.to}${m ? `; confirming VP${m.row.year} Mudda ${pname(m.lord)} ${m.from} → ${m.to}` : ''}${sahamNote}`,
       certainty: 'fact',
-      evidence: [evKey],
+      evidence: [evKey, ...(m ? [`annual:VP${m.row.year}.D1`] : [])],
     });
   }
   return body(lead || (claims[0]?.text ?? ''), claims, g);

@@ -20,7 +20,8 @@ import { addDaysIso, addMonthsIso, monthEnd, monthOf, monthStart } from '../time
 import type { Band, SystemId } from '../timeline/types.js';
 import type { DigestView } from '../digest/types.js';
 import type { ActivationRow } from '../digest/activation.js';
-import { currentYear, hasClass, isBad, isGood } from './houseLayers.js';
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
+import { hasClass, isBad, isGood } from './houseLayers.js';
 import {
   buildWorkCharacterArc,
   buildWorkVocationAndPersonality,
@@ -211,11 +212,12 @@ export function workD10Check(view: DigestView, planet: string): D10CheckResult {
 
 /**
  * work.annual_family (doc 43 §8.1 family 5, doc 46 §B.6, doc 53 §4.5):
- * Reads the current year's TP/VP chart (D1 and D10), the running Mudda/Patyayini/year dasha lord, and the rajya/karma
- * sahams to cast the annual family's vote.
+ * Reads the running Tithi Pravesha year chart (D1 and D10; the TP whose return moment has passed, doc 66 §4.10), the TP
+ * year dasha lord when the engine bounds it to the year, and the rajya/karma sahams to cast the annual family's vote.
  */
 export function workAnnualVote(view: DigestView, asOf: string): FamilyVote | null {
-  const yr = currentYear(view, asOf);
+  const tp = runningTithiPravesha(view, asOf);
+  const yr = tp.row;
   if (!yr) return null;
   const d10Yr = view.annual(yr.year).find((a) => a.kind === yr.kind && a.varga === 'D10') ?? null;
   let score = 0;
@@ -236,15 +238,12 @@ export function workAnnualVote(view: DigestView, asOf: string): FamilyVote | nul
       else if (hasClass(at10, BAD_CLASS)) score -= 1;
     }
   }
-  for (const d of yr.dashas) {
-    for (const p of d.periods) {
-      if (p.from <= asOf && asOf < p.to && p.lord) {
-        leadPlanet = leadPlanet ?? p.lord;
-        const side = planetSideInVarga(view, 'D10', p.lord);
-        if (side === 'support') score += 1;
-        else if (side === 'test') score -= 1;
-      }
-    }
+  // the TP year dasha period, only when bounded to the year (a lifetime dasha is not the year's clock)
+  if (tp.shortClock) {
+    leadPlanet = leadPlanet ?? tp.shortClock.lord;
+    const side = planetSideInVarga(view, 'D10', tp.shortClock.lord);
+    if (side === 'support') score += 1;
+    else if (side === 'test') score -= 1;
   }
   for (const s of yr.sahams) {
     const name = s.name.toLowerCase();

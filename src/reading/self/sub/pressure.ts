@@ -75,7 +75,8 @@ export type PressureRowDetail = PressureRow & { houseFromMoon: number | null };
 export type PressureInventoryDetail = Omit<PressureInventory, 'rows'> & { asOf: string; rows: PressureRowDetail[] };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const KINDS: readonly PressureKind[] = ['dasha', 'transit', 'sade_sati', 'return', 'station'];
+/** `annual` and `return` arrive with engine calc_version 2 (the TP year window and its year periods; Saturn/Jupiter returns) */
+const KINDS: readonly PressureKind[] = ['dasha', 'transit', 'sade_sati', 'return', 'station', 'annual'];
 const POLARITIES: readonly Polarity[] = ['presses', 'mixed', 'supports'];
 const MATTERS: readonly Matter[] = [
   'self_and_body',
@@ -120,7 +121,7 @@ export function toPressureInventory(payload: EnginePressurePayload, kundliId: st
     rows.push({
       id: r.id,
       kind,
-      ...(kind === 'dasha' && level ? { level } : {}),
+      ...((kind === 'dasha' || kind === 'annual') && level ? { level } : {}),
       planet: String(r.planet ?? ''),
       ...(typeof r.system === 'string' ? { system: r.system } : {}),
       housesTouched: Array.isArray(r.houses_touched) ? r.houses_touched.filter((h) => Number.isInteger(h) && h >= 1 && h <= 12) : [],

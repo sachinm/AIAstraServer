@@ -8,14 +8,14 @@
  *   2. Divisional Vargas (`D1, D9, D30, D60`) & Chara Karakas (`AK`, `Karakamsa`): connecting physical body, thinking brain (`Me`),
  *      emotional mind (`Mo`), and soul (`Su, AK`).
  *   3. Multi-Clock Dasha Synthesis: primary reading clock (`dwisatpathi` / conditional) alongside `vimsottari` and Jaimini `narayana`.
- *   4. Multi-Year Tithi Pravesha & Varshaphal (`2025`, `2026`, `2027` across `D1..D60`) plus `tithi_ashtottari` and `mudda` annual dashas.
+ *   4. Tithi Pravesha & Varshaphal: the running TP year (its return moment has passed) with the year before and after, across the stored vargas, plus the TP year dasha (bounded to the year) and Mudda (confirming).
  *   5. Universal Shared Transit Sky (`sky` / Gochara) & Sarvashtakavarga (`SAV`) bindus over Lagna, Moon, and body houses.
  */
 import type { TransitRangePayload } from '../../chartData/transitRange.js';
 import { BODY_NOTE, BODY_SHAPE, clockLabel, dignityWords, HOUSE_SELF, HOUSE_SHORT, longDate, PLANET_FACULTY, PLANET_SHORT, RIPENESS_WORDS } from '../words.js';
 import { activationKey, allRunningDashas, gaps, houseFrame, planetChain, pointOf, runningChain } from '../slices.js';
 import type { PanelBody, SelfClaim } from '../types.js';
-import { activeTpAshtottariPeriod } from './year.js';
+import { runningTithiPravesha } from '../../annual/tithiPravesha.js';
 import { body, cap, cardDetail, pname, type PanelInput } from './common.js';
 
 export const BODY_HOUSES = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12];
@@ -259,10 +259,12 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
     }
   }
 
-  // 11. Multi-Year Tithi Pravesha & Varshaphal Review (`2025`, `2026`, `2027` across `D1..D60` + `tithi_ashtottari` & `mudda`) (`body.tp_review`)
+  // 11. Tithi Pravesha & Varshaphal review: the running TP year (its return moment has passed, doc 66 §4.10) with the year
+  // before and after, across the stored vargas; the TP year dasha (bounded to the year) and Mudda as the confirming clock
   const annualAll = view.annual();
+  const tpRun = runningTithiPravesha(view, asOf);
   if (annualAll.length > 0) {
-    const refYear = Number(asOf.slice(0, 4));
+    const refYear = tpRun.year ?? tpRun.varsha?.row.year ?? Number(asOf.slice(0, 4));
     const yearsToInspect = [...new Set([refYear - 1, refYear, refYear + 1, ...annualAll.map((a) => a.year)])].sort((a, b) => a - b);
     const tpEv: string[] = [];
     const tpNotes: string[] = [];
@@ -288,24 +290,19 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
       const h8Ann = primaryRow.houses.find((h) => h.house === 8);
       const l1Placement = h1Ann?.lordHouse ? `lagna ruler in ${HOUSE_SHORT[h1Ann.lordHouse] ?? `H${h1Ann.lordHouse}`}` : primaryRow.lagna ? `rising in ${primaryRow.lagna}` : 'active';
 
-      // Check Tithi Ashtottari on TP (with 108y->1y proportional compression when needed) and Mudda on VP
+      // the TP year dasha period of the running TP year (only when the engine bounds it to the year; never rescaled here)
+      // and the Mudda period on VP, which only confirms
       const muddaDasha = vpD1?.dashas.find((d) => d.system === 'mudda') ?? vpD1?.dashas[0];
-      const muddaWindow =
-        muddaDasha && muddaDasha.periods.length
-          ? {
-              from: muddaDasha.periods.map((p) => p.from).sort()[0]!,
-              to: muddaDasha.periods.map((p) => p.to).sort().at(-1)!,
-            }
-          : null;
-      const activeTa = activeTpAshtottariPeriod(tpD1, asOf, muddaWindow);
+      const activeTa = tpD1 && tpRun.row === tpD1 ? tpRun.shortClock : null;
       const activeMudda = muddaDasha?.periods.find((p) => p.from <= asOf && asOf < p.to) ?? muddaDasha?.periods[0];
 
-      if (activeMudda && yr === refYear) {
+      // the running year's span is the TP year; the TP short clock first, Mudda (confirming) only when it is not stored
+      if (yr === refYear && tpRun.from && tpRun.to && tpD1 && tpRun.row === tpD1) {
+        activeFrom = activeTa?.from ?? tpRun.from;
+        activeTo = activeTa?.to ?? tpRun.to;
+      } else if (activeMudda && yr === refYear && !activeFrom) {
         activeFrom = activeMudda.from;
         activeTo = activeMudda.to;
-      } else if (activeTa && yr === refYear && !activeFrom) {
-        activeFrom = activeTa.from;
-        activeTo = activeTa.to;
       }
 
       // Check divisional TP/VP vargas (D9, D30, D60, etc.) if present
@@ -316,17 +313,17 @@ export function bodyPanel({ view, activation, asOf, clock }: PanelInput, opts: B
       }
 
       const periodNote =
-        activeMudda
-          ? `active annual period from ${longDate(activeMudda.from)} to ${longDate(activeMudda.to)}`
-          : activeTa
-            ? `Tithi Ashtottari period from ${longDate(activeTa.from)} to ${longDate(activeTa.to)}`
+        activeTa
+          ? `Tithi Pravesha year period from ${longDate(activeTa.from)} to ${longDate(activeTa.to)}`
+          : activeMudda
+            ? `active annual period from ${longDate(activeMudda.from)} to ${longDate(activeMudda.to)}`
             : 'annual return window';
 
       tpNotes.push(
         `${yr} return (${l1Placement}${h6Ann?.occupants.length ? `, 6th house pressure on digestion/routine` : ''}${h8Ann?.occupants.length ? `, 8th house cellular renewal demand` : ''}, ${periodNote})`,
       );
       tpDetails.push(
-        `Year ${yr}: TP vargas=[${tpVargas.join(',') || 'none'}], VP vargas=[${vpVargas.join(',') || 'none'}]; lagna=${primaryRow.lagna ?? h1Ann?.sign ?? '?'}; H1 lord ${pname(h1Ann?.lord)} in h${h1Ann?.lordHouse ?? '?'} (${h1Ann?.lordDignity ?? '?'}); H6 occ=[${h6Ann?.occupants.map((o) => pname(o.planet)).join(',') || 'none'}]; H8 occ=[${h8Ann?.occupants.map((o) => pname(o.planet)).join(',') || 'none'}]${activeTa ? `; TP tithi_ashtottari=${pname(activeTa.lord)} ${activeTa.from}→${activeTa.to}` : ''}${activeMudda ? `; VP mudda=${pname(activeMudda.lord)} ${activeMudda.from}→${activeMudda.to}` : ''}${vargaNotes.length ? `; Vargas: ${vargaNotes.join('; ')}` : ''}`,
+        `Year ${yr}: TP vargas=[${tpVargas.join(',') || 'none'}], VP vargas=[${vpVargas.join(',') || 'none'}]; lagna=${primaryRow.lagna ?? h1Ann?.sign ?? '?'}; H1 lord ${pname(h1Ann?.lord)} in h${h1Ann?.lordHouse ?? '?'} (${h1Ann?.lordDignity ?? '?'}); H6 occ=[${h6Ann?.occupants.map((o) => pname(o.planet)).join(',') || 'none'}]; H8 occ=[${h8Ann?.occupants.map((o) => pname(o.planet)).join(',') || 'none'}]${activeTa ? `; TP ${activeTa.system}=${pname(activeTa.lord)} ${activeTa.from}→${activeTa.to}` : ''}${activeMudda ? `; VP mudda=${pname(activeMudda.lord)} ${activeMudda.from}→${activeMudda.to}` : ''}${vargaNotes.length ? `; Vargas: ${vargaNotes.join('; ')}` : ''}`,
       );
     }
 

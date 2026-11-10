@@ -117,12 +117,13 @@ export type Strength = 1 | 2 | 3;
 // Layer 0: the engine's pressure inventory (doc 66 §4.3), stored as `kundli_pressure`
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type PressureKind = 'dasha' | 'transit' | 'sade_sati' | 'return' | 'station';
+/** `annual`: the TP year window and its level-2 year periods (engine calc_version 2); `return`: Saturn and Jupiter returns */
+export type PressureKind = 'dasha' | 'transit' | 'sade_sati' | 'return' | 'station' | 'annual';
 
 export interface PressureRow {
   id: string;
   kind: PressureKind;
-  /** dasha level, when kind = dasha */
+  /** dasha level, when kind = dasha; 1 (the year) or 2 (a year period) when kind = annual */
   level?: 1 | 2 | 3;
   planet: string;
   system?: string;
@@ -245,7 +246,8 @@ export interface RiskRow {
   matter: Matter;
   /** what the chart says can go wrong, as a words-table key (not prose) */
   what: string;
-  from: { planet?: string; house?: number; yogaId?: string; windowId?: string };
+  /** `chart: 'year'` when the row comes from the engine's annual (Tithi Pravesha year) pressure row */
+  from: { planet?: string; house?: number; yogaId?: string; windowId?: string; chart?: 'year' };
   who: PeopleLabel[];
   since: IsoDate | null;
   until: IsoDate | null;
@@ -296,12 +298,22 @@ export interface PresenceFacts {
 }
 
 /** S9 */
+/**
+ * S9: the year read from the Tithi Pravesha chart whose return moment has passed (doc 66 §4.10). `from`/`to` are the TP
+ * year (tp_start → tp_end); `shortClock` is the TP year dasha period, only when the engine bounds it to the year;
+ * `confirmClock` is the Varshaphala Mudda period, which only confirms. Never a Varsha year in place of the TP year.
+ */
 export interface YearFrame extends DateSpan {
   yearLagna: EvidenceKey | null;
   yearLord: EvidenceKey | null;
   shortClock: PeriodSpan | null;
-  /** no annual row covers today: the live year line is withheld */
+  /** no Tithi Pravesha year covers today: the live year line is withheld */
   noCoverage: boolean;
+  /** the exact return moments ('YYYY-MM-DD HH:MM:SS', local) when stored */
+  tpStart?: string | null;
+  tpEnd?: string | null;
+  /** the Varshaphala Mudda period covering asOf: a confirming clock, never the year */
+  confirmClock?: PeriodSpan | null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

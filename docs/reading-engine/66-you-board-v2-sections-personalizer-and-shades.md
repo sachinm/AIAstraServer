@@ -546,6 +546,49 @@ Love and Work builds are unchanged. Tests: `tests/unit/reading/self/v2agents/sin
 A prefix under 1,024 tokens is refused as an explicit region and its call goes uncached; docs/TODOS.md keeps the
 padding item open, now with the research-kundli numbers.
 
+### 4.10 The year: Tithi Pravesha (Sachin, 2026-11-09)
+
+The rule: the year is read from the **Tithi Pravesha (TP) chart whose return moment has passed**. A TP year runs from its
+return moment `tp_start` to the next return `tp_end`; the running year is the one with `tp_start ≤ now < tp_end`,
+compared as the person's local date-time (the engine writes both in the birth place's local time; a bare date is read at
+noon). Before this year's return the previous year's TP chart is still in force. The calendar birthday is never the
+boundary: the tithi return falls some days before or after it. The TP year dasha periods are bounded to that year.
+Varshaphala (VP, solar return) and its Mudda dasha only confirm; they never pick the year, and a VP year is never used in
+place of a TP year that did not resolve.
+
+The selector: `runningTithiPravesha(view, asOfDateTime)` in `src/reading/annual/tithiPravesha.ts`, the only place that
+picks the year. It returns the TP D1 row, the year window (`from`/`to`, exact `start`/`end`), the basis, the TP short
+clock (the TP year dasha period covering today, only when the dasha is bounded to the year: never rescaled in Node), the
+Varshaphala Mudda period as the confirming clock, and gaps. Where the return moment comes from, best first:
+
+1. `tp_start` / `tp_end` on the TP year row (engine lane AIAstra_Radha `feat/dasha-levels-1-6`);
+2. `valid_from` / `valid_to` on the stored `annual.tithi_pravesha` payload (the same instants, served since 2026-10-25);
+   both reach the digest as `AnnualRow.start` / `end` / `startBasis` (digest `d1.2026-11-09`);
+3. an older digest with neither: the TP D1 row whose own year dasha spans ≤ 400 days and covers today, with a gap;
+   otherwise no TP year and a gap.
+
+Callers: S9 `self.sub.year` (TP-led frame: year lagna, year lord from the TP row or the engine's `annual` pressure row,
+TP short clock, `confirmClock` = Mudda), the v1 panels (`panels/year.ts`, `love.ts` / `work.ts` year panels, the body
+panel's TP review), `self/service.ts` (annual span and cache keys), the v1 oracle's `family.year` pack (a RUNNING YEAR
+line leads; every row is tagged running / past / coming / confirming; a lifetime TP dasha is marked as not the year's
+clock), the area boards (`houseLayers.currentYear`, `career.workAnnualVote`), the life service, the chat evidence pack
+(`packs/digestSource.ts`) and the sub-agent slices (`oracle/digestSlices.ts`).
+
+S3 and S5: engine `pressure_inventory` calc_version 2 adds kind `annual` rows (the TP year window with its year lord and
+the houses the year lagna activates; level-2 rows for the year's periods) and kind `return` rows (Saturn and Jupiter
+returns). They are windows like any other (strip, byMatter, startedLast12m, endingNext6m), kept in degraded mode too
+because they hold on every clock; an `annual` row that presses on a matter becomes an S5 risk row with
+`from.chart = 'year'`.
+
+Prompts: every reader of the year carries the same rule block (`TITHI_PRAVESHA_YEAR_RULE`; `prompts/annual.md`,
+`readers/R11-annual.md`, `readers/R15-self.md`, `oracle/self.md`, `oracle/self-areas.md`, `oracle/self-areas-v2.md`,
+`personalizer/self.md`, `v2/synth.md`, the `family.year` system prompt and the Love/Work board focus lines). No prompt
+names a fixed year.
+
+Waiting on the engine release: until `feat/dasha-levels-1-6` ships, the stored TP year dasha is a lifetime dasha, so the
+TP short clock is withheld (gap) and S9 `shortClock` is null; `annual`/`return` pressure rows do not exist yet. The year
+window itself already resolves from `valid_from` once the digest is rebuilt at `d1.2026-11-09`.
+
 ## 5. Architecture
 
 ```

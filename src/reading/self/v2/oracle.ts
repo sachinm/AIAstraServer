@@ -134,6 +134,7 @@ export function storedWindowsOf(ctx: SelfBuildContext, briefs: readonly Pick<Are
   if (s.year && !s.year.noCoverage) {
     span(s.year);
     span(s.year.shortClock);
+    span(s.year.confirmClock);
   }
   for (const l of s.body?.liveLords ?? []) day(l.until);
   for (const r of s.body?.liveTransits ?? []) span(r);

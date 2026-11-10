@@ -50,7 +50,7 @@ const GRAPH_ANALYSTS: Array<{ name: string; title: string; description: string }
   { name: 'dasha', title: 'Dasha analyst', description: 'Reads the Vimshottari periods in the horizon and their lords in the frame vargas' },
   { name: 'transit', title: 'Transit analyst', description: 'Reads the selected transit rows and natal-degree contacts in the horizon' },
   { name: 'nakshatra', title: 'Nakshatra analyst', description: 'Reads the stars of the frame planets, the running lords and the transits' },
-  { name: 'annual', title: 'Annual chart analyst', description: 'Reads the Tithi Pravesha year chart and its dasha when the graph has it' },
+  { name: 'annual', title: 'Annual chart analyst', description: 'Reads the Tithi Pravesha year chart whose return moment has passed (tp_start ≤ today < tp_end) and its year dasha when the graph has it' },
   { name: 'prashna', title: 'Question chart analyst', description: 'Reads the chart of the question moment when the graph has it' },
 ];
 
@@ -208,7 +208,7 @@ export const AGENTS: AgentDef[] = [
     module: 'self',
     subModule: 'family',
     role: 'reader',
-    description: 'Reads the running Tithi Pravesha and Varshaphal annual charts, muntha, year lord, sahams, Tajaka yogas, and Mudda dasha to grade annual confirmation or friction against the running Mahadasha',
+    description: 'Reads the running Tithi Pravesha year (the one whose return moment has passed; before the return of this year the previous year is in force) with its year lord and year dasha, then the Varshaphala chart, muntha, sahams, Tajaka yogas and Mudda dasha as confirmation, to grade annual confirmation or friction against the running Mahadasha',
   },
   {
     id: 'family.sky',
