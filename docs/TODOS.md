@@ -2134,6 +2134,12 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   web `src/components/LoadingVeil.tsx`), against the no-planet-words rule for user-facing text.
 - **P3:** the first "Reading your chart…" and "chart still being prepared" veils have no bar (no board yet to read
   `build` from); the 5 s bar delay restarts per veil.
+- **P2 (2026-11-09, Self v2 Chart details):** the "Who you are · Chart details" sheet prints empty brackets where chart
+  names were stripped ("Your chart rises in Pisces (), ... ruled by Jupiter ()"). The redaction removes the bracketed
+  term and leaves the brackets. Seen on staging in Sachin's screenshot. Fix in the details redaction step.
+- **P2 (2026-11-09, Self v2 layout):** at about 970 px wide the four-across cards are about 190 px and lines wrap after
+  three or four words; the date list sits at the bottom of every card. Answered by the plan in
+  `docs/reading-engine/68-self-board-v3-your-cards-your-months.md` (Phases A and B approved 2026-11-09; in progress on `feat/self-v3`).
 
 ## Filed 2026-11-09 by the dasha-deep worker go-live
 
