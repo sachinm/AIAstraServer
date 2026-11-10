@@ -2100,9 +2100,9 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
 
 ## Filed 2026-11-09 by the engine dasha levels and Tithi Pravesha build (AIAstra_Radha develop 8e31dd5)
 
-- **DECISION for Sachin · The Tithi Pravesha year lord.** The engine had no rule; it now uses the lord of the weekday
-  (sunrise to sunrise) at the TP moment (`year_lord_rule: "weekday_lord_at_tp"`), the classical TP year lord, not the
-  Tajaka year lord of the solar return. Done: confirmed, or the rule named.
+- **DECIDED · The Tithi Pravesha year lord is the weekday lord at the TP moment** (sunrise to sunrise;
+  `year_lord_rule: "weekday_lord_at_tp"`), not the Tajaka year lord of the solar return. Sachin, 2026-11-09:
+  "Yes, weekday lord". Engine develop 8e31dd5 already uses it; nothing to change.
 - **DECISION for Sachin · Deeper dasha levels are derived by the engine's own split rule.** This pyjhora version gives two
   levels (Vimshottari three); levels 4–6 split each period the way its own lord's mahadasha splits in that system, the rule
   the export already used for level 3. Classical sookshma/prana/deha for Vimshottari (tested); the same proportional
