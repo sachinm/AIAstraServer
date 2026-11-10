@@ -1809,11 +1809,13 @@ have these tests clear the vars they depend on).
 
 ## Filed 2026-11-09 by the Self v2 release
 
-- **P2 · The engine (AIAstra_Radha) has no documented release path.** The deploy session would not ship engine develop
-  `9a4fb5d` (the `pressure_inventory` export) without one. Until it ships, the Self v2 windows run degraded: equal
-  strength, transits mixed. Owner: Sachin with the deploy session. Done: a written engine release path in `AGENTS.md` or
-  `docs/ops/`, the export live on the engine Lambda, and the server's pull storing a `kundli_data` `pressure_inventory`
-  row for one test kundli.
+- **P2 · Engine develop is not deployed: `pressure_inventory` waits for a release.** Correction 2026-11-09: the engine
+  has a release path. `AIAstra_Radha/.github/workflows/deploy-lambda.yml` runs on a push to `release-candidate-staging`
+  (or manual dispatch), builds the Dockerfile image to ECR `aiastra-pyjhora`, updates the Lambda and repoints the
+  `previous` alias for rollback. Live image is `bc8dd2b` (7 Nov); engine develop `9a4fb5d` is 2 commits ahead and not on
+  origin. Limits: Lambda timeout 60 s, 2048 MB, server `RADHA_MAX_CONCURRENT=4`. Owner: deploy session with Sachin's
+  yes. Done: `9a4fb5d` pushed, merged into the engine's release branch, Lambda green, and one kundli's
+  `kundli_data` `pressure_inventory` row stored by the server pull.
 
 ## Filed 2026-11-09 by the Self v2 live replay
 
