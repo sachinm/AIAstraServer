@@ -2208,12 +2208,31 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `tests/unit/reading/self/v3/clockSet.test.ts`. On the test kundli the set is Vimshottari, Narayana, the year,
   Dwisaptati Sama, Yogini, but only Dwisaptati is stored: the three other pulls failed locally (no AWS credentials may
   invoke the engine Lambda from this machine). Report: `docs/reading-engine/70-phase1-clock-rows-2026-11-10.md`. Owner:
-  this branch. Done: the three rows pulled on staging and the frame lists five clocks.
+  this branch. Done: the three rows pulled on staging and the frame lists five clocks. **Update 2026-11-10 19:35 UTC:**
+  met on a second test kundli, 75b0d618, on deployed staging (`37a5209`): the sync worker pulled Vimshottari,
+  Narayana, Chathuraaseethi Sama and Yogini, and the frame lists five clocks with a tone per span. Stays open until
+  c584c0a3 has its rows too (blocked until 2026-11-11 12:44 UTC) and Chara has been pulled once.
+- **P1 · open · Every clock reads heavy nearly always, so agreement on heavy says little.** On 75b0d618, 81% of period
+  rows are `presses` (302 of 375 across four clocks); Vimshottari and Yogini are heavy in all five frame spans, the
+  year in four. Three clocks agreeing is then the normal case and the ledger's "confirmed" (doc 70 Phase 2,
+  `statusOf`) would not mean what it says. Two things to check: the engine's polarity rule (harness, engine lane), and
+  the server's row-to-tone step (does one pressing row make a span heavy regardless of strength?). Owner: this branch
+  with the engine lane. Done: the share of heavy spans per clock measured on the four test kundlis, and a written rule
+  for tone that weighs strength. Must close before the ledger is shown to a user.
+- **P1 · open · The v3 frame tone is the spine's tone even when it stands alone.** On 75b0d618 span s2 (2027-01-25 to
+  2027-04-24) is shown light on 1 of 5 clocks, s4 mixed on 1 of 5. The Phase 2 count makes both confirmed heavy, but
+  it is not wired. Fix: Phase 3 wiring, or until then do not show a frame tone that fewer than `READING_CLOCKS_MIN`
+  clocks hold. Owner: doc 70 Phase 3. Done: a test with one clock against four.
+- **P3 · open · Frame spans run past the Tithi Pravesha year the frame names.** On 75b0d618 the year is 2026-09-12 to
+  2027-09-01 and spans s4, s5 reach 2028-01-18; their year tone comes from the next year's rows but the frame's
+  `year` field names one year only. Done: the frame names every year its spans touch.
 - **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** Checked 2026-11-10 on the
   test kundli's Dwisaptati inventory: the 7 `annual:TP<year>` rows run 353 to 384 days and all 54 year sub-period rows
   fall inside their year, so the pressure rows do not show the 108-year problem. The separate
   `annual.tithi_pravesha_dasha` row still does (the build reports "TP2026 year dasha is a lifetime dasha"), so the P0
-  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled.
+  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled. **Update
+  2026-11-10:** done for the pressure rows: on 75b0d618 all four inventories carry the same 7 year rows (354 to 384
+  days) and 56 sub-period rows, none outside its year. This entry can close; the P0 on the year-dasha row stays.
 - **P3 · open · The failed `pressure_inventory` row for `system=kaala` on staging.** Its error column reads
   `validation_error: Invalid export type: pressure_inventory`, written 2026-11-10 00:38 UTC, before the engine that serves
   the export went live (the Dwisaptati row was pulled at 05:03 UTC, calc version 2). Kaala is no longer selectable for
@@ -2240,7 +2259,10 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `supports` (46 presses, 6 mixed): check whether a dasha row can be `supports` at all. (b) No `sade_sati` or `station`
   row in the 2023-11 to 2029-11 window for c584c0a3. (c) Sign-dasha rows (Narayana, Chara) not checked yet. (d) The
   inventory is 82.5 KB as JSON, not 21 KB as doc 70 says (21 KB is likely the compressed size). Owner: engine lane, doc
-  70 step 2.
+  70 step 2. **Update 2026-11-10 (75b0d618):** (a) answered: period rows can be `supports` (34 of 375). (c) Narayana
+  checked: 107 period rows, all with houses and polarity; Chara still not pulled. (b) also no `sade_sati` or `station`
+  row on the second kundli, in any of four inventories: still to check. (d) four inventories are 422 KB of JSON for one
+  kundli (73 to 155 KB each; Yogini largest), and 102 rows are repeated in each; doc 70's size estimates need redoing.
 - **P2 · open · Each `pressure_inventory` call recomputes the clock-independent rows.** Five clocks is five sky scans
   and five sets of year charts. Engine pass E1 in doc 70 §6: accept a list of systems and compute the shared rows once.
 - **P2 · open · No weighted order of dasha systems from the engine.** The clock set's order is a server list

@@ -65,3 +65,75 @@ Lambda: the sync worker or a build, after 2026-11-11 12:44 UTC).
    run with credentials that may invoke the engine Lambda), then re-run `scripts/clock-rows-check.ts` and fill the
    sign-dasha check and the five-clock frame here.
 2. The engine harness (doc 70 step 2) for sign-dasha rows and the `supports` polarity of dasha rows.
+
+## Second run: kundli `75b0d618` on deployed staging (2026-11-10, 19:35 UTC)
+
+Branch `feat/self-v3` shipped to staging (server `37a5209`). A sync event for kundli
+`75b0d618-90b7-4db6-bff8-cc7bb0ed561f` (test data) ran on the deployed worker, which pulled the four clocks in one
+pass. `scripts/clock-rows-check.ts --kundli 75b0d618` then read the stored rows from a laptop (no engine call, no
+model call, storage dry).
+
+### Answer first
+
+- **Five clocks are read.** Set: Vimshottari, Narayana, the Tithi Pravesha year, Chathuraaseethi Sama (the conditional
+  clock that applies to this chart; also the spine), Yogini. Chara is cut by the limit of five. The year frame lists
+  all five with a tone per span; `degraded` is false.
+- **Narayana (a sign dasha) rows are usable.** 107 period rows at levels 1 to 3, every one with houses and a polarity
+  (presses 83, mixed 17, supports 7). The open sign-dasha check from the first run is closed for Narayana. Chara is
+  still unchecked (never pulled).
+- **A period row can be `supports`.** Vimshottari 5 of 45, Narayana 7 of 107, Chathuraaseethi 4 of 32, Yogini 18 of
+  191. The question from the first run (Dwisaptati had none) is answered.
+- **The Tithi Pravesha year rows are sound on a second kundli and in every inventory.** 7 year rows of 354 to 384 days,
+  56 sub-period rows, none outside its year, identical in all four inventories.
+- **The four rows total 422 KB of JSON for one kundli**, not the roughly 84 KB doc 70 assumed. 102 of each
+  inventory's rows (38 transit, 63 year, 1 return) are the same in all four.
+- **Every clock leans heavy.** 81% of all period rows are `presses`. Vimshottari and Yogini read heavy in all five
+  spans; the year in four. See "What this means for Phase 2" below.
+
+### Per clock
+
+| Clock | Rows | Period rows (L1 / L2 / L3) | Polarity of period rows | Payload |
+|---|---|---|---|---|
+| Vimshottari | 147 | 45 (1 / 6 / 38) | presses 38, mixed 2, supports 5 | 78,092 bytes |
+| Narayana | 209 | 107 (2 / 9 / 96) | presses 83, mixed 17, supports 7 | 116,062 bytes |
+| Tithi Pravesha year | 63 in every inventory | year 7, sub-period 56 | (not counted here) | (inside) |
+| Chathuraaseethi Sama (spine) | 134 | 32 (1 / 5 / 26) | presses 25, mixed 3, supports 4 | 73,258 bytes |
+| Yogini | 293 | 191 (4 / 22 / 165) | presses 156, mixed 17, supports 18 | 155,008 bytes |
+| Chara | not pulled (limit) | | | |
+
+Every inventory: window 2023-11-10 to 2029-11-10, calc version 2, 38 transit rows, 1 return row, no gaps reported by
+the engine. Every period row in all four has houses and a polarity. No `sade_sati` or `station` row in any of them.
+
+### The year frame (code only)
+
+Spine Chathuraaseethi Sama; Tithi Pravesha year 2026-09-12 to 2027-09-01.
+
+| Span | From | To | Place | Frame tone | Spine | Year | Vimshottari | Narayana | Yogini | Agree |
+|---|---|---|---|---|---|---|---|---|---|---|
+| s1 | 2026-10-27 | 2027-01-25 | now | heavy | heavy | heavy | heavy | mixed | heavy | 4 of 5 |
+| s2 | 2027-01-25 | 2027-04-24 | next | light | light | heavy | heavy | heavy | heavy | 1 of 5 |
+| s3 | 2027-04-24 | 2027-07-23 | later | heavy | heavy | mixed | heavy | heavy | heavy | 4 of 5 |
+| s4 | 2027-07-23 | 2027-10-20 | later | mixed | mixed | heavy | heavy | heavy | heavy | 1 of 5 |
+| s5 | 2027-10-20 | 2028-01-18 | later | heavy | heavy | heavy | heavy | light | heavy | 4 of 5 |
+
+### What this means for Phase 2
+
+1. **The frame's tone is the spine's tone even when it stands alone.** s2 is shown as light on one clock against four
+   heavy; s4 as mixed on one against four. Under the Phase 2 count (`statusOf`) both spans come out confirmed heavy.
+   Until the ledger is wired (Phase 3), a v3 build would tell this person the next three months are light on a 1 of 5
+   reading. Filed.
+2. **Agreement on "heavy" carries little information if clocks are heavy nearly always.** Vimshottari and Yogini are
+   heavy in 5 of 5 spans here. Either the engine's polarity rule leans to `presses` (81% of period rows), or the
+   server's row-to-tone step lets one pressing row make a span heavy. Three or more clocks agreeing would then be the
+   normal case, not a confirmation. This must be settled before the ledger's "confirmed" is shown to anyone: check the
+   engine's polarity rule in the harness, and check the tone step against strength. Filed as P1.
+3. **Spans s4 and s5 run past the end of the Tithi Pravesha year** (2027-09-01). The year's tone for those spans comes
+   from the TP2027 rows, which is right, but the frame's `year` field names only TP2026. Filed.
+4. **Size.** 422 KB of JSON per kundli for four clocks, of which the shared rows are stored four times. The engine pass
+   E1 (shared rows once) roughly halves it. Estimates in doc 70 §4 that rest on 21 KB per row need redoing.
+
+### Still open for Phase 1
+
+1. Chara rows have never been pulled or checked (it is sixth in the order).
+2. Kundli `c584c0a3` still has three `failed` rows blocking its pulls until 2026-11-11 12:44 UTC.
+3. The engine harness for the polarity rule (point 2 above).
