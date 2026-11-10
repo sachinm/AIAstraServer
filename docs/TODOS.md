@@ -1989,6 +1989,7 @@ Owner: the next Self v2 branch unless noted.
 - **P2 · The web shows an empty ladder step.** The validator now drops a failing ladder step and leaves it `''` (the
   ladder stands with ≥ 2 steps). `AreaCard.tsx` (AIAstra_WEB `pages/you/v2`) renders all four rows; it should skip an
   empty step. Owner: web lane.
+  **DONE 2026-11-09 (web `feat/self-v2-illustration`):** `AreaCard` skips an empty step and draws no ladder when all are empty.
 - **P2 · A withheld stand-in card reads as `ok` in the API.** `v2api/response.ts` `areaStatus` returns `ok` whenever a
   card object exists, and the validator stores a withheld card (stand-in headline, empty body). The status should come
   from `cardStatus`. Owner: the API lane (that file was off limits to this branch).
@@ -2016,3 +2017,31 @@ Owner: the next Self v2 branch unless noted.
   is written; existing users have only today's tap, so the trend reads "unknown" until three taps exist.
 - **P3 · The house-state engine (doc 46) is not in code** (only planned layers in `techniques/catalog.ts`); the portrait's
   life labels read S3 windows and S5 rows (`lifeNowSource: 'windows_and_risk'`). Switch when the engine lands.
+
+## Filed 2026-11-09 by the Oracle failures + storyteller branch (server `feat/self-v2-oracle-failures-storyteller`, web `feat/self-v2-illustration`)
+
+- **P1 · Apply migration `20261109120000_reading_validation_failures` and regenerate the Prisma client** on staging
+  before the branch ships. Until the table and the client delegate exist, `recordValidationIssues` writes nothing (the
+  delegate is reached structurally, never throws) and the admin loads `validation` list is empty; the build's repair,
+  fallback and charge rule work without it. Owner: deploy sub-session.
+- **P2 · The admin page does not draw the validator failures yet.** `GET /api/admin-lab/loads/:userId` now carries
+  `validation[]` (per build: `oracleAreas` ok/repaired/failed, `repaired`, `failed`, counts, each finding's check,
+  message, call and prompt hash). The admin web repo's Dashboard loads page needs a panel for it. Owner: admin lane.
+- **P2 · Alarm on failed Oracle areas.** Every build logs one `self.v2 validation` JSON line per stage (`byCheck`,
+  `failed`); no CloudWatch metric filter or alarm reads it yet. Owner: deploy sub-session.
+- **P3 · `reading_validation_failures` has no retention.** A build writes 0–40 rows; add a 90-day delete to the
+  scheduled sweep. Owner: any server lane.
+- **P3 · A partial Oracle is reused for the day.** A partial Oracle with ≥ 8 good areas is stored under its key, so a
+  later non-forced build with the same stamps reads it and does not repair again (by design: one repair per build; a
+  fresh reading forces a new key). Revisit if staff see many stale areas on one day.
+- **P3 · A stale card keeps its own dates.** The fallback card is the last good reading's, as stored; a date on it may
+  have passed. The page marks it "From your last reading"; a later pass could drop past dates from stale cards.
+- **P3 · "Area briefs" is still the catalogue title.** `techniques/catalog.ts` (`self.v2.oracle`: "Oracle over the
+  ledgers and the area briefs") and the generated docs (`docs/admin/07`, `docs/techniques/03`) keep the old words; doc
+  66 and the pipeline page now say "area work orders". Rename in the catalogue row and regenerate (catalogue rows were
+  another lane's this round). Owner: catalogue lane.
+- **P3 · `src/reading/prompts/generated.ts` will conflict on merge** with the Tithi Pravesha lane (both edit
+  `oracle/self-areas-v2.md` and `personalizer/self.md`; this branch's additions are their own sections at the end).
+  After the merge, run `npm run prompts:embed` and commit the regenerated file.
+- **P3 · Storyteller cost not measured.** The illustration adds ≈ 600 output tokens per profile (estimate ≈ $0.002 at
+  Flash prices); measure on the next live run (needs a yes).

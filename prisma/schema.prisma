@@ -138,6 +138,7 @@ model Kundli {
   areaBuilds         AreaBuild[]
   techniqueOutputs   TechniqueOutput[]
   readingDossiers    ReadingDossier[]
+  validationFailures ReadingValidationFailure[]
 
   @@map("kundlis")
 }
@@ -1515,3 +1516,32 @@ model ResearchDashboardRun {
 }
 
 
+
+/// Self v2 validation failures (docs/reading-engine/66 §4.1, 2026-11-09): every finding of the Oracle and Personalizer
+/// validators per build, with the area's status after the one Oracle repair pass (ok | repaired | failed). Staff-only;
+/// no words of the person, so not in SEALED_MODELS. Written by src/reading/self/v2/failures.ts; read by the admin loads view.
+model ReadingValidationFailure {
+  id          String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id     String   @map("user_id")
+  kundli_id   String   @map("kundli_id")
+  board       String
+  build_id    String   @map("build_id")
+  /// oracle | personalizer
+  stage       String
+  /// area id, 'hero', or null for the document as a whole
+  area        String?
+  check       String
+  message     String
+  /// ok | repaired | failed (Oracle areas); null for the Personalizer
+  area_status String?  @map("area_status")
+  model       String
+  prompt_hash String   @map("prompt_hash")
+  /// oracle.a | oracle.b | oracle.c | oracle.repair | self.personalizer
+  call_id     String?  @map("call_id")
+  created_at  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  kundli      Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "reading_validation_failures_kundli_fkey")
+
+  @@index([kundli_id, board, created_at(sort: Desc)], map: "reading_validation_failures_kundli_board_created_idx")
+  @@index([build_id], map: "reading_validation_failures_build_idx")
+  @@map("reading_validation_failures")
+}

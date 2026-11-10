@@ -95,7 +95,8 @@ describe('Self v2 Oracle: three calls over one prefix (doc 66 §4.1)', () => {
   it('one call failing is partial, all failing is failed, a spend over the cap is budget_exceeded', async () => {
     const { ctx, slice } = setup();
     const deps = { prisma: makePrisma().prisma, informUsed: vi.fn(), maxSpendUsd: 1 };
-    const partial = await runOracleV2({ ...deps, callGemini: makeGemini([], { failOracle: 'oracle.b' }) }, ctx, slice);
+    // the repair pass fails too (2026-11-09: one repair per build), so the call's areas stay failed
+    const partial = await runOracleV2({ ...deps, callGemini: makeGemini([], { failOracle: 'oracle.b', failRepair: true }) }, ctx, slice);
     expect(partial.status).toBe('partial');
     expect(Object.keys(partial.output!.doc.areas)).not.toContain('mind');
     expect(partial.gaps[0]).toMatch(/oracle\.b/);

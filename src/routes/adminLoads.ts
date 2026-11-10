@@ -5,7 +5,11 @@
  * row comes from `reading_dossiers`, `agent_runs` and the `area_builds` build marker; nothing is computed or re-run.
  *
  *   GET /api/admin-lab/loads/:userId?board=self|love|work&limit=1..30
- *     → 200 { userId, board, marker, loads: [...], unassignedRuns: [...] } | 400 bad_board | 404 no_kundli
+ *     → 200 { userId, board, marker, loads: [...], unassignedRuns: [...], validation: [...] } | 400 bad_board | 404 no_kundli
+ *
+ * `validation` (2026-11-09): the Self v2 builds' validator findings from `reading_validation_failures`, newest build
+ * first, grouped per build: per Oracle area ok, repaired (by the one repair pass) or failed, each finding's check and
+ * message, the model, the prompt hash and the call. The v2 build writes no dossier, so these are listed on their own.
  *
  * Agent runs are grouped under a build by time: a run belongs to the first dossier written at or after it ended; runs
  * after the newest dossier are `unassignedRuns` (a build still running, or one that died before writing its dossier,
@@ -121,13 +125,73 @@ export interface LoadBuild {
   runs: LoadRun[];
 }
 
+export interface LoadValidationFinding {
+  stage: string;
+  area: string | null;
+  check: string;
+  message: string;
+  areaStatus: string | null;
+  callId: string | null;
+}
+
+/** one Self v2 build's validator findings (`reading_validation_failures`, grouped by `build_id`) */
+export interface LoadValidationBuild {
+  buildId: string;
+  createdAt: string | null;
+  model: string | null;
+  promptHashes: string[];
+  /** per Oracle area, its status after the repair pass (areas with no finding are not listed: they passed clean) */
+  oracleAreas: Record<string, string>;
+  repaired: string[];
+  failed: string[];
+  counts: { oracle: number; personalizer: number };
+  findings: LoadValidationFinding[];
+}
+
 export interface LoadsResponse {
   userId: string;
   board: ReadingBoardId;
   marker: { state: string; status: string | null; startedAt: string | null; error: string | null } | null;
   loads: LoadBuild[];
   unassignedRuns: LoadRun[];
+  validation: LoadValidationBuild[];
 }
+
+/** at most this many findings are read for one person's loads view */
+export const MAX_VALIDATION_ROWS = 500;
+
+/** `reading_validation_failures` rows → one entry per build, newest first. */
+export function validationBuildsOf(rows: readonly Obj[]): LoadValidationBuild[] {
+  const by = new Map<string, LoadValidationBuild>();
+  for (const r of rows) {
+    const buildId = str(r.build_id) ?? '';
+    if (!buildId) continue;
+    let b = by.get(buildId);
+    if (!b) {
+      b = { buildId, createdAt: iso(r.created_at), model: str(r.model), promptHashes: [], oracleAreas: {}, repaired: [], failed: [], counts: { oracle: 0, personalizer: 0 }, findings: [] };
+      by.set(buildId, b);
+    }
+    const created = iso(r.created_at);
+    if (created && (!b.createdAt || created < b.createdAt)) b.createdAt = created;
+    const stage = str(r.stage) ?? '';
+    const area = str(r.area);
+    const areaStatus = str(r.area_status);
+    const ph = str(r.prompt_hash);
+    if (ph && !b.promptHashes.includes(ph)) b.promptHashes.push(ph);
+    if (stage === 'oracle') b.counts.oracle++;
+    else if (stage === 'personalizer') b.counts.personalizer++;
+    if (stage === 'oracle' && area && areaStatus) b.oracleAreas[area] = areaStatus;
+    b.findings.push({ stage, area, check: str(r.check) ?? 'other', message: str(r.message) ?? '', areaStatus, callId: str(r.call_id) });
+  }
+  const out = [...by.values()];
+  for (const b of out) {
+    b.repaired = Object.entries(b.oracleAreas).filter(([, s]) => s === 'repaired').map(([a]) => a);
+    b.failed = Object.entries(b.oracleAreas).filter(([, s]) => s === 'failed').map(([a]) => a);
+  }
+  return out.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+}
+
+type ValidationPrisma = { readingValidationFailure?: { findMany?: (q: unknown) => Promise<Obj[]> } };
 
 export function oracleOf(raw: unknown, runs: LoadRun[]): LoadOracle | null {
   const o = obj(raw);
@@ -305,7 +369,13 @@ export function loadsHandler(deps: { prisma: PrismaClient; now?: () => Date }): 
           .catch(() => null);
         marker = { state: markerState, status: row?.status ?? null, startedAt: str(obj(row?.result).started_at), error: row?.error ?? null };
       }
-      const out: LoadsResponse = { userId, board, marker, loads, unassignedRuns: unassigned };
+      // the delegate is reached structurally: a client generated before the migration lists nothing
+      const vRows = await ((deps.prisma as unknown as ValidationPrisma).readingValidationFailure?.findMany?.({
+        where: { kundli_id: kundli.id, board },
+        orderBy: { created_at: 'desc' },
+        take: MAX_VALIDATION_ROWS,
+      }) ?? Promise.resolve([])).catch(() => [] as Obj[]);
+      const out: LoadsResponse = { userId, board, marker, loads, unassignedRuns: unassigned, validation: validationBuildsOf(vRows).slice(0, limit) };
       return res.json(stripBirthFields(out));
     } catch (e) {
       console.error('[admin-lab] loads', (e as Error).message);
