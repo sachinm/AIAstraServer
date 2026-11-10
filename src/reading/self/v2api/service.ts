@@ -100,12 +100,13 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   const now = (deps.now ?? (() => new Date()))();
   const asOf = dayOf(now);
   const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
-  const [latest, profile, floors, refresh] = await Promise.all([
+  const [latest, profile, floors, refresh, markers] = await Promise.all([
     // only the board clock's build: after a switch the old clock's cards are not served as the new one's
     (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
     (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf),
     deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({}),
     refreshView(deps, kundli.id, asOf, now),
+    (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null),
   ]);
 
   const nothingStored = !latest.cards && !latest.oracle;
@@ -119,9 +120,23 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
       queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary);
       status = 'pending';
     }
-  } else if (latest.status === 'pending') {
-    // a rebuild is running over an earlier build: serve the earlier one, the page keeps polling
-    status = latest.cards ? 'ok' : 'pending';
+  } else {
+    if (latest.status === 'pending') {
+      // a rebuild is running over an earlier build: serve the earlier one, the page keeps polling
+      status = latest.cards ? 'ok' : 'pending';
+    }
+    // the page's Try again (docs/loading-overlay/05): today's build is stuck, or failed past its cooldown, or the board
+    // has no cards for this clock and no build ran today. queueSelfReadingBuild still refuses one that is building or
+    // failed in the last 30 min, so a page reload never stacks builds. A build that ran today and still left no cards
+    // is not re-run here (it would only fail again): it shows as ready/failed and is filed in docs/TODOS.md.
+    const q = markers?.queue.state;
+    const retry = q === 'stuck' || q === 'failed' || (!latest.cards && (q === 'none' || q === undefined));
+    if (retry && (!kundli.digest_status || kundli.digest_status === 'ready')) {
+      queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary).catch((e) => {
+        console.warn('[self:v2] re-queue failed:', (e as Error).message);
+        return 'skipped' as const;
+      });
+    }
   }
   const build = await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
   return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued };
