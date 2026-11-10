@@ -2156,3 +2156,44 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 - **P2 · The first real worker invocation is not yet confirmed.** It needs a signed-in board open on staging, then a
   `dasha_deep_focus_invoked` log on the API and a `dasha_deep_pull` (or `dasha_deep_queued`) log on the worker.
   [deploy session] Done when both logs are seen for one kundli and its level-4 rows are in `kundli_activation`.
+
+## Filed 2026-11-09 by the Self v3 build (branch `feat/self-v3`, docs/reading-engine/68 Phases A and B)
+
+- **P1 · Paid replay of Phase B not run (doc 68 D6).** The v3 Oracle and Personalizer have only run against a fake
+  client. One test kundli, two builds, under $0.50, on the live key, needs Sachin's yes with key, count and cost stated.
+  [Sachin] Done when the replay is written to `docs/reading-engine/replays/`.
+- **P2 · With `SELF_V3_BUILD=1` a build pays for v2 and v3.** The v3 step runs after a v2 build that served the page,
+  over the same context and natal prefix, so the Oracle and Personalizer run twice. GET /api/self/v3 still queues and
+  reads progress through the v2 store and marker. Cutover step: when v3 is the default, drop the v2 Oracle and
+  Personalizer steps from the build and key GET's queue logic on the v3 row. Done when one build calls one Oracle set.
+- **P2 · The other clocks' tones are stored-only.** The year frame reads `pressure_inventory` for the confirming and
+  applicable clocks only when a row is already stored; it never pulls at build time (the account's Lambda concurrency
+  is 10). Most charts will show agreement from the reading clock and the year chart only. Pull them in the background
+  (the deep-level worker or the digest), one at a time. Done when a fresh kundli has rows for each confirming clock.
+- **P2 · Build time and the progress bar.** The v3 step adds an estimated 30 to 60 s in the same invocation after v2,
+  and `BUILD_STAGES` has no v3 stage, so the bar sits at its last v2 stage. Check the build Lambda's timeout and add a
+  stage. Done when a timed staging build stays under the timeout and the bar moves during v3.
+- **P3 · A section change re-runs the whole v3 step.** The store key carries the sections hash, so switching the ladder
+  on re-runs the Oracle too. Split the key: Oracle by frame and prefix, Personalizer by profile and sections.
+- **P3 · "Suggested for you" is the registry's fixed eight.** The `suggest` seam (from what presses now and the
+  person's stated focus) is not built. Done when the suggested set follows the strongest pressure rows' matters.
+- **P3 · A unit test reached the real model-cache endpoint.** The first v3 step test called the real
+  `ensurePromptCache` through `warmPrefixes` (no fake passed). It failed with "model not found", so nothing was
+  created or charged. The test now passes a fake. Consider a vitest setup that blocks outbound network.
+- **Not deployed:** migration `20261109180000_board_layout_m47` is not applied anywhere, and `SELF_V3_ENABLED` and
+  `SELF_V3_BUILD` are not set on any Lambda. Goes through the deploy session with Sachin's yes.
+- **P2 · Web v3 board not looked at in a browser.** Branch `feat/self-v3` in AIAstra_WEB (f1cfc31) passes typecheck and
+  637 unit tests but has not been opened at iPad, phone or Duo size. Check that a card does not scroll inside at tablet
+  width with the default sections, and that the 40 px peek shows. [web] Done with screenshots at 1180, 768 and 375 px.
+- **P3 · Web v3 gaps.** Duo draws two cards across rather than splitting at the hinge (Template 3 not built); chip
+  edit mode has no Cancel (press Edit again to back out); a v2-filled card shows the same body for every period.
+- **P3 · Web lint baseline.** `eslint .` in AIAstra_WEB reports 28 errors in files the v3 work did not touch (for
+  example `no-explicit-any` in `SelfBoardV2.test.tsx`, `YouPage.test.tsx`, `SelfReading.test.tsx`).
+- **P2 · Staging registries seeded from this branch.** Running `npx tsx scripts/write-techniques-doc.ts` in the
+  worktree, with the server `.env` copied in, seeded `technique_registry` and `agent_registry` on the Render staging
+  database (54 agents, 136 techniques). It upserts, so the only new rows are `self.v3.cards` and `self.oracle.v3`; the
+  Admin catalogue shows them before the branch is deployed. Nothing was deleted. The copied `.env` was removed from
+  the worktree. Either leave them (they arrive with the deploy) or delete the two rows. [Sachin] Done when decided.
+- **P3 · The doc script writes to whatever `DATABASE_URL` is set.** `scripts/write-techniques-doc.ts` seeds the
+  registries whenever `DATABASE_URL` is present, so regenerating a doc in a worktree with a copied `.env` writes to
+  staging. Make the seed opt-in (`--seed`). Done when the doc regenerates without touching a database by default.

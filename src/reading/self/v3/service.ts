@@ -8,10 +8,11 @@ import { getSelfV2, writeConfirm, type SelfV2Deps } from '../v2api/service.js';
 import type { QueueOutcome } from '../buildEvent.js';
 import { emptyLayout, readLayout, validateLayout, writeLayout } from './layout.js';
 import { buildSelfV3Response } from './response.js';
+import { readSelfV3Cards } from './store.js';
 import type { LayoutError, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CatalogueEntry, SelfV3Response } from './types.js';
 
 export interface SelfV3Deps extends SelfV2Deps {
-  /** the stored v3 cards for the board clock (Phase B); default: none, the cards are filled from the v2 build */
+  /** the stored v3 cards for the board clock (Phase B); default: the newest `self.v3.cards` row; none: filled from v2 */
   readV3Cards?: (prisma: PrismaClient, kundliId: string, clock: string) => Promise<Partial<Record<SelfCardId, SelfV3CardContent>> | null>;
   /** the suggested set for this person (Phase B: from what presses now and the stated focus); default: the registry's */
   suggest?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<SelfCardId[] | null>;
@@ -40,7 +41,7 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
       console.warn('[self:v3] layout read failed:', (e as Error).message);
       return emptyLayout();
     }),
-    deps.readV3Cards ? deps.readV3Cards(deps.prisma, kundliId, v2.body.clock.system).catch(() => null) : Promise.resolve(null),
+    (deps.readV3Cards ?? readSelfV3Cards)(deps.prisma, kundliId, v2.body.clock.system).catch(() => null),
     deps.suggest ? deps.suggest(deps.prisma, userId, kundliId).catch(() => null) : Promise.resolve(null),
   ]);
   return { body: buildSelfV3Response({ v2: v2.body, v3Cards, suggested, layout, today }), queued: v2.queued };

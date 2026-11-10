@@ -2210,6 +2210,32 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
       output: 'self_v2_hero.v1',
     },
   },
+  {
+    id: 'self.v3.cards',
+    title: 'You board v3: span-led cards for the next twelve months',
+    category: 'self',
+    board: 'you',
+    status: 'built',
+    charts: [c('natal', 'D1'), c('divisional', 'D9'), c('dasha', 'reading clock'), c('dasha', 'confirming clocks'), c('annual', 'year chart'), c('transit', 'Saturn passage')],
+    algorithm: [
+      'Builds the year frame from stored pressure_inventory rows only: the next twelve months cut on the reading clock level-3 (else level-2) period edges and the Tithi Pravesha year edge, neighbours with the same copied tone merged, at most six spans',
+      'Copies each span tone from the engine polarity of the period row covering its first day (presses heavy, mixed mixed, supports light) and counts the other clocks (the year chart rows and the stored inventories of the confirming and applicable clocks) that share it',
+      'Runs the Oracle as three parallel calls over the v2 natal prefix with the year frame as the suffix; validates each card (every span answered once with the frame tone, heavy never build, light never get_through, evidence keys and dates from the input, a knot as well as a gift) and re-asks failed cards once',
+      'Runs the Personalizer once per Oracle call, in parallel, over the Oracle cards and the person; validates the line, asks, obstacle and the if-then step with the v2 text checks',
+      'Stores the cards beside the frame in technique_outputs, keyed by clock, frame, Oracle prefix, profile, sections and prompt hashes',
+    ],
+    source: SELF_V2_AGENTS_SOURCE,
+    code: 'src/reading/self/v3/build.ts runSelfV3Cards; src/reading/self/v3/yearFrame.ts buildYearFrameV3; src/reading/self/v3/oracle.ts runOracleV3; src/reading/self/v3/personalizer.ts runPersonalizerV3',
+    agents: ['self.oracle.v3', 'self.personalizer'],
+    accuracy: 'area_checks:self',
+    selectors: { boards: ['you'], subjects: ['general_life_direction'] },
+    contract: {
+      inputs: [inp('activation', 'the year frame spans from the stored pressure inventories', 'activation_row')],
+      system: 'src/reading/prompts/oracle/self-cards-v3.md',
+      user: ['TODAY', 'FACTS'],
+      output: 'self_v3_cards.v1',
+    },
+  },
 ];
 
 

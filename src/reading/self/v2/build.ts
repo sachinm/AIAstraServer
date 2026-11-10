@@ -21,7 +21,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getSelfFamilyMaxOutputTokens, getSelfReadingMaxSpendUsd } from '../../../config/env.js';
+import { getSelfFamilyMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { runSelfV3Cards, type SelfV3StepResult } from '../v3/build.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
 import { canonicalJson } from '../../../techniques/pieces.js';
 import { informIndividualCacheUsed } from '../../llm/cacheSweep.js';
@@ -126,6 +127,8 @@ export interface SelfV2BuildResult {
   buildId: string;
   /** the Oracle's areas ok, repaired by the one repair pass, or failed (null before the Oracle step) */
   quality: SelfV2Quality | null;
+  /** the v3 step (doc 68 Phase B), when SELF_V3_BUILD=1 and this build served the page */
+  v3?: Pick<SelfV3StepResult, 'status' | 'cached' | 'stored' | 'key' | 'ms'> & { cards: number; spans: number; issues: number };
 }
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
@@ -581,6 +584,19 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
+    // doc 68 Phase B: the span-led cards over the same context and prefix; a failure here never fails the build
+    if (served && isSelfV3BuildEnabled()) {
+      step('v3');
+      const spent = round6(agents.reduce((n, x) => n + x.costUsd, 0));
+      const v3 = await runSelfV3Cards(
+        { prisma: deps.prisma, callGemini: call, ensureCache: deps.ensureCache, informUsed: deps.informUsed, maxSpendUsd: Math.max(0, maxSpendUsd - spent), now, force: deps.force },
+        { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait, buildId: out.buildId },
+      );
+      agents.push(...v3.agents);
+      gaps.push(...v3.gaps);
+      ms.v3 = v3.ms.total ?? 0;
+      out.v3 = { status: v3.status, cached: v3.cached, stored: v3.stored, key: v3.key, ms: v3.ms, cards: Object.keys(v3.cards).length, spans: v3.frame?.spans.length ?? 0, issues: v3.issues.length };
+    }
     await stageWrites;
     await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : out.status === 'partial' ? 'build does not serve the page' : `personalizer ${cards.status}`);
     return out;
