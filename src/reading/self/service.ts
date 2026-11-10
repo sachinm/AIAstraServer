@@ -23,7 +23,8 @@ import { atmaPanel } from './panels/atma.js';
 import { yogasPanel } from './panels/yogas.js';
 import { strugglePanel } from './panels/struggle.js';
 import { chaptersPanel } from './panels/chapters.js';
-import { yearPanel, runningMudda, runningTp } from './panels/year.js';
+import { yearPanel } from './panels/year.js';
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
 import {
   heartPanel,
   partnerPanel,
@@ -312,10 +313,10 @@ export async function getBoardReading(
   });
   const input: PanelInput = { view, asOf, clock, activation };
   const run = runningChain(activation, clock.system, asOf);
-  const mudda = runningMudda(view, asOf);
-  const tpRow = runningTp(view, asOf, mudda?.row.year);
-  const muddaRow = mudda?.row.dashas.find((d) => d.system === 'mudda');
-  const yearSpan = muddaRow ? span(muddaRow.periods.map((p) => p.from).sort()[0]!, muddaRow.periods.map((p) => p.to).sort().at(-1)!) : null;
+  // the year is the Tithi Pravesha year whose return moment has passed (doc 66 §4.10): its window bounds the annual panels
+  const tpRun = runningTithiPravesha(view, asOf);
+  const tpRow = tpRun.row;
+  const yearSpan = tpRun.from && tpRun.to ? span(tpRun.from, tpRun.to) : null;
   const periodSpan = (_id: BoardPanelId): DateSpan | null => {
     const r = run.l2 ?? run.l1;
     return r ? span(r.from, r.to) : null;
@@ -333,7 +334,8 @@ export async function getBoardReading(
   const runPanel = async (id: BoardPanelId, title: string, window: 'natal' | 'dasha' | 'annual', make: () => PanelBody): Promise<{ panel: SelfPanel; body: PanelBody | null }> => {
     const def = { title, window, run: make };
     const technique = `${prefix}.${id}`;
-    const extraKey = id === 'year' ? `|tp=${tpRow?.year ?? 'none'}` : id === 'body' ? `|sky=${skyStored ? '1' : '0'}|tp=${tpRow?.year ?? 'none'}` : '';
+    const tpKey = `|tp=${tpRow?.year ?? 'none'}:${tpRun.from ?? '-'}`;
+    const extraKey = id === 'year' ? tpKey : id === 'body' ? `|sky=${skyStored ? '1' : '0'}${tpKey}` : '';
     try {
       const made = async () => {
         const value = await withAgentRun(

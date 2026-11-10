@@ -93,7 +93,7 @@ describe('runSelfSubTechniques (Layer 0 once, S1 → S2..S10 → S5, S7)', () =>
       subPeriod: 'activation:dwisatpathi/2/Ve@2025-11-16',
       subSubPeriod: 'activation:dwisatpathi/3/Me@2026-09-20',
       skyWeek: isoWeek('2026-11-02'),
-      year: '2026-09-09..2027-09-09',
+      year: '2026-09-03..2027-09-22',
     });
     expect(r.ctx.stamps.profileHash).toMatch(/^[0-9a-f]{16}$/);
     expect(r.ctx.stamps.confirmHash).toMatch(/^[0-9a-f]{16}$/);
@@ -214,10 +214,12 @@ describe('runSelfSubTechniques (Layer 0 once, S1 → S2..S10 → S5, S7)', () =>
     expect(p.liveCare).toMatchObject({ lord: 'Ve', until: '2027-01-01' });
   });
 
-  it('S9 year: the covering annual row; noCoverage when none covers asOf, never the first period', async () => {
+  it('S9 year: the Tithi Pravesha year whose return has passed; Mudda only confirms; noCoverage when none covers asOf', async () => {
     const y = (await run()).ctx.sub.year!;
-    expect(y).toMatchObject({ from: '2026-09-09', to: '2027-09-09', noCoverage: false, yearLord: null });
-    expect(y.shortClock?.evidence).toBe('annual:VP2026.D1#mudda');
+    expect(y).toMatchObject({ from: '2026-09-03', to: '2027-09-22', noCoverage: false, yearLord: null, yearLagna: 'annual:TP2026.D1#lagna', tpStart: '2026-09-03 04:12:00' });
+    // the fixture's TP year dasha is a lifetime dasha (engine fix pending): no TP short clock, and never Mudda in its place
+    expect(y.shortClock).toBeNull();
+    expect(y.confirmClock?.evidence).toBe('annual:VP2026.D1#mudda');
     const none = subYear(envOf(view, '2031-01-01'));
     expect(none).toMatchObject({ noCoverage: true, shortClock: null, yearLagna: null, yearLord: null });
   });
@@ -278,7 +280,9 @@ describe('areas (Layer 2)', () => {
     expect(by.yogas!.promiseEntries.length).toBe(r.ctx.sub.promise!.entries.length);
     expect(by.chapter!.claims.some((c) => c.fact === 'relation:2/12')).toBe(true);
     expect(by.presence!.claims.some((c) => c.fact === 'best_window')).toBe(true);
-    expect(by.year!.claims.some((c) => c.fact === 'short_clock:Ve' || c.fact.startsWith('short_clock:'))).toBe(true);
+    expect(by.year!.claims.some((c) => c.fact === 'year_lagna')).toBe(true);
+    expect(by.year!.claims.some((c) => c.fact.startsWith('confirm_clock:'))).toBe(true);
+    expect(by.year!.claims.some((c) => c.fact.startsWith('short_clock:'))).toBe(false);
     expect(by.stuck!.ledgerRows.length).toBe(r.ctx.sub.risk!.rows.length);
   });
   it('a year with no coverage gives an empty year brief', async () => {

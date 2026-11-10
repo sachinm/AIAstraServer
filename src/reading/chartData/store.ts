@@ -224,6 +224,7 @@ export async function loadMergedChartTypes(repo: ChartDataRepo, now: number = Da
 /** `moving` types (transit, transit_contacts, prashna, transit_range, daily_grade, muhurta, transit_ashtakavarga) depend on the moment or range asked for and are never stored per person. */
 export function movingTypeError(id: string): string {
   if (id === 'daily_grade' || id === 'muhurta' || id === 'transit_ashtakavarga') return `${id} is a moving type and is not stored per person; it needs a date range and has no server fetcher yet`;
+  if (id === 'dasha.deep') return `${id} is pulled only by the dasha-deep worker for a kundli in focus (src/workers/dashaDeep.ts); read the rows with activationFor({ maxLevel: 4 })`;
   if (id === 'prashna') return `${id} is a moving type and is not stored per person; call castPrashna({ userId, at, place, runId }) from src/reading/chartData/prashna.ts`;
   if (id === 'transit_range') return `${id} is a moving type and is not stored per person; call fetchTransitRange(kundliId, { from, to, planets }) from src/reading/chartData/transitRange.ts`;
   if (id === 'transit_contacts') return `${id} is a moving type and is not stored per person; call fetchTransitContacts(kundliId, { from, to, orb, planets }) from src/reading/chartData/transitContacts.ts`;

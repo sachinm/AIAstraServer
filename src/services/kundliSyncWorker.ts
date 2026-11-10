@@ -295,7 +295,7 @@ export interface SweepResult {
  * Radha's one-request-per-second spacing in this process holds. A kundli the budget cuts short re-invokes itself; the
  * kundlis not reached wait for the next sweep. Never throws.
  */
-export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; find?: typeof findIncompleteKundlis; findFacts?: typeof findKundlisMissingFacts }): Promise<SweepResult> {
+export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; find?: typeof findIncompleteKundlis; findFacts?: typeof findKundlisMissingFacts; deepSweep?: (prisma: PrismaClient) => Promise<unknown> }): Promise<SweepResult> {
   const now = deps.now ?? Date.now;
   const startedAt = now();
   const maxMs = deps.maxMs ?? getKundliSyncMaxMs();
@@ -334,6 +334,12 @@ export async function runKundliSyncSweep(deps: WorkerDeps & { batch?: number; fi
     } catch (err) {
       queueLogError({ event: 'kundli_sync_sweep_facts_failed', error: (err as Error).message?.slice(0, 300) });
     }
+  }
+  // the deep dasha levels' weekly roll (docs/reading-engine/67): invokes the worker for focused kundlis, never pulls here
+  if (!stoppedForBudget) {
+    await (deps.deepSweep ?? ((p: PrismaClient) => import('../workers/dashaDeepFocus.js').then((m) => m.runDashaDeepSweep(p))))(deps.prisma).catch((err: Error) =>
+      queueLogError({ event: 'dasha_deep_sweep_failed', error: err.message?.slice(0, 300) }),
+    );
   }
   queueLog({ event: 'kundli_sync_sweep_done', candidates: ids.length, processed: outcomes.length, facts_tried: factsTried, stopped_for_budget: stoppedForBudget });
   return { candidates: ids.length, outcomes, stoppedForBudget };

@@ -4,6 +4,10 @@
  * engine graded them (houses touched, matters, polarity, strength 1–3, true dates) and `degraded` is false. Rahu and
  * Ketu periods always press in the engine's table; that is kept as given.
  *
+ * The engine's `annual` rows (the Tithi Pravesha year window with its year lord and the houses the year lagna activates,
+ * and level-2 year periods) and `return` rows (Saturn and Jupiter returns) arrive with calc_version 2; they are windows
+ * like any other (strip, byMatter, startedLast12m, endingNext6m) and S5 reads them as risk rows from the year chart.
+ *
  * Degraded mode (§8, no inventory stored or the pull failed): the rows are the primary clock's activation periods
  * (levels 1–3, houses as stored) and the stored sky overlay (ingresses with `house_from_lagna` / `house_from_moon`,
  * Sade Sati and dhaiya spans). Polarity is the engine's functional-nature label of the period lord (`FUNCTIONAL_POLARITY`);
@@ -44,12 +48,13 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
   const hi = addMonthsIso(env.asOf, WINDOW_RANGE_MONTHS);
   const rows: WindowRow[] = [];
   for (const r of env.activation) {
-    if (r.system !== clock.primary || !overlaps(r.from, r.to, lo, hi)) continue;
+    // the Self board reads levels 1–3 only (doc 67)
+    if (r.level > 3 || r.system !== clock.primary || !overlaps(r.from, r.to, lo, hi)) continue;
     const id = activationKey(r);
     rows.push({
       rowId: id,
       kind: 'dasha',
-      level: r.level,
+      level: r.level as 1 | 2 | 3,
       planet: r.lord,
       houses: [...r.houses],
       houseFromMoon: null,
@@ -117,14 +122,20 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
   return rows.sort((a, b) => a.from.localeCompare(b.from) || (a.level ?? 9) - (b.level ?? 9) || a.rowId.localeCompare(b.rowId));
 }
 
-/** the engine's inventory rows overlapping asOf ± 36 months, as S3 rows (values carried, nothing recomputed) */
-export function pressureWindowRows(env: SubEnv): WindowRow[] {
+/** the kinds that hold on every clock (the year chart and the planet returns): kept even when the inventory is another clock's */
+export const CLOCK_FREE_KINDS: ReadonlySet<string> = new Set(['annual', 'return']);
+
+/**
+ * The engine's inventory rows overlapping asOf ± 36 months, as S3 rows (values carried, nothing recomputed). `only`
+ * keeps just the clock-free kinds (`annual` Tithi Pravesha year rows, `return` rows) for degraded mode.
+ */
+export function pressureWindowRows(env: SubEnv, only?: ReadonlySet<string>): WindowRow[] {
   const inv = env.pressure;
   if (!inv) return [];
   const lo = addMonthsIso(env.asOf, -WINDOW_RANGE_MONTHS);
   const hi = addMonthsIso(env.asOf, WINDOW_RANGE_MONTHS);
   return inv.rows
-    .filter((r) => overlaps(r.from, r.to, lo, hi))
+    .filter((r) => (!only || only.has(r.kind)) && overlaps(r.from, r.to, lo, hi))
     .map((r) => ({
       rowId: r.id,
       kind: r.kind,
@@ -149,7 +160,10 @@ const byWeight = (a: WindowRow, b: WindowRow) => b.strength - a.strength || a.to
 
 export function subWindows(env: SubEnv, clock: ClockResolution): WindowSetDetail {
   const fromEngine = Boolean(env.pressure && env.pressure.clock === clock.primary && env.pressure.rows.length);
-  const rows = fromEngine ? pressureWindowRows(env) : windowRows(env, clock);
+  // degraded mode still takes the engine's annual (TP year) and return rows when an inventory is stored: they hold on any clock
+  const rows = fromEngine
+    ? pressureWindowRows(env)
+    : [...windowRows(env, clock), ...pressureWindowRows(env, CLOCK_FREE_KINDS)].sort((a, b) => a.from.localeCompare(b.from) || (a.level ?? 9) - (b.level ?? 9) || a.rowId.localeCompare(b.rowId));
   const asOf = env.asOf;
   if (!fromEngine) {
     env.g.add('windows: pressure_inventory not stored; built from kundli_activation and the sky overlay (degraded)');

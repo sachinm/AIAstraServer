@@ -3,7 +3,8 @@
  * and what holds it. A join of S2 × S3 × S4 and nothing else: every live S3 window that presses becomes a row; its matter
  * and people come from the window's stored houses (`SELF.matters` / `SELF.people`), `what` from `RISK_WHAT` by the
  * window's planet, `from.yogaId` from an S4 knot that names the same planet, and `holds` from the S4 graces that name the
- * same planet or cancel that knot. "Since" and "until" are kept only where the stored window has them.
+ * same planet or cancel that knot. "Since" and "until" are kept only where the stored window has them. An engine `annual`
+ * row (the Tithi Pravesha year, doc 66 §4.10) that presses on a matter is a risk row like any other, with `from.chart: 'year'`.
  */
 import { peopleOf, RISK_WHAT } from '../v2words.js';
 import type { PeriodFrame, PromiseLedger, RiskLedger, RiskRow, WindowSetDetail } from '../v2types.js';
@@ -38,7 +39,7 @@ export function subRisk(asOf: string, periods: PeriodFrame | null, windows: Wind
       id: `risk:${w.rowId}`,
       matter,
       what,
-      from: { planet: w.planet, ...(w.houses[0] != null ? { house: w.houses[0] } : {}), ...(knot?.source.yogaId ? { yogaId: knot.source.yogaId } : {}), windowId: w.rowId },
+      from: { planet: w.planet, ...(w.houses[0] != null ? { house: w.houses[0] } : {}), ...(knot?.source.yogaId ? { yogaId: knot.source.yogaId } : {}), windowId: w.rowId, ...(w.kind === 'annual' ? { chart: 'year' as const } : {}) },
       who: peopleOf(w.houses),
       since: w.sinceKnown ? w.from : null,
       until: w.untilKnown ? w.to : null,

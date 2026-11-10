@@ -5,16 +5,20 @@
  *   2    area briefs
  *   3    every agent's slice from the context (no DB); the family and Oracle prefixes warmed in parallel
  *   4    family readers ×5, in parallel, read through `reading_findings_cache`
- *   5    Oracle: three parallel calls over the warm prefix
- *   6    validator (doc 65) → `technique_outputs` `self.v2.oracle` (only an ok result)
+ *   5    Oracle: three parallel calls over the warm prefix; failed areas re-asked once (one repair call)
+ *   6    validator (doc 65) → every finding to `reading_validation_failures`; `technique_outputs` `self.v2.oracle` (ok, or
+ *        partial with at least 8 areas ok or repaired)
  *   7    Personalizer over the Oracle document + the profile pack (its prefix warmed first: it is the Oracle document,
  *        which exists only after step 6 on a cold build)
- *   8    validator (§4.1) → `technique_outputs` `self.v2.personalizer` (`self.v2.cards|…` key: hero and cards)
+ *   8    validator (§4.1) → its drops to `reading_validation_failures`; the Oracle's failed areas take the last good
+ *        reading's card (stale) or are withheld; `technique_outputs` `self.v2.personalizer` only when the build serves the
+ *        page (the hero and 8 of 11 areas ok or repaired; failures.ts `servesPage`), else `partial`, nothing stored
  *
  * Returns timings and tokens per agent. A stored Oracle that still covers today skips steps 4–6 (no model call); a
  * stored card document for the same Oracle key and profile hash skips step 7. Charging stays with the existing build
  * event (one per board per day). Never throws.
  */
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
 import { getSelfFamilyMaxOutputTokens, getSelfReadingMaxSpendUsd } from '../../../config/env.js';
@@ -38,8 +42,10 @@ import type {
   SelfV2FamilyAgentId,
   SelfV2Frame,
   SelfV2OracleResult,
+  SelfV2Quality,
   WarmedRegion,
 } from '../v2types.js';
+import { issuesFromGaps, logValidation, qualityOf, recordValidationIssues, SERVE_MIN_AREAS, servesPage, type RecordMeta } from './failures.js';
 import { markAgentUsed, warmPrefixes } from './cache.js';
 import { runOracleV2, timingOf } from './oracle.js';
 import { runPersonalizer } from './personalizer.js';
@@ -56,7 +62,7 @@ import {
   type FamilySlices,
 } from './slices.js';
 import { stageOfStep } from './progress.js';
-import { SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
+import { readLastGoodAreas, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
 import { buildAreaBriefs } from '../areas/index.js';
 import { runSelfSubTechniques, subTechniqueId, type SelfV2Deps } from '../sub/index.js';
 
@@ -116,6 +122,10 @@ export interface SelfV2BuildResult {
   keys: { oracle: string | null; cards: string | null };
   /** step 2's stores: keyed and written now, already stored under the same key (nothing written), without a key, failed */
   layers: { stored: string[]; cached: string[]; unkeyed: string[]; failed: string[] };
+  /** this build's id: the `build_id` of its `reading_validation_failures` rows */
+  buildId: string;
+  /** the Oracle's areas ok, repaired by the one repair pass, or failed (null before the Oracle step) */
+  quality: SelfV2Quality | null;
 }
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
@@ -364,6 +374,8 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     stored: { oracle: false, cards: false },
     keys: { oracle: null, cards: null },
     layers: { stored: [], cached: [], unkeyed: [], failed: [] },
+    buildId: randomUUID(),
+    quality: null,
   };
   const call = deps.callGemini ?? realCallGemini;
   const d = { ...deps, callGemini: call };
@@ -469,12 +481,19 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         const to = performance.now();
         const r = await runOracleV2({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: familySpend, maxSpendUsd }, ctx, oracleSlice, briefs);
         ms.oracle = since(to);
+        const repairCall = r.calls.find((c) => c.call === 'oracle.repair');
+        if (repairCall) ms.oracleRepair = repairCall.ms;
         agents.push(...r.calls);
         const result: SelfV2OracleResult = { ...r, familyFindings, cached: false };
         step('oracle.validated');
+        // every finding is stored and logged, whatever the outcome (Sachin 2026-11-09)
+        const meta: RecordMeta = { userId: ctx.userId, kundliId: ctx.kundliId, board: 'self', buildId: out.buildId, model: r.model, promptHash: r.promptHash };
+        logValidation(meta, 'oracle', r.issues ?? [], qualityOf(r.areaStatus));
+        await recordValidationIssues(deps.prisma, meta, r.issues ?? []);
         return {
           value: { key: oracleKey, result, briefs },
-          skipStore: r.status !== 'ok',
+          // an ok document is stored; a partial one only when its good areas can serve the page
+          skipStore: !oracleServes(r),
           summary: { status: r.status, areas: r.output ? Object.keys(r.output.doc.areas).length : 0, withheld: r.withheld.length, patterns: r.output?.patterns.length ?? 0 },
         };
       },
@@ -482,10 +501,11 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     ms.oracleStep = since(t);
     const oracle: SelfV2OracleResult = storedOracle.cached ? { ...storedOracle.value.result, cached: true } : storedOracle.value.result;
     out.oracle = oracle;
-    out.stored.oracle = !storedOracle.cached && oracle.status === 'ok';
+    out.stored.oracle = !storedOracle.cached && oracleServes(oracle);
     if (storedOracle.cached) step('oracle.cached');
     gaps.push(...oracle.gaps);
-    if (oracle.status !== 'ok' || !oracle.output) {
+    out.quality = oracleQuality(oracle);
+    if (!oracle.output || !oracleServes(oracle)) {
       out.status = oracle.status === 'budget_exceeded' ? 'budget_exceeded' : oracle.status === 'partial' ? 'partial' : 'failed';
       out.slices = sliceTable([...FAMILY_IDS.map((id) => fam.slices[id]), oracleSlice]);
       await stageWrites;
@@ -523,11 +543,33 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         if (r.call) agents.push(r.call);
         step('personalizer.validated');
         if (r.metrics) logPersonalizerMetrics(ctx, r.metrics);
-        const result: SelfV2CardsResult = { ...r, cached: false };
+        // the Personalizer's drops are stored too (no repair pass for them)
+        const issues = issuesFromGaps('personalizer', r.gaps, 'self.personalizer');
+        const meta: RecordMeta = { userId: ctx.userId, kundliId: ctx.kundliId, board: 'self', buildId: out.buildId, model: r.model, promptHash: r.promptHash };
+        logValidation(meta, 'personalizer', issues);
+        await recordValidationIssues(deps.prisma, meta, issues);
+        const quality = out.quality ?? oracleQuality(oracle);
+        const result: SelfV2CardsResult = { ...r, cached: false, issues, quality };
+        // the Oracle's failed areas show the last good reading's card, marked stale; with none stored they are withheld
+        if (r.doc && quality.failed.length) {
+          const stale = await readLastGoodAreas(deps.prisma, ctx.kundliId, ctx.stamps.clock, quality.failed);
+          if (Object.keys(stale).length) {
+            result.stale = stale;
+            result.cardStatus = { ...result.cardStatus };
+            for (const id of Object.keys(stale) as Array<keyof typeof stale>) result.cardStatus[id] = 'stale';
+          }
+          const none = quality.failed.filter((id) => !stale[id]);
+          if (none.length) result.gaps = [...result.gaps, `oracle failed areas with no earlier reading (withheld): ${none.join(', ')}`];
+        }
+        const served = r.status === 'ok' && servesPage(quality, Boolean(r.doc?.hero.sentence));
+        if (r.status === 'ok' && !served) {
+          const n = quality.okAreas.length + quality.repaired.length;
+          result.gaps = [...result.gaps, `build does not serve the page (hero ${r.doc?.hero.sentence ? 'stands' : 'missing'}, ${n} of 11 areas ok or repaired, ${SERVE_MIN_AREAS} needed): not stored, the question is given back`];
+        }
         const frame: SelfV2Frame = { asOf: ctx.asOf, stamps: ctx.stamps, periods: ctx.sub.periods ?? null, year: ctx.sub.year ?? null };
         return {
           value: { key: cardsKey, oracleKey, result, frame },
-          skipStore: r.status !== 'ok',
+          skipStore: !served,
           summary: { status: r.status, cards: r.doc ? Object.keys(r.doc.cards).length : 0, withheld: Object.values(r.cardStatus).filter((s) => s === 'withheld').length },
         };
       },
@@ -535,11 +577,12 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     ms.personalizerStep = since(t);
     const cards: SelfV2CardsResult = storedCards.cached ? { ...storedCards.value.result, cached: true } : storedCards.value.result;
     out.cards = cards;
-    out.stored.cards = !storedCards.cached && cards.status === 'ok';
+    const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality, Boolean(cards.doc?.hero.sentence));
+    out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
-    out.status = cards.status === 'ok' ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : 'failed';
+    out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
     await stageWrites;
-    await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : `personalizer ${cards.status}`);
+    await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : out.status === 'partial' ? 'build does not serve the page' : `personalizer ${cards.status}`);
     return out;
   } catch (e) {
     gaps.push(`build: ${String((e as Error).message ?? e).slice(0, 300)}`);
@@ -550,6 +593,24 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
   } finally {
     ms.total = since(tAll);
   }
+}
+
+/**
+ * The Oracle's quality: its per-area status after the repair pass; a result stored before 2026-11-09 (no `areaStatus`)
+ * counts every area it holds as ok.
+ */
+export function oracleQuality(r: Pick<SelfV2OracleResult, 'areaStatus' | 'output'>): SelfV2Quality {
+  if (r.areaStatus) return qualityOf(r.areaStatus);
+  return { okAreas: Object.keys(r.output?.doc.areas ?? {}) as SelfV2Quality['okAreas'], repaired: [], failed: [] };
+}
+
+/** An Oracle result whose good areas can serve the page: ok, or partial with at least SERVE_MIN_AREAS ok or repaired. */
+export function oracleServes(r: Pick<SelfV2OracleResult, 'status' | 'areaStatus' | 'output'>): boolean {
+  if (!r.output) return false;
+  if (r.status === 'ok') return true;
+  if (r.status !== 'partial') return false;
+  const q = oracleQuality(r);
+  return q.okAreas.length + q.repaired.length >= SERVE_MIN_AREAS;
 }
 
 /** The per-build Oracle-echo metric (doc 66 replay run 2, failure 1): one log line, never a reject. */

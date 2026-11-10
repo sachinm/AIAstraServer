@@ -6,7 +6,9 @@
  * claim ids are allowed keys as `claim:<id>`, so the validator keeps them in `evidence` (docs/TODOS.md "Claim ids are
  * lost on the way to the card", fixed for the v2 path). Patterns (≤ 3, areas mind and stuck) are validated here.
  *
- * Only an `ok` result is stored; `partial`, `failed` and `budget_exceeded` are returned for the Lab and never stored.
+ * One repair pass (2026-11-09): areas that fail are re-asked once, in one call over the same cached prefix, with the
+ * validator's reasons. The build stores an `ok` result, or a `partial` one whose good areas serve the page
+ * (failures.ts `servesPage`); `failed` and `budget_exceeded` are returned for the Lab and never stored.
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
@@ -16,7 +18,20 @@ import { usageCostUsd } from '../../llm/models.js';
 import { cleanAreaText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from '../areaDoc.js';
 import { inStoredWindow } from '../audit.js';
 import type { BoardPanelId } from '../types.js';
-import type { AreaBrief, OraclePattern, OracleV2Output, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, SelfV2AreaId, SelfV2OracleResult, WindowRef } from '../v2types.js';
+import type {
+  AreaBrief,
+  OracleAreaStatus,
+  OraclePattern,
+  OracleV2Output,
+  PreparedAgentSlice,
+  SelfBuildContext,
+  SelfV2AgentTiming,
+  SelfV2AreaId,
+  SelfV2OracleResult,
+  ValidationIssue,
+  WindowRef,
+} from '../v2types.js';
+import { issuesFromGaps } from './failures.js';
 import { markAgentUsed } from './cache.js';
 import { normaliseEvidenceKey, promptHash, SELF_V2_ORACLE_PROMPT } from './slices.js';
 
@@ -119,6 +134,7 @@ export function storedWindowsOf(ctx: SelfBuildContext, briefs: readonly Pick<Are
   if (s.year && !s.year.noCoverage) {
     span(s.year);
     span(s.year.shortClock);
+    span(s.year.confirmClock);
   }
   for (const l of s.body?.liveLords ?? []) day(l.until);
   for (const r of s.body?.liveTransits ?? []) span(r);
@@ -271,9 +287,56 @@ export function timingOf(agent: SelfV2AgentTiming['agent'], call: string, model:
 export const reportedThoughtTokens = (t: Pick<SelfV2AgentTiming, 'thoughtTokens' | 'thoughtTokensReported'>): number | null =>
   t.thoughtTokensReported === false ? null : t.thoughtTokens;
 
+/** The calls' ids, for a finding on an area (the call that wrote it). */
+export const callOfArea = (area: string | null): string | null => (area ? (ORACLE_V2_CALLS.find((c) => (c.areas as readonly string[]).includes(area))?.call ?? null) : null);
+
+/** The areas this build's Oracle must return: all eleven, but `year` only when a year row covers today (the prompt's rule). */
+export function expectedOracleAreas(ctx: SelfBuildContext): SelfV2AreaId[] {
+  const year = ctx.sub.year;
+  return ORACLE_V2_AREAS.filter((a) => a !== 'year' || Boolean(year && !year.noCoverage));
+}
+
+/** at most this many reasons per area in the repair call's "fix these" list */
+export const REPAIR_REASONS_MAX = 4;
+
 /**
- * Runs the three Oracle calls in parallel over one warm prefix, merges and validates. Never throws: a call that throws
- * or returns no document is a gap, all three failing is `failed`, a spend over the cap is `budget_exceeded`.
+ * The repair call's instruction (one pass, 2026-11-09): only the failed areas, with the validator's reasons as a short
+ * "fix these" list. Same system prompt, prefix and suffix as the three calls, so the cached prefix serves it.
+ */
+export function repairInstruction(areas: readonly SelfV2AreaId[], reasons: Readonly<Partial<Record<SelfV2AreaId, readonly string[]>>>): string {
+  const pat = PATTERN_AREAS.filter((a) => areas.includes(a));
+  const lines = areas.map((a) => {
+    const rs = [...new Set(reasons[a] ?? [])].slice(0, REPAIR_REASONS_MAX).map((r) => (r.startsWith(`${a}: `) ? r.slice(a.length + 2) : r));
+    return `- ${a}: ${rs.length ? rs.join('; ') : 'not returned'}`;
+  });
+  return [
+    `REPAIR: your earlier answer for these areas did not pass the checks: ${areas.join(', ')}. Write only these areas again, fixing what is listed; every other rule still holds.`,
+    'Fix these:',
+    ...lines,
+    pat.length ? `Patterns: up to ${PATTERNS_MAX} in all, only for ${pat.join(' and ')}.` : 'No patterns in this call (return none).',
+    'Return the JSON document only.',
+  ].join('\n');
+}
+
+type CallOutcome = {
+  call: string;
+  areas: readonly SelfV2AreaId[];
+  parsed: ParsedCall | null;
+  timing: SelfV2AgentTiming;
+  error: string | null;
+  /** why the call gave no document: it threw, it was cut at the cap, or its JSON did not parse */
+  check: 'call_failed' | 'truncated' | 'json_schema' | null;
+};
+
+const idOf = (x: unknown): string => String((x as { id?: unknown } | null)?.id ?? '');
+
+/**
+ * Runs the three Oracle calls in parallel over one warm prefix, merges and validates; when expected areas fail (a call
+ * threw or returned no document, the validator withheld an area, or the model left one out), one repair call re-asks
+ * the Oracle for only those areas with the validator's reasons, and the document is validated again. Never more than
+ * one repair. Never throws: no area standing is `failed`, some areas still failing is `partial` (with the good areas
+ * in `output`), a spend over the cap is `budget_exceeded`. Every finding is returned structured in `issues`, with each
+ * area's final status in `areaStatus`.
  */
 export async function runOracleV2(
   deps: OracleV2Deps,
@@ -284,70 +347,140 @@ export async function runOracleV2(
   const pHash = promptHash(SELF_V2_ORACLE_PROMPT);
   const model = slice.model;
   const allowed = new Set(slice.keys.map(normaliseEvidenceKey));
-  const results = await Promise.all(
-    ORACLE_V2_CALLS.map(async ({ call, areas }) => {
-      const t0 = performance.now();
-      try {
-        const res = await withAgentRun(
-          deps.prisma,
-          'self.oracle.v2',
-          {
-            userId: ctx.userId,
-            kundliId: ctx.kundliId,
-            technique: 'self.v2.oracle',
-            task: `self.v2.oracle ${call} ${ctx.asOf}`,
-            input: { areas: areas.length, keys: allowed.size, prefixTokens: slice.estTokens.prefix, suffixTokens: slice.estTokens.suffix },
-            charts: [{ type: 'kundli_digest', variant: ctx.stamps.digestVersion }, { type: 'kundli_activation', variant: ctx.stamps.clock }],
-          },
-          async () => {
-            const g = await deps.callGemini({
-              model,
-              node: `self.oracle.v2.${call}`,
-              system: slice.system,
-              parts: [slice.prefix, slice.suffix, callInstruction(areas)],
-              thinking: 'low',
-              maxOutputTokens: getSelfOracleMaxOutputTokens(),
-              timeoutMs: ORACLE_V2_TIMEOUT_MS,
-              cachePrefix: true,
-              cacheOwner: slice.cacheOwner,
-              responseSchema: oracleV2Schema(areas),
-            });
-            return {
-              value: g,
-              usage: { model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
-            };
-          },
-        );
-        markAgentUsed(slice, deps.informUsed);
-        const p = parseCall(res.text);
-        const parsed = p ? normaliseCallKeys(p) : null;
-        return { call, areas, parsed, timing: timingOf('self.oracle', call, model, res, performance.now() - t0, parsed ? 'ok' : 'failed'), error: parsed ? null : `no area document (finish ${res.finishReason ?? 'unknown'}, ${res.text.length} chars)` };
-      } catch (e) {
-        return { call, areas, parsed: null, timing: timingOf('self.oracle', call, model, null, performance.now() - t0, 'failed'), error: String((e as Error).message ?? e).slice(0, 200) };
-      }
-    }),
-  );
-  const calls = results.map((r) => r.timing);
-  const spentUsd = round6((deps.spentUsd ?? 0) + calls.reduce((n, c) => n + c.costUsd, 0));
-  const gaps = results.filter((r) => r.error).map((r) => `${r.call} (${r.areas.join(', ')}): ${r.error}`);
-  const base = { promptName: SELF_V2_ORACLE_PROMPT, promptHash: pHash, model, calls, spentUsd } as const;
-  if (spentUsd > deps.maxSpendUsd) return { ...base, status: 'budget_exceeded', output: null, gaps: [...gaps, `spent ${spentUsd} over the cap ${deps.maxSpendUsd}`], withheld: [] };
-  if (results.every((r) => !r.parsed)) return { ...base, status: 'failed', output: null, gaps, withheld: [] };
+  const ask = async (call: string, areas: readonly SelfV2AreaId[], instruction: string): Promise<CallOutcome> => {
+    const t0 = performance.now();
+    try {
+      const res = await withAgentRun(
+        deps.prisma,
+        'self.oracle.v2',
+        {
+          userId: ctx.userId,
+          kundliId: ctx.kundliId,
+          technique: 'self.v2.oracle',
+          task: `self.v2.oracle ${call} ${ctx.asOf}`,
+          input: { areas: areas.length, keys: allowed.size, prefixTokens: slice.estTokens.prefix, suffixTokens: slice.estTokens.suffix },
+          charts: [{ type: 'kundli_digest', variant: ctx.stamps.digestVersion }, { type: 'kundli_activation', variant: ctx.stamps.clock }],
+        },
+        async () => {
+          const g = await deps.callGemini({
+            model,
+            node: `self.oracle.v2.${call}`,
+            system: slice.system,
+            parts: [slice.prefix, slice.suffix, instruction],
+            thinking: 'low',
+            maxOutputTokens: getSelfOracleMaxOutputTokens(),
+            timeoutMs: ORACLE_V2_TIMEOUT_MS,
+            cachePrefix: true,
+            cacheOwner: slice.cacheOwner,
+            responseSchema: oracleV2Schema(areas),
+          });
+          return {
+            value: g,
+            usage: { model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
+            output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
+          };
+        },
+      );
+      markAgentUsed(slice, deps.informUsed);
+      const cut = res.finishReason === 'MAX_TOKENS';
+      // a document cut at the output cap is never read, even when a partial JSON would parse
+      const p = cut ? null : parseCall(res.text);
+      const parsed = p ? normaliseCallKeys(p) : null;
+      return {
+        call,
+        areas,
+        parsed,
+        timing: timingOf('self.oracle', call, model, res, performance.now() - t0, parsed ? 'ok' : 'failed'),
+        error: parsed ? null : `no area document (finish ${res.finishReason ?? 'unknown'}, ${res.text.length} chars)`,
+        check: parsed ? null : cut ? 'truncated' : 'json_schema',
+      };
+    } catch (e) {
+      return { call, areas, parsed: null, timing: timingOf('self.oracle', call, model, null, performance.now() - t0, 'failed'), error: String((e as Error).message ?? e).slice(0, 200), check: 'call_failed' };
+    }
+  };
+  const callIssues = (r: CallOutcome): ValidationIssue[] =>
+    r.error ? r.areas.map((a) => ({ stage: 'oracle' as const, area: a, check: r.check ?? 'call_failed', message: `${a}: ${r.call}: ${r.error}`.slice(0, 300), callId: r.call })) : [];
 
-  const merged = mergeOracleCalls(results.map((r) => r.parsed));
+  const results = await Promise.all(ORACLE_V2_CALLS.map(({ call, areas }) => ask(call, areas, callInstruction(areas))));
+  const calls = results.map((r) => r.timing);
+  const gaps = results.filter((r) => r.error).map((r) => `${r.call} (${r.areas.join(', ')}): ${r.error}`);
+  const issues: ValidationIssue[] = results.flatMap(callIssues);
+  const spent = () => round6((deps.spentUsd ?? 0) + calls.reduce((n, c) => n + c.costUsd, 0));
+  const base = () => ({ promptName: SELF_V2_ORACLE_PROMPT, promptHash: pHash, model, calls, spentUsd: spent() }) as const;
+  let repairRan = false;
+  const overBudget = (): Omit<SelfV2OracleResult, 'familyFindings' | 'cached'> => {
+    const b = base();
+    const msg = `spent ${b.spentUsd} over the cap ${deps.maxSpendUsd}`;
+    issues.push({ stage: 'oracle', area: null, check: 'budget', message: msg, callId: null });
+    return { ...b, status: 'budget_exceeded', output: null, gaps: [...gaps, msg], withheld: [], issues, repairRan };
+  };
+  if (spent() > deps.maxSpendUsd) return overBudget();
+
   const frame = storedWindowsOf(ctx, briefs);
-  const validation = validateAreaDoc(merged, {
-    panelIds: asPanelIds(ORACLE_V2_AREAS),
-    allowedKeys: allowed,
-    boundaries: frame.boundaries,
-    windows: frame.windows,
-    asOf: ctx.asOf,
-    spans: frame.spans,
-    endpoints: frame.endpoints,
+  const validate = (merged: ParsedCall) => ({
+    v: validateAreaDoc(merged, {
+      panelIds: asPanelIds(ORACLE_V2_AREAS),
+      allowedKeys: allowed,
+      boundaries: frame.boundaries,
+      windows: frame.windows,
+      asOf: ctx.asOf,
+      spans: frame.spans,
+      endpoints: frame.endpoints,
+    }),
+    pv: validatePatterns(merged.patterns, allowed, frame),
   });
-  const pv = validatePatterns(merged.patterns, allowed, frame);
-  const output: OracleV2Output = { doc: validation.doc, patterns: pv.patterns };
-  const partial = results.some((r) => !r.parsed);
-  return { ...base, status: partial ? 'partial' : 'ok', output, gaps: [...gaps, ...validation.gaps, ...pv.gaps], withheld: validation.withheld as string[] };
+  const first = validate(mergeOracleCalls(results.map((r) => r.parsed)));
+  const expected = expectedOracleAreas(ctx);
+  const has = (doc: OracleV2Output['doc'], a: string) => Boolean((doc.areas as Record<string, unknown>)[a]);
+  const failedCalls = new Set<string>(results.filter((r) => !r.parsed).flatMap((r) => r.areas));
+  const firstGaps = [...first.v.gaps, ...first.pv.gaps];
+  gaps.push(...firstGaps);
+  issues.push(...issuesFromGaps('oracle', firstGaps, null).map((i) => ({ ...i, callId: callOfArea(i.area) })));
+  const failed = expected.filter((a) => !has(first.v.doc, a));
+  for (const a of failed) {
+    if (failedCalls.has(a) || (first.v.withheld as readonly string[]).includes(a)) continue;
+    const msg = `${a}: not returned by ${callOfArea(a) ?? 'the Oracle'}`;
+    gaps.push(msg);
+    issues.push({ stage: 'oracle', area: a, check: 'missing_area', message: msg, callId: callOfArea(a) });
+  }
+
+  let final = first;
+  if (failed.length) {
+    repairRan = true;
+    const failedSet = new Set<string>(failed);
+    const reasons: Partial<Record<SelfV2AreaId, string[]>> = {};
+    for (const i of issues) if (i.area && failedSet.has(i.area)) (reasons[i.area as SelfV2AreaId] ??= []).push(i.message);
+    const rep = await ask('oracle.repair', failed, repairInstruction(failed, reasons));
+    calls.push(rep.timing);
+    if (rep.error) gaps.push(`oracle.repair (${failed.join(', ')}): ${rep.error}`);
+    issues.push(...callIssues(rep));
+    if (spent() > deps.maxSpendUsd) return overBudget();
+    if (rep.parsed) {
+      // the first pass's good areas stand as they were; the repair's areas take the failed areas' place
+      const keep = results.flatMap((r) => (r.parsed ? [{ ...r.parsed, areas: r.parsed.areas.filter((x) => !failedSet.has(idOf(x))) }] : []));
+      const repaired = { ...rep.parsed, areas: rep.parsed.areas.filter((x) => failedSet.has(idOf(x))) };
+      const second = validate(mergeOracleCalls([...keep, repaired]));
+      const repairGaps = [...second.v.gaps, ...second.pv.gaps].filter((g) => failedSet.has(/^([a-z_]+):/.exec(g)?.[1] ?? ''));
+      gaps.push(...repairGaps.map((g) => `repair: ${g}`));
+      issues.push(...issuesFromGaps('oracle', repairGaps, 'oracle.repair'));
+      for (const a of failed) {
+        if (has(second.v.doc, a) || repaired.areas.some((x) => idOf(x) === a)) continue;
+        const msg = `${a}: not returned by the repair call`;
+        gaps.push(msg);
+        issues.push({ stage: 'oracle', area: a, check: 'missing_area', message: msg, callId: 'oracle.repair' });
+      }
+      final = second;
+    }
+  }
+
+  const areaStatus: Partial<Record<SelfV2AreaId, OracleAreaStatus>> = {};
+  for (const a of expected) areaStatus[a] = !failed.includes(a) ? 'ok' : has(final.v.doc, a) ? 'repaired' : 'failed';
+  for (const a of ORACLE_V2_AREAS) if (!areaStatus[a] && has(final.v.doc, a)) areaStatus[a] = 'ok';
+  for (const i of issues) if (i.area && areaStatus[i.area as SelfV2AreaId]) i.areaStatus = areaStatus[i.area as SelfV2AreaId];
+
+  const anyArea = Object.keys(final.v.doc.areas).length > 0;
+  const output: OracleV2Output | null = anyArea ? { doc: final.v.doc, patterns: final.pv.patterns } : null;
+  const status = !anyArea ? 'failed' : expected.some((a) => areaStatus[a] === 'failed') ? 'partial' : 'ok';
+  const withheld = (final.v.withheld as readonly string[]).filter((a) => areaStatus[a as SelfV2AreaId] !== 'repaired');
+  return { ...base(), status, output, gaps, withheld: [...withheld], areaStatus, issues, repairRan };
 }
