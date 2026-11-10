@@ -2227,14 +2227,40 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   rule 3+ of 4 clocks are heavy on 88% (75b0d618) and 77% (de5a2275) of days; requiring 3+ bad flags gives 10-30%
   heavy days and 0-3% three-clock agreement. Next: the engine owner grades polarity (presses needs 2+ independent bad
   flags; one flag gives mixed; parent-relative flags tilt, not set) and gives dasha rows a real strength. Stopgap
-  (count stored flags in the server, heavy at 3+) waits on Sachin's yes.
+  (count stored flags in the server, heavy at 3+) waits on Sachin's yes. **Update 2026-11-10 (doc 70 Phase 3):** the
+  stopgap is built (see the two entries below); this entry stays open until the engine grades polarity.
+- **P1 · open · Engine: grade dasha and annual polarity instead of OR-ing six flags (engine owner).** Today
+  `lord_quality` (`AIAstra_Radha` `pressure_inventory_export.py:303-321`) returns `presses` when any one of
+  functional_malefic, shadbala_ratio_below_0.8, in_dusthana, kashta_over_ishta is on, and the dasha/annual rows add
+  `2_12_from_parent` / `6_8_from_parent` (`:378-393`, `:603-613`). Asked: presses needs 2+ independent bad flags and no
+  good flag; a single bad flag gives mixed; a good flag with no bad flag gives supports; the two parent-relative flags
+  tilt a row from the planet's baseline and never set it; give dasha rows a real strength (87% of presses are 1 today);
+  make functional_benefic reachable (2 of 26 planets). Evidence: `docs/reading-engine/70-heavy-clocks-2026-11-10.md`.
+  Owner: engine lane. Done: the engine's rows carry graded polarity and the server stopgap below is switched off
+  (`PRESSES_MIN_BAD_FLAGS=1`) and removed.
+- **P1 · open · Server stopgap for the heavy tone, awaiting Sachin's confirmation.** Built 2026-11-10 on
+  `feat/self-v3`: the engine's stored `reasons` now reach `PressureRowDetail.reasons` (`toPressureInventory`), and one
+  pure selection, `gradeRow` (`src/reading/self/sub/rowTone.ts`), turns a stored row into a tone for the year frame
+  (`v3/yearFrame.ts`: spans, clocks per span, year rows, merge) and the slices (`slices/render.ts` `rowLine` writes
+  `tone=` beside the engine's `polarity=` and `flags=`; the clock reader validator checks against `tone=`). Rule: a
+  dasha or annual `presses` row is heavy only with >= `PRESSES_MIN_BAD_FLAGS` (default 3) of `PRESSES_BAD_FLAGS` in its
+  stored `reasons`, else mixed; supports stays light; transits and rows without a stored list keep the engine's word.
+  It counts a stored list and computes no astrology, but it reshapes the engine's verdict against the rule that the
+  engine alone gives astrological data. Owner: Sachin (yes or no). Done: Sachin confirms, or sets
+  `PRESSES_MIN_BAD_FLAGS=1` (the engine's own tone) until the engine change above ships. Tests:
+  `tests/unit/reading/self/v3/heavyTone.test.ts`.
 - **P1 · open · The v3 frame tone is the spine's tone even when it stands alone.** On 75b0d618 span s2 (2027-01-25 to
   2027-04-24) is shown light on 1 of 5 clocks, s4 mixed on 1 of 5. The Phase 2 count makes both confirmed heavy, but
   it is not wired. Fix: Phase 3 wiring, or until then do not show a frame tone that fewer than `READING_CLOCKS_MIN`
-  clocks hold. Owner: doc 70 Phase 3. Done: a test with one clock against four.
+  clocks hold. Owner: doc 70 Phase 3. Done: a test with one clock against four. **Fixed 2026-11-10 (doc 70 Phase 3):**
+  a span's tone is now the tone `READING_CLOCKS_MIN` clocks hold (`heldTone`); none held → `held: false`, tone
+  `mixed`, no tone word on the rail; the spine's own tone is kept as `spineTone`. Test: one clock light against four
+  heavy (`heavyTone.test.ts`). Delete this entry when the branch merges.
 - **P3 · open · Frame spans run past the Tithi Pravesha year the frame names.** On 75b0d618 the year is 2026-09-12 to
   2027-09-01 and spans s4, s5 reach 2028-01-18; their year tone comes from the next year's rows but the frame's
-  `year` field names one year only. Done: the frame names every year its spans touch.
+  `year` field names one year only. Done: the frame names every year its spans touch. **Fixed 2026-11-10:**
+  `YearFrameV3.years` lists every level-1 annual row the spans touch and the Oracle suffix prints a `YEARS:` line.
+  Delete this entry when the branch merges.
 - **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** Checked 2026-11-10 on the
   test kundli's Dwisaptati inventory: the 7 `annual:TP<year>` rows run 353 to 384 days and all 54 year sub-period rows
   fall inside their year, so the pressure rows do not show the 108-year problem. The separate

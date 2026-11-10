@@ -43,7 +43,8 @@ export function railFromSpans(c: SelfV3CardContent, today: string): RailItem[] {
     from: s.from,
     to: s.to,
     label: `${short(s.from, today)} → ${dayLabel(s.to)}`,
-    tone: s.tone,
+    // a span whose tone fewer than READING_CLOCKS_MIN clocks hold shows no tone word
+    tone: s.held === false ? null : s.tone,
     note: null,
     current: s.from <= today && today <= s.to,
     span: s.span,

@@ -43,12 +43,13 @@ const frame = buildYearFrameV3({ asOf: ASOF, clock, primary, others: [{ system: 
 
 describe('year frame', () => {
   it('cuts on stored level-3 edges and the year edge, merges same-tone neighbours, every edge stored', () => {
-    // the year edge (2027-09-09) cuts the mixed stretch, then the two mixed halves merge back (same copied tone)
-    expect(frame.spans.map((s) => [s.from, s.to, s.tone])).toEqual([
-      ['2026-10-01', '2027-01-01', 'heavy'],
-      ['2027-01-01', '2027-06-03', 'light'],
-      ['2027-06-03', '2027-10-04', 'mixed'],
-      ['2027-10-04', '2028-01-10', 'light'],
+    // the year edge (2027-09-09) cuts the mixed stretch, then the two mixed halves merge back (same copied tone);
+    // a span's own tone is the one READING_CLOCKS_MIN (3) clocks hold, else none (mixed, held=false)
+    expect(frame.spans.map((s) => [s.from, s.to, s.spineTone, s.tone, s.held])).toEqual([
+      ['2026-10-01', '2027-01-01', 'heavy', 'heavy', true],
+      ['2027-01-01', '2027-06-03', 'light', 'mixed', false],
+      ['2027-06-03', '2027-10-04', 'mixed', 'mixed', false],
+      ['2027-10-04', '2028-01-10', 'light', 'light', true],
     ]);
     const stored = new Set(primary.rows.flatMap((r) => [r.from, r.to]));
     for (const s of frame.spans) {
@@ -289,7 +290,7 @@ describe('the v3 step with a fake model', () => {
     };
     const retired = { ...ctx, sub: { ...ctx.sub, profile: { ...(ctx.sub.profile as object), facts: { work: { status: 'retired' } } } } } as unknown as SelfBuildContext;
     const r = await runSelfV3Cards(
-      { prisma, callGemini: callGemini as never, ensureCache: (async () => null) as never, maxSpendUsd: 1, now: new Date(), loadInventory: async () => null, loadSections: async () => ({}) },
+      { prisma, callGemini: callGemini as never, ensureCache: (async () => null) as never, maxSpendUsd: 1, now: new Date(), loadInventory: async (_p, _k, s) => (s === 'vimsottari' ? vim : null), loadSections: async () => ({}) },
       { ctx: retired, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b2' },
     );
     expect(pcalls).toBe(4);

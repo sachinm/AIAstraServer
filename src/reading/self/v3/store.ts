@@ -23,7 +23,7 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
   const spans = oracle.spans.flatMap((os) => {
     const fs = frame.spans.find((s) => s.id === os.span);
     const ps = personal.spans.find((s) => s.span === os.span);
-    return fs && ps ? [{ span: os.span, from: fs.from, to: fs.to, tone: os.tone, mode: os.mode, asks: ps.asks, obstacle: ps.obstacle, step: ps.step }] : [];
+    return fs && ps ? [{ span: os.span, from: fs.from, to: fs.to, tone: os.tone, mode: os.mode, asks: ps.asks, obstacle: ps.obstacle, step: ps.step, held: fs.held !== false }] : [];
   });
   if (!spans.length) return null;
   const now = frame.spans.find((s) => s.place === 'now') ?? frame.spans[0]!;

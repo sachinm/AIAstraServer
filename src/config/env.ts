@@ -872,6 +872,30 @@ export function getReadingClocksMin(): number {
   return parseClampedIntEnv('READING_CLOCKS_MIN', 3, 1, 6);
 }
 
+// ── The heavy-tone stopgap (docs/reading-engine/70-heavy-clocks-2026-11-10.md) ─
+
+/**
+ * The engine's "bad" flags in a dasha or annual row's stored `reasons` list. The engine sets `presses` when any ONE is
+ * on; the server's stopgap counts them (selection over a stored list, no astrology). Env `PRESSES_BAD_FLAGS`.
+ */
+export function getPressesBadFlags(): string[] {
+  return listEnv('PRESSES_BAD_FLAGS', ['functional_malefic', 'in_dusthana', 'kashta_over_ishta', 'shadbala_ratio_below_0.8', '2_12_from_parent', '6_8_from_parent']);
+}
+
+/** The engine's "good" flags in `reasons` (shown in provenance only). Env `PRESSES_GOOD_FLAGS`. */
+export function getPressesGoodFlags(): string[] {
+  return listEnv('PRESSES_GOOD_FLAGS', ['functional_benefic', 'yogakaraka']);
+}
+
+/**
+ * A `presses` dasha or annual row reads `heavy` only with at least this many bad flags in its stored `reasons`; fewer
+ * reads `mixed`. Stopgap until the engine grades polarity itself, awaiting Sachin's yes. Env `PRESSES_MIN_BAD_FLAGS`
+ * (default 3, 1..6; 1 restores the engine's own verdict).
+ */
+export function getPressesMinBadFlags(): number {
+  return parseClampedIntEnv('PRESSES_MIN_BAD_FLAGS', 3, 1, 6);
+}
+
 /** How near (months) a confirming clock's main period must start to the chapter's start to agree on the shift. Env: `SELF_CHAPTER_BOUNDARY_MONTHS` (default 18, 6..36). */
 export function getSelfChapterBoundaryMonths(): number {
   return parseClampedIntEnv('SELF_CHAPTER_BOUNDARY_MONTHS', 18, 6, 36);

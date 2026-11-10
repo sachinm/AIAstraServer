@@ -53,6 +53,8 @@ export interface EnginePressureRow {
   evidence: string[];
   /** transit and station rows */
   house_from_moon?: number;
+  /** dasha and annual rows: the engine's flags behind the polarity (functional_malefic, in_dusthana, …) */
+  reasons?: string[];
   [extra: string]: unknown;
 }
 
@@ -71,8 +73,11 @@ export interface EnginePressurePayload {
   rules?: unknown;
 }
 
-/** a mapped row with the transit extra S7 joins on (the Moon's house as the engine stated it) */
-export type PressureRowDetail = PressureRow & { houseFromMoon: number | null };
+/**
+ * a mapped row with the transit extra S7 joins on (the Moon's house as the engine stated it) and the engine's stored
+ * `reasons` flags (null when the payload carried none); the tone stopgap (`rowTone.ts`) counts them
+ */
+export type PressureRowDetail = PressureRow & { houseFromMoon: number | null; reasons?: string[] | null };
 export type PressureInventoryDetail = Omit<PressureInventory, 'rows'> & { asOf: string; rows: PressureRowDetail[] };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -133,6 +138,7 @@ export function toPressureInventory(payload: EnginePressurePayload, kundliId: st
       to: r.to,
       evidence: Array.isArray(r.evidence) ? r.evidence.filter((e) => typeof e === 'string') : [r.id],
       houseFromMoon: Number.isInteger(r.house_from_moon) ? (r.house_from_moon as number) : null,
+      reasons: Array.isArray(r.reasons) ? r.reasons.filter((x): x is string => typeof x === 'string') : null,
     });
   }
   const boundaries: PressureBoundary[] = payload.boundaries

@@ -130,9 +130,13 @@ export type SpanPlace = 'now' | 'next' | 'later';
 
 export interface SpanClockTone {
   system: string;
+  /** the tone word after the heavy-tone stopgap (`sub/rowTone.ts`) */
   tone: SpanTone;
   /** the stored row the tone was read from */
   evidence: EvidenceKey;
+  /** provenance: the engine's own polarity of that row, and how many bad flags its stored `reasons` carry */
+  polarity?: 'presses' | 'mixed' | 'supports';
+  flags?: number;
 }
 
 export interface YearSpan {
@@ -141,17 +145,24 @@ export interface YearSpan {
   from: IsoDate;
   to: IsoDate;
   place: SpanPlace;
-  /** the reading clock's tone for the span: its running period rows' polarity as stored */
+  /**
+   * the span's tone: the tone at least READING_CLOCKS_MIN clocks hold for it (`held`); when no tone is held by that
+   * many clocks the span is not given a tone of its own: `mixed`, with `held` false (the page shows no tone word)
+   */
   tone: SpanTone;
+  /** true when READING_CLOCKS_MIN or more clocks hold `tone` for the span */
+  held: boolean;
+  /** the reading clock's own tone for the span (provenance) */
+  spineTone: SpanTone;
   /** per clock that covers the span, its stored tone (reading clock, Vimshottari, Narayana, the TP year, applicable conditionals) */
   clocks: SpanClockTone[];
-  /** how many clocks share the reading clock's tone, and how many were read */
+  /** how many clocks hold the span's tone (unheld: the largest tally), and how many were read */
   agree: number;
   of: number;
   /** what starts the span: the stored boundary row (a period start, the TP year start, a window edge) */
   opensWith: EvidenceKey;
   /** the pressure and support rows overlapping the span, by id, strongest first */
-  rows: Array<{ id: EvidenceKey; polarity: 'presses' | 'mixed' | 'supports'; strength: Strength; matters: string[] }>;
+  rows: Array<{ id: EvidenceKey; polarity: 'presses' | 'mixed' | 'supports'; tone?: SpanTone; flags?: number; strength: Strength; matters: string[] }>;
 }
 
 export interface YearFrameV3 {
@@ -161,6 +172,8 @@ export interface YearFrameV3 {
   spans: YearSpan[];
   /** Saturn's passage rows over the Moon as the engine stored them (kind sade_sati), with its house from the Moon */
   saturn: Array<{ from: IsoDate; to: IsoDate; houseFromMoon: number | null; evidence: EvidenceKey }>;
+  /** every Tithi Pravesha year (the engine's level-1 annual rows) the spans touch, in date order */
+  years?: Array<{ key: EvidenceKey; label: string; from: IsoDate; to: IsoDate }>;
   /** the clocks read for agreement, and the ones skipped with the reason */
   clocksRead: string[];
   clocksSkipped: Array<{ system: string; reason: string }>;
@@ -239,6 +252,8 @@ export interface SpanReading {
   obstacle: string;
   /** one if-then sentence */
   step: string;
+  /** false when fewer than READING_CLOCKS_MIN clocks hold the frame span's tone: the page shows no tone word */
+  held?: boolean;
 }
 
 export interface SelfV3CardContent {

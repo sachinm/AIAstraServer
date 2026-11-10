@@ -111,7 +111,7 @@ describe('parseRowLines', () => {
     const sky = renderSkyWindow(inventories(), ASOF);
     const rows = parseRowLines(sky.text);
     expect([...rows.keys()].sort()).toEqual(['pressure:sade_sati:peak@2025-03-29', 'pressure:transit:Ju/h11@2026-10-01']);
-    expect(rows.get('pressure:transit:Ju/h11@2026-10-01')).toEqual({ key: 'pressure:transit:Ju/h11@2026-10-01', from: '2026-10-01', to: '2027-04-01', polarity: 'supports', strength: 2, matters: ['gains_and_network'] });
+    expect(rows.get('pressure:transit:Ju/h11@2026-10-01')).toEqual({ key: 'pressure:transit:Ju/h11@2026-10-01', from: '2026-10-01', to: '2027-04-01', polarity: 'supports', tone: 'light', strength: 2, matters: ['gains_and_network'] });
   });
 
   it('a clock with no stored rows renders an empty clock slice, not an error', () => {
