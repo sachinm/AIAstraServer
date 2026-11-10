@@ -188,7 +188,18 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
     .filter((r) => r.kind === 'sade_sati' && r.from < end && i.asOf < r.to)
     .map((r) => ({ from: r.from, to: r.to, houseFromMoon: r.houseFromMoon, evidence: rowKey(r) }));
 
+  const listed = new Set([...spans.flatMap((s) => [s.opensWith, ...s.clocks.map((c) => c.evidence), ...s.rows.map((r) => r.id)]), ...saturn.map((x) => x.evidence)]);
+  const aliases: Record<string, string> = {};
+  for (const r of [...i.primary.rows, ...others.flatMap((o) => o.rows)]) {
+    const key = rowKey(r);
+    if (!listed.has(key)) continue;
+    // the row id, the engine's own evidence keys, and the activation spelling of a period row (same id, v2 prefix)
+    const spellings = [r.id, ...r.evidence, ...(r.id.startsWith('dasha:') ? [`activation:${r.id.slice('dasha:'.length)}`] : [])];
+    for (const a of spellings) if (a && a !== key && !listed.has(a)) aliases[a] = key;
+  }
+
   return {
+    aliases,
     asOf: i.asOf,
     to: spans[spans.length - 1]!.to,
     clock: system,

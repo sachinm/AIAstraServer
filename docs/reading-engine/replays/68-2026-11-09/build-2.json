@@ -1,0 +1,793 @@
+{
+  "frame": {
+    "asOf": "2026-11-10",
+    "to": "2027-12-27",
+    "clock": "dwisatpathi",
+    "spans": [
+      {
+        "id": "s1",
+        "from": "2026-09-20",
+        "to": "2027-06-04",
+        "place": "now",
+        "tone": "heavy",
+        "clocks": [
+          {
+            "system": "dwisatpathi",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:dwisatpathi/3/Me@2026-09-20"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "heavy",
+            "evidence": "pressure:annual:TP2025/2/Ju@2026-08-15"
+          }
+        ],
+        "agree": 2,
+        "of": 2,
+        "opensWith": "pressure:dasha:dwisatpathi/3/Me@2026-09-20",
+        "rows": [
+          {
+            "id": "pressure:transit:Ju@2026-06-02",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "ideas_and_children"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "gains_and_network"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2027-01-25",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "ideas_and_children"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2027-06-03",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2025-03-29",
+            "polarity": "presses",
+            "strength": 2,
+            "matters": [
+              "self_and_body"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ra@2025-05-18",
+            "polarity": "presses",
+            "strength": 2,
+            "matters": [
+              "loss_rest_and_distance"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s2",
+        "from": "2027-06-04",
+        "to": "2027-07-25",
+        "place": "next",
+        "tone": "mixed",
+        "clocks": [
+          {
+            "system": "dwisatpathi",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:dwisatpathi/3/Mo@2027-06-04"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "heavy",
+            "evidence": "pressure:annual:TP2026/2/Me@2027-06-01"
+          }
+        ],
+        "agree": 1,
+        "of": 2,
+        "opensWith": "pressure:dasha:dwisatpathi/3/Mo@2027-06-04",
+        "rows": [
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "gains_and_network"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2027-01-25",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "ideas_and_children"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2027-06-03",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2027-06-26",
+            "polarity": "mixed",
+            "strength": 2,
+            "matters": [
+              "work_load_and_health"
+            ]
+          },
+          {
+            "id": "pressure:dasha:dwisatpathi/1/Ra@2019-02-16",
+            "polarity": "presses",
+            "strength": 1,
+            "matters": [
+              "ideas_and_children"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ke@2026-12-05",
+            "polarity": "presses",
+            "strength": 1,
+            "matters": [
+              "ideas_and_children"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s3",
+        "from": "2027-07-25",
+        "to": "2027-12-27",
+        "place": "later",
+        "tone": "heavy",
+        "clocks": [
+          {
+            "system": "dwisatpathi",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:dwisatpathi/3/Ma@2027-07-25"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "heavy",
+            "evidence": "pressure:annual:TP2026/2/Me@2027-06-01"
+          }
+        ],
+        "agree": 2,
+        "of": 2,
+        "opensWith": "pressure:dasha:dwisatpathi/3/Ma@2027-07-25",
+        "rows": [
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "gains_and_network"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2027-06-03",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2027-11-26",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "partnership"
+            ]
+          },
+          {
+            "id": "pressure:return:Ju@2027-11-26",
+            "polarity": "supports",
+            "strength": 3,
+            "matters": [
+              "partnership"
+            ]
+          },
+          {
+            "id": "pressure:annual:TP2027/2/Ra@2027-10-09",
+            "polarity": "presses",
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2027-10-20",
+            "polarity": "presses",
+            "strength": 2,
+            "matters": [
+              "self_and_body"
+            ]
+          }
+        ]
+      }
+    ],
+    "saturn": [],
+    "clocksRead": [
+      "dwisatpathi",
+      "tithi_pravesha"
+    ],
+    "clocksSkipped": [
+      {
+        "system": "ashtottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "chathuraaseethi_sama",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "dwadasottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "panchottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "sataatbika",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shastihayani",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shodasottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shattrimsa_sama",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "vimsottari",
+        "reason": "no stored tone"
+      },
+      {
+        "system": "narayana",
+        "reason": "no stored tone"
+      },
+      {
+        "system": "chara",
+        "reason": "no stored tone"
+      },
+      {
+        "system": "yogini",
+        "reason": "no stored tone"
+      }
+    ],
+    "degraded": false
+  },
+  "cards": {
+    "lagna": {
+      "line": "Heavy obligations ask you to guard your physical stamina and consolidate your search until 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Hold steady with daily habits while personal commitments press hard. Protect your stamina and let external demands wait their turn.",
+          "obstacle": "Physical tiredness and heavy obligations draining your daily reserve.",
+          "step": "If personal demands threaten your daily walk, then politely decline the extra request and take your scheduled rest."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a focused morning routine for sharpening skills and reaching out to trusted contacts. Express your ideas clearly without defending them.",
+          "obstacle": "Worry about whether old setbacks define your present standing.",
+          "step": "If second-guessing clouds your outreach, then send one clear note outlining your expertise and step away from the screen."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Manage family and financial responsibilities with quiet composure. Keep your pace steady and refuse to let abrupt demands push you into overexertion.",
+          "obstacle": "Sudden sharp friction testing your physical endurance.",
+          "step": "If someone presses you for an immediate answer, then pause and give yourself until tomorrow morning to respond."
+        }
+      ],
+      "confirm": {
+        "claimId": "lagna.burden_felt",
+        "text": "Between 29 Mar 2025 and 10 Nov 2026, did you experience increased bodily heaviness and duties pressing upon your personal autonomy?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "drive": {
+      "line": "Patience anchors your next career chapter while structural money matters test your resolve until 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Conserve your effort and avoid speculative risks. Focus on careful preparation and refining your credentials rather than forcing quick outcomes.",
+          "obstacle": "Frustration over quiet periods and slow traction.",
+          "step": "If you feel the urge to pursue an unvetted venture, then set the proposal aside for forty-eight hours."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a study schedule to master two technical skills that strengthen your standing. Turn past professional setbacks into practical lessons.",
+          "obstacle": "Restless impulses urging you to pivot before finishing the basics.",
+          "step": "If restlessness distracts your study block, then close unnecessary browser tabs and finish one chapter before stopping."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Guard your funds and keep agreements strictly defined. Maintain disciplined habits and let your ethical foundation guide your next commitments.",
+          "obstacle": "Impatience tempting you into sudden, unbudgeted expenditures.",
+          "step": "If an unexpected expense appears, then review your monthly budget line by line before committing funds."
+        }
+      ],
+      "confirm": {
+        "claimId": "drive.effort_strain",
+        "text": "Between 16 Nov 2025 and 10 Nov 2026, did moving goals forward require twice the usual effort due to friction around you?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "presence": {
+      "line": "A dignified, quiet presence commands respect while you prepare your next career opening before 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Carry yourself with quiet gravitas in conversations. Keep your public tone simple, direct, and free from unnecessary explanation.",
+          "obstacle": "Appearing distant or drained during formal introductions.",
+          "step": "If an introductory call feels draining, then stick strictly to your prepared points and conclude on time."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build an updated portfolio of your past work and share it with close allies who can open doors.",
+          "obstacle": "Hesitation to present your hard-won experience to new people.",
+          "step": "If doubt arises while drafting your professional summary, then list three verifiable outcomes from your past work."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Lead through quiet determination rather than forceful speech. Let your accumulated experience speak without raising your voice.",
+          "obstacle": "Sounding overly sharp or unyielding in discussions.",
+          "step": "If a conversation grows tense, then take a slow breath and lower your speaking volume."
+        }
+      ],
+      "confirm": {
+        "claimId": "presence.quiet_stance",
+        "text": "Between 16 Nov 2025 and 10 Nov 2026, did you adopt a far more reserved demeanor in public settings than before?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "yogas": {
+      "line": "Steady financial renewal protects your independence despite structural friction through 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Meet competitive headwinds with thorough preparation. Let your seasoned judgment absorb friction while you protect your financial base.",
+          "obstacle": "Feeling trapped by competing demands on your time.",
+          "step": "If a dispute over terms arises, then document every detail in writing before replying."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build long-term security by setting clear terms with those who seek your counsel or offer contract work.",
+          "obstacle": "Old disappointments making you hesitant to claim fair terms.",
+          "step": "If a prospective agreement lacks clear financial terms, then write down your baseline rate before signing."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Defend core savings and resist speculative ventures. Keep commitments lean and refuse to guarantee funds for others.",
+          "obstacle": "Pressure to commit capital quickly without thorough review.",
+          "step": "If someone asks for a quick financial pledge, then state your need for a week to review your holdings."
+        }
+      ],
+      "confirm": {
+        "claimId": "yogas.viparita_relief",
+        "text": "Between 16 Nov 2025 and 10 Nov 2026, did a difficult administrative or contractual dispute resolve in your favor through procedural turns?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "chapters": {
+      "line": "You are completing an extended chapter of deep reorientation before a fresh start on 16 Feb 2028.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Consolidate the skills from your past work and eliminate unnecessary financial risks before starting anew.",
+          "obstacle": "A lingering weariness from years of navigating shifting circumstances.",
+          "step": "If fatigue hits during your day, then step away from your desk for an afternoon walk."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Anchor your long-range career strategy by reconnecting with solid contacts who know your true standing.",
+          "obstacle": "Wavering confidence when mapping out where to position your skills next.",
+          "step": "If you hesitate to reach out to an ally, then write one straightforward message outlining your availability."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Manage your transition with deliberate stewardship and avoid rushing into agreements simply to force an end.",
+          "obstacle": "The urge to accept a weak offer just to bring the waiting to a close.",
+          "step": "If you feel rushed to close an arrangement, then list your non-negotiable terms before signing."
+        }
+      ],
+      "confirm": {
+        "claimId": "chapters.rahu_reorientation",
+        "text": "Since 16 Feb 2019, did a fundamental shift change your long-term focus and the direction of your pursuits?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "body": {
+      "line": "Your physical stamina demands deliberate conservation rather than forced output until 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Protect your core stamina and drop nonessential demands until 4 Jun 2027. Keep an unhurried daily pace and give heavy tasks more time.",
+          "obstacle": "Deep physical wear and sluggish mornings that slow your start.",
+          "step": "If heaviness hits your limbs in the afternoon, then stop pushing and rest for twenty minutes."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Rebuild your daily rhythm from 4 Jun to 25 Jul 2027. Set fixed sleep hours and establish steady walking routines to restore physical tone.",
+          "obstacle": "Lingering stiffness and an urge to rush after months of heavy limits.",
+          "step": "If your morning feels clear, then walk for thirty minutes before opening any correspondence."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Guard against sudden physical depletion from 25 Jul to 27 Dec 2027. Scale back physical demands and protect your nightly rest.",
+          "obstacle": "Renewed physical dryness and sudden drops in stamina during longer days.",
+          "step": "If evening fatigue sets in earlier than planned, then turn off the lights thirty minutes sooner."
+        }
+      ],
+      "confirm": {
+        "claimId": "body.transit_fatigue",
+        "text": "Between 29 Mar 2025 and 10 Nov 2026, did you notice a marked increase in physical weariness and delayed recovery?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "mind": {
+      "line": "Restless mental looping settles into grounded clarity once past 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Quiet racing scenarios about the future until 4 Jun 2027. Rely on verified facts rather than spinning speculative outcomes in isolation.",
+          "obstacle": "Overthinking worst-case prospects when sitting alone with your thoughts.",
+          "step": "If your mind starts looping on future security, then write the single known fact on paper and close the notebook."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Channel renewed mental focus into planning your next direction between 4 Jun and 25 Jul 2027. Ground your judgment in practical next steps.",
+          "obstacle": "Old habits of self-doubt questioning your capacity to re-enter.",
+          "step": "If hesitation stalls your planning, then outline just the first two concrete actions you can take today."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Keep an even keel and avoid reactive choices from 25 Jul to 27 Dec 2027. Maintain mental detachment when plans encounter unexpected delays.",
+          "obstacle": "Sharp spikes of impatience when outside answers take longer than expected.",
+          "step": "If an email stirs urgent irritation, then step away from your desk before typing a response."
+        }
+      ],
+      "confirm": {
+        "claimId": "mind.restless_overthinking",
+        "text": "Between 20 Sep and 10 Nov 2026, did you experience persistent mental overthinking and heightened anxiety at home?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "stuck": {
+      "line": "Persistent friction and isolated standoffs begin clearing after 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Endure slow administrative friction and keep your outlays tight until 4 Jun 2027. Avoid picking fights or entering unvetted arrangements.",
+          "obstacle": "Lingering costs and quiet resistance from old ties draining your attention.",
+          "step": "If an old disagreement resurfaces, then state your position in writing once and decline further debate."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Untangle old obligations and sort outstanding paperwork between 4 Jun and 25 Jul 2027. Build clear terms with trusted contacts who open doors.",
+          "obstacle": "Hesitation to trust new possibilities after an extended period of stall.",
+          "step": "If a door opens through a trusted contact, then review the terms in detail within forty-eight hours."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Keep firm personal boundaries and document all commitments from 25 Jul to 27 Dec 2027. Stay clear of vague or unwritten pacts.",
+          "obstacle": "Administrative complications and slow formal responses testing your patience.",
+          "step": "If a proposed agreement lacks written specifics, then ask for a dated document before proceeding."
+        }
+      ],
+      "confirm": {
+        "claimId": "stuck.isolation_dispute",
+        "text": "Between 18 May 2025 and 10 Nov 2026, did you struggle with restless isolation and outlays beyond your control?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    },
+    "diagnosis": {
+      "line": "A testing passage gives way to steady footing in your search after 4 Jun 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-09-20",
+          "to": "2027-06-04",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Conserve your reserves and protect your standing through disciplined patience until 4 Jun 2027. Hold your position instead of forcing early ventures.",
+          "obstacle": "Heavy personal fatigue colliding with unexpected drains on your resources.",
+          "step": "If you feel urged to take a desperate step forward, then pause and hold your current baseline instead."
+        },
+        {
+          "span": "s2",
+          "from": "2027-06-04",
+          "to": "2027-07-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Mobilize your experience and reach out to key alliances between 4 Jun and 25 Jul 2027. Turn accumulated expertise into three targeted opportunities.",
+          "obstacle": "Reluctance to put yourself forward after an extended defensive stretch.",
+          "step": "If you identify a viable direction, then send two thoughtful inquiries to seasoned peers that morning."
+        },
+        {
+          "span": "s3",
+          "from": "2027-07-25",
+          "to": "2027-12-27",
+          "tone": "heavy",
+          "mode": "get_through",
+          "asks": "Consolidate your standing without overpromising from 25 Jul to 27 Dec 2027. Ground every prospective commitment in verified facts.",
+          "obstacle": "Slower procedural reviews and strict vetting testing your endurance.",
+          "step": "If formal scrutiny slows your momentum, then provide the requested records without taking the delay personally."
+        }
+      ],
+      "confirm": {
+        "claimId": "diagnosis.burdensome_friction",
+        "text": "Between 16 Nov 2025 and 10 Nov 2026, did you navigate a taxing trade-off between physical stamina and heavy obligations?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 2,
+        "of": 2
+      }
+    }
+  },
+  "issues": [
+    {
+      "stage": "oracle",
+      "area": "body",
+      "check": "unknown_evidence_key",
+      "message": "body: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "body",
+      "check": "unknown_evidence_key",
+      "message": "body: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "mind",
+      "check": "unknown_evidence_key",
+      "message": "mind: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "mind",
+      "check": "unknown_evidence_key",
+      "message": "mind: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "stuck",
+      "check": "unknown_evidence_key",
+      "message": "stuck: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "stuck",
+      "check": "unknown_evidence_key",
+      "message": "stuck: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "diagnosis",
+      "check": "unknown_evidence_key",
+      "message": "diagnosis: span s2: unknown evidence key activation:dwisatpathi/3/Mo@2027-06-04",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "diagnosis",
+      "check": "unknown_evidence_key",
+      "message": "diagnosis: span s3: unknown evidence key activation:dwisatpathi/3/Ma@2027-07-25",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "year",
+      "check": "unknown_evidence_key",
+      "message": "year: span s2: unknown evidence key annual:TP2026/2/Me@2027-06-01",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "oracle",
+      "area": "year",
+      "check": "unknown_evidence_key",
+      "message": "year: span s3: unknown evidence key annual:TP2026/2/Me@2027-06-01",
+      "callId": null,
+      "areaStatus": "repaired"
+    },
+    {
+      "stage": "personalizer",
+      "area": "chapter",
+      "check": "other",
+      "message": "chapter: span s2 asks: role word against the stated work status (your career)",
+      "callId": "v3.personalizer.c"
+    },
+    {
+      "stage": "personalizer",
+      "area": "year",
+      "check": "chart_term",
+      "message": "year: line: chart term (annual cycle)",
+      "callId": "v3.personalizer.c"
+    }
+  ],
+  "gaps": [],
+  "ms": {
+    "frame": 383.39,
+    "warm": 2.19,
+    "oracle": 67112.2,
+    "personalizer": 16185.44,
+    "step": 83303.99,
+    "total": 83998.94
+  }
+}

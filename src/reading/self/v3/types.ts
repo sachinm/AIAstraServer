@@ -166,6 +166,12 @@ export interface YearFrameV3 {
   clocksSkipped: Array<{ system: string; reason: string }>;
   /** true when the frame had to fall back to the reading clock alone */
   degraded: boolean;
+  /**
+   * Other spellings of the frame's row keys a model may cite (the row's own id without `pressure:`, the engine's
+   * evidence keys of the row), each mapped to the frame key. Replay 2026-11-09: the Oracle cited
+   * `activation:dwisatpathi/3/Mo@2027-06-04` for `pressure:dasha:dwisatpathi/3/Mo@2027-06-04`.
+   */
+  aliases?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

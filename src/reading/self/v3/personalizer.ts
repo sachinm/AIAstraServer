@@ -207,6 +207,21 @@ export interface PersonalizerV3Call {
   cacheOwner: { userId: string; kundliId: string };
 }
 
+/** one call over the given Oracle cards; `extra` (a repair note) goes after the person */
+export function personalizerV3Call(
+  ctx: SelfBuildContext,
+  call: string,
+  cards: OracleCardV3[],
+  spans: ReadonlyMap<string, { from: string; to: string }>,
+  input: PersonalizerV3Input,
+  system: string,
+  model: string,
+  extra = '',
+): PersonalizerV3Call {
+  const suffix = personalizerV3Suffix(ctx.asOf, cards, spans, input);
+  return { call, cards, system, model, prefix: renderOracleCards(cards), suffix: extra ? `${suffix}\n\n${extra}` : suffix, cacheOwner: { userId: ctx.userId, kundliId: ctx.kundliId } };
+}
+
 export function personalizerV3Calls(
   ctx: SelfBuildContext,
   groups: ReadonlyArray<{ call: string; cards: readonly SelfCardId[] }>,
@@ -219,12 +234,30 @@ export function personalizerV3Calls(
   return groups.flatMap((g) => {
     const cards = g.cards.map((id) => oracle.cards[id]).filter((c): c is OracleCardV3 => Boolean(c));
     if (!cards.length) return [];
-    return [{ call: g.call.replace('oracle', 'personalizer'), cards, system, model, prefix: renderOracleCards(cards), suffix: personalizerV3Suffix(ctx.asOf, cards, spans, input), cacheOwner: { userId: ctx.userId, kundliId: ctx.kundliId } }];
+    return [personalizerV3Call(ctx, g.call.replace('oracle', 'personalizer'), cards, spans, input, system, model)];
   });
 }
 
-/** Runs the calls in parallel and validates each card. Never throws. */
-export async function runPersonalizerV3(deps: PersonalizerV3Deps, ctx: SelfBuildContext, calls: readonly PersonalizerV3Call[], input: PersonalizerV3Input, dates: Iterable<string>): Promise<PersonalizerV3Result> {
+/** the repair note: the cards the validator dropped and exactly why (at most four reasons each) */
+export function personalizerRepairNote(reasons: Readonly<Partial<Record<SelfCardId, readonly string[]>>>): string {
+  return [
+    'REPAIR: these cards failed the checks. Write them again and fix exactly this; keep everything else the same:',
+    ...Object.entries(reasons).map(([id, r]) => `- ${id}: ${(r ?? []).slice(0, 4).join('; ')}`),
+  ].join('\n');
+}
+
+/**
+ * Runs the calls in parallel and validates each card; then, when `repair` is given, re-asks the dropped cards once in
+ * one call with the reasons (replay 2026-11-09: 7 of 11 cards dropped on one word each). Never throws.
+ */
+export async function runPersonalizerV3(
+  deps: PersonalizerV3Deps,
+  ctx: SelfBuildContext,
+  calls: readonly PersonalizerV3Call[],
+  input: PersonalizerV3Input,
+  dates: Iterable<string>,
+  repair?: (cards: OracleCardV3[], note: string) => PersonalizerV3Call,
+): Promise<PersonalizerV3Result> {
   const model = calls[0]?.model ?? '';
   const pHash = promptHash(SELF_V3_PERSONALIZER_PROMPT);
   const timings: SelfV2AgentTiming[] = [];
@@ -232,8 +265,8 @@ export async function runPersonalizerV3(deps: PersonalizerV3Deps, ctx: SelfBuild
   const out: PersonalizerV3Result['cards'] = {};
   const withheld: SelfCardId[] = [];
   const check: TextCheckContext = { gender: input.profile.gender, dates: v3DateFrame(dates), roleWords: roleWordsFor(input.profile.facts), stageWords: seniorStageWordsFor(input.profile) };
-  await Promise.all(
-    calls.map(async (c) => {
+  const dropped: Partial<Record<SelfCardId, string[]>> = {};
+  const runOne = async (c: PersonalizerV3Call) => {
       const t0 = performance.now();
       const ids = c.cards.map((x) => x.card);
       let list: unknown[] | null = null;
@@ -278,10 +311,19 @@ export async function runPersonalizerV3(deps: PersonalizerV3Deps, ctx: SelfBuild
         if (r.card) out[oc.card] = r.card;
         else {
           withheld.push(oc.card);
-          for (const p of r.problems) issues.push({ stage: 'personalizer', area: oc.card, check: /chart term/.test(p) ? 'chart_term' : /medical/.test(p) ? 'medical' : /date|month|year/.test(p) ? 'date' : /gendered/.test(p) ? 'gendered' : /engine/.test(p) ? 'engine_name' : /words, at most/.test(p) ? 'cap' : 'other', message: `${oc.card}: ${p}`.slice(0, 300), callId: c.call });
+          dropped[oc.card] = r.problems;
+          for (const p of r.problems) issues.push({ stage: 'personalizer', area: oc.card, check: /chart term/.test(p) ? 'chart_term' : /medical/.test(p) ? 'medical' : /role word/.test(p) ? 'role_word' : /date|month|year/.test(p) ? 'date' : /gendered/.test(p) ? 'gendered' : /engine/.test(p) ? 'engine_name' : /words, at most/.test(p) ? 'cap' : 'other', message: `${oc.card}: ${p}`.slice(0, 300), callId: c.call });
         }
       }
-    }),
-  );
+  };
+  await Promise.all(calls.map(runOne));
+  const failed = calls.flatMap((c) => c.cards).filter((oc) => dropped[oc.card]);
+  if (repair && failed.length) {
+    for (const oc of failed) withheld.splice(withheld.indexOf(oc.card), 1);
+    const reasons: Partial<Record<SelfCardId, string[]>> = {};
+    for (const oc of failed) reasons[oc.card] = dropped[oc.card]!;
+    for (const k of Object.keys(dropped)) delete dropped[k as SelfCardId];
+    await runOne(repair(failed, personalizerRepairNote(reasons)));
+  }
   return { cards: out, withheld, issues, calls: timings, model, promptHash: pHash };
 }

@@ -2159,9 +2159,10 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 
 ## Filed 2026-11-09 by the Self v3 build (branch `feat/self-v3`, docs/reading-engine/68 Phases A and B)
 
-- **P1 · Paid replay of Phase B not run (doc 68 D6).** The v3 Oracle and Personalizer have only run against a fake
-  client. One test kundli, two builds, under $0.50, on the live key, needs Sachin's yes with key, count and cost stated.
-  [Sachin] Done when the replay is written to `docs/reading-engine/replays/`.
+- **P2 · Phase B replay: confirm the two fixes live.** The first replay (2 builds, $0.17,
+  `docs/reading-engine/68-replay-2026-11-09-self-v3.md`) kept 4 and 9 of 11 cards. The Personalizer repair call and the
+  evidence-key aliases that answer it are unit-tested only. One more live build, about $0.10, needs Sachin's yes.
+  Done when a live build keeps all eleven cards.
 - **P2 · With `SELF_V3_BUILD=1` a build pays for v2 and v3.** The v3 step runs after a v2 build that served the page,
   over the same context and natal prefix, so the Oracle and Personalizer run twice. GET /api/self/v3 still queues and
   reads progress through the v2 store and marker. Cutover step: when v3 is the default, drop the v2 Oracle and

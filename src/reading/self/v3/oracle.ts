@@ -102,6 +102,8 @@ export function parseJson(text: string): unknown {
 
 export interface OracleV3CheckContext {
   frame: YearFrameV3;
+  /** other spellings of a frame key (YearFrameV3.aliases), mapped to the frame key before the check */
+  aliases?: Readonly<Record<string, string>>;
   allowedKeys: ReadonlySet<string>;
   /** every date a card may name (frame dates plus the stored windows the prefix carries) */
   dates: ReadonlySet<string>;
@@ -118,6 +120,7 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
   const id = S(o.card) as SelfCardId;
   const problems: string[] = [];
   const notes: string[] = [];
+  const alias = (ks: string[]) => ks.map((k) => c.aliases?.[k] ?? c.aliases?.[normaliseEvidenceKey(k)] ?? k);
   const badKeys = (ks: string[]) => ks.filter((k) => !c.allowedKeys.has(k));
   const badDays = (text: string) => daysIn(text).filter((d) => !c.dates.has(d));
   const headline = S(o.headline);
@@ -143,7 +146,7 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
     const asks = S(g.asks);
     const obstacle = S(g.obstacle);
     if (!asks || !obstacle) problems.push(`span ${fs.id}: asks or obstacle empty`);
-    const evidence = keysOf(g.evidence);
+    const evidence = alias(keysOf(g.evidence));
     if (!evidence.length) problems.push(`span ${fs.id}: no evidence`);
     for (const k of badKeys(evidence)) problems.push(`span ${fs.id}: unknown evidence key ${k}`);
     for (const d of [...badDays(asks), ...badDays(obstacle)]) problems.push(`span ${fs.id}: date ${d} not in the frame`);
@@ -156,7 +159,7 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
   if (!knot) problems.push('no knot (a card that only flatters is rejected)');
   if (!gift) problems.push('no gift');
 
-  const evidence = keysOf(o.evidence);
+  const evidence = alias(keysOf(o.evidence));
   for (const k of badKeys(evidence)) problems.push(`unknown evidence key ${k}`);
   const certaintyRaw = S(o.certainty) as AreaCertainty;
   const certainty: AreaCertainty = AREA_CERTAINTIES.includes(certaintyRaw) ? certaintyRaw : 'possible';
@@ -179,7 +182,7 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
   if (S(pt.text)) {
     const since = S(pt.since) || null;
     const until = S(pt.until) || null;
-    const pk = keysOf(pt.evidence);
+    const pk = alias(keysOf(pt.evidence));
     if (!PATTERN_CARDS.includes(id)) notes.push(`pattern dropped: ${id} carries none`);
     else if ((since && !c.dates.has(since)) || (until && !c.dates.has(until))) notes.push('pattern dropped: a date not in the frame');
     else if (!pk.length || badKeys(pk).length) notes.push('pattern dropped: evidence missing or unknown');
@@ -301,7 +304,7 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
     issues.push({ stage: 'oracle', area: null, check: 'budget', message: `spent ${spent()} over the cap ${deps.maxSpendUsd}`, callId: null });
     return { ...base, status: 'budget_exceeded', output: null, cardStatus: {}, issues, spentUsd: spent(), repairRan: false };
   }
-  const check = { frame, allowedKeys: allowed, dates, expected };
+  const check = { frame, allowedKeys: allowed, dates, expected, aliases: frame.aliases ?? {} };
   const first = validateOracleV3(lists.flatMap((l) => l ?? []), check);
   const pushFailures = (failed: Partial<Record<SelfCardId, string[]>>, callId: string | null) => {
     for (const [id, reasons] of Object.entries(failed)) for (const r of reasons ?? []) issues.push({ stage: 'oracle', area: id, check: r.includes('evidence') ? 'unknown_evidence_key' : r.includes('date') ? 'date_not_stored' : r === 'not returned' ? 'missing_area' : 'other', message: `${id}: ${r}`.slice(0, 300), callId });

@@ -140,6 +140,15 @@ describe('Oracle v3 validator', () => {
     c.headline = 'Rest is thin until 3 Mar 2027.';
     expect(checkOracleCard(c, ctxCheck).problems.join(' ')).toMatch(/2027-03-03/);
   });
+  it('accepts the engine spelling of a frame row key and maps it to the frame key', () => {
+    expect(frame.aliases?.['activation:dwisaptati/3/pd1']).toBeUndefined();
+    expect(frame.aliases?.['pd1']).toBe('pressure:pd1');
+    const c = goodOracle('body');
+    (c.spans as Array<Record<string, unknown>>)[0]!.evidence = ['pd1'];
+    const r = checkOracleCard(c, { ...ctxCheck, aliases: frame.aliases });
+    expect(r.problems).toEqual([]);
+    expect(r.card?.spans[0]?.evidence).toEqual(['pressure:pd1']);
+  });
   it('validateOracleV3 marks the cards not returned', () => {
     const r = validateOracleV3([goodOracle('body'), goodOracle('body')], ctxCheck);
     expect(Object.keys(r.output.cards)).toEqual(['body']);
@@ -248,6 +257,46 @@ describe('the v3 step with a fake model', () => {
     expect(r.key).toMatch(/^self\.v3\.cards\|clock=dwisaptati\|/);
     expect(r.cards.body?.confirm).toEqual({ claimId: 'body.rest', text: 'Since 1 Oct 2026, have you been sleeping less?' });
     expect(r.issues).toEqual([]);
+  });
+
+  it('re-asks the cards the Personalizer dropped once, with the reasons', async () => {
+    const notes: string[] = [];
+    let pcalls = 0;
+    const callGemini = async (o: { node: string; parts: string[] }) => {
+      const text = o.parts.join('\n');
+      const isOracle = o.node.includes('oracle');
+      const ids = isOracle
+        ? (/write only these cards: ([a-z, ]+)\./.exec(text)?.[1]?.split(', ') ?? [])
+        : (/## WRITE[^\n]*\n((?:- [a-z]+: .*\n?)*)/.exec(text)?.[1]?.split('\n').filter(Boolean).map((l) => l.slice(2).split(':')[0]!) ?? []);
+      if (!isOracle) {
+        pcalls++;
+        if (text.includes('REPAIR:')) notes.push(text.slice(text.indexOf('REPAIR:')));
+      }
+      const repairing = text.includes('REPAIR:');
+      const cards = ids.map((id) =>
+        isOracle
+          ? goodOracle(id as SelfCardId)
+          : {
+              card: id,
+              line: id === 'lagna' && !repairing ? 'Your professional calm holds until 1 Jan 2027.' : 'Your evenings need guarding until 1 Jan 2027.',
+              spans: frame.spans.map((s) => ({ span: s.id, asks: 'Guard your evenings.', obstacle: 'Working late.', step: 'If it is past ten, then stop and rest.' })),
+              confirm: '',
+              pattern: '',
+              ladder: { best: '', practical: '', drift: '', floor: '' },
+            },
+      );
+      return { text: JSON.stringify({ cards }), usage: { promptTokens: 1, cachedTokens: 0, outputTokens: 1, thoughtTokens: 0 }, finishReason: 'STOP', ttftMs: 1, stoppedForLoop: false } as never;
+    };
+    const retired = { ...ctx, sub: { ...ctx.sub, profile: { ...(ctx.sub.profile as object), facts: { work: { status: 'retired' } } } } } as unknown as SelfBuildContext;
+    const r = await runSelfV3Cards(
+      { prisma, callGemini: callGemini as never, ensureCache: (async () => null) as never, maxSpendUsd: 1, now: new Date(), loadInventory: async () => null, loadSections: async () => ({}) },
+      { ctx: retired, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b2' },
+    );
+    expect(pcalls).toBe(4);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatch(/- lagna: line: role word/);
+    expect(r.cards.lagna?.line).toBe('Your evenings need guarding until 1 Jan 2027.');
+    expect(r.status).toBe('ok');
   });
 
   it('no stored inventory: skipped, no model call', async () => {

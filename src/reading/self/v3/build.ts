@@ -23,7 +23,7 @@ import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentT
 import type { PressureInventoryDetail } from '../sub/pressure.js';
 import { readLayout } from './layout.js';
 import { ORACLE_V3_CALLS, runOracleV3, SELF_V3_ORACLE_PROMPT } from './oracle.js';
-import { personalizerV3Calls, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
+import { personalizerV3Call, personalizerV3Calls, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
 import { cardContent, SELF_V3_TECHNIQUE, type StoredSelfV3 } from './store.js';
 import type { SelfCardId, SelfSectionId, SelfV3CardContent, YearFrameV3 } from './types.js';
 import { buildYearFrameV3, frameDates, FRAME_MAX_OTHER_CLOCKS, loadStoredInventory, otherClocks, renderYearFrame } from './yearFrame.js';
@@ -165,7 +165,9 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
         const pInput = { profile: { ...profile }, portrait: i.portrait, sections };
         const pcalls = personalizerV3Calls(ctx, ORACLE_V3_CALLS, oracle.output, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), i.oracleSlice.model);
         const tp = performance.now();
-        const personal = await runPersonalizerV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed }, ctx, pcalls, pInput, dates);
+        const repair = (cards: Parameters<typeof personalizerV3Call>[2], note: string) =>
+          personalizerV3Call(ctx, 'v3.personalizer.repair', cards, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), i.oracleSlice.model, note);
+        const personal = await runPersonalizerV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed }, ctx, pcalls, pInput, dates, repair);
         ms.personalizer = since(tp);
         out.agents.push(...personal.calls);
         out.issues.push(...personal.issues);
