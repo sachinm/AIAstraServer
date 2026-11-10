@@ -26,6 +26,7 @@ import type { TransitRangePayload } from '../../chartData/transitRange.js';
 import { defaultLoadTransit } from '../../area/boardService.js';
 import { addMonthsIso } from '../../timeline/months.js';
 import { defaultSystemsPresent, type SelfDeps } from '../service.js';
+import { parseApplicability, type ApplicabilityRow } from '../clock.js';
 import { gaps } from '../slices.js';
 import type { ClockResolution, PeriodFrame, PromiseLedger, SelfBuildContext, SelfBuildStamps, WindowSetDetail } from '../v2types.js';
 import type { SubEnv } from './common.js';
@@ -45,6 +46,15 @@ import { loadPressureInventory as realLoadPressure, type PressureInventoryDetail
 export interface SelfV2Deps extends Pick<SelfDeps, 'prisma' | 'loadDigest' | 'activationFor' | 'systemsPresent' | 'loadTransit' | 'now'> {
   /** the engine's pressure inventory on the primary clock (default: kundli_data, pulled when missing or older than 7 days) */
   loadPressure?: (prisma: SelfDeps['prisma'], kundliId: string, system: string, asOf: string) => Promise<PressureLoad>;
+  /** the engine's `dasha.applicable` rows (default: kundli_data); the same read GET /api/self/v2 resolves its clock with */
+  loadApplicability?: (prisma: SelfDeps['prisma'], kundliId: string) => Promise<ApplicabilityRow[] | null>;
+}
+
+async function realLoadApplicability(prisma: SelfDeps['prisma'], kundliId: string): Promise<ApplicabilityRow[] | null> {
+  const row = await prisma.kundliData
+    ?.findFirst?.({ where: { kundli_id: kundliId, data_type: 'dasha.applicable' }, select: { payload: true } })
+    .catch(() => null);
+  return row?.payload !== undefined && row?.payload !== null ? parseApplicability(row.payload) : null;
 }
 export interface SelfV2Loaded { view: DigestView; activation: ActivationRow[]; sky: TransitRangePayload | null; preferred: string | null; pressure?: PressureInventoryDetail | null }
 export interface SelfV2SubResult { ctx: SelfBuildContext; loaded: SelfV2Loaded; gaps: string[]; ms: Record<string, number> }
@@ -80,12 +90,14 @@ export async function runSelfSubTechniques(
   // starts here too instead of after the activation read (run 2: it was a third round on the critical path)
   const profileP = timed('profile', subProfile(prisma, userId, asOf));
   profileP.catch(() => undefined); // awaited inside its span below; never an unhandled rejection
-  const [viewR, kundliR, presentR, skyR] = await Promise.allSettled([
+  const [viewR, kundliR, presentR, skyR, applicabilityR] = await Promise.allSettled([
     timed('digest', (deps.loadDigest ?? realLoadDigest)(prisma, kundliId)),
     timed('kundli', prisma.kundli.findUnique({ where: { id: kundliId }, select: { preferred_dasha: true } }).catch(() => null)),
     timed('systems', (deps.systemsPresent ?? defaultSystemsPresent)(prisma, kundliId)),
     timed('sky', (deps.loadTransit ?? defaultLoadTransit)(prisma, kundliId, asOf).catch(() => null)),
+    timed('applicable', (deps.loadApplicability ?? realLoadApplicability)(prisma, kundliId).catch(() => null)),
   ]);
+  const applicability = applicabilityR.status === 'fulfilled' ? applicabilityR.value : null;
   // the digest decides first: no digest is "preparing" whatever the other reads did; then a failed read throws as before
   if (viewR.status === 'rejected') throw viewR.reason;
   const view = viewR.value;
@@ -122,7 +134,7 @@ export async function runSelfSubTechniques(
 
   // S1, then the activation read on its clock
   const tClock = performance.now();
-  const clock = (await span('clock', [{ type: 'kundli_activation', variant: preferred ?? 'default' }], () => subClock(preferred, present, g), (c: ClockResolution) => ({
+  const clock = (await span('clock', [{ type: 'kundli_activation', variant: preferred ?? 'default' }], () => subClock(preferred, present, g, applicability), (c: ClockResolution) => ({
     confirming: c.confirming.length,
     applicable: c.applicable.length,
     notApplicable: c.notApplicable.length,

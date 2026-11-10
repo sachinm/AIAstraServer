@@ -2016,3 +2016,18 @@ Owner: the next Self v2 branch unless noted.
   is written; existing users have only today's tap, so the trend reads "unknown" until three taps exist.
 - **P3 · The house-state engine (doc 46) is not in code** (only planned layers in `techniques/catalog.ts`); the portrait's
   life labels read S3 windows and S5 rows (`lifeNowSource: 'windows_and_risk'`). Switch when the engine lands.
+
+## Filed 2026-11-09 by the Self v2 stuck-board session (docs/loading-overlay/05)
+
+- **P0 fixed on `fix/self-v2-build-clock`, not yet deployed:** the Self v2 build chose its clock with the v1 `resolveClock`
+  while GET `/api/self/v2` used `resolveClockV2`. On `c584c0a3` (preferred `kaala`) the build stored `clock=kaala`, the page
+  read `clock=dwisatpathi`, and every card stayed `pending` forever with no message. After deploy: one free rebuild of
+  `c584c0a3`.
+- **P1:** GET `/api/self/v2` re-queues only when nothing at all is stored for the clock (`nothingStored`). An Oracle row with
+  no cards row, or a `ready` marker with no row for the page's clock, is served as `pending` with no build queued and no
+  failure shown. It should queue (or say failed) instead of polling forever.
+- **P1:** no build progress or state reaches the web. The header shows "Fresh reading from …" during a first build, a
+  rebuild and a stuck read alike. Plan in docs/loading-overlay/05 (marker stages, `build` object, veil bar, header chip).
+- **P2:** clients cannot force a fresh Self reading before "Good until" (409 `not_due`), and there is no admin "rebuild
+  this person's board" action. After technique changes the only path is a DB-side or script rebuild. Add an admin action
+  (free, logged) in the admin app.
