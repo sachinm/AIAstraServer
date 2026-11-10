@@ -276,6 +276,26 @@ export const AGENTS: AgentDef[] = [
       'Writes the You board v3 cards span by span over the next twelve months in three parallel calls over the v2 natal prefix, with the year frame (spans, copied tones, clock agreement) as the suffix: per span get through or build, what it asks, the obstacle, the agreement; one dated confirm per card; JSON by schema (docs/reading-engine/68 §4.5, §4.8)',
   },
   {
+    id: 'reading.clock',
+    title: 'Clock reader',
+    kind: 'llm',
+    module: 'reading',
+    subModule: 'clocks',
+    role: 'oracle',
+    description:
+      'Reads one period clock of the chart (one call per clock, the Tithi Pravesha year as its own clock) over the shared cached prefix and only that clock slice, without seeing the other clocks: per span and per matter its rows touch, a tone, one sentence, a strength and evidence keys; tones checked against the engine polarity of the cited rows (docs/reading-engine/70 §4.1 Layer 2)',
+  },
+  {
+    id: 'reading.concordance',
+    title: 'Concordance writer',
+    kind: 'llm',
+    module: 'reading',
+    subModule: 'clocks',
+    role: 'oracle',
+    description:
+      'Writes the agreed ledger over the code count of the clock sheets: one settled sentence per confirmed or leaning cell, and per contested cell which clocks stand on each side and what each rests on; it cannot change a status or tone the count set or add a cell (docs/reading-engine/70 §4.1 Layer 3)',
+  },
+  {
     id: 'self.personalizer',
     title: 'You board v2 Personalizer',
     kind: 'llm',

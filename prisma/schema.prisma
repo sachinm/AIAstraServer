@@ -140,6 +140,7 @@ model Kundli {
   readingDossiers    ReadingDossier[]
   validationFailures ReadingValidationFailure[]
   boardLayouts       BoardLayout[]
+  slices             KundliSlice[]
 
   @@map("kundlis")
 }
@@ -1568,4 +1569,25 @@ model BoardLayout {
 
   @@unique([kundli_id, board], map: "board_layout_kundli_board_key")
   @@map("board_layout")
+}
+
+/// M48 (docs/reading-engine/70 §4.1 Layer 1): the stored engine rows rendered once into fixed text blocks (natal.core,
+/// sky.window, year.tp, frame, clock.<system>, matter.<key>), one row per kundli per slice. A build reads slices and never
+/// renders raw rows. `text` and `keys` are sealed (SEALED_MODELS); `hash` changes only when the rendered text changes.
+model KundliSlice {
+  id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  kundli_id  String   @map("kundli_id")
+  slice_id   String   @map("slice_id")
+  text       String
+  /// evidence keys the text carries in {braces}
+  keys       Json     @default("[]")
+  est_tokens Int      @default(0) @map("est_tokens")
+  /// the stored data the slice was rendered from: [{ dataType, variant, calcVersion, hash }]
+  sources    Json     @default("[]")
+  hash       String
+  built_at   DateTime @default(now()) @map("built_at") @db.Timestamptz(6)
+  kundli     Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "kundli_slices_kundli_fkey")
+
+  @@unique([kundli_id, slice_id], name: "kundli_slice_key", map: "kundli_slices_kundli_slice_key")
+  @@map("kundli_slices")
 }

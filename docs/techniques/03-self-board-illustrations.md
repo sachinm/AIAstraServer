@@ -1087,7 +1087,7 @@ flowchart LR
 
 ---
 
-## Page 26 of 51 — `self.sub.clock`: Self v2 S1: the primary dasha clock and its confirming clocks
+## Page 26 of 53 — `self.sub.clock`: Self v2 S1: the primary dasha clock and its confirming clocks
 
 | Field | Value |
 |---|---|
@@ -1104,7 +1104,7 @@ flowchart LR
 
 ---
 
-## Page 27 of 51 — `self.sub.periods`: Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries
+## Page 27 of 53 — `self.sub.periods`: Self v2 S2: previous, running and next main period, running sub and sub-sub, charter relation, boundaries
 
 | Field | Value |
 |---|---|
@@ -1122,7 +1122,7 @@ flowchart LR
 
 ---
 
-## Page 28 of 51 — `self.sub.windows`: Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)
+## Page 28 of 53 — `self.sub.windows`: Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)
 
 | Field | Value |
 |---|---|
@@ -1140,7 +1140,7 @@ flowchart LR
 
 ---
 
-## Page 29 of 51 — `self.sub.promise`: Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags
+## Page 29 of 53 — `self.sub.promise`: Self v2 S4: the promise ledger (gifts, knots, graces) from stored yoga and dosha rows and the charter flags
 
 | Field | Value |
 |---|---|
@@ -1158,7 +1158,7 @@ flowchart LR
 
 ---
 
-## Page 30 of 51 — `self.sub.risk`: Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)
+## Page 30 of 53 — `self.sub.risk`: Self v2 S5: the risk ledger (what could go wrong, from where, from who, since, until, what holds it)
 
 | Field | Value |
 |---|---|
@@ -1176,7 +1176,7 @@ flowchart LR
 
 ---
 
-## Page 31 of 51 — `self.sub.mind_facts`: Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only
+## Page 31 of 53 — `self.sub.mind_facts`: Self v2 S6: mind facts (feeling, thinking, peace, judgement, candidate patterns), evidence keys only
 
 | Field | Value |
 |---|---|
@@ -1193,7 +1193,7 @@ flowchart LR
 
 ---
 
-## Page 32 of 51 — `self.sub.body_facts`: Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)
+## Page 32 of 53 — `self.sub.body_facts`: Self v2 S7: body facts (footing, wear, shape, live lords on body houses, live transits over lagna and Moon)
 
 | Field | Value |
 |---|---|
@@ -1211,7 +1211,7 @@ flowchart LR
 
 ---
 
-## Page 33 of 51 — `self.sub.presence_facts`: Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)
+## Page 33 of 53 — `self.sub.presence_facts`: Self v2 S8: presence facts (bearing, style, adornment, face, public vs private, best window, live care)
 
 | Field | Value |
 |---|---|
@@ -1228,7 +1228,7 @@ flowchart LR
 
 ---
 
-## Page 34 of 51 — `self.sub.year`: Self v2 S9: the year frame from the stored annual row covering today
+## Page 34 of 53 — `self.sub.year`: Self v2 S9: the year frame from the stored annual row covering today
 
 | Field | Value |
 |---|---|
@@ -1245,7 +1245,7 @@ flowchart LR
 
 ---
 
-## Page 35 of 51 — `self.sub.profile`: Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)
+## Page 35 of 53 — `self.sub.profile`: Self v2 S10: the person profile pack (age band, stated gender, role, facts, declined, confirms, mood)
 
 | Field | Value |
 |---|---|
@@ -1261,7 +1261,7 @@ flowchart LR
 
 ---
 
-## Page 36 of 51 — `self.v2.now`: Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)
+## Page 36 of 53 — `self.v2.now`: Self v2 area: Right now (hero) (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1278,7 +1278,7 @@ flowchart LR
 
 ---
 
-## Page 37 of 51 — `self.v2.stuck`: Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief)
+## Page 37 of 53 — `self.v2.stuck`: Self v2 area: Where you get stuck (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1295,7 +1295,7 @@ flowchart LR
 
 ---
 
-## Page 38 of 51 — `self.v2.chapter`: Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief)
+## Page 38 of 53 — `self.v2.chapter`: Self v2 area: This chapter (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1312,7 +1312,7 @@ flowchart LR
 
 ---
 
-## Page 39 of 51 — `self.v2.diagnosis`: Self v2 area: In short (selection over the self.sub outputs into an AreaBrief)
+## Page 39 of 53 — `self.v2.diagnosis`: Self v2 area: In short (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1329,7 +1329,7 @@ flowchart LR
 
 ---
 
-## Page 40 of 51 — `self.v2.lagna`: Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief)
+## Page 40 of 53 — `self.v2.lagna`: Self v2 area: Who you are (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1346,7 +1346,7 @@ flowchart LR
 
 ---
 
-## Page 41 of 51 — `self.v2.mind`: Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief)
+## Page 41 of 53 — `self.v2.mind`: Self v2 area: How you think (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1363,7 +1363,7 @@ flowchart LR
 
 ---
 
-## Page 42 of 51 — `self.v2.body`: Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)
+## Page 42 of 53 — `self.v2.body`: Self v2 area: Body & energy (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1380,7 +1380,7 @@ flowchart LR
 
 ---
 
-## Page 43 of 51 — `self.v2.drive`: Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief)
+## Page 43 of 53 — `self.v2.drive`: Self v2 area: Drive & ambition (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1397,7 +1397,7 @@ flowchart LR
 
 ---
 
-## Page 44 of 51 — `self.v2.presence`: Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief)
+## Page 44 of 53 — `self.v2.presence`: Self v2 area: How you come across (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1414,7 +1414,7 @@ flowchart LR
 
 ---
 
-## Page 45 of 51 — `self.v2.yogas`: Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)
+## Page 45 of 53 — `self.v2.yogas`: Self v2 area: Gifts & knots (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1431,7 +1431,7 @@ flowchart LR
 
 ---
 
-## Page 46 of 51 — `self.v2.chapters`: Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief)
+## Page 46 of 53 — `self.v2.chapters`: Self v2 area: Chapters (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1448,7 +1448,7 @@ flowchart LR
 
 ---
 
-## Page 47 of 51 — `self.v2.year`: Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)
+## Page 47 of 53 — `self.v2.year`: Self v2 area: This year (selection over the self.sub outputs into an AreaBrief)
 
 | Field | Value |
 |---|---|
@@ -1465,7 +1465,7 @@ flowchart LR
 
 ---
 
-## Page 48 of 51 — `self.v2.oracle`: You board v2: Oracle over the ledgers and the area briefs
+## Page 48 of 53 — `self.v2.oracle`: You board v2: Oracle over the ledgers and the area briefs
 
 | Field | Value |
 |---|---|
@@ -1482,7 +1482,7 @@ flowchart LR
 
 ---
 
-## Page 49 of 51 — `self.v2.personalizer`: You board v2: Personalizer cards for this person
+## Page 49 of 53 — `self.v2.personalizer`: You board v2: Personalizer cards for this person
 
 | Field | Value |
 |---|---|
@@ -1499,7 +1499,7 @@ flowchart LR
 
 ---
 
-## Page 50 of 51 — `self.v2.hero`: You board v2: the hero (tone, one dated sentence, one question)
+## Page 50 of 53 — `self.v2.hero`: You board v2: the hero (tone, one dated sentence, one question)
 
 | Field | Value |
 |---|---|
@@ -1516,7 +1516,7 @@ flowchart LR
 
 ---
 
-## Page 51 of 51 — `self.v3.cards`: You board v3: span-led cards for the next twelve months
+## Page 51 of 53 — `self.v3.cards`: You board v3: span-led cards for the next twelve months
 
 | Field | Value |
 |---|---|
@@ -1544,3 +1544,60 @@ flowchart LR
 1. The year frame cuts the next twelve months on stored period edges and copies each span's tone from the stored row
 2. The Oracle writes every card span by span: get through a heavy span, build in a light one, with one dated question the person can answer No to
 3. The Personalizer writes the face in plain words: one line, and per span what it asks, the likely obstacle and one if-then step
+
+---
+
+## Page 52 of 53 — `reading.clock.sheet`: Clock sheet: one period clock read alone, span by span
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` (behind `READING_CLOCK_LAYER=1`, not wired into a build yet) |
+| **Charts Declared** | `natal:D1`, `divisional:D9`, `dasha:each clock of the reading set`, `annual:year chart`, `transit:sky window` |
+| **Inputs** | one clock slice (its periods to level 3) and the shared slices of the stored pressure inventories |
+| **Agent** | `reading.clock` (model, `common/reader-system.md` cached, `clock/reader.md` uncached), one call per clock |
+| **Output** | `clock_sheet.v1` |
+| **Code** | `src/reading/slices/render.ts renderSliceSet`; `src/reading/clocks/reader.ts readClocks, validateClockSheet` |
+
+```mermaid
+flowchart LR
+  subgraph Stored
+    P[("pressure inventories<br/>one per clock")]
+    S[("kundli_slices<br/>natal.core · sky.window · year.tp · frame · clock.*")]
+  end
+  P --> S
+  S --> C["One cache<br/>system + natal.core + sky.window + year.tp + frame"]
+  C --> R["Reader per clock, in parallel<br/>its own clock slice only"]
+  R --> V{"Validator<br/>span, keys, own row, matter, tone vs polarity"}
+  V --> T[("technique_outputs<br/>reading.clock.sheet")]
+```
+
+1. The stored rows are rendered once into slices; rows every clock shares are stored once
+2. Each clock is read by its own agent that cannot see the others; the Tithi Pravesha year is read as its own clock
+3. A cell stands only when its keys are in that reader's input, it cites its own clock's period in the span, and its tone follows the polarity of the rows it cites
+
+---
+
+## Page 53 of 53 — `reading.concordance`: Agreed ledger: where the clocks agree, counted in code
+
+| Field | Value |
+|---|---|
+| **Category / Board / Status** | `self` · `you` · `built` (behind `READING_CLOCK_LAYER=1`, not wired into a build yet) |
+| **Charts Declared** | `dasha:each clock of the reading set`, `annual:year chart` |
+| **Inputs** | the clock sheets of the reading set, counted per span and matter |
+| **Agent** | `reading.concordance` (model, `common/reader-system.md` cached, `concordance.md` uncached) |
+| **Output** | `agreed_ledger.v1` |
+| **Code** | `src/reading/clocks/concordance.ts countConcordance, runConcordance`; `src/reading/clocks/run.ts runClockLayer` |
+
+```mermaid
+flowchart LR
+  SH[("clock sheets")] --> N["Count in code<br/>identical tones per span and matter"]
+  N --> ST["Status<br/>confirmed · leaning · single · contested"]
+  N --> PT["Pair table<br/>cells both read, cells agreed"]
+  ST --> A["Concordance call<br/>words only"]
+  A --> V{"Validator<br/>status and tone as counted, no added cell, keys from the sheets"}
+  V --> L[("technique_outputs<br/>reading.concordance")]
+```
+
+1. Code joins the sheets and counts: three or more clocks with one tone is confirmed, heavy against light is contested, exactly two agreeing with none opposed is leaning, anything else is single
+2. The agent writes one settled sentence per confirmed or leaning cell, and both sides of a contested one
+3. No agent can raise a status: the ledger takes status and tone from the count

@@ -2247,3 +2247,28 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   (`src/config/env.ts:834-835`). Which clocks carry most weight for a birth is astrology; engine pass E2 in doc 70 §6.
 - **P3 · open · Doc 68 §4.9 and doc 69 §4.1 are superseded by doc 70** (budget; one call per board). The two docs still
   carry the old text.
+- **P1 · open · Doc 70 Phase 2 (slices, clock readers, ledger) is built behind `READING_CLOCK_LAYER=1` and not wired.**
+  Code: `src/reading/slices/` (renderers, `writeSlices`, `readSlices`), `src/reading/clocks/` (`readClocks`,
+  `countConcordance`, `runConcordance`, `runClockLayer`); migration `20261110100000_kundli_slices_m48` (table
+  `kundli_slices`) is written, not applied, and `prisma generate` has not been run for it (the store reads the delegate
+  through a loose type, so it works once the client has it). Nothing renders or writes slices yet: the sync worker
+  after `ensurePressureInventories` should call `renderSliceSet` + `writeSlices`, and the build should read slices
+  (doc 70 step 3 "build reads slices"; prep under 1 s not measured on real rows). Owner: doc 70 Phase 3. Done: slices
+  written at sync for the test kundli, two runs give the same hashes, and `runClockLayer` called from the event.
+- **P2 · open · The frame slice does not carry each clock's rows per span (doc 70 §4.1 table says it does).** The frame
+  slice sits in every reader's cached prefix; listing each clock's rows there would let a reader see the other clocks,
+  against doc 70 §9. Each clock's rows per span are in its own `clock.<system>` slice (BY SPAN index) instead. Decision
+  for Sachin to confirm; the doc table needs the same change. Owner: doc 70.
+- **P2 · open · Count edge cases decided in code, for Sachin's review** (`src/reading/clocks/concordance.ts` header):
+  3 heavy + 1 light is confirmed (with `opposed=1`, not contested); 3 heavy + 3 light is contested; 2 heavy + 1 mixed is
+  leaning (mixed opposes nothing); 2 heavy + 2 mixed and heavy + mixed are `single` (nothing agreed, nothing stated).
+  Done: Sachin confirms or changes the rules; tests in `tests/unit/reading/clocks/concordance.test.ts` follow.
+- **P2 · open · The clock-layer agents have no `SUBAGENT_DIGEST_SPECS` / `subagentCachePlan` entry of their own.**
+  `reading.clock` and `reading.concordance` use one prefix (the common system prompt + natal.core, sky.window, year.tp,
+  frame) warmed by `warmPrefixes`; the cache plan falls back to the generic plan for `reading.clock.sheet` and
+  `reading.concordance`, which does not describe this prefix. Owner: doc 70 Phase 3, when the layer is wired. Done: a
+  plan branch naming the shared slices, and the Lab shows cached vs total tokens for the five readers.
+- **P3 · open · Clock-layer prompts never run against a model.** `prompts/common/reader-system.md`,
+  `prompts/clock/reader.md`, `prompts/concordance.md` are tested only with a fake model. Word limits (cell 25 words,
+  ledger 30) and the "rows of two polarities allow only mixed" tone rule may drop many cells live. Done: the doc 70
+  Phase 2 replay (one kundli, needs Sachin's yes on key, count and cost) reports drop rates per check.

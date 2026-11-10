@@ -945,6 +945,11 @@ export function isSelfV3BuildEnabled(env: NodeJS.ProcessEnv = process.env): bool
   return env.SELF_V3_BUILD?.trim() === '1';
 }
 
+/** The clock layer (doc 70 §4.1 layers 2–3: clock readers and the concordance ledger); off unless READING_CLOCK_LAYER=1. */
+export function isReadingClockLayerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.READING_CLOCK_LAYER?.trim() === '1';
+}
+
 /** Self board v3 routes (docs/reading-engine/68): on only when SELF_V3_ENABLED=1 and the v2 board is on. */
 export function isSelfV3Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.SELF_V3_ENABLED?.trim() === '1' && isSelfV2Enabled(env);
