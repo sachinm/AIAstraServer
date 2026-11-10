@@ -1953,3 +1953,17 @@ Owner: the next Self v2 branch unless noted.
   already memoised (per kundli and built-at, `MEMO_MS`); the activation read takes only the primary and confirming
   clocks. What is slow on the live DB (digest row size, Render latency, the pressure pull) is unknown until a live run
   reads `sub.load.*`.
+- **DECIDED · Personal facts reach the Personalizer on Gemini.** Sachin, 2026-11-09: send everything to the
+  Personalizer on the paid Gemini key ("their job is very grand … if they get it wrong the dashboard doesn't click with
+  the person"); data minimisation is not applied to the Personalizer; the Bedrock move later carries the same pack. The
+  pack (`PersonPortrait`, `src/reading/self/v2/portrait.ts`) carries the wizard facts with dates, life events (category
+  and date), monthly checks, confirm answers, the 30-day mood history and question topics (categories, never text), the
+  body keys, the life labels' state, and, by Sachin's correction the same day, the **birth place** (city, region,
+  country as typed) and the **current city and country**. It never carries the name, the exact birth date or time, or
+  coordinates and time zone (age band only). Update the privacy policy words (docs/privacy/01) to say so.
+- **P3 · The Personalizer now runs on the Oracle's model at `low`.** Estimated ≈ $0.022–0.029 per profile (doc 66 §4.9),
+  about four times flash-lite; measure the thought tokens and the wall on the next live run (needs a yes).
+- **P3 · Mood history starts empty.** `self.mood.history` (server-owned, 30 taps) is written from now on when `self.mood`
+  is written; existing users have only today's tap, so the trend reads "unknown" until three taps exist.
+- **P3 · The house-state engine (doc 46) is not in code** (only planned layers in `techniques/catalog.ts`); the portrait's
+  life labels read S3 windows and S5 rows (`lifeNowSource: 'windows_and_risk'`). Switch when the engine lands.

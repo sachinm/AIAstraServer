@@ -43,6 +43,7 @@ import type {
 import { markAgentUsed, warmPrefixes } from './cache.js';
 import { runOracleV2, timingOf } from './oracle.js';
 import { runPersonalizer } from './personalizer.js';
+import { buildPersonPortrait, loadPortraitSources, type PortraitSources } from './portrait.js';
 import {
   buildFamilySlices,
   buildOracleSlice,
@@ -129,8 +130,16 @@ export function oracleStoreKey(ctx: SelfBuildContext, oracleSlice: PreparedAgent
 }
 
 /** The cards' store key: the clock (so a read can ask for one clock), the Oracle key, the profile hash and the prompt. */
-export function cardsStoreKey(ctx: SelfBuildContext, oracleKey: string): string {
-  return ['self.v2.cards', `clock=${ctx.stamps.clock}`, `o=${shortHash(oracleKey)}`, `profile=${ctx.sub.profile?.hash ?? ctx.stamps.profileHash ?? '-'}`, `p=${promptHash(SELF_V2_PERSONALIZER_PROMPT)}`].join('|');
+export function cardsStoreKey(ctx: SelfBuildContext, oracleKey: string, portraitHash?: string | null): string {
+  return [
+    'self.v2.cards',
+    `clock=${ctx.stamps.clock}`,
+    `o=${shortHash(oracleKey)}`,
+    `profile=${ctx.sub.profile?.hash ?? ctx.stamps.profileHash ?? '-'}`,
+    // the portrait (biography, the past month, mood trend, life now) changes the cards too
+    ...(portraitHash ? [`portrait=${portraitHash}`] : []),
+    `p=${promptHash(SELF_V2_PERSONALIZER_PROMPT)}`,
+  ].join('|');
 }
 
 /** the shortest running period: the stored output's window */
@@ -382,6 +391,14 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     out.keys.oracle = oracleKey;
     const runningPeriod = runningPeriodOf(ctx);
 
+    // the portrait's sources (Sachin 2026-11-09) are read beside the Oracle step; the Personalizer waits for them
+    const tp = performance.now();
+    const portraitSrcP: Promise<PortraitSources> = loadPortraitSources(deps.prisma, ctx.userId, ctx.kundliId, ctx.asOf)
+      .catch((e: Error): PortraitSources => ({ facts: null, lifeEvents: null, areaChecks: null, chatCategories: null, birth: null, currentLocation: null, gaps: [`portrait sources: ${e.message?.slice(0, 80)}`] }))
+      .finally(() => {
+        ms.portraitLoad = since(tp);
+      });
+
     // 4–6: family readers, the Oracle ×3 and its validator, through the store (a hit runs nothing)
     let oracleSlice = first.slice;
     let familyFindings: Array<{ family: string; text: string }> = [];
@@ -454,9 +471,11 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
 
     // 7–8: the Personalizer over the Oracle document; its prefix warmed first
     // the hero rests on the `now` brief (its S3/S5 rows and dates); no Oracle call writes it (run 1 failure 14)
-    const p = buildPersonalizerSlice(ctx, oracle.output, briefs);
+    const portrait = buildPersonPortrait(ctx, oracle.output, await portraitSrcP);
+    for (const g of portrait.gaps) gaps.push(`portrait: ${g}`);
+    const p = buildPersonalizerSlice(ctx, oracle.output, briefs, portrait);
     out.slices = sliceTable([...FAMILY_IDS.map((id) => fam.slices[id]), oracleSlice, p.slice]);
-    const cardsKey = cardsStoreKey(ctx, oracleKey);
+    const cardsKey = cardsStoreKey(ctx, oracleKey, shortHash(canonicalJson(portrait)));
     out.keys.cards = cardsKey;
     t = performance.now();
     const storedCards = await withTechniqueOutput<StoredSelfV2Cards>(

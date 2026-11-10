@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto';
 import { getSelfPersonalizerModel, getSelfV2SeniorStageWords } from '../../../config/env.js';
 import { MATTER_PLAIN, mattersOfClaim, PEOPLE_PLAIN } from '../v2words.js';
 import { seniorStageWordsFor } from './profileFit.js';
+import { portraitLines } from './portrait.js';
 import { modelFor } from '../../llm/models.js';
 import { PROMPTS } from '../../prompts/generated.js';
 import { buildSelfFamilyPacks, FAMILY_SYSTEM_PROMPTS, type SelfFamilyAgentId, type SelfFamilyPack } from '../oracle.js';
@@ -34,6 +35,7 @@ import type {
   OracleV2Output,
   PeopleLabel,
   PersonalizerInput,
+  PersonPortrait,
   PreparedAgentSlice,
   PromiseEntry,
   PromiseLedger,
@@ -425,7 +427,7 @@ export function renderOracleDoc(out: OracleV2Output): { text: string; keys: stri
 }
 
 /** The Personalizer's input: the Oracle document, the profile pack without age in years and hash, the windows summary. */
-export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Output, briefs: readonly AreaBrief[] = []): PersonalizerInput {
+export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Output, briefs: readonly AreaBrief[] = [], portrait: PersonPortrait | null = null): PersonalizerInput {
   const p = ctx.sub.profile;
   if (!p) throw new Error('self v2 Personalizer input: the profile pack (S10) is missing from the build context');
   const { ageYears: _age, hash: _hash, ...profile } = p;
@@ -438,6 +440,7 @@ export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Ou
     windows: { asOf: w?.asOf ?? ctx.asOf, heaviestNow: w?.heaviestNow ?? null, easesAt: w?.easesAt ?? null, nextSupportFrom: w?.nextSupportFrom ?? null },
     ...(now ? { now } : {}),
     heroClaim: heroClaimFrame(ctx, oracle, nowBrief),
+    ...(portrait ? { portrait } : {}),
   };
 }
 
@@ -636,6 +639,7 @@ export function personalizerSuffix(input: PersonalizerInput, asOf: string): stri
     `declined (never mention): ${p.declined.length ? p.declined.join(', ') : 'none'}`,
     `last answers: ${p.lastConfirms.map((c) => `${claimKey(c.claimId)}=${c.answer}`).join(', ') || 'none'}`,
     `mood today: ${p.mood ?? 'not given'}`,
+    ...(input.portrait ? portraitLines(input.portrait) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
     '## WINDOWS (engine dates around today)',
     `heaviest now: ${w.heaviestNow ? `${w.heaviestNow.matters.join(', ')} ${w.heaviestNow.from}..${w.heaviestNow.to} (${w.heaviestNow.polarity})` : 'none'}`,
     `eases at: ${w.easesAt ?? 'not stored'} · next support from: ${w.nextSupportFrom ?? 'not stored'}`,
@@ -659,8 +663,13 @@ export function personalizerSuffix(input: PersonalizerInput, asOf: string): stri
 }
 
 /** The Personalizer's slice: the Oracle document is the stable prefix (the same for every profile on one Oracle key). */
-export function buildPersonalizerSlice(ctx: SelfBuildContext, oracle: OracleV2Output, briefs: readonly AreaBrief[] = []): { slice: PreparedAgentSlice; input: PersonalizerInput } {
-  const input = buildPersonalizerInput(ctx, oracle, briefs);
+export function buildPersonalizerSlice(
+  ctx: SelfBuildContext,
+  oracle: OracleV2Output,
+  briefs: readonly AreaBrief[] = [],
+  portrait: PersonPortrait | null = null,
+): { slice: PreparedAgentSlice; input: PersonalizerInput } {
+  const input = buildPersonalizerInput(ctx, oracle, briefs, portrait);
   const doc = renderOracleDoc(oracle);
   const slice = prepared('self.personalizer', ctx, doc.text, personalizerSuffix(input, ctx.asOf), getSelfPersonalizerModel(), promptText(SELF_V2_PERSONALIZER_PROMPT), doc.keys);
   return { slice, input };

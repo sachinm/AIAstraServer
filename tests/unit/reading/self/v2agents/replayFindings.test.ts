@@ -157,8 +157,10 @@ describe('replay 66 · Personalizer truncation (failure 1)', () => {
     maxSpendUsd: 1,
   });
 
-  it('asks for minimal thinking (sent as thinkingLevel minimal on 3.x Flash-Lite) under a cap that fits profile c with headroom', async () => {
-    expect(PERSONALIZER_THINKING).toBe('minimal');
+  it('thinks at low since the portrait (Sachin 2026-11-09), under a cap that fits profile c and thought with headroom', async () => {
+    // run 1 asked for minimal; the Personalizer now reasons about the person, so it thinks at low
+    expect(PERSONALIZER_THINKING).toBe('low');
+    expect(getSelfPersonalizerMaxOutputTokens()).toBeGreaterThanOrEqual(10_000);
     expect(thinkingConfigFor('gemini-3.1-flash-lite', 'minimal')).toEqual({ thinkingLevel: 'minimal', includeThoughts: false });
     expect(thinkingConfigFor('gemini-3-pro', 'minimal')).toEqual({ thinkingLevel: 'low', includeThoughts: false });
     expect(thinkingConfigFor('gemini-2.5-flash', 'minimal', true)).toEqual({ thinkingBudget: 0, includeThoughts: false });
@@ -168,14 +170,14 @@ describe('replay 66 · Personalizer truncation (failure 1)', () => {
     const r = await runPersonalizer(deps([result(full, 'STOP')], log), ctx, slice, input, []);
     expect(r.status).toBe('ok');
     expect(log).toHaveLength(1);
-    expect(log[0]).toMatchObject({ thinking: 'minimal', maxOutputTokens: getSelfPersonalizerMaxOutputTokens() });
+    expect(log[0]).toMatchObject({ thinking: 'low', maxOutputTokens: getSelfPersonalizerMaxOutputTokens() });
   });
 
-  it('on MAX_TOKENS it retries once with minimal thinking and the higher cap, and counts both calls', async () => {
+  it('on MAX_TOKENS it retries once at the higher cap, and counts both calls', async () => {
     const log: GeminiCallOptions[] = [];
     const r = await runPersonalizer(deps([result(cut, 'MAX_TOKENS'), result(full, 'STOP')], log), ctx, slice, input, []);
     expect(log.map((o) => o.maxOutputTokens)).toEqual([getSelfPersonalizerMaxOutputTokens(), getSelfPersonalizerRetryMaxOutputTokens()]);
-    expect(log.every((o) => o.thinking === 'minimal')).toBe(true);
+    expect(log.every((o) => o.thinking === 'low')).toBe(true);
     expect(r.status).toBe('ok');
     expect(r.call?.outputTokens).toBe(8000);
   });

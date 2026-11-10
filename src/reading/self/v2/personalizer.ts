@@ -16,10 +16,12 @@ import { promptHash, SELF_V2_PERSONALIZER_PROMPT } from './slices.js';
 
 export const PERSONALIZER_TIMEOUT_MS = 60_000;
 /**
- * The Personalizer translates, it does not reason: it asks for the lowest thinking the model allows (`minimal`; Gemini
- * 3.x counts thought tokens against the output cap, doc 66 replay 2026-11-09 failure 1).
+ * The Personalizer now reasons about the person (Sachin 2026-11-09: it builds a portrait, then decides emphasis, tone
+ * and register), so it thinks at `low`. Gemini 3.x counts thought tokens against the output cap: the cap
+ * (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, 12,000) leaves room for them, and a `MAX_TOKENS` finish is retried once at
+ * 16,000 (doc 66 replay 2026-11-09 failure 1).
  */
-export const PERSONALIZER_THINKING = 'minimal' as const;
+export const PERSONALIZER_THINKING = 'low' as const;
 
 /** a finish that means the JSON was cut at the output cap */
 export const isTruncated = (finishReason: string | null | undefined): boolean => finishReason === 'MAX_TOKENS';

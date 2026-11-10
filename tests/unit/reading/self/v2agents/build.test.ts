@@ -75,7 +75,7 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     // stored under the two keys, and read back as the API reads it
     expect(r.stored).toEqual({ oracle: true, cards: true });
     expect(r.keys.oracle).toMatch(/^self\.v2\.oracle\|dv-1\|clock=vimsottari\|.*\|p=[0-9a-f]{24}$/);
-    expect(r.keys.cards).toMatch(/^self\.v2\.cards\|clock=vimsottari\|o=[0-9a-f]{24}\|profile=profile-hash-1\|p=[0-9a-f]{24}$/);
+    expect(r.keys.cards).toMatch(/^self\.v2\.cards\|clock=vimsottari\|o=[0-9a-f]{24}\|profile=profile-hash-1\|portrait=[0-9a-f]{24}\|p=[0-9a-f]{24}$/);
     const ids = [...db.outputs.values()].map((x) => String(x.technique_id));
     expect(ids.filter((x) => x === 'self.v2.oracle' || x === 'self.v2.personalizer').sort()).toEqual(['self.v2.oracle', 'self.v2.personalizer']);
     // step 2: the ten sub-technique outputs and the eleven area briefs, keyed by the stamps

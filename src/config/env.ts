@@ -970,7 +970,15 @@ export function getSelfV2PressureTimeoutMs(): number {
 
 /** The Self v2 Personalizer's model (docs/reading-engine/66 §4.1). Env: `SELF_PERSONALIZER_MODEL` (default gemini-3.1-flash-lite). */
 export function getSelfPersonalizerModel(): string {
-  return process.env.SELF_PERSONALIZER_MODEL?.trim() || 'gemini-3.1-flash-lite';
+  // Sachin 2026-11-09: the Personalizer builds the person's portrait and decides emphasis and register, so it runs on
+  // the Oracle's model by default (the same chain as modelFor('oracle'): READING_MODEL_ORACLE → READING_MODEL_SYNTH →
+  // the chat model); SELF_PERSONALIZER_MODEL overrides
+  return (
+    process.env.SELF_PERSONALIZER_MODEL?.trim() ||
+    process.env.READING_MODEL_ORACLE?.trim() ||
+    process.env.READING_MODEL_SYNTH?.trim() ||
+    getGeminiChatModelId()
+  );
 }
 
 /**
@@ -981,7 +989,10 @@ export function getSelfPersonalizerModel(): string {
  * cards at their longest (120-word bodies) plus thought.
  */
 export function getSelfPersonalizerMaxOutputTokens(): number {
-  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 8000, 500, 16000);
+  // 2026-11-09: on the Oracle's model at `low` thinking with the portrait: the 11 cards were 4.1–4.3 k out on run 2;
+  // thinking at `low` on Gemini 3.x counts against the cap (run 1 flash-lite at low: ≈ 2.2 k); 12,000 leaves room for
+  // ≈ 6 k of thought on top of the longest card document
+  return parseClampedIntEnv('SELF_PERSONALIZER_MAX_OUTPUT_TOKENS', 12000, 500, 24000);
 }
 
 /**
@@ -989,7 +1000,7 @@ export function getSelfPersonalizerMaxOutputTokens(): number {
  * `SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS` (integer, 1000–16000; default 12000). A truncated document is never stored.
  */
 export function getSelfPersonalizerRetryMaxOutputTokens(): number {
-  return parseClampedIntEnv('SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS', 12000, 1000, 16000);
+  return parseClampedIntEnv('SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS', 16000, 1000, 24000);
 }
 
 /**

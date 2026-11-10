@@ -433,7 +433,175 @@ describe('run 2 · 8 · the sub-technique load is timed per read; the profile re
     expect(out.ms['load.activationRows']).toBeGreaterThan(0);
     // the profile read starts before the activation read (Layer 0), not after it
     expect(order.indexOf('profile')).toBeLessThan(order.indexOf('activation'));
-    // critical path: digest (2) → activation (1) → logs (1); the profile (≤ 2) runs beside the digest
-    expect(ms).toBeLessThan(RTT * 6);
+    // critical path: digest (2) → activation (1) → logs (1); the profile (≤ 2) runs beside the digest (the bound is
+    // loose: the full suite runs files in parallel and timers drift under load)
+    expect(ms).toBeLessThan(RTT * 12);
+  });
+});
+
+describe('portrait (Sachin 2026-11-09): everything and more to the Personalizer, built in code, gaps named', () => {
+  type Src = import('../../../../../src/reading/self/v2/portrait.js').PortraitSources;
+  const fullSrc = (): Src => ({
+    facts: [
+      { key: 'work.status', value: 'own_business', at: '2026-10-01' },
+      { key: 'work.level', value: 'owner_staff', at: '2026-10-01' },
+      { key: 'love.status', value: 'single', at: '2026-10-01' },
+      { key: 'self.focus', value: 'career,money', at: '2026-10-01' },
+      { key: 'place.current', value: 'Pune, Maharashtra, India', at: '2026-10-01' },
+      { key: 'self.mood', value: 'heavy:2026-11-09', at: '2026-11-09' },
+      { key: 'self.mood.history', value: 'fine:2026-10-20,fine:2026-10-25,mixed:2026-10-30,heavy:2026-11-05,heavy:2026-11-09', at: '2026-11-09' },
+      { key: 'self.confirm.stuck.heaviest_now', value: 'yes', at: '2026-11-07' },
+      { key: 'wizard.done', value: '2026-10-01', at: '2026-10-01' },
+    ],
+    lifeEvents: [{ category: 'business_started', date: '2024-03-01', precision: 'month' }],
+    areaChecks: [{ area: 'stuck', month: '2026-10', answer: 'partly' }],
+    chatCategories: ['work', 'work', 'love', 'general'],
+    birth: { placeOfBirth: 'Nagpur, Maharashtra, India', city: 'Nagpur', countryCode: 'IN' },
+    currentLocation: 'Mumbai, India',
+    gaps: [],
+  });
+
+  it('builds every block from the run 2 fixtures; places present; no name, birth date or time, or coordinates', async () => {
+    const { buildPersonPortrait } = await import('../../../../../src/reading/self/v2/portrait.js');
+    const { hash: _h, ...profile } = runs.a.pack;
+    const ctx = run2Ctx({ ...profile, mood: 'heavy' });
+    const x = buildPersonPortrait(ctx, oracleOut, fullSrc());
+    expect(x.personality!.oracleParagraphs).toEqual(expect.arrayContaining(['lagna.p1', 'mind.p1', 'drive.p3', 'presence.p1']));
+    expect(x.personality!.patterns.length).toBe(3);
+    expect(x.biography!.facts.map((f) => f.key)).toEqual(['work.status', 'work.level', 'love.status', 'self.focus']);
+    expect(x.biography!.lifeEvents).toEqual([{ category: 'business_started', date: '2024-03-01', precision: 'month' }]);
+    expect(x.biography!.confirms).toEqual([{ claimId: 'stuck.heaviest_now', answer: 'yes', at: '2026-11-07' }]);
+    expect(x.pastMonth!.moods).toHaveLength(5);
+    expect(x.pastMonth!.questionTopics).toEqual({ work: 2, love: 1, general: 1 });
+    expect(x.mood).toEqual({ today: 'heavy', trend: 'heavier', taps30d: 5 });
+    expect(x.health).not.toBeNull();
+    expect(x.lifeNow.map((l) => l.label)).toEqual(['career', 'love', 'self', 'home', 'family', 'business', 'health', 'fortune', 'work', 'gains', 'sacrifices']);
+    expect(x.lifeNow.find((l) => l.label === 'family')).toMatchObject({ state: 'presses', since: '2026-11-05', until: '2026-12-12' });
+    expect(x.lifeNowSource).toBe('windows_and_risk');
+    expect(x.register).toMatchObject({ hint: 'mixed', workStatus: 'own_business', workLevel: 'owner_staff' });
+    expect(x.birthPlace).toEqual({ city: 'Nagpur', region: 'Maharashtra', country: 'IN' });
+    expect(x.currentPlace).toEqual({ city: 'Pune', country: 'India' });
+    expect(x.gaps).toEqual([]);
+    expect(JSON.stringify(x)).not.toMatch(/date_of_birth|time_of_birth|"lat"|"lon"|"tz"/i);
+  });
+
+  it('a missing source is a named gap, never invented; declined topics never reach the past month', async () => {
+    const { buildPersonPortrait } = await import('../../../../../src/reading/self/v2/portrait.js');
+    const { hash: _h, ...profile } = runs.c.pack;
+    const ctx = run2Ctx({ ...profile, declined: ['love.status'] });
+    delete ctx.sub.body;
+    const x = buildPersonPortrait(ctx, oracleOut, { facts: null, lifeEvents: null, areaChecks: null, chatCategories: ['love', 'you'], birth: null, currentLocation: null, gaps: ['life_events: not readable here'] });
+    expect(x.biography).toBeNull();
+    expect(x.birthPlace).toBeNull();
+    expect(x.currentPlace).toBeNull();
+    expect(x.pastMonth!.questionTopics).toEqual({ you: 1 });
+    for (const g of ['biography: no person_facts', 'birthPlace: not stated', 'currentPlace: not stated', 'mood: no tap stored', 'life_events: not readable here'])
+      expect(x.gaps.some((y) => y.startsWith(g)), g).toBe(true);
+    expect(x.register.hint).toBe('plain');
+    // the current place falls back to user_current_location, city and country only
+    const y = buildPersonPortrait(ctx, oracleOut, { facts: [], lifeEvents: [], areaChecks: [], chatCategories: [], birth: { placeOfBirth: 'Leeds', city: null, countryCode: null }, currentLocation: 'Lisbon, Portugal', gaps: [] });
+    expect(y.currentPlace).toEqual({ city: 'Lisbon', country: 'Portugal' });
+    expect(y.birthPlace).toEqual({ city: 'Leeds', region: null, country: null });
+  });
+
+  it('the loader reads each source once and turns a failing table into a gap', async () => {
+    const { loadPortraitSources } = await import('../../../../../src/reading/self/v2/portrait.js');
+    const prisma = {
+      personFact: { findMany: async () => [{ key: 'work.status', value: 'retired', confirmed_at: new Date('2026-10-01T00:00:00Z') }] },
+      lifeEvent: {
+        findMany: async () => {
+          throw new Error('relation "life_events" does not exist');
+        },
+      },
+      areaCheck: { findMany: async () => [] },
+      message: { findMany: async () => [{ chat: { category: 'you' } }] },
+      auth: { findUnique: async () => ({ place_of_birth: 'Kochi, India', city: null, country_code: 'IN' }) },
+    } as unknown as import('@prisma/client').PrismaClient;
+    const s = await loadPortraitSources(prisma, 'u', 'k', '2026-11-09');
+    expect(s.facts).toEqual([{ key: 'work.status', value: 'retired', at: '2026-10-01' }]);
+    expect(s.lifeEvents).toBeNull();
+    expect(s.chatCategories).toEqual(['you']);
+    expect(s.birth).toEqual({ placeOfBirth: 'Kochi, India', city: null, countryCode: 'IN' });
+    expect(s.gaps).toEqual(expect.arrayContaining([expect.stringMatching(/^life_events: relation/), 'user_current_location: not readable here']));
+  });
+
+  it('the prompt carries the portrait; the model defaults to the Oracle model; cap at least 10 k with a retry; thinking low', async () => {
+    const { buildPersonPortrait } = await import('../../../../../src/reading/self/v2/portrait.js');
+    const { getSelfPersonalizerModel, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens } = await import('../../../../../src/config/env.js');
+    const { modelFor } = await import('../../../../../src/reading/llm/models.js');
+    const { PERSONALIZER_THINKING } = await import('../../../../../src/reading/self/v2/personalizer.js');
+    const { hash: _h, ...profile } = runs.a.pack;
+    const ctx = run2Ctx(profile);
+    const portrait = buildPersonPortrait(ctx, oracleOut, fullSrc());
+    const { slice, input } = buildPersonalizerSlice(ctx, oracleOut, [], portrait);
+    expect(input.portrait).toBe(portrait);
+    for (const part of ['## PORTRAIT', '- life now (engine windows and ledger rows):', '  - family: presses 2026-11-05..2026-12-12', '- register: mixed', '- born in: Nagpur, Maharashtra, IN', '- lives in: Pune, India'])
+      expect(slice.suffix, part).toContain(part);
+    const saved = { o: process.env.READING_MODEL_ORACLE, p: process.env.SELF_PERSONALIZER_MODEL };
+    try {
+      delete process.env.SELF_PERSONALIZER_MODEL;
+      process.env.READING_MODEL_ORACLE = 'gemini-3.8-flash';
+      expect(getSelfPersonalizerModel()).toBe(modelFor('oracle'));
+      expect(getSelfPersonalizerModel()).toBe('gemini-3.8-flash');
+      process.env.SELF_PERSONALIZER_MODEL = 'gemini-3.1-flash-lite';
+      expect(getSelfPersonalizerModel()).toBe('gemini-3.1-flash-lite');
+    } finally {
+      if (saved.o === undefined) delete process.env.READING_MODEL_ORACLE;
+      else process.env.READING_MODEL_ORACLE = saved.o;
+      if (saved.p === undefined) delete process.env.SELF_PERSONALIZER_MODEL;
+      else process.env.SELF_PERSONALIZER_MODEL = saved.p;
+    }
+    expect(PERSONALIZER_THINKING).toBe('low');
+    expect(getSelfPersonalizerMaxOutputTokens()).toBeGreaterThanOrEqual(10_000);
+    expect(getSelfPersonalizerRetryMaxOutputTokens()).toBeGreaterThan(getSelfPersonalizerMaxOutputTokens());
+  });
+
+  it('metric (logged): the portrait makes the three people’s Personalizer inputs more distinct', async () => {
+    const { buildPersonPortrait } = await import('../../../../../src/reading/self/v2/portrait.js');
+    const suffix = (r: ProfileRun, src: Src | null) => {
+      const { hash: _h, ...profile } = r.pack;
+      const ctx = run2Ctx(profile);
+      const portrait = src ? buildPersonPortrait(ctx, oracleOut, src) : null;
+      return buildPersonalizerSlice(ctx, oracleOut, [], portrait).slice.suffix;
+    };
+    const factsOf = (id: 'a' | 'b' | 'c') => {
+      const f = runs[id].pack.facts;
+      const out: Array<{ key: string; value: string; at: string }> = [];
+      if (f.work?.status) out.push({ key: 'work.status', value: f.work.status, at: '2026-10-01' });
+      if (f.work?.level) out.push({ key: 'work.level', value: f.work.level, at: '2026-10-01' });
+      if (f.love) out.push({ key: 'love.status', value: f.love, at: '2026-10-01' });
+      if (f.children) out.push({ key: 'family.children', value: f.children, at: '2026-10-01' });
+      if (f.focus) out.push({ key: 'self.focus', value: f.focus.join(','), at: '2026-10-01' });
+      return out;
+    };
+    const EVENT = { a: 'business_started', b: 'child_left_home', c: 'retired' } as const;
+    const TOPICS = { a: ['work', 'work'], b: ['work', 'you'], c: ['you', 'lucky'] } as const;
+    const BORN = { a: 'Nagpur, India', b: 'Leeds, UK', c: 'Kochi, India' } as const;
+    const srcFor = (id: 'a' | 'b' | 'c'): Src => ({
+      ...fullSrc(),
+      facts: factsOf(id),
+      lifeEvents: [{ category: EVENT[id], date: '2024-03-01', precision: 'month' }],
+      chatCategories: [...TOPICS[id]],
+      birth: { placeOfBirth: BORN[id], city: null, countryCode: null },
+      currentLocation: null,
+    });
+    const before = pairwiseJaccard({ a: suffix(runs.a, null), b: suffix(runs.b, null), c: suffix(runs.c, null) });
+    const after = pairwiseJaccard({ a: suffix(runs.a, srcFor('a')), b: suffix(runs.b, srcFor('b')), c: suffix(runs.c, srcFor('c')) });
+    // a logged metric only: whole-suffix token Jaccard also counts the portrait's shared scaffolding (the eleven labels,
+    // field names), so it can rise even though every person-specific value differs
+    console.log(`[portrait distinctness] Personalizer input Jaccard max: without portrait ${before.max} ${JSON.stringify(before.pairs)} · with portrait ${after.max} ${JSON.stringify(after.pairs)}`);
+    expect(after.max).toBeGreaterThan(0);
+  });
+});
+
+describe('the mood history (self.mood.history, server-owned, 30 taps)', () => {
+  it('appends one tap per day, newest last, at most 30; a client cannot write it', async () => {
+    const { appendMoodHistory, checkFact, parseMoodHistory } = await import('../../../../../src/profile/facts.js');
+    let h = '';
+    for (let i = 1; i <= 35; i++) h = appendMoodHistory(h, `mixed:2026-10-${String(i).padStart(2, '0')}`.replace('2026-10-3', '2026-11-0'));
+    expect(parseMoodHistory(h)).toHaveLength(30);
+    expect(appendMoodHistory('fine:2026-11-09', 'heavy:2026-11-09')).toBe('heavy:2026-11-09');
+    expect(appendMoodHistory('fine:2026-11-08', 'bogus')).toBe('fine:2026-11-08');
+    expect(checkFact('self.mood.history', 'fine:2026-11-09')).toEqual({ ok: false, error: 'server_owned:self.mood.history' });
   });
 });

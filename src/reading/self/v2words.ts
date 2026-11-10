@@ -7,7 +7,7 @@
  * functional-nature label); the value is a plain vocabulary key the briefs and the model agents read. Nothing here
  * computes a house, a lord, a relation, a strength or a polarity.
  */
-import type { Matter, PeopleLabel, Polarity, PromiseKind } from './v2types.js';
+import type { LifeLabel, Matter, PeopleLabel, Polarity, PromiseKind } from './v2types.js';
 
 /** `SELF.people`: the people a house's matters are about. The 8th and the 12th name no people. */
 export const SELF_PEOPLE: Readonly<Partial<Record<number, PeopleLabel>>> = {
@@ -133,3 +133,27 @@ export function mattersOfClaim(claimId: string): Matter[] {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// personalizer portrait: the life labels Sachin named (2026-11-09) on the matters table
+// reviewed by Sachin before release; vocabulary, not derivation
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * `SELF.life_labels`: each label the portrait states, as the matters (`SELF.matters`) whose windows and ledger rows
+ * speak for it. `family` reads the family of origin (money_in_hand: the 2nd's matter) and children; `business` reads
+ * partnership and gains; `health` reads the body and the daily load.
+ */
+export const LIFE_LABEL_MATTERS: Readonly<Record<LifeLabel, readonly Matter[]>> = {
+  career: ['career_and_standing'],
+  love: ['partnership'],
+  self: ['self_and_body'],
+  home: ['home_and_peace'],
+  family: ['money_in_hand', 'ideas_and_children'],
+  business: ['partnership', 'gains_and_network'],
+  health: ['self_and_body', 'work_load_and_health'],
+  fortune: ['luck_and_belief'],
+  work: ['work_load_and_health'],
+  gains: ['gains_and_network'],
+  sacrifices: ['loss_rest_and_distance'],
+};

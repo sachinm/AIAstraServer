@@ -455,6 +455,16 @@ retries, 0 refusals.
 | Sub-techniques + briefs | ≈ 6 round trips, well under 1.5 s on the Lambda | **9.0 s** from a laptop (run 1: 9.1 s): the parallel Layer 0 gained nothing measurable. Per-read timings now land in the build's `ms` (`sub.load.digest`, `…kundli`, `…systems`, `…sky`, `…profile`, `…applicability`, `…activation`, `…pressure`); the profile read moved into Layer 0. Not yet measured on the Lambda |
 | One build, three profiles | — | **$0.087 for 11 calls** (`priceFor`) + **≈ $0.002 storage** (126,548 cached tokens × $1 / M / h × 1.04 min; the regions were deleted after the run) ≈ **$0.089**, against a $0.15 cap; 72.7 s wall (58.9 s of build steps, ≈ 14 s deleting cache rows, 15 of which failed with HTTP 403 on expired regions: now treated as gone) |
 
+**The Personalizer on the Oracle's model (Sachin, 2026-11-09; branch `fix/self-v2-run2-findings`), estimate.** The
+Personalizer now builds a portrait of the person (`PersonPortrait`: character, biography, the past month, mood trend,
+health, the eleven life labels' state, register, birth and current place) and runs on the Oracle's model by default
+(`modelFor('oracle')`, today gemini-3.8-flash; `SELF_PERSONALIZER_MODEL` overrides) at thinking `low`, cap 12,000
+(retry 16,000). At Flash prices (≈ $0.75 / M in, $0.075 / M cached, $3.75 / M out): ≈ 8.5 k cached Oracle document
+($0.0006) + ≈ 1.5–2.5 k uncached suffix with the portrait ($0.0015) + ≈ 4.3 k card output and an assumed 1–3 k of
+thought at `low` (≈ $0.020–0.027) ≈ **$0.022–0.029 per profile**, against $0.0065 on flash-lite in run 2 (about four
+times), and ≈ 15–25 s instead of 10–12 s. One cold build with one profile moves from ≈ $0.074 to ≈ $0.09. Not measured:
+the first run on the new default measures the thought tokens (whether 3.8-flash reports them at all is still open).
+
 Token estimate: the Lab now shows chars / 2.2 (`estProviderTokens`; the replay's 74.6 k chars of Oracle input were
 34.6 k provider tokens); chars / 4 stays only as the conservative padding bound for the 1,024-token cache minimum.
 
