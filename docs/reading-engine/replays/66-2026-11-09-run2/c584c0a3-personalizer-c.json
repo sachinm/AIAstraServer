@@ -1,0 +1,1416 @@
+{
+  "id": "c",
+  "label": "gender not stated, 60+, retired, focus health and spirituality",
+  "pack": {
+    "ageBand": "60_plus",
+    "gender": null,
+    "role": "public",
+    "facts": {
+      "work": {
+        "status": "retired"
+      },
+      "focus": [
+        "health",
+        "spirituality"
+      ]
+    },
+    "declined": [],
+    "lastConfirms": [],
+    "mood": null,
+    "hash": "d9993c9b24cf0beb"
+  },
+  "status": "ok",
+  "doc": {
+    "hero": {
+      "tone": "heavy",
+      "sentence": "Your health and spiritual focus face a test of detachment until 12 Dec 2026.",
+      "sub": "A brief period of withdrawal precedes a more supportive cycle.",
+      "strip": [
+        {
+          "rowId": "activation:kaala/1/Ju@2023-10-23",
+          "matters": [
+            "self_and_body",
+            "effort_and_courage",
+            "partnership",
+            "career_and_standing",
+            "gains_and_network"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2023-10-23",
+          "to": "2034-10-22"
+        },
+        {
+          "rowId": "sky:ingress/Sa/Pisces@2025-03-29",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2025-03-29",
+          "to": "2027-06-03"
+        },
+        {
+          "rowId": "sky:ingress/Ke/Leo@2025-05-18",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2025-05-18",
+          "to": "2026-12-05"
+        },
+        {
+          "rowId": "sky:ingress/Ra/Aquarius@2025-05-18",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2025-05-18",
+          "to": "2026-12-05"
+        },
+        {
+          "rowId": "sky:ingress/Ju/Gemini@2025-12-05",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2025-12-05",
+          "to": "2026-06-02"
+        },
+        {
+          "rowId": "activation:kaala/2/Ma@2026-05-05",
+          "matters": [
+            "money_in_hand",
+            "effort_and_courage",
+            "home_and_peace",
+            "luck_and_belief",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-05-05",
+          "to": "2026-12-12"
+        },
+        {
+          "rowId": "activation:kaala/3/Ma@2026-05-08",
+          "matters": [
+            "money_in_hand",
+            "effort_and_courage",
+            "home_and_peace",
+            "luck_and_belief",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-05-08",
+          "to": "2026-05-10"
+        },
+        {
+          "rowId": "activation:kaala/3/Me@2026-05-10",
+          "matters": [
+            "money_in_hand",
+            "home_and_peace",
+            "partnership",
+            "sudden_and_hidden"
+          ],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-05-10",
+          "to": "2026-05-14"
+        },
+        {
+          "rowId": "activation:kaala/3/Ju@2026-05-14",
+          "matters": [
+            "self_and_body",
+            "effort_and_courage",
+            "partnership",
+            "career_and_standing",
+            "gains_and_network"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-05-14",
+          "to": "2026-05-18"
+        },
+        {
+          "rowId": "activation:kaala/3/Ve@2026-05-18",
+          "matters": [
+            "effort_and_courage",
+            "work_load_and_health",
+            "sudden_and_hidden",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-05-18",
+          "to": "2026-05-23"
+        },
+        {
+          "rowId": "activation:kaala/3/Sa@2026-05-23",
+          "matters": [
+            "self_and_body",
+            "home_and_peace",
+            "partnership",
+            "luck_and_belief",
+            "gains_and_network",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-05-23",
+          "to": "2026-05-29"
+        },
+        {
+          "rowId": "activation:kaala/3/Ra@2026-05-29",
+          "matters": [
+            "ideas_and_children",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-05-29",
+          "to": "2026-06-05"
+        },
+        {
+          "rowId": "sky:ingress/Ju/Cancer@2026-06-02",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-06-02",
+          "to": "2026-10-31"
+        },
+        {
+          "rowId": "activation:kaala/3/Ke@2026-06-05",
+          "matters": [
+            "ideas_and_children",
+            "luck_and_belief",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-06-05",
+          "to": "2026-06-13"
+        },
+        {
+          "rowId": "activation:kaala/3/Su@2026-06-13",
+          "matters": [
+            "self_and_body",
+            "work_load_and_health",
+            "partnership"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-06-13",
+          "to": "2026-06-17"
+        },
+        {
+          "rowId": "activation:kaala/3/Mo@2026-06-17",
+          "matters": [
+            "effort_and_courage",
+            "ideas_and_children",
+            "luck_and_belief"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-06-17",
+          "to": "2026-06-25"
+        },
+        {
+          "rowId": "activation:kaala/3/Ma@2026-06-25",
+          "matters": [
+            "money_in_hand",
+            "effort_and_courage",
+            "home_and_peace",
+            "luck_and_belief",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-06-25",
+          "to": "2026-07-07"
+        },
+        {
+          "rowId": "activation:kaala/3/Me@2026-07-07",
+          "matters": [
+            "money_in_hand",
+            "home_and_peace",
+            "partnership",
+            "sudden_and_hidden"
+          ],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-07-07",
+          "to": "2026-07-23"
+        },
+        {
+          "rowId": "activation:kaala/3/Ju@2026-07-23",
+          "matters": [
+            "self_and_body",
+            "effort_and_courage",
+            "partnership",
+            "career_and_standing",
+            "gains_and_network"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-07-23",
+          "to": "2026-08-12"
+        },
+        {
+          "rowId": "activation:kaala/3/Ve@2026-08-12",
+          "matters": [
+            "effort_and_courage",
+            "work_load_and_health",
+            "sudden_and_hidden",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-08-12",
+          "to": "2026-09-06"
+        },
+        {
+          "rowId": "activation:kaala/3/Sa@2026-09-06",
+          "matters": [
+            "self_and_body",
+            "home_and_peace",
+            "partnership",
+            "luck_and_belief",
+            "gains_and_network",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-09-06",
+          "to": "2026-10-04"
+        },
+        {
+          "rowId": "activation:kaala/3/Ra@2026-10-04",
+          "matters": [
+            "ideas_and_children",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-10-04",
+          "to": "2026-11-05"
+        },
+        {
+          "rowId": "sky:ingress/Ju/Leo@2026-10-31",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-10-31",
+          "to": "2027-01-25"
+        },
+        {
+          "rowId": "activation:kaala/3/Ke@2026-11-05",
+          "matters": [
+            "ideas_and_children",
+            "luck_and_belief",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-11-05",
+          "to": "2026-12-12"
+        },
+        {
+          "rowId": "sky:ingress/Ke/Cancer@2026-12-05",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-12-05",
+          "to": "2028-06-24"
+        },
+        {
+          "rowId": "sky:ingress/Ra/Capricorn@2026-12-05",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-12-05",
+          "to": "2028-06-24"
+        },
+        {
+          "rowId": "activation:kaala/2/Me@2026-12-12",
+          "matters": [
+            "money_in_hand",
+            "home_and_peace",
+            "partnership",
+            "sudden_and_hidden"
+          ],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-12-12",
+          "to": "2027-10-02"
+        },
+        {
+          "rowId": "activation:kaala/3/Su@2026-12-12",
+          "matters": [
+            "self_and_body",
+            "work_load_and_health",
+            "partnership"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-12-12",
+          "to": "2026-12-13"
+        },
+        {
+          "rowId": "activation:kaala/3/Mo@2026-12-13",
+          "matters": [
+            "effort_and_courage",
+            "ideas_and_children",
+            "luck_and_belief"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-12-13",
+          "to": "2026-12-15"
+        },
+        {
+          "rowId": "activation:kaala/3/Ma@2026-12-15",
+          "matters": [
+            "money_in_hand",
+            "effort_and_courage",
+            "home_and_peace",
+            "luck_and_belief",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-12-15",
+          "to": "2026-12-19"
+        },
+        {
+          "rowId": "activation:kaala/3/Me@2026-12-19",
+          "matters": [
+            "money_in_hand",
+            "home_and_peace",
+            "partnership",
+            "sudden_and_hidden"
+          ],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2026-12-19",
+          "to": "2026-12-23"
+        },
+        {
+          "rowId": "activation:kaala/3/Ju@2026-12-23",
+          "matters": [
+            "self_and_body",
+            "effort_and_courage",
+            "partnership",
+            "career_and_standing",
+            "gains_and_network"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2026-12-23",
+          "to": "2026-12-29"
+        },
+        {
+          "rowId": "activation:kaala/3/Ve@2026-12-29",
+          "matters": [
+            "effort_and_courage",
+            "work_load_and_health",
+            "sudden_and_hidden",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2026-12-29",
+          "to": "2027-01-05"
+        },
+        {
+          "rowId": "activation:kaala/3/Sa@2027-01-05",
+          "matters": [
+            "self_and_body",
+            "home_and_peace",
+            "partnership",
+            "luck_and_belief",
+            "gains_and_network",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2027-01-05",
+          "to": "2027-01-13"
+        },
+        {
+          "rowId": "activation:kaala/3/Ra@2027-01-13",
+          "matters": [
+            "ideas_and_children",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2027-01-13",
+          "to": "2027-01-22"
+        },
+        {
+          "rowId": "activation:kaala/3/Ke@2027-01-22",
+          "matters": [
+            "ideas_and_children",
+            "luck_and_belief",
+            "gains_and_network"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2027-01-22",
+          "to": "2027-02-01"
+        },
+        {
+          "rowId": "sky:ingress/Ju/Cancer@2027-01-25",
+          "matters": [],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2027-01-25",
+          "to": "2027-06-26"
+        },
+        {
+          "rowId": "activation:kaala/3/Su@2027-02-01",
+          "matters": [
+            "self_and_body",
+            "work_load_and_health",
+            "partnership"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2027-02-01",
+          "to": "2027-02-07"
+        },
+        {
+          "rowId": "activation:kaala/3/Mo@2027-02-07",
+          "matters": [
+            "effort_and_courage",
+            "ideas_and_children",
+            "luck_and_belief"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2027-02-07",
+          "to": "2027-02-18"
+        },
+        {
+          "rowId": "activation:kaala/3/Ma@2027-02-18",
+          "matters": [
+            "money_in_hand",
+            "effort_and_courage",
+            "home_and_peace",
+            "luck_and_belief",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2027-02-18",
+          "to": "2027-03-06"
+        },
+        {
+          "rowId": "activation:kaala/3/Me@2027-03-06",
+          "matters": [
+            "money_in_hand",
+            "home_and_peace",
+            "partnership",
+            "sudden_and_hidden"
+          ],
+          "polarity": "mixed",
+          "strength": 2,
+          "from": "2027-03-06",
+          "to": "2027-03-27"
+        },
+        {
+          "rowId": "activation:kaala/3/Ju@2027-03-27",
+          "matters": [
+            "self_and_body",
+            "effort_and_courage",
+            "partnership",
+            "career_and_standing",
+            "gains_and_network"
+          ],
+          "polarity": "supports",
+          "strength": 2,
+          "from": "2027-03-27",
+          "to": "2027-04-23"
+        },
+        {
+          "rowId": "activation:kaala/3/Ve@2027-04-23",
+          "matters": [
+            "effort_and_courage",
+            "work_load_and_health",
+            "sudden_and_hidden",
+            "loss_rest_and_distance"
+          ],
+          "polarity": "presses",
+          "strength": 2,
+          "from": "2027-04-23",
+          "to": "2027-05-26"
+        }
+      ],
+      "easesAt": "2026-12-12",
+      "nextCheck": "2026-12-12",
+      "question": {
+        "claimId": "claim:stuck.heaviest_now:presses:ideas_and_children+luck_and_belief+gains_and_network",
+        "text": "Has your focus on health and spiritual practice felt heavier since 5 Nov 2026?"
+      },
+      "withheld": false
+    },
+    "cards": {
+      "diagnosis": {
+        "areaId": "diagnosis",
+        "headline": "Personal effort yields steady momentum despite temporary detachment pressing your spiritual and health pursuits.",
+        "body": [
+          "Your life is anchored in relational intelligence and structured counsel. You are currently in an expansive phase that stabilizes your vitality and collective responsibilities.",
+          "A brief period of friction is pressing your creative and social pursuits until 12 Dec 2026. This contraction triggers sudden mental aloofness, but it clears completely after that date."
+        ],
+        "patterns": [
+          {
+            "text": "Mental aloofness and emotional distance arise from a brief cycle of detachment.",
+            "kind": "risk",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "diagnosis.p3"
+          }
+        ],
+        "ladder": {
+          "best": "Focus on your spiritual foundation and personal counsel.",
+          "practical": "Organize your financial affairs to maintain stability.",
+          "drift": "You may feel an urge to pull away from community projects.",
+          "floor": "Protect your daily routine from unnecessary mental fatigue."
+        },
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A temporary stretch of detachment"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "diagnosis.p1",
+          "diagnosis.p1",
+          "diagnosis.p2",
+          "diagnosis.p3",
+          "diagnosis.p3"
+        ]
+      },
+      "stuck": {
+        "areaId": "stuck",
+        "headline": "A temporary wave of mental withdrawal demands quiet patience until 12 Dec 2026.",
+        "body": [
+          "You may feel a sense of creative fatigue and emotional distance from peers. This resistance stems from a brief cycle that tests your focus.",
+          "This pressure carries an absolute expiration date. Momentum shifts toward supportive alignments from 13 Dec 2026 onward."
+        ],
+        "patterns": [
+          {
+            "text": "Refrain from abandoning long-term intellectual or spiritual projects during this phase.",
+            "kind": "watch",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "stuck.p1"
+          }
+        ],
+        "ladder": {
+          "best": "Observe your thoughts without acting on temporary detachment.",
+          "practical": "Stick to your established daily spiritual habits.",
+          "drift": "You might feel inclined to isolate yourself from friends.",
+          "floor": "Do not cut off long-term alliances while feeling withdrawn."
+        },
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A period of mental withdrawal"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "stuck.p1",
+          "stuck.p1",
+          "stuck.p1",
+          "stuck.p2",
+          "stuck.p2"
+        ]
+      },
+      "chapter": {
+        "areaId": "chapter",
+        "headline": "A focused phase of material strengthening reaches its culmination before 12 Dec 2026.",
+        "body": [
+          "You have been tasked with building tangible security and stepping into independent responsibilities. This phase requires persistent personal labor.",
+          "The current closing stretch asks you to tie up loose ends and clear mental clutter. New momentum begins after 12 Dec 2026."
+        ],
+        "patterns": [
+          {
+            "text": "Consolidate your financial and personal assets before the cycle shifts.",
+            "kind": "strength",
+            "since": "2026-05-05",
+            "until": "2026-12-12",
+            "source": "chapter.p1"
+          }
+        ],
+        "ladder": {
+          "best": "Complete your individual initiatives with steady focus.",
+          "practical": "Review your financial balances and organizational tasks.",
+          "drift": "Passive waiting may lead to missed opportunities for growth.",
+          "floor": "Maintain your personal independence in all matters."
+        },
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A phase of building security"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "chapter.p1",
+          "chapter.p1",
+          "chapter.p1",
+          "chapter.p2",
+          "chapter.p2"
+        ]
+      },
+      "chapters": {
+        "areaId": "chapters",
+        "headline": "A decade of wisdom and engagement bridges your past training and future comfort.",
+        "body": [
+          "You are in an eleven-year period that brings your wisdom and reputation into public visibility. This journey develops systematically through successive chapters.",
+          "When this foundational cycle concludes, you will enter an era centered on strategic resource refinement and quiet mastery."
+        ],
+        "patterns": [
+          {
+            "text": "Anchor your ambitions around mentorship and advisory roles.",
+            "kind": "strength",
+            "since": "2023-10-23",
+            "until": "2034-10-22",
+            "source": "chapters.p2"
+          }
+        ],
+        "ladder": {
+          "best": "Embrace your role as a mentor and guide.",
+          "practical": "Focus on long-term public and community commitments.",
+          "drift": "You may feel the weight of your public reputation.",
+          "floor": "Protect your integrity in all community engagements."
+        },
+        "dates": [
+          {
+            "from": "2023-10-23",
+            "to": "2034-10-22",
+            "label": "Your major years of wisdom"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "chapters.p2",
+          "chapters.p2",
+          "chapters.p2",
+          "chapters.p3"
+        ]
+      },
+      "lagna": {
+        "areaId": "lagna",
+        "headline": "You navigate life through deep philosophical contemplation while the world recognizes you for executive leadership and professional gravitas.",
+        "body": [],
+        "patterns": [],
+        "ladder": null,
+        "dates": [],
+        "certainty": "strong",
+        "sources": []
+      },
+      "mind": {
+        "areaId": "mind",
+        "headline": "Intense emotional tides are steadied by your capacity to convert crisis into durable wisdom.",
+        "body": [
+          "You possess remarkable emotional resilience built from psychological friction. Your heart and domestic sanctuary have strong intrinsic capacity.",
+          "Mental turbulence resolves as the current period of detachment shifts after 12 Dec 2026. Grounding yourself in methodical problem-solving will restore your peace."
+        ],
+        "patterns": [
+          {
+            "text": "Avoid making long-term emotional decisions during this window of detachment.",
+            "kind": "risk",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "mind.p3"
+          }
+        ],
+        "ladder": {
+          "best": "Convert emotional challenges into lasting wisdom.",
+          "practical": "Use methodical problem-solving to clear mental clutter.",
+          "drift": "You may experience bouts of solitary brooding.",
+          "floor": "Refrain from reactive decisions when moods fluctuate."
+        },
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A window of mental detachment"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "mind.p1",
+          "mind.p1",
+          "mind.p2",
+          "mind.p3",
+          "mind.p3"
+        ]
+      },
+      "drive": {
+        "areaId": "drive",
+        "headline": "A fierce determination channels analytical rigor into tangible achievements.",
+        "body": [
+          "You possess unyielding ambition and an instinct for wealth accumulation through specialized knowledge. Your efforts are characterized by high-intensity execution.",
+          "The current period demands direct, assertive labor to secure your assets. Focus on finalizing your ongoing tasks rather than launching new initiatives."
+        ],
+        "patterns": [],
+        "ladder": {
+          "best": "Channel your ambition into meaningful, lasting projects.",
+          "practical": "Finalize your current commitments with detail-oriented care.",
+          "drift": "You may face friction in your social networks.",
+          "floor": "Maintain your courage and initiative."
+        },
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A period of focused effort"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "drive.p1",
+          "drive.p2",
+          "drive.p2",
+          "drive.p3",
+          "drive.p3"
+        ]
+      },
+      "presence": {
+        "areaId": "presence",
+        "headline": "You present a dignified and authoritative countenance that commands natural respect.",
+        "body": [
+          "Your presence conveys a balanced blend of warmth, formality, and gravitas. You prefer purposeful, respectable presentation over ornamentation.",
+          "In your current passage, you convey strategic grit and unyielding resolve. You keep others engaged through your competence."
+        ],
+        "patterns": [],
+        "ladder": {
+          "best": "Project your natural authority with calm dignity.",
+          "practical": "Maintain a crisp and formal style in all meetings.",
+          "drift": "You might feel the need to guard your vulnerabilities.",
+          "floor": "Keep your presentation purposeful and measured."
+        },
+        "dates": [
+          {
+            "from": "2024-06-14",
+            "to": "2024-09-16",
+            "label": "A past window of peak grace"
+          }
+        ],
+        "certainty": "likely",
+        "sources": [
+          "presence.p1",
+          "presence.p1",
+          "presence.p1",
+          "presence.p3",
+          "presence.p3"
+        ]
+      },
+      "body": {
+        "areaId": "body",
+        "headline": "Physical stamina rests on disciplined habits, though recovery requires deliberate daily pacing.",
+        "body": [
+          "Your vitality is protected by a steady baseline, but mental stress directly affects your physical tension. Consistent structure is essential for your well-being.",
+          "Nervous exhaustion is a source of friction until 12 Dec 2026."
+        ],
+        "patterns": [],
+        "ladder": null,
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A period requiring rest and moderation"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "body.p1",
+          "body.p1",
+          "body.p1",
+          "body.p3"
+        ]
+      },
+      "yogas": {
+        "areaId": "yogas",
+        "headline": "Fortunate cancellations resolve earlier knots into enduring material and strategic strength.",
+        "body": [
+          "Your chart contains gifts that transform early emotional vulnerability into profound resilience. These configurations generate long-term resources and financial fortune.",
+          "Persistent effort activates these wealth-producing gifts. Refrain from emotionally reactive negotiations while you navigate your current cycle."
+        ],
+        "patterns": [
+          {
+            "text": "Focus on asset consolidation rather than speculative initiatives.",
+            "kind": "strength",
+            "since": "2026-05-05",
+            "until": "2026-12-12",
+            "source": "yogas.p3"
+          }
+        ],
+        "ladder": {
+          "best": "Use your resilience to build lasting security.",
+          "practical": "Direct your efforts toward core financial commitments.",
+          "drift": "You may face tests of your creative focus.",
+          "floor": "Maintain your faith and mentorship connections."
+        },
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A period engaging your wealth potential"
+          }
+        ],
+        "certainty": "strong",
+        "sources": [
+          "yogas.p1",
+          "yogas.p1",
+          "yogas.p1",
+          "yogas.p3",
+          "yogas.p3"
+        ]
+      },
+      "year": {
+        "areaId": "year",
+        "headline": "A disciplined … calls for structural adjustments at home and work before broader professional expansion resumes.",
+        "body": [],
+        "patterns": [],
+        "ladder": null,
+        "dates": [],
+        "certainty": "strong",
+        "sources": []
+      }
+    }
+  },
+  "raw": {
+    "hero": {
+      "tone": "heavy",
+      "sentence": "Your health and spiritual focus face a test of detachment until 12 Dec 2026.",
+      "sub": "A brief period of withdrawal precedes a more supportive cycle.",
+      "questionClaimId": "stuck.heaviest_now:presses:ideas_and_children+luck_and_belief+gains_and_network",
+      "questionText": "Has your focus on health and spiritual practice felt heavier since 5 Nov 2026?",
+      "withheld": false
+    },
+    "cards": [
+      {
+        "areaId": "diagnosis",
+        "headline": "Personal effort yields steady momentum despite temporary detachment pressing your spiritual and health pursuits.",
+        "body": [
+          "Your life is anchored in relational intelligence and structured counsel. You are currently in an expansive phase that stabilizes your vitality and collective responsibilities.",
+          "A brief period of friction is pressing your creative and social pursuits until 12 Dec 2026. This contraction triggers sudden mental aloofness, but it clears completely after that date."
+        ],
+        "patterns": [
+          {
+            "text": "Mental aloofness and emotional distance arise from a brief cycle of detachment.",
+            "kind": "risk",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "diagnosis.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A temporary stretch of detachment"
+          }
+        ],
+        "sources": [
+          "diagnosis.p1",
+          "diagnosis.p1",
+          "diagnosis.p2",
+          "diagnosis.p3",
+          "diagnosis.p3"
+        ],
+        "ladder": {
+          "best": "Focus on your spiritual foundation and personal counsel.",
+          "practical": "Organize your financial affairs to maintain stability.",
+          "drift": "You may feel an urge to pull away from community projects.",
+          "floor": "Protect your daily routine from unnecessary mental fatigue."
+        }
+      },
+      {
+        "areaId": "stuck",
+        "headline": "A temporary wave of mental withdrawal demands quiet patience until 12 Dec 2026.",
+        "body": [
+          "You may feel a sense of creative fatigue and emotional distance from peers. This resistance stems from a brief cycle that tests your focus.",
+          "This pressure carries an absolute expiration date. Momentum shifts toward supportive alignments from 13 Dec 2026 onward."
+        ],
+        "patterns": [
+          {
+            "text": "Refrain from abandoning long-term intellectual or spiritual projects during this phase.",
+            "kind": "watch",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "stuck.p1"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A period of mental withdrawal"
+          }
+        ],
+        "sources": [
+          "stuck.p1",
+          "stuck.p1",
+          "stuck.p2",
+          "stuck.p2"
+        ],
+        "ladder": {
+          "best": "Observe your thoughts without acting on temporary detachment.",
+          "practical": "Stick to your established daily spiritual habits.",
+          "drift": "You might feel inclined to isolate yourself from friends.",
+          "floor": "Do not cut off long-term alliances while feeling withdrawn."
+        }
+      },
+      {
+        "areaId": "chapter",
+        "headline": "A focused phase of material strengthening reaches its culmination before 12 Dec 2026.",
+        "body": [
+          "You have been tasked with building tangible security and stepping into independent responsibilities. This phase requires persistent personal labor.",
+          "The current closing stretch asks you to tie up loose ends and clear mental clutter. New momentum begins after 12 Dec 2026."
+        ],
+        "patterns": [
+          {
+            "text": "Consolidate your financial and personal assets before the cycle shifts.",
+            "kind": "strength",
+            "since": "2026-05-05",
+            "until": "2026-12-12",
+            "source": "chapter.p1"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A phase of building security"
+          }
+        ],
+        "sources": [
+          "chapter.p1",
+          "chapter.p1",
+          "chapter.p2",
+          "chapter.p2"
+        ],
+        "ladder": {
+          "best": "Complete your individual initiatives with steady focus.",
+          "practical": "Review your financial balances and organizational tasks.",
+          "drift": "Passive waiting may lead to missed opportunities for growth.",
+          "floor": "Maintain your personal independence in all matters."
+        }
+      },
+      {
+        "areaId": "chapters",
+        "headline": "A decade of wisdom and engagement bridges your past training and future comfort.",
+        "body": [
+          "You are in an eleven-year period that brings your wisdom and reputation into public visibility. This journey develops systematically through successive chapters.",
+          "When this foundational cycle concludes, you will enter an era centered on strategic resource refinement and quiet mastery."
+        ],
+        "patterns": [
+          {
+            "text": "Anchor your ambitions around mentorship and advisory roles.",
+            "kind": "strength",
+            "since": "2023-10-23",
+            "until": "2034-10-22",
+            "source": "chapters.p2"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2023-10-23",
+            "to": "2034-10-22",
+            "label": "Your major years of wisdom"
+          }
+        ],
+        "sources": [
+          "chapters.p2",
+          "chapters.p2",
+          "chapters.p3"
+        ],
+        "ladder": {
+          "best": "Embrace your role as a mentor and guide.",
+          "practical": "Focus on long-term public and community commitments.",
+          "drift": "You may feel the weight of your public reputation.",
+          "floor": "Protect your integrity in all community engagements."
+        }
+      },
+      {
+        "areaId": "lagna",
+        "headline": "You navigate life through philosophical contemplation while the world recognizes your executive gravitas.",
+        "body": [
+          "Your core is reflective and ethically grounded. You balance your fluid imagination with structured commitments.",
+          "While your internal orientation remains contemplative, you are viewed as an established, values-driven mentor. You are learning to anchor an adaptable spirit within unshakeable personal dignity."
+        ],
+        "patterns": [
+          {
+            "text": "Balance your private contemplation with your public leadership persona.",
+            "kind": "watch",
+            "since": "",
+            "until": "",
+            "source": "lagna.p2"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-11-09",
+            "to": "2026-12-12",
+            "label": "Your current period of reflection"
+          }
+        ],
+        "sources": [
+          "lagna.p1",
+          "lagna.p1",
+          "lagna.p2",
+          "lagna.p3"
+        ],
+        "ladder": {
+          "best": "Align your inner wisdom with your outward actions.",
+          "practical": "Maintain clear boundaries between your private and public life.",
+          "drift": "Your public image may feel at odds with your inner state.",
+          "floor": "Keep your personal vulnerabilities guarded."
+        }
+      },
+      {
+        "areaId": "mind",
+        "headline": "Intense emotional tides are steadied by your capacity to convert crisis into durable wisdom.",
+        "body": [
+          "You possess remarkable emotional resilience built from psychological friction. Your heart and domestic sanctuary have strong intrinsic capacity.",
+          "Mental turbulence resolves as the current period of detachment shifts after 12 Dec 2026. Grounding yourself in methodical problem-solving will restore your peace."
+        ],
+        "patterns": [
+          {
+            "text": "Avoid making long-term emotional decisions during this window of detachment.",
+            "kind": "risk",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "mind.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A window of mental detachment"
+          }
+        ],
+        "sources": [
+          "mind.p1",
+          "mind.p2",
+          "mind.p3",
+          "mind.p3"
+        ],
+        "ladder": {
+          "best": "Convert emotional challenges into lasting wisdom.",
+          "practical": "Use methodical problem-solving to clear mental clutter.",
+          "drift": "You may experience bouts of solitary brooding.",
+          "floor": "Refrain from reactive decisions when moods fluctuate."
+        }
+      },
+      {
+        "areaId": "drive",
+        "headline": "A fierce determination channels analytical rigor into tangible achievements.",
+        "body": [
+          "You possess unyielding ambition and an instinct for wealth accumulation through specialized knowledge. Your efforts are characterized by high-intensity execution.",
+          "The current period demands direct, assertive labor to secure your assets. Focus on finalizing your ongoing tasks rather than launching new initiatives."
+        ],
+        "patterns": [
+          {
+            "text": "Direct your energy toward finalizing operational tasks.",
+            "kind": "strength",
+            "since": "2026-11-09",
+            "until": "2026-12-12",
+            "source": "drive.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A period of focused effort"
+          }
+        ],
+        "sources": [
+          "drive.p1",
+          "drive.p2",
+          "drive.p3"
+        ],
+        "ladder": {
+          "best": "Channel your ambition into meaningful, lasting projects.",
+          "practical": "Finalize your current commitments with detail-oriented care.",
+          "drift": "You may face friction in your social networks.",
+          "floor": "Maintain your courage and initiative."
+        }
+      },
+      {
+        "areaId": "presence",
+        "headline": "You present a dignified and authoritative countenance that commands natural respect.",
+        "body": [
+          "Your presence conveys a balanced blend of warmth, formality, and gravitas. You prefer purposeful, respectable presentation over ornamentation.",
+          "In your current passage, you convey strategic grit and unyielding resolve. You keep others engaged through your competence."
+        ],
+        "patterns": [
+          {
+            "text": "Lean into a formal presentation to let your authority speak.",
+            "kind": "strength",
+            "since": "2026-11-09",
+            "until": "2026-12-12",
+            "source": "presence.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2024-06-14",
+            "to": "2024-09-16",
+            "label": "A past window of peak grace"
+          }
+        ],
+        "sources": [
+          "presence.p1",
+          "presence.p1",
+          "presence.p3",
+          "presence.p3"
+        ],
+        "ladder": {
+          "best": "Project your natural authority with calm dignity.",
+          "practical": "Maintain a crisp and formal style in all meetings.",
+          "drift": "You might feel the need to guard your vulnerabilities.",
+          "floor": "Keep your presentation purposeful and measured."
+        }
+      },
+      {
+        "areaId": "body",
+        "headline": "Physical stamina rests on disciplined habits, though recovery requires deliberate daily pacing.",
+        "body": [
+          "Your vitality is protected by a steady baseline, but mental stress directly affects your physical tension. Consistent structure is essential for your well-being.",
+          "Nervous exhaustion is a source of friction until 12 Dec 2026. Maintain simple meals and protect your sleep hours to counteract this heat."
+        ],
+        "patterns": [
+          {
+            "text": "Maintain simple, easily digestible meals to support your energy.",
+            "kind": "watch",
+            "since": "2026-11-05",
+            "until": "2026-12-12",
+            "source": "body.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-11-05",
+            "to": "2026-12-12",
+            "label": "A period requiring rest and moderation"
+          }
+        ],
+        "sources": [
+          "body.p1",
+          "body.p1",
+          "body.p3",
+          "body.p3"
+        ],
+        "ladder": {
+          "best": "Prioritize restorative sleep and steady pacing.",
+          "practical": "Follow a simple, consistent dietary routine.",
+          "drift": "You may experience drops in stamina when overworked.",
+          "floor": "Protect your joints and physical framework."
+        }
+      },
+      {
+        "areaId": "yogas",
+        "headline": "Fortunate cancellations resolve earlier knots into enduring material and strategic strength.",
+        "body": [
+          "Your chart contains gifts that transform early emotional vulnerability into profound resilience. These configurations generate long-term resources and financial fortune.",
+          "Persistent effort activates these wealth-producing gifts. Refrain from emotionally reactive negotiations while you navigate your current cycle."
+        ],
+        "patterns": [
+          {
+            "text": "Focus on asset consolidation rather than speculative initiatives.",
+            "kind": "strength",
+            "since": "2026-05-05",
+            "until": "2026-12-12",
+            "source": "yogas.p3"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-05-05",
+            "to": "2026-12-12",
+            "label": "A period engaging your wealth potential"
+          }
+        ],
+        "sources": [
+          "yogas.p1",
+          "yogas.p1",
+          "yogas.p3",
+          "yogas.p3"
+        ],
+        "ladder": {
+          "best": "Use your resilience to build lasting security.",
+          "practical": "Direct your efforts toward core financial commitments.",
+          "drift": "You may face tests of your creative focus.",
+          "floor": "Maintain your faith and mentorship connections."
+        }
+      },
+      {
+        "areaId": "year",
+        "headline": "A disciplined annual cycle calls for structural adjustments at home before expansion resumes.",
+        "body": [
+          "Your current cycle emphasizes personal ethics and long-range planning. The theme revolves around consolidating your standing and aligning your ambitions.",
+          "Patient labor is required to address overdue administrative matters. Complete your organizational cleanups to clear pending obligations."
+        ],
+        "patterns": [
+          {
+            "text": "Complete your home and organizational cleanups to clear obligations.",
+            "kind": "watch",
+            "since": "2026-10-28",
+            "until": "2026-12-24",
+            "source": "year.p2"
+          }
+        ],
+        "dates": [
+          {
+            "from": "2026-10-28",
+            "to": "2026-12-24",
+            "label": "A period of domestic discipline"
+          }
+        ],
+        "sources": [
+          "year.p1",
+          "year.p1",
+          "year.p2",
+          "year.p2"
+        ],
+        "ladder": {
+          "best": "Align your personal goals with your external obligations.",
+          "practical": "Address overdue administrative and home tasks.",
+          "drift": "You might feel the pressure of pending duties.",
+          "floor": "Maintain order in your daily routines."
+        }
+      }
+    ]
+  },
+  "cardStatus": {
+    "diagnosis": "ok",
+    "stuck": "ok",
+    "chapter": "ok",
+    "chapters": "ok",
+    "lagna": "withheld",
+    "mind": "ok",
+    "drive": "ok",
+    "presence": "ok",
+    "body": "ok",
+    "yogas": "ok",
+    "year": "withheld"
+  },
+  "gaps": [
+    "lagna: headline dropped (role word against the stated work status (executive))",
+    "lagna: withheld (no headline survived); the Oracle headline stands in",
+    "drive: a pattern dropped (the span 2026-11-09..2026-12-12 is not a window of the Oracle document)",
+    "presence: a pattern dropped (the span 2026-11-09..2026-12-12 is not a window of the Oracle document)",
+    "body: a body sentence dropped (diet or medicine advice (meals))",
+    "body: a pattern dropped (diet or medicine advice (meals))",
+    "body: ladder dropped (practical: diet or medicine advice (dietary))",
+    "year: headline dropped (chart term (annual cycle))",
+    "year: withheld (no headline survived); the Oracle headline stands in"
+  ],
+  "scan": [
+    {
+      "where": "c.cards.lagna.headline",
+      "kind": "role word",
+      "match": "executive",
+      "text": "You navigate life through deep philosophical contemplation while the world recognizes you for executive leadership and professional gravitas."
+    }
+  ],
+  "rawScan": [
+    {
+      "where": "c.raw.cards[4].headline",
+      "kind": "role word",
+      "match": "executive",
+      "text": "You navigate life through philosophical contemplation while the world recognizes your executive gravitas."
+    },
+    {
+      "where": "c.raw.cards[8].body[1]",
+      "kind": "body advice word",
+      "match": "meals",
+      "text": "Nervous exhaustion is a source of friction until 12 Dec 2026. Maintain simple meals and protect your sleep hours to counteract this heat."
+    },
+    {
+      "where": "c.raw.cards[8].patterns[0].text",
+      "kind": "body advice word",
+      "match": "meals",
+      "text": "Maintain simple, easily digestible meals to support your energy."
+    },
+    {
+      "where": "c.raw.cards[8].ladder.practical",
+      "kind": "body advice word",
+      "match": "dietary",
+      "text": "Follow a simple, consistent dietary routine."
+    },
+    {
+      "where": "c.raw.cards[10].headline",
+      "kind": "chart term",
+      "match": "annual cycle",
+      "text": "A disciplined annual cycle calls for structural adjustments at home before expansion resumes."
+    }
+  ],
+  "datesOutside": [],
+  "finishReason": "STOP",
+  "attempts": [
+    {
+      "callId": "personalizer.c:self.personalizer",
+      "finishReason": "STOP",
+      "outputTokens": 4075,
+      "thoughtTokens": 0,
+      "costUsd": 0.006426
+    }
+  ],
+  "heroNamesFocus": true,
+  "wordCounts": {
+    "diagnosis": {
+      "headline": 14,
+      "body": 53
+    },
+    "stuck": {
+      "headline": 13,
+      "body": 41
+    },
+    "chapter": {
+      "headline": 13,
+      "body": 41
+    },
+    "chapters": {
+      "headline": 13,
+      "body": 40
+    },
+    "lagna": {
+      "headline": 18,
+      "body": 0
+    },
+    "mind": {
+      "headline": 14,
+      "body": 41
+    },
+    "drive": {
+      "headline": 9,
+      "body": 42
+    },
+    "presence": {
+      "headline": 11,
+      "body": 36
+    },
+    "body": {
+      "headline": 12,
+      "body": 34
+    },
+    "yogas": {
+      "headline": 11,
+      "body": 37
+    },
+    "year": {
+      "headline": 16,
+      "body": 0
+    }
+  }
+}

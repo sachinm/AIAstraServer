@@ -10,6 +10,8 @@
  *   (POST /events, AWS_LWA_PASS_THROUGH_PATH). `isCacheSweepEvent` recognises it; `runScheduledSweep` runs it.
  * - Long-lived server (not Lambda): `startPeriodicSweep` runs it every 45 minutes on an unref'd timer.
  * - CLI: `npm run cache:sweep` (scripts/cache-sweep.ts).
+ * - An expired region answers HTTP 403 (or 404) on delete: every delete path (this sweep, the per-individual recycle,
+ *   logout) treats that as gone and marks the row deleted (`goneOnDelete` in promptCache.ts; doc 66 replay run 2).
  */
 import type { PrismaClient } from '@prisma/client';
 import { getReadingCacheRecycleMs } from '../../config/env.js';

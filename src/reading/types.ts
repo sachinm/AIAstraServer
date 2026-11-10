@@ -61,6 +61,11 @@ export interface Usage {
   outputTokens: number;
   thoughtTokens: number;
   ms: number;
+  /**
+   * false when the provider's usage had no thought count (Gemini `usageMetadata.thoughtsTokenCount` absent): then
+   * `thoughtTokens` is 0 for the cost arithmetic but means "not reported", not "did not think". Undefined: not known.
+   */
+  thoughtTokensReported?: boolean;
 }
 
 export interface ReadingEvent {

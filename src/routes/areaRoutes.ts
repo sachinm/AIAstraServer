@@ -25,7 +25,7 @@ import { getLoveBoard } from '../reading/area/loveService.js';
 import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area/shadeResolver.js';
 import { questionGate, quotaBody, type BoardCharge, type QuestionGate } from '../billing/questionGate.js';
 import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
-import { synthesisValidity } from '../reading/self/synthesisValidity.js';
+import { selfBoardDates } from '../reading/self/synthesisValidity.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -52,10 +52,10 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
   const gate = deps.gate ?? questionGate(deps.prisma);
   const today = () => (deps.now ?? (() => new Date()))().toISOString().slice(0, 10);
   const kundliOf = (userId: string) => deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
-  /** The You board's dates are its synthesis's own, once one is made (docs/billing/03). */
-  const youDates = async (userId: string) => {
+  /** The You board's dates: its synthesis's own once one is made, else the area reading's (docs/billing/03; selfBoardDates). */
+  const youDates = async (userId: string, area: AreaBoardResult & { status: 'ok' }) => {
     const k = await kundliOf(userId);
-    return k ? synthesisValidity(deps.prisma, k.id, 'self', today()) : null;
+    return k ? selfBoardDates(deps.prisma, k.id, today(), area) : null;
   };
 
   app.get('/api/area/career', async (req, res) => {
@@ -88,7 +88,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
         const r = await get(boardDeps, userId);
         if (r.status === 'no_kundli') return res.status(404).json({ status: 'no_kundli', error: 'no_kundli' });
         if (r.status === 'preparing') return res.status(202).json({ status: 'preparing' });
-        const dates = area === 'self' ? await youDates(userId) : null;
+        const dates = area === 'self' ? await youDates(userId, r) : null;
         return res.json({ ...r, ...(dates ?? {}), checks: await checksFor(deps.prisma, userId, area) });
       } catch (e) {
         console.error(`[area:${area}]`, (e as Error).message);
@@ -115,7 +115,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       const current = await build(false);
       if (current.status === 'no_kundli') return res.status(404).json({ error: 'no_kundli' });
       if (current.status !== 'ok') return res.status(409).json({ error: 'not_ready', code: 'not_ready' });
-      const dates = (board === 'self' ? await synthesisValidity(deps.prisma, kundli.id, 'self', day) : null) ?? current;
+      const dates = (board === 'self' ? await selfBoardDates(deps.prisma, kundli.id, day, current) : null) ?? current;
       if (!dates.refresh_due) return res.status(409).json({ error: 'not_due', code: 'not_due', valid_until: dates.valid_until });
 
       const reserved = await gate.reserveBoardRefresh(userId, board, day);

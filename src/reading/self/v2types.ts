@@ -593,6 +593,26 @@ export interface SelfV2Response {
   /** the running sub period's end date (S2 `runningSub.to`), for "Sub-chapter ends"; null when not known */
   subChapterEnds?: string | null;
   usage?: unknown;
+  /**
+   * The fresh-reading control (docs/billing/03): when the board's reading was made, its last good day and whether the
+   * person may ask for a fresh one. The same rule as GET /api/area/self and POST /api/boards/self/refresh
+   * (`selfBoardDates`), so v1 and v2 agree. All null and `due: false` when no reading has been made yet.
+   */
+  refresh: SelfV2RefreshView;
+}
+
+/** GET /api/self/v2 `refresh` (appended 2026-11-09 for the Get a fresh reading button). */
+export interface SelfV2RefreshView {
+  madeAt: string | null;
+  validUntil: string | null;
+  due: boolean;
+  /**
+   * Appended 2026-11-09 (fix/self-v2-single-build), from today's You build marker: a build is running now (`building`),
+   * or today's last build failed (`failed`; a fresh reading's question was given back). The page stops polling on
+   * `failed` and offers Try again. Both false when no build ran today.
+   */
+  building: boolean;
+  failed: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -680,4 +700,92 @@ export interface SelfV2Frame {
   stamps: SelfBuildStamps;
   periods: PeriodFrame | null;
   year: YearFrame | null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// run 2 fixes (branch fix/self-v2-run2-findings; docs/reading-engine/66-replay-2026-11-09-self-v2-run2.md). Appended;
+// nothing above changes. Interfaces below merge with the ones above (optional fields only).
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The hero question's claim as code read it (failure 6): its matters and people from the S5 row, and a plain draft. */
+export interface HeroClaimFrame {
+  claimId: string;
+  matters: Matter[];
+  who: PeopleLabel[];
+  since: IsoDate | null;
+  until: IsoDate | null;
+  /** the question in plain words, built from the matter; the Personalizer may only rephrase it */
+  draft: string;
+}
+
+/** The `now` brief as the Personalizer reads it (run 1 failure 14): the hero rests on these S3/S5 rows and dates. */
+export interface NowBriefView {
+  claims: Array<{ id: string; fact: string; range: DateSpan | 'always' }>;
+  dates: AreaDate[];
+  /** the brief's S5 ledger rows, words keys only (no planet, no house) */
+  ledger: Array<{ id: string; matter: Matter; what: string; who: PeopleLabel[]; since: IsoDate | null; until: IsoDate | null; polarity: Polarity }>;
+}
+
+export interface PersonalizerInput {
+  heroClaim?: HeroClaimFrame | null;
+  now?: NowBriefView | null;
+}
+
+export interface SelfV2AgentTiming {
+  /** false when the provider's usage carried no thought count (the 0 is "not reported", not "did not think") */
+  thoughtTokensReported?: boolean;
+}
+
+/** Per build, never a reject: how much of each card repeats the Oracle's word sequences (failure 1). */
+export interface PersonalizerMetrics {
+  /** share of the card body's word trigrams found in its Oracle area (0–1) */
+  oracleEcho: Partial<Record<SelfV2AreaId, number>>;
+  echoMean: number;
+  echoMax: number;
+  echoMaxArea: SelfV2AreaId | null;
+  /** cards over SELF_V2_ORACLE_ECHO_FLAG */
+  flagged: SelfV2AreaId[];
+}
+
+export interface SelfV2CardsResult {
+  metrics?: PersonalizerMetrics;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// personalizer portrait (Sachin 2026-11-09: "send everything and more to the Personalizer"). Built in code from stored
+// rows (src/reading/self/v2/portrait.ts); a block with no source is null and named in `gaps`, never invented. Never the
+// name, the exact birth date or time, or coordinates.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** the life labels the portrait states (reviewed words table `LIFE_LABEL_MATTERS` in v2words.ts) */
+export type LifeLabel = 'career' | 'love' | 'self' | 'home' | 'family' | 'business' | 'health' | 'fortune' | 'work' | 'gains' | 'sacrifices';
+
+export type LifeState = 'presses' | 'mixed' | 'supports' | 'quiet';
+
+export interface PersonPortrait {
+  /** character: the Oracle's natal areas as paragraph ids, its patterns, and S6 mind keys */
+  personality: { oracleParagraphs: string[]; patterns: string[]; mindKeys: { feeling: string[]; thinking: string[]; peace: string[]; judgement: string[] } } | null;
+  /** what the person has told us, with dates: wizard facts, life events, monthly checks, confirm answers */
+  biography: {
+    facts: Array<{ key: string; value: string; at: IsoDate | null }>;
+    lifeEvents: Array<{ category: string; date: IsoDate; precision: string }>;
+    areaChecks: Array<{ area: string; month: string; answer: string }>;
+    confirms: Array<{ claimId: string; answer: string; at: IsoDate | null }>;
+  } | null;
+  /** the last 30 days: confirm answers, mood taps, and the categories (never the text) of their questions */
+  pastMonth: { confirms: Array<{ claimId: string; answer: string; at: IsoDate | null }>; moods: Array<{ mood: Mood; on: IsoDate }>; questionTopics: Record<string, number> } | null;
+  mood: { today: Mood | null; trend: 'heavier' | 'lighter' | 'steady' | 'unknown'; taps30d: number } | null;
+  health: { focus: boolean; footing: string[]; wear: string[]; shape: string[]; liveWindows: Array<{ from: IsoDate; to: IsoDate; polarity: Polarity }> } | null;
+  /** each life label's current state from S3 windows (byMatter) and S5 rows; `source` says which */
+  lifeNow: Array<{ label: LifeLabel; matters: Matter[]; state: LifeState; since: IsoDate | null; until: IsoDate | null; strength: Strength | null }>;
+  lifeNowSource: 'windows_and_risk' | 'house_state';
+  register: { hint: 'plain' | 'mixed' | 'technical'; why: string[]; workStatus: string | null; workLevel: string | null; role: ReaderRole };
+  birthPlace: { city: string | null; region: string | null; country: string | null } | null;
+  currentPlace: { city: string | null; country: string | null } | null;
+  /** the blocks with no source, by name */
+  gaps: string[];
+}
+
+export interface PersonalizerInput {
+  portrait?: PersonPortrait | null;
 }

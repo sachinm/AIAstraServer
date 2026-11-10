@@ -138,6 +138,43 @@ describe('GET /api/self/v2', () => {
     expect(invokes[0]).toMatchObject({ source: 'self-reading-build', userId: 'u1', board: 'self' });
   });
 
+  it("refresh: the You board's dates by the v1 rule (selfBoardDates): the synthesis's own, due only after its last day", async () => {
+    stored.k1 = latestFixture();
+    // nothing made yet: nothing due, no dates
+    const none = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(none.refresh).toEqual({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
+    // a synthesis said it holds through 2026-11-08; today is 2026-11-09
+    f.prisma.techniqueOutput = {
+      findFirst: async ({ where }: any) =>
+        where.technique_id === 'self.reading.oracle' && where.kundli_id === 'k1'
+          ? { output: { status: 'ok', validUntil: { overall: '2026-11-08' } }, created_at: new Date('2026-10-20T09:00:00Z'), valid_from: new Date('2026-10-20T00:00:00Z'), valid_to: null }
+          : null,
+    };
+    const due = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(due.refresh).toEqual({ madeAt: '2026-10-20T09:00:00.000Z', validUntil: '2026-11-08', due: true, building: false, failed: false });
+    f.prisma.techniqueOutput = {
+      findFirst: async () => ({ output: { status: 'ok', validUntil: { overall: '2026-12-04' } }, created_at: new Date('2026-11-01T09:00:00Z'), valid_from: new Date('2026-11-01T00:00:00Z'), valid_to: null }),
+    };
+    const notDue = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(notDue.refresh).toEqual({ madeAt: '2026-11-01T09:00:00.000Z', validUntil: '2026-12-04', due: false, building: false, failed: false });
+    const nk = await (await call('GET', '/api/self/v2', 'u2')).json();
+    expect(nk.refresh).toEqual({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
+  });
+
+  it("refresh.building and refresh.failed come from today's You build marker, so a failed fresh reading shows at once", async () => {
+    stored.k1 = latestFixture();
+    const started = { started_at: NOW.toISOString() };
+    f.markers.set('k1|self.reading', { status: 'building', result: started });
+    expect((await (await call('GET', '/api/self/v2', 'u1')).json()).refresh).toMatchObject({ building: true, failed: false });
+    f.markers.set('k1|self.reading', { status: 'failed', result: started, error: 'v2 failed' });
+    expect((await (await call('GET', '/api/self/v2', 'u1')).json()).refresh).toMatchObject({ building: false, failed: true });
+    f.markers.set('k1|self.reading', { status: 'ready', result: started });
+    expect((await (await call('GET', '/api/self/v2', 'u1')).json()).refresh).toMatchObject({ building: false, failed: false });
+    // a build dead past the stuck limit is neither: the page's own timeout covers it
+    f.markers.set('k1|self.reading', { status: 'building', result: { started_at: new Date(NOW.getTime() - 11 * 60_000).toISOString() } });
+    expect((await (await call('GET', '/api/self/v2', 'u1')).json()).refresh).toMatchObject({ building: false, failed: false });
+  });
+
   it('digest not ready: preparing, the digest is queued, no build', async () => {
     const r = await (await call('GET', '/api/self/v2', 'u3')).json();
     expect(r.status).toBe('preparing');

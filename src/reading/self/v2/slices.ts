@@ -17,7 +17,10 @@
  * Selection and formatting only: every value is an engine row carried through by id.
  */
 import { createHash } from 'node:crypto';
-import { getSelfPersonalizerModel } from '../../../config/env.js';
+import { getSelfPersonalizerModel, getSelfV2SeniorStageWords } from '../../../config/env.js';
+import { MATTER_PLAIN, mattersOfClaim, PEOPLE_PLAIN } from '../v2words.js';
+import { seniorStageWordsFor } from './profileFit.js';
+import { portraitLines } from './portrait.js';
 import { modelFor } from '../../llm/models.js';
 import { PROMPTS } from '../../prompts/generated.js';
 import { buildSelfFamilyPacks, FAMILY_SYSTEM_PROMPTS, type SelfFamilyAgentId, type SelfFamilyPack } from '../oracle.js';
@@ -26,9 +29,13 @@ import { clockLabel } from '../words.js';
 import type {
   AreaBrief,
   ClockResolution,
+  HeroClaimFrame,
+  NowBriefView,
   OracleInput,
   OracleV2Output,
+  PeopleLabel,
   PersonalizerInput,
+  PersonPortrait,
   PreparedAgentSlice,
   PromiseEntry,
   PromiseLedger,
@@ -420,16 +427,99 @@ export function renderOracleDoc(out: OracleV2Output): { text: string; keys: stri
 }
 
 /** The Personalizer's input: the Oracle document, the profile pack without age in years and hash, the windows summary. */
-export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Output): PersonalizerInput {
+export function buildPersonalizerInput(ctx: SelfBuildContext, oracle: OracleV2Output, briefs: readonly AreaBrief[] = [], portrait: PersonPortrait | null = null): PersonalizerInput {
   const p = ctx.sub.profile;
   if (!p) throw new Error('self v2 Personalizer input: the profile pack (S10) is missing from the build context');
   const { ageYears: _age, hash: _hash, ...profile } = p;
   const w = ctx.sub.windows;
+  const nowBrief = briefs.find((b) => b.areaId === 'now') ?? null;
+  const now = nowBrief ? nowBriefView(ctx, nowBrief) : null;
   return {
     oracle,
     profile,
     windows: { asOf: w?.asOf ?? ctx.asOf, heaviestNow: w?.heaviestNow ?? null, easesAt: w?.easesAt ?? null, nextSupportFrom: w?.nextSupportFrom ?? null },
+    ...(now ? { now } : {}),
+    heroClaim: heroClaimFrame(ctx, oracle, nowBrief),
+    ...(portrait ? { portrait } : {}),
   };
+}
+
+/** The `now` brief as the Personalizer reads it: claims, dates and its S5 rows as words keys (run 1 failure 14). */
+export function nowBriefView(ctx: SelfBuildContext, b: AreaBrief): NowBriefView {
+  const rows = new Set(b.ledgerRows);
+  return {
+    claims: b.claims.map((c) => ({ id: claimKey(c.id), fact: c.fact, range: c.range })),
+    dates: b.dates.map((d) => ({ ...d })),
+    ledger: (ctx.sub.risk?.rows ?? [])
+      .filter((r) => rows.has(r.id))
+      .map((r) => ({ id: r.id, matter: r.matter, what: r.what, who: [...r.who], since: r.since, until: r.until, polarity: r.polarity })),
+  };
+}
+
+const MONTH_WORDS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** '2026-11-05' → '5 Nov 2026' (calendar words only) */
+export const dayWords = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[3])} ${MONTH_WORDS[Number(m[2]) - 1]} ${m[1]}` : iso;
+};
+const LIVE_AREA_IDS = ['diagnosis', 'stuck', 'chapter'];
+
+/**
+ * The hero question's claim, chosen by code (doc 66 replay run 2, failure 6): the `now` brief's heaviest window, else the
+ * live areas' heaviest window in the Oracle document, else a `now` ledger claim, else any live claim that names a
+ * matter. Its matters and people come from the S5 row of that window (`risk:<rowId>`), else from the claim id's words;
+ * the draft asks about the first matter only (one thing at a time), in the person's words. Null when no claim names a
+ * matter. Selection and wording only.
+ */
+export function heroClaimFrame(ctx: SelfBuildContext, oracle: OracleV2Output, nowBrief: AreaBrief | null = null): HeroClaimFrame | null {
+  const oracleClaims = [...new Set(Object.values(oracle.doc.areas).flatMap((a) => (a ? a.evidence.filter((k) => k.startsWith('claim:')) : [])))];
+  const live = oracleClaims.filter((k) => LIVE_AREA_IDS.some((a) => k.startsWith(`claim:${a}.`)));
+  const nowClaims = (nowBrief?.claims ?? []).map((c) => ({ id: claimKey(c.id), range: c.range }));
+  const heavy = (k: string) => k.includes('.heaviest_now:');
+  const ordered = [
+    ...nowClaims.filter((c) => heavy(c.id)).map((c) => c.id),
+    ...live.filter(heavy),
+    ...nowClaims.filter((c) => c.id.includes('.risk:')).map((c) => c.id),
+    ...live,
+  ];
+  const claimId = ordered.find((k) => mattersOfClaim(k).length) ?? null;
+  if (!claimId) return null;
+  const w = ctx.sub.windows?.heaviestNow ?? null;
+  const rows = ctx.sub.risk?.rows ?? [];
+  let matters = mattersOfClaim(claimId);
+  let who: PeopleLabel[] = [];
+  let since: string | null = null;
+  let until: string | null = null;
+  if (heavy(claimId) && w) {
+    const row = rows.find((r) => r.id === `risk:${w.rowId}` || r.from.windowId === w.rowId);
+    if (row) {
+      matters = [row.matter, ...matters.filter((m) => m !== row.matter)];
+      who = [...row.who];
+    }
+    since = w.from;
+    until = w.to;
+  } else {
+    const row = rows.find((r) => matters.includes(r.matter));
+    if (row) {
+      who = [...row.who];
+      since = row.since;
+      until = row.until;
+    }
+    const range = nowClaims.find((c) => c.id === claimId)?.range;
+    if (!since && range && range !== 'always') {
+      since = range.from;
+      until = range.to;
+    }
+  }
+  const facts = ctx.sub.profile?.facts ?? {};
+  const hasChildren = Boolean(facts.children && facts.children !== 'none');
+  const hasPartner = Boolean(facts.love && facts.love !== 'single');
+  who = who.filter((x) => (x !== 'children' || hasChildren) && (x !== 'partners_and_clients' || hasPartner || facts.work?.status === 'own_business'));
+  const first = MATTER_PLAIN[matters[0]!];
+  const phrase = matters[0] === 'ideas_and_children' && hasChildren ? 'your creative projects and your children' : first.phrase;
+  const draft =
+    since && since <= ctx.asOf ? `Since ${dayWords(since)}, has there been more strain around ${phrase}?` : `Lately, has there been more strain around ${phrase}?`;
+  return { claimId, matters, who, since, until, draft };
 }
 
 const AGE_BAND_WORDS: Record<string, string> = {
@@ -450,45 +540,98 @@ const WORK_WORDS: Record<string, string> = {
 const NO_JOB = new Set(['between_jobs', 'studying', 'retired']);
 
 /**
+ * Per age band (doc 66 §10, the persona table): what the person usually arrives with and the register. Selection and
+ * wording only; the band comes from a typed birth date.
+ */
+export const BAND_REGISTER: Readonly<Record<string, string>> = {
+  under_25:
+    'usually arrives asking "is this normal, will it pass, who am I": study and focus, a first job and first money, friends, energy and how they look. Register: short, light, encouraging; no talk of standing, legacy or long careers.',
+  '25_35':
+    'usually arrives with a decision: a job switch, a partner, a move, first big money, a business being built. Register: practical, about windows to start or hold and the patterns that trip them up; no talk of seniority, mentoring others, advising or legacy.',
+  '36_45':
+    'usually arrives tired or stalled: load, a plateau, parenting if stated, strain at home. Register: what is heavy and since when, stamina and recovery, what this stretch is teaching; plain and steady.',
+  '46_60':
+    'usually arrives with timing: a hand-over, health habits, a property or legal matter, parents, what to consolidate rather than start. Register: consequence-led and direct, cost at work first, endurance; standing and what to hand on are fair words here.',
+  '60_plus':
+    'usually arrives with rest, meaning and the family around them: body and rest, what they are really after, the rhythm of the day. Register: unhurried, warm, short; no job words, no ambition words, no money targets.',
+};
+
+/** Per work status and level: what the examples on the cards may be about. */
+export const WORK_EXAMPLES: Readonly<Record<string, string>> = {
+  'yes:hourly': 'shifts, a manager, pay, a next step up; never a team they lead',
+  'yes:employee': 'their own tasks, a manager, colleagues, a next role; never a team they lead or a company they run',
+  'yes:specialist': 'their craft, the quality of their work, being relied on, a next role; never managing others',
+  'yes:manager': 'their team, workload, the people above and below them, a next role',
+  'yes:senior_leader': 'decisions, people they lead, hand-overs, what to consolidate, their standing',
+  own_business: 'their business: customers, cash, building it, decisions they make alone; never a boss or a promotion',
+  'own_business:owner_alone': 'a business they run alone: customers, cash, their own hours; never staff, a boss or a promotion',
+  'own_business:owner_staff':
+    'a business they run with staff: customers, cash, the people who work for them, building it; never a boss or a promotion',
+  'own_business:several_businesses': 'several businesses: where to put attention and money, the people who run them',
+  between_jobs: 'the search for work, skills, the people who can open a door; never a current workplace',
+  studying: 'study, learning, exams, first steps and the people around them; never a workplace',
+  retired:
+    'their days now: rest, meaning, family, community, the projects they choose; never a job, a workplace, meetings, labor, assets to secure or money targets',
+};
+
+/**
  * The person's stated facts as plain lines and the register rules they set (doc 66 replay failure 5: a retired person
- * aged 60 and over got "executive responsibility" and "public pitches"). Selection and wording only.
+ * aged 60 and over got "executive responsibility" and "public pitches"; run 2 failure 2: a 25–35 founder got "seasoned
+ * professional" and "mentorship"). Selection and wording only.
  */
 export function profileLines(p: PersonalizerInput['profile']): string[] {
   const f = p.facts ?? {};
   const status = f.work?.status ?? null;
+  const level = f.work?.level ?? null;
   const focus = f.focus ?? [];
   const L = [
     `age band: ${p.ageBand ? (AGE_BAND_WORDS[p.ageBand] ?? p.ageBand) : 'not known'}`,
     `gender: ${p.gender ?? 'not stated (use no gendered words at all)'}`,
     `reader: ${p.role}`,
     `work status: ${status ? (WORK_WORDS[status] ?? status) : 'not stated (assume nothing about work)'}`,
-    `work level: ${f.work?.level ?? 'not stated'}`,
+    `work level: ${level ?? 'not stated'}`,
     `love status: ${f.love ?? 'not stated (assume nothing about a partner)'}`,
     `children: ${f.children ?? 'not stated (assume nothing about children)'}`,
     `focus: ${focus.length ? focus.join(', ') : 'not stated'}`,
     ...(f.place ? [`place: ${f.place}`] : []),
     '## WHAT THESE FACTS FORBID AND REQUIRE',
   ];
+  if (p.ageBand && BAND_REGISTER[p.ageBand]) L.push(`- Age band ${AGE_BAND_WORDS[p.ageBand]}: this person ${BAND_REGISTER[p.ageBand]}`);
+  const examples = status ? (WORK_EXAMPLES[`${status}:${level ?? ''}`] ?? WORK_EXAMPLES[status] ?? null) : null;
+  if (examples) L.push(`- Work examples may be about: ${examples}.`);
   if (status && NO_JOB.has(status)) {
     L.push(
-      `- This person has no current job (${status.replace('_', ' ')}). Never write of a workplace, colleagues, a team, a boss, clients, pitches, promotion, executive duties or professional timelines, unless the Oracle paragraph is explicitly about a past role (then say "in your past work"). Carry a career reading over to what this person does now: ${status === 'retired' ? 'meaning, mentoring, family, community, rest and the projects they choose' : status === 'studying' ? 'study, learning, first steps and the people around them' : 'the search for work, skills and the people who can open a door'}.`,
+      `- This person has no current job (${status.replace('_', ' ')}). Never write of a workplace, colleagues, a team, a boss, clients, pitches, meetings, labor, promotion, executive duties or professional timelines, unless the Oracle paragraph is explicitly about a past role (then say "in your past work"). Carry a career reading over to what this person does now: ${status === 'retired' ? 'meaning, mentoring, family, community, rest and the projects they choose' : status === 'studying' ? 'study, learning, first steps and the people around them' : 'the search for work, skills and the people who can open a door'}.`,
+    );
+  }
+  if (seniorStageWordsFor(p)) {
+    const stage = getSelfV2SeniorStageWords();
+    L.push(
+      `- Career stage: nothing this person told you says they are senior or late in a career. Never invent a stage: no ${stage
+        .slice(0, 10)
+        .map((x) => `"${x}"`)
+        .join(', ')} or the like. Write for where they are now.`,
     );
   }
   if (!f.love) L.push('- No love status was given: never assume a partner, a marriage or a break-up.');
+  else L.push(`- Love status is "${f.love}": where an Oracle paragraph speaks of partners or relationships, say it for someone ${f.love}.`);
   if (!f.children || f.children === 'none') L.push('- No children are stated: never mention a child of theirs.');
   if (focus.length) {
     L.push(
-      `- Focus first: the hero and the first card you write speak to ${focus.join(' and ')} when the Oracle document has material for it; the other cards follow.`,
+      `- Focus first: ${focus.join(' and ')} leads the hero, and is the lens of the Now group cards (Where you get stuck, This chapter) whenever the Oracle document has material for it: say what this stretch means for ${focus.join(' and ')} first, then the rest.`,
     );
   }
   return L;
 }
 
-/** The Personalizer's suffix: the person (never the chart) and the windows summary. */
+/** The Personalizer's suffix: the person (never the chart), the windows summary, the `now` brief and the hero claim. */
 export function personalizerSuffix(input: PersonalizerInput, asOf: string): string {
   const p = input.profile;
   const w = input.windows;
   const areas = Object.keys(input.oracle.doc.areas);
+  const now = input.now;
+  const hc = input.heroClaim;
+  const span = (a: string | null, b: string | null) => `${a ?? 'n/a'}..${b ?? 'n/a'}`;
   return [
     `TODAY: ${asOf}`,
     '## THE PERSON',
@@ -496,16 +639,37 @@ export function personalizerSuffix(input: PersonalizerInput, asOf: string): stri
     `declined (never mention): ${p.declined.length ? p.declined.join(', ') : 'none'}`,
     `last answers: ${p.lastConfirms.map((c) => `${claimKey(c.claimId)}=${c.answer}`).join(', ') || 'none'}`,
     `mood today: ${p.mood ?? 'not given'}`,
+    ...(input.portrait ? portraitLines(input.portrait) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
     '## WINDOWS (engine dates around today)',
     `heaviest now: ${w.heaviestNow ? `${w.heaviestNow.matters.join(', ')} ${w.heaviestNow.from}..${w.heaviestNow.to} (${w.heaviestNow.polarity})` : 'none'}`,
     `eases at: ${w.easesAt ?? 'not stored'} · next support from: ${w.nextSupportFrom ?? 'not stored'}`,
+    ...(now
+      ? [
+          '## RIGHT NOW (the hero rests on these rows and dates: its sentence names one of these matters and one of these dates)',
+          ...now.ledger.map((r) => `- row ${r.id}: ${r.matter} · ${r.what} · people ${r.who.join(', ') || 'none'} · ${span(r.since, r.until)} (${r.polarity})`),
+          ...now.dates.map((d) => `- date: ${d.from}..${d.to} ${d.label}`),
+        ]
+      : []),
+    ...(hc
+      ? [
+          '## HERO QUESTION (built by code from the claim; rephrase it in plain words only, keep its matter, ask one thing)',
+          `claim: ${hc.claimId}`,
+          `matter: ${hc.matters.map((m) => MATTER_PLAIN[m].phrase).join('; ')}${hc.who.length ? ` · people: ${hc.who.map((x) => PEOPLE_PLAIN[x]).filter(Boolean).join(', ')}` : ''} · ${span(hc.since, hc.until)}`,
+          `draft: ${hc.draft}`,
+        ]
+      : ['## HERO QUESTION: no dated claim names a life matter; leave questionClaimId and questionText empty']),
     `## WRITE: the hero and one card for each of these areas: ${areas.join(', ')}`,
   ].join('\n');
 }
 
 /** The Personalizer's slice: the Oracle document is the stable prefix (the same for every profile on one Oracle key). */
-export function buildPersonalizerSlice(ctx: SelfBuildContext, oracle: OracleV2Output): { slice: PreparedAgentSlice; input: PersonalizerInput } {
-  const input = buildPersonalizerInput(ctx, oracle);
+export function buildPersonalizerSlice(
+  ctx: SelfBuildContext,
+  oracle: OracleV2Output,
+  briefs: readonly AreaBrief[] = [],
+  portrait: PersonPortrait | null = null,
+): { slice: PreparedAgentSlice; input: PersonalizerInput } {
+  const input = buildPersonalizerInput(ctx, oracle, briefs, portrait);
   const doc = renderOracleDoc(oracle);
   const slice = prepared('self.personalizer', ctx, doc.text, personalizerSuffix(input, ctx.asOf), getSelfPersonalizerModel(), promptText(SELF_V2_PERSONALIZER_PROMPT), doc.keys);
   return { slice, input };

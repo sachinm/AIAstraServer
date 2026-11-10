@@ -20,6 +20,7 @@ import {
   type SelfV2AreaId,
   type SelfV2AreaView,
   type SelfV2ClockView,
+  type SelfV2RefreshView,
   type SelfV2Response,
   type SelfV2Status,
 } from '../v2types.js';
@@ -172,7 +173,11 @@ export interface BuildResponseInput {
   profile: Pick<ProfilePack, 'ageBand' | 'gender' | 'facts' | 'declined'> & Partial<Pick<ProfilePack, 'role'>>;
   floors?: Partial<Record<SelfV2AreaId, string[]>>;
   factKeys?: readonly string[];
+  /** the board's refresh dates (selfBoardDates); absent: nothing made yet */
+  refresh?: SelfV2RefreshView | null;
 }
+
+export const NO_REFRESH: Readonly<SelfV2RefreshView> = Object.freeze({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
 
 export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
   const missing = missingFacts(i.profile, i.factKeys);
@@ -189,6 +194,7 @@ export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
     areas: areaViews(i.latest, i.floors),
     profile: { ageBand: i.profile.ageBand, hasGender: i.profile.gender !== null, missing, role: i.profile.role ?? 'public' },
     subChapterEnds: i.latest.frame?.periods?.runningSub?.to ?? null,
+    refresh: i.refresh ? { ...NO_REFRESH, ...i.refresh } : { ...NO_REFRESH },
   };
 }
 
@@ -203,5 +209,6 @@ export function noKundliResponse(): SelfV2Response {
     areas: [],
     profile: { ageBand: null, hasGender: false, missing: [], role: 'public' },
     subChapterEnds: null,
+    refresh: { ...NO_REFRESH },
   };
 }

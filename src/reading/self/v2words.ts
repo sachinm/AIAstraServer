@@ -7,7 +7,7 @@
  * functional-nature label); the value is a plain vocabulary key the briefs and the model agents read. Nothing here
  * computes a house, a lord, a relation, a strength or a polarity.
  */
-import type { Matter, PeopleLabel, Polarity, PromiseKind } from './v2types.js';
+import type { LifeLabel, Matter, PeopleLabel, Polarity, PromiseKind } from './v2types.js';
 
 /** `SELF.people`: the people a house's matters are about. The 8th and the 12th name no people. */
 export const SELF_PEOPLE: Readonly<Partial<Record<number, PeopleLabel>>> = {
@@ -78,3 +78,82 @@ export function promiseKindOf(cls: string | null | undefined): PromiseKind | nul
 
 export const mattersOf = (houses: readonly number[]): Matter[] => [...new Set(houses.map((h) => SELF_MATTERS[h]).filter((m): m is Matter => Boolean(m)))];
 export const peopleOf = (houses: readonly number[]): PeopleLabel[] => [...new Set(houses.map((h) => SELF_PEOPLE[h]).filter((p): p is PeopleLabel => Boolean(p)))];
+
+// ---------------------------------------------------------------------------------------------------------------------
+// run 2 fixes (doc 66 replay run 2, failure 6: the hero question did not ask about its own claim)
+// reviewed by Sachin before release; vocabulary, not derivation
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * `SELF.matter_plain`: each life matter in everyday words. `phrase` is what the hero question asks about; `words` are
+ * the plain words that show a question names the matter (the validator drops a question that names none of its claim's
+ * matters). `childWords` are used only when the person stated children.
+ */
+export const MATTER_PLAIN: Readonly<Record<Matter, { phrase: string; words: readonly string[]; childWords?: readonly string[] }>> = {
+  self_and_body: { phrase: 'your energy', words: ['energy', 'body', 'health', 'stamina', 'yourself', 'vitality', 'pace'] },
+  money_in_hand: { phrase: 'money and savings', words: ['money', 'savings', 'income', 'spending', 'finances', 'financial', 'bills', 'earnings'] },
+  effort_and_courage: { phrase: 'your own push and effort', words: ['effort', 'push', 'drive', 'courage', 'initiative', 'energy to start', 'siblings'] },
+  home_and_peace: { phrase: 'home and peace of mind', words: ['home', 'house', 'household', 'peace', 'calm', 'mother', 'settled'] },
+  ideas_and_children: { phrase: 'your creative projects and new ideas', words: ['creative', 'creativity', 'ideas', 'idea', 'projects', 'project', 'making', 'learning', 'hobbies'], childWords: ['children', 'child', 'kids'] },
+  work_load_and_health: { phrase: 'your daily load', words: ['work', 'workload', 'load', 'routine', 'duties', 'chores', 'habits', 'health'] },
+  partnership: { phrase: 'your closest partnership', words: ['partner', 'partnership', 'marriage', 'spouse', 'relationship', 'agreements', 'contracts'] },
+  sudden_and_hidden: { phrase: 'sudden changes', words: ['sudden', 'unexpected', 'upheaval', 'hidden', 'shake'] },
+  luck_and_belief: { phrase: 'your faith and sense of meaning', words: ['faith', 'belief', 'beliefs', 'meaning', 'purpose', 'spiritual', 'prayer', 'luck', 'teachers', 'teacher'] },
+  career_and_standing: { phrase: 'work and your standing', words: ['work', 'career', 'job', 'business', 'standing', 'reputation', 'role'] },
+  gains_and_network: { phrase: 'friends and your wider circle', words: ['friends', 'friend', 'friendships', 'circle', 'network', 'community', 'gains', 'hopes', 'groups'] },
+  loss_rest_and_distance: { phrase: 'rest and time alone', words: ['rest', 'sleep', 'retreat', 'solitude', 'distance', 'spending'] },
+};
+
+/** `SELF.people_plain`: the people a matter is about, in everyday words; `null` people are left out of a question. */
+export const PEOPLE_PLAIN: Readonly<Record<PeopleLabel, string | null>> = {
+  partners_and_clients: 'partners',
+  authority_and_boss: 'people in charge',
+  rivals_and_creditors: 'rivals',
+  home_and_mother: 'family at home',
+  father_and_teachers: 'teachers and mentors',
+  siblings_and_peers: 'siblings and peers',
+  friends_and_elder_siblings: 'friends',
+  children: 'children',
+  family_of_origin: 'your family',
+  self: null,
+};
+
+const MATTER_IDS = Object.keys(MATTER_PLAIN) as Matter[];
+
+/**
+ * The life matters a claim id names (`stuck.heaviest_now:presses:ideas_and_children+luck_and_belief`, `now.risk:partnership:…`,
+ * `stuck.work_load` → work_load_and_health). Vocabulary matching on the id's own words; nothing derived.
+ */
+export function mattersOfClaim(claimId: string): Matter[] {
+  const tokens = claimId.replace(/^claim:/, '').split(/[.:+#]/).filter(Boolean);
+  const out: Matter[] = [];
+  for (const t of tokens) {
+    const m = MATTER_IDS.find((x) => x === t) ?? (t.length > 3 ? MATTER_IDS.find((x) => x.startsWith(`${t}_and_`)) : undefined);
+    if (m && !out.includes(m)) out.push(m);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// personalizer portrait: the life labels Sachin named (2026-11-09) on the matters table
+// reviewed by Sachin before release; vocabulary, not derivation
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * `SELF.life_labels`: each label the portrait states, as the matters (`SELF.matters`) whose windows and ledger rows
+ * speak for it. `family` reads the family of origin (money_in_hand: the 2nd's matter) and children; `business` reads
+ * partnership and gains; `health` reads the body and the daily load.
+ */
+export const LIFE_LABEL_MATTERS: Readonly<Record<LifeLabel, readonly Matter[]>> = {
+  career: ['career_and_standing'],
+  love: ['partnership'],
+  self: ['self_and_body'],
+  home: ['home_and_peace'],
+  family: ['money_in_hand', 'ideas_and_children'],
+  business: ['partnership', 'gains_and_network'],
+  health: ['self_and_body', 'work_load_and_health'],
+  fortune: ['luck_and_belief'],
+  work: ['work_load_and_health'],
+  gains: ['gains_and_network'],
+  sacrifices: ['loss_rest_and_distance'],
+};

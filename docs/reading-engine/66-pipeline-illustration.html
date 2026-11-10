@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Self board pipeline</title>
+<style>
+:root{color-scheme:dark;--page:#06051a;--card:#15142e;--line:#2b2a52;--text:#f2f1fc;--muted:#b4b2d4;--dim:#8785ad;
+--data:#4fd1c0;--data-bg:rgba(79,209,192,.12);--comp:#b9a6ff;--comp-bg:rgba(185,166,255,.12);--model:#f58bb3;--model-bg:rgba(245,139,179,.12);--io:#ecc04f;--io-bg:rgba(236,192,79,.12);--warn:#ff8a7a}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){color-scheme:light;--page:#f6f5fc;--card:#fff;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;--dim:#6f6d94;
+--data:#0a7a6d;--data-bg:rgba(10,122,109,.08);--comp:#5b21b6;--comp-bg:rgba(91,33,182,.07);--model:#b0306a;--model-bg:rgba(176,48,106,.07);--io:#7f5800;--io-bg:rgba(127,88,0,.08);--warn:#b3261e}}
+:root[data-theme="light"]{color-scheme:light;--page:#f6f5fc;--card:#fff;--line:#d8d6ee;--text:#16152e;--muted:#4f4d74;--dim:#6f6d94;
+--data:#0a7a6d;--data-bg:rgba(10,122,109,.08);--comp:#5b21b6;--comp-bg:rgba(91,33,182,.07);--model:#b0306a;--model-bg:rgba(176,48,106,.07);--io:#7f5800;--io-bg:rgba(127,88,0,.08);--warn:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:36px 0 10px}p{margin:0 0 10px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 20px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}.sw{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid}
+.lane{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:stretch;margin-bottom:10px}
+.lane-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding-top:10px}
+.row{display:grid;gap:10px}
+.box{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card)}
+.box b{display:block;font-size:14px}.box small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.box .num{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px}
+.d{border-color:var(--data);background:var(--data-bg)}.d .num{color:var(--data);background:var(--data-bg)}
+.c{border-color:var(--comp);background:var(--comp-bg)}.c .num{color:var(--comp);background:var(--comp-bg)}
+.m{border-color:var(--model);background:var(--model-bg)}.m .num{color:var(--model);background:var(--model-bg)}
+.i{border-color:var(--io);background:var(--io-bg)}.i .num{color:var(--io);background:var(--io-bg)}
+.down{text-align:center;color:var(--dim);font-size:18px;margin:2px 0 8px 150px}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
+@media (max-width:900px){.lane{grid-template-columns:1fr}.down{margin-left:0}.g4,.g5{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}th,td{text-align:left;padding:7px 9px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.05em;border-top:0}
+td:first-child{font-weight:700;white-space:nowrap}
+.note{border-left:3px solid var(--warn);padding:8px 12px;background:var(--card);border-radius:0 10px 10px 0;margin:8px 0;font-size:13.5px;color:var(--muted)}
+.note b{color:var(--text)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+</style>
+</head>
+<body><div class="wrap">
+<h1>Self board pipeline, end to end</h1>
+<p>How one reading of the Self board is made, from the tap that starts it to the cards on screen. Numbers are measured from live replay run 2 (9 Nov 2026, one cold build, three profiles) unless marked as estimates.</p>
+<div class="legend">
+<span><i class="sw" style="border-color:var(--io);background:var(--io-bg)"></i>Entry and exit</span>
+<span><i class="sw" style="border-color:var(--data);background:var(--data-bg)"></i>Data and storage</span>
+<span><i class="sw" style="border-color:var(--comp);background:var(--comp-bg)"></i>Code, no model</span>
+<span><i class="sw" style="border-color:var(--model);background:var(--model-bg)"></i>Model call (paid)</span>
+</div>
+
+<h2>The flow</h2>
+
+<div class="lane"><div class="lane-label">1 · Trigger</div><div class="row g3">
+<div class="box i"><b>First open of the board</b><small>Free trial build, once per board</small></div>
+<div class="box i"><b>"Get a fresh reading" tap</b><small>Only after "good until"; uses 1 question</small></div>
+<div class="box i"><b>Clock switch</b><small>Consent sheet; uses 1 question</small></div>
+</div></div>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">2 · Build event</div><div class="row">
+<div class="box i"><b>One background run per person and clock</b><small>Its own Lambda invocation. The page shows the last reading (or a veil) and polls every 10 s. A marker stops two builds racing; a failed build gives the question back.</small></div>
+</div></div>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">3 · Data pulls</div><div class="row g4">
+<div class="box d"><b>Chart digest</b><small>D1–D60 houses and planets, dignities, avasthas, strength, yogas, arudhas, karakas</small></div>
+<div class="box d"><b>Dasha activation</b><small>Every stored clock, levels 1–3, with the engine's period charter</small></div>
+<div class="box d"><b>Sky overlay and pressure</b><small>Transits, Sade Sati; the engine's pressure inventory (not deployed yet: windows run degraded)</small></div>
+<div class="box d"><b>Person</b><small>Wizard facts, places, confirms, mood, plan</small></div>
+</div></div>
+<p style="margin-left:162px;font-size:13px">All four are rows the engine and the app already stored. One read each, in parallel. <b style="color:var(--warn)">Measured 9.0 s on the live database</b>; per-query timing is being added to find the slow one.</p>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">4 · Sub-techniques</div><div class="row g5">
+<div class="box c"><b>S1 Clock</b><small>Which dasha system reads this chart</small></div>
+<div class="box c"><b>S2 Periods</b><small>Previous, running, next; sub and sub-sub</small></div>
+<div class="box c"><b>S3 Windows</b><small>6 months back and ahead; by life matter</small></div>
+<div class="box c"><b>S4 Promise ledger</b><small>Gifts, knots, graces from yogas</small></div>
+<div class="box c"><b>S5 Risk ledger</b><small>What could go wrong, from where, who, when, what holds it</small></div>
+<div class="box c"><b>S6 Mind facts</b><small>Feeling, thinking, peace, judgement</small></div>
+<div class="box c"><b>S7 Body facts</b><small>Footing, wear, shape, live pressure</small></div>
+<div class="box c"><b>S8 Presence facts</b><small>Bearing, style, best-dressed window</small></div>
+<div class="box c"><b>S9 Year</b><small>This year's chart and clock</small></div>
+<div class="box c"><b>S10 Profile</b><small>Age band, gender, facts, mood</small></div>
+</div></div>
+<p style="margin-left:162px;font-size:13px">Each runs once per build and is shared by every area. Node only selects and joins engine rows with reviewed words tables; it computes nothing astrological. Outputs are stored in <code>technique_outputs</code>, keyed by the boundary stamps that can change them, so an unchanged stamp is a cache hit.</p>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">5 · Area briefs</div><div class="row">
+<div class="box c"><b>12 briefs: the hero plus 11 areas</b><small>Right now · Where you get stuck · This chapter · In short · Who you are · How you think · Body &amp; energy · Drive &amp; ambition · How you come across · Gifts &amp; knots · Chapters · This year. Each brief is a selection of fact tags, evidence keys, dates and ledger rows. No prose.</small></div>
+</div></div>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">6 · Cache prep</div><div class="row g2">
+<div class="box d"><b>Slices built from the context</b><small>Each agent gets a stable prefix (cached) and a small suffix (today, confirms). Never read from the database again.</small></div>
+<div class="box d"><b>Prefixes warmed in parallel</b><small>Every region gets an <code>llm_cache_entries</code> row so the 45-minute sweep can delete it. Warm-up measured 3.4 s.</small></div>
+</div></div>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">7 · Family readers</div><div class="row g5">
+<div class="box m"><b>Rasi</b><small>Natal houses</small></div>
+<div class="box m"><b>Varga</b><small>Divisional charts</small></div>
+<div class="box m"><b>Dasha</b><small>Periods</small></div>
+<div class="box m"><b>Year</b><small>Annual charts</small></div>
+<div class="box m"><b>Sky</b><small>Transits</small></div>
+</div></div>
+<p style="margin-left:162px;font-size:13px">The linemen. Five parallel calls on gemini-3.1-flash-lite, each returns plain findings for its family. <b>Measured: 99% of input cached, about 6 s wall, $0.015 for all five.</b> The v1 lineman that joined them is retired in v2: the ledgers do that join in code.</p>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">8 · Oracle</div><div class="row g3">
+<div class="box m"><b>Call A</b><small>Now group areas</small></div>
+<div class="box m"><b>Call B</b><small>You group areas</small></div>
+<div class="box m"><b>Call C</b><small>Time group and patterns</small></div>
+</div></div>
+<p style="margin-left:162px;font-size:13px">Three parallel calls on gemini-3.8-flash over one shared cached prefix (natal slice, ledgers, briefs). Each writes its areas in the strict Vedic register as JSON: headline, paragraphs, dates, actions, certainty, evidence keys. It reads the risk ledger and confirms or rejects each row; it never recomputes a date. <b>Measured: 89.7% cached, about 27 s wall, $0.05.</b></p>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">9 · Validate</div><div class="row">
+<div class="box c"><b>Oracle validator</b><small>Every evidence key must be in the input; every date must be an exact stored window; caps; engine names redacted. A failed or partial Oracle stores nothing.</small></div>
+</div></div>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">10 · Personalizer</div><div class="row g2">
+<div class="box m"><b>Builds a portrait, then writes the cards</b><small>Being moved to the Oracle's model (gemini-3.8-flash). Reads the Oracle document plus the person portrait: personality, character, biography, birth place and current city, past month, mood, health, the state of career, love, self, home, family, business, health, fortune, work, gains and sacrifices, and the register (plain or technical).</small></div>
+<div class="box c"><b>Personalizer validator</b><small>Every sentence cites an Oracle paragraph; dates only from the Oracle; no chart terms, engine names, medical words; profile-fit words; gender words only when stated. A failing card shows "Not enough in your chart to say this with confidence."</small></div>
+</div></div>
+<p style="margin-left:162px;font-size:13px">Run 2 on flash-lite: 3 of 3 profiles, about 13 s each, about $0.007 each. <b>Estimate on the Oracle's model: about $0.02–0.03 per profile.</b> A profile change (wizard answer, mood, birthday) re-runs only this step.</p>
+<div class="down">↓</div>
+
+<div class="lane"><div class="lane-label">11 · Store and serve</div><div class="row g3">
+<div class="box d"><b>Stored reading</b><small>Hero and cards per clock and profile; Oracle document; briefs and frame</small></div>
+<div class="box i"><b>GET /api/self/v2</b><small>12 areas in order, ranges, refresh dates, clock list; engine names redacted</small></div>
+<div class="box i"><b>Self page</b><small>Selfie and "Self", hero with strip and question, carousel, Fresh reading button</small></div>
+</div></div>
+
+<h2>One build, measured (run 2) and projected</h2>
+<table>
+<tr><th>Stage</th><th>Model</th><th>Calls</th><th>Cached input</th><th>Wall</th><th>Cost</th></tr>
+<tr><td>Data pulls + sub-techniques</td><td>none</td><td>0</td><td>—</td><td>9.0 s</td><td>$0</td></tr>
+<tr><td>Cache warm-up</td><td>none</td><td>0</td><td>—</td><td>3.4 s</td><td>about $0.002 storage</td></tr>
+<tr><td>Family readers</td><td>3.1-flash-lite</td><td>5</td><td>99%</td><td>about 6 s</td><td>$0.015</td></tr>
+<tr><td>Oracle</td><td>3.8-flash</td><td>3</td><td>89.7%</td><td>about 27 s</td><td>$0.05</td></tr>
+<tr><td>Personalizer, per profile</td><td>3.1-flash-lite now; 3.8-flash next</td><td>1</td><td>about 97%</td><td>about 13 s</td><td>$0.007 now; about $0.02–0.03 next</td></tr>
+<tr><td>Total, one profile</td><td></td><td>9</td><td></td><td>about 59 s</td><td>about $0.075 now; about $0.09–0.10 next</td></tr>
+</table>
+<p style="font-size:13px;margin-top:8px">Flash prices double on 1 Jan 2027. The v1 lineman and v1 Oracle (about $0.055) still run before v2 today; that double build is being removed before the switch goes on.</p>
+
+<h2>What is not working yet</h2>
+<div class="note"><b>Double build.</b> With the switch on, the old Oracle and lineman run first and the new page never reads them. Fix in progress.</div>
+<div class="note"><b>9-second data load.</b> Expected under 1.5 s; per-query timing is being added to find the slow read on the live database.</div>
+<div class="note"><b>Engine pressure inventory not deployed.</b> Every window has equal strength until it ships; there is no documented engine release path.</div>
+<div class="note"><b>Readings go stale between fresh taps.</b> "Since May" and "eases 12 Dec" are relative to the build date; the page needs an "as of" date and a nudge when a window has passed.</div>
+<div class="note"><b>Love and Work don't share the sub-techniques.</b> Clock, periods, windows, ledgers and profile are the same for all three boards.</div>
+</div></body></html>

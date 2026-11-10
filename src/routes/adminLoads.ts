@@ -44,7 +44,8 @@ export interface LoadRun {
   promptTokens: number;
   cachedTokens: number;
   outputTokens: number;
-  thoughtTokens: number;
+  /** null when the run's output says the provider reported no thought count (doc 66 replay run 2: "not reported") */
+  thoughtTokens: number | null;
   costUsd: number | null;
   startedAt: string;
   endedAt: string;
@@ -207,7 +208,7 @@ export function runOf(r: Obj): LoadRun {
     promptTokens: num(r.prompt_tokens) ?? 0,
     cachedTokens: num(r.cached_tokens) ?? 0,
     outputTokens: num(r.output_tokens) ?? 0,
-    thoughtTokens: num(r.thought_tokens) ?? 0,
+    thoughtTokens: obj(r.output_summary).thoughtsReported === false ? null : (num(r.thought_tokens) ?? 0),
     costUsd: num(r.est_cost_usd),
     startedAt: iso(r.started_at) ?? '',
     endedAt: iso(r.ended_at) ?? iso(r.started_at) ?? '',

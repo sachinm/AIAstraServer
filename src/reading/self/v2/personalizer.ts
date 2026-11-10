@@ -16,10 +16,12 @@ import { promptHash, SELF_V2_PERSONALIZER_PROMPT } from './slices.js';
 
 export const PERSONALIZER_TIMEOUT_MS = 60_000;
 /**
- * The Personalizer translates, it does not reason: it asks for the lowest thinking the model allows (`minimal`; Gemini
- * 3.x counts thought tokens against the output cap, doc 66 replay 2026-11-09 failure 1).
+ * The Personalizer now reasons about the person (Sachin 2026-11-09: it builds a portrait, then decides emphasis, tone
+ * and register), so it thinks at `low`. Gemini 3.x counts thought tokens against the output cap: the cap
+ * (`SELF_PERSONALIZER_MAX_OUTPUT_TOKENS`, 12,000) leaves room for them, and a `MAX_TOKENS` finish is retried once at
+ * 16,000 (doc 66 replay 2026-11-09 failure 1).
  */
-export const PERSONALIZER_THINKING = 'minimal' as const;
+export const PERSONALIZER_THINKING = 'low' as const;
 
 /** a finish that means the JSON was cut at the output cap */
 export const isTruncated = (finishReason: string | null | undefined): boolean => finishReason === 'MAX_TOKENS';
@@ -36,8 +38,8 @@ export function personalizerSchema(areaIds: readonly string[]): Record<string, u
           tone: { type: 'STRING', enum: [...TONES] },
           sentence: S('one sentence: the life area and the date it changes'),
           sub: S('one short supporting line, or empty'),
-          questionClaimId: S('the claim: id of the strongest dated claim the question checks, or empty'),
-          questionText: S('one plain yes/no question for this person, or empty'),
+          questionClaimId: S('the claim id given under HERO QUESTION, exactly, or empty'),
+          questionText: S('the HERO QUESTION draft rephrased in plain words: one yes/no question about its matter, or empty'),
           withheld: { type: 'BOOLEAN', description: 'true when the live areas disagree or are only possible' },
         },
         required: ['tone', 'sentence', 'sub', 'questionClaimId', 'questionText', 'withheld'],
@@ -48,7 +50,7 @@ export function personalizerSchema(areaIds: readonly string[]): Record<string, u
           type: 'OBJECT',
           properties: {
             areaId: { type: 'STRING', enum: [...areaIds] },
-            headline: S('at most 14 words, second person'),
+            headline: S('at most 14 words (count them), second person, no chart word such as yoga or annual cycle'),
             body: { type: 'ARRAY', items: S(), description: '2 or 3 short paragraphs, at most 120 words in all' },
             patterns: {
               type: 'ARRAY',
@@ -98,6 +100,7 @@ export function addUsage(first: GeminiResult, second: GeminiResult): GeminiResul
       cachedTokens: a.cachedTokens + b.cachedTokens,
       outputTokens: a.outputTokens + b.outputTokens,
       thoughtTokens: a.thoughtTokens + b.thoughtTokens,
+      ...(a.thoughtTokensReported !== undefined || b.thoughtTokensReported !== undefined ? { thoughtTokensReported: a.thoughtTokensReported !== false && b.thoughtTokensReported !== false } : {}),
       ms: a.ms + b.ms,
     },
   };
@@ -150,7 +153,7 @@ export async function runPersonalizer(
         return {
           value: g,
           usage: { model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-          output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, retried: g !== first },
+          output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, retried: g !== first, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
         };
       },
     );
@@ -162,7 +165,7 @@ export async function runPersonalizer(
     if ((deps.spentUsd ?? 0) + call.costUsd > deps.maxSpendUsd) return { ...base, status: 'budget_exceeded', doc: null, cardStatus: {}, gaps: ['personalizer: spend over the cap'] };
     if (!parsed) return { ...base, status: 'failed', doc: null, cardStatus: {}, gaps: [`personalizer: no card document (finish ${res.finishReason ?? 'unknown'}, ${res.text.length} chars)`] };
     const v = validatePersonalDoc(parsed, input, strip);
-    return { ...base, status: 'ok', doc: v.doc, cardStatus: v.cardStatus, gaps: v.gaps };
+    return { ...base, status: 'ok', doc: v.doc, cardStatus: v.cardStatus, gaps: v.gaps, metrics: v.metrics };
   } catch (e) {
     return {
       promptHash: pHash,

@@ -253,3 +253,18 @@ const INTERNAL_ENGINE_RE = /\b(aiastra_radha|pyjhora|jhora|radha)\b/gi;
 export function redactEngineTerms(text: string): string {
   return text.replace(INTERNAL_ENGINE_RE, 'traditional calculations');
 }
+
+/** the note a family finding cut at the output cap carries into the Oracle (doc 66 replay run 2, failure 7) */
+export const CUT_FINDING_NOTE = 'NOTE: this finding stopped at the output cap; only its complete sentences are kept and it states no VALID_UNTIL.';
+
+/**
+ * A model text cut at its output cap (`finishReason` MAX_TOKENS), kept to its complete sentences: everything after the
+ * last sentence end (`.`, `!` or `?`, with any closing quote, bracket, backtick or bold mark, then a space or the end)
+ * is dropped. '' when no sentence is complete. Never adds an ellipsis.
+ */
+export function completeSentencesOf(text: string): string {
+  const t = text.trimEnd();
+  let cut = -1;
+  for (const m of t.matchAll(/[.!?][)\]"'`*]*(?=\s|$)/g)) cut = (m.index ?? 0) + m[0].length;
+  return cut > 0 ? t.slice(0, cut).trim() : '';
+}
