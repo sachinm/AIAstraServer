@@ -9,7 +9,7 @@ import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { getLifeCharterHorizonYears, getLifeHorizonYears } from '../../config/env.js';
 import { ACTIVATION_YEARS_AHEAD, activationFor as activationForDb } from '../digest/activation.js';
 import { digestStatusOf as digestStatusOfDb, loadDigest as loadDigestDb } from '../digest/load.js';
-import type { ActivationRow } from '../digest/activation.js';
+import type { ActivationLevel, ActivationRow } from '../digest/activation.js';
 import { queueDigestBuild } from '../digest/event.js';
 import type { DigestStatus, DigestView } from '../digest/types.js';
 import { allAreaHouses, LIFE_AREAS } from './areas.js';
@@ -41,7 +41,7 @@ export interface LifeDeps {
   /** tests: the digest without the database */
   loadDigest?: (kundliId: string) => Promise<DigestView | null>;
   digestStatusOf?: (kundliId: string) => Promise<{ status: DigestStatus; version: string | null }>;
-  activationFor?: (kundliId: string, q: { from: string; to: string; houses?: number[]; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
+  activationFor?: (kundliId: string, q: { from: string; to: string; houses?: number[]; maxLevel?: ActivationLevel }) => Promise<ActivationRow[]>;
   loadSky?: (kundliId: string) => Promise<{ sky: SkyView; id: string } | null>;
 }
 

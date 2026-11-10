@@ -1966,3 +1966,51 @@ region costs about $1 per million tokens per hour.
   `replayFindings` "sub-technique round trips" and `specialistFailures` fail only under full-suite load. Same set
   failing with this branch's changes stashed. Done: tests that read env vars stub them instead of inheriting `.env`;
   the timing test asserts call rounds, not wall time.
+
+## Filed 2026-11-09 by dasha levels 1–6 (server)
+
+Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in brackets.
+
+- **P1: The worker Lambda, its IAM and the API env var do not exist yet.** Until the deploy session creates
+  `aiastra-dasha-deep-worker`, grants `lambda:InvokeFunction` on it to `aiastra-api-lambda-exec`, sets
+  `DASHA_DEEP_WORKER_FUNCTION` on the API, and updates `deploy-api-lambda.yml` to roll both functions, focus is a no-op
+  (logged once as `dasha_deep_no_worker_function`). The spec is in doc 67 §5.1. [deploy session, Sachin's typed yes]
+  Done when a manual `dasha-deep-pull` invoke logs `dasha_deep_pull` with rows for each system.
+- **P1: Migration M46 (`20261109120000_dasha_levels_m46`) is not applied.** It adds the
+  `(kundli_id, level, from_date, to_date)` index and the `dasha.narayana.l3` and `dasha.deep` chart types. Without it,
+  the worker's focus and marker writes hit the `kundli_data.data_type` foreign key. [server release] Done when
+  `prisma migrate status` is clean on the release database.
+- **P1: The levels backfill has not been run.** Every kundli still has two levels for every system except the six `.l3`
+  ones. Run after the engine release and the server release:
+  `npx tsx scripts/backfill-dasha-levels.ts --dry-run=false` (dry run first with `--limit 3`). Sachin approved updating
+  all kundlis in chat on 2026-11-09. [deploy or ops session] Done when the after counts show level 3 rows for every
+  system.
+- **P2: The deep-pull contract is assumed, not read.** The engine lane `feat/dasha-levels-1-6` has no commits beyond
+  `develop` yet (checked 2026-11-09). The server sends `params: { max_level, deep_from, deep_to }` to every `dasha.<name>`
+  and assumes these things:
+  - the answer is the R-6 tree with `levels`;
+  - `levels: 3` still caps the tree at three levels with no deep window;
+  - the `catalog` export lists `max_level` with `allowed` up to 6.
+
+  The backfill's wet-run gate depends on that last point. [engine lane] Done when the engine's tests pin the three
+  points, or the server is adjusted to what ships.
+- **P2: Levels 5–6 are stored at date precision.** `kundli_activation.from_date` and `to_date` are `date`. A level-6
+  period lasts about 2 hours, and many level-5 periods last under a day, so most of them start and end on the same date.
+  `activationFor`'s `from_date < to AND to_date > from` then never matches them for a one-day query. Level 4 (the default,
+  about 6.7 days) is not affected. Before `DASHA_DEEP_MAX_LEVEL` is raised above 4, store `start_jd` / `end_jd` (or
+  timestamps) and query on them. [server] Done when a level-6 row is found for the hour it covers.
+- **P2: Today, Lucky times and chat do not read the deep levels yet.** `activationFor({ maxLevel: 4 })` (or
+  `shortMaxLevel: 4` around a date) returns them where they are stored. The calls and prompts were deliberately not
+  changed:
+  - `luckyTimes/wiring.ts runningDashaLordsOf` asks for `maxLevel: 2`;
+  - `run.ts` and `prewarmReaders.ts` now get levels 1–3 by default.
+
+  [board owners] Done when each surface states, in its plan, what level 4 adds, and its prompt change is reviewed.
+- **P3: Narayana and Vimsottari base rows stay on the legacy wire types** (`narayana_dasa`, `vimsottari_dasa`), which
+  take no params. Their three-level data comes from `dasha.vimsottari.l3` and the new `dasha.narayana.l3`. The `.l3`
+  entries are now redundant with `levels: 3` on every base row. [server] Done when the base rows move to `dasha.<name>`
+  wire types and the `.l3` entries are retired, in one migration.
+- **P3: Boards cached before the backfill keep their old activation reads.** The backfill replaces `kundli_activation`
+  only. `technique_outputs` and `area_builds` built from level-2-only systems are served until their next rebuild (the
+  digest version or a boundary stamp). [server] Done when the backfill's runbook includes a digest-stale mark per kundli,
+  if Sachin wants fresh boards at once.

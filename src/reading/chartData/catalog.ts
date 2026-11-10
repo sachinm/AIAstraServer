@@ -111,7 +111,24 @@ export const PAST_READING_MOVING_TYPES = [
  * Separate rows, because the default `dasha.<name>` row stays at Radha's default of two levels. The wire type is always
  * `dasha.<name>`: the legacy `vimsottari_dasa` takes no params.
  */
-export const LEVEL3_DASHAS = ['vimsottari', 'dwisatpathi', 'yogini', 'tithi_ashtottari', 'kaala', 'karaka'] as const;
+export const LEVEL3_DASHAS = ['vimsottari', 'dwisatpathi', 'yogini', 'tithi_ashtottari', 'kaala', 'karaka', 'narayana'] as const;
+
+/**
+ * Levels asked of every `dasha.<name>` row in the normal pull (docs/reading-engine/67): three levels, lifelong. Sent as
+ * `levels`, which both the engine before and after the levels 1–6 release accept (the old engine refuses unknown keys
+ * such as `max_level`, and the new one defaults `max_level` to 6, so a request with no levels would store the deep
+ * window in a row nobody refreshes). Not sent to the legacy wire types (vimsottari_dasa, narayana_dasa take no params;
+ * their `.l3` rows carry three levels) nor to systems the engine serves at one level only.
+ */
+export const DASHA_LIFELONG_LEVELS = 3;
+export const DASHA_LEVEL1_ONLY: ReadonlySet<string> = new Set(['kalachakra']);
+
+/**
+ * The deep-window rows of the dasha-deep worker (src/workers/dashaDeep.ts): never pulled by ensureChartData or the
+ * registration set (change class `moving`). Variants: `marker` (the worker's lock and last pull: window, per-system ms and
+ * rows) and `focus` (when a signed-in person last opened a board, Today, Lucky times or chat for the kundli).
+ */
+export const DASHA_DEEP_TYPE = 'dasha.deep';
 
 const SERVED_VARGAS = new Set([1, 2, 4, 7, 9, 10]);
 const FIRST_VARGAS = new Set([1, 9]);
@@ -162,7 +179,7 @@ function build(): ChartDataType[] {
       radhaType: legacy?.radhaType ?? `dasha.${name}`,
       tier: legacy?.tier ?? 'on_demand',
       served: Boolean(legacy),
-      ...(legacy ? { legacyColumn: legacy.column } : {}),
+      ...(legacy ? { legacyColumn: legacy.column } : DASHA_LEVEL1_ONLY.has(name) ? {} : { fixedParams: { levels: DASHA_LIFELONG_LEVELS } }),
       sortOrder: 200 + i,
       label: `${name.replace(/_/g, ' ')} dasha`,
     });
@@ -244,7 +261,9 @@ function build(): ChartDataType[] {
   out.push({ id: 'daily_grade', family: 'transit', radhaType: 'daily_grade', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 640, label: 'Day grade over a date range (Moon star, tara, chandra bala, panchanga, events)' });
   out.push({ id: 'muhurta', family: 'panchanga', radhaType: 'muhurta', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 650, label: 'Muhurta tables per day at a place (sunrise, horas, muhurtas, kalas, optional natal grade)' });
   out.push({ id: 'transit_ashtakavarga', family: 'transit', radhaType: 'transit_ashtakavarga', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 660, label: 'Dated transit positions scored by natal ashtakavarga (BAV, SAV, kakshya)' });
-  // Self board v2 (doc 66 §4.3): one row per kundli and clock (variant `system=<clock>`), pulled and refreshed by
+  // Dasha levels 4–6 in a window (doc 67): pulled only by the dasha-deep worker for a kundli in focus, never by ensureChartData.
+  out.push({ id: DASHA_DEEP_TYPE, family: 'dasha', radhaType: 'dasha.deep', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 280, label: 'Dasha levels 4–6 in a window around today (dasha-deep worker marker and focus rows)' });
+    // Self board v2 (doc 66 §4.3): one row per kundli and clock (variant `system=<clock>`), pulled and refreshed by
   // src/reading/self/sub/pressure.ts, never by ensureChartData (it depends on the date asked for).
   out.push({ id: 'pressure_inventory', family: 'transit', radhaType: 'pressure_inventory', changeClass: 'moving', tier: 'on_demand', variantKind: 'natal', served: false, calcVersion: null, sortOrder: 670, label: 'Dated windows of pressure and support around a date, on one dasha clock (Self board v2)' });
   return out;

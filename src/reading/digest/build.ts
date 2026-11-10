@@ -13,7 +13,7 @@ import type { PrismaClient, Prisma } from '@prisma/client';
 import { SIGN_NAMES } from '../facts/constants.js';
 import { lordCode } from '../timeline/dashas.js';
 import { ARUDHA_ARGALA_VARGAS, AVASTHA_VARGAS, VARGA_FACTORS } from '../chartData/catalog.js';
-import { buildActivationRows, type ActivationRowInput } from './activation.js';
+import { buildActivationRows, LIFELONG_MAX_LEVEL, type ActivationRowInput } from './activation.js';
 import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
 import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type DoshaDetails, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
 
@@ -1437,7 +1437,8 @@ async function writeDigest(prisma: PrismaClient, kundliId: string, rows: DigestR
       })
     );
   }
-  ops.push(prisma.kundliActivation.deleteMany({ where: { kundli_id: kundliId } }));
+  // lifelong levels only: the deep rows (4–6) belong to the dasha-deep worker and survive a digest rebuild (doc 67)
+  ops.push(prisma.kundliActivation.deleteMany({ where: { kundli_id: kundliId, level: { lte: LIFELONG_MAX_LEVEL } } }));
   for (let i = 0; i < activation.length; i += BATCH) {
     ops.push(
       prisma.kundliActivation.createMany({

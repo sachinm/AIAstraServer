@@ -1,7 +1,8 @@
 /**
  * The activation calendar (`digest.activation`, docs/reading-engine/53 §4.1 and step 3, the contract of 54 §2): one row
- * per period of every stored dasha tree, from birth to thirty years after today, level 3 where a `.l3` tree is stored and
- * level 2 otherwise, with the D1 houses the period activates AS THE ENGINE STATES THEM:
+ * per period of every stored dasha tree, from birth to thirty years after today, to level 3 (the normal pull asks every
+ * system for three levels; docs/reading-engine/67), plus levels 4–6 inside the deep window for a kundli in focus
+ * (written by the dasha-deep worker, src/workers/dashaDeep.ts), with the D1 houses the period activates AS THE ENGINE STATES THEM:
  *   - a graha period: the lord's D1 house, the houses it owns and the houses its graha drishti falls on (the lord's D1
  *     planet card, built from dignities / benefic_malefic / aspects);
  *   - a rasi period: the house of the sign in D1 (`house_counts.sign_to_house`) and the house of the sign's lord (the D1
@@ -16,10 +17,15 @@ import { FACTS_ITEM, type DigestRowInput, type HouseCard, type PlanetCard } from
 
 export type ActivationFamily = 'vimshottari' | 'conditional' | 'yogini' | 'tithi_ashtottari' | 'rasi' | 'karaka' | 'other';
 
+/** Dasha depth: 1 maha, 2 antar, 3 pratyantar (lifelong, the normal pull), 4 sookshma, 5 prana, 6 deha (the deep window, docs/reading-engine/67). */
+export type ActivationLevel = 1 | 2 | 3 | 4 | 5 | 6;
+/** The deepest level stored lifelong; deeper rows exist only inside the deep window the dasha-deep worker pulls. */
+export const LIFELONG_MAX_LEVEL = 3;
+
 export interface ActivationRow {
   system: string;
   family: ActivationFamily;
-  level: 1 | 2 | 3;
+  level: ActivationLevel;
   lord: string | null;
   sign: string | null;
   from: string;
@@ -151,51 +157,91 @@ function signIndexOfNode(n: DashaNode): number | null {
   return signIndexOf(n.lord);
 }
 
+interface WalkOpts {
+  minLevel: ActivationLevel;
+  maxLevel: ActivationLevel;
+  /** rows must overlap [from, to) when given (the deep window) */
+  from?: string;
+  to?: string;
+  /** rows starting on or after this date are left out */
+  horizon: string;
+  birth: string | null;
+}
+
+/** One tree's rows between minLevel and maxLevel. Houses follow the same engine-field rule at every level. */
+function rowsOfTree(tree: { system: string; payload: unknown }, cards: Cards, applicable: ReadonlySet<string>, o: WalkOpts): ActivationRowInput[] {
+  const n = normalizeDasha(tree.payload, { system: tree.system });
+  if (!n || !n.periods.length) return [];
+  const rasi = n.periods.some((p) => signIndexOfNode(p) != null && lordCode(p.lord) == null);
+  const family = familyOf(tree.system, rasi, applicable);
+  const out: ActivationRowInput[] = [];
+  const walk = (nodes: DashaNode[], parent: DashaNode | null, parentEnd: string | null, depth: number): void => {
+    nodes.forEach((node, i) => {
+      const end = node.end ?? (i + 1 < nodes.length ? nodes[i + 1]!.start : parentEnd);
+      const lvl = Math.max(1, Math.round(node.level || depth));
+      if (!node.start || !end || lvl > o.maxLevel) return;
+      if (node.start >= o.horizon) return;
+      // outside the window nothing below this node can be inside it either
+      if (o.from && end <= o.from) return;
+      if (o.to && node.start >= o.to) return;
+      if (lvl >= o.minLevel && (!o.birth || end > o.birth)) {
+        const level = lvl as ActivationLevel;
+        if (rasi) {
+          const s = signIndexOfNode(node);
+          const ps = parent ? signIndexOfNode(parent) : null;
+          if (s != null) {
+            const { houses } = rasiHouses(s, cards);
+            out.push({ system: tree.system, family, level, lord: null, sign: SIGN_NAMES[s] ?? null, from: node.start, to: end, houses, parentLord: ps != null ? (SIGN_NAMES[ps] ?? null) : null });
+          }
+        } else {
+          const p = lordCode(node.lord);
+          if (p) out.push({ system: tree.system, family, level, lord: p, sign: null, from: node.start, to: end, houses: grahaHouses(cards.planet.get(p)), parentLord: parent ? lordCode(parent.lord) : null });
+        }
+      }
+      if (node.children.length && lvl < o.maxLevel) walk(node.children, node, end, lvl + 1);
+    });
+  };
+  walk(n.periods, null, null, 1);
+  return out;
+}
+
 /**
- * PURE. Activation rows from the stored trees and the digest's D1 cards. `today` bounds the calendar at thirty years
- * after it; the stored birth date (when there is one) bounds it below.
+ * PURE. Lifelong activation rows (levels 1–3) from the stored trees and the digest's D1 cards. `today` bounds the
+ * calendar at thirty years after it; the stored birth date (when there is one) bounds it below. Levels 4–6 are never
+ * built here: they come only from the dasha-deep worker (`buildDeepActivationRows`).
  */
 export function buildActivationRows(items: Record<string, unknown>, digestRows: readonly DigestRowInput[], opts: { today: string; yearsAhead?: number }): ActivationRowInput[] {
   const cards = cardsOf(items, digestRows);
   const applicable = applicableConditionalSystems(items['dasha.applicable']);
-  const birth = birthDate(items);
-  const horizon = addYears(opts.today, opts.yearsAhead ?? ACTIVATION_YEARS_AHEAD);
-  const out: ActivationRowInput[] = [];
-  for (const tree of dashaTrees(items)) {
-    const n = normalizeDasha(tree.payload, { system: tree.system });
-    if (!n || !n.periods.length) continue;
-    const rasi = n.periods.some((p) => signIndexOfNode(p) != null && lordCode(p.lord) == null);
-    const family = familyOf(tree.system, rasi, applicable);
-    const walk = (nodes: DashaNode[], parent: DashaNode | null, parentEnd: string | null): void => {
-      nodes.forEach((node, i) => {
-        const end = node.end ?? (i + 1 < nodes.length ? nodes[i + 1]!.start : parentEnd);
-        if (!node.start || !end || node.level > 3) return;
-        if (node.start >= horizon) return;
-        if (!birth || end > birth) {
-          const level = Math.min(3, Math.max(1, node.level)) as 1 | 2 | 3;
-          if (rasi) {
-            const s = signIndexOfNode(node);
-            const ps = parent ? signIndexOfNode(parent) : null;
-            if (s != null) {
-              const { houses } = rasiHouses(s, cards);
-              out.push({ system: tree.system, family, level, lord: null, sign: SIGN_NAMES[s] ?? null, from: node.start, to: end, houses, parentLord: ps != null ? (SIGN_NAMES[ps] ?? null) : null });
-            }
-          } else {
-            const p = lordCode(node.lord);
-            if (p) out.push({ system: tree.system, family, level, lord: p, sign: null, from: node.start, to: end, houses: grahaHouses(cards.planet.get(p)), parentLord: parent ? lordCode(parent.lord) : null });
-          }
-        }
-        if (node.children.length && node.level < 3) walk(node.children, node, end);
-      });
-    };
-    walk(n.periods, null, null);
-  }
-  return out;
+  const o: WalkOpts = { minLevel: 1, maxLevel: LIFELONG_MAX_LEVEL, horizon: addYears(opts.today, opts.yearsAhead ?? ACTIVATION_YEARS_AHEAD), birth: birthDate(items) };
+  return dashaTrees(items).flatMap((tree) => rowsOfTree(tree, cards, applicable, o));
+}
+
+/**
+ * PURE. The deep rows (levels 4..maxLevel) of trees the engine answered with `max_level` and a window, kept only where
+ * they overlap [from, to). `items` supplies `house_counts`, `dasha.applicable` and the birth date; `digestRows` the D1
+ * planet and house cards. The house rule is the lifelong one, unchanged: every value is the engine's.
+ */
+export function buildDeepActivationRows(
+  trees: ReadonlyArray<{ system: string; payload: unknown }>,
+  items: Record<string, unknown>,
+  digestRows: readonly DigestRowInput[],
+  window: { from: string; to: string; maxLevel: ActivationLevel },
+): ActivationRowInput[] {
+  const cards = cardsOf(items, digestRows);
+  const applicable = applicableConditionalSystems(items['dasha.applicable']);
+  const o: WalkOpts = { minLevel: (LIFELONG_MAX_LEVEL + 1) as ActivationLevel, maxLevel: window.maxLevel, from: window.from, to: window.to, horizon: '9999-12-31', birth: birthDate(items) };
+  return trees.flatMap((tree) => rowsOfTree(tree, cards, applicable, o));
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above `maxLevel` (and `shortMaxLevel` inside `[shortFrom, shortTo)` / `shortSystems`). */
+/**
+ * The periods overlapping [from, to) that activate any of `houses` (when given), in `systems` (when given), at or above
+ * `maxLevel` (and `shortMaxLevel` inside `[shortFrom, shortTo)` / `shortSystems`). `maxLevel` defaults to 3 (lifelong
+ * levels only). Levels 4–6 exist only inside the deep window the dasha-deep worker pulled for a kundli in focus: ask for
+ * them with `maxLevel` (or `shortMaxLevel`) above 3; where they are not stored the answer simply has none (no pull).
+ */
 export async function activationFor(
   prisma: PrismaClient,
   kundliId: string,
@@ -204,16 +250,15 @@ export async function activationFor(
     to: string;
     houses?: number[];
     systems?: string[];
-    maxLevel?: 1 | 2 | 3;
+    maxLevel?: ActivationLevel;
     shortFrom?: string;
     shortTo?: string;
-    shortMaxLevel?: 1 | 2 | 3;
+    shortMaxLevel?: ActivationLevel;
     shortSystems?: string[];
   },
 ): Promise<ActivationRow[]> {
-  const hasShortWindow = Boolean(
-    q.maxLevel && q.shortMaxLevel && q.shortMaxLevel > q.maxLevel && (q.shortTo || q.shortFrom),
-  );
+  const maxLevel: ActivationLevel = q.maxLevel ?? LIFELONG_MAX_LEVEL;
+  const hasShortWindow = Boolean(q.shortMaxLevel && q.shortMaxLevel > maxLevel && (q.shortTo || q.shortFrom));
   const shortClause: Record<string, unknown> = hasShortWindow
     ? {
         level: { lte: q.shortMaxLevel },
@@ -229,20 +274,14 @@ export async function activationFor(
       to_date: { gt: new Date(`${q.from}T00:00:00Z`) },
       ...(q.houses?.length ? { houses: { hasSome: q.houses } } : {}),
       ...(q.systems?.length ? { system: { in: q.systems } } : {}),
-      ...(q.maxLevel
-        ? hasShortWindow
-          ? {
-              OR: [{ level: { lte: q.maxLevel } }, shortClause],
-            }
-          : { level: { lte: q.maxLevel } }
-        : {}),
+      ...(hasShortWindow ? { OR: [{ level: { lte: maxLevel } }, shortClause] } : { level: { lte: maxLevel } }),
     },
     orderBy: [{ from_date: 'asc' }, { level: 'asc' }, { system: 'asc' }],
   });
   return rows.map((r) => ({
     system: r.system,
     family: r.family as ActivationFamily,
-    level: r.level as 1 | 2 | 3,
+    level: r.level as ActivationLevel,
     lord: r.lord,
     sign: r.sign,
     from: iso(r.from_date),
