@@ -2097,3 +2097,19 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   only. `technique_outputs` and `area_builds` built from level-2-only systems are served until their next rebuild (the
   digest version or a boundary stamp). [server] Done when the backfill's runbook includes a digest-stale mark per kundli,
   if Sachin wants fresh boards at once.
+
+## Filed 2026-11-09 by the engine dasha levels and Tithi Pravesha build (AIAstra_Radha develop 8e31dd5)
+
+- **DECISION for Sachin · The Tithi Pravesha year lord.** The engine had no rule; it now uses the lord of the weekday
+  (sunrise to sunrise) at the TP moment (`year_lord_rule: "weekday_lord_at_tp"`), the classical TP year lord, not the
+  Tajaka year lord of the solar return. Done: confirmed, or the rule named.
+- **DECISION for Sachin · Deeper dasha levels are derived by the engine's own split rule.** This pyjhora version gives two
+  levels (Vimshottari three); levels 4–6 split each period the way its own lord's mahadasha splits in that system, the rule
+  the export already used for level 3. Classical sookshma/prana/deha for Vimshottari (tested); the same proportional
+  rule for every other system. Kalachakra stops at level 1 (pyjhora's antardasha rows are broken); sign dashas cap at 5
+  if 6 is ever switched on (size). Done: confirmed per system family, or rules named for the systems that differ.
+- **P3 · `annual.mudda` and `annual.patyayini` are still pyjhora's raw trees**, not bounded to their own
+  `valid_from` / `valid_to`: Mudda starts before `valid_from` (pyjhora's balance); Patyayini starts on it and runs one
+  average Gregorian year. Owner: engine. Done: both bounded to their solar year like the TP year dasha.
+- **P3 · Some engine tests fail when run alone** because pyjhora's language lists are not set up before them; the ones
+  touched by this build were fixed. Owner: engine. Done: a test fixture sets them up.
