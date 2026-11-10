@@ -15,6 +15,7 @@ import {
   type DeepMarkerPayload,
 } from '../../../src/workers/dashaDeep.js';
 import { findDeepSweepCandidates, noteDashaDeepFocus, resetDashaDeepFocusState, runDashaDeepSweep, withDashaDeepFocus } from '../../../src/workers/dashaDeepFocus.js';
+import { memSlots } from './memSlots.js';
 import { deepen } from '../reading/digest/deepFixture.js';
 import { loadFixture } from '../reading/digest/helpers.js';
 
@@ -169,7 +170,9 @@ function focusPrisma(focusAt: Date | null = null) {
 }
 
 describe('focus trigger and sweep (doc 67)', () => {
+  let slots = memSlots().slots;
   beforeEach(() => {
+    slots = memSlots().slots;
     resetDashaDeepFocusState();
     vi.mocked(fetchEngineExport).mockClear();
   });
@@ -180,7 +183,7 @@ describe('focus trigger and sweep (doc 67)', () => {
   it('without DASHA_DEEP_WORKER_FUNCTION it is a no-op: no invoke, no write, no engine call', async () => {
     const invoke = vi.fn(async () => undefined);
     const f = focusPrisma();
-    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW })).toBe('no_function');
+    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW, slots })).toBe('no_function');
     expect(invoke).not.toHaveBeenCalled();
     expect(f.upserts).toHaveLength(0);
     expect(fetchEngineExport).not.toHaveBeenCalled();
@@ -191,15 +194,15 @@ describe('focus trigger and sweep (doc 67)', () => {
     process.env.KUNDLI_SYNC_EVENT_TOKEN = 'tok';
     const invoke = vi.fn(async () => undefined);
     const f = focusPrisma();
-    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW })).toBe('invoked');
+    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW, slots })).toBe('invoked');
     expect(invoke).toHaveBeenCalledWith('aiastra-dasha-deep-worker', { type: 'dasha-deep-pull', kundliId: 'k1', userId: 'u1', reason: 'focus', asOf: '2026-11-09', token: 'tok' });
-    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW + 3_600_000 })).toBe('cooldown');
+    expect(await noteDashaDeepFocus(f.prisma, 'u1', { invoke, now: () => NOW + 3_600_000, slots })).toBe('cooldown');
     // another container (memory empty) sees the focus row
     resetDashaDeepFocusState();
-    expect(await noteDashaDeepFocus(focusPrisma(new Date(NOW)).prisma, 'u1', { invoke, now: () => NOW + 3_600_000 })).toBe('recent');
+    expect(await noteDashaDeepFocus(focusPrisma(new Date(NOW)).prisma, 'u1', { invoke, now: () => NOW + 3_600_000, slots })).toBe('recent');
     expect(invoke).toHaveBeenCalledTimes(1);
     resetDashaDeepFocusState();
-    expect(await noteDashaDeepFocus(focusPrisma(new Date(NOW)).prisma, 'u1', { invoke, now: () => NOW + 7 * 3_600_000 })).toBe('invoked');
+    expect(await noteDashaDeepFocus(focusPrisma(new Date(NOW)).prisma, 'u1', { invoke, now: () => NOW + 7 * 3_600_000, slots })).toBe('invoked');
     expect(fetchEngineExport).not.toHaveBeenCalled();
     delete process.env.KUNDLI_SYNC_EVENT_TOKEN;
   });
@@ -208,13 +211,13 @@ describe('focus trigger and sweep (doc 67)', () => {
     process.env.DASHA_DEEP_WORKER_FUNCTION = 'aiastra-dasha-deep-worker';
     let release: () => void = () => undefined;
     const invoke = vi.fn(() => new Promise<void>((r) => (release = r)));
-    const requireUser = withDashaDeepFocus(async () => 'u1', focusPrisma().prisma, { invoke, now: () => NOW });
+    const requireUser = withDashaDeepFocus(async () => 'u1', focusPrisma().prisma, { invoke, now: () => NOW, slots });
     const userId = await requireUser({} as never, {} as never);
     expect(userId).toBe('u1');
     await new Promise((r) => setTimeout(r, 0));
     expect(invoke).toHaveBeenCalledTimes(1);
     release();
-    const anon = withDashaDeepFocus(async () => null, focusPrisma().prisma, { invoke, now: () => NOW });
+    const anon = withDashaDeepFocus(async () => null, focusPrisma().prisma, { invoke, now: () => NOW, slots });
     expect(await anon({} as never, {} as never)).toBeNull();
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(fetchEngineExport).not.toHaveBeenCalled();
@@ -248,13 +251,15 @@ describe('focus trigger and sweep (doc 67)', () => {
 
     // without the function name the sweep step does nothing
     const invoke = vi.fn(async (_fn: string, _payload: Record<string, unknown>) => undefined);
-    expect(await runDashaDeepSweep(prisma, { invoke, now: () => NOW })).toMatchObject({ skipped: 'no_function', invoked: 0 });
+    expect(await runDashaDeepSweep(prisma, { invoke, now: () => NOW, slots })).toMatchObject({ skipped: 'no_function', invoked: 0 });
     process.env.DASHA_DEEP_WORKER_FUNCTION = 'aiastra-dasha-deep-worker';
     process.env.DASHA_DEEP_SWEEP_MAX = '2';
-    const r = await runDashaDeepSweep(prisma, { invoke, now: () => NOW });
+    process.env.DASHA_DEEP_GLOBAL_MAX = '2';
+    const r = await runDashaDeepSweep(prisma, { invoke, now: () => NOW, slots });
     expect(r.invoked).toBe(2);
     expect(invoke.mock.calls.every((c) => (c[1] as { reason: string }).reason === 'sweep')).toBe(true);
     delete process.env.DASHA_DEEP_SWEEP_MAX;
+    delete process.env.DASHA_DEEP_GLOBAL_MAX;
     expect(fetchEngineExport).not.toHaveBeenCalled();
   });
 });

@@ -2113,3 +2113,19 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   average Gregorian year. Owner: engine. Done: both bounded to their solar year like the TP year dasha.
 - **P3 · Some engine tests fail when run alone** because pyjhora's language lists are not set up before them; the ones
   touched by this build were fixed. Owner: engine. Done: a test fixture sets them up.
+
+## Filed 2026-11-09 by the dasha-deep worker go-live
+
+Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each item in brackets.
+
+- **P1 · The account's Lambda concurrency limit is 10.** Lambda keeps 10 unreserved, so `aiastra-dasha-deep-worker`
+  runs without reserved concurrency and shares one pool with `aiastra-server-api`, the chart worker and the sweep.
+  The database cap `DASHA_DEEP_GLOBAL_MAX` (default 1) keeps deep pulls to one at a time. Request an increase in
+  Service Quotas ("Concurrent executions", us-east-1, account 442728149528). [Sachin] Done when the quota is raised
+  and the worker has a reserved concurrency of 1–2.
+- **P2 · The worker Lambda is not in Terraform.** `aiastra-dasha-deep-worker` was created with the CLI. Add the
+  `lambda_dasha_deep_worker` module and import it (doc 67 §5.1), with no reserved concurrency until the quota is
+  raised. [deploy session] Done when `terraform plan` shows no change for the function.
+- **P2 · The first real worker invocation is not yet confirmed.** It needs a signed-in board open on staging, then a
+  `dasha_deep_focus_invoked` log on the API and a `dasha_deep_pull` (or `dasha_deep_queued`) log on the worker.
+  [deploy session] Done when both logs are seen for one kundli and its level-4 rows are in `kundli_activation`.

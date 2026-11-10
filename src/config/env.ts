@@ -1219,3 +1219,12 @@ export function getDashaDeepFocusHours(): number {
 export function getDashaDeepSweepMax(): number {
   return parseClampedIntEnv('DASHA_DEEP_SWEEP_MAX', 10, 0, 100);
 }
+
+/**
+ * Deep pulls in flight account-wide at most (DASHA_DEEP_GLOBAL_MAX, 1–10; default 1). The worker Lambda has no reserved
+ * concurrency (the account limit is 10 and Lambda keeps 10 unreserved), so every run takes a slot from the API's pool;
+ * the cap is enforced in the database (src/workers/dashaDeepSlots.ts, doc 67 §5.2).
+ */
+export function getDashaDeepGlobalMax(): number {
+  return parseClampedIntEnv('DASHA_DEEP_GLOBAL_MAX', 1, 1, 10);
+}
