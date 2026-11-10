@@ -83,3 +83,36 @@ describe('dasha levels 1–6 (doc 67)', () => {
     expect(found.filter((x) => x.level > 3)).toEqual([]);
   });
 });
+
+describe('digest rebuild never strips a system whose tree failed or is mid-pull (2026-11-09 incident)', () => {
+  const old = (system: string, level: number) => ({ kundli_id: 'k1', system, level, lord: 'Sa', from_date: new Date('1990-01-01T00:00:00Z'), to_date: new Date('1999-01-01T00:00:00Z') });
+
+  it('a failed dasha tree keeps its activation rows; ready systems are replaced', async () => {
+    const data = [...fixtureDataRows(fx), { data_type: 'dasha.narayana.l3', variant: '', status: 'failed', calc_version: null, payload: null }];
+    const f = fakeDigestPrisma({ kundlis: [{ id: 'k1' }], data, dossier: fx.items.facts });
+    f.activation.push(old('narayana', 1), old('narayana', 2), old('narayana', 3), old('yogini', 1));
+    const r = await buildDigest(f.prisma as never, 'k1', { today: '2026-11-06' });
+    expect(r.status).toBe('ready');
+    expect(f.activation.filter((a) => a.system === 'narayana')).toHaveLength(3);
+    // the old yogini row is gone, replaced by the rebuilt ones
+    expect(f.activation.some((a) => a.system === 'yogini' && (a.from_date as Date).getTime() === Date.parse('1990-01-01T00:00:00Z'))).toBe(false);
+    expect(f.activation.filter((a) => a.system === 'yogini').length).toBeGreaterThan(0);
+  });
+
+  it('a tree mid-pull (fetching) keeps its old rows and gets no duplicate rows from the stored payload', async () => {
+    const data = [...fixtureDataRows(fx), { data_type: 'dasha.yogini', variant: '', status: 'fetching', calc_version: null, payload: null }];
+    const f = fakeDigestPrisma({ kundlis: [{ id: 'k1' }], data, dossier: fx.items.facts });
+    f.activation.push(old('yogini', 1), old('yogini', 2));
+    const r = await buildDigest(f.prisma as never, 'k1', { today: '2026-11-06' });
+    expect(r.status).toBe('ready');
+    expect(f.activation.filter((a) => a.system === 'yogini')).toHaveLength(2);
+    expect(f.activation.filter((a) => a.system === 'kalachakra').length).toBeGreaterThan(0);
+  });
+
+  it('a system with no stored tree at all (birth details changed) loses its rows', async () => {
+    const f = fakeDigestPrisma({ kundlis: [{ id: 'k1' }], data: fixtureDataRows(fx), dossier: fx.items.facts });
+    f.activation.push(old('narayana', 1));
+    await buildDigest(f.prisma as never, 'k1', { today: '2026-11-06' });
+    expect(f.activation.filter((a) => a.system === 'narayana')).toHaveLength(0);
+  });
+});

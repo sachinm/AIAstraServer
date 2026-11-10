@@ -16,6 +16,7 @@ import {
 } from '../../../src/workers/dashaDeep.js';
 import { findDeepSweepCandidates, noteDashaDeepFocus, resetDashaDeepFocusState, runDashaDeepSweep, withDashaDeepFocus } from '../../../src/workers/dashaDeepFocus.js';
 import { memSlots } from './memSlots.js';
+import { createDiskGuard } from '../../../src/reading/digest/diskGuard.js';
 import { deepen } from '../reading/digest/deepFixture.js';
 import { loadFixture } from '../reading/digest/helpers.js';
 
@@ -261,5 +262,27 @@ describe('focus trigger and sweep (doc 67)', () => {
     delete process.env.DASHA_DEEP_SWEEP_MAX;
     delete process.env.DASHA_DEEP_GLOBAL_MAX;
     expect(fetchEngineExport).not.toHaveBeenCalled();
+  });
+});
+
+describe('dasha-deep worker disk guard (2026-11-09 incident)', () => {
+  const guard = (size: number) => createDiskGuard({ databaseSize: async () => size, activationBytesPerRow: async () => 350 }, { limitBytes: 5_368_709_120, maxFill: 0.7 });
+
+  it('past limit x max fill: writes nothing, the marker says deferred_disk, and the next focus backs off for an hour', async () => {
+    const { d, writes, repo } = deps({ diskGuard: guard(Math.floor(5_368_709_120 * 0.7)) });
+    const o = await runDashaDeepPull(d, ev);
+    expect(o).toMatchObject({ status: 'skipped', why: 'deferred_disk' });
+    expect(writes).toHaveLength(0);
+    const marker = repo.rows.get('marker')!;
+    expect(marker.status).toBe('deferred_disk');
+    expect(marker.error).toMatch(/threshold/);
+    expect(deepFreshness(marker, '2026-11-09', NOW + 30 * 60_000, 4)).toEqual({ fresh: true, why: 'backoff' });
+    expect(deepFreshness(marker, '2026-11-09', NOW + 2 * 3_600_000, 4)).toEqual({ fresh: false, why: 'retry' });
+  });
+
+  it('under the threshold: writes as before', async () => {
+    const { d, writes } = deps({ diskGuard: guard(1_000_000_000) });
+    expect((await runDashaDeepPull(d, ev)).status).toBe('pulled');
+    expect(writes).toHaveLength(1);
   });
 });

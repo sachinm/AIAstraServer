@@ -103,6 +103,12 @@ function birthDate(items: Record<string, unknown>): string | null {
 
 const addYears = (iso: string, years: number) => `${String(Number(iso.slice(0, 4)) + years).padStart(4, '0')}${iso.slice(4)}`;
 
+/** The dasha system a stored item key names (`dasha.<name>` or `dasha.<name>.l3`), or null (not a dasha tree, `applicable`, `deep`). */
+export function dashaSystemOfKey(key: string): string | null {
+  const m = /^dasha\.([a-z_]+?)(\.l3)?$/.exec(key);
+  return m && m[1] !== 'applicable' && m[1] !== 'deep' ? m[1]! : null;
+}
+
 /** Every stored dasha system and the tree to read for it: `dasha.<name>.l3` when stored, else `dasha.<name>` */
 export function dashaTrees(items: Record<string, unknown>): Array<{ system: string; key: string; payload: unknown }> {
   const out = new Map<string, { system: string; key: string; payload: unknown }>();
