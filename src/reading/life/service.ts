@@ -4,12 +4,13 @@
  * 'preparing' and the digest is queued (kundlis.digest_status = 'pending', picked up by the digest sweep) unless it is
  * already building. Composed by code; no model call.
  */
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { getLifeCharterHorizonYears, getLifeHorizonYears } from '../../config/env.js';
 import { ACTIVATION_YEARS_AHEAD, activationFor as activationForDb } from '../digest/activation.js';
 import { digestStatusOf as digestStatusOfDb, loadDigest as loadDigestDb } from '../digest/load.js';
-import type { ActivationRow } from '../digest/activation.js';
+import type { ActivationLevel, ActivationRow } from '../digest/activation.js';
 import { queueDigestBuild } from '../digest/event.js';
 import type { DigestStatus, DigestView } from '../digest/types.js';
 import { allAreaHouses, LIFE_AREAS } from './areas.js';
@@ -41,7 +42,7 @@ export interface LifeDeps {
   /** tests: the digest without the database */
   loadDigest?: (kundliId: string) => Promise<DigestView | null>;
   digestStatusOf?: (kundliId: string) => Promise<{ status: DigestStatus; version: string | null }>;
-  activationFor?: (kundliId: string, q: { from: string; to: string; houses?: number[]; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
+  activationFor?: (kundliId: string, q: { from: string; to: string; houses?: number[]; maxLevel?: ActivationLevel }) => Promise<ActivationRow[]>;
   loadSky?: (kundliId: string) => Promise<{ sky: SkyView; id: string } | null>;
 }
 
@@ -104,8 +105,13 @@ export async function getLifeReading(deps: LifeDeps, userId: string): Promise<Li
       const sky = stored?.sky ?? null;
       const facts = await readFacts(prisma, userId);
       const running = rows.filter((r) => covers(r, today));
-      const year = Number(today.slice(0, 4));
-      const thisYear = view.annual(year);
+      // this year = the Tithi Pravesha year whose return moment has passed (doc 66 §4.10), with the Varsha row that
+      // covers today as its confirming chart; never the calendar year
+      const tp = runningTithiPravesha(view, today);
+      const thisYear = [
+        ...(tp.year != null ? view.annual(tp.year).filter((r) => r.kind === 'TP') : []),
+        ...(tp.varsha ? view.annual(tp.varsha.row.year).filter((r) => r.kind === 'VP') : []),
+      ];
       const built = LIFE_AREAS.map((area) => {
         const promise = promiseScale(view, area, { today, running, annual: thisYear, sky });
         const timing = areaTiming(view, area, promise, { today, horizonEnd, rows, annual: (y) => view.annual(y), sky });

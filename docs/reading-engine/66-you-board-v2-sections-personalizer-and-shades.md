@@ -207,6 +207,22 @@ digest + activation + sky overlay + pressure_inventory (engine rows)
   short, This chapter, Where you get stuck, Body live lines), sub-sub-period boundary and weekly sky snapshot (Right
   now), year boundary (This year), digest version (all). A build at a boundary rebuilds only the areas whose trigger
   fired; the store key carries the trigger stamps. No daily build.
+- **Oracle validation failures are stored and acted on (Sachin 2026-11-09: "if there's an error it should store that
+  error and bubble it up to inform some action being taken about the Oracle"; branch
+  `feat/self-v2-oracle-failures-storyteller`).** Every finding of the Oracle validator (unknown evidence key, date not a
+  stored span, caps, missing area, JSON/schema failure, cut at the output cap, call failed, budget) and of the
+  Personalizer validator (per card and check) is written per build to `reading_validation_failures` (`build_id`,
+  `stage`, `area`, `check`, `message`, `area_status`, `model`, `prompt_hash`, `call_id`; no words of the person, so not
+  sealed) and logged as one `self.v2 validation` line. When expected Oracle areas fail, ONE repair call re-asks the
+  Oracle for only those areas over the same cached prefix with the validator's reasons as a short "fix these" list,
+  validates again and marks each area `ok`, `repaired` or `failed` (never a second repair; the call counts in the
+  build's cost and `ms.oracleRepair`). Areas that still fail: the good areas are stored; a failed area shows the last
+  good stored reading's card on the same clock, marked `stale` ("From your last reading"), else it is withheld. The
+  build serves the page (is stored, is `ok`, commits a held question) only when the hero stands and at least 8 of the
+  11 areas are ok or repaired; otherwise it is `partial`, nothing new is stored and the question is given back.
+  GET /api/self/v2 carries `stale` per area and `quality: { okAreas, repaired, failed }`; the admin loads view
+  (`GET /api/admin-lab/loads/:userId`) carries `validation[]` per build. The Personalizer's drops get the same storage,
+  without a repair pass.
 - **Failure.** Oracle failed → the code lines stand in per area (doc 65). Personalizer failed → the Oracle headline
   and first paragraph stand in, with the chart-term redaction, and the dossier records `personalizer: failed`.
   Pressure inventory missing → the hero is withheld ("Not enough stored yet to say where you are; check back
@@ -360,7 +376,10 @@ authority and the boss, 6th → rivals, debt and what wears you, 4th → home an
 and money in hand, 8th → the hidden and the sudden, 12th → loss, distance and rest), reviewed by Sachin like
 `SELF.words`; it is vocabulary, not a derivation.
 
-**Layer 2 — area techniques (eleven, code).** Each is a pure selection over S1–S10 into an `AreaBrief { areaId,
+**Layer 2 — area techniques (eleven, code): the area work orders.** Each is a pure selection over S1–S10 into an
+area work order (type `AreaBrief`; the code name stays). A work order is the Oracle's order for one area: the facts
+(claims), the evidence keys, the dates and the ledger rows the Oracle reads for that area, and it also scopes the
+Oracle validator (its claim ids and keys are allowed evidence keys, its dates are stored spans). Shape: `AreaBrief { areaId,
 claims[] (id, text-free facts with evidence), dates[] from S2/S3/S9, ledgerRows: id[] from S5, promiseEntries: id[]
 from S4, horizon, refreshStamp }` plus the code floor lines (doc 62) for pending and failed states. No area touches the
 database; a test asserts it.
@@ -386,14 +405,17 @@ minutes.
 ```
 0  load Layer 0 rows once (one query per table, kundli-scoped)                                  ≈ 300 ms
 1  S1 → S2 ∥ S3 ∥ S4 ∥ S6 ∥ S8 ∥ S9 ∥ S10 → S5, S7 (need S2, S3, S4)                             ≈ 200 ms
-2  Layer 2: eleven AreaBriefs + floor lines; store `self.sub.*` and `self.area.*`                 ≈ 100 ms
+2  Layer 2: eleven area work orders (AreaBrief) + floor lines; store `self.sub.*` and `self.area.*` ≈ 100 ms
 3  build every agent's slice from the context (no DB); warm the five family prefixes, the Oracle
    prefix and the Personalizer prefix in parallel (explicit cache, READING_EXPLICIT_CACHE=1)       ≈ 1.5 s
 4  family readers ×5 in parallel (cached after the first build per digest version)               ≈ 3 s cold, 0 warm
 5  Oracle: three parallel calls over the warm prefix                                               ≈ 15 s
-6  validator (doc 65) → store `self.reading.oracle`                                                ≈ 100 ms
+6  validator (doc 65) → every finding to `reading_validation_failures`; failed areas re-asked in ONE
+   repair call (same prefix), validated again; store `self.v2.oracle` (ok, or partial with ≥ 8 areas) ≈ 100 ms (+ ≈ 10 s on a repair)
 7  Personalizer over the Oracle document + S10                                                     ≈ 8 s
-8  validator (§4.1) → store `self.personal.<area>` and `self.hero`; charge the board; mark done     ≈ 100 ms
+8  validator (§4.1) → drops to `reading_validation_failures`; failed Oracle areas take the last good
+   reading's card (stale) or are withheld; store and charge only when the build serves the page
+   (the hero and ≥ 8 of 11 areas ok or repaired), else partial: nothing stored, question given back  ≈ 100 ms
                                                                                    cold ≈ 28 s · warm (profile change only) ≈ 9 s
 ```
 
@@ -465,6 +487,19 @@ thought at `low` (≈ $0.020–0.027) ≈ **$0.022–0.029 per profile**, agains
 times), and ≈ 15–25 s instead of 10–12 s. One cold build with one profile moves from ≈ $0.074 to ≈ $0.09. Not measured:
 the first run on the new default measures the thought tokens (whether 3.8-flash reports them at all is still open).
 
+**The Personalizer as storyteller, and its model (Sachin 2026-11-09).** The Personalizer stays on the Oracle's model:
+`getSelfPersonalizerModel()` (`src/config/env.ts`) falls back `SELF_PERSONALIZER_MODEL` → `READING_MODEL_ORACLE` (today
+gemini-3.8-flash on the live Lambda) → `READING_MODEL_SYNTH` → the chat model; there is no hard-coded 3.8-flash default
+in code, the live value comes from the Lambda env. gemini-3.6-flash is priced exactly as 3.8-flash in
+`src/reading/llm/models.ts` (0.75 / 3.75 / 0.075 per M, doubling on 2027-01-01 for both), so moving to it saves nothing.
+A Pro model (`gemini-3.1-pro-preview`, 2.00 / 12.00 / 0.20) would cost about three times as much per Personalizer
+call (≈ $0.07–0.09 per profile): only for a later side-by-side test, not now. Each card may now carry one
+`illustration` (`{ text, kind: example | analogy | modern, illustrates: <Oracle paragraph id> }`, ≤ 40 words; the hero
+may carry one too): the Oracle point most likely to be misread, made to land with an everyday example, an analogy or a
+widely known modern reference fitted to the portrait. It adds no claim, date, chart term, prediction, advice or medical
+content; its own validator rule set drops a failing illustration alone, never the card. Estimate: ≈ 11 × 40 words ≈
+600 more output tokens per profile, ≈ $0.002 at Flash prices.
+
 Token estimate: the Lab now shows chars / 2.2 (`estProviderTokens`; the replay's 74.6 k chars of Oracle input were
 34.6 k provider tokens); chars / 4 stays only as the conservative padding bound for the 1,024-token cache minimum.
 
@@ -511,6 +546,49 @@ Love and Work builds are unchanged. Tests: `tests/unit/reading/self/v2agents/sin
 A prefix under 1,024 tokens is refused as an explicit region and its call goes uncached; docs/TODOS.md keeps the
 padding item open, now with the research-kundli numbers.
 
+### 4.10 The year: Tithi Pravesha (Sachin, 2026-11-09)
+
+The rule: the year is read from the **Tithi Pravesha (TP) chart whose return moment has passed**. A TP year runs from its
+return moment `tp_start` to the next return `tp_end`; the running year is the one with `tp_start ≤ now < tp_end`,
+compared as the person's local date-time (the engine writes both in the birth place's local time; a bare date is read at
+noon). Before this year's return the previous year's TP chart is still in force. The calendar birthday is never the
+boundary: the tithi return falls some days before or after it. The TP year dasha periods are bounded to that year.
+Varshaphala (VP, solar return) and its Mudda dasha only confirm; they never pick the year, and a VP year is never used in
+place of a TP year that did not resolve.
+
+The selector: `runningTithiPravesha(view, asOfDateTime)` in `src/reading/annual/tithiPravesha.ts`, the only place that
+picks the year. It returns the TP D1 row, the year window (`from`/`to`, exact `start`/`end`), the basis, the TP short
+clock (the TP year dasha period covering today, only when the dasha is bounded to the year: never rescaled in Node), the
+Varshaphala Mudda period as the confirming clock, and gaps. Where the return moment comes from, best first:
+
+1. `tp_start` / `tp_end` on the TP year row (engine lane AIAstra_Radha `feat/dasha-levels-1-6`);
+2. `valid_from` / `valid_to` on the stored `annual.tithi_pravesha` payload (the same instants, served since 2026-10-25);
+   both reach the digest as `AnnualRow.start` / `end` / `startBasis` (digest `d1.2026-11-09`);
+3. an older digest with neither: the TP D1 row whose own year dasha spans ≤ 400 days and covers today, with a gap;
+   otherwise no TP year and a gap.
+
+Callers: S9 `self.sub.year` (TP-led frame: year lagna, year lord from the TP row or the engine's `annual` pressure row,
+TP short clock, `confirmClock` = Mudda), the v1 panels (`panels/year.ts`, `love.ts` / `work.ts` year panels, the body
+panel's TP review), `self/service.ts` (annual span and cache keys), the v1 oracle's `family.year` pack (a RUNNING YEAR
+line leads; every row is tagged running / past / coming / confirming; a lifetime TP dasha is marked as not the year's
+clock), the area boards (`houseLayers.currentYear`, `career.workAnnualVote`), the life service, the chat evidence pack
+(`packs/digestSource.ts`) and the sub-agent slices (`oracle/digestSlices.ts`).
+
+S3 and S5: engine `pressure_inventory` calc_version 2 adds kind `annual` rows (the TP year window with its year lord and
+the houses the year lagna activates; level-2 rows for the year's periods) and kind `return` rows (Saturn and Jupiter
+returns). They are windows like any other (strip, byMatter, startedLast12m, endingNext6m), kept in degraded mode too
+because they hold on every clock; an `annual` row that presses on a matter becomes an S5 risk row with
+`from.chart = 'year'`.
+
+Prompts: every reader of the year carries the same rule block (`TITHI_PRAVESHA_YEAR_RULE`; `prompts/annual.md`,
+`readers/R11-annual.md`, `readers/R15-self.md`, `oracle/self.md`, `oracle/self-areas.md`, `oracle/self-areas-v2.md`,
+`personalizer/self.md`, `v2/synth.md`, the `family.year` system prompt and the Love/Work board focus lines). No prompt
+names a fixed year.
+
+Waiting on the engine release: until `feat/dasha-levels-1-6` ships, the stored TP year dasha is a lifetime dasha, so the
+TP short clock is withheld (gap) and S9 `shortClock` is null; `annual`/`return` pressure rows do not exist yet. The year
+window itself already resolves from `valid_from` once the digest is rebuilt at `d1.2026-11-09`.
+
 ## 5. Architecture
 
 ```
@@ -520,7 +598,7 @@ engine (export types) ── natal/varga/dasha/avastha/yoga rows ─┐
                                                                                      ▼
  self-reading-build (own invocation, one per kundli)
    ─► Layer 1: S1 clock → S2 periods ∥ S3 windows ∥ S4 promise ∥ S6 mind ∥ S8 presence ∥ S9 year ∥ S10 profile → S5 risk, S7 body
-   ─► Layer 2: eleven AreaBriefs + floor lines        ─► slices built, prefixes warmed (families, Oracle, Personalizer)
+   ─► Layer 2: eleven area work orders + floor lines        ─► slices built, prefixes warmed (families, Oracle, Personalizer)
    ─► readers ×5 (cached) ─► ORACLE ×3 parallel (Vedic, JSON, over S4+S5 ledger and the briefs)
                                                                                      │
                                             S10 profile pack ─────────────────────────► PERSONALIZER (plain, JSON)

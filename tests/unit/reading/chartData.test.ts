@@ -74,7 +74,8 @@ describe('catalog', () => {
     const ids = BUILTIN_CHART_TYPES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const f of VARGA_FACTORS) expect(CHART_TYPE_BY_ID.get(`varga.d${f}`)).toBeTruthy();
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha' && !t.id.endsWith('.l3'))).toHaveLength(45);
+    // 44 dashas, dasha.applicable and the dasha-deep worker's rows (doc 67)
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.family === 'dasha' && !t.id.endsWith('.l3'))).toHaveLength(46);
     expect(CHART_TYPE_BY_ID.get('annual.varsha')?.variantKind).toBe('year');
   });
   it('lists the R-4a/R-4b/R-5 types and transit with their wire names, unserved until the catalog sync', () => {
@@ -87,7 +88,7 @@ describe('catalog', () => {
     expect(CHART_TYPE_BY_ID.get('transit_contacts')).toMatchObject({ radhaType: 'transit_contacts', family: 'transit', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('prashna')).toMatchObject({ radhaType: 'prashna', family: 'prashna', changeClass: 'moving', tier: 'on_demand', served: false, calcVersion: null });
     expect(CHART_TYPE_BY_ID.get('annual.tithi_pravesha_dasha')?.fixedParams).toEqual({ system: 'tithi_ashtottari' });
-    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range', 'daily_grade', 'muhurta', 'transit_ashtakavarga', 'pressure_inventory']);
+    expect(BUILTIN_CHART_TYPES.filter((t) => t.changeClass === 'moving').map((t) => t.id)).toEqual(['transit', 'transit_contacts', 'prashna', 'transit_range', 'daily_grade', 'muhurta', 'transit_ashtakavarga', 'dasha.deep', 'pressure_inventory']);
     expect(chartDataTypeIds()).not.toContain('prashna');
     expect(chartDataTypeIds()).not.toContain('transit');
     expect(chartDataTypeIds()).not.toContain('transit_contacts');
@@ -124,6 +125,8 @@ describe('catalog', () => {
     const m16 = readFileSync(path.resolve('prisma/migrations/20261031120000_reading_m16_house_counts/migration.sql'), 'utf8');
     const m17 = readFileSync(path.resolve('prisma/migrations/20261031110000_reading_m17_radha_reading_types/migration.sql'), 'utf8');
     const m34 = readFileSync(path.resolve('prisma/migrations/20261106060000_reading_m34_deep_varga_chart_types/migration.sql'), 'utf8');
+    const m46 = readFileSync(path.resolve('prisma/migrations/20261109120100_dasha_levels_m46/migration.sql'), 'utf8');
+    const m46Ids = ['dasha.narayana.l3', 'dasha.deep'];
     const m9Ids = ['dasha.applicable', 'relations', 'benefic_malefic', 'dignities', 'bhava', 'annual.tithi_pravesha_dasha', 'transit'];
     const m12Ids = ['transit_contacts'];
     const m14Ids = ['prashna'];
@@ -151,7 +154,7 @@ describe('catalog', () => {
     expect(pressureSrc).toMatch(/async function ensureTypeRow[\s\S]*chartDataType\.upsert/);
     for (const id of loaderSeeded) for (const sql of [m7, m9, m11, m12, m14, m15, m16, m17, m34]) expect(sql).not.toContain(`('${id}', `);
     for (const t of BUILTIN_CHART_TYPES.filter((x) => !loaderSeeded.includes(x.id))) {
-      const sql = isM34(t.id) ? m34 : isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
+      const sql = m46Ids.includes(t.id) ? m46 : isM34(t.id) ? m34 : isM17(t.id) ? m17 : m16Ids.includes(t.id) ? m16 : m15Ids.includes(t.id) ? m15 : m14Ids.includes(t.id) ? m14 : m12Ids.includes(t.id) ? m12 : isM11(t.id) ? m11 : m9Ids.includes(t.id) ? m9 : m7;
       expect(sql).toContain(seedRow(t, m14Relabel[t.id] ?? t.label));
       if (m14Relabel[t.id]) {
         expect(m14).toContain(`SET "label" = '${t.label}'`);
@@ -172,6 +175,7 @@ describe('catalog', () => {
     expect(m11).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m16).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m17).toContain('ON CONFLICT ("id") DO NOTHING');
+    expect(m46).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m12).toContain('ON CONFLICT ("id") DO NOTHING');
     expect(m9).toMatch(/CHECK \("change_class" IN \('natal', 'annual', 'moving'\)\)/);
     expect(m9).toContain('ON CONFLICT ("id") DO NOTHING');

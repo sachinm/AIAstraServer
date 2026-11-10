@@ -8,7 +8,7 @@ import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
 import { latestReadyBuild, refreshDue, storedValidity, validityOf, type ReadingValidity } from './validity.js';
 import { runningYearSpan, shortestRunningPeriodSpan, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
-import { activationFor as realActivationFor, type ActivationRow } from '../digest/activation.js';
+import { activationFor as realActivationFor, type ActivationLevel, type ActivationRow } from '../digest/activation.js';
 import { loadDigest as realLoadDigest } from '../digest/load.js';
 import { DIGEST_VERSION, type DigestView } from '../digest/types.js';
 import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
@@ -25,7 +25,7 @@ export interface CareerDeps {
   /** tests: inputs without the database or the engine */
   loadInputs?: (kundliId: string, asOf: string, span: { from: string; to: string }) => Promise<TimelineInputs | null>;
   loadDigest?: (prisma: PrismaClient, kundliId: string) => Promise<DigestView | null>;
-  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; maxLevel?: 1 | 2 | 3 }) => Promise<ActivationRow[]>;
+  activationFor?: (prisma: PrismaClient, kundliId: string, q: { from: string; to: string; maxLevel?: ActivationLevel }) => Promise<ActivationRow[]>;
   now?: () => Date;
 }
 

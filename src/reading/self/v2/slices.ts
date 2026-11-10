@@ -319,7 +319,7 @@ export function oracleFrame(input: OracleInput): { text: string; keys: string[] 
   );
   L.push(`## RISK LEDGER (S5, the ${input.risk.length} heaviest rows: confirm or reject each with evidence; never recompute its dates)`);
   for (const r of input.risk) {
-    const from = [r.from.planet ? `planet=${r.from.planet}` : '', r.from.house != null ? `house=${r.from.house}` : '', r.from.yogaId ? `yoga=${r.from.yogaId}` : '', r.from.windowId ? `window=${b.k(`window:${r.from.windowId}`)}` : '']
+    const from = [r.from.planet ? `planet=${r.from.planet}` : '', r.from.house != null ? `house=${r.from.house}` : '', r.from.yogaId ? `yoga=${r.from.yogaId}` : '', r.from.windowId ? `window=${b.k(`window:${r.from.windowId}`)}` : '', r.from.chart === 'year' ? 'from=the year chart' : '']
       .filter(Boolean)
       .join(' ');
     L.push(
@@ -362,8 +362,9 @@ export function oracleFrame(input: OracleInput): { text: string; keys: string[] 
   L.push(
     '## YEAR (S9)',
     y.noCoverage
-      ? 'no annual row covers today: the live year line is withheld'
-      : `year ${y.from}..${y.to} year lagna ${b.k(y.yearLagna)} year lord ${b.k(y.yearLord)} short clock ${y.shortClock ? `${y.shortClock.lord} ${y.shortClock.from}..${y.shortClock.to} ${b.k(y.shortClock.evidence)}` : 'none'}`,
+      ? 'no Tithi Pravesha year covers today: the live year line is withheld'
+      : `Tithi Pravesha year ${y.from}..${y.to}${y.tpStart ? ` (return ${y.tpStart}${y.tpEnd ? ` to ${y.tpEnd}` : ''})` : ''} year lagna ${b.k(y.yearLagna)} year lord ${b.k(y.yearLord)} short clock ${y.shortClock ? `${y.shortClock.lord} ${y.shortClock.from}..${y.shortClock.to} ${b.k(y.shortClock.evidence)}` : 'none (TP year dasha not bounded to the year)'}`,
+    `confirming clock (Varshaphala Mudda, confirms only): ${y.confirmClock ? `${y.confirmClock.lord} ${y.confirmClock.from}..${y.confirmClock.to} ${b.k(y.confirmClock.evidence)}` : 'none'}`,
   );
   L.push('## AREA BRIEFS (Layer 2: the claims each area may stand on)');
   for (const a of input.areaBriefs) {

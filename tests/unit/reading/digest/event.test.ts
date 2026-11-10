@@ -102,7 +102,7 @@ describe('handling', () => {
       kundlis: [
         { id: 'failed', digest_status: 'failed' },
         { id: 'pending', digest_status: 'pending' },
-        { id: 'ready', digest_status: 'ready', digest_version: 'd1.2026-11-06' },
+        { id: 'ready', digest_status: 'ready', digest_version: 'd1.2026-11-09' },
         { id: 'old', digest_status: 'ready', digest_version: 'd0' },
         { id: 'stuck', digest_status: 'building', digest_built_at: new Date(now - 30 * 60_000) },
         { id: 'busy', digest_status: 'building', digest_built_at: new Date(now - 60_000) },

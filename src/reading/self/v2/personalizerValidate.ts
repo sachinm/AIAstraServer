@@ -32,6 +32,7 @@ import { SELF_V2_AREAS } from '../v2types.js';
 import { claimKeysOf } from './oracle.js';
 import { oracleEcho, seniorStageWordsFor } from './profileFit.js';
 import { paragraphId } from './slices.js';
+import { oracleParagraphIds, validateIllustration } from './storyteller.js';
 
 export const HEADLINE_MAX_WORDS = 14;
 /**
@@ -402,6 +403,7 @@ export function validatePersonalDoc(
   const oracle = input.oracle;
   const gaps: string[] = [];
   const sources = oracleSources(oracle);
+  const paragraphIds = oracleParagraphIds(oracle);
   const oDates = oracleDates(oracle);
   const gender = input.profile.gender;
   const cardCtx: TextCheckContext = { gender, dates: oDates };
@@ -567,7 +569,9 @@ export function validatePersonalDoc(
       dates.push({ from, to, label });
     }
 
-    cards[areaId] = { areaId, headline, body, patterns, ladder, dates, certainty: oArea.certainty, sources: kept };
+    // storyteller (2026-11-09): its own rule set; a failing illustration is dropped alone, never the card
+    const illustration = validateIllustration(c.illustration, areaId, paragraphIds, (t) => textProblem(t, ctx), gaps);
+    cards[areaId] = { areaId, headline, body, patterns, ladder, dates, certainty: oArea.certainty, sources: kept, ...(illustration ? { illustration } : {}) };
     cardStatus[areaId] = 'ok';
   }
 
@@ -629,6 +633,8 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
   const focus = input.profile.facts?.focus ?? [];
   if (sentence && focus.length && !focusNamed(`${sentence} ${sub}`, focus)) gaps.push(`hero: names none of the stated focus (${focus.join(', ')})`);
   const split = heroSplit(oracle);
+  // storyteller: the hero may carry one illustration under the same rules as a card's
+  const illustration = sentence ? validateIllustration(raw.illustration, 'hero', oracleParagraphIds(oracle), (t) => textProblem(t, c), gaps) : null;
   // only real days: an area's 'always' is never a date to check on (run 1 failure 14)
   const nextCheck = [w.easesAt, w.nextSupportFrom].filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > w.asOf).sort()[0] ?? null;
   return {
@@ -640,6 +646,7 @@ export function validateHero(raw: Obj, input: PersonalizerInput, strip: readonly
     nextCheck,
     question,
     withheld: split || !sentence || raw.withheld === true,
+    ...(illustration ? { illustration } : {}),
   };
 }
 

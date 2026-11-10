@@ -50,6 +50,9 @@ import { FRAMES, SUBJECT_IDS, type SubjectId } from './src/reading/packs/frames.
 import { isCacheSweepEvent, runScheduledSweep, startPeriodicSweep } from './src/reading/llm/cacheSweep.js';
 import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kundliSyncWorker.js';
 import { handleKundliDigestEvent, parseKundliDigestEvent } from './src/reading/digest/event.js';
+import { handleDashaDeepEvent, parseDashaDeepEvent } from './src/workers/dashaDeep.js';
+import { withDashaDeepFocus } from './src/workers/dashaDeepFocus.js';
+import { isDashaDeepWorker } from './src/config/env.js';
 import { handleSelfReadingBuildEvent, parseSelfReadingBuildEvent } from './src/reading/self/buildEvent.js';
 import {
   logChatProviderError,
@@ -97,6 +100,12 @@ app.post('/events', async (req, res) => {
   // one person's reading build (docs/reading-engine/64 §4): queued by the reading route, runs to the end here
   const readingBuild = parseSelfReadingBuildEvent(req.body);
   if (readingBuild) return res.json(await handleSelfReadingBuildEvent(readingBuild, { prisma }));
+  // the deep dasha levels (docs/reading-engine/67): only on the worker function (DASHA_DEEP_WORKER=1), never on the API
+  const dashaDeep = parseDashaDeepEvent(req.body);
+  if (dashaDeep) {
+    if (!isDashaDeepWorker()) return res.status(202).json({ status: 'ignored', reason: 'not the dasha-deep worker function' });
+    return res.json(await handleDashaDeepEvent(dashaDeep, { prisma }));
+  }
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();
@@ -197,13 +206,17 @@ app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
+// Opening chat, Today, Lucky times or a board marks the kundli in focus: the dasha-deep worker is invoked in the
+// background (at most once per 6 h per kundli; a no-op without DASHA_DEEP_WORKER_FUNCTION). docs/reading-engine/67
+const focusUser = withDashaDeepFocus(requireUser, prisma);
+
 /**
  * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
  * Same persistence as GraphQL `ask`. JWT via X-Astra-Authorization or Authorization.
  */
 app.post('/api/chat/ask-stream', async (req, res) => {
   // 401 unauthorized / session_revoked / account_locked is written here, before any SSE frame
-  const userId = await requireUser(req, res);
+  const userId = await focusUser(req, res);
   if (!userId) return;
   const { question, chatId, clarify, focus, parts } = req.body as {
     question?: string;
@@ -328,7 +341,7 @@ app.post('/api/chat/ask-stream', async (req, res) => {
   }
 });
 
-registerClarifyRoutes(app, { prisma, requireUser });
+registerClarifyRoutes(app, { prisma, requireUser: focusUser });
 registerBillingRoutes(app, { prisma, requireUser, optionalUser });
 // life-timeline ledger (docs/reading-engine/27 P0): not mounted unless TIMELINE_ENABLED=1
 registerTimelineRoutes(app, { prisma, requireUser });
@@ -337,26 +350,26 @@ registerAssistantRoutes(app, { prisma });
 // Lucky times (docs/reading-engine/49, 53 §4.6): mounted when LUCKY_ENABLED=1; analytics events always
 registerLuckyRoutes(app, {
   prisma,
-  requireUser,
+  requireUser: focusUser,
   engine: engineAtPlace,
   natalFor: natalForUser(prisma),
   functionalNatureOf: functionalNatureOf(prisma),
   runningDashaLordsOf: runningDashaLordsOf(prisma),
 });
 // career map Phase 1 (docs/reading-engine/42): mounted when AREA_ENABLED=1
-registerAreaRoutes(app, { prisma, requireUser });
-registerSelfReadingRoutes(app, { prisma, requireUser });
+registerAreaRoutes(app, { prisma, requireUser: focusUser });
+registerSelfReadingRoutes(app, { prisma, requireUser: focusUser });
 // Self board v2 (docs/reading-engine/66 §4.5): mounted when SELF_V2_ENABLED=1 (unset: follows AREA_ENABLED)
-registerSelfV2Routes(app, { prisma, requireUser });
+registerSelfV2Routes(app, { prisma, requireUser: focusUser });
 registerAdminLabRoutes(app, { prisma });
 // life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
-registerLifeReadingRoutes(app, { prisma, requireUser });
+registerLifeReadingRoutes(app, { prisma, requireUser: focusUser });
 // personalization wizard and selfie (docs/reading-engine/52)
 registerProfileRoutes(app, { prisma, requireUser });
 // the loading veil's art key for signed-in sessions (docs/loading-overlay/01 §4.1)
 registerAssetRoutes(app, { requireUser });
 // page execution timing beacon & progressive dashboard section streaming (docs/admin/08)
-registerPageTimingRoutes(app, { prisma, optionalUser, requireUser });
+registerPageTimingRoutes(app, { prisma, optionalUser, requireUser: focusUser });
 // research staging & Self dashboard QA routes (docs/admin/09)
 registerResearchRoutes(app, { prisma, requireUser });
 

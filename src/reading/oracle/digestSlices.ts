@@ -8,6 +8,7 @@
  *
  * Pure selection and shaping only: no astrological computation.
  */
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
 import { techniqueById } from '../../techniques/catalog.js';
 import type { ContractInput } from '../../techniques/contracts.js';
 import type { ActivationRow } from '../digest/activation.js';
@@ -879,8 +880,11 @@ function buildDashaTreeFromActivation(rows: readonly ActivationRow[], system: st
   return { system, periods: flat };
 }
 
-function buildAnnualFromDigest(rows: readonly AnnualRow[], kind: 'TP' | 'VP'): Record<string, unknown> | null {
-  const picked = rows.find((r) => r.kind === kind && r.varga === 'D1') ?? rows.find((r) => r.kind === kind);
+function buildAnnualFromDigest(rows: readonly AnnualRow[], kind: 'TP' | 'VP', year?: number): Record<string, unknown> | null {
+  const picked =
+    (year != null ? rows.find((r) => r.kind === kind && r.year === year && r.varga === 'D1') : undefined) ??
+    rows.find((r) => r.kind === kind && r.varga === 'D1') ??
+    rows.find((r) => r.kind === kind);
   if (!picked) return null;
   const periods = picked.dashas.flatMap((d) =>
     d.periods.map((p) => ({
@@ -896,6 +900,7 @@ function buildAnnualFromDigest(rows: readonly AnnualRow[], kind: 'TP' | 'VP'): R
     varga: picked.varga,
     lagna: picked.lagna,
     year_lord: picked.yearLord ?? null,
+    ...(picked.start ? { valid_from: picked.start, valid_to: picked.end ?? null } : {}),
     muntha: picked.muntha ?? null,
     houses: picked.houses,
     sahams: picked.sahams,
@@ -1200,11 +1205,13 @@ export function buildTablesFromDigest(
     }
   }
 
-  const year = opts.asOf ? Number(opts.asOf.slice(0, 4)) : undefined;
+  // the running year is the Tithi Pravesha year whose return moment has passed (doc 66 §4.10); Varsha only confirms
+  const running = opts.asOf && typeof (digest as unknown as { annual?: unknown }).annual === 'function' ? runningTithiPravesha(digest, opts.asOf) : null;
+  const year = running?.year ?? undefined;
   const annualRows = readAnnual(digest, year);
   if (annualRows.length > 0) {
-    const tp = buildAnnualFromDigest(annualRows, 'TP');
-    const vp = buildAnnualFromDigest(annualRows, 'VP');
+    const tp = buildAnnualFromDigest(annualRows, 'TP', running?.year ?? undefined);
+    const vp = buildAnnualFromDigest(annualRows, 'VP', running?.varsha?.row.year);
     if (tp) tables['annual.tithi_pravesha'] = tp;
     if (vp) tables['annual.varsha'] = vp;
     const sahams = (tp?.sahams as unknown[] | undefined) ?? (vp?.sahams as unknown[] | undefined) ?? [];

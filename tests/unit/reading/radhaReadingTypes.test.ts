@@ -72,12 +72,15 @@ describe('doc 34 catalog entries', () => {
     expect(PAST_READING_MOVING_TYPES).toEqual(['transit_range', 'transit_contacts']);
   });
 
-  it('has a level-3 entry per doc 34 system on the dasha.<name> wire type, and leaves the default entries alone', () => {
-    expect(LEVEL3_DASHAS).toEqual(['vimsottari', 'dwisatpathi', 'yogini', 'tithi_ashtottari', 'kaala', 'karaka']);
+  it('has a level-3 entry per doc 34 system (and narayana, doc 67) on the dasha.<name> wire type; default entries ask for three levels too', () => {
+    expect(LEVEL3_DASHAS).toEqual(['vimsottari', 'dwisatpathi', 'yogini', 'tithi_ashtottari', 'kaala', 'karaka', 'narayana']);
     for (const name of LEVEL3_DASHAS) {
       expect(CHART_TYPE_BY_ID.get(`dasha.${name}.l3`)).toMatchObject({ family: 'dasha', radhaType: `dasha.${name}`, fixedParams: { levels: 3 }, tier: 'on_demand', served: false });
-      expect(CHART_TYPE_BY_ID.get(`dasha.${name}`)!.fixedParams).toBeUndefined();
+      const base = CHART_TYPE_BY_ID.get(`dasha.${name}`)!;
+      // legacy wire types take no params; every other default entry asks for three levels, lifelong (doc 67)
+      expect(base.fixedParams).toEqual(base.legacyColumn ? undefined : { levels: 3 });
     }
+    expect(CHART_TYPE_BY_ID.get('dasha.kalachakra')!.fixedParams).toBeUndefined(); // the engine serves one level only
     expect(CHART_TYPE_BY_ID.get('dasha.vimsottari')).toMatchObject({ radhaType: 'vimsottari_dasa', legacyColumn: 'vimsottari_dasa' });
     expect(CHART_TYPE_BY_ID.get('dasha.vimsottari.l3')!.legacyColumn).toBeUndefined();
   });

@@ -24,6 +24,10 @@ re-applied by it.
   Chart Data Review checks (admin `feat/admin-chart-data-review`, check "a year dasha should fit its year") on
   2026-11-08. Owner: engine (Radha `annual.tithi_pravesha_dasha`). Done: the periods of each year row fall inside that
   year (compressed to the year), the admin Annual tab shows no "periods span N years" error.
+  Status (2026-11-09): engine fix in AIAstra_Radha `feat/dasha-levels-1-6` (with `tp_start`/`tp_end` on every TP year
+  row); server side done on `feat/tithi-pravesha-year` (doc 66 §4.10: `runningTithiPravesha` picks the TP whose return
+  moment has passed, never rescales a lifetime dasha and withholds the TP short clock until the dasha is bounded). Open
+  until the engine ships and the digests are rebuilt.
 
 - **12-person multi-age-group (`20s`–`70s`) live benchmark & 4-school review (`Self`, `Love`, `Work`).** Twenty-three of the 24 `ready` kundlis in PostgreSQL were built on `2026-11-06` before `PointRow.planet` (`AK.planet`, `AmK.planet`, `DK.planet`) and the `dasha.applicable` filter on `kundli_activation` were added (code backfills are now in `loadDigest` and `defaultSystemsPresent`, and all `love.reading.*` + `work.reading.*` panels are built and wired). Next session: run `buildDigest(prisma, kundliId)` for the 12-person cohort and execute the multi-age benchmark + independent review per [`docs/handoff/2026-11-08-techniques-lab-self-love-work-handoff.md`](handoff/2026-11-08-techniques-lab-self-love-work-handoff.md) under the $1.00 spend cap. Status: open (handoff ready). Done: 12-person cohort benchmarked across `self`, `love`, and `work` with `>=95%` verifier pass.
 
@@ -1989,6 +1993,7 @@ Owner: the next Self v2 branch unless noted.
 - **P2 · The web shows an empty ladder step.** The validator now drops a failing ladder step and leaves it `''` (the
   ladder stands with ≥ 2 steps). `AreaCard.tsx` (AIAstra_WEB `pages/you/v2`) renders all four rows; it should skip an
   empty step. Owner: web lane.
+  **DONE 2026-11-09 (web `feat/self-v2-illustration`):** `AreaCard` skips an empty step and draws no ladder when all are empty.
 - **P2 · A withheld stand-in card reads as `ok` in the API.** `v2api/response.ts` `areaStatus` returns `ok` whenever a
   card object exists, and the validator stores a withheld card (stand-in headline, empty body). The status should come
   from `cardStatus`. Owner: the API lane (that file was off limits to this branch).
@@ -2016,3 +2021,95 @@ Owner: the next Self v2 branch unless noted.
   is written; existing users have only today's tap, so the trend reads "unknown" until three taps exist.
 - **P3 · The house-state engine (doc 46) is not in code** (only planned layers in `techniques/catalog.ts`); the portrait's
   life labels read S3 windows and S5 rows (`lifeNowSource: 'windows_and_risk'`). Switch when the engine lands.
+
+## Filed 2026-11-09 by the Oracle failures + storyteller branch (server `feat/self-v2-oracle-failures-storyteller`, web `feat/self-v2-illustration`)
+
+- **P1 · Apply migration `20261109120000_reading_validation_failures` and regenerate the Prisma client** on staging
+  before the branch ships. Until the table and the client delegate exist, `recordValidationIssues` writes nothing (the
+  delegate is reached structurally, never throws) and the admin loads `validation` list is empty; the build's repair,
+  fallback and charge rule work without it. Owner: deploy sub-session.
+- **P2 · The admin page does not draw the validator failures yet.** `GET /api/admin-lab/loads/:userId` now carries
+  `validation[]` (per build: `oracleAreas` ok/repaired/failed, `repaired`, `failed`, counts, each finding's check,
+  message, call and prompt hash). The admin web repo's Dashboard loads page needs a panel for it. Owner: admin lane.
+- **P2 · Alarm on failed Oracle areas.** Every build logs one `self.v2 validation` JSON line per stage (`byCheck`,
+  `failed`); no CloudWatch metric filter or alarm reads it yet. Owner: deploy sub-session.
+- **P3 · `reading_validation_failures` has no retention.** A build writes 0–40 rows; add a 90-day delete to the
+  scheduled sweep. Owner: any server lane.
+- **P3 · A partial Oracle is reused for the day.** A partial Oracle with ≥ 8 good areas is stored under its key, so a
+  later non-forced build with the same stamps reads it and does not repair again (by design: one repair per build; a
+  fresh reading forces a new key). Revisit if staff see many stale areas on one day.
+- **P3 · A stale card keeps its own dates.** The fallback card is the last good reading's, as stored; a date on it may
+  have passed. The page marks it "From your last reading"; a later pass could drop past dates from stale cards.
+- **P3 · "Area briefs" is still the catalogue title.** `techniques/catalog.ts` (`self.v2.oracle`: "Oracle over the
+  ledgers and the area briefs") and the generated docs (`docs/admin/07`, `docs/techniques/03`) keep the old words; doc
+  66 and the pipeline page now say "area work orders". Rename in the catalogue row and regenerate (catalogue rows were
+  another lane's this round). Owner: catalogue lane.
+- **P3 · `src/reading/prompts/generated.ts` will conflict on merge** with the Tithi Pravesha lane (both edit
+  `oracle/self-areas-v2.md` and `personalizer/self.md`; this branch's additions are their own sections at the end).
+  After the merge, run `npm run prompts:embed` and commit the regenerated file.
+- **P3 · Storyteller cost not measured.** The illustration adds ≈ 600 output tokens per profile (estimate ≈ $0.002 at
+  Flash prices); measure on the next live run (needs a yes).
+
+## Filed 2026-11-09 by dasha levels 1–6 (server)
+
+Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in brackets.
+
+- **P1: The worker Lambda, its IAM and the API env var do not exist yet.** Until the deploy session creates
+  `aiastra-dasha-deep-worker`, grants `lambda:InvokeFunction` on it to `aiastra-api-lambda-exec`, sets
+  `DASHA_DEEP_WORKER_FUNCTION` on the API, and updates `deploy-api-lambda.yml` to roll both functions, focus is a no-op
+  (logged once as `dasha_deep_no_worker_function`). The spec is in doc 67 §5.1. [deploy session, Sachin's typed yes]
+  Done when a manual `dasha-deep-pull` invoke logs `dasha_deep_pull` with rows for each system.
+- **P1: Migration M46 (`20261109120100_dasha_levels_m46`) is not applied.** It adds the
+  `(kundli_id, level, from_date, to_date)` index and the `dasha.narayana.l3` and `dasha.deep` chart types. Without it,
+  the worker's focus and marker writes hit the `kundli_data.data_type` foreign key. [server release] Done when
+  `prisma migrate status` is clean on the release database.
+- **P1: The levels backfill has not been run.** Every kundli still has two levels for every system except the six `.l3`
+  ones. Run after the engine release and the server release:
+  `npx tsx scripts/backfill-dasha-levels.ts --dry-run=false` (dry run first with `--limit 3`). Sachin approved updating
+  all kundlis in chat on 2026-11-09. [deploy or ops session] Done when the after counts show level 3 rows for every
+  system.
+- **P2: The deep-pull contract is assumed, not read.** The engine lane `feat/dasha-levels-1-6` has no commits beyond
+  `develop` yet (checked 2026-11-09). The server sends `params: { max_level, deep_from, deep_to }` to every `dasha.<name>`
+  and assumes these things:
+  - the answer is the R-6 tree with `levels`;
+  - `levels: 3` still caps the tree at three levels with no deep window;
+  - the `catalog` export lists `max_level` with `allowed` up to 6.
+
+  The backfill's wet-run gate depends on that last point. [engine lane] Done when the engine's tests pin the three
+  points, or the server is adjusted to what ships.
+- **P2: Levels 5–6 are stored at date precision.** `kundli_activation.from_date` and `to_date` are `date`. A level-6
+  period lasts about 2 hours, and many level-5 periods last under a day, so most of them start and end on the same date.
+  `activationFor`'s `from_date < to AND to_date > from` then never matches them for a one-day query. Level 4 (the default,
+  about 6.7 days) is not affected. Before `DASHA_DEEP_MAX_LEVEL` is raised above 4, store `start_jd` / `end_jd` (or
+  timestamps) and query on them. [server] Done when a level-6 row is found for the hour it covers.
+- **P2: Today, Lucky times and chat do not read the deep levels yet.** `activationFor({ maxLevel: 4 })` (or
+  `shortMaxLevel: 4` around a date) returns them where they are stored. The calls and prompts were deliberately not
+  changed:
+  - `luckyTimes/wiring.ts runningDashaLordsOf` asks for `maxLevel: 2`;
+  - `run.ts` and `prewarmReaders.ts` now get levels 1–3 by default.
+
+  [board owners] Done when each surface states, in its plan, what level 4 adds, and its prompt change is reviewed.
+- **P3: Narayana and Vimsottari base rows stay on the legacy wire types** (`narayana_dasa`, `vimsottari_dasa`), which
+  take no params. Their three-level data comes from `dasha.vimsottari.l3` and the new `dasha.narayana.l3`. The `.l3`
+  entries are now redundant with `levels: 3` on every base row. [server] Done when the base rows move to `dasha.<name>`
+  wire types and the `.l3` entries are retired, in one migration.
+- **P3: Boards cached before the backfill keep their old activation reads.** The backfill replaces `kundli_activation`
+  only. `technique_outputs` and `area_builds` built from level-2-only systems are served until their next rebuild (the
+  digest version or a boundary stamp). [server] Done when the backfill's runbook includes a digest-stale mark per kundli,
+  if Sachin wants fresh boards at once.
+
+## Filed 2026-11-09 by the engine dasha levels and Tithi Pravesha build (AIAstra_Radha develop 8e31dd5)
+
+- **DECISION for Sachin · The Tithi Pravesha year lord.** The engine had no rule; it now uses the lord of the weekday
+  (sunrise to sunrise) at the TP moment (`year_lord_rule: "weekday_lord_at_tp"`), the classical TP year lord, not the
+  Tajaka year lord of the solar return. Done: confirmed, or the rule named.
+- **DECISION for Sachin · Deeper dasha levels are derived by the engine's own split rule.** This pyjhora version gives two
+  levels (Vimshottari three); levels 4–6 split each period the way its own lord's mahadasha splits in that system, the rule
+  the export already used for level 3. Classical sookshma/prana/deha for Vimshottari (tested); the same proportional
+  rule for every other system. Kalachakra stops at level 1 (pyjhora's antardasha rows are broken); sign dashas cap at 5
+  if 6 is ever switched on (size). Done: confirmed per system family, or rules named for the systems that differ.
+- **P3 · `annual.mudda` and `annual.patyayini` are still pyjhora's raw trees**, not bounded to their own
+  `valid_from` / `valid_to`: Mudda starts before `valid_from` (pyjhora's balance); Patyayini starts on it and runs one
+  average Gregorian year. Owner: engine. Done: both bounded to their solar year like the TP year dasha.
+- **P3 · Some engine tests fail when run alone** because pyjhora's language lists are not set up before them; the ones
+  touched by this build were fixed. Owner: engine. Done: a test fixture sets them up.

@@ -27,7 +27,11 @@ function matches(row: Row, where: Record<string, unknown> | undefined): boolean 
     if (k === 'NOT') return !matches(row, v as Record<string, unknown>);
     if (k === 'OR') return (v as Record<string, unknown>[]).some((w) => matches(row, w));
     if (v && typeof v === 'object' && !(v instanceof Date)) {
-      const o = v as { in?: unknown[]; lt?: Date; not?: unknown };
+      const o = v as { in?: unknown[]; lt?: Date; not?: unknown; lte?: number; gte?: number };
+      if (typeof o.lte === 'number' || typeof o.gte === 'number') {
+        const n = row[k] as number;
+        return (typeof o.lte !== 'number' || n <= o.lte) && (typeof o.gte !== 'number' || n >= o.gte) && (!o.in || o.in.includes(n));
+      }
       if (o.in) return o.in.includes(row[k]);
       if (o.lt) return row[k] instanceof Date && (row[k] as Date) < o.lt;
       return true;

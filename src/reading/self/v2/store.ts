@@ -13,7 +13,8 @@
  * Written through `withTechniqueOutput` (the helper service.ts uses); read here newest first.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AreaBrief, OracleV2Output, PersonalCardDoc, SelfV2CardsResult, SelfV2Frame, SelfV2OracleResult } from '../v2types.js';
+import type { OracleArea } from '../areaDoc.js';
+import type { AreaBrief, OracleV2Output, PersonalCardDoc, SelfV2AreaId, SelfV2CardsResult, SelfV2Frame, SelfV2OracleResult, SelfV2Quality, StaleArea } from '../v2types.js';
 import { normaliseEvidenceKey } from './slices.js';
 
 /**
@@ -64,6 +65,10 @@ export interface SelfV2Latest {
   builtAt: string | null;
   status: 'ok' | 'pending' | 'failed';
   frame?: SelfV2Frame | null;
+  /** the Oracle's failed areas of this build, shown from the last good reading (2026-11-09) */
+  stale?: Partial<Record<SelfV2AreaId, StaleArea>> | null;
+  /** the build's Oracle quality (null on a row stored before 2026-11-09) */
+  quality?: SelfV2Quality | null;
 }
 
 type Row = { output: unknown; created_at?: Date | string | null };
@@ -108,11 +113,52 @@ export async function readSelfV2Latest(prisma: PrismaClient, kundliId: string, c
       builtAt: iso(cardsRow?.created_at ?? oracleRow?.created_at ?? null),
       status,
       frame: storedCards?.frame ?? null,
+      stale: storedCards?.result?.stale ?? null,
+      quality: storedCards?.result?.quality ?? null,
     };
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'self v2 store read failed', error: (e as Error).message?.slice(0, 200) }));
     return { cards: null, oracle: null, briefs: null, builtAt: null, status: 'pending', frame: null };
   }
+}
+
+/**
+ * The last good stored reading's version of each named area, on this clock (2026-11-09: an area the Oracle failed after
+ * its repair pass is shown from there, marked stale): the newest cards row's card where that row's card was `ok`, or the
+ * stale card it carried itself (keeping its own date), with that row's Oracle area for Chart details. An area with
+ * nothing stored is left out (the page withholds it). Never throws.
+ */
+export async function readLastGoodAreas(prisma: PrismaClient, kundliId: string, clock: string | null | undefined, areas: readonly SelfV2AreaId[]): Promise<Partial<Record<SelfV2AreaId, StaleArea>>> {
+  const out: Partial<Record<SelfV2AreaId, StaleArea>> = {};
+  if (!areas.length) return out;
+  try {
+    const row = await latestRow(prisma, kundliId, SELF_V2_PERSONALIZER_TECHNIQUE, 'self.v2.cards|', clock);
+    const stored = row?.output as StoredSelfV2Cards | undefined;
+    const result = stored?.result;
+    if (!result?.doc) return out;
+    let oracleAreas: Record<string, OracleArea | undefined> | null = null;
+    const loadOracle = async () => {
+      if (oracleAreas) return oracleAreas;
+      const p = prisma as unknown as StorePrisma;
+      const o = stored?.oracleKey && p.techniqueOutput?.findFirst ? await p.techniqueOutput.findFirst({ where: { kundli_id: kundliId, technique_id: SELF_V2_ORACLE_TECHNIQUE, digest_version: stored.oracleKey }, orderBy: { created_at: 'desc' } }) : null;
+      oracleAreas = ((normaliseStoredOracle((o?.output as StoredSelfV2Oracle | undefined)?.result?.output ?? null)?.doc.areas ?? {}) as Record<string, OracleArea | undefined>);
+      return oracleAreas;
+    };
+    const builtAt = iso(row?.created_at ?? null);
+    const cards = normaliseStoredCards(result.doc)?.cards ?? {};
+    for (const id of areas) {
+      const card = cards[id];
+      if (card && result.cardStatus?.[id] === 'ok' && card.body.length) {
+        out[id] = { card, details: (await loadOracle())[id] ?? null, fromBuiltAt: builtAt };
+        continue;
+      }
+      const carried = result.stale?.[id];
+      if (carried?.card) out[id] = carried;
+    }
+  } catch (e) {
+    console.warn(JSON.stringify({ msg: 'self v2 last good areas read failed', error: (e as Error).message?.slice(0, 200) }));
+  }
+  return out;
 }
 
 const dayOf = (now: Date): Date => new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);

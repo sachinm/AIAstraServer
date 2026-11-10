@@ -10,8 +10,9 @@ import type { ClockResolution, PeriodFrame, PeriodSpan } from '../v2types.js';
 import type { SubEnv } from './common.js';
 
 export function periodSpan(r: ActivationRow | null): PeriodSpan | null {
-  if (!r) return null;
-  return { level: r.level, lord: r.lord ?? r.sign ?? '?', from: r.from, to: r.to, evidence: activationKey(r) };
+  // the Self board reads levels 1–3 only (doc 67): a deep row is never a period span
+  if (!r || r.level > 3) return null;
+  return { level: r.level as 1 | 2 | 3, lord: r.lord ?? r.sign ?? '?', from: r.from, to: r.to, evidence: activationKey(r) };
 }
 
 /** the engine charter's relation of `subLord` to `mainLord`; null and a gap when not stored */

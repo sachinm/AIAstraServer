@@ -19,6 +19,7 @@
  *  - annual      the current year chart (TP first, else VP): the year's lord of each house, and the area's sahams
  *  - tone        doc 45 §7 from the family votes, scaled to the families present
  */
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
 import type { AnnualRow, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -467,17 +468,12 @@ export function transitLayer(payload: TransitRangePayload | null, cfg: AreaConfi
 
 // ---------------------------------------------------------------- annual (the current year chart)
 
-/** The year chart running on `asOf`: the row whose year dashas cover the date; TP before VP. */
+/**
+ * The year chart running on `asOf`: the Tithi Pravesha D1 row whose return moment has passed (`runningTithiPravesha`,
+ * doc 66 §4.10). Null when no TP year covers the date; the Varsha row is never put in its place.
+ */
 export function currentYear(view: DigestView, asOf: string): AnnualRow | null {
-  const covers = (a: AnnualRow) => {
-    const all = a.dashas.flatMap((d) => d.periods);
-    if (!all.length) return false;
-    const from = all.map((p) => p.from).sort()[0]!;
-    const to = all.map((p) => p.to).sort().at(-1)!;
-    return from <= asOf && asOf < to;
-  };
-  const rows = view.annual().filter(covers);
-  return rows.find((r) => r.kind === 'TP') ?? rows[0] ?? null;
+  return runningTithiPravesha(view, asOf).row;
 }
 
 export function annualLayer(view: DigestView, cfg: AreaConfig, asOf: string): { year: AnnualRow | null; rows: LayerRow[] } {

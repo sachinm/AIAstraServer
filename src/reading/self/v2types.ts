@@ -9,7 +9,7 @@
  * Nothing in this file is astrological arithmetic; every planet, house, window, polarity and strength is an engine value
  * carried through by id.
  */
-import type { OracleAreaDoc, AreaCertainty, AreaDate } from './areaDoc.js';
+import type { OracleArea, OracleAreaDoc, AreaCertainty, AreaDate } from './areaDoc.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Areas
@@ -117,12 +117,13 @@ export type Strength = 1 | 2 | 3;
 // Layer 0: the engine's pressure inventory (doc 66 §4.3), stored as `kundli_pressure`
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type PressureKind = 'dasha' | 'transit' | 'sade_sati' | 'return' | 'station';
+/** `annual`: the TP year window and its level-2 year periods (engine calc_version 2); `return`: Saturn and Jupiter returns */
+export type PressureKind = 'dasha' | 'transit' | 'sade_sati' | 'return' | 'station' | 'annual';
 
 export interface PressureRow {
   id: string;
   kind: PressureKind;
-  /** dasha level, when kind = dasha */
+  /** dasha level, when kind = dasha; 1 (the year) or 2 (a year period) when kind = annual */
   level?: 1 | 2 | 3;
   planet: string;
   system?: string;
@@ -245,7 +246,8 @@ export interface RiskRow {
   matter: Matter;
   /** what the chart says can go wrong, as a words-table key (not prose) */
   what: string;
-  from: { planet?: string; house?: number; yogaId?: string; windowId?: string };
+  /** `chart: 'year'` when the row comes from the engine's annual (Tithi Pravesha year) pressure row */
+  from: { planet?: string; house?: number; yogaId?: string; windowId?: string; chart?: 'year' };
   who: PeopleLabel[];
   since: IsoDate | null;
   until: IsoDate | null;
@@ -296,12 +298,22 @@ export interface PresenceFacts {
 }
 
 /** S9 */
+/**
+ * S9: the year read from the Tithi Pravesha chart whose return moment has passed (doc 66 §4.10). `from`/`to` are the TP
+ * year (tp_start → tp_end); `shortClock` is the TP year dasha period, only when the engine bounds it to the year;
+ * `confirmClock` is the Varshaphala Mudda period, which only confirms. Never a Varsha year in place of the TP year.
+ */
 export interface YearFrame extends DateSpan {
   yearLagna: EvidenceKey | null;
   yearLord: EvidenceKey | null;
   shortClock: PeriodSpan | null;
-  /** no annual row covers today: the live year line is withheld */
+  /** no Tithi Pravesha year covers today: the live year line is withheld */
   noCoverage: boolean;
+  /** the exact return moments ('YYYY-MM-DD HH:MM:SS', local) when stored */
+  tpStart?: string | null;
+  tpEnd?: string | null;
+  /** the Varshaphala Mudda period covering asOf: a confirming clock, never the year */
+  confirmClock?: PeriodSpan | null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -395,6 +407,12 @@ export interface BriefClaim {
   range: DateSpan | 'always';
 }
 
+/**
+ * The Oracle's work order for one area (docs call it an "area work order"; the type keeps its name): per area, the
+ * facts (claims), the evidence keys, the dates and the ledger rows (S5 risk rows, S4 promise entries) the Oracle reads
+ * for that area, chosen in code from the sub-techniques. It also scopes the Oracle validator: the brief's claim ids
+ * (`claim:<id>`) and keys are among the allowed evidence keys, and its dates are among the stored spans a date may name.
+ */
 export interface AreaBrief {
   areaId: SelfV2AreaId;
   horizon: AreaHorizon;
@@ -512,7 +530,8 @@ export interface PersonalCardDoc {
   cards: Partial<Record<SelfV2AreaId, PersonalCard>>;
 }
 
-export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed';
+/** `stale` (2026-11-09, Oracle failures): the Oracle failed this area this build; the last good reading's card stands in */
+export type CardStatus = 'ok' | 'pending' | 'withheld' | 'failed' | 'stale';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // 1b additions (step 1b, branch feat/self-v2-subtechniques): the window rows S3 keeps beside its `WindowSet` selections,
@@ -788,4 +807,122 @@ export interface PersonPortrait {
 
 export interface PersonalizerInput {
   portrait?: PersonPortrait | null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Oracle validation outcomes (Sachin 2026-11-09: "if there's an error it should store that error and bubble it up").
+// Appended; interfaces below merge with the ones above (optional fields only).
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** what a validator check found (stored in `reading_validation_failures.check`) */
+export type ValidationCheck =
+  | 'unknown_evidence_key'
+  | 'date_not_stored'
+  | 'cap'
+  | 'missing_area'
+  | 'json_schema'
+  | 'truncated'
+  | 'budget'
+  | 'call_failed'
+  | 'withheld'
+  | 'duplicate_paragraph'
+  | 'duplicate_area'
+  | 'not_a_panel'
+  | 'valid_until'
+  | 'pattern'
+  // the Personalizer's checks
+  | 'no_source'
+  | 'chart_term'
+  | 'engine_name'
+  | 'internal_id'
+  | 'medical'
+  | 'diet_advice'
+  | 'role_word'
+  | 'stage_word'
+  | 'gendered'
+  | 'date'
+  | 'question'
+  | 'focus'
+  | 'echo_flag'
+  | 'headline_replaced'
+  | 'tone'
+  | 'not_an_area'
+  | 'duplicate'
+  | 'illustration'
+  | 'other';
+
+/** per Oracle area, after the one repair pass */
+export type OracleAreaStatus = 'ok' | 'repaired' | 'failed';
+
+/** one validator finding, staff-only (never the person's own words) */
+export interface ValidationIssue {
+  stage: 'oracle' | 'personalizer';
+  /** the area id, 'hero', or null for the document as a whole */
+  area: string | null;
+  check: ValidationCheck;
+  message: string;
+  /** 'oracle.a' | 'oracle.b' | 'oracle.c' | 'oracle.repair' | 'self.personalizer' */
+  callId: string | null;
+  /** the first pass's finding on an area the repair pass then fixed carries 'repaired' */
+  areaStatus?: OracleAreaStatus | 'ok';
+}
+
+/** the build's quality as the page and the Lab see it: ok and repaired Oracle areas serve; failed ones go stale or withheld */
+export interface SelfV2Quality {
+  okAreas: SelfV2AreaId[];
+  repaired: SelfV2AreaId[];
+  failed: SelfV2AreaId[];
+}
+
+/** an area the Oracle failed this build, shown from the last good stored reading */
+export interface StaleArea {
+  card: PersonalCard;
+  /** that reading's Oracle area, for Chart details (null when it was not stored) */
+  details: OracleArea | null;
+  /** when the reading it comes from was stored */
+  fromBuiltAt: string | null;
+}
+
+export interface SelfV2OracleResult {
+  /** per expected area: ok, repaired by the one repair pass, or failed (absent on results stored before 2026-11-09) */
+  areaStatus?: Partial<Record<SelfV2AreaId, OracleAreaStatus>>;
+  /** every check the validator raised this build, structured (the `gaps` say the same in words) */
+  issues?: ValidationIssue[];
+  /** true when the repair call ran */
+  repairRan?: boolean;
+}
+
+export interface SelfV2CardsResult {
+  /** the Personalizer validator's drops, structured */
+  issues?: ValidationIssue[];
+  /** the Oracle's quality for this build */
+  quality?: SelfV2Quality;
+  /** failed Oracle areas shown from the last good reading */
+  stale?: Partial<Record<SelfV2AreaId, StaleArea>>;
+}
+
+export interface SelfV2Response {
+  /** the build's Oracle quality (null when no build is stored, or one stored before 2026-11-09) */
+  quality?: SelfV2Quality | null;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// storyteller (Sachin 2026-11-09: "the Personalizer needs to be entertainer, the story-teller"). Appended; interfaces
+// below merge with the ones above (optional fields only).
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** one short real-life example, analogy or modern reference that makes one Oracle point land (≤ 40 words) */
+export interface CardIllustration {
+  text: string;
+  kind: 'example' | 'analogy' | 'modern';
+  /** the Oracle paragraph id (`<area>.p<n>`) the illustration makes land */
+  illustrates: string;
+}
+
+export interface PersonalCard {
+  illustration?: CardIllustration;
+}
+
+export interface HeroDoc {
+  illustration?: CardIllustration;
 }
