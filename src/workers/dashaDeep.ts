@@ -11,7 +11,9 @@
  *
  * One run: read the marker row (`kundli_data` dasha.deep@marker); skip when its window covers as_of … as_of + 30 d and it
  * was pulled less than 7 days ago (24 h when the engine answered no deep level, e.g. before the engine release); take the
- * marker as a lock (the chart-data row claim, 11 min lease) so two focus events never pull twice; call the engine once per
+ * marker as a lock (11 min lease) so two focus events never pull twice, and inside the account-wide cap
+ * (DASHA_DEEP_GLOBAL_MAX, default 1, src/workers/dashaDeepSlots.ts): over the cap the run exits before any engine call and
+ * leaves the marker `queued` for the next sweep; call the engine once per
  * dasha system with { max_level, deep_from, deep_to } (≤ 2 in flight, the export client's spacing, 50 s per call); build
  * the deep rows with the lifelong house rule (engine fields only); replace the level 4–6 rows of the systems that answered
  * in one transaction; write the marker (window, per-system ms / rows / levels / error). Never throws to the caller.
@@ -35,6 +37,7 @@ import type { ChartDataRepo, RadhaFetcher, StoredRow } from '../reading/chartDat
 import { buildDeepActivationRows, LIFELONG_MAX_LEVEL, type ActivationLevel, type ActivationRowInput } from '../reading/digest/activation.js';
 import type { ActivationBand } from '../reading/digest/activationWrite.js';
 import type { DigestRowInput } from '../reading/digest/types.js';
+import type { DeepSlots } from './dashaDeepSlots.js';
 
 export const DASHA_DEEP_EVENT_TYPE = 'dasha-deep-pull';
 export const DASHA_DEEP_AYANAMSA = 'LAHIRI';
@@ -171,6 +174,8 @@ export interface DashaDeepDeps {
   loadTypes: () => Promise<readonly ChartDataType[]>;
   loadInputs: (kundliId: string) => Promise<DeepInputs>;
   writeBand: (kundliId: string, rows: ActivationRowInput[], band: ActivationBand) => Promise<{ deleted: number; inserted: number }>;
+  /** the account-wide cap (production: prismaDeepSlots). Unset = the per-kundli row claim only (tests, no cap). */
+  slots?: Pick<DeepSlots, 'acquire'>;
   /** the engine call (default: the throttled export client) */
   fetcher?: RadhaFetcher;
   now?: () => number;
@@ -222,8 +227,16 @@ export async function runDashaDeepPull(deps: DashaDeepDeps, event: DashaDeepEven
     if (verdict.fresh && event.reason !== 'manual') return { kundliId, status: 'skipped', why: verdict.why };
     const window = deepWindow(asOf);
     const params = { as_of: asOf, max_level: maxLevel, deep_from: window.from, deep_to: window.to };
-    owned = await deps.repo.claim(kundliId, key, params, DASHA_DEEP_AYANAMSA, DEEP_LEASE_MS);
-    if (!owned) return { kundliId, status: 'skipped', why: 'locked' };
+    if (deps.slots) {
+      // the per-kundli lock and the global cap in one step; over the cap: no engine call, the marker stays queued
+      const slot = await deps.slots.acquire(kundliId, 'run', { now: t0 });
+      if (slot === 'queued') return { kundliId, status: 'skipped', why: 'queued' };
+      if (slot !== 'granted') return { kundliId, status: 'skipped', why: 'locked' };
+      owned = true;
+    } else {
+      owned = await deps.repo.claim(kundliId, key, params, DASHA_DEEP_AYANAMSA, DEEP_LEASE_MS);
+      if (!owned) return { kundliId, status: 'skipped', why: 'locked' };
+    }
 
     const req = await deps.repo.kundliRequest(kundliId);
     if (!req) throw new Error('kundli or birth details not found');
@@ -279,9 +292,11 @@ export async function runDashaDeepPull(deps: DashaDeepDeps, event: DashaDeepEven
 export async function prismaDashaDeepDeps(prisma: PrismaClient): Promise<DashaDeepDeps> {
   const { loadMergedChartTypes, prismaChartDataRepo } = await import('../reading/chartData/store.js');
   const { replaceActivationBand } = await import('../reading/digest/activationWrite.js');
+  const { prismaDeepSlots } = await import('./dashaDeepSlots.js');
   const repo = prismaChartDataRepo(prisma);
   return {
     repo,
+    slots: prismaDeepSlots(prisma),
     loadTypes: () => loadMergedChartTypes(repo),
     writeBand: (kundliId, rows, band) => replaceActivationBand(prisma, kundliId, rows, band),
     loadInputs: async (kundliId) => {

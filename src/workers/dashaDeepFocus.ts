@@ -10,6 +10,9 @@
  *   last focus invoked the worker, so other containers hold back too.
  * - Sweep: `runDashaDeepSweep` (the kundli-sync sweep, every 15 min) sends `reason: 'sweep'` for kundlis focused in the
  *   last 30 days whose window ends within 30 days or whose last pull is older than 7 days, at most DASHA_DEEP_SWEEP_MAX.
+ *   Queued kundlis (held back by the cap) come first, oldest focus first.
+ * - Cap: both take a slot (src/workers/dashaDeepSlots.ts) before they invoke. At DASHA_DEEP_GLOBAL_MAX live pulls
+ *   account-wide (default 1) they do not invoke; the kundli's marker says `queued` and the next sweep picks it up.
  */
 import type { PrismaClient } from '@prisma/client';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
@@ -18,6 +21,7 @@ import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { DASHA_DEEP_TYPE } from '../reading/chartData/catalog.js';
 import { DEEP_COVER_DAYS, DEEP_FAILED_RETRY_HOURS, DEEP_LEASE_MS, DEEP_MAX_AGE_DAYS, DASHA_DEEP_AYANAMSA, dashaDeepEventPayload, FOCUS_VARIANT, MARKER_VARIANT, type DashaDeepEvent } from './dashaDeep.js';
+import { DEEP_SLOT_LIVE_MS, prismaDeepSlots, type DeepSlots } from './dashaDeepSlots.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -62,9 +66,11 @@ type FocusPrisma = {
 export interface FocusDeps {
   invoke?: Invoker;
   now?: () => number;
+  /** the account-wide cap (default: prismaDeepSlots over the same client) */
+  slots?: DeepSlots;
 }
 
-export type FocusOutcome = 'invoked' | 'no_function' | 'cooldown' | 'no_kundli' | 'recent' | 'error';
+export type FocusOutcome = 'invoked' | 'queued' | 'fresh' | 'running' | 'no_function' | 'cooldown' | 'no_kundli' | 'recent' | 'error';
 
 const focusKey = (kundliId: string) => ({ kundli_data_key: { kundli_id: kundliId, data_type: DASHA_DEEP_TYPE, variant: FOCUS_VARIANT, ayanamsa: DASHA_DEEP_AYANAMSA } });
 
@@ -90,8 +96,19 @@ export async function noteDashaDeepFocus(prisma: PrismaClient, userId: string, d
     const at = new Date(now);
     const data = { status: 'ready', payload: { focused_at: at.toISOString() }, fetched_at: at, error: null };
     await p.kundliData.upsert({ where: focusKey(k.id), create: { kundli_id: k.id, data_type: DASHA_DEEP_TYPE, variant: FOCUS_VARIANT, ayanamsa: DASHA_DEEP_AYANAMSA, ...data }, update: data });
-    const event: Omit<DashaDeepEvent, 'type'> = { kundliId: k.id, userId, reason: 'focus', asOf: at.toISOString().slice(0, 10) };
-    await (deps.invoke ?? defaultInvoker)(fn, dashaDeepEventPayload(event));
+    const asOf = at.toISOString().slice(0, 10);
+    const slots = deps.slots ?? prismaDeepSlots(prisma);
+    const slot = await slots.acquire(k.id, 'dispatch', { now, asOf });
+    if (slot === 'fresh') return 'fresh';
+    if (slot === 'busy') return 'running';
+    if (slot === 'queued') return 'queued';
+    const event: Omit<DashaDeepEvent, 'type'> = { kundliId: k.id, userId, reason: 'focus', asOf };
+    try {
+      await (deps.invoke ?? defaultInvoker)(fn, dashaDeepEventPayload(event));
+    } catch (err) {
+      await slots.requeue(k.id).catch(() => undefined);
+      throw err;
+    }
     queueLog({ event: 'dasha_deep_focus_invoked', kundli_id: k.id });
     return 'invoked';
   } catch (err) {
@@ -116,10 +133,15 @@ export interface DeepSweepResult {
   focused: number;
   due: number;
   invoked: number;
+  /** stopped at the cap: this candidate (and the rest) wait for the next sweep */
+  queued: number;
   skipped: 'no_function' | 'off' | null;
 }
 
-/** Kundlis focused in the last 30 days whose deep window needs a refresh, oldest pull first, at most `max`. */
+/**
+ * Kundlis focused in the last 30 days whose deep window needs a refresh, at most `max`: first the queued ones (held back
+ * by the cap), oldest focus first; then the rest, oldest pull first.
+ */
 export async function findDeepSweepCandidates(prisma: PrismaClient, now: number, max: number): Promise<string[]> {
   const p = prisma as unknown as FocusPrisma;
   const focused = await p.kundliData.findMany({
@@ -136,14 +158,22 @@ export async function findDeepSweepCandidates(prisma: PrismaClient, now: number,
   const byId = new Map(markers.map((m) => [m.kundli_id, m]));
   const cover = new Date(now + DEEP_COVER_DAYS * DAY);
   const due = focused
-    .map((f) => ({ id: f.kundli_id, m: byId.get(f.kundli_id) }))
+    .map((f) => ({ id: f.kundli_id, focusedAt: f.fetched_at?.getTime() ?? 0, m: byId.get(f.kundli_id) }))
     .filter(({ m }) => {
       if (!m) return true;
+      if (m.status === 'queued') return true;
       if (m.status === 'fetching') return !m.fetch_started_at || now - m.fetch_started_at.getTime() > DEEP_LEASE_MS;
+      if (m.status === 'dispatched') return !m.fetch_started_at || now - m.fetch_started_at.getTime() > DEEP_SLOT_LIVE_MS;
       if (m.status === 'failed') return !m.fetched_at || now - m.fetched_at.getTime() > DEEP_FAILED_RETRY_HOURS * HOUR;
       return !m.valid_to || m.valid_to < cover || !m.fetched_at || now - m.fetched_at.getTime() > DEEP_MAX_AGE_DAYS * DAY;
     })
-    .sort((a, b) => (a.m?.fetched_at?.getTime() ?? 0) - (b.m?.fetched_at?.getTime() ?? 0));
+    .sort((a, b) => {
+      const qa = a.m?.status === 'queued' ? 0 : 1;
+      const qb = b.m?.status === 'queued' ? 0 : 1;
+      if (qa !== qb) return qa - qb;
+      if (qa === 0) return a.focusedAt - b.focusedAt;
+      return (a.m?.fetched_at?.getTime() ?? 0) - (b.m?.fetched_at?.getTime() ?? 0);
+    });
   return due.slice(0, max).map((d) => d.id);
 }
 
@@ -152,28 +182,43 @@ export async function runDashaDeepSweep(prisma: PrismaClient, deps: FocusDeps & 
   const fn = getDashaDeepWorkerFunction();
   if (!fn) {
     noFunction('sweep');
-    return { focused: 0, due: 0, invoked: 0, skipped: 'no_function' };
+    return { focused: 0, due: 0, invoked: 0, queued: 0, skipped: 'no_function' };
   }
   const max = getDashaDeepSweepMax();
-  if (max <= 0) return { focused: 0, due: 0, invoked: 0, skipped: 'off' };
+  if (max <= 0) return { focused: 0, due: 0, invoked: 0, queued: 0, skipped: 'off' };
   const now = (deps.now ?? Date.now)();
   let ids: string[] = [];
   try {
     ids = await (deps.find ?? findDeepSweepCandidates)(prisma, now, max);
   } catch (err) {
     queueLogError({ event: 'dasha_deep_sweep_failed', error: (err as Error).message?.slice(0, 200) });
-    return { focused: 0, due: 0, invoked: 0, skipped: null };
+    return { focused: 0, due: 0, invoked: 0, queued: 0, skipped: null };
   }
   let invoked = 0;
+  let queued = 0;
   const asOf = new Date(now).toISOString().slice(0, 10);
-  for (const kundliId of ids.slice(0, max)) {
+  const slots = deps.slots ?? prismaDeepSlots(prisma);
+  const batch = ids.slice(0, max);
+  for (const [i, kundliId] of batch.entries()) {
     try {
-      await (deps.invoke ?? defaultInvoker)(fn, dashaDeepEventPayload({ kundliId, reason: 'sweep', asOf }));
+      const slot = await slots.acquire(kundliId, 'dispatch', { now, asOf });
+      // at the cap: this one is marked queued; the rest keep their place for the next sweep
+      if (slot === 'queued') {
+        queued = batch.length - i;
+        break;
+      }
+      if (slot !== 'granted') continue;
+      try {
+        await (deps.invoke ?? defaultInvoker)(fn, dashaDeepEventPayload({ kundliId, reason: 'sweep', asOf }));
+      } catch (err) {
+        await slots.requeue(kundliId).catch(() => undefined);
+        throw err;
+      }
       invoked += 1;
     } catch (err) {
       queueLogError({ event: 'dasha_deep_sweep_invoke_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 200) });
     }
   }
-  queueLog({ event: 'dasha_deep_sweep_done', due: ids.length, invoked });
-  return { focused: ids.length, due: ids.length, invoked, skipped: null };
+  queueLog({ event: 'dasha_deep_sweep_done', due: ids.length, invoked, queued });
+  return { focused: ids.length, due: ids.length, invoked, queued, skipped: null };
 }

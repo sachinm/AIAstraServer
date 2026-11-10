@@ -31,6 +31,7 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'src/services/kundliSyncWorker.ts': 'sweeps select kundli ids by plain status, lock and timestamp columns only',
   'src/assistant/store.ts': 'public-page assistant log: no account, no personal table',
   'src/lib/dbCheck.ts': 'SELECT 1 at boot',
+  'src/workers/dashaDeepSlots.ts': 'pg_advisory_xact_lock(constant) only; the marker count and write use the Prisma client',
   'src/reading/prompts/registry.ts': 'system prompt rows: no personal data',
   'scripts/check-assistant-store.ts': 'assistant log check script: no personal table',
   'scripts/oracle-slice-sizes.ts': 'counts byte sizes of chart rows; reads no value (reviewed for B1; B4.2 reviews scripts again)',
