@@ -872,6 +872,30 @@ export function getReadingClocksMin(): number {
   return parseClampedIntEnv('READING_CLOCKS_MIN', 3, 1, 6);
 }
 
+// ── The heavy-tone stopgap (docs/reading-engine/70-heavy-clocks-2026-11-10.md) ─
+
+/**
+ * The engine's "bad" flags in a dasha or annual row's stored `reasons` list. The engine sets `presses` when any ONE is
+ * on; the server's stopgap counts them (selection over a stored list, no astrology). Env `PRESSES_BAD_FLAGS`.
+ */
+export function getPressesBadFlags(): string[] {
+  return listEnv('PRESSES_BAD_FLAGS', ['functional_malefic', 'in_dusthana', 'kashta_over_ishta', 'shadbala_ratio_below_0.8', '2_12_from_parent', '6_8_from_parent']);
+}
+
+/** The engine's "good" flags in `reasons` (shown in provenance only). Env `PRESSES_GOOD_FLAGS`. */
+export function getPressesGoodFlags(): string[] {
+  return listEnv('PRESSES_GOOD_FLAGS', ['functional_benefic', 'yogakaraka']);
+}
+
+/**
+ * A `presses` dasha or annual row reads `heavy` only with at least this many bad flags in its stored `reasons`; fewer
+ * reads `mixed`. Stopgap until the engine grades polarity itself, awaiting Sachin's yes. Env `PRESSES_MIN_BAD_FLAGS`
+ * (default 3, 1..6; 1 restores the engine's own verdict).
+ */
+export function getPressesMinBadFlags(): number {
+  return parseClampedIntEnv('PRESSES_MIN_BAD_FLAGS', 3, 1, 6);
+}
+
 /** How near (months) a confirming clock's main period must start to the chapter's start to agree on the shift. Env: `SELF_CHAPTER_BOUNDARY_MONTHS` (default 18, 6..36). */
 export function getSelfChapterBoundaryMonths(): number {
   return parseClampedIntEnv('SELF_CHAPTER_BOUNDARY_MONTHS', 18, 6, 36);
@@ -948,6 +972,42 @@ export function isSelfV3BuildEnabled(env: NodeJS.ProcessEnv = process.env): bool
 /** The clock layer (doc 70 §4.1 layers 2–3: clock readers and the concordance ledger); off unless READING_CLOCK_LAYER=1. */
 export function isReadingClockLayerEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.READING_CLOCK_LAYER?.trim() === '1';
+}
+
+// ── A reading per card (docs/reading-engine/70 §4.1 layers 4–5, §4.2, §9) ─
+
+/**
+ * The per-card reading: on only when the v3 build and the clock layer are both on (SELF_V3_BUILD=1 and
+ * READING_CLOCK_LAYER=1), since every card stands on the agreed ledger. When on, the Phase C cards are offered, the
+ * layout save queues the reading, and the three-call v3 Oracle is not run.
+ */
+export function isCardsReadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isSelfV3BuildEnabled(env) && isReadingClockLayerEnabled(env);
+}
+
+/** Read the offered cards not on the board in the background after the board (doc 70 §9). Off unless CARDS_READ_REST=1. */
+export function isCardsReadRestEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CARDS_READ_REST?.trim() === '1';
+}
+
+/** Spend cap per person per day for the card readings, USD. Env `CARDS_SPEND_CAP_USD` (default 0.75, 0.01..10). */
+export function getCardsSpendCapUsd(): number {
+  return parseClampedFloatEnv('CARDS_SPEND_CAP_USD', 0.75, 0.01, 10);
+}
+
+/** The reading starts once the board holds this many cards. Env `CARDS_READ_MIN` (default 5, 1..8). */
+export function getCardsReadMin(): number {
+  return parseClampedIntEnv('CARDS_READ_MIN', 5, 1, 8);
+}
+
+/** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 8, 1..12). */
+export function getCardsBoardParallel(): number {
+  return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 8, 1, 12);
+}
+
+/** The rest of the catalogue, read this many at a time. Env `CARDS_REST_PARALLEL` (default 2, 1..4). */
+export function getCardsRestParallel(): number {
+  return parseClampedIntEnv('CARDS_REST_PARALLEL', 2, 1, 4);
 }
 
 /** Self board v3 routes (docs/reading-engine/68): on only when SELF_V3_ENABLED=1 and the v2 board is on. */

@@ -139,6 +139,24 @@ describe('pressure_inventory: pull, store, refresh', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('a pull that fails on the caller side (credentials, network, timeout) leaves no blocking row: the next call pulls again', async () => {
+    const db = store();
+    for (const msg of ['Could not load credentials from any providers', 'getaddrinfo ENOTFOUND engine.local', 'pressure_inventory pull timed out after 15000 ms']) {
+      const fetcher = vi.fn<RadhaFetcher>(async () => {
+        throw Object.assign(new Error(msg), { name: msg.startsWith('Could') ? 'CredentialsProviderError' : 'Error' });
+      });
+      const r1 = await loadPressureInventory(db.prisma, 'k1', 'vimsottari', ASOF, { fetcher, kundliRequest: async () => REQ, now: () => NOW });
+      expect(r1).toMatchObject({ inventory: null, source: 'none' });
+      expect(r1.gaps.join(' ')).toMatch(/caller's side, not stored/);
+      expect(db.rows.get('k1|pressure_inventory|system=vimsottari|LAHIRI')).toBeUndefined();
+    }
+    // a minute later the clock is pulled again, not held back for 24 h
+    const ok = okFetcher();
+    const r2 = await loadPressureInventory(db.prisma, 'k1', 'vimsottari', ASOF, { fetcher: ok, kundliRequest: async () => REQ, now: () => new Date(NOW.getTime() + 60_000) });
+    expect(ok).toHaveBeenCalledTimes(1);
+    expect(r2.source).toBe('pulled');
+  });
+
   it('a failed refresh keeps serving the older stored payload', async () => {
     const db = store();
     await loadPressureInventory(db.prisma, 'k1', 'dwisatpathi', ASOF, { fetcher: okFetcher(), kundliRequest: async () => REQ, now: () => NOW });

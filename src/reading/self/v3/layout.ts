@@ -3,7 +3,7 @@
  * sections and template. No model call and no astrological content; a layout change never queues a build.
  */
 import type { PrismaClient } from '@prisma/client';
-import { cardDef, defaultSuggested } from './cards.js';
+import { cardDef, defaultSuggested, isCardOffered } from './cards.js';
 import {
   DEFAULT_TEMPLATE,
   FIXED_SECTIONS,
@@ -47,7 +47,7 @@ export function validateLayout(body: unknown): LayoutCheck {
     if (typeof c !== 'string') return { ok: false, error: 'unknown_card' };
     const def = cardDef(c);
     if (!def) return { ok: false, error: 'unknown_card', detail: c };
-    if (!def.offered) return { ok: false, error: 'card_not_offered', detail: c };
+    if (!isCardOffered(def)) return { ok: false, error: 'card_not_offered', detail: c };
     if (cards.includes(def.id)) return { ok: false, error: 'duplicate_card', detail: c };
     cards.push(def.id);
   }
@@ -79,7 +79,7 @@ export function layoutFromRow(row: { template: string; cards: unknown; sections:
   const template = (SELF_TEMPLATES_LIVE as readonly string[]).includes(row.template) ? (row.template as SelfTemplateId) : DEFAULT_TEMPLATE;
   const cards = (Array.isArray(row.cards) ? row.cards : [])
     .map((c) => (typeof c === 'string' ? cardDef(c) : null))
-    .filter((d): d is NonNullable<typeof d> => Boolean(d && d.offered))
+    .filter((d): d is NonNullable<typeof d> => Boolean(d && isCardOffered(d)))
     .map((d) => d.id)
     .filter((id, i, all) => all.indexOf(id) === i);
   const sections: Partial<Record<SelfCardId, SelfSectionId[]>> = {};

@@ -186,6 +186,9 @@ export interface PersonalizerV3Deps {
   prisma: PrismaClient;
   callGemini: (o: GeminiCallOptions) => Promise<GeminiResult>;
   informUsed?: Parameters<typeof markAgentUsed>[1];
+  /** the agent and technique the run is logged under (default `self.personalizer`, `self.v3.cards`) */
+  agentId?: string;
+  technique?: string;
 }
 
 export interface PersonalizerV3Result {
@@ -273,8 +276,8 @@ export async function runPersonalizerV3(
       try {
         const res = await withAgentRun(
           deps.prisma,
-          'self.personalizer',
-          { userId: ctx.userId, kundliId: ctx.kundliId, technique: 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
+          deps.agentId ?? 'self.personalizer',
+          { userId: ctx.userId, kundliId: ctx.kundliId, technique: deps.technique ?? 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
           async () => {
             const g = await deps.callGemini({
               model: c.model,

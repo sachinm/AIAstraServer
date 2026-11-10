@@ -276,6 +276,26 @@ export const AGENTS: AgentDef[] = [
       'Writes the You board v3 cards span by span over the next twelve months in three parallel calls over the v2 natal prefix, with the year frame (spans, copied tones, clock agreement) as the suffix: per span get through or build, what it asks, the obstacle, the agreement; one dated confirm per card; JSON by schema (docs/reading-engine/68 §4.5, §4.8)',
   },
   {
+    id: 'self.card.oracle',
+    title: 'Card Oracle',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'cards',
+    role: 'oracle',
+    description:
+      'Writes one Self board card per call, as if it were the whole reading on its subject, over the shared cached prefix with the card brief, the titles of the cards the person chose, the year frame, the agreed ledger cells and dated rows of the card matters: every span answered, a dated claim only on a confirmed cell, build only on a confirmed or leaning light or mixed cell; one repair alone (docs/reading-engine/70 §4.1 Layer 4)',
+  },
+  {
+    id: 'self.card.personalizer',
+    title: 'Card Personalizer',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'cards',
+    role: 'fast',
+    description:
+      'Turns one card Oracle answer into the person card (line, per-span asks, obstacle and step, confirm question), chained to its Oracle call, with the v3 text checks and one repair (docs/reading-engine/70 §4.1 Layer 5)',
+  },
+  {
     id: 'reading.clock',
     title: 'Clock reader',
     kind: 'llm',

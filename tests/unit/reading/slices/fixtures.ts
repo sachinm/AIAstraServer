@@ -74,6 +74,8 @@ const span = (id: string, from: string, to: string, place: YearSpan['place']): Y
   to,
   place,
   tone: 'heavy',
+  held: true,
+  spineTone: 'heavy',
   clocks: [],
   agree: 1,
   of: 1,

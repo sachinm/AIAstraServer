@@ -5,8 +5,8 @@
  */
 import { dayLabel, redactDeep } from '../v2api/response.js';
 import type { SelfV2AreaView, SelfV2Response } from '../v2types.js';
-import { SELF_CARDS } from './cards.js';
-import type { RailItem, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CardView, SelfV3Response } from './types.js';
+import { isCardOffered, SELF_CARDS } from './cards.js';
+import type { BoardReadingView, CardReadState, RailItem, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CardView, SelfV3Response } from './types.js';
 
 /** most bars the rail shows (doc 68 §4.2: three to six periods across twelve months) */
 export const RAIL_MAX = 6;
@@ -43,7 +43,8 @@ export function railFromSpans(c: SelfV3CardContent, today: string): RailItem[] {
     from: s.from,
     to: s.to,
     label: `${short(s.from, today)} → ${dayLabel(s.to)}`,
-    tone: s.tone,
+    // a span whose tone fewer than READING_CLOCKS_MIN clocks hold shows no tone word
+    tone: s.held === false ? null : s.tone,
     note: null,
     current: s.from <= today && today <= s.to,
     span: s.span,
@@ -56,6 +57,11 @@ export interface CardViewsInput {
   /** the registry ids marked suggested for this person (default: the registry's own) */
   suggested?: readonly SelfCardId[] | null;
   today: string;
+  /** doc 70 Phase 3: each card's reading state (absent: `ready` when it has v3 content, else `not_read`) */
+  states?: Partial<Record<SelfCardId, CardReadState>> | null;
+  /** doc 70 Phase 3: whether the per-card reading is on (Phase C cards offered); default false */
+  cardsRead?: boolean;
+  reading?: BoardReadingView | null;
 }
 
 export function cardViews(i: CardViewsInput): SelfV3CardView[] {
@@ -65,8 +71,9 @@ export function cardViews(i: CardViewsInput): SelfV3CardView[] {
     const area = def.v2Area ? areas.get(def.v2Area) ?? null : null;
     const v3 = i.v3Cards?.[def.id] ? redactDeep(i.v3Cards[def.id]!) : null;
     const v2card = area?.card ?? null;
-    const available = def.offered;
+    const available = isCardOffered(def, Boolean(i.cardsRead));
     const status = v3 ? 'ok' : area ? area.status : 'pending';
+    const state: CardReadState = i.states?.[def.id] ?? (v3 ? 'ready' : 'not_read');
     return {
       id: def.id,
       group: def.group,
@@ -77,6 +84,7 @@ export function cardViews(i: CardViewsInput): SelfV3CardView[] {
       available,
       unavailableReason: available ? null : 'Coming soon',
       status,
+      state,
       firstLine: v3?.line ?? v2card?.headline ?? null,
       defaultSections: [...def.defaultSections],
       rail: v3 ? railFromSpans(v3, i.today) : railFromDates(v2card?.dates ?? [], i.today),
@@ -99,5 +107,6 @@ export function buildSelfV3Response(i: CardViewsInput & { layout: SelfBoardLayou
     quality: i.v2.quality ?? null,
     layout: i.layout,
     cards: i.v2.status === 'no_kundli' ? [] : cardViews(i),
+    reading: i.reading ?? null,
   };
 }

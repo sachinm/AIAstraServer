@@ -2208,12 +2208,66 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `tests/unit/reading/self/v3/clockSet.test.ts`. On the test kundli the set is Vimshottari, Narayana, the year,
   Dwisaptati Sama, Yogini, but only Dwisaptati is stored: the three other pulls failed locally (no AWS credentials may
   invoke the engine Lambda from this machine). Report: `docs/reading-engine/70-phase1-clock-rows-2026-11-10.md`. Owner:
-  this branch. Done: the three rows pulled on staging and the frame lists five clocks.
+  this branch. Done: the three rows pulled on staging and the frame lists five clocks. **Update 2026-11-10 19:35 UTC:**
+  met on a second test kundli, 75b0d618, on deployed staging (`37a5209`): the sync worker pulled Vimshottari,
+  Narayana, Chathuraaseethi Sama and Yogini, and the frame lists five clocks with a tone per span. Stays open until
+  c584c0a3 has its rows too (blocked until 2026-11-11 12:44 UTC) and Chara has been pulled once.
+- **P1 · open · Every clock reads heavy nearly always, so agreement on heavy says little.** On 75b0d618, 81% of period
+  rows are `presses` (302 of 375 across four clocks); Vimshottari and Yogini are heavy in all five frame spans, the
+  year in four. Three clocks agreeing is then the normal case and the ledger's "confirmed" (doc 70 Phase 2,
+  `statusOf`) would not mean what it says. Two things to check: the engine's polarity rule (harness, engine lane), and
+  the server's row-to-tone step (does one pressing row make a span heavy regardless of strength?). Owner: this branch
+  with the engine lane. Done: the share of heavy spans per clock measured on the four test kundlis, and a written rule
+  for tone that weighs strength. Must close before the ledger is shown to a user. **Update 2026-11-10, cause found**
+  (`docs/reading-engine/70-heavy-clocks-2026-11-10.md`): the engine sets a dasha or annual row to `presses` when any
+  one of six bad flags in its `reasons` list is on and `functional_benefic` is not (fits 884 of 884 dasha rows, 565 of
+  565 annual rows). Most flags belong to the planet (functional malefic, kashta over ishta, in dusthana), so 7 of 9
+  planets press on every row they rule; 20 of 26 kundli-planet pairs carry a bad flag, 2 of 26 are benefic. The server
+  copies the tone correctly. Strength is 1 on 87% of presses and all supports, so it cannot split them. Under today's
+  rule 3+ of 4 clocks are heavy on 88% (75b0d618) and 77% (de5a2275) of days; requiring 3+ bad flags gives 10-30%
+  heavy days and 0-3% three-clock agreement. Next: the engine owner grades polarity (presses needs 2+ independent bad
+  flags; one flag gives mixed; parent-relative flags tilt, not set) and gives dasha rows a real strength. Stopgap
+  (count stored flags in the server, heavy at 3+) waits on Sachin's yes. **Update 2026-11-10 (doc 70 Phase 3):** the
+  stopgap is built (see the two entries below); this entry stays open until the engine grades polarity.
+- **P1 · open · Engine: grade dasha and annual polarity instead of OR-ing six flags (engine owner).** Today
+  `lord_quality` (`AIAstra_Radha` `pressure_inventory_export.py:303-321`) returns `presses` when any one of
+  functional_malefic, shadbala_ratio_below_0.8, in_dusthana, kashta_over_ishta is on, and the dasha/annual rows add
+  `2_12_from_parent` / `6_8_from_parent` (`:378-393`, `:603-613`). Asked: presses needs 2+ independent bad flags and no
+  good flag; a single bad flag gives mixed; a good flag with no bad flag gives supports; the two parent-relative flags
+  tilt a row from the planet's baseline and never set it; give dasha rows a real strength (87% of presses are 1 today);
+  make functional_benefic reachable (2 of 26 planets). Evidence: `docs/reading-engine/70-heavy-clocks-2026-11-10.md`.
+  Owner: engine lane. Done: the engine's rows carry graded polarity and the server stopgap below is switched off
+  (`PRESSES_MIN_BAD_FLAGS=1`) and removed.
+- **P1 · open · Server stopgap for the heavy tone, awaiting Sachin's confirmation.** Built 2026-11-10 on
+  `feat/self-v3`: the engine's stored `reasons` now reach `PressureRowDetail.reasons` (`toPressureInventory`), and one
+  pure selection, `gradeRow` (`src/reading/self/sub/rowTone.ts`), turns a stored row into a tone for the year frame
+  (`v3/yearFrame.ts`: spans, clocks per span, year rows, merge) and the slices (`slices/render.ts` `rowLine` writes
+  `tone=` beside the engine's `polarity=` and `flags=`; the clock reader validator checks against `tone=`). Rule: a
+  dasha or annual `presses` row is heavy only with >= `PRESSES_MIN_BAD_FLAGS` (default 3) of `PRESSES_BAD_FLAGS` in its
+  stored `reasons`, else mixed; supports stays light; transits and rows without a stored list keep the engine's word.
+  It counts a stored list and computes no astrology, but it reshapes the engine's verdict against the rule that the
+  engine alone gives astrological data. Owner: Sachin (yes or no). Done: Sachin confirms, or sets
+  `PRESSES_MIN_BAD_FLAGS=1` (the engine's own tone) until the engine change above ships. Tests:
+  `tests/unit/reading/self/v3/heavyTone.test.ts`.
+- **P1 · open · The v3 frame tone is the spine's tone even when it stands alone.** On 75b0d618 span s2 (2027-01-25 to
+  2027-04-24) is shown light on 1 of 5 clocks, s4 mixed on 1 of 5. The Phase 2 count makes both confirmed heavy, but
+  it is not wired. Fix: Phase 3 wiring, or until then do not show a frame tone that fewer than `READING_CLOCKS_MIN`
+  clocks hold. Owner: doc 70 Phase 3. Done: a test with one clock against four. **Fixed 2026-11-10 (doc 70 Phase 3):**
+  a span's tone is now the tone `READING_CLOCKS_MIN` clocks hold (`heldTone`); none held → `held: false`, tone
+  `mixed`, no tone word on the rail; the spine's own tone is kept as `spineTone`. Test: one clock light against four
+  heavy (`heavyTone.test.ts`). Delete this entry when the branch merges.
+- **P3 · open · Frame spans run past the Tithi Pravesha year the frame names.** On 75b0d618 the year is 2026-09-12 to
+  2027-09-01 and spans s4, s5 reach 2028-01-18; their year tone comes from the next year's rows but the frame's
+  `year` field names one year only. Done: the frame names every year its spans touch. **Fixed 2026-11-10:**
+  `YearFrameV3.years` lists every level-1 annual row the spans touch and the Oracle suffix prints a `YEARS:` line.
+  Delete this entry when the branch merges.
 - **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** Checked 2026-11-10 on the
   test kundli's Dwisaptati inventory: the 7 `annual:TP<year>` rows run 353 to 384 days and all 54 year sub-period rows
   fall inside their year, so the pressure rows do not show the 108-year problem. The separate
   `annual.tithi_pravesha_dasha` row still does (the build reports "TP2026 year dasha is a lifetime dasha"), so the P0
-  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled.
+  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled. **Update
+  2026-11-10:** done for the pressure rows: on 75b0d618 all four inventories carry the same 7 year rows (354 to 384
+  days) and 56 sub-period rows, none outside its year. This entry can close; the P0 on the year-dasha row stays.
 - **P3 · open · The failed `pressure_inventory` row for `system=kaala` on staging.** Its error column reads
   `validation_error: Invalid export type: pressure_inventory`, written 2026-11-10 00:38 UTC, before the engine that serves
   the export went live (the Dwisaptati row was pulled at 05:03 UTC, calc version 2). Kaala is no longer selectable for
@@ -2224,13 +2278,23 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   laptop without AWS credentials wrote `failed` rows for Vimshottari, Narayana and Yogini on kundli c584c0a3 (test data),
   so those three are not pulled on staging until 2026-11-11 12:44 UTC. Fix: do not store failures that are not the
   engine's answer (credentials, network, timeout), or retry those after minutes; and give staff a re-pull that skips
-  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row.
+  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row. **Fixed 2026-11-10 (doc
+  70 Phase 3):** `isEngineAnswer` (`sub/pressure.ts`) stores a `failed` row only for the engine's own refusal (an
+  HTTP error status other than 401/403/407/408/429, a validation error, a payload of the wrong shape); credentials,
+  network and timeout failures store nothing (test in `tests/unit/reading/self/v2/pressure.test.ts`). The staff
+  re-pull that skips the wait is not built (still open: delete the three `failed` rows on c584c0a3 by hand or wait
+  until 2026-11-11 12:44 UTC). Delete this entry when the branch merges.
 - **P2 · open · The sync sweep never pulls inventories for kundlis whose chart is already complete.** The sweep
   (`findIncompleteKundlis`) only picks kundlis with a missing registration row, and the new pull runs only after a sync
   run. A kundli synced before 2026-11-10, or one whose inventory went stale after 7 days, gets its clocks only when a
   build pulls them (15 s each, in the build). Fix: a sweep step that picks kundlis with a missing or stale clock-set
   inventory. Owner: this branch or doc 70 Phase 2. Done: a test kundli with complete charts gets its four rows from the
-  sweep.
+  sweep. **Built 2026-11-10 (doc 70 Phase 3):** `findKundlisMissingClocks` + `runClockSetPull`
+  (`src/services/kundliSyncWorker.ts`) run after the incomplete-kundli pass: digest-ready kundlis with fewer settled
+  inventories (ready and fresh, or failed within the retry wait) than `READING_CLOCKS - 1`. Unit-tested with fakes;
+  not run against a database yet. Side effect to watch: a kundli whose chart has fewer clock systems than that number
+  is picked on every sweep (the pulls then return at once, but it takes a batch slot). Done: one staging sweep log
+  (`clocks_pulled`) and the test kundli's rows.
 - **P2 · open · At first sync the clock set may miss the conditional clock.** The set is read from `kundli_activation`
   and `dasha.applicable`; at the first sync these may not be stored yet, so the set falls back to the non-conditional
   systems and the spine (Vimshottari by default). The conditional clock's inventory is then pulled only by the first
@@ -2240,13 +2304,24 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `supports` (46 presses, 6 mixed): check whether a dasha row can be `supports` at all. (b) No `sade_sati` or `station`
   row in the 2023-11 to 2029-11 window for c584c0a3. (c) Sign-dasha rows (Narayana, Chara) not checked yet. (d) The
   inventory is 82.5 KB as JSON, not 21 KB as doc 70 says (21 KB is likely the compressed size). Owner: engine lane, doc
-  70 step 2.
+  70 step 2. **Update 2026-11-10 (75b0d618):** (a) answered: period rows can be `supports` (34 of 375). (c) Narayana
+  checked: 107 period rows, all with houses and polarity; Chara still not pulled. (b) also no `sade_sati` or `station`
+  row on the second kundli, in any of four inventories: still to check. (d) four inventories are 422 KB of JSON for one
+  kundli (73 to 155 KB each; Yogini largest), and 102 rows are repeated in each; doc 70's size estimates need redoing.
 - **P2 · open · Each `pressure_inventory` call recomputes the clock-independent rows.** Five clocks is five sky scans
   and five sets of year charts. Engine pass E1 in doc 70 §6: accept a list of systems and compute the shared rows once.
 - **P2 · open · No weighted order of dasha systems from the engine.** The clock set's order is a server list
   (`src/config/env.ts:834-835`). Which clocks carry most weight for a birth is astrology; engine pass E2 in doc 70 §6.
 - **P3 · open · Doc 68 §4.9 and doc 69 §4.1 are superseded by doc 70** (budget; one call per board). The two docs still
   carry the old text.
+- **P1 · open · Doc 70 Phase 2 wiring: built 2026-11-10, not run live.** The sync worker now writes slices after
+  `ensurePressureInventories` (`writeSlicesAtSync`, `src/reading/slices/prepare.ts`), the v3 step reads stored slices
+  and writes back only changed ones (`prepareSlices`), and `runClockLayer` runs from the v3 step when
+  `READING_CLOCK_LAYER=1` (`src/reading/self/v3/build.ts`); tests in `tests/unit/reading/self/v3/clockWiring.test.ts`.
+  Still open: migration m48 is not applied and `prisma generate` was not run for it in the worktree (the store reads
+  the delegate through a loose type and reports `no kundli_slices store` until then); prep time on real rows not
+  measured. Done: the migration applied with the deploy, slices on the test kundli, two syncs give the same hashes.
+  Older text follows.
 - **P1 · open · Doc 70 Phase 2 (slices, clock readers, ledger) is built behind `READING_CLOCK_LAYER=1` and not wired.**
   Code: `src/reading/slices/` (renderers, `writeSlices`, `readSlices`), `src/reading/clocks/` (`readClocks`,
   `countConcordance`, `runConcordance`, `runClockLayer`); migration `20261110100000_kundli_slices_m48` (table
@@ -2272,6 +2347,42 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `prompts/clock/reader.md`, `prompts/concordance.md` are tested only with a fake model. Word limits (cell 25 words,
   ledger 30) and the "rows of two polarities allow only mixed" tone rule may drop many cells live. Done: the doc 70
   Phase 2 replay (one kundli, needs Sachin's yes on key, count and cost) reports drop rates per check.
+
+## Filed 2026-11-10 by doc 70 Phase 3 (a reading per card; branch `feat/self-v3`)
+
+Report: `docs/reading-engine/70-phase3-2026-11-10.md`. Everything below is built behind `SELF_V3_BUILD=1` and
+`READING_CLOCK_LAYER=1` (both off by default) and tested with a fake model only.
+
+- **P1 · open · No real model run of the per-card reading.** The card Oracle prompt (`prompts/cards/oracle.md`), the 21
+  briefs (`prompts/cards/self/*.md`) and the ledger checks (`checkAgainstLedger`: a span must cite one of its ledger
+  cells; `build` needs a confirmed or leaning light or mixed cell) have never met a model; the ledger rules may drop
+  many cards live. Done: the doc 70 §8 Phase 3 test (`scripts/cards-replay.ts --yes-spend`, Sachin's yes on key, count
+  and cost) reports drop rates per check.
+- **P2 · open · Minimum board: saving still needs 3 cards; the reading starts at `CARDS_READ_MIN` (5).** Doc 70 §10
+  decision 2 (minimum board of five) is Sachin's; until then a 3- or 4-card board saves and reads nothing, and the web
+  shows "Add at least five cards to start your reading." Done: Sachin decides; `MIN_CARDS` follows.
+- **P2 · open · The v2 Oracle still runs before the per-card reading (doc 70 §4.1 trigger item 5 not built).** The cards
+  are read inside the v3 step, after a v2 build that served; the v2 calls are cached per day in `technique_outputs`, so a
+  second build the same day costs nothing for v2, but the first build of a day pays v2 too. A layout save re-queues the
+  whole build (v1 code panels, v2 from cache, v3) to reach the cards. Done: a dedicated `self.cards` event that builds
+  only what the cards need, and v2's model calls skipped while the per-card reading is on.
+- **P2 · open · The per-card state doc is read-modify-write across processes.** `src/reading/cards/state.ts` serialises
+  writes inside one process; the API Lambda (layout save, POST) and the build invocation can still overwrite each
+  other's entry for a card in the same second. The runner re-reads the doc before every write and drains newly queued
+  cards at the end, so the usual loss is a `queued` mark that the next build picks up. Done: entries in their own rows
+  (one `area_builds` row per card) or a JSON merge in SQL.
+- **P2 · open · Card agents have no cache plan entry.** `self.card.oracle` reuses the clock layer's warmed region (same
+  system prompt and prefix), but neither it nor `self.card.personalizer` is in `SUBAGENT_DIGEST_SPECS` /
+  `subagentCachePlan`; the card Personalizer's prefix (one Oracle card) is under 1,024 tokens, so it is never cached.
+  Joins the clock-layer cache-plan entry above. Done: plan rows and the Lab showing cached vs total per card agent.
+- **P3 · open · Web: doc 70 §4.3 items 3 and 5 not built.** The first ready card is not auto-selected, and the `+`
+  picker does not mark cards ready or "about 15 seconds". Owner: web lane (`AIAstra_WEB` `src/pages/you/v3/`).
+- **P3 · open · `tests/unit/reading/specialistFailures.test.ts` "a time-out on a cached call is not retried uncached"
+  is flaky under full-suite load.** On 2026-11-10 it failed once in `npx vitest run` (2585 of 2586 passed; "expected []
+  to have a length of 1") and passed alone (18 of 18). Not touched by doc 70 (no change under `src/reading/llm`). Likely a
+  real-time timeout in the test racing a loaded machine. Done: the test uses fake timers or a wider margin.
+- **P3 · open · Love and Work card registries (doc 70 Phase 4).** `src/reading/cards/` is Self-only (`cards/self/`
+  briefs, `self.cards` state row). Done: doc 70 step 10.
 
 ## Filed 2026-11-09 by the backfill disk-full incident
 

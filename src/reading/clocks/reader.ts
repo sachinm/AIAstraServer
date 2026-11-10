@@ -6,8 +6,9 @@
  * The validator keeps a cell only when its span is a frame span, every evidence key is in that reader's slice or the
  * shared prefix, it cites at least one dated row of its own clock overlapping the span, its matter is one of the cited
  * rows' own `matters`, its strength is 1..3, its sentence has 1..25 words, and its tone does not contradict the engine
- * polarity of the cited rows through the fixed words table (`TONE_OF`: presses heavy, mixed mixed, supports light; rows
- * of more than one tone allow only `mixed`). A bad cell is dropped and recorded; the sheet keeps the rest.
+ * tone of the cited rows as the slice line carries it (`tone=`, the one row-to-tone selection in `sub/rowTone.ts`: the
+ * engine's polarity with `presses` heavy only at PRESSES_MIN_BAD_FLAGS stored bad flags; rows of more than one tone
+ * allow only `mixed`). A bad cell is dropped and recorded; the sheet keeps the rest.
  *
  * Readers run in parallel, 45 s each, under a spend guard. Each sheet is stored with `withTechniqueOutput` (technique
  * `reading.clock.sheet`). Nothing here throws.
@@ -20,7 +21,6 @@ import { usageCostUsd } from '../llm/models.js';
 import { markAgentUsed } from '../self/v2/cache.js';
 import { normaliseEvidenceKey, promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
-import { TONE_OF } from '../self/v3/yearFrame.js';
 import { cmp, parseRowLines, type SliceRowRef } from '../slices/render.js';
 import type { RenderedSlice } from '../slices/types.js';
 import {
@@ -164,7 +164,7 @@ export function validateClockSheet(rawCells: readonly unknown[], c: ReaderCheckC
       continue;
     }
     const tone = S(o.tone) as ClockTone;
-    const rowTones = [...new Set(cited.map((r) => TONE_OF[r.polarity]))];
+    const rowTones = [...new Set(cited.map((r) => r.tone))];
     const allowed: ClockTone[] = rowTones.length === 1 ? rowTones : ['mixed'];
     if (!TONES.includes(tone) || !allowed.includes(tone)) {
       drop('tone_contradicts_polarity', `tone ${tone || 'none'} against the cited rows (${rowTones.join(', ')}); allowed ${allowed.join(', ')}`);

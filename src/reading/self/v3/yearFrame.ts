@@ -3,16 +3,21 @@
  * every edge is a stored period boundary, each span with the reading clock's tone and the other clocks' tones for
  * agreement. Built from the engine's stored `pressure_inventory` rows only.
  *
- * What Node does here is selection and counting, never astrology: a span's tone is the engine's `polarity` of the stored
- * period row covering the span's first day, copied through a fixed words table (presses → heavy, mixed → mixed, supports
- * → light); agreement counts clocks whose copied tone is the same word. No boundary, tone or strength is computed.
+ * What Node does here is selection and counting, never astrology: a clock's tone for a span is the tone of the stored
+ * period row covering the span's first day, through the one row-to-tone selection (`sub/rowTone.ts`: the engine's
+ * polarity, with `presses` read `heavy` only when the row's stored `reasons` carry PRESSES_MIN_BAD_FLAGS bad flags);
+ * agreement counts clocks with the same word. A span's own tone is the tone READING_CLOCKS_MIN or more clocks hold;
+ * when none is held that widely the span shows no tone (`held: false`, `tone: 'mixed'`). No boundary, tone or strength
+ * is computed.
  *
  * Cutting rule: try the reading clock's level-3 edges (plus the Tithi Pravesha year edge), merge neighbours with the same
  * tone, and when more than RAIL spans remain, cut on level-2 edges instead; still too many: keep the first RAIL. The last
  * span ends on a stored edge, so the frame can run a little past twelve months.
  */
 import type { PrismaClient } from '@prisma/client';
+import { getReadingClocksMin } from '../../../config/env.js';
 import { addMonthsIso } from '../../timeline/months.js';
+import { ENGINE_TONE, gradeRow, toneRule, type ToneRule } from '../sub/rowTone.js';
 import { asPressurePayload, PRESSURE_AYANAMSA, PRESSURE_TYPE, pressureVariant, toPressureInventory, type PressureInventoryDetail, type PressureRowDetail } from '../sub/pressure.js';
 import type { ReadingClockSet } from '../clock.js';
 import type { ClockResolution, Polarity, YearFrame } from '../v2types.js';
@@ -26,8 +31,8 @@ export const FRAME_MAX_OTHER_CLOCKS = 4;
 export const FRAME_ROWS_PER_SPAN = 6;
 export const TP_SYSTEM = 'tithi_pravesha';
 
-/** the words table: the engine's polarity → the tone word the board shows */
-export const TONE_OF: Readonly<Record<Polarity, SpanTone>> = { presses: 'heavy', mixed: 'mixed', supports: 'light' };
+/** the engine's words table (polarity → tone), before the heavy-tone stopgap; rows are graded with `gradeRow` */
+export const TONE_OF: Readonly<Record<Polarity, SpanTone>> = ENGINE_TONE;
 const POLARITY_ORDER: Readonly<Record<Polarity, number>> = { presses: 0, mixed: 1, supports: 2 };
 
 export const rowKey = (r: Pick<PressureRowDetail, 'id'>): string => `pressure:${r.id}`;
@@ -40,6 +45,9 @@ export interface YearFrameInput {
   /** stored inventories of the other clocks (null: none stored) */
   others: ReadonlyArray<{ system: string; inventory: PressureInventoryDetail | null }>;
   year: YearFrame | null;
+  /** test seams: the row-to-tone rule (default: env) and READING_CLOCKS_MIN (default: env) */
+  rule?: ToneRule;
+  minClocks?: number;
 }
 
 const covers = (r: { from: string; to: string }, day: string): boolean => r.from <= day && day < r.to;
@@ -63,7 +71,7 @@ interface Atom {
   opensWith: string;
 }
 
-function cut(rows: readonly PressureRowDetail[], asOf: string, end: string, extraEdges: readonly string[], tpKey: string | null, tpFrom: string | null): Atom[] {
+function cut(rows: readonly PressureRowDetail[], asOf: string, end: string, extraEdges: readonly string[], tpKey: string | null, tpFrom: string | null, rule: ToneRule): Atom[] {
   const first = deepestAt(rows, asOf);
   if (!first) return [];
   const edges = [...new Set([...rows.flatMap((r) => [r.from, r.to]), ...extraEdges])].filter((d) => d > first.from).sort();
@@ -82,20 +90,41 @@ function cut(rows: readonly PressureRowDetail[], asOf: string, end: string, extr
   const merged: Atom[] = [];
   for (const a of atoms) {
     const last = merged[merged.length - 1];
-    if (last && TONE_OF[last.row.polarity] === TONE_OF[a.row.polarity] && last.to === a.from) last.to = a.to;
+    if (last && gradeRow(last.row, rule).tone === gradeRow(a.row, rule).tone && last.to === a.from) last.to = a.to;
     else merged.push({ ...a });
   }
   return merged;
 }
 
-function toneOn(rows: readonly PressureRowDetail[], day: string): { tone: SpanTone; evidence: string } | null {
+type ClockToneAt = { tone: SpanTone; evidence: string; polarity: Polarity; flags: number };
+
+const toneAt = (r: PressureRowDetail, rule: ToneRule): ClockToneAt => {
+  const g = gradeRow(r, rule);
+  return { tone: g.tone, evidence: rowKey(r), polarity: r.polarity, flags: g.bad.length };
+};
+
+function toneOn(rows: readonly PressureRowDetail[], day: string, rule: ToneRule): ClockToneAt | null {
   const r = deepestAt(rows, day);
-  return r ? { tone: TONE_OF[r.polarity], evidence: rowKey(r) } : null;
+  return r ? toneAt(r, rule) : null;
+}
+
+/**
+ * The span's own tone from its clocks' tones: the tone held by at least `min` clocks; none held that widely (or two
+ * tones each held that widely) → not held. Counting only.
+ */
+export function heldTone(tones: readonly SpanTone[], min: number): { tone: SpanTone | null; agree: number } {
+  const tally = new Map<SpanTone, number>();
+  for (const t of tones) tally.set(t, (tally.get(t) ?? 0) + 1);
+  const top = Math.max(0, ...tally.values());
+  const winners = [...tally.entries()].filter(([, n]) => n >= min);
+  return winners.length === 1 ? { tone: winners[0]![0], agree: winners[0]![1] } : { tone: null, agree: top };
 }
 
 export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
   const end = addMonthsIso(i.asOf, FRAME_MONTHS);
   const system = i.clock.primary;
+  const rule = i.rule ?? toneRule();
+  const minClocks = i.minClocks ?? getReadingClocksMin();
   const empty = (why: string): YearFrameV3 => ({
     asOf: i.asOf,
     to: end,
@@ -116,7 +145,7 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
 
   let atoms: Atom[] = [];
   for (const level of [3, 2]) {
-    atoms = cut(dashaRows(i.primary, system, level), i.asOf, end, tpEdges, tpKey, tpOn ? i.year!.to : null);
+    atoms = cut(dashaRows(i.primary, system, level), i.asOf, end, tpEdges, tpKey, tpOn ? i.year!.to : null, rule);
     if (atoms.length && atoms.length <= FRAME_MAX_SPANS) break;
   }
   const degradedCut = atoms.length > FRAME_MAX_SPANS;
@@ -128,7 +157,7 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
   const annualAt = (day: string) => {
     const rows = annual.filter((r) => covers(r, day));
     const r = rows.find((x) => (x.level ?? 1) === 2) ?? rows.find((x) => (x.level ?? 1) === 1) ?? null;
-    return r ? { tone: TONE_OF[r.polarity], evidence: rowKey(r) } : null;
+    return r ? toneAt(r, rule) : null;
   };
   const skipped: YearFrameV3['clocksSkipped'] = i.clock.notApplicable.map((n) => ({ system: n.system, reason: 'does not apply to this chart' }));
   const others: Array<{ system: string; rows: PressureRowDetail[] }> = [];
@@ -144,15 +173,15 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
 
   const read = new Set<string>([system]);
   const spans: YearSpan[] = atoms.map((a, idx) => {
-    const tone = TONE_OF[a.row.polarity];
-    const clocks: SpanClockTone[] = [{ system, tone, evidence: rowKey(a.row) }];
+    const spine = toneAt(a.row, rule);
+    const clocks: SpanClockTone[] = [{ system, ...spine }];
     const tp = annualAt(a.from);
     if (tp) {
       clocks.push({ system: TP_SYSTEM, ...tp });
       read.add(TP_SYSTEM);
     }
     for (const o of others) {
-      const t = toneOn(o.rows, a.from);
+      const t = toneOn(o.rows, a.from, rule);
       if (t) {
         clocks.push({ system: o.system, ...t });
         read.add(o.system);
@@ -162,16 +191,22 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
       .filter((r) => r.from < a.to && a.from < r.to)
       .sort((x, y) => y.strength - x.strength || POLARITY_ORDER[x.polarity] - POLARITY_ORDER[y.polarity] || x.from.localeCompare(y.from))
       .slice(0, FRAME_ROWS_PER_SPAN)
-      .map((r) => ({ id: rowKey(r), polarity: r.polarity, strength: r.strength, matters: [...r.matters] }));
+      .map((r) => {
+        const g = gradeRow(r, rule);
+        return { id: rowKey(r), polarity: r.polarity, tone: g.tone, flags: g.bad.length, strength: r.strength, matters: [...r.matters] };
+      });
     const place: SpanPlace = covers(a, i.asOf) || (idx === 0 && a.from <= i.asOf) ? 'now' : idx === 1 ? 'next' : 'later';
+    const held = heldTone(clocks.map((c) => c.tone), minClocks);
     return {
       id: `s${idx + 1}`,
       from: a.from,
       to: a.to,
       place,
-      tone,
+      tone: held.tone ?? 'mixed',
+      held: held.tone !== null,
+      spineTone: spine.tone,
       clocks,
-      agree: clocks.filter((c) => c.tone === tone).length,
+      agree: held.agree,
       of: clocks.length,
       opensWith: a.opensWith,
       rows,
@@ -199,17 +234,32 @@ export function buildYearFrameV3(i: YearFrameInput): YearFrameV3 {
     for (const a of spellings) if (a && a !== key && !listed.has(a)) aliases[a] = key;
   }
 
+  // every Tithi Pravesha year the spans touch (the engine's level-1 annual rows), not only the one covering today
+  const frameTo = spans[spans.length - 1]!.to;
+  const years = annual
+    .filter((r) => (r.level ?? 1) === 1 && r.from < frameTo && spans[0]!.from < r.to)
+    .sort((x, y) => x.from.localeCompare(y.from))
+    .filter((r, n, all) => all.findIndex((x) => x.from === r.from) === n)
+    .map((r) => ({ key: rowKey(r), label: yearLabel(r), from: r.from, to: r.to }));
+
   return {
     aliases,
     asOf: i.asOf,
-    to: spans[spans.length - 1]!.to,
+    to: frameTo,
     clock: system,
     spans,
     saturn,
+    years,
     clocksRead: [...read],
     clocksSkipped: skipped,
     degraded: degradedCut || read.size < 2,
   };
+}
+
+/** `TP2026` from the engine's row id (`annual:TP2026`), else the start year */
+function yearLabel(r: PressureRowDetail): string {
+  const m = /TP(\d{4})/.exec(r.id);
+  return m ? `TP${m[1]}` : `TP${r.from.slice(0, 4)}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -222,11 +272,14 @@ export function renderYearFrame(f: YearFrameV3, clockLabel: string): { text: str
     keys.add(key);
     return `{${key}}`;
   };
-  const lines: string[] = [`TODAY: ${f.asOf}`, `CLOCK: ${clockLabel}`, 'YEAR FRAME (the spans of the next twelve months; every date you write must be a span edge below)'];
+  const lines: string[] = [`TODAY: ${f.asOf}`, `CLOCK: ${clockLabel}`];
+  if (f.years?.length) lines.push(`YEARS: ${f.years.map((y) => `${y.label} ${y.from}..${y.to} ${k(y.key)}`).join('; ')}`);
+  lines.push('YEAR FRAME (the spans of the next twelve months; every date you write must be a span edge below)');
   for (const s of f.spans) {
-    lines.push(`${s.id} ${s.from}..${s.to} place=${s.place} tone=${s.tone} agree=${s.agree}/${s.of} opens=${k(s.opensWith)}`);
-    lines.push(`  clocks: ${s.clocks.map((c) => `${c.system}=${c.tone} ${k(c.evidence)}`).join('; ')}`);
-    lines.push(`  rows: ${s.rows.length ? s.rows.map((r) => `${k(r.id)} ${r.polarity} strength=${r.strength} matters=${r.matters.join(',')}`).join('; ') : 'none'}`);
+    const held = s.held === false ? ' held=no (no tone is shared by enough clocks; nothing dated may be stated for this span)' : '';
+    lines.push(`${s.id} ${s.from}..${s.to} place=${s.place} tone=${s.tone} agree=${s.agree}/${s.of}${held} opens=${k(s.opensWith)}`);
+    lines.push(`  clocks: ${s.clocks.map((c) => `${c.system}=${c.tone}${c.polarity ? ` (row ${c.polarity}, ${c.flags ?? 0} flags)` : ''} ${k(c.evidence)}`).join('; ')}`);
+    lines.push(`  rows: ${s.rows.length ? s.rows.map((r) => `${k(r.id)} ${r.tone ?? r.polarity} (row ${r.polarity}) strength=${r.strength} matters=${r.matters.join(',')}`).join('; ') : 'none'}`);
   }
   lines.push(
     `SATURN PASSAGE: ${f.saturn.length ? f.saturn.map((x) => `${k(x.evidence)} ${x.from}..${x.to} house_from_moon=${x.houseFromMoon ?? 'unknown'}`).join('; ') : 'none stored'}`,

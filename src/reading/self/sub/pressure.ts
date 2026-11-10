@@ -17,7 +17,7 @@ import {
   getSelfV2PressureTimeoutMs,
   isSelfV2PressurePullEnabled,
 } from '../../../config/env.js';
-import { fetchEngineExport } from '../../../lib/astroKundliClient.js';
+import { fetchEngineExport, RadhaHttpError } from '../../../lib/astroKundliClient.js';
 import { CHART_TYPE_BY_ID } from '../../chartData/catalog.js';
 import type { KundliRequest, RadhaFetcher } from '../../chartData/store.js';
 import type { Matter, Polarity, PressureBoundary, PressureInventory, PressureKind, PressureRow, Strength } from '../v2types.js';
@@ -53,6 +53,8 @@ export interface EnginePressureRow {
   evidence: string[];
   /** transit and station rows */
   house_from_moon?: number;
+  /** dasha and annual rows: the engine's flags behind the polarity (functional_malefic, in_dusthana, …) */
+  reasons?: string[];
   [extra: string]: unknown;
 }
 
@@ -71,8 +73,11 @@ export interface EnginePressurePayload {
   rules?: unknown;
 }
 
-/** a mapped row with the transit extra S7 joins on (the Moon's house as the engine stated it) */
-export type PressureRowDetail = PressureRow & { houseFromMoon: number | null };
+/**
+ * a mapped row with the transit extra S7 joins on (the Moon's house as the engine stated it) and the engine's stored
+ * `reasons` flags (null when the payload carried none); the tone stopgap (`rowTone.ts`) counts them
+ */
+export type PressureRowDetail = PressureRow & { houseFromMoon: number | null; reasons?: string[] | null };
 export type PressureInventoryDetail = Omit<PressureInventory, 'rows'> & { asOf: string; rows: PressureRowDetail[] };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -133,6 +138,7 @@ export function toPressureInventory(payload: EnginePressurePayload, kundliId: st
       to: r.to,
       evidence: Array.isArray(r.evidence) ? r.evidence.filter((e) => typeof e === 'string') : [r.id],
       houseFromMoon: Number.isInteger(r.house_from_moon) ? (r.house_from_moon as number) : null,
+      reasons: Array.isArray(r.reasons) ? r.reasons.filter((x): x is string => typeof x === 'string') : null,
     });
   }
   const boundaries: PressureBoundary[] = payload.boundaries
@@ -203,6 +209,18 @@ async function ensureTypeRow(p: PressurePrisma): Promise<void> {
     create: { id: t.id, family: t.family, radha_type: t.radhaType, change_class: t.changeClass, tier: t.tier, variant_kind: t.variantKind, served: false, calc_version: null, legacy_column: null, sort_order: t.sortOrder, label: t.label, enabled: true },
     update: {},
   });
+}
+
+/**
+ * True when a failed pull is the engine's own answer (it ran and said no: an HTTP error status other than an auth or
+ * throttle status, a validation error, a payload of the wrong shape). Anything else failed on the caller's side
+ * (credentials, network, a timeout, a missing birth request): such a failure is not stored, so it never blocks the next
+ * pull for SELF_V2_PRESSURE_RETRY_HOURS (docs/TODOS.md, doc 70: a laptop without credentials blocked three clocks 24 h).
+ */
+export function isEngineAnswer(e: unknown): boolean {
+  if (e instanceof RadhaHttpError) return ![401, 403, 407, 408, 429].includes(e.status);
+  const msg = String((e as Error)?.message ?? e);
+  return /not a pressure_inventory payload|validation_error|(invalid|unknown) (export )?type|(Radha|HTTP) ?[45]\d\d/i.test(msg) && !/(Radha|HTTP) ?(401|403|407|408|429)/i.test(msg);
 }
 
 function withTimeout<T>(p: Promise<T>, limitMs: number): Promise<T> {
@@ -280,8 +298,13 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
     return { inventory: m.inventory, source: 'pulled', gaps };
   } catch (e) {
     const error = String((e as Error).message ?? e).slice(0, 300);
+    if (!isEngineAnswer(e)) {
+      // failed on the caller's side: nothing is stored, the next build or sync asks again
+      gaps.push(`pressure_inventory: pull failed on the caller's side, not stored (${error.slice(0, 120)})`);
+      return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
+    }
     gaps.push(`pressure_inventory: pull failed (${error.slice(0, 120)})`);
-    // remember the attempt; an older payload is kept as it is
+    // the engine's own refusal: remember the attempt; an older payload is kept as it is
     await ensureTypeRow(p)
       .then(() =>
         p.kundliData?.upsert?.({

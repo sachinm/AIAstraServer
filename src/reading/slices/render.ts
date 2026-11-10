@@ -12,6 +12,8 @@ import type { SelfFamilyAgentId, SelfFamilyPack } from '../self/oracle.js';
 import { estProviderTokens, KeyBook, oraclePrefix, promiseKey, shortHash } from '../self/v2/slices.js';
 import type { PromiseEntry, PromiseLedger, YearFrame } from '../self/v2types.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
+import { gradeRow } from '../self/sub/rowTone.js';
+import type { SpanTone } from '../self/v3/types.js';
 import { rowKey, TP_SYSTEM } from '../self/v3/yearFrame.js';
 import { clockSliceId, matterSliceId, type RenderedSlice, type SliceSource } from './types.js';
 
@@ -65,8 +67,12 @@ function finish(id: string, text: string, keys: Iterable<string>, sources: Slice
 export const byDate = (a: PressureRowDetail, b: PressureRowDetail): number =>
   cmp(a.from, b.from) || cmp(a.kind, b.kind) || (a.level ?? 0) - (b.level ?? 0) || cmp(a.id, b.id);
 
-/** One row as every slice writes it. */
+/**
+ * One row as every slice writes it. `tone=` is the one row-to-tone selection (`sub/rowTone.ts`); `polarity=` and
+ * `flags=` keep the engine's own verdict and its stored bad flags visible beside it.
+ */
 export function rowLine(book: KeyBook, r: PressureRowDetail): string {
+  const g = gradeRow(r);
   return [
     book.k(rowKey(r)),
     `kind=${r.kind}`,
@@ -74,7 +80,9 @@ export function rowLine(book: KeyBook, r: PressureRowDetail): string {
     ...(r.system ? [`system=${r.system}`] : []),
     `lord=${r.planet || 'n/a'}`,
     `${r.from}..${r.to}`,
+    `tone=${g.tone}`,
     `polarity=${r.polarity}`,
+    ...(r.reasons ? [`flags=${g.bad.length}`] : []),
     `strength=${r.strength}`,
     `houses=[${[...r.housesTouched].sort((a, b) => a - b).join(',')}]`,
     `matters=[${[...r.matters].sort(cmp).join(',')}]`,
@@ -289,6 +297,8 @@ export interface SliceRowRef {
   from: string;
   to: string;
   polarity: PressureRowDetail['polarity'];
+  /** the graded tone the line carries (`tone=`); lines without one fall back to the engine's words table */
+  tone: SpanTone;
   strength: number;
   matters: string[];
 }
@@ -304,6 +314,7 @@ export function parseRowLines(text: string): Map<string, SliceRowRef> {
     const rest = m[2]!;
     const d = /(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/.exec(rest);
     const pol = /\bpolarity=(presses|mixed|supports)\b/.exec(rest);
+    const tn = /\btone=(heavy|mixed|light)\b/.exec(rest);
     const st = /\bstrength=(\d)\b/.exec(rest);
     const mt = /\bmatters=\[([^\]]*)\]/.exec(rest);
     if (!d || !pol) continue;
@@ -312,6 +323,7 @@ export function parseRowLines(text: string): Map<string, SliceRowRef> {
       from: d[1]!,
       to: d[2]!,
       polarity: pol[1] as SliceRowRef['polarity'],
+      tone: tn ? (tn[1] as SpanTone) : ({ presses: 'heavy', mixed: 'mixed', supports: 'light' } as const)[pol[1] as SliceRowRef['polarity']],
       strength: st ? Number(st[1]) : 0,
       matters: mt && mt[1] ? mt[1].split(',').filter(Boolean) : [],
     });
