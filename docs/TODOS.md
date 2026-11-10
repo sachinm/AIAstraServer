@@ -2113,3 +2113,24 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   average Gregorian year. Owner: engine. Done: both bounded to their solar year like the TP year dasha.
 - **P3 · Some engine tests fail when run alone** because pyjhora's language lists are not set up before them; the ones
   touched by this build were fixed. Owner: engine. Done: a test fixture sets them up.
+## Filed 2026-11-09 by the Self v2 stuck-board session (docs/loading-overlay/05)
+
+- **P0 fixed on `fix/self-v2-build-clock`, not yet deployed:** the Self v2 build chose its clock with the v1 `resolveClock`
+  while GET `/api/self/v2` used `resolveClockV2`. On `c584c0a3` (preferred `kaala`) the build stored `clock=kaala`, the page
+  read `clock=dwisatpathi`, and every card stayed `pending` forever with no message. After deploy: one free rebuild of
+  `c584c0a3`.
+- ~~**P1:** GET did not queue a build when an Oracle row had no cards row.~~ Fixed 2026-11-09 on
+  `feat/self-v2-build-progress` (no cards and no build today → queued).
+- **P1:** no build progress or state reaches the web. The header shows "Fresh reading from …" during a first build, a
+  rebuild and a stuck read alike. Plan in docs/loading-overlay/05 (marker stages, `build` object, veil bar, header chip).
+- **P2:** clients cannot force a fresh Self reading before "Good until" (409 `not_due`), and there is no admin "rebuild
+  this person's board" action. After technique changes the only path is a DB-side or script rebuild. Add an admin action
+  (free, logged) in the admin app.
+- ~~**P1:** Try again could not re-run a failed or stuck build.~~ Fixed 2026-11-09 on `feat/self-v2-build-progress`: GET
+  `/api/self/v2` re-queues on `stuck`, on `failed` past the 30 min cooldown, and when there are no cards and no build today.
+- **P2:** a build that finished `ready` today but left no cards for the page's clock is not re-run by GET (it would only
+  repeat); the page shows ready with pending cards until tomorrow. Should surface as failed.
+- **P2:** `LoadingVeil` shows planet and rashi names (Sun, Mesha…) as hover titles on its decorative tiles (`PIECES` in
+  web `src/components/LoadingVeil.tsx`), against the no-planet-words rule for user-facing text.
+- **P3:** the first "Reading your chart…" and "chart still being prepared" veils have no bar (no board yet to read
+  `build` from); the 5 s bar delay restarts per veil.

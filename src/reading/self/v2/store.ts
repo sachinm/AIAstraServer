@@ -163,16 +163,34 @@ export async function readLastGoodAreas(prisma: PrismaClient, kundliId: string, 
 
 const dayOf = (now: Date): Date => new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
 
-/** Today's v2 build marker in `area_builds`. Never throws. */
-export async function writeSelfV2Marker(prisma: PrismaClient, userId: string, kundliId: string, now: Date, status: 'building' | 'ready' | 'failed', error?: string): Promise<void> {
+/**
+ * Today's v2 build marker in `area_builds`. Never throws. `result`, when given, replaces the marker's result (the stage
+ * writes, docs/loading-overlay/05); without it an update keeps the stored result.
+ */
+export async function writeSelfV2Marker(prisma: PrismaClient, userId: string, kundliId: string, now: Date, status: 'building' | 'ready' | 'failed', error?: string, result?: Record<string, unknown>): Promise<void> {
   try {
     const where = { kundli_id_area_as_of: { kundli_id: kundliId, area: SELF_V2_MARKER_AREA, as_of: dayOf(now) } };
     await (prisma as unknown as StorePrisma).areaBuild?.upsert?.({
       where,
-      create: { user_id: userId, kundli_id: kundliId, area: SELF_V2_MARKER_AREA, as_of: dayOf(now), status, result: { started_at: now.toISOString() }, error: error ?? null },
-      update: { status, error: error ?? null },
+      create: { user_id: userId, kundli_id: kundliId, area: SELF_V2_MARKER_AREA, as_of: dayOf(now), status, result: result ?? { started_at: now.toISOString() }, error: error ?? null },
+      update: { status, error: error ?? null, ...(result ? { result } : {}) },
     });
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'self v2 marker write failed', status, error: (e as Error).message?.slice(0, 200) }));
+  }
+}
+
+/** Today's v2 marker as the progress view reads it (docs/loading-overlay/05). Never throws. */
+export async function readSelfV2Marker(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ status: 'building' | 'ready' | 'failed' | null; stage: string | null; stageAt: string | null }> {
+  try {
+    const row = (await (prisma as unknown as { areaBuild?: { findUnique?: (q: unknown) => Promise<{ status: string; result: unknown } | null> } }).areaBuild?.findUnique?.({
+      where: { kundli_id_area_as_of: { kundli_id: kundliId, area: SELF_V2_MARKER_AREA, as_of: dayOf(now) } },
+    })) ?? null;
+    if (!row) return { status: null, stage: null, stageAt: null };
+    const r = (row.result ?? {}) as { stage?: unknown; stage_at?: unknown };
+    const status = row.status === 'building' || row.status === 'ready' || row.status === 'failed' ? row.status : null;
+    return { status, stage: typeof r.stage === 'string' ? r.stage : null, stageAt: typeof r.stage_at === 'string' ? r.stage_at : null };
+  } catch {
+    return { status: null, stage: null, stageAt: null };
   }
 }

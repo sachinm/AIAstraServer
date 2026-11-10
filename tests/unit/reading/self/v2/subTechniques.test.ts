@@ -13,6 +13,7 @@ import type { TransitRangePayload } from '../../../../../src/reading/chartData/t
 import { gaps } from '../../../../../src/reading/self/slices.js';
 import { runSelfSubTechniques, type SelfV2SubResult } from '../../../../../src/reading/self/sub/index.js';
 import { subClock } from '../../../../../src/reading/self/sub/clock.js';
+import { resolveClockV2 } from '../../../../../src/reading/self/clock.js';
 import { subPeriods } from '../../../../../src/reading/self/sub/periods.js';
 import { subWindows } from '../../../../../src/reading/self/sub/windows.js';
 import { subPromise } from '../../../../../src/reading/self/sub/promise.js';
@@ -111,8 +112,21 @@ describe('runSelfSubTechniques (Layer 0 once, S1 → S2..S10 → S5, S7)', () =>
     expect(c!.reason).toBe('preferred');
     expect(c!.confirming).toContain('vimsottari');
     expect(c!.applicable).toContain('dwisatpathi');
-    expect(c!.notApplicable.map((x) => x.system)).toContain('aayu');
+    // the build's clock is the page's clock (GET /api/self/v2 resolves with resolveClockV2): never a clock the page cannot read
+    expect(c!.notApplicable.map((x) => x.system)).toEqual(resolveClockV2('dwisatpathi', FIX.systems, null).notApplicable.map((x) => x.system));
     expect(subClock(null, FIX.systems, gaps()).reason).toBe('conditional_applies');
+  });
+
+  it('S1 clock: a stored preference the page no longer allows is not built on (c584c0a3 kaala, 2026-11-10)', () => {
+    const present = [
+      { system: 'kaala', family: 'other' },
+      { system: 'dwisatpathi', family: 'conditional' },
+      { system: 'vimsottari', family: 'nakshatra' },
+    ];
+    const g = gaps();
+    const c = subClock('kaala', present, g);
+    expect(c.primary).toBe(resolveClockV2('kaala', present, null).primary);
+    expect(c.primary).not.toBe('kaala');
   });
 
   it('S2 periods: main, sub and sub-sub with evidence keys and the charter relation', async () => {

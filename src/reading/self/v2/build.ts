@@ -61,6 +61,7 @@ import {
   shortHash,
   type FamilySlices,
 } from './slices.js';
+import { stageOfStep } from './progress.js';
 import { readLastGoodAreas, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
 import { buildAreaBriefs } from '../areas/index.js';
 import { runSelfSubTechniques, subTechniqueId, type SelfV2Deps } from '../sub/index.js';
@@ -346,7 +347,17 @@ async function runFamilyReaders(
 export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArgs): Promise<SelfV2BuildResult> {
   const tAll = performance.now();
   const now = (deps.now ?? (() => new Date()))();
-  const step = (s: string) => deps.onStep?.(s);
+  // each stage a person sees is written to today's marker in order (docs/loading-overlay/05); a failed write never stops
+  // the build, and the last stage write lands before the build's own ready/failed write
+  const startedAt = now.toISOString();
+  let stageWrites: Promise<void> = Promise.resolve();
+  const step = (s: string) => {
+    deps.onStep?.(s);
+    const stage = stageOfStep(s);
+    if (!stage) return;
+    const at = new Date().toISOString();
+    stageWrites = stageWrites.then(() => writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'building', undefined, { started_at: startedAt, stage, stage_at: at })).catch(() => undefined);
+  };
   const ms: Record<string, number> = {};
   const gaps: string[] = [];
   const agents: SelfV2AgentTiming[] = [];
@@ -497,6 +508,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     if (!oracle.output || !oracleServes(oracle)) {
       out.status = oracle.status === 'budget_exceeded' ? 'budget_exceeded' : oracle.status === 'partial' ? 'partial' : 'failed';
       out.slices = sliceTable([...FAMILY_IDS.map((id) => fam.slices[id]), oracleSlice]);
+      await stageWrites;
       await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, 'failed', `oracle ${oracle.status}`);
       return out;
     }
@@ -569,11 +581,13 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
+    await stageWrites;
     await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : out.status === 'partial' ? 'build does not serve the page' : `personalizer ${cards.status}`);
     return out;
   } catch (e) {
     gaps.push(`build: ${String((e as Error).message ?? e).slice(0, 300)}`);
     out.status = 'failed';
+    await stageWrites;
     await writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'failed', String((e as Error).message ?? e).slice(0, 300));
     return out;
   } finally {

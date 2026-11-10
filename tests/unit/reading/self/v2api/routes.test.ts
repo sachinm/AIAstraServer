@@ -175,6 +175,38 @@ describe('GET /api/self/v2', () => {
     expect((await (await call('GET', '/api/self/v2', 'u1')).json()).refresh).toMatchObject({ building: false, failed: false });
   });
 
+  it("Try again (docs/loading-overlay/05): a stuck build, or one failed past the cooldown, is queued again; a recent failure or a running build is not", async () => {
+    stored.k1 = latestFixture();
+    const ago = (min: number) => ({ started_at: new Date(NOW.getTime() - min * 60_000).toISOString() });
+    f.markers.set('k1|self.reading', { status: 'building', result: ago(11) });
+    let b = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(invokes).toHaveLength(1);
+    expect(b.build.state).toBe('queued');
+    f.markers.set('k1|self.reading', { status: 'failed', result: ago(31), error: 'v2 failed' });
+    await call('GET', '/api/self/v2', 'u1');
+    expect(invokes).toHaveLength(2);
+    f.markers.set('k1|self.reading', { status: 'failed', result: ago(5), error: 'v2 failed' });
+    b = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(invokes).toHaveLength(2);
+    expect(b.build.state).toBe('failed');
+    f.markers.set('k1|self.reading', { status: 'building', result: ago(1) });
+    await call('GET', '/api/self/v2', 'u1');
+    expect(invokes).toHaveLength(2);
+    // stored cards and a build done today: nothing is queued
+    f.markers.set('k1|self.reading', { status: 'ready', result: ago(1) });
+    b = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(invokes).toHaveLength(2);
+    expect(b.build).toMatchObject({ state: 'ready', percent: 100 });
+  });
+
+  it('an Oracle with no cards for this clock and no build today is built again, not left pending forever (c584c0a3)', async () => {
+    stored.k1 = { ...latestFixture(), cards: null, status: 'pending' };
+    const b = await (await call('GET', '/api/self/v2', 'u1')).json();
+    expect(b.status).toBe('pending');
+    expect(invokes).toHaveLength(1);
+    expect(b.build.state).toBe('queued');
+  });
+
   it('digest not ready: preparing, the digest is queued, no build', async () => {
     const r = await (await call('GET', '/api/self/v2', 'u3')).json();
     expect(r.status).toBe('preparing');

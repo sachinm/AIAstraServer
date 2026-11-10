@@ -26,6 +26,7 @@ import {
 } from '../v2types.js';
 import { missingFacts, pickHeroQuestion } from './question.js';
 import type { SelfV2Latest } from './storeContract.js';
+import { NO_BUILD, type SelfV2BuildView } from '../v2/progress.js';
 import { CLOCK_REASON_LINES, NOT_APPLICABLE_LINES, systemLine } from './words.js';
 
 /** v2 area → the Oracle document keys to look under, the v2 id first, then the legacy panel it replaces */
@@ -179,6 +180,8 @@ export interface BuildResponseInput {
   factKeys?: readonly string[];
   /** the board's refresh dates (selfBoardDates); absent: nothing made yet */
   refresh?: SelfV2RefreshView | null;
+  /** today's build progress (docs/loading-overlay/05); absent: no build */
+  build?: SelfV2BuildView | null;
 }
 
 export const NO_REFRESH: Readonly<SelfV2RefreshView> = Object.freeze({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
@@ -199,6 +202,7 @@ export function buildSelfV2Response(i: BuildResponseInput): SelfV2Response {
     profile: { ageBand: i.profile.ageBand, hasGender: i.profile.gender !== null, missing, role: i.profile.role ?? 'public' },
     subChapterEnds: i.latest.frame?.periods?.runningSub?.to ?? null,
     refresh: i.refresh ? { ...NO_REFRESH, ...i.refresh } : { ...NO_REFRESH },
+    build: i.build ? { ...i.build } : { ...NO_BUILD },
     quality: i.latest.quality ?? null,
   };
 }
@@ -215,6 +219,7 @@ export function noKundliResponse(): SelfV2Response {
     profile: { ageBand: null, hasGender: false, missing: [], role: 'public' },
     subChapterEnds: null,
     refresh: { ...NO_REFRESH },
+    build: { ...NO_BUILD },
     quality: null,
   };
 }
