@@ -2100,9 +2100,9 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
 
 ## Filed 2026-11-09 by the engine dasha levels and Tithi Pravesha build (AIAstra_Radha develop 8e31dd5)
 
-- **DECISION for Sachin · The Tithi Pravesha year lord.** The engine had no rule; it now uses the lord of the weekday
-  (sunrise to sunrise) at the TP moment (`year_lord_rule: "weekday_lord_at_tp"`), the classical TP year lord, not the
-  Tajaka year lord of the solar return. Done: confirmed, or the rule named.
+- **DECIDED · The Tithi Pravesha year lord is the weekday lord at the TP moment** (sunrise to sunrise;
+  `year_lord_rule: "weekday_lord_at_tp"`), not the Tajaka year lord of the solar return. Sachin, 2026-11-09:
+  "Yes, weekday lord". Engine develop 8e31dd5 already uses it; nothing to change.
 - **DECISION for Sachin · Deeper dasha levels are derived by the engine's own split rule.** This pyjhora version gives two
   levels (Vimshottari three); levels 4–6 split each period the way its own lord's mahadasha splits in that system, the rule
   the export already used for level 3. Classical sookshma/prana/deha for Vimshottari (tested); the same proportional
@@ -2134,3 +2134,19 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   web `src/components/LoadingVeil.tsx`), against the no-planet-words rule for user-facing text.
 - **P3:** the first "Reading your chart…" and "chart still being prepared" veils have no bar (no board yet to read
   `build` from); the 5 s bar delay restarts per veil.
+
+## Filed 2026-11-09 by the dasha-deep worker go-live
+
+Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each item in brackets.
+
+- **P1 · The account's Lambda concurrency limit is 10.** Lambda keeps 10 unreserved, so `aiastra-dasha-deep-worker`
+  runs without reserved concurrency and shares one pool with `aiastra-server-api`, the chart worker and the sweep.
+  The database cap `DASHA_DEEP_GLOBAL_MAX` (default 1) keeps deep pulls to one at a time. Request an increase in
+  Service Quotas ("Concurrent executions", us-east-1, account 442728149528). [Sachin] Done when the quota is raised
+  and the worker has a reserved concurrency of 1–2.
+- **P2 · The worker Lambda is not in Terraform.** `aiastra-dasha-deep-worker` was created with the CLI. Add the
+  `lambda_dasha_deep_worker` module and import it (doc 67 §5.1), with no reserved concurrency until the quota is
+  raised. [deploy session] Done when `terraform plan` shows no change for the function.
+- **P2 · The first real worker invocation is not yet confirmed.** It needs a signed-in board open on staging, then a
+  `dasha_deep_focus_invoked` log on the API and a `dasha_deep_pull` (or `dasha_deep_queued`) log on the worker.
+  [deploy session] Done when both logs are seen for one kundli and its level-4 rows are in `kundli_activation`.
