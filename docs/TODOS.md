@@ -2218,7 +2218,16 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   `statusOf`) would not mean what it says. Two things to check: the engine's polarity rule (harness, engine lane), and
   the server's row-to-tone step (does one pressing row make a span heavy regardless of strength?). Owner: this branch
   with the engine lane. Done: the share of heavy spans per clock measured on the four test kundlis, and a written rule
-  for tone that weighs strength. Must close before the ledger is shown to a user.
+  for tone that weighs strength. Must close before the ledger is shown to a user. **Update 2026-11-10, cause found**
+  (`docs/reading-engine/70-heavy-clocks-2026-11-10.md`): the engine sets a dasha or annual row to `presses` when any
+  one of six bad flags in its `reasons` list is on and `functional_benefic` is not (fits 884 of 884 dasha rows, 565 of
+  565 annual rows). Most flags belong to the planet (functional malefic, kashta over ishta, in dusthana), so 7 of 9
+  planets press on every row they rule; 20 of 26 kundli-planet pairs carry a bad flag, 2 of 26 are benefic. The server
+  copies the tone correctly. Strength is 1 on 87% of presses and all supports, so it cannot split them. Under today's
+  rule 3+ of 4 clocks are heavy on 88% (75b0d618) and 77% (de5a2275) of days; requiring 3+ bad flags gives 10-30%
+  heavy days and 0-3% three-clock agreement. Next: the engine owner grades polarity (presses needs 2+ independent bad
+  flags; one flag gives mixed; parent-relative flags tilt, not set) and gives dasha rows a real strength. Stopgap
+  (count stored flags in the server, heavy at 3+) waits on Sachin's yes.
 - **P1 · open · The v3 frame tone is the spine's tone even when it stands alone.** On 75b0d618 span s2 (2027-01-25 to
   2027-04-24) is shown light on 1 of 5 clocks, s4 mixed on 1 of 5. The Phase 2 count makes both confirmed heavy, but
   it is not wired. Fix: Phase 3 wiring, or until then do not show a frame tone that fewer than `READING_CLOCKS_MIN`
