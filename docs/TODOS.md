@@ -2202,16 +2202,45 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
 ## Filed 2026-11-09 by doc 70 (five clocks, a reading per card; branch `feat/self-v3`)
 
 - **P1 · open · Only one clock was ever read.** Plan: `docs/reading-engine/70-five-clocks-and-card-by-card-readings.md`.
-  Phase 1 step 1 is in code (`src/reading/self/v3/build.ts`: the v3 step now pulls the inventory of every clock in the
-  set, 15 s each, in parallel) but has not run against the engine and has no test of the default loader. Owner: this
-  branch. Done: the test kundli's frame lists five clocks; the sync worker pulls them so no build waits.
-- **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** The P0 above ("the Tithi
-  Pravesha year dasha is a lifetime dasha") is about the stored `annual.tithi_pravesha_dasha` rows. The engine's
-  `develop` bounds the year tree to the year (reported by an agent reading `annual_export.py`, not verified on staging).
-  Doc 70 step 2 verifies the `annual:` rows inside `pressure_inventory` on the test kundlis. Done: every `annual:` row
-  falls inside its year.
-- **P2 · open · A failed `pressure_inventory` row for `system=kaala` on staging.** Seen 2026-11-09 by a read-only query
-  (one `ready` row `system=dwisatpathi`, 21 KB; one `failed` row `system=kaala`). Not investigated. Owner: doc 70 step 2.
+  Phase 1 code is in (2026-11-10): `resolveReadingClocks()` (`src/reading/self/clock.ts`, env `READING_CLOCK_ORDER`,
+  `READING_CLOCKS`, `READING_CLOCKS_MIN`), the v3 step reads that set, `ensurePressureInventories()`
+  (`src/reading/self/sub/pressure.ts`) runs from the sync worker after a complete sync; unit tests in
+  `tests/unit/reading/self/v3/clockSet.test.ts`. On the test kundli the set is Vimshottari, Narayana, the year,
+  Dwisaptati Sama, Yogini, but only Dwisaptati is stored: the three other pulls failed locally (no AWS credentials may
+  invoke the engine Lambda from this machine). Report: `docs/reading-engine/70-phase1-clock-rows-2026-11-10.md`. Owner:
+  this branch. Done: the three rows pulled on staging and the frame lists five clocks.
+- **P1 · open · The Tithi Pravesha year rows must be checked before they count as a clock.** Checked 2026-11-10 on the
+  test kundli's Dwisaptati inventory: the 7 `annual:TP<year>` rows run 353 to 384 days and all 54 year sub-period rows
+  fall inside their year, so the pressure rows do not show the 108-year problem. The separate
+  `annual.tithi_pravesha_dasha` row still does (the build reports "TP2026 year dasha is a lifetime dasha"), so the P0
+  above stays open. Done: the same check on a second kundli and on every clock's inventory once pulled.
+- **P3 · open · The failed `pressure_inventory` row for `system=kaala` on staging.** Its error column reads
+  `validation_error: Invalid export type: pressure_inventory`, written 2026-11-10 00:38 UTC, before the engine that serves
+  the export went live (the Dwisaptati row was pulled at 05:03 UTC, calc version 2). Kaala is no longer selectable for
+  that kundli, so nothing asks for it again. No engine fix needed. Done: the row is replaced if kaala is ever pulled.
+- **P1 · open · A pull that fails on the caller's side blocks that clock for 24 h.** `loadPressureInventory`
+  (`src/reading/self/sub/pressure.ts`) stores every failure as a `failed` row with `fetch_started_at`, and no build or sync
+  pulls that clock again for `SELF_V2_PRESSURE_RETRY_HOURS` (24). On 2026-11-10 12:44 UTC the doc 70 check run from a
+  laptop without AWS credentials wrote `failed` rows for Vimshottari, Narayana and Yogini on kundli c584c0a3 (test data),
+  so those three are not pulled on staging until 2026-11-11 12:44 UTC. Fix: do not store failures that are not the
+  engine's answer (credentials, network, timeout), or retry those after minutes; and give staff a re-pull that skips
+  the wait. Owner: this branch. Done: a test that a credentials error leaves no blocking row.
+- **P2 · open · The sync sweep never pulls inventories for kundlis whose chart is already complete.** The sweep
+  (`findIncompleteKundlis`) only picks kundlis with a missing registration row, and the new pull runs only after a sync
+  run. A kundli synced before 2026-11-10, or one whose inventory went stale after 7 days, gets its clocks only when a
+  build pulls them (15 s each, in the build). Fix: a sweep step that picks kundlis with a missing or stale clock-set
+  inventory. Owner: this branch or doc 70 Phase 2. Done: a test kundli with complete charts gets its four rows from the
+  sweep.
+- **P2 · open · At first sync the clock set may miss the conditional clock.** The set is read from `kundli_activation`
+  and `dasha.applicable`; at the first sync these may not be stored yet, so the set falls back to the non-conditional
+  systems and the spine (Vimshottari by default). The conditional clock's inventory is then pulled only by the first
+  build. Done: the sync pulls the set again after the digest lands, or the digest worker calls
+  `ensurePressureInventories`.
+- **P3 · open · Questions for the engine harness from the 2026-11-10 rows.** (a) No Dwisaptati period row has polarity
+  `supports` (46 presses, 6 mixed): check whether a dasha row can be `supports` at all. (b) No `sade_sati` or `station`
+  row in the 2023-11 to 2029-11 window for c584c0a3. (c) Sign-dasha rows (Narayana, Chara) not checked yet. (d) The
+  inventory is 82.5 KB as JSON, not 21 KB as doc 70 says (21 KB is likely the compressed size). Owner: engine lane, doc
+  70 step 2.
 - **P2 · open · Each `pressure_inventory` call recomputes the clock-independent rows.** Five clocks is five sky scans
   and five sets of year charts. Engine pass E1 in doc 70 §6: accept a list of systems and compute the shared rows once.
 - **P2 · open · No weighted order of dasha systems from the engine.** The clock set's order is a server list

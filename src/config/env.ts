@@ -851,6 +851,27 @@ export function getSelfConfirmSystems(): string[] {
   return listEnv('SELF_CONFIRM_SYSTEMS', SELF_CONFIRM_DEFAULT);
 }
 
+// ── The reading's clock set (docs/reading-engine/70 §4.1) ─
+
+/**
+ * The clock set's order (catalogue dasha ids). Two slot words: `tithi_pravesha` is the year (never pulled; its rows ride
+ * in every inventory) and `conditional` is the first conditional clock the engine says applies. Until the engine exports
+ * a weighted order (doc 70 E2) this list is the weighting. Env: `READING_CLOCK_ORDER`.
+ */
+export function getReadingClockOrder(): string[] {
+  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional', 'yogini', 'chara']);
+}
+
+/** Clocks in the set, the year counted as one. Env `READING_CLOCKS` (default 5, 3..6). */
+export function getReadingClocks(): number {
+  return parseClampedIntEnv('READING_CLOCKS', 5, 3, 6);
+}
+
+/** Fewer clocks than this with dated rows is a gap; a reading waits for the next pull. Env `READING_CLOCKS_MIN` (default 3, 1..6). */
+export function getReadingClocksMin(): number {
+  return parseClampedIntEnv('READING_CLOCKS_MIN', 3, 1, 6);
+}
+
 /** How near (months) a confirming clock's main period must start to the chapter's start to agree on the shift. Env: `SELF_CHAPTER_BOUNDARY_MONTHS` (default 18, 6..36). */
 export function getSelfChapterBoundaryMonths(): number {
   return parseClampedIntEnv('SELF_CHAPTER_BOUNDARY_MONTHS', 18, 6, 36);

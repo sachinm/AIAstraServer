@@ -184,6 +184,24 @@ export interface WorkerDeps {
   maxMs?: number;
   /** Self re-invoke; default invokeKundliSyncAsync */
   invoke?: (kundliId: string) => Promise<boolean>;
+  /** The reading clock set's inventories (doc 70 §4.1); default ensurePressureInventories. Never throws. */
+  ensurePressure?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<unknown>;
+}
+
+/**
+ * Time that must be left in the run's budget before the clock set's inventories are pulled. The pulls run in parallel,
+ * each limited to SELF_V2_PRESSURE_TIMEOUT_MS (15 s); the engine client spaces calls about 1 s apart in this process, so
+ * four pulls end within about 19 s. The run's budget is KUNDLI_SYNC_MAX_MS (12 min) and a sweep runs at most
+ * KUNDLI_SYNC_SWEEP_BATCH (5) kundlis one after another under that one budget, so the pulls add at most about 1.6 min
+ * to a full sweep. With less than this left, the pull is left to the next run or to the build.
+ */
+export const PRESSURE_PULL_MIN_LEFT_MS = 30_000;
+
+async function defaultEnsurePressure(prisma: PrismaClient, kundliId: string, asOf: string): Promise<unknown> {
+  const { ensurePressureInventories } = await import('../reading/self/sub/pressure.js');
+  const r = await ensurePressureInventories(prisma, kundliId, asOf);
+  queueLog({ event: 'kundli_sync_pressure', kundli_id: kundliId, clocks: r.clocks.map((c) => `${c.system}:${c.source}:${c.rows}`), gaps: r.gaps.length });
+  return r;
 }
 
 export type KundliSyncOutcome =
@@ -209,6 +227,13 @@ export async function runKundliSync(deps: WorkerDeps, kundliId: string, startedA
     const row = (await deps.prisma.kundli.findUnique({ where: { id: kundliId }, include: { user: true } })) as KundliRowWithUser | null;
     if (!row) return { kundliId, status: 'skipped', reason: 'not found' };
     const result = await processOneKundliRow(deps.prisma, row, deps.queue ?? {}, { deadline, leaseAt });
+    // doc 70 §4.1 layer 0: the clock set's dated rows, under the lease, only when the chart is complete and time is left
+    if (result.gateComplete && !result.more && deadline - now() >= PRESSURE_PULL_MIN_LEFT_MS) {
+      const asOf = new Date(now()).toISOString().slice(0, 10);
+      await (deps.ensurePressure ?? defaultEnsurePressure)(deps.prisma, kundliId, asOf).catch((err: Error) =>
+        queueLogError({ event: 'kundli_sync_pressure_failed', kundli_id: kundliId, error: err?.message?.slice(0, 300) }),
+      );
+    }
     await releaseLease(deps.prisma, kundliId, leaseAt);
     leaseAt = null;
     let reinvoked = false;

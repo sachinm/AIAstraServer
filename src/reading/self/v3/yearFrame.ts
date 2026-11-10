@@ -14,6 +14,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { addMonthsIso } from '../../timeline/months.js';
 import { asPressurePayload, PRESSURE_AYANAMSA, PRESSURE_TYPE, pressureVariant, toPressureInventory, type PressureInventoryDetail, type PressureRowDetail } from '../sub/pressure.js';
+import type { ReadingClockSet } from '../clock.js';
 import type { ClockResolution, Polarity, YearFrame } from '../v2types.js';
 import type { SpanClockTone, SpanPlace, SpanTone, YearFrameV3, YearSpan } from './types.js';
 
@@ -240,7 +241,7 @@ export function frameDates(f: YearFrameV3): Set<string> {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Load: the other clocks' stored inventories (stored only; a missing one is skipped, never pulled at build time)
+// Load: a clock's stored inventory (the fallback when a pull at build time fails; doc 70 moves pulls to the sync worker)
 // ---------------------------------------------------------------------------------------------------------------------
 
 type InventoryPrisma = {
@@ -256,7 +257,12 @@ export async function loadStoredInventory(prisma: PrismaClient, kundliId: string
   return payload ? toPressureInventory(payload, kundliId).inventory : null;
 }
 
-/** the clocks read beside the reading clock: the confirming clocks, then the conditional ones the engine says apply */
-export function otherClocks(clock: Pick<ClockResolution, 'primary' | 'confirming' | 'applicable'>): string[] {
-  return [...new Set([...clock.confirming, ...clock.applicable])].filter((s) => s !== clock.primary);
+/**
+ * The clocks read beside the reading clock. With the reading clock set (doc 70 §4.1, `resolveReadingClocks`): its pulled
+ * systems in order. Without one (the set could not be read): the confirming clocks, then the conditional ones the engine
+ * says apply, as before.
+ */
+export function otherClocks(clock: Pick<ClockResolution, 'primary' | 'confirming' | 'applicable'>, set?: Pick<ReadingClockSet, 'pulled'> | null): string[] {
+  const list = set ? set.pulled : [...clock.confirming, ...clock.applicable];
+  return [...new Set(list)].filter((s) => s !== clock.primary);
 }

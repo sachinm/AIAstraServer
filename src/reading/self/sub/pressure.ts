@@ -21,6 +21,7 @@ import { fetchEngineExport } from '../../../lib/astroKundliClient.js';
 import { CHART_TYPE_BY_ID } from '../../chartData/catalog.js';
 import type { KundliRequest, RadhaFetcher } from '../../chartData/store.js';
 import type { Matter, Polarity, PressureBoundary, PressureInventory, PressureKind, PressureRow, Strength } from '../v2types.js';
+import { parseApplicability, resolveClockV2, resolveReadingClocks, type ReadingClockSet } from '../clock.js';
 
 export const PRESSURE_TYPE = 'pressure_inventory';
 export const PRESSURE_AYANAMSA = 'LAHIRI';
@@ -291,5 +292,66 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
       )
       .catch(() => undefined);
     return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The clock set's inventories (docs/reading-engine/70 §4.1 layer 0): pulled away from the build, at sync
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The kundli's reading clock set from what is stored: the systems with periods (`kundli_activation`), the engine's
+ * `dasha.applicable` verdicts and the stored clock preference. `spine` given (a build knows its clock) skips the
+ * preference read. Selection only. Throws on a failed read (callers catch).
+ */
+export async function loadReadingClockSet(prisma: PrismaClient, kundliId: string, spine?: string): Promise<ReadingClockSet> {
+  const { defaultSystemsPresent } = await import('../service.js');
+  const appRead = (prisma as unknown as { kundliData: { findFirst: (q: unknown) => Promise<{ payload: unknown } | null> } }).kundliData.findFirst({
+    where: { kundli_id: kundliId, data_type: 'dasha.applicable' },
+    select: { payload: true },
+  });
+  const prefRead = spine
+    ? Promise.resolve(null)
+    : (prisma as unknown as { kundli: { findUnique: (q: unknown) => Promise<{ preferred_dasha: string | null } | null> } }).kundli.findUnique({
+        where: { id: kundliId },
+        select: { preferred_dasha: true },
+      });
+  const [present, appRow, pref] = await Promise.all([defaultSystemsPresent(prisma, kundliId), appRead, prefRead]);
+  const applicability = appRow?.payload !== undefined && appRow?.payload !== null ? parseApplicability(appRow.payload) : null;
+  const s = spine ?? resolveClockV2(pref?.preferred_dasha ?? null, present, applicability).primary;
+  return resolveReadingClocks(s, present, applicability);
+}
+
+export interface EnsureInventoriesResult {
+  set: ReadingClockSet | null;
+  clocks: Array<{ system: string; source: PressureLoad['source']; rows: number; gaps: string[] }>;
+  gaps: string[];
+}
+
+export interface EnsureInventoriesDeps extends PressureDeps {
+  loadSet?: (prisma: PrismaClient, kundliId: string) => Promise<ReadingClockSet>;
+  load?: typeof loadPressureInventory;
+}
+
+/**
+ * Every pulled clock of the kundli's set, in parallel: a stored fresh row is only read; a missing or stale one is pulled
+ * (each pull limited to SELF_V2_PRESSURE_TIMEOUT_MS, default 15 s; a failure waits SELF_V2_PRESSURE_RETRY_HOURS).
+ * Called by the sync worker so a build normally finds the rows stored. Never throws.
+ */
+export async function ensurePressureInventories(prisma: PrismaClient, kundliId: string, asOf: string, deps: EnsureInventoriesDeps = {}): Promise<EnsureInventoriesResult> {
+  try {
+    const set = await (deps.loadSet ?? ((p, k) => loadReadingClockSet(p, k)))(prisma, kundliId);
+    const load = deps.load ?? loadPressureInventory;
+    const clocks = await Promise.all(
+      set.pulled.map(async (system) => {
+        const r = await load(prisma, kundliId, system, asOf, deps).catch(
+          (e: Error): PressureLoad => ({ inventory: null, source: 'none', gaps: [`pressure_inventory: ${String(e?.message ?? e).slice(0, 120)}`] }),
+        );
+        return { system, source: r.source, rows: r.inventory?.rows.length ?? 0, gaps: r.gaps };
+      }),
+    );
+    return { set, clocks, gaps: [] };
+  } catch (e) {
+    return { set: null, clocks: [], gaps: [`clock set not read (${String((e as Error)?.message ?? e).slice(0, 120)})`] };
   }
 }

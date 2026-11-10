@@ -2,8 +2,8 @@
  * The v3 build step (docs/reading-engine/68 Phase B). Runs after a v2 build that served the page, over the same build
  * context, the same natal prefix and the same portrait, when SELF_V3_BUILD=1:
  *
- *   1  the year frame from the pressure inventories of the clock set (the reading clock's, loaded by v2; the others
- *      pulled here when not stored: doc 70 Phase 1)
+ *   1  the year frame from the pressure inventories of the reading clock set (doc 70 §4.1: the reading clock's, loaded
+ *      by v2; the others stored at sync, pulled here only when missing)
  *   2  the Oracle ×3 in parallel over the v2 natal prefix, the frame as the suffix; failed cards re-asked once
  *   3  the Personalizer ×(1–3) in parallel, one per Oracle call that kept a card
  *   4  every validator finding to `reading_validation_failures`; the cards with the frame to `technique_outputs`
@@ -21,7 +21,9 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { loadPressureInventory, type PressureInventoryDetail } from '../sub/pressure.js';
+import { getReadingClocksMin } from '../../../config/env.js';
+import type { ReadingClockSet } from '../clock.js';
+import { loadPressureInventory, loadReadingClockSet, type PressureInventoryDetail } from '../sub/pressure.js';
 import { readLayout } from './layout.js';
 import { ORACLE_V3_CALLS, runOracleV3, SELF_V3_ORACLE_PROMPT } from './oracle.js';
 import { personalizerV3Call, personalizerV3Calls, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
@@ -37,8 +39,10 @@ export interface SelfV3StepDeps {
   maxSpendUsd: number;
   now: Date;
   force?: boolean;
-  /** test seam: the other clocks' stored inventories */
+  /** test seam: the other clocks' inventories (default `loadClockInventory`: pulled when not stored, else the stored row) */
   loadInventory?: (prisma: PrismaClient, kundliId: string, system: string) => Promise<PressureInventoryDetail | null>;
+  /** test seam: the reading clock set (default `loadReadingClockSet` over the stored rows, the build's clock as spine) */
+  loadClockSet?: (prisma: PrismaClient, kundliId: string, spine: string) => Promise<ReadingClockSet | null>;
   /** test seam: the person's sections per card */
   loadSections?: (prisma: PrismaClient, kundliId: string) => Promise<Partial<Record<SelfCardId, SelfSectionId[]>>>;
 }
@@ -66,8 +70,21 @@ export interface SelfV3StepResult {
   ms: Record<string, number>;
 }
 
-/** fewer clocks than this with dated rows is reported as a gap (doc 70 §4.1) */
-export const MIN_CLOCKS_READ = 3;
+/**
+ * One clock's inventory for the frame: the stored row when fresh, else a pull (15 s limit, see `loadPressureInventory`);
+ * a failed pull falls back to whatever row is stored; null when neither. Never throws. The seams are for tests.
+ */
+export async function loadClockInventory(
+  prisma: PrismaClient,
+  kundliId: string,
+  system: string,
+  asOf: string,
+  seams: { pull?: typeof loadPressureInventory; stored?: typeof loadStoredInventory } = {},
+): Promise<PressureInventoryDetail | null> {
+  const pulled = await (seams.pull ?? loadPressureInventory)(prisma, kundliId, system, asOf).catch(() => null);
+  if (pulled?.inventory) return pulled.inventory;
+  return (seams.stored ?? loadStoredInventory)(prisma, kundliId, system).catch(() => null);
+}
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
 
@@ -100,13 +117,13 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
     }
     // 1: the year frame
     let t = performance.now();
-    const others = otherClocks(clock).slice(0, FRAME_MAX_OTHER_CLOCKS);
-    // doc 70 Phase 1: every clock of the set is pulled when it is not stored (or is stale), in parallel, 15 s each;
-    // a failed pull falls back to whatever row is stored, and a clock with neither is skipped by the frame
-    const load =
-      deps.loadInventory ??
-      (async (p: PrismaClient, k: string, system: string) =>
-        (await loadPressureInventory(p, k, system, ctx.asOf).catch(() => null))?.inventory ?? (await loadStoredInventory(p, k, system)));
+    // doc 70 §4.1: the reading clock set (the spine is this build's clock); unreadable → the v2 confirming clocks
+    const set = await (deps.loadClockSet ?? ((p: PrismaClient, k: string, spine: string) => loadReadingClockSet(p, k, spine)))(deps.prisma, ctx.kundliId, clock.primary).catch(() => null);
+    if (!set) out.gaps.push('v3: clock set not read; the confirming clocks are read instead');
+    const others = otherClocks(clock, set).slice(0, FRAME_MAX_OTHER_CLOCKS);
+    // every clock of the set is normally stored by the sync worker (`ensurePressureInventories`); one that is not is
+    // pulled here, in parallel, 15 s each; a failed pull falls back to the stored row; a clock with neither is skipped
+    const load = deps.loadInventory ?? ((p: PrismaClient, k: string, system: string) => loadClockInventory(p, k, system, ctx.asOf));
     const inventories = await Promise.all(others.map(async (system) => ({ system, inventory: await load(deps.prisma, ctx.kundliId, system).catch(() => null) })));
     const frame = buildYearFrameV3({ asOf: ctx.asOf, clock, primary: i.pressure, others: inventories, year: ctx.sub.year ?? null });
     out.frame = frame;
@@ -116,7 +133,8 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       out.gaps.push(`v3: no year frame (${frame.clocksSkipped.map((c) => c.reason).join('; ')})`);
       return out;
     }
-    if (frame.clocksRead.length < MIN_CLOCKS_READ) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${MIN_CLOCKS_READ} wanted`);
+    const minClocks = getReadingClocksMin();
+    if (frame.clocksRead.length < minClocks) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${minClocks} wanted`);
     if (frame.degraded) out.gaps.push(`v3: frame degraded (clocks read: ${frame.clocksRead.join(', ')})`);
 
     const sections = await (deps.loadSections ?? (async (p, k) => (await readLayout(p, k)).sections))(deps.prisma, ctx.kundliId).catch(() => ({}));

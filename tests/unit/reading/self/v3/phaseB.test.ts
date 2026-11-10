@@ -245,7 +245,7 @@ describe('the v3 step with a fake model', () => {
       return { text: JSON.stringify({ cards }), usage: { promptTokens: 100, cachedTokens: 0, outputTokens: 50, thoughtTokens: 0 }, finishReason: 'STOP', ttftMs: 1, stoppedForLoop: false } as never;
     };
     const r = await runSelfV3Cards(
-      { prisma, callGemini: callGemini as never, ensureCache: (async () => null) as never, maxSpendUsd: 1, now: new Date('2026-11-09T12:00:00Z'), loadInventory: async (_p, _k, s) => (s === 'vimsottari' ? vim : null), loadSections: async () => ({}) },
+      { prisma, callGemini: callGemini as never, ensureCache: (async () => null) as never, maxSpendUsd: 1, now: new Date('2026-11-09T12:00:00Z'), loadInventory: async (_p, _k, s) => (s === 'vimsottari' ? vim : null), loadClockSet: async () => ({ spine: 'dwisaptati', clocks: ['vimsottari', 'narayana', 'tithi_pravesha', 'dwisaptati'], pulled: ['vimsottari', 'narayana', 'dwisaptati'], conditional: 'dwisaptati', skipped: [] }), loadSections: async () => ({}) },
       { ctx, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b1' },
     );
     expect(r.gaps.filter((g) => !g.startsWith('v3: frame degraded'))).toEqual([]);

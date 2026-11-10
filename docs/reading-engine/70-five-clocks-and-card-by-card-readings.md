@@ -1,7 +1,7 @@
 # 70. Five clocks, one agreed ledger, a reading per card
 
-Status: **plan, waiting for Sachin's review. Phase 1 step 1 (the v3 step pulls every clock of the set) is in code on
-`feat/self-v3`, untested against the engine. No paid call is made by this plan until the test in §8 gets its own yes.**
+Status: **plan, waiting for Sachin's review. Phase 1 (clock set, pulls at sync, tests) is in code on `feat/self-v3`;
+the engine check is in `70-phase1-clock-rows-2026-11-10.md` (one of four clocks stored so far). No paid call is made by this plan until the test in §8 gets its own yes.**
 Asked by Sachin 2026-11-09: every card on offer must build; every time span inside a card must be read; at least five
 dasha systems, always with the Tithi Pravesha year, compared against each other before anything is predicted; each
 card read as if it were the only reading; the Oracle told which cards the person chose; the reading starts only after
