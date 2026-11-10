@@ -2348,6 +2348,38 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   ledger 30) and the "rows of two polarities allow only mixed" tone rule may drop many cells live. Done: the doc 70
   Phase 2 replay (one kundli, needs Sachin's yes on key, count and cost) reports drop rates per check.
 
+## Filed 2026-11-10 by doc 70 Phase 3 (a reading per card; branch `feat/self-v3`)
+
+Report: `docs/reading-engine/70-phase3-2026-11-10.md`. Everything below is built behind `SELF_V3_BUILD=1` and
+`READING_CLOCK_LAYER=1` (both off by default) and tested with a fake model only.
+
+- **P1 · open · No real model run of the per-card reading.** The card Oracle prompt (`prompts/cards/oracle.md`), the 21
+  briefs (`prompts/cards/self/*.md`) and the ledger checks (`checkAgainstLedger`: a span must cite one of its ledger
+  cells; `build` needs a confirmed or leaning light or mixed cell) have never met a model; the ledger rules may drop
+  many cards live. Done: the doc 70 §8 Phase 3 test (`scripts/cards-replay.ts --yes-spend`, Sachin's yes on key, count
+  and cost) reports drop rates per check.
+- **P2 · open · Minimum board: saving still needs 3 cards; the reading starts at `CARDS_READ_MIN` (5).** Doc 70 §10
+  decision 2 (minimum board of five) is Sachin's; until then a 3- or 4-card board saves and reads nothing, and the web
+  shows "Add at least five cards to start your reading." Done: Sachin decides; `MIN_CARDS` follows.
+- **P2 · open · The v2 Oracle still runs before the per-card reading (doc 70 §4.1 trigger item 5 not built).** The cards
+  are read inside the v3 step, after a v2 build that served; the v2 calls are cached per day in `technique_outputs`, so a
+  second build the same day costs nothing for v2, but the first build of a day pays v2 too. A layout save re-queues the
+  whole build (v1 code panels, v2 from cache, v3) to reach the cards. Done: a dedicated `self.cards` event that builds
+  only what the cards need, and v2's model calls skipped while the per-card reading is on.
+- **P2 · open · The per-card state doc is read-modify-write across processes.** `src/reading/cards/state.ts` serialises
+  writes inside one process; the API Lambda (layout save, POST) and the build invocation can still overwrite each
+  other's entry for a card in the same second. The runner re-reads the doc before every write and drains newly queued
+  cards at the end, so the usual loss is a `queued` mark that the next build picks up. Done: entries in their own rows
+  (one `area_builds` row per card) or a JSON merge in SQL.
+- **P2 · open · Card agents have no cache plan entry.** `self.card.oracle` reuses the clock layer's warmed region (same
+  system prompt and prefix), but neither it nor `self.card.personalizer` is in `SUBAGENT_DIGEST_SPECS` /
+  `subagentCachePlan`; the card Personalizer's prefix (one Oracle card) is under 1,024 tokens, so it is never cached.
+  Joins the clock-layer cache-plan entry above. Done: plan rows and the Lab showing cached vs total per card agent.
+- **P3 · open · Web: doc 70 §4.3 items 3 and 5 not built.** The first ready card is not auto-selected, and the `+`
+  picker does not mark cards ready or "about 15 seconds". Owner: web lane (`AIAstra_WEB` `src/pages/you/v3/`).
+- **P3 · open · Love and Work card registries (doc 70 Phase 4).** `src/reading/cards/` is Self-only (`cards/self/`
+  briefs, `self.cards` state row). Done: doc 70 step 10.
+
 ## Filed 2026-11-09 by the backfill disk-full incident
 
 Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of each item in brackets.

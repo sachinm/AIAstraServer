@@ -323,7 +323,7 @@ describe('words tables and registration', () => {
       expect(contractProblems(t!)).toEqual([]);
     }
     // the agents lane's block (self.v2.oracle, personalizer, hero) follows this one
-    const AGENT_ROWS = ['self.v2.oracle', 'self.v2.personalizer', 'self.v2.hero', 'self.v3.cards', 'reading.clock.sheet', 'reading.concordance'];
+    const AGENT_ROWS = ['self.v2.oracle', 'self.v2.personalizer', 'self.v2.hero', 'self.v3.cards', 'self.card.reading', 'reading.clock.sheet', 'reading.concordance'];
     expect(TECHNIQUES.filter((t) => !AGENT_ROWS.includes(t.id)).slice(-ids.length).map((t) => t.id)).toEqual(ids);
   });
   it('the sub-technique run summaries carry no personal keys', () => {

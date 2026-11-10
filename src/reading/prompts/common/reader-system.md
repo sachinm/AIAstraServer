@@ -9,7 +9,7 @@ Then your role and your own data.
 
 Every value in this input was computed before you saw it: every date, house, matter, polarity and strength is given. You read it. You never compute a date, a house, a strength or a tone of your own, and you never use a placement, an aspect or a yoga that is not in the input.
 
-Rows. A dated row looks like `{pressure:<id>} ... polarity=presses|mixed|supports strength=1..3 matters=[...] <from>..<to>`. Polarity is the row's own verdict: `presses` is heavy, `supports` is light, `mixed` is mixed. Your tone for a row never contradicts its polarity.
+Rows. A dated row looks like `{pressure:<id>} ... <from>..<to> tone=heavy|mixed|light polarity=presses|mixed|supports flags=<n> strength=1..3 matters=[...]`. `tone` is the row's tone to read: a period row that presses counts as heavy only when it carries enough independent strain (`flags`), else mixed. `polarity` is the row's verdict before that rule, kept for reference. Your tone for a row never contradicts its `tone`.
 
 Evidence keys. Every key you cite must appear in the input in `{braces}`, copied exactly, without the braces in your output: `pressure:dasha:...`, `pressure:transit:...`, `promise:...`, `planet:D1.Ju`, `house:D9.h7`. A key not in the input is dropped together with the claim it supports. Cite the rows your sentence rests on, not every row you read.
 

@@ -177,3 +177,61 @@ describe('the v3 step with READING_CLOCK_LAYER on', () => {
     expect(nodes.some((n) => n.startsWith('reading.'))).toBe(false);
   });
 });
+
+describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
+  const base = (over: Record<string, unknown>) => ({
+    prisma: noPrisma,
+    ensureCache: (async () => 'cachedContents/fake') as never,
+    maxSpendUsd: 1,
+    now: new Date(`${ASOF}T12:00:00Z`),
+    cardsRead: true,
+    loadInventory: async (_p: PrismaClient, _k: string, s: string) => (s === 'vimsottari' ? vim : s === 'narayana' ? nar : null),
+    loadClockSet: async () => ({ spine: 'dwisatpathi', clocks: [], pulled: ['vimsottari', 'narayana', 'dwisatpathi'], conditional: null, skipped: [] }),
+    loadSections: async () => ({}),
+    prepareSlices: (p: PrismaClient, k: string, fresh: readonly RenderedSlice[]) => prepareSlices(p, k, fresh, { read: async () => ({}), write: async (_p, _k, s) => ({ written: s.map((x) => x.id), unchanged: [], failed: [] }) }),
+    ...over,
+  });
+
+  it('a board under five cards reads nothing: no clock reader, no card, no Oracle', async () => {
+    const nodes: string[] = [];
+    const r = await runSelfV3Cards(base({ callGemini: (async (o: GeminiCallOptions) => (nodes.push(o.node), ok('{}'))) as never, loadBoard: async () => ({ cards: ['body', 'mind', 'stuck'], sections: {} }) }) as never, {
+      ctx,
+      pressure: primary,
+      oracleSlice: slice,
+      portrait: null,
+      buildId: 'b4',
+    });
+    expect(r.status).toBe('skipped');
+    expect(r.gaps.join(' ')).toMatch(/holds 3 cards/);
+    expect(nodes).toEqual([]);
+  });
+
+  it('a board of five: the clock layer, then one run per card on the ledger; the three-call Oracle is not run', async () => {
+    const nodes: string[] = [];
+    const seen: Array<{ board: readonly string[]; ledger: unknown; prefix: string }> = [];
+    const callGemini = async (o: GeminiCallOptions) => {
+      nodes.push(o.node);
+      if (o.node.startsWith('reading.clock.')) return ok(reader(o.parts));
+      if (o.node === 'reading.concordance') return ok(boastful(o.parts[1]!));
+      return ok(JSON.stringify({ cards: [] }));
+    };
+    const r = await runSelfV3Cards(
+      base({
+        callGemini: callGemini as never,
+        loadBoard: async () => ({ cards: ['body', 'mind', 'stuck', 'sleep', 'year'], sections: {} }),
+        readCards: async (_d: unknown, i: { board: readonly string[]; ledger: unknown; prefix: { text: string } }) => {
+          seen.push({ board: i.board, ledger: i.ledger, prefix: i.prefix.text });
+          return { results: [{ card: 'body', status: 'ok', content: null, timings: [], issues: [], costUsd: 0 }], cards: { body: { line: 'x', spans: [], confirm: null, pattern: null, ladder: null, agreement: null } }, timings: [], issues: [], spentUsd: 0, capReached: false, order: ['body'] };
+        },
+      }) as never,
+      { ctx, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b5' },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.board).toEqual(['body', 'mind', 'stuck', 'sleep', 'year']);
+    expect(seen[0]!.ledger).toBeTruthy();
+    expect(seen[0]!.prefix).toContain('# FRAME');
+    expect(nodes.some((n) => n.startsWith('self.oracle.v3'))).toBe(false);
+    expect(r.cards.body).toBeTruthy();
+    expect(r.status).toBe('ok');
+  });
+});

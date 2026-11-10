@@ -82,8 +82,33 @@ export interface SelfCardDef {
   needs: readonly string[];
   /** offered in the catalogue now; false for ids reserved for later phases */
   offered: boolean;
+  /**
+   * Phase C (doc 68 §8, doc 70 §7 step 6): the card needs only its brief, so it is offered whenever the per-card reading
+   * is on (`isCardsReadEnabled`), and stays reserved otherwise
+   */
+  briefOnly?: boolean;
+  /**
+   * the engine's matter keys this card reads (its ledger cells and `matter.<key>` slices; doc 70 §4.1 "Which matters a
+   * card reads is a list in the card registry"). A words table chosen by the product, never computed.
+   */
+  matters: readonly CardMatter[];
   defaultSections: readonly SelfSectionId[];
 }
+
+/** the engine's twelve matter keys (the `matters` field of a pressure row) */
+export type CardMatter =
+  | 'self_and_body'
+  | 'money_in_hand'
+  | 'effort_and_courage'
+  | 'home_and_peace'
+  | 'ideas_and_children'
+  | 'work_load_and_health'
+  | 'partnership'
+  | 'sudden_and_hidden'
+  | 'luck_and_belief'
+  | 'career_and_standing'
+  | 'gains_and_network'
+  | 'loss_rest_and_distance';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Layout (doc 68 §4.5 item 8; doc 69 §4.1 item 6: one table for self, love and work)
@@ -254,6 +279,18 @@ export interface SpanReading {
   step: string;
   /** false when fewer than READING_CLOCKS_MIN clocks hold the frame span's tone: the page shows no tone word */
   held?: boolean;
+  /** doc 70 §4.2: how many clocks hold the span's tone, of how many read ("4 of 5 clocks agree") */
+  agreement?: { agree: number; of: number } | null;
+  /** doc 70 §4.3 item 6, Chart details: each clock read for this span, its tone, and whether it holds the span's tone */
+  clocks?: SpanClockView[];
+}
+
+/** one clock's word for a span, as Chart details lists it (labels are plain names, never an engine's) */
+export interface SpanClockView {
+  system: string;
+  label: string;
+  tone: SpanTone;
+  agrees: boolean;
 }
 
 export interface SelfV3CardContent {
@@ -300,6 +337,8 @@ export interface SelfV3CardView {
   available: boolean;
   unavailableReason: string | null;
   status: CardStatus;
+  /** doc 70 §4.2: the card's own reading state (always `ready` or `not_read` while the per-card reading is off) */
+  state: CardReadState;
   /** the card's real first line for this person, for the picker tile; null until read */
   firstLine: string | null;
   defaultSections: SelfSectionId[];
@@ -327,7 +366,42 @@ export interface SelfV3Response {
   layout: SelfBoardLayoutView;
   /** every catalogue card in registry order, offered or not; the page shows `layout.cards` on the board */
   cards: SelfV3CardView[];
+  /** doc 70 §4.2: the board's reading progress; null when nothing is known yet */
+  reading: BoardReadingView | null;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Doc 70 Phase 3: a reading per card (§4.1 layers 4–5, §4.2, §4.4)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * One card's reading state. `ready`: a stored reading is served; `reading`: its calls are running; `queued`: waiting
+ * for its turn; `failed`: its last attempt did not come through (Try again); `not_read`: not read yet (the person has
+ * not chosen it, the rest is off, or the spend cap stopped the queue).
+ */
+export type CardReadState = 'ready' | 'reading' | 'queued' | 'failed' | 'not_read';
+export const CARD_READ_STATES: readonly CardReadState[] = ['ready', 'reading', 'queued', 'failed', 'not_read'];
+
+/** where the board's reading is: reading the clocks, checking agreement, writing cards, done; idle when nothing runs */
+export type BoardReadingStage = 'idle' | 'clocks' | 'ledger' | 'cards' | 'done';
+
+export interface BoardReadingView {
+  /** false when the per-card reading is off on this server (the board is filled the Phase B way) */
+  enabled: boolean;
+  stage: BoardReadingStage;
+  /** the clocks the ledger stands on, plain labels; `missing`: not stored yet; `failed`: its reader did not come through */
+  clocks: Array<{ system: string; label: string; state: 'read' | 'missing' | 'failed' }>;
+  /** board cards ready, of board cards */
+  done: number;
+  total: number;
+  /** the day's spend cap stopped the queue: the rest stays "Not read yet" */
+  capReached: boolean;
+  /** fewer clocks stored than READING_CLOCKS_MIN: "Your chart is still being prepared" */
+  preparing: boolean;
+}
+
+/** POST /api/self/v3/cards/:id/read */
+export type CardReadError = 'unknown_card' | 'card_not_offered' | 'already_reading' | 'spend_cap' | 'off' | 'no_kundli';
 
 /** GET /api/self/v3/catalogue: the picker without card bodies */
 export interface SelfV3CatalogueEntry {
@@ -339,4 +413,5 @@ export interface SelfV3CatalogueEntry {
   available: boolean;
   unavailableReason: string | null;
   firstLine: string | null;
+  state: CardReadState;
 }

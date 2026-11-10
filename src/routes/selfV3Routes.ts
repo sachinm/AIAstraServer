@@ -4,8 +4,10 @@
  *
  *   GET  /api/self/v3            → 200 SelfV3Response (status ok | pending | preparing) | 404 SelfV3Response (no_kundli)
  *   GET  /api/self/v3/catalogue  → 200 { cards: SelfV3CatalogueEntry[] } | 404 { error: 'no_kundli' }
- *   PUT  /api/self/v3/layout     { template, cards, sections } → 200 SelfBoardLayoutView | 400 { error, detail? } | 404
+ *   PUT  /api/self/v3/layout     { template, cards, sections } → 200 SelfBoardLayoutView & { reading?: { queued } } | 400 { error, detail? } | 404
  *   POST /api/self/v3/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
+ *   POST /api/self/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404 no_kundli
+ *                                       | 409 already_reading | 429 spend_cap | 503 off (doc 70 §4.2)
  *
  * The clock switch stays PUT /api/self/v2/clock. GET /api/self/v2 keeps working until v3 is the default.
  */
@@ -14,7 +16,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { isSelfV3Enabled } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
-import { getSelfV3, getSelfV3Catalogue, putSelfLayout, writeConfirmV3, type SelfV3Deps } from '../reading/self/v3/service.js';
+import { getSelfV3, getSelfV3Catalogue, putSelfLayout, readSelfV3Card, writeConfirmV3, type CardsQueueDeps, type SelfV3Deps } from '../reading/self/v3/service.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
 
 export interface SelfV3RouteDeps {
@@ -22,6 +24,8 @@ export interface SelfV3RouteDeps {
   requireUser: RequireUser;
   enabled?: boolean;
   v3?: Omit<SelfV3Deps, 'prisma'>;
+  /** doc 70 Phase 3: the card queue's seams (the build queue, the flag) */
+  cards?: CardsQueueDeps;
 }
 
 function ownAccount(userId: string, req: express.Request, res: express.Response): boolean {
@@ -76,9 +80,9 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
     const userId = await user(req, res);
     if (!userId) return;
     try {
-      const r = await putSelfLayout(deps.prisma, userId, req.body);
+      const r = await putSelfLayout(deps.prisma, userId, req.body, deps.cards ?? {});
       if (!r.ok) return res.status(r.status).json({ error: r.error, ...(r.detail ? { detail: r.detail } : {}) });
-      return res.status(200).json(r.layout);
+      return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
     } catch (e) {
       console.error('[self:v3:layout]', (e as Error).message);
       return res.status(500).json({ error: 'self_layout_failed' });
@@ -90,6 +94,18 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
     if (!userId) return;
     const r = await writeConfirmV3(deps.prisma, userId, req.body).catch(() => ({ ok: false as const, error: 'write_failed' }));
     return r.ok ? res.status(204).end() : res.status(r.error === 'write_failed' ? 500 : 400).json({ error: r.error });
+  });
+
+  app.post('/api/self/v3/cards/:id/read', async (req, res) => {
+    const userId = await user(req, res);
+    if (!userId) return;
+    try {
+      const r = await readSelfV3Card(deps.prisma, userId, String(req.params.id ?? ''), deps.cards ?? {});
+      return r.ok ? res.status(202).json({ state: r.state }) : res.status(r.status).json({ error: r.error });
+    } catch (e) {
+      console.error('[self:v3:card-read]', (e as Error).message);
+      return res.status(500).json({ error: 'self_card_read_failed' });
+    }
   });
 
   return true;

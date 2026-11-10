@@ -6,6 +6,9 @@
  *      by v2; the others stored at sync, pulled here only when missing)
  *   1b with READING_CLOCK_LAYER=1 (doc 70 §4.1 layers 1–3): the slices (stored ones read, changed ones written back),
  *      then the clock layer: one reader per clock, the code count and the agreed ledger
+ *   1c with the per-card reading on (doc 70 §4.1 layers 4–5; SELF_V3_BUILD=1 and READING_CLOCK_LAYER=1): nothing is
+ *      read until the board holds CARDS_READ_MIN cards or a card was asked for alone; then one Oracle and one
+ *      Personalizer call per card (`readCards`) on the ledger, and steps 2–4 below (the three-call Oracle) are not run
  *   2  the Oracle ×3 in parallel over the v2 natal prefix, the frame as the suffix; failed cards re-asked once
  *   3  the Personalizer ×(1–3) in parallel, one per Oracle call that kept a card
  *   4  every validator finding to `reading_validation_failures`; the cards with the frame to `technique_outputs`
@@ -23,8 +26,11 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getReadingClocksMin, isReadingClockLayerEnabled } from '../../../config/env.js';
-import { runClockLayer, type ClockLayerResult } from '../../clocks/run.js';
+import { getCardsReadMin, getReadingClocksMin, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { readCards, type CardsRunResult } from '../../cards/run.js';
+import { readCardsState, updateCardsState } from '../../cards/state.js';
+import { sharedPrefix } from '../../clocks/reader.js';
+import { pickClockLayerSlices, runClockLayer, type ClockLayerResult } from '../../clocks/run.js';
 import type { AgreedLedger } from '../../clocks/types.js';
 import { natalCoreFromPrefix, prepareSlices, type SliceSetReport } from '../../slices/prepare.js';
 import { renderSliceSet, type SliceInventory } from '../../slices/render.js';
@@ -57,6 +63,14 @@ export interface SelfV3StepDeps {
   /** test seams: the slice store and the clock layer */
   prepareSlices?: typeof prepareSlices;
   runClockLayer?: typeof runClockLayer;
+  /** overrides `isCardsReadEnabled` (doc 70 Phase 3) */
+  cardsRead?: boolean;
+  /** test seams: the board (default `readLayout`) and the card runner */
+  loadBoard?: (prisma: PrismaClient, kundliId: string) => Promise<{ cards: SelfCardId[]; sections: Partial<Record<SelfCardId, SelfSectionId[]>> }>;
+  readCards?: typeof readCards;
+  /** overrides for the card runner (spend cap, the rest flag) */
+  cardsCapUsd?: number;
+  cardsReadRest?: boolean;
 }
 
 export interface SelfV3StepInput {
@@ -86,6 +100,8 @@ export interface SelfV3StepResult {
   ledger?: AgreedLedger | null;
   /** the slices the clock layer read (the cards read the same prefix and their matter slices) */
   sliceSet?: RenderedSlice[];
+  /** doc 70 Phase 3: the per-card run, when it ran */
+  cardsRun?: Pick<CardsRunResult, 'order' | 'spentUsd' | 'capReached'> & { results: Array<{ card: SelfCardId; status: string }> };
 }
 
 /**
@@ -151,8 +167,26 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       out.gaps.push(`v3: no year frame (${frame.clocksSkipped.map((c) => c.reason).join('; ')})`);
       return out;
     }
+    // 1c (gate): with the per-card reading on, nothing is read before the person chose a board or asked for a card
+    const cardsOn = deps.cardsRead ?? isCardsReadEnabled();
+    let board: { cards: SelfCardId[]; sections: Partial<Record<SelfCardId, SelfSectionId[]>> } = { cards: [], sections: {} };
+    if (cardsOn) {
+      board = await (deps.loadBoard ?? (async (p: PrismaClient, k: string) => readLayout(p, k)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [], sections: {} }));
+      const doc = await readCardsState(deps.prisma, ctx.kundliId, deps.now);
+      const asked = Object.values(doc.cards).some((e) => e?.state === 'queued');
+      if (board.cards.length < getCardsReadMin() && !asked) {
+        out.status = 'skipped';
+        out.gaps.push(`cards: the board holds ${board.cards.length} cards (${getCardsReadMin()} start the reading) and none was asked for; nothing read`);
+        return out;
+      }
+      await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
+        d.stage = 'clocks';
+        d.preparing = false;
+      });
+    }
     // 1b: the slices and the clock layer (doc 70 §4.1 layers 1–3), behind READING_CLOCK_LAYER
-    if (deps.clockLayer ?? isReadingClockLayerEnabled()) {
+    let layerModel: string | null = null;
+    if (cardsOn || (deps.clockLayer ?? isReadingClockLayerEnabled())) {
       const tl = performance.now();
       const invs: SliceInventory[] = [{ system: frame.clock, inventory: i.pressure }, ...inventories].filter((x): x is SliceInventory => Boolean(x.inventory));
       const fresh = [natalCoreFromPrefix(i.oracleSlice.prefix, ctx.stamps.digestVersion), ...renderSliceSet({ frame, inventories: invs, year: ctx.sub.year ?? null })];
@@ -166,6 +200,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
         { ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf }, frame, slices: prepared.slices },
       );
       ms.clockLayer = since(tc);
+      layerModel = layer.model;
       out.agents.push(...(layer.timings as unknown as SelfV2AgentTiming[]));
       out.ledger = layer.ledger;
       out.clockLayer = {
@@ -178,6 +213,57 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       if (layer.status !== 'ok') out.gaps.push(`v3: clock layer ${layer.status}${layer.issues.length ? ` (${layer.issues.slice(0, 3).map((x) => x.message).join('; ')})` : ''}`);
     }
     const minClocks = getReadingClocksMin();
+    // 1c: a reading per card on the ledger (doc 70 §4.1 layers 4–5); the three-call Oracle is not run
+    if (cardsOn) {
+      const clocksView = [
+        ...(out.clockLayer?.sheets ?? []).map((x) => ({ system: x.system, label: clockLabel(x.system), state: x.status === 'ok' || x.status === 'partial' ? ('read' as const) : ('failed' as const) })),
+        ...frame.clocksSkipped.filter((c) => c.reason === 'no stored tone').map((c) => ({ system: c.system, label: clockLabel(c.system), state: 'missing' as const })),
+      ];
+      const layerSpent = out.clockLayer?.spentUsd ?? 0;
+      const picked = out.sliceSet ? pickClockLayerSlices(out.sliceSet).picked : null;
+      if (!out.ledger || !picked) {
+        await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
+          d.stage = 'idle';
+          d.preparing = frame.clocksRead.length < minClocks || out.clockLayer?.status === 'too_few_clocks' || out.clockLayer?.status === 'missing_slices';
+          d.clocks = clocksView;
+          d.spentUsd = Math.round((d.spentUsd + layerSpent) * 1e6) / 1e6;
+          // the queued cards wait for the next build (the board says the chart is still being prepared)
+        });
+        out.status = 'skipped';
+        out.gaps.push(`cards: no agreed ledger (${out.clockLayer?.status ?? 'no clock layer'}); no card read`);
+        return out;
+      }
+      await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
+        d.stage = 'cards';
+        d.preparing = false;
+        d.clocks = clocksView;
+        d.spentUsd = Math.round((d.spentUsd + layerSpent) * 1e6) / 1e6;
+      });
+      const prefix = sharedPrefix(picked.shared);
+      const years = (frame.years ?? []).flatMap((y) => [y.from, y.to]);
+      const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
+      const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
+      const tcards = performance.now();
+      const run = await (deps.readCards ?? readCards)(
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, now: deps.now, force: deps.force, capUsd: deps.cardsCapUsd, readRest: deps.cardsReadRest },
+        { ctx, frame, ledger: out.ledger, prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash }, slices: out.sliceSet!, board: board.cards, portrait: i.portrait, sections: board.sections, dates, answers, model: layerModel ?? i.oracleSlice.model, spentBeforeUsd: 0 },
+      );
+      ms.cards = since(tcards);
+      await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
+        d.stage = 'done';
+        d.capReached = run.capReached;
+      });
+      out.agents.push(...run.timings);
+      out.issues.push(...run.issues);
+      out.cards = run.cards;
+      out.cardsRun = { order: run.order, spentUsd: run.spentUsd, capReached: run.capReached, results: run.results.map((r) => ({ card: r.card, status: r.status })) };
+      const wanted = run.results.filter((r) => r.status !== 'skipped_cap').length;
+      const n = Object.keys(run.cards).length;
+      out.status = run.capReached && !n ? 'budget_exceeded' : !n ? 'failed' : n < wanted ? 'partial' : 'ok';
+      out.stored = run.results.some((r) => r.status === 'ok');
+      out.cached = n > 0 && run.results.every((r) => r.status === 'cached' || r.status === 'skipped_cap');
+      return out;
+    }
     if (frame.clocksRead.length < minClocks) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${minClocks} wanted`);
     if (frame.degraded) out.gaps.push(`v3: frame degraded (clocks read: ${frame.clocksRead.join(', ')})`);
 
