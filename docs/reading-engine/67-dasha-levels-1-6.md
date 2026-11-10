@@ -72,7 +72,7 @@ is not merged yet.
 | `src/agents/registry.ts` | A new agent row, `dasha.deep_pull`. |
 | `src/reading/self/sub/periods.ts`, `windows.ts` | Skip any row deeper than level 3. |
 
-**Migration** `20261109120000_dasha_levels_m46`. It is additive:
+**Migration** `20261109120100_dasha_levels_m46`. It is additive:
 
 - the index `idx_kundli_activation_level_range` on `(kundli_id, level, from_date, to_date)`;
 - two `chart_data_types` rows, `dasha.narayana.l3` and `dasha.deep`, inserted with `ON CONFLICT DO NOTHING`.

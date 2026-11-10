@@ -1976,7 +1976,7 @@ Branch `feat/dasha-levels-1-6` (docs/reading-engine/67). Owner of each item in b
   `DASHA_DEEP_WORKER_FUNCTION` on the API, and updates `deploy-api-lambda.yml` to roll both functions, focus is a no-op
   (logged once as `dasha_deep_no_worker_function`). The spec is in doc 67 §5.1. [deploy session, Sachin's typed yes]
   Done when a manual `dasha-deep-pull` invoke logs `dasha_deep_pull` with rows for each system.
-- **P1: Migration M46 (`20261109120000_dasha_levels_m46`) is not applied.** It adds the
+- **P1: Migration M46 (`20261109120100_dasha_levels_m46`) is not applied.** It adds the
   `(kundli_id, level, from_date, to_date)` index and the `dasha.narayana.l3` and `dasha.deep` chart types. Without it,
   the worker's focus and marker writes hit the `kundli_data.data_type` foreign key. [server release] Done when
   `prisma migrate status` is clean on the release database.
