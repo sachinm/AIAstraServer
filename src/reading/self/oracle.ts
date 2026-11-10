@@ -26,7 +26,7 @@ import { callGemini, type GeminiResult } from '../llm/gemini.js';
 import { modelFor, usageCostUsd } from '../llm/models.js';
 import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle/prewarm.js';
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
-import { runningMudda, runningTp } from './panels/year.js';
+import { MAX_TP_YEAR_DAYS, runningTithiPravesha, TITHI_PRAVESHA_YEAR_RULE } from '../annual/tithiPravesha.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
 import { clockLabel, completeSentencesOf, CUT_FINDING_NOTE, MAX_LINE_WORDS, redactEngineTerms, wordCount } from './words.js';
 import { areaCertaintyToLine, areaDocToText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from './areaDoc.js';
@@ -287,16 +287,32 @@ export function buildSelfFamilyPacks(
   const dashaHorizonKey = `${clock.system}:${run.l1?.from ?? 'none'}:${run.l2?.from ?? 'none'}:${vimRun.l2?.from ?? 'none'}`;
   const dashaPrefix = dashaLines.join('\n');
 
-  // 4. family.year — Multi-year Varshaphal (VP) and Tithi Pravesha (TP) across 2025, 2026, 2027 and D1..D60 + tithi_ashtottari & mudda
+  // 4. family.year — the Tithi Pravesha year whose return moment has passed (doc 66 §4.10) leads; the stored TP and
+  // Varshaphal rows of the years around it across the stored vargas follow; Varshaphal and Mudda only confirm
   const yearKeys: string[] = [];
-  const yearLines: string[] = [`# FAMILY PACK: family.year (Multi-Year Tithi Pravesha & Varshaphal 2025/2026/2027 across D1..D60 + Tithi Ashtottari & Mudda)`];
-  const mudda = runningMudda(view, asOf);
-  const tpRow = runningTp(view, asOf, mudda?.row.year);
+  const yearLines: string[] = [`# FAMILY PACK: family.year (the running Tithi Pravesha year leads; stored TP & Varshaphal years across the vargas; Varshaphal and Mudda confirm only)`];
+  const tpRun = runningTithiPravesha(view, asOf);
+  const tpRow = tpRun.row;
+  const mudda = tpRun.varsha;
+  yearLines.push(`TODAY ${asOf}`);
+  if (tpRow && tpRun.year != null) {
+    const ak = `annual:TP${tpRun.year}.D1`;
+    yearLines.push(
+      `{${ak}} RUNNING YEAR = TP${tpRun.year} (Tithi Pravesha, return moment passed) ${tpRun.start ?? tpRun.from ?? '?'} -> ${tpRun.end ?? tpRun.to ?? '?'} lagna=${tpRow.lagna ?? '-'} yearLord=${tpRow.yearLord ?? '-'}`,
+      tpRun.shortClock
+        ? `{${ak}} RUNNING YEAR short clock (TP year dasha ${tpRun.shortClock.system}): ${tpRun.shortClock.lord}(${tpRun.shortClock.from}..${tpRun.shortClock.to})`
+        : `{${ak}} RUNNING YEAR short clock: none (the stored TP year dasha is not bounded to the year; do not read a lifetime period as this year's clock)`,
+    );
+  } else {
+    yearLines.push(`RUNNING YEAR: no Tithi Pravesha year covers TODAY; read no year chart as this year's`);
+  }
+  if (mudda) yearLines.push(`{annual:VP${mudda.row.year}.D1} CONFIRMING clock (Varshaphala Mudda, confirms only): ${mudda.lord}(${mudda.from}..${mudda.to})`);
   for (const a of view.annual()) {
     const ak = `annual:${a.kind}${a.year}.${a.varga}`;
     if (!yearKeys.includes(ak)) yearKeys.push(ak);
+    const role = a.kind === 'TP' ? (tpRun.year == null ? 'TP' : a.year === tpRun.year ? 'TP running year' : a.year < tpRun.year ? 'TP past year' : 'TP coming year') : 'VP confirming';
     yearLines.push(
-      `{${ak}} ${a.kind}${a.year}.${a.varga} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
+      `{${ak}} ${a.kind}${a.year}.${a.varga} [${role}]${a.start ? ` from=${a.start} to=${a.end ?? '?'}` : ''} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
     );
     for (const hc of a.houses) {
       if (hc.occupants.length > 0 || hc.house === 1 || hc.house === 6 || hc.house === 8 || hc.house === 10) {
@@ -312,14 +328,18 @@ export function buildSelfFamilyPacks(
       yearLines.push(`{${ak}} Saham ${sh.name}: ${sh.sign ?? '-'} H${sh.house ?? '?'}`);
     }
     for (const d of a.dashas ?? []) {
-      const activeP = d.periods.find((p) => p.from <= asOf && p.to > asOf) ?? d.periods[0];
+      const from = d.periods.map((p) => p.from).sort()[0];
+      const to = d.periods.map((p) => p.to).sort().at(-1);
+      const bounded = Boolean(from && to && (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 <= MAX_TP_YEAR_DAYS);
+      const activeP = bounded ? d.periods.find((p) => p.from <= asOf && p.to > asOf) : undefined;
       const allP = d.periods.slice(0, 9).map((p) => `${p.lord}(${p.from}..${p.to})`).join(', ');
-      yearLines.push(`{${ak}} AnnualDasha ${d.system}: active=${activeP ? `${activeP.lord}(${activeP.from}..${activeP.to})` : 'none'} periods=[${allP}]`);
+      yearLines.push(`{${ak}} AnnualDasha ${d.system}${bounded ? '' : ' (lifetime span, not the clock of this year)'}: active=${activeP ? `${activeP.lord}(${activeP.from}..${activeP.to})` : 'none'} periods=[${allP}]`);
     }
   }
-  const yearEndIso = mudda?.to;
+  // the year pack holds until the TP year's next return (or the short clock's end, when sooner); the Mudda end otherwise
+  const yearEndIso = [tpRun.shortClock?.to, tpRun.to].filter((x): x is string => Boolean(x)).sort()[0] ?? mudda?.to;
   const yearExpiresAt = yearEndIso ? new Date(`${yearEndIso}T00:00:00Z`) : undefined;
-  const yearHorizonKey = `vp=${mudda?.row.year ?? 'none'}|tp=${tpRow?.year ?? 'none'}|m=${mudda?.from ?? 'annual'}`;
+  const yearHorizonKey = `tp=${tpRow?.year ?? 'none'}:${tpRun.from ?? '-'}|sc=${tpRun.shortClock?.from ?? 'none'}|vp=${mudda?.row.year ?? 'none'}|m=${mudda?.from ?? 'annual'}`;
   const yearPrefix = yearLines.join('\n');
 
   // 5. family.sky — Universal Gochara Transit Sky + Ashtakavarga SAV bindus + sensitive points (BB, K64M, K64L, KD22)
@@ -404,7 +424,7 @@ export function buildSelfFamilyPacks(
       horizonKey: yearHorizonKey,
       ...(yearExpiresAt ? { expiresAt: yearExpiresAt } : {}),
       prefix: yearPrefix,
-      dynamic: `AS_OF: ${asOf}. Analyze the stored 2025, 2026, and 2027 Tithi Pravesha (TP) and Varshaphal (VP) charts across D1..D60, including the active Tithi Ashtottari and Mudda dashas, Muntha, Year Lord, Tajaka yogas, and how the 2025 TP (pre-Oct 2026), 2026 TP (current month Nov 2026 and into 2027), and 2027 TP shape the body, mind, and self. Cite exact {key} evidence in every bullet.`,
+      dynamic: `TODAY: ${asOf}. Read the RUNNING YEAR line first: that Tithi Pravesha chart (its return moment has passed) is this year; its year lagna, year lord and its year dasha periods (bounded to the year) shape the body, mind and self. The other stored TP years are past or coming years, named only with their own dates; Varshaphal, Muntha, Tajaka yogas, Sahams and Mudda only confirm or question the TP reading. Cite exact {key} evidence in every bullet.`,
       packHash: shortHash(`${v}|year|${yearHorizonKey}|${yearPrefix}`),
       keys: yearKeys,
       charts: [{ type: 'digest.annual', variant: v }],
@@ -432,7 +452,9 @@ export const FAMILY_SYSTEM_PROMPTS: Record<SelfFamilyAgentId, string> = {
   'family.dasha':
     'You are the Multi-Clock Dasha Family Sub-Agent. Weigh the primary reading clock alongside Vimshottari Dasha, Jaimini Narayana Dasha, and confirming clocks; audit the previous/running/next Mahadasha chapters, the active Antardasha/Pratyantardasha, and the 9x9 Mahadasha-to-Antardasha fruition geometry (Trikona, Kendra, 2/12, 6/8) across H1..H12. Never invent dates or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the exact active Antardasha/Pratyantardasha boundary date.',
   'family.year':
-    'You are the Annual Return (Tithi Pravesha & Varshaphal) Family Sub-Agent. Audit the stored 2025, 2026, and 2027 Tithi Pravesha (TP) and Varshaphal (VP) charts across D1..D60, Year Lord, Muntha, Tajaka yogas, Sahams, and active Tithi Ashtottari / Mudda dashas covering the current year and upcoming year. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the active annual sub-period or return boundary date.',
+    'You are the Annual Return (Tithi Pravesha & Varshaphal) Family Sub-Agent. ' +
+    TITHI_PRAVESHA_YEAR_RULE +
+    ' Audit the running Tithi Pravesha (TP) chart named on the RUNNING YEAR line across its stored vargas, its year lord and its year dasha periods, then the Varshaphal (VP) chart, Muntha, Tajaka yogas, Sahams and the Mudda period as confirmation. Read a past or coming TP year only with its own dates. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the running TP year dasha period end or the next Tithi Pravesha return, whichever comes first.',
   'family.sky':
     'You are the Gochara Sky & Ashtakavarga Family Sub-Agent. Audit the Universal Gochara Transit Sky (Saturn, Jupiter, Rahu, Ketu, Mars over natal Lagna, Moon, and body houses), Sarvashtakavarga (SAV) house bindus across H1..H12, and sensitive transit points (BB, K64M, K64L, KD22, AL, SL, HL, MD, GK). Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: <YYYY-MM-DD>` naming the active slow-planet transit boundary.',
 };
@@ -762,17 +784,16 @@ export async function runSelfOracle(
     for (const k of packs[familyId].keys) allKeys.add(k);
   }
   const answersKey = shortHash(JSON.stringify(Object.entries(answers).sort(([a], [b]) => a.localeCompare(b))));
-  const mudda = runningMudda(view, reading.asOf);
-  const tpRow = runningTp(view, reading.asOf, mudda?.row.year);
+  const tpRun = runningTithiPravesha(view, reading.asOf);
   // the prompt bundle version and the output shape are part of the key: a prompt change, or switching to the area
   // document, never serves an output written under the old prompt (doc 65 Phase A found the opposite)
-  const oracleDigestVersion = `${view.version}|board=${board}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRow?.year ?? 'none'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? 'code'}|p=${PROMPT_VERSION}|shape=${isSelfOracleAreasEnabled() ? 'areas' : 'essay'}`;
+  const oracleDigestVersion = `${view.version}|board=${board}|scope=${scopeKey}|clock=${reading.clock.system}|tp=${tpRun.year ?? 'none'}:${tpRun.from ?? '-'}|sky=${sky ? '1' : '0'}|ans=${answersKey}|${ctx.codeVersion ?? 'code'}|p=${PROMPT_VERSION}|shape=${isSelfOracleAreasEnabled() ? 'areas' : 'essay'}`;
 
   const boardFocusInstruction =
     board === 'love'
-      ? `BOARD: LOVE & RELATIONSHIPS (love.reading). Focus your Vedic synthesis on H7 (partnership), H5 (heart & romance), H2 (family & sustenance), H4 (home & emotional peace), H8 (intimacy & shared vulnerability), H11 (friends & community), H12 (bed pleasures & release), L7, L5, Venus, Moon, Jupiter, Darakaraka (DK), Putrakaraka (PK), Upapada Lagna (UL), 2nd from UL, Darapada (A7), Navamsa (D9), Saptamsa (D7), active multi-clock chapters, and 2025/2026/2027 Tithi Pravesha & Varshaphal. In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|heart|partner|bond|circle|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
+      ? `BOARD: LOVE & RELATIONSHIPS (love.reading). Focus your Vedic synthesis on H7 (partnership), H5 (heart & romance), H2 (family & sustenance), H4 (home & emotional peace), H8 (intimacy & shared vulnerability), H11 (friends & community), H12 (bed pleasures & release), L7, L5, Venus, Moon, Jupiter, Darakaraka (DK), Putrakaraka (PK), Upapada Lagna (UL), 2nd from UL, Darapada (A7), Navamsa (D9), Saptamsa (D7), active multi-clock chapters, and the running Tithi Pravesha year (the one whose return moment has passed; Varshaphal confirms only). In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|heart|partner|bond|circle|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
       : board === 'work'
-        ? `BOARD: WORK, CAREER & WEALTH (work.reading). Focus your Vedic synthesis on H10 (vocation & karma), H6 (service, execution & competition), H11 (gains & networks), H2 (treasury & resources), H3 (initiative & skills), H9 (dharma & mentorship), L10, L6, L11, L2, Amatyakaraka (AmK), Saturn, Sun, Mercury, Jupiter, Mars, Arudha Lagna (AL), Rajyapada (A10), Ghatika Lagna (GL), Hora Lagna (HL), Sree Lagna (SL), Indu Lagna (IL), Labhapada (A11), Dhanapada (A2), Dasamsa (D10), Hora (D2), Karakamsa (D9.AK), SAV bindus, active multi-clock chapters, and 2025/2026/2027 Tithi Pravesha & Varshaphal. In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|vocation|standing|ground|gain|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
+        ? `BOARD: WORK, CAREER & WEALTH (work.reading). Focus your Vedic synthesis on H10 (vocation & karma), H6 (service, execution & competition), H11 (gains & networks), H2 (treasury & resources), H3 (initiative & skills), H9 (dharma & mentorship), L10, L6, L11, L2, Amatyakaraka (AmK), Saturn, Sun, Mercury, Jupiter, Mars, Arudha Lagna (AL), Rajyapada (A10), Ghatika Lagna (GL), Hora Lagna (HL), Sree Lagna (SL), Indu Lagna (IL), Labhapada (A11), Dhanapada (A2), Dasamsa (D10), Hora (D2), Karakamsa (D9.AK), SAV bindus, active multi-clock chapters, and the running Tithi Pravesha year (the one whose return moment has passed; Varshaphal confirms only). In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|vocation|standing|ground|gain|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`
         : `BOARD: SELF (self.reading). In PANEL_SYNTHESIS, emit lines for [diagnosis|chapters|lagna|mind|body|atma|yogas|struggle|year] (<= 22 words per line, zero chart jargon in PANEL_SYNTHESIS lines).`;
 
   try {

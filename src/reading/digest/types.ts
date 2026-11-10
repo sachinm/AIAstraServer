@@ -5,7 +5,7 @@
  * builder selects, counts, joins and dates engine fields (doc 46 §C.3; tests/unit/reading/digest/noAstrologyInNode.test.ts).
  */
 
-export const DIGEST_VERSION = 'd1.2026-11-06';
+export const DIGEST_VERSION = 'd1.2026-11-09';
 
 export type DigestSection = 'house' | 'planet' | 'yoga' | 'point' | 'annual' | 'star';
 export const DIGEST_SECTIONS: readonly DigestSection[] = ['house', 'planet', 'yoga', 'point', 'annual', 'star'];
@@ -163,6 +163,15 @@ export interface AnnualRow {
   muntha?: { sign: string | null; house: number | null } | null;
   yearLord?: string | null;
   tajakaYogas?: Array<{ id: string; present: boolean }>;
+  /**
+   * The year's return moment and the next one, local 'YYYY-MM-DD HH:MM:SS' as the engine wrote them: TP rows read
+   * `tp_start` / `tp_end` (engine feat/dasha-levels-1-6), else the payload's `valid_from` / `valid_to` (the same instants);
+   * VP rows read `valid_from` / `valid_to`. Absent on digests built before d1.2026-11-09.
+   */
+  start?: string | null;
+  end?: string | null;
+  /** which engine field `start` came from */
+  startBasis?: 'tp_start' | 'valid_from';
 }
 
 export interface StarProfile {

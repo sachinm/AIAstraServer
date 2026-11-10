@@ -1152,6 +1152,25 @@ function annualRows(items: Record<string, unknown>, src: Sources): Built<AnnualR
         if (s && sahams.length) source.push(src.of(s));
       }
     }
+    // the year's return moment (doc 66 §4.10): TP rows prefer the engine's tp_start/tp_end, else valid_from/valid_to
+    let start: string | null = null;
+    let end: string | null = null;
+    let startBasis: AnnualRow['startBasis'];
+    {
+      const p = payload as Obj;
+      const tpStart = kind === 'TP' ? str(p.tp_start) : null;
+      if (tpStart) {
+        start = tpStart;
+        end = str(p.tp_end);
+        startBasis = 'tp_start';
+        source.push(src.of({ key, at: 'tp_start', value: tpStart }));
+      } else if (str(p.valid_from)) {
+        start = str(p.valid_from);
+        end = str(p.valid_to);
+        startBasis = 'valid_from';
+        source.push(src.of({ key, at: 'valid_from', value: start }));
+      }
+    }
     let muntha: AnnualRow['muntha'];
     let yearLord: AnnualRow['yearLord'];
     let tajakaYogas: AnnualRow['tajakaYogas'];
@@ -1188,6 +1207,7 @@ function annualRows(items: Record<string, unknown>, src: Sources): Built<AnnualR
         ...(muntha !== undefined ? { muntha } : {}),
         ...(yearLord !== undefined ? { yearLord } : {}),
         ...(tajakaYogas !== undefined ? { tajakaYogas } : {}),
+        ...(start ? { start, end, startBasis } : {}),
       },
       source,
     });

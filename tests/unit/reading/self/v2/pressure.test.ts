@@ -14,6 +14,8 @@ import { gaps } from '../../../../../src/reading/self/slices.js';
 import { runSelfSubTechniques } from '../../../../../src/reading/self/sub/index.js';
 import { subClock } from '../../../../../src/reading/self/sub/clock.js';
 import { subWindows } from '../../../../../src/reading/self/sub/windows.js';
+import { subRisk } from '../../../../../src/reading/self/sub/risk.js';
+import { subYear } from '../../../../../src/reading/self/sub/year.js';
 import {
   asPressurePayload,
   loadPressureInventory,
@@ -212,5 +214,61 @@ describe('S3 prefers the engine rows (degraded = false)', () => {
     expect(out.ctx.sub.windows!.degraded).toBe(true);
     expect(out.gaps.join(' ')).toMatch(/pressure_inventory: engine down/);
     expect(Object.keys(out.ctx.sub)).toHaveLength(10);
+  });
+});
+
+describe('engine calc_version 2: annual (Tithi Pravesha year) and return rows (doc 66 §4.10)', () => {
+  const clock = subClock('dwisatpathi', FIX.systems, gaps());
+  const V2: EnginePressurePayload = {
+    ...ENGINE,
+    calc_version: '2',
+    rows: [
+      ...ENGINE.rows,
+      { id: 'annual:TP2026', kind: 'annual', level: 1, planet: 'Sa', houses_touched: [7, 10], matters: ['partnership', 'career_and_standing'], polarity: 'presses', strength: 2, from: '2026-09-03', to: '2027-09-22', evidence: ['annual:TP2026.D1', 'annual:TP2026.D1#yearLord'] },
+      { id: 'annual:TP2026/2/Ve', kind: 'annual', level: 2, planet: 'Ve', houses_touched: [5], matters: ['ideas_and_children'], polarity: 'supports', strength: 1, from: '2026-10-01', to: '2027-01-15', evidence: ['annual:TP2026.D1#tithi_ashtottari'] },
+      { id: 'return:Sa@2026-02-14', kind: 'return', planet: 'Sa', houses_touched: [9], matters: ['luck_and_belief'], polarity: 'mixed', strength: 2, from: '2026-02-14', to: '2027-04-10', evidence: ['return:Sa'] },
+    ],
+  };
+  const inv = toPressureInventory(V2, 'k1').inventory;
+
+  it('the mapper keeps annual rows with their level and return rows', () => {
+    const a = inv.rows.find((r) => r.id === 'annual:TP2026/2/Ve')!;
+    expect(a).toMatchObject({ kind: 'annual', level: 2, planet: 'Ve', matters: ['ideas_and_children'] });
+    expect(inv.rows.find((r) => r.id === 'return:Sa@2026-02-14')?.kind).toBe('return');
+  });
+
+  it('S3 puts them in the strip, byMatter, startedLast12m and endingNext6m', () => {
+    const w = subWindows({ view, activation: FIX.activation, sky: null, asOf: ASOF, g: gaps(), pressure: inv }, clock);
+    const ids = (xs: Array<{ rowId: string }>) => xs.map((x) => x.rowId);
+    expect(ids(w.strip)).toEqual(expect.arrayContaining(['annual:TP2026', 'annual:TP2026/2/Ve', 'return:Sa@2026-02-14']));
+    expect(ids(w.byMatter.partnership ?? [])).toContain('annual:TP2026');
+    expect(ids(w.startedLast12m)).toEqual(expect.arrayContaining(['annual:TP2026', 'annual:TP2026/2/Ve', 'return:Sa@2026-02-14']));
+    expect(ids(w.endingNext6m)).toContain('annual:TP2026/2/Ve');
+  });
+
+  it('degraded mode (inventory on another clock) still keeps the clock-free annual and return rows', () => {
+    const w = subWindows({ view, activation: FIX.activation, sky: null, asOf: ASOF, g: gaps(), pressure: { ...inv, clock: 'vimsottari' } }, clock);
+    expect(w.degraded).toBe(true);
+    const kinds = new Set(w.rows.map((r) => r.kind));
+    expect(kinds.has('annual')).toBe(true);
+    expect(kinds.has('return')).toBe(true);
+    expect(w.rows.some((r) => r.rowId.startsWith('dasha:dwisatpathi'))).toBe(false);
+  });
+
+  it('S5: an annual row that presses on a matter is a risk row from the year chart', () => {
+    const w = subWindows({ view, activation: FIX.activation, sky: null, asOf: ASOF, g: gaps(), pressure: inv }, clock);
+    const risk = subRisk(ASOF, null, w, { entries: [] } as never, gaps());
+    const r = risk.rows.find((x) => x.id === 'risk:annual:TP2026')!;
+    expect(r).toMatchObject({ matter: 'partnership', from: { planet: 'Sa', chart: 'year', windowId: 'annual:TP2026' }, since: '2026-09-03', until: '2027-09-22' });
+  });
+
+  it('S9: the TP year frame from the stored return moment; the year lord from the annual row; Mudda only confirms', () => {
+    const g = gaps();
+    const y = subYear({ view, activation: FIX.activation, sky: null, asOf: ASOF, g, pressure: inv });
+    expect(y).toMatchObject({ from: '2026-09-03', to: '2027-09-22', noCoverage: false, yearLagna: 'annual:TP2026.D1#lagna', yearLord: 'annual:TP2026.D1', tpStart: '2026-09-03 04:12:00' });
+    // the stored TP year dasha is a lifetime dasha (engine fix pending): no TP short clock, never the Mudda in its place
+    expect(y.shortClock).toBeNull();
+    expect(y.confirmClock?.evidence).toBe('annual:VP2026.D1#mudda');
+    expect(g.list.join(' ')).toMatch(/lifetime dasha/);
   });
 });

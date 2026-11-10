@@ -154,12 +154,14 @@ describe('panels', () => {
   it('year: the natal lagna lord at its strongest in this year\'s 1st', () => {
     const t = texts(yearPanel(input));
     expect(t).toContain("This year's chart puts the part of you that steers in your body, your presence and your sense of self, at its strongest.");
-    expect(t).toContain('Until 24 Dec 2026');
+    // the fixture's TP year dasha is a lifetime dasha: the TP short clock is withheld (never the Mudda in its place)
+    expect(t).not.toContain('Until 24 Dec 2026');
+    expect(yearPanel(input).gaps.join()).toMatch(/lifetime dasha/);
   });
   it('year: withheld when no year chart covers the day', () => {
     const b = yearPanel({ ...input, asOf: '2040-01-01' });
     expect(b.claims).toEqual([]);
-    expect(b.gaps.join()).toMatch(/annual:VP covering 2040-01-01 missing/);
+    expect(b.gaps.join()).toMatch(/annual:TP covering 2040-01-01 missing/);
   });
   it('no panel text carries chart words (doc 45 §3.3); chart terms live in detail', () => {
     const banned = /\b(house|lord|dasha|mahadasha|antardasha|nakshatra|varga|rahu|ketu|saturn|jupiter|venus|mercury|mars|sun|moon|lagna|D1\.|D9\.)\b/i;
