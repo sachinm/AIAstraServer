@@ -8,7 +8,7 @@ import type { AgreedLedger, LedgerCell } from '../../../../src/reading/clocks/ty
 import { sharedPrefix } from '../../../../src/reading/clocks/reader.js';
 import { pickClockLayerSlices } from '../../../../src/reading/clocks/run.js';
 import { boardReadingView, cardStateOf, readCardsState } from '../../../../src/reading/cards/state.js';
-import { checkAgainstLedger, renderCardLedger } from '../../../../src/reading/cards/oracle.js';
+import { CARD_ORACLE_MAX_OUTPUT_TOKENS, checkAgainstLedger, precheckCard, readCardOracle, renderCardLedger } from '../../../../src/reading/cards/oracle.js';
 import { cardOrder, readCards, type CardsRunInput } from '../../../../src/reading/cards/run.js';
 import { emptyCardsState } from '../../../../src/reading/cards/types.js';
 import type { GeminiCallOptions, GeminiResult } from '../../../../src/reading/llm/gemini.js';
@@ -258,5 +258,91 @@ describe('per-card state for the page', () => {
     d.stage = 'cards';
     const v = boardReadingView(d, ['body', 'mind', 'stuck'], { stuck: {} as never }, now, true);
     expect(v).toMatchObject({ enabled: true, stage: 'cards', done: 1, total: 3 });
+  });
+});
+
+describe('the card Oracle input and the pre-check (doc 70 Phase 3 replay fixes)', () => {
+  const groundedLedger: AgreedLedger = { ...ledger, cells: ledger.cells.map((c) => ({ ...c, evidence: ['pressure:dasha:vimsottari/3/Sa@2026-10-01', 'pressure:dasha:vimsottari/3/Ju@2027-01-01'] })) };
+  const oracleInput = (over: Record<string, unknown> = {}) => ({
+    ctx,
+    card: 'body' as SelfCardId,
+    matters: ['work_load_and_health'] as never,
+    board: ['Body & energy'],
+    frame,
+    frameText: 'YEAR FRAME',
+    frameKeys: [],
+    prefix: { text: prefix.text, keys: prefix.keys },
+    ledger: groundedLedger,
+    matterSlices: slices.filter((s) => s.id === 'matter.work_load_and_health'),
+    dates: new Set([ASOF, ...frame.spans.flatMap((s) => [s.from, s.to])]),
+    answers: '',
+    model: 'gemini-3.8-flash',
+    cacheOwner: { userId: 'u1', kundliId: 'k1' },
+    ...over,
+  });
+
+  it('the matter rows: each row once, only rows overlapping the frame, rows of the shared prefix by key; a 4 k output cap', async () => {
+    const seen: GeminiCallOptions[] = [];
+    const callGemini = async (o: GeminiCallOptions) => (seen.push(o), ok(JSON.stringify({ cards: [goodOracle('body')] })));
+    const r = await readCardOracle({ prisma: memPrisma(), callGemini: callGemini as never }, oracleInput() as never);
+    expect(r.status).toBe('ok');
+    const part = seen[0]!.parts[1]!;
+    const block = part.slice(part.indexOf('MATTER ROWS ('), part.lastIndexOf("PERSON'S ANSWERS"));
+    const from = frame.spans[0]!.from;
+    for (const m of block.matchAll(/^\{(pressure:[^}]+)\} .*?(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/gm)) {
+      expect(m[3]! > from, m[1]).toBe(true);
+      expect(prefix.keys).not.toContain(m[1]);
+    }
+    // the annual row is in the shared prefix: named by key, not written again
+    expect(block).toContain('## in the shared data above');
+    expect(block).toContain('{pressure:annual:TP2026}');
+    expect(block).not.toMatch(/^\{pressure:annual:TP2026\} kind=/m);
+    expect(seen[0]!.maxOutputTokens).toBe(CARD_ORACLE_MAX_OUTPUT_TOKENS);
+  });
+
+  it("a key never given to the card is dropped in code: no repair call (the replay's chapter)", async () => {
+    const nodes: string[] = [];
+    const bad = goodOracle('body') as { spans: Array<{ evidence: string[] }>; evidence: string[] };
+    bad.spans[0]!.evidence.push('pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03');
+    bad.evidence.push('pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03');
+    const callGemini = async (o: GeminiCallOptions) => (nodes.push(o.node), ok(JSON.stringify({ cards: [bad] })));
+    const r = await readCardOracle({ prisma: memPrisma(), callGemini: callGemini as never }, oracleInput() as never);
+    expect(r.status).toBe('ok');
+    expect(nodes).toEqual(['self.card.oracle.body']);
+    expect(r.card!.spans[0]!.evidence).not.toContain('pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03');
+    expect(r.issues.some((x) => /precheck: span s1: dropped key/.test(x.message))).toBe(true);
+  });
+
+  it("a span citing a row its cell rests on, but not the cell, gets the cell in code: no repair call (the replay's mind)", async () => {
+    const nodes: string[] = [];
+    const bare = goodOracle('body') as { spans: Array<{ span: string; evidence: string[] }> };
+    for (const sp of bare.spans) sp.evidence = ['pressure:dasha:vimsottari/3/Sa@2026-10-01'];
+    const callGemini = async (o: GeminiCallOptions) => (nodes.push(o.node), ok(JSON.stringify({ cards: [bare] })));
+    const r = await readCardOracle({ prisma: memPrisma(), callGemini: callGemini as never }, oracleInput() as never);
+    expect(r.status).toBe('ok');
+    expect(nodes).toEqual(['self.card.oracle.body']);
+    for (const sp of r.card!.spans) expect(sp.evidence).toContain(`ledger:${sp.span}/work_load_and_health`);
+  });
+
+  it('the pre-check never grounds a span on a planet or house key alone, and never strips a span to nothing', () => {
+    const cells = groundedLedger.cells.map((c) => ({ ...c, evidence: [...c.evidence, 'planet:D1.Mo'] }));
+    const raw = { spans: [{ span: 's1', evidence: ['planet:D1.Mo'] }, { span: 's2', evidence: ['made:up'] }], evidence: ['made:up'] };
+    const r = precheckCard(raw, { allowed: new Set(['planet:D1.Mo']), cells });
+    const spans = (r.raw as typeof raw).spans;
+    expect(spans[0]!.evidence).toEqual(['planet:D1.Mo']);
+    expect(spans[1]!.evidence).toEqual(['made:up']);
+    expect((r.raw as typeof raw).evidence).toEqual([]);
+    // the validator still rejects both spans, so the repair call stays the path for them
+    expect(raw.spans[1]!.evidence).toEqual(['made:up']);
+  });
+
+  it('a card with no grounding at all still goes to one repair call', async () => {
+    const nodes: string[] = [];
+    const bare = goodOracle('body') as { spans: Array<{ evidence: string[] }> };
+    for (const sp of bare.spans) sp.evidence = ['planet:D1.Mo'];
+    const callGemini = async (o: GeminiCallOptions) => (nodes.push(o.node), ok(JSON.stringify({ cards: [nodes.length > 1 ? goodOracle('body') : bare] })));
+    const r = await readCardOracle({ prisma: memPrisma(), callGemini: callGemini as never }, oracleInput() as never);
+    expect(nodes).toEqual(['self.card.oracle.body', 'self.card.oracle.body.repair']);
+    expect(r.status).toBe('repaired');
   });
 });
