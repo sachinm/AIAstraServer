@@ -247,3 +247,60 @@ Creation charge: the page does not say. No TTL limits.
    storage while open, creation at worst rate). From 2027-01-01 every figure doubles.
 4. **Still to prove:** quality with the ledger in place, the readers and concordance on the same pack, and the
    seven-group time. That is the next paid replay.
+
+## 13. First group replay (2026-11-11, measured)
+
+Run: `scripts/cards-replay.ts --yes-spend --group --seed 42 --kundli 75b0d618... --cap 0.35`, key ending `hbtQ`.
+Output: `docs/reading-engine/replays/71-groups-2026-11-11/`. Board: sleep, mood, purpose, layers, chapter. Spent
+$0.344 on 26 calls (the pack's creation charge, if any, is not in that figure).
+
+### Answer first
+
+- **The board's five cards were ready 13 to 16 s after their calls started**, one card per call, all five at once, on
+  the cached pack (89,362 cached tokens per call). The five clock readers ran before them (17 to 24 s); in the plan
+  they run before the click.
+- **Quality held on what was stored:** 19 of 21 cards, 57 of 57 spans grounded on the ledger (29 confirmed, 5 leaning,
+  2 single), no chart word on any face. The two misses (`diagnosis`: "divided"; `year`: "annual cycle") failed the face
+  check and their repair call was blocked by the replay's call limit, not by the model.
+- **A bug sent every card alone.** The groups were gathered by a 25 ms timer, and each card's store lookup is a
+  database round trip, so no two cards met. 21 calls instead of 10. Fixed: a phase's groups now go out when every card
+  of the phase has asked or been served from the store (3 s at most). Test added.
+- **A second bug:** the concordance asked for thinking level "minimal", which `gemini-3.8-flash` refuses. It is sent as
+  "low" for that model now.
+- **Writing a card costs about 1,400 output tokens, $0.0053.** 21 cards wrote 29,872 tokens, $0.112. That is the floor
+  for all 21 cards at this length, whatever the grouping.
+
+### Where the money went
+
+| Part | Calls | Cost |
+|---|---|---|
+| Five clock readers | 5 | $0.090 |
+| Board cards (one per call) | 5 | $0.061 |
+| Other 16 cards (sent alone by the bug) | 16 | $0.194 |
+| Concordance | 0 (failed) | $0 |
+
+Each call on the pack reads 89,362 cached tokens: $0.0067.
+
+### What it costs with the fixes (estimate)
+
+| Part | Calls | Cost |
+|---|---|---|
+| Five clock readers (before the click) | 5 | $0.090 |
+| Concordance | 1 | about $0.015 |
+| Board cards, one per call | 5 | $0.061 |
+| Other 16 cards, six per call | 3 | $0.105 |
+| Pack creation, if billed at the input rate | | $0.067 |
+| **Board only** (the cards the person chose) | 11 | **about $0.17 to $0.23** |
+| **All 21 cards** | 14 | **about $0.27 to $0.34** |
+
+The cards alone: $0.061 for the board, $0.17 for all 21.
+
+### What would bring it near 10 cents
+
+1. **Batch mode for the cards not on the board.** Half price on output and cached reads; they can wait. The 16 cards
+   would cost about $0.05. Batch jobs are not instant; Google gives no latency figure. Not yet built.
+2. **A shorter Oracle object.** The person never sees it; it is the working note the face is written from. Asking for
+   one sentence where it asks for one to three would cut card output by about a third (estimate). Quality must be
+   rechecked.
+3. **Read the clocks once per kundli and date range, not per refresh.** The readers are $0.09 of every refresh; the
+   layer cache (`e24a4d4`) already stores them per day. A refresh on a day the ledger is stored costs no reader call.

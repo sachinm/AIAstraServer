@@ -2514,3 +2514,11 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P2 · open · Gemini prices double on 2027-01-01** (input $1.50, output $7.50, cached $0.15, storage $1.00 per 1M per
   hour). `PRICE_CHANGES` in `src/reading/llm/models.ts` has input, output and cached; storage is not modelled anywhere.
   Owner: this branch.
+- **P2 · open · Card faces failed on "divided" and "annual cycle" (doc 71 §13).** `diagnosis` and `year`, first pass;
+  the repair was blocked by the replay's call limit. Watch the next replay; if the words recur, name them in the
+  Personalizer prompt. Owner: this branch.
+- **P2 · fixed · The group batcher sent every card alone (doc 71 §13).** A 25 ms timer; store lookups are database round
+  trips. Groups now wait for every card of the phase (3 s at most). Test in `tests/unit/reading/cards/cards.test.ts`.
+- **P2 · fixed · `gemini-3.8-flash` refuses thinking level "minimal"** (concordance, 2026-11-11). `allowsMinimal` in
+  `src/reading/llm/gemini.ts` now sends "low" for that model.
+- **P3 · open · Batch mode for the cards not on the board (doc 71 §13).** Half price; not built. Owner: this branch.

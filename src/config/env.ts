@@ -1005,6 +1005,27 @@ export function getCardsBoardParallel(): number {
   return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 8, 1, 12);
 }
 
+/**
+ * Cards read in groups on one cached pack (docs/reading-engine/71 §4.3). Off unless CARDS_GROUP_PACK=1; needs
+ * READING_EXPLICIT_CACHE=1 for the pack to be cached (without it the groups still run, uncached).
+ */
+export function isCardsGroupPackEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CARDS_GROUP_PACK?.trim() === '1';
+}
+
+/**
+ * Cards per call for the board's cards (fast first). Env `CARDS_GROUP_SIZE_BOARD` (default 1, 1..6): a card writes about
+ * 1,400 tokens and one card per call finished in 12 to 16 s on 2026-11-11 (doc 71 §13); three would take about 40 s.
+ */
+export function getCardsGroupSizeBoard(): number {
+  return parseClampedIntEnv('CARDS_GROUP_SIZE_BOARD', 1, 1, 6);
+}
+
+/** Cards per call for the cards not on the board (fewer reads of the pack). Env `CARDS_GROUP_SIZE_REST` (default 6, 1..8). */
+export function getCardsGroupSizeRest(): number {
+  return parseClampedIntEnv('CARDS_GROUP_SIZE_REST', 6, 1, 8);
+}
+
 /** The rest of the catalogue, read this many at a time. Env `CARDS_REST_PARALLEL` (default 2, 1..4). */
 export function getCardsRestParallel(): number {
   return parseClampedIntEnv('CARDS_REST_PARALLEL', 2, 1, 4);
