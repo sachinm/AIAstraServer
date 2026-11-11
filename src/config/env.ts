@@ -1032,6 +1032,11 @@ export function getCardsRestParallel(): number {
 }
 
 /** Self board v3 routes (docs/reading-engine/68): on only when SELF_V3_ENABLED=1 and the v2 board is on. */
+/** The Now card on every board (docs/reading-engine/72): GET /api/now. Off unless NOW_CARD_ENABLED=1. */
+export function isNowCardEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NOW_CARD_ENABLED?.trim() === '1';
+}
+
 export function isSelfV3Enabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.SELF_V3_ENABLED?.trim() === '1' && isSelfV2Enabled(env);
 }

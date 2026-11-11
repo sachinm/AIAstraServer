@@ -276,6 +276,16 @@ export const AGENTS: AgentDef[] = [
       'Writes the You board v3 cards span by span over the next twelve months in three parallel calls over the v2 natal prefix, with the year frame (spans, copied tones, clock agreement) as the suffix: per span get through or build, what it asks, the obstacle, the agreement; one dated confirm per card; JSON by schema (docs/reading-engine/68 §4.5, §4.8)',
   },
   {
+    id: 'self.now',
+    title: 'Now card',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'now',
+    role: 'oracle',
+    description:
+      'Writes the Now card of the Self, Love and Work boards in one call from the periods running today in each clock (deepest level served) and today’s sky over the chart in D1-D60: a line, what today asks, one if-then step, when the chapter turns (docs/reading-engine/72)',
+  },
+  {
     id: 'self.card.oracle',
     title: 'Card Oracle',
     kind: 'llm',
