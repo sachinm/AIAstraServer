@@ -2206,18 +2206,46 @@ Branch `fix/dasha-deep-global-cap` (docs/reading-engine/67 §5.2). Owner of each
   $0.013). The clock layer (readers then a 44 s concordance) blocks every card. Fix: store the ledger per kundli and day
   so only the first open pays; let the board cards show before the layer finishes; shrink the concordance input. Keep
   `CARDS_READ_REST` off until then. Owner: this branch. Done: first card under 40 s on a warm ledger; all 21 cards under
-  $0.50.
+  $0.50. **Update 2026-11-10, partial (code in, not measured):** clock layer cached per kundli and day (`kundli_slices`
+  row `layer.clock`, a no-op until M48 is applied), cards start on the counted ledger with the concordance beside them,
+  concordance input and output trimmed, readers and cards read rows cut to the frame, a pre-check replaces the two
+  repairs (commits `e24a4d4`..`27d0e43`). Expected from the replay's own calls: first card ≈ 60 s cold, ≈ 31 s warm;
+  all 21 cards $0.49–0.56. Report: "Fixes made" in `docs/reading-engine/70-phase3-replay-2026-11-10.md`. Stays open
+  until the next paid replay (command there, `--warm`) measures it.
 - **P1 · open · The new agents are not in the staging `agents` table.** The replay's `agent_runs` writes hit
   `agent_runs_agent_fkey` for `reading.clock`, `reading.concordance` and the card agents. Runs on staging will not be
   logged until the registry rows exist (migration or seed, same way as earlier agents). Owner: this branch. Done: a run
-  of the replay with storage on writes its `agent_runs` rows.
+  of the replay with storage on writes its `agent_runs` rows. **Update 2026-11-10, partial:** cause found: the rows come
+  from the idempotent seed (`seedAgentRegistry`, no migration inserts agent rows) and the four agents are defined, but
+  the replay's storage-dry proxy swallowed the seed's raw SQL. Now a run that hits the FK re-seeds and writes once more,
+  and the replay seeds with the plain client first (`da11df5`, unit-tested with fakes). No migration written or applied.
+  Stays open until a replay or a staging run shows the rows written.
 - **P2 · open · Ledger still 28 of 36 confirmed after the heavy-tone stopgap.** Check whether the clocks truly agree or
   share the engine's per-planet flags; see `docs/reading-engine/70-heavy-clocks-2026-11-10.md`. Done: the count on a
-  second kundli, and Sachin's decision on the word "confirmed" before a face shows it.
+  second kundli, and Sachin's decision on the word "confirmed" before a face shows it. **2026-11-10:** not touched by
+  the speed and cost fixes (the count rules are unchanged); still open.
+- **P2 · open · Cold cards read the ledger without the concordance's words.** Since `eee5b32` the cards start on the
+  counted ledger (status, tone, agree/of, keys) while the concordance writes; only a warm open gives them the words.
+  Grounding is unchanged; whether cold cards read worse is not measured. Done: the next replay's cold and `--warm`
+  cards compared side by side.
+- **P3 · open · The concordance's cost reaches the day's spend after the cards.** With the words in the background the
+  card queue checks the cap without the concordance (about $0.015 by estimate); it is added to the state doc when it
+  returns. Done: accepted, or the queue reserves it before the first card.
+- **P3 · open · More cuts if the replay lands above $0.50.** (a) The card role prompt (≈ 1.6 k tokens per card) could
+  move into the cached system prompt shared by every reading agent: ≈ 21 × 1.6 k × ($0.75 − $0.075)/M ≈ $0.023;
+  needs a prompt-architecture decision (readers would see the card role text). (b) A repair of only the failing spans
+  saves only output (≈ 700 tokens ≈ $0.003 a repair), so it was not built. (c) The cold board's critical path is the
+  slowest reader (Yogini, 29.5 s, 4,387 out); only a shorter reader output moves it.
+- **P3 · open · The `ledger` reading stage is never set.** The web shows "Checking where they agree" for it; the build
+  goes `clocks` → `cards` → `done` (before and after the 2026-11-10 fixes). Done: dropped from the type and the web, or
+  set while the concordance runs on a non-card build.
 - **P3 · open · Card Oracle cited evidence outside the frame.** `chapter` cited a row from before the frame; `mind` cited
   no ledger cell in three spans; `yogas` and `learning` had a confirm dropped (dates outside the frame). All repaired or
   dropped by the validators; prompt wording could stop it. Two clock sheets (Yogini, Tithi Pravesha year) were partial
-  on tones the cited rows did not allow.
+  on tones the cited rows did not allow. **Update 2026-11-10, partial:** the card reads only rows overlapping the frame
+  and may cite only keys it was given; `precheckCard` drops a key it was never given (the `chapter` case) and adds the
+  ledger cell a span's cited row rests on (the `mind` case) before any repair call (`e55c9e2`, unit-tested). The confirm
+  dates and the partial clock sheets are not addressed. Stays open until a replay shows no repair from these causes.
 
 - **P1 · open · Only one clock was ever read.** Plan: `docs/reading-engine/70-five-clocks-and-card-by-card-readings.md`.
   Phase 1 code is in (2026-11-10): `resolveReadingClocks()` (`src/reading/self/clock.ts`, env `READING_CLOCK_ORDER`,
