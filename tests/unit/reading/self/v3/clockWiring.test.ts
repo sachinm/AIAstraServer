@@ -234,4 +234,45 @@ describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
     expect(r.cards.body).toBeTruthy();
     expect(r.status).toBe('ok');
   });
+  it('the cards start on the counted ledger while the concordance is still writing; its words are folded in after', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((r) => (release = r));
+    const order: string[] = [];
+    const callGemini = async (o: GeminiCallOptions) => {
+      if (o.node.startsWith('reading.clock.')) return ok(reader(o.parts));
+      if (o.node === 'reading.concordance') {
+        order.push('concordance asked');
+        await held;
+        order.push('concordance answered');
+        return ok(boastful(o.parts[1]!));
+      }
+      return ok(JSON.stringify({ cards: [] }));
+    };
+    let ledgerSeen: { cells: Array<{ status: string; tone: string | null; agree: number; of: number; sentence: string | null; evidence: string[] }> } | null = null;
+    const r = await runSelfV3Cards(
+      base({
+        callGemini: callGemini as never,
+        loadBoard: async () => ({ cards: ['body', 'mind', 'stuck', 'sleep', 'year'], sections: {} }),
+        readCards: async (_d: unknown, i: { ledger: typeof ledgerSeen }) => {
+          order.push('cards');
+          ledgerSeen = i.ledger;
+          release();
+          return { results: [{ card: 'body', status: 'ok', content: null, timings: [], issues: [], costUsd: 0 }], cards: { body: { line: 'x', spans: [], confirm: null, pattern: null, ladder: null, agreement: null } }, timings: [], issues: [], spentUsd: 0, capReached: false, order: ['body'] };
+        },
+      }) as never,
+      { ctx, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b6' },
+    );
+    expect(order).toEqual(['concordance asked', 'cards', 'concordance answered']);
+    // the cards' ledger: counted in code, no words yet, every confirmed cell with three or more clocks and its keys
+    expect(ledgerSeen!.cells.length).toBeGreaterThan(0);
+    for (const c of ledgerSeen!.cells) {
+      expect(c.sentence).toBeNull();
+      if (c.status === 'confirmed') expect(c.agree).toBeGreaterThanOrEqual(3);
+      if (c.status === 'confirmed' || c.status === 'leaning') expect(c.evidence.length).toBeGreaterThan(0);
+    }
+    // the result holds the worded ledger, the concordance's call, and the same counted statuses
+    expect(r.agents.some((a) => (a as { call?: string }).call === 'concordance')).toBe(true);
+    expect(r.ledger!.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of])).toEqual((ledgerSeen as unknown as { cells: Array<{ id: string; status: string; tone: string | null; agree: number; of: number }> }).cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of]));
+    expect(r.status).toBe('ok');
+  });
 });

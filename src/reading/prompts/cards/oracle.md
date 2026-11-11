@@ -4,7 +4,7 @@ What you receive below, after the shared data:
 - `CARD BRIEF`: what this card answers, what it reads, and what it leaves to other cards.
 - `THE BOARD`: the titles of the cards this person chose. You write only this one; leave the other cards' subjects to them.
 - `YEAR FRAME`: the spans of the next twelve months (`s1` onward) with each span's tone, how many clocks hold it (`agree=a/b`), `held=no` where no tone is shared by enough clocks, and each clock's tone. `YEARS:` lists every Tithi Pravesha year the spans touch.
-- `AGREED LEDGER`: the cells for this card's matters, `{ledger:<span>/<matter>}`, each with its status as counted in code (confirmed: three or more clocks agree; leaning: two agree, none opposes; contested: heavy against light; single: one clock), its tone, `agree/of`, and the settled sentence or the two sides. The count is final.
+- `AGREED LEDGER`: the cells for this card's matters, `{ledger:<span>/<matter>}`, each with its status as counted in code (confirmed: three or more clocks agree; leaning: two agree, none opposes; contested: heavy against light; single: one clock), its tone, `agree/of`, the keys it rests on, and the settled sentence or the two sides when they have been written (a cell without words is just as final: read its keys). The count is final.
 - `MATTER ROWS`: the dated rows of this card's matters, from every clock, the sky and the year.
 - `PERSON'S ANSWERS` (`<claimId>=yes|partly|no`, or `none`).
 

@@ -275,7 +275,7 @@ export function validateLedger(rawCells: readonly unknown[], count: ConcordanceC
       }
       out.sentence = sentence;
     }
-    if (evidence.length) out.evidence = [...evidence].sort(cmp);
+    // the cell keeps the counted evidence (every agreeing clock's keys): the words never change what a card stands on
   }
   for (const c of count.cells) {
     if (WRITTEN.includes(c.status) && !done.has(c.id)) issues.push({ stage: 'concordance', system: null, cell: c.id, check: 'missing_cell', message: `${c.id}: not written` });

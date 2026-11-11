@@ -30,7 +30,7 @@ import { getCardsReadMin, getReadingClocksMin, isCardsReadEnabled, isReadingCloc
 import { readCards, type CardsRunResult } from '../../cards/run.js';
 import { readCardsState, updateCardsState } from '../../cards/state.js';
 import { sharedPrefix } from '../../clocks/reader.js';
-import { pickClockLayerSlices, runClockLayer, type ClockLayerResult } from '../../clocks/run.js';
+import { pickClockLayerSlices, runClockLayer, type ClockLayerResult, type ClockLayerWords } from '../../clocks/run.js';
 import type { AgreedLedger } from '../../clocks/types.js';
 import { natalCoreFromPrefix, prepareSlices, type SliceSetReport } from '../../slices/prepare.js';
 import { renderSliceSet, type SliceInventory } from '../../slices/render.js';
@@ -186,6 +186,27 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
     }
     // 1b: the slices and the clock layer (doc 70 §4.1 layers 1–3), behind READING_CLOCK_LAYER
     let layerModel: string | null = null;
+    let layerWords: Promise<ClockLayerWords> | null = null;
+    // the concordance's words, once written: the worded ledger, its call and its spend (on the result and the day's doc)
+    const foldWords = async () => {
+      if (!layerWords) return;
+      const w = await layerWords;
+      layerWords = null;
+      ms.concordance = w.ms;
+      if (w.timing) out.agents.push(w.timing as unknown as SelfV2AgentTiming);
+      out.ledger = w.ledger;
+      if (out.clockLayer) {
+        out.clockLayer.spentUsd = Math.round((out.clockLayer.spentUsd + w.spentUsd) * 1e6) / 1e6;
+        out.clockLayer.byStatus = w.ledger.byStatus;
+        if (w.status !== 'ok' && out.clockLayer.status === 'ok') out.clockLayer.status = w.status;
+      }
+      if (w.issues.length) out.gaps.push(`v3: concordance ${w.status} (${w.issues.slice(0, 3).map((x) => x.message).join('; ')})`);
+      if (cardsOn && w.spentUsd > 0) {
+        await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
+          d.spentUsd = Math.round((d.spentUsd + w.spentUsd) * 1e6) / 1e6;
+        });
+      }
+    };
     if (cardsOn || (deps.clockLayer ?? isReadingClockLayerEnabled())) {
       const tl = performance.now();
       const invs: SliceInventory[] = [{ system: frame.clock, inventory: i.pressure }, ...inventories].filter((x): x is SliceInventory => Boolean(x.inventory));
@@ -195,11 +216,14 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       out.sliceSet = prepared.slices;
       ms.slices = since(tl);
       const tc = performance.now();
+      // with the per-card reading on, the cards start on the counted ledger and the concordance writes its words
+      // meanwhile (doc 70 Phase 3 replay fixes); they are folded in after the cards (`foldWords`)
       const layer = await (deps.runClockLayer ?? runClockLayer)(
-        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true },
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true, words: cardsOn ? 'background' : 'await' },
         { ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf }, frame, slices: prepared.slices },
       );
       ms.clockLayer = since(tc);
+      layerWords = layer.words ?? null;
       layerModel = layer.model;
       out.agents.push(...(layer.timings as unknown as SelfV2AgentTiming[]));
       out.ledger = layer.ledger;
@@ -229,6 +253,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
           d.spentUsd = Math.round((d.spentUsd + layerSpent) * 1e6) / 1e6;
           // the queued cards wait for the next build (the board says the chart is still being prepared)
         });
+        await foldWords();
         out.status = 'skipped';
         out.gaps.push(`cards: no agreed ledger (${out.clockLayer?.status ?? 'no clock layer'}); no card read`);
         return out;
@@ -249,6 +274,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
         { ctx, frame, ledger: out.ledger, prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash }, slices: out.sliceSet!, board: board.cards, portrait: i.portrait, sections: board.sections, dates, answers, model: layerModel ?? i.oracleSlice.model, spentBeforeUsd: 0 },
       );
       ms.cards = since(tcards);
+      await foldWords();
       await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, deps.now, (d) => {
         d.stage = 'done';
         d.capReached = run.capReached;

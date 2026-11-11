@@ -15,7 +15,7 @@ import type { PreparedAgentSlice, WarmedRegion } from '../self/v2types.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
 import { TP_SYSTEM } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
-import { countConcordance, runConcordance } from './concordance.js';
+import { countConcordance, ledgerFromCount, runConcordance, sheetHashesOf } from './concordance.js';
 import { LAYER_CACHE_VERSION, layerCacheKey, readLayerCache, writeLayerCache } from './layerCache.js';
 import { clockTiming, readClocks, sharedPrefix, systemOfSlice, type ClockCallContext, type ClockCallDeps } from './reader.js';
 import {
@@ -48,6 +48,24 @@ export interface ClockLayerDeps extends ClockCallDeps {
   writeCache?: typeof writeLayerCache;
   /** overrides the prompts' part of the layer cache key (tests) */
   promptVersion?: string;
+  /**
+   * `await` (default): the result carries the ledger with the concordance's words. `background`: the result returns as
+   * soon as the sheets are counted, with the counted ledger (every cell's status, tone, agree/of and evidence are final
+   * there; only the words are missing), and `words` settles when the concordance has written them. The cards read on
+   * the counted ledger meanwhile (doc 70 Phase 3 replay fixes: the 44 s concordance no longer stands before the first card).
+   */
+  words?: 'await' | 'background';
+}
+
+/** what the concordance added after a `background` layer returned: the worded ledger, its call, its issues */
+export interface ClockLayerWords {
+  status: ClockLayerStatus;
+  ledger: AgreedLedger;
+  timing: ClockAgentTiming | null;
+  issues: ClockIssue[];
+  /** USD of the concordance call alone (0 when stored or not run) */
+  spentUsd: number;
+  ms: number;
 }
 
 export interface ClockLayerInput {
@@ -76,6 +94,8 @@ export interface ClockLayerResult {
   cached: boolean;
   /** the layer cache key this run read or wrote (null before the slices were picked) */
   cacheKey: string | null;
+  /** with `words: 'background'` and a ledger counted: settles with the concordance's words (never rejects); else null */
+  words: Promise<ClockLayerWords> | null;
 }
 
 /** Picks the shared slices and the clock slices (the year last when not placed) out of what the build read. */
@@ -114,6 +134,7 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
     ms: { warm: 0, readers: 0, concordance: 0, total: 0 },
     cached: false,
     cacheKey: null,
+    words: null,
   };
   const done = (status: ClockLayerStatus): ClockLayerResult => {
     result.status = status;
@@ -195,9 +216,10 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       return done(spent() > deps.maxSpendUsd ? 'budget_exceeded' : 'too_few_clocks');
     }
 
-    // 3. count and the concordance call
+    // 3. the count (code, final) and the concordance call (the words)
+    const sheetsClean = result.sheets.every((s) => s.status === 'ok');
     const tc = performance.now();
-    const c = await runConcordance(deps, {
+    const concordance = runConcordance(deps, {
       ctx: input.ctx,
       frame: input.frame,
       prefix,
@@ -205,24 +227,46 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       model,
       frameHash: picked.shared.frame.hash,
       overBudget: spent() >= deps.maxSpendUsd,
+    }).then(async (c): Promise<ClockLayerWords> => {
+      const ms = Math.round(performance.now() - tc);
+      const cost = c.timing?.costUsd ?? 0;
+      const issues = [...c.issues];
+      let status: ClockLayerStatus = sheetsClean && !c.issues.length ? 'ok' : 'partial';
+      if (spent() + cost > deps.maxSpendUsd) {
+        issues.push({ stage: 'concordance', system: null, cell: null, check: 'budget', message: `spent ${round6(spent() + cost)} over the cap ${deps.maxSpendUsd}` });
+        status = 'budget_exceeded';
+      }
+      // stored only when the ledger has its words (the concordance wrote, came from its store, or had nothing to write)
+      if (status !== 'budget_exceeded' && (!c.timing || c.timing.status === 'ok' || c.timing.status === 'cached')) {
+        await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, status, sheets: result.sheets, ledger: c.ledger }, deps.now);
+      }
+      return { status, ledger: c.ledger, timing: c.timing, issues, spentUsd: round6(cost), ms };
     });
-    result.ms.concordance = Math.round(performance.now() - tc);
-    result.count = c.count;
-    result.pairs = c.count.pairs;
-    result.ledger = c.ledger;
-    if (c.timing) result.timings.push(c.timing);
-    result.issues.push(...c.issues);
-    if (spent() > deps.maxSpendUsd) {
-      result.issues.push({ stage: 'concordance', system: null, cell: null, check: 'budget', message: `spent ${spent()} over the cap ${deps.maxSpendUsd}` });
-      return done('budget_exceeded');
+
+    if (deps.words === 'background') {
+      const count = countConcordance(result.sheets, input.frame.spans.map((s) => s.id));
+      result.count = count;
+      result.pairs = count.pairs;
+      result.ledger = ledgerFromCount(count, picked.shared.frame.hash, sheetHashesOf(result.sheets));
+      result.words = concordance.catch((e): ClockLayerWords => ({
+        status: 'partial',
+        ledger: result.ledger!,
+        timing: null,
+        issues: [{ stage: 'concordance', system: null, cell: null, check: 'call_failed', message: `concordance: ${String((e as Error)?.message ?? e).slice(0, 160)}` }],
+        spentUsd: 0,
+        ms: Math.round(performance.now() - tc),
+      }));
+      return done(sheetsClean ? 'ok' : 'partial');
     }
-    const clean = result.sheets.every((s) => s.status === 'ok') && !c.issues.length;
-    const status = clean ? 'ok' : 'partial';
-    // stored only when the ledger has its words (the concordance wrote, came from its store, or had nothing to write)
-    if (result.ledger && (!c.timing || c.timing.status === 'ok' || c.timing.status === 'cached')) {
-      await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, status, sheets: result.sheets, ledger: result.ledger }, deps.now);
-    }
-    return done(status);
+
+    const w = await concordance;
+    result.ms.concordance = w.ms;
+    result.count = countConcordance(result.sheets, input.frame.spans.map((s) => s.id));
+    result.pairs = result.count.pairs;
+    result.ledger = w.ledger;
+    if (w.timing) result.timings.push(w.timing);
+    result.issues.push(...w.issues);
+    return done(w.status);
   } catch (e) {
     result.issues.push({ stage: 'clock', system: null, cell: null, check: 'call_failed', message: `clock layer: ${String((e as Error).message ?? e).slice(0, 200)}` });
     return done('partial');

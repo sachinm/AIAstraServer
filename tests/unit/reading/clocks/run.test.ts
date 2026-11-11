@@ -141,4 +141,27 @@ describe('runClockLayer end to end (fake model, fake cache, no database)', () =>
     expect(r.status).toBe('missing_slices');
     expect(calls).toHaveLength(0);
   });
+  it('background words: returns on the count (no words, statuses final), then the words settle with the call and the cost', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((r) => (release = r));
+    const { d, calls } = deps({
+      words: 'background',
+      callGemini: async (o) => {
+        calls.push(o);
+        if (o.node === 'reading.concordance') await held;
+        return result(o.node === 'reading.concordance' ? fakeConcordance(o.parts[1]!) : fakeReader(o.parts[1]!));
+      },
+    });
+    const r = await runClockLayer(d, { ctx, frame: frame(), slices: slices() });
+    expect(r.ledger).not.toBeNull();
+    expect(r.ledger!.cells.every((c) => c.sentence === null && c.sides === null)).toBe(true);
+    expect(r.timings.filter((t) => t.call === 'concordance')).toHaveLength(0);
+    expect(r.words).not.toBeNull();
+    release();
+    const w = await r.words!;
+    expect(w.timing!.status).toBe('ok');
+    expect(w.spentUsd).toBeGreaterThan(0);
+    expect(w.ledger.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of, c.evidence])).toEqual(r.ledger!.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of, c.evidence]));
+    expect(w.ledger.cells.find((c) => c.id === 'ledger:s1/career_and_standing')!.sentence).toBe('The clocks agree: heavy.');
+  });
 });
