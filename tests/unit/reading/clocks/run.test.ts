@@ -1,56 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runClockLayer, type ClockLayerDeps } from '../../../../src/reading/clocks/run.js';
 import type { GeminiCallOptions, GeminiResult } from '../../../../src/reading/llm/gemini.js';
-import { TONE_OF } from '../../../../src/reading/self/v3/yearFrame.js';
-import { parseRowLines, renderSliceSet } from '../../../../src/reading/slices/index.js';
+import { renderSliceSet } from '../../../../src/reading/slices/index.js';
+import { fakeConcordance, fakeReader, result } from './fakes.js';
 import { ASOF, frame, inventories, natal } from '../slices/fixtures.js';
 
 const prisma = new Proxy({}, { get: () => undefined }) as never;
 const ctx = { userId: 'u1', kundliId: 'k1', asOf: ASOF };
-const result = (text: string): GeminiResult => ({ text, usage: { promptTokens: 1000, cachedTokens: 900, outputTokens: 200, thoughtTokens: 0 } as never, finishReason: 'STOP', ttftMs: 1, stoppedForLoop: false });
-
-/** A reader that reads its own clock slice honestly: per span and matter, the tone of its rows (mixed when they differ). */
-function fakeReader(part: string): string {
-  const own = /# CLOCK (\S+)/.exec(part)![1]!;
-  const rows = parseRowLines(part.slice(part.indexOf(`# CLOCK ${own}`)));
-  const cells: unknown[] = [];
-  for (const s of frame().spans) {
-    const by = new Map<string, Array<{ key: string; polarity: keyof typeof TONE_OF }>>();
-    for (const r of rows.values()) {
-      if (!(r.from < s.to && s.from < r.to)) continue;
-      for (const m of r.matters) by.set(m, [...(by.get(m) ?? []), { key: r.key, polarity: r.polarity }]);
-    }
-    for (const [matter, rs] of by) {
-      const tones = [...new Set(rs.map((x) => TONE_OF[x.polarity]))];
-      cells.push({ span: s.id, matter, tone: tones.length === 1 ? tones[0] : 'mixed', sentence: `${own} reads ${matter}.`, strength: 2, evidence: rs.map((x) => x.key) });
-    }
-  }
-  // one cell citing a row of another clock: the validator must drop it
-  cells.push({ span: 's1', matter: 'career_and_standing', tone: 'heavy', sentence: 'Borrowed.', strength: 2, evidence: ['pressure:dasha:narayana/1/Le@2025-01-01'] });
-  return JSON.stringify({ cells });
-}
-
-/** A concordance agent that writes every counted cell, and tries to raise a single cell to confirmed. */
-function fakeConcordance(part: string): string {
-  const cells: unknown[] = [];
-  const lines = part.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^(ledger:\S+) status=(\w+) tone=(\w+)/.exec(lines[i]!);
-    if (!m) continue;
-    const clocks: Array<{ system: string; tone: string; keys: string[] }> = [];
-    for (let j = i + 1; j < lines.length && lines[j]!.startsWith('  '); j++) {
-      const c = /^ {2}(\S+): (\w+) .* evidence (.*)$/.exec(lines[j]!)!;
-      clocks.push({ system: c[1]!, tone: c[2]!, keys: [...c[3]!.matchAll(/\{([^}]+)\}/g)].map((x) => x[1]!) });
-    }
-    if (m[2] === 'contested') {
-      const sides = ['heavy', 'mixed', 'light'].map((t) => ({ tone: t, clocks: clocks.filter((c) => c.tone === t).map((c) => c.system), restsOn: `the ${t} periods` })).filter((s) => s.clocks.length);
-      cells.push({ id: m[1], status: 'contested', tone: 'none', sentence: '', sides, evidence: clocks[0]!.keys });
-    } else cells.push({ id: m[1], status: m[2], tone: m[3], sentence: `The clocks agree: ${m[3]}.`, sides: [], evidence: clocks[0]!.keys });
-  }
-  cells.push({ id: 'ledger:s1/self_and_body', status: 'confirmed', tone: 'mixed', sentence: 'Raised.', sides: [], evidence: [] });
-  return JSON.stringify({ cells });
-}
-
 describe('runClockLayer end to end (fake model, fake cache, no database)', () => {
   const env = { ...process.env };
   beforeEach(() => {

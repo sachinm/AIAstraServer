@@ -15,10 +15,12 @@ import type { PreparedAgentSlice, WarmedRegion } from '../self/v2types.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
 import { TP_SYSTEM } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
-import { runConcordance } from './concordance.js';
-import { readClocks, sharedPrefix, systemOfSlice, type ClockCallContext, type ClockCallDeps } from './reader.js';
+import { countConcordance, runConcordance } from './concordance.js';
+import { LAYER_CACHE_VERSION, layerCacheKey, readLayerCache, writeLayerCache } from './layerCache.js';
+import { clockTiming, readClocks, sharedPrefix, systemOfSlice, type ClockCallContext, type ClockCallDeps } from './reader.js';
 import {
   CLOCK_AGENT,
+  CONCORDANCE_AGENT,
   READER_SYSTEM_PROMPT,
   type AgreedLedger,
   type ClockAgentTiming,
@@ -41,6 +43,11 @@ export interface ClockLayerDeps extends ClockCallDeps {
   minSheets?: number;
   /** the model every call of the layer runs on (one model, so one cache region serves them all); default the oracle role's */
   model?: string;
+  /** test seams for the layer cache (`layerCache.ts`); default the `kundli_slices` row `layer.clock` */
+  readCache?: typeof readLayerCache;
+  writeCache?: typeof writeLayerCache;
+  /** overrides the prompts' part of the layer cache key (tests) */
+  promptVersion?: string;
 }
 
 export interface ClockLayerInput {
@@ -65,6 +72,10 @@ export interface ClockLayerResult {
   issues: ClockIssue[];
   spentUsd: number;
   ms: { warm: number; readers: number; concordance: number; total: number };
+  /** true when the sheets and the ledger came from the layer cache (no reader and no concordance call) */
+  cached: boolean;
+  /** the layer cache key this run read or wrote (null before the slices were picked) */
+  cacheKey: string | null;
 }
 
 /** Picks the shared slices and the clock slices (the year last when not placed) out of what the build read. */
@@ -101,6 +112,8 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
     issues: [],
     spentUsd: deps.spentUsd ?? 0,
     ms: { warm: 0, readers: 0, concordance: 0, total: 0 },
+    cached: false,
+    cacheKey: null,
   };
   const done = (status: ClockLayerStatus): ClockLayerResult => {
     result.status = status;
@@ -137,9 +150,34 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       estTokens: { prefix: Math.ceil(prefix.text.length / 2.2), suffix: 0 },
       keys: prefix.keys,
     } as unknown as PreparedAgentSlice;
+    // the cards read over this region too, so it is warmed on a cache hit as well; the cache row is read meanwhile
+    const key = layerCacheKey({
+      asOf: input.ctx.asOf,
+      model,
+      prefixHash: prefix.hash,
+      frameHash: picked.shared.frame.hash,
+      clockSlices: picked.clocks.map((s) => ({ id: s.id, hash: s.hash })),
+      promptVersion: deps.promptVersion,
+    });
+    result.cacheKey = key;
     const tw = performance.now();
-    result.warmed = await warmPrefixes([warmSlice], { ensureCache: deps.ensureCache });
+    const [warmed, hit] = await Promise.all([
+      warmPrefixes([warmSlice], { ensureCache: deps.ensureCache }),
+      deps.force ? Promise.resolve(null) : (deps.readCache ?? readLayerCache)(deps.prisma, input.ctx.kundliId, key),
+    ]);
+    result.warmed = warmed;
     result.ms.warm = Math.round(performance.now() - tw);
+
+    // 1b. a warm open: the sheets and the ledger as stored, no reader and no concordance call
+    if (hit) {
+      result.cached = true;
+      result.sheets = hit.sheets;
+      result.count = countConcordance(hit.sheets, input.frame.spans.map((s) => s.id));
+      result.pairs = hit.ledger.pairs;
+      result.ledger = hit.ledger;
+      result.timings = [...hit.sheets.map((s) => clockTiming(CLOCK_AGENT, `clock.${s.system}`, model, null, 0, 'cached')), clockTiming(CONCORDANCE_AGENT, 'concordance', model, null, 0, 'cached')];
+      return done(hit.status);
+    }
 
     // 2. the readers, all at once
     const tr = performance.now();
@@ -179,7 +217,12 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       return done('budget_exceeded');
     }
     const clean = result.sheets.every((s) => s.status === 'ok') && !c.issues.length;
-    return done(clean ? 'ok' : 'partial');
+    const status = clean ? 'ok' : 'partial';
+    // stored only when the ledger has its words (the concordance wrote, came from its store, or had nothing to write)
+    if (result.ledger && (!c.timing || c.timing.status === 'ok' || c.timing.status === 'cached')) {
+      await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, status, sheets: result.sheets, ledger: result.ledger }, deps.now);
+    }
+    return done(status);
   } catch (e) {
     result.issues.push({ stage: 'clock', system: null, cell: null, check: 'call_failed', message: `clock layer: ${String((e as Error).message ?? e).slice(0, 200)}` });
     return done('partial');
