@@ -19,8 +19,11 @@ import { CLOCK_READER_PROMPT, CONCORDANCE_PROMPT, READER_SYSTEM_PROMPT, type Agr
 export const LAYER_CACHE_SLICE_ID = 'layer.clock';
 /** bump when the layer's output changes for the same inputs (a validator or a count rule) */
 export const LAYER_CACHE_VERSION = 1;
-/** The readers' and the concordance's input version (how the slices are cut and the count is rendered). 1 = as built in Phase 3. */
-export const READER_INPUT_VERSION = 1;
+/**
+ * The readers' and the concordance's input version (how the slices are cut and the count is rendered). 1 = as built in
+ * Phase 3; 2 = each `clock.<system>` slice cut to the frame before it is read, and the trimmed count.
+ */
+export const READER_INPUT_VERSION = 2;
 
 export interface LayerCacheKeyInput {
   asOf: string;
