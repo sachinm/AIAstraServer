@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { countConcordance, ledgerFromCount, statusOf, validateLedger } from '../../../../src/reading/clocks/concordance.js';
+import { concordanceSchema, CONCORDANCE_MAX_OUTPUT_TOKENS, countConcordance, ledgerFromCount, renderCount, runConcordance, statusOf, validateLedger } from '../../../../src/reading/clocks/concordance.js';
+import type { GeminiCallOptions, GeminiResult } from '../../../../src/reading/llm/gemini.js';
 import type { ClockCell, ClockSheet, ClockTone } from '../../../../src/reading/clocks/types.js';
 
 const sheet = (system: string, cells: Array<Partial<ClockCell> & { span: string; matter: string; tone: ClockTone }>): ClockSheet => ({
@@ -146,5 +147,72 @@ describe('validateLedger: the agent cannot change the count', () => {
     const bad = { ...good[2], sides: [{ tone: 'light', clocks: ['yogini'], restsOn: 'x' }, good[2]!.sides[1]] };
     const v = validateLedger([bad], count, base);
     expect(v.issues.find((i) => i.check === 'bad_sides')?.message).toMatch(/names clocks that did not give it/);
+  });
+});
+
+describe('the concordance input and answer, trimmed (doc 70 Phase 3 replay fixes)', () => {
+  const sheets = [
+    sheet('vimsottari', [{ span: 's1', matter: 'career_and_standing', tone: 'heavy' }, { span: 's2', matter: 'career_and_standing', tone: 'light' }, { span: 's1', matter: 'self_and_body', tone: 'mixed' }]),
+    sheet('narayana', [{ span: 's1', matter: 'career_and_standing', tone: 'heavy' }, { span: 's2', matter: 'career_and_standing', tone: 'light' }]),
+    sheet('yogini', [{ span: 's1', matter: 'career_and_standing', tone: 'heavy' }, { span: 's2', matter: 'career_and_standing', tone: 'heavy' }]),
+    sheet('tithi_pravesha', [{ span: 's1', matter: 'career_and_standing', tone: 'light' }]),
+  ];
+  const count = countConcordance(sheets, ['s1', 's2']);
+
+  it('the count sent: no evidence key, no strength, no pair table; the agreeing clocks speak, the others by tone; a single cell is not sent', () => {
+    const t = renderCount(count);
+    expect(t).not.toMatch(/\{pressure:|evidence|strength=|PAIRS/);
+    expect(t).toContain('ledger:s1/career_and_standing status=confirmed tone=heavy');
+    expect(t).toContain('  vimsottari: heavy "vimsottari says heavy"');
+    expect(t).toContain('  apart: tithi_pravesha=light');
+    expect(t).not.toContain('tithi_pravesha: light "');
+    // contested: every clock with its sentence
+    expect(t).toContain('  yogini: heavy "yogini says heavy"');
+    expect(t).toContain('  narayana: light "narayana says light"');
+    expect(t).not.toContain('ledger:s1/self_and_body');
+  });
+
+  it('the schema asks for the words only: id, sentence, sides', () => {
+    const item = ((concordanceSchema(['a'], ['vimsottari']).properties as Record<string, { items: { properties: Record<string, unknown>; required: string[] } }>).cells.items);
+    expect(Object.keys(item.properties).sort()).toEqual(['id', 'sentence', 'sides']);
+    expect(item.required).toEqual(['id', 'sentence', 'sides']);
+  });
+
+  it('a words-only answer is kept with the count status, tone and the counted keys', () => {
+    const base = ledgerFromCount(count, 'fh', {});
+    const v = validateLedger(
+      [
+        { id: 'ledger:s1/career_and_standing', sentence: 'Work presses in this span.', sides: [] },
+        { id: 'ledger:s2/career_and_standing', sentence: '', sides: [{ tone: 'light', clocks: ['vimsottari', 'narayana'], restsOn: 'support' }, { tone: 'heavy', clocks: ['yogini'], restsOn: 'pressure' }] },
+      ],
+      count,
+      base,
+    );
+    expect(v.issues).toEqual([]);
+    const s1 = v.ledger.cells.find((c) => c.id === 'ledger:s1/career_and_standing')!;
+    expect(s1).toMatchObject({ status: 'confirmed', tone: 'heavy', sentence: 'Work presses in this span.' });
+    expect(s1.evidence).toEqual(base.cells.find((c) => c.id === s1.id)!.evidence);
+  });
+
+  it('the call: minimal thinking, a 6 k output cap, the trimmed count as the uncached part (fake model)', async () => {
+    const seen: GeminiCallOptions[] = [];
+    const callGemini = async (o: GeminiCallOptions): Promise<GeminiResult> => {
+      seen.push(o);
+      return { text: JSON.stringify({ cells: [{ id: 'ledger:s1/career_and_standing', sentence: 'Work presses.', sides: [] }] }), usage: { promptTokens: 10, cachedTokens: 0, outputTokens: 5, thoughtTokens: 0 } as never, finishReason: 'STOP', ttftMs: 1, stoppedForLoop: false };
+    };
+    const frame = { asOf: '2026-11-10', to: '2027-11-10', spans: [{ id: 's1', from: '2026-11-01', to: '2027-02-01', place: 'now' }, { id: 's2', from: '2027-02-01', to: '2027-11-10', place: 'next' }] } as never;
+    const r = await runConcordance(
+      { prisma: new Proxy({}, { get: () => undefined }) as never, callGemini, maxSpendUsd: 1, now: new Date('2026-11-10T12:00:00Z') },
+      { ctx: { userId: 'u', kundliId: 'k', asOf: '2026-11-10' }, frame, prefix: { text: 'PREFIX', keys: [], hash: 'ph', rows: new Map() }, sheets, model: 'gemini-3.8-flash', frameHash: 'fh', overBudget: false },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.thinking).toBe('minimal');
+    expect(seen[0]!.maxOutputTokens).toBe(CONCORDANCE_MAX_OUTPUT_TOKENS);
+    expect(CONCORDANCE_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(6144);
+    expect(seen[0]!.parts[0]).toBe('PREFIX');
+    expect(seen[0]!.parts[1]).toContain(renderCount(count));
+    expect(r.ledger.cells.find((c) => c.id === 'ledger:s1/career_and_standing')!.sentence).toBe('Work presses.');
+    // the contested cell was not written: it keeps the count, and the gap is recorded
+    expect(r.issues.map((i) => i.check)).toEqual(['missing_cell']);
   });
 });

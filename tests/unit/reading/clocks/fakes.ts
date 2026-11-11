@@ -27,23 +27,23 @@ export function fakeReader(part: string): string {
   return JSON.stringify({ cells });
 }
 
-/** A concordance agent that writes every counted cell, and tries to raise a single cell to confirmed. */
+/** A concordance agent that writes every counted cell (words only, as the schema asks), and tries to raise a single cell to confirmed. */
 export function fakeConcordance(part: string): string {
   const cells: unknown[] = [];
   const lines = part.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const m = /^(ledger:\S+) status=(\w+) tone=(\w+)/.exec(lines[i]!);
     if (!m) continue;
-    const clocks: Array<{ system: string; tone: string; keys: string[] }> = [];
+    const clocks: Array<{ system: string; tone: string }> = [];
     for (let j = i + 1; j < lines.length && lines[j]!.startsWith('  '); j++) {
-      const c = /^ {2}(\S+): (\w+) .* evidence (.*)$/.exec(lines[j]!)!;
-      clocks.push({ system: c[1]!, tone: c[2]!, keys: [...c[3]!.matchAll(/\{([^}]+)\}/g)].map((x) => x[1]!) });
+      const c = /^ {2}(\S+): (\w+) "/.exec(lines[j]!);
+      if (c) clocks.push({ system: c[1]!, tone: c[2]! });
     }
     if (m[2] === 'contested') {
       const sides = ['heavy', 'mixed', 'light'].map((t) => ({ tone: t, clocks: clocks.filter((c) => c.tone === t).map((c) => c.system), restsOn: `the ${t} periods` })).filter((s) => s.clocks.length);
-      cells.push({ id: m[1], status: 'contested', tone: 'none', sentence: '', sides, evidence: clocks[0]!.keys });
-    } else cells.push({ id: m[1], status: m[2], tone: m[3], sentence: `The clocks agree: ${m[3]}.`, sides: [], evidence: clocks[0]!.keys });
+      cells.push({ id: m[1], sentence: '', sides });
+    } else cells.push({ id: m[1], sentence: `The clocks agree: ${m[3]}.`, sides: [] });
   }
-  cells.push({ id: 'ledger:s1/self_and_body', status: 'confirmed', tone: 'mixed', sentence: 'Raised.', sides: [], evidence: [] });
+  cells.push({ id: 'ledger:s1/self_and_body', status: 'confirmed', tone: 'mixed', sentence: 'Raised.', sides: [] });
   return JSON.stringify({ cells });
 }
