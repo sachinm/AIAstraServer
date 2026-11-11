@@ -2678,3 +2678,15 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   `npx update-browserslist-db@latest` is run in its own commit (it edits `package-lock.json`).
 - **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
   when `AIAstra_WEB/AGENTS.md` says agents and CI use `test:run`.
+
+## Filed 2026-11-10 by the phone-frame session (web `fix/sky-mobile-cover`, merged into develop)
+
+- **P2 · Landing scroll icon can rest on the figure in portrait.** In `docs/screenshots/mobile-frame/01-landing-portrait.png`
+  (web repo) one parchment icon sits at about x 56 %, y 32 %, inside `KEEP_OUT_PORTRAIT` [30, 70, 30, 66] of
+  `src/lib/scrollPlacement.ts`. Either the placement runs before the portrait flag is read, or the keep-out is applied
+  to something other than the icon centre. Owner: web. Done: no icon centre inside the portrait keep-out on a phone.
+  Status: open.
+- **P3 · Phone header squeezes the question quota to "2…".** At 360 px the board header (menu, star, quota, chat,
+  Personalize, avatar) leaves the `UsageBar` text a few pixels, so the count truncates. Seen in
+  `docs/screenshots/mobile-frame/10-board-phone.png`. Owner: web. Done: the quota reads in full on a 360 px phone, for
+  example by moving Personalize into the menu drawer. Status: open.
