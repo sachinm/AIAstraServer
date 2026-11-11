@@ -15,6 +15,7 @@ import { CARD_STUCK_MS } from '../../cards/types.js';
 import { getSelfV2, writeConfirm, type SelfV2Deps } from '../v2api/service.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../buildEvent.js';
 import { cardDef, isCardOffered } from './cards.js';
+import { shapeSelfCard } from '../../boards/cardOptions.js';
 import { emptyLayout, readLayout, validateLayout, writeLayout } from './layout.js';
 import { buildSelfV3Response } from './response.js';
 import { readSelfV3Cards } from './store.js';
@@ -69,10 +70,10 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
     for (const id of Object.keys({ ...doc.cards, ...v3Cards }) as SelfCardId[]) states[id] = cardStateOf(doc, id, Boolean(v3Cards[id]), now);
   }
   const reading = doc ? boardReadingView(doc, layout.cards, v3Cards, now, true) : null;
-  return {
-    body: buildSelfV3Response({ v2: v2.body, v3Cards: Object.keys(v3Cards).length ? v3Cards : null, suggested, layout, today, states, cardsRead, reading }),
-    queued: v2.queued,
-  };
+  const body = buildSelfV3Response({ v2: v2.body, v3Cards: Object.keys(v3Cards).length ? v3Cards : null, suggested, layout, today, states, cardsRead, reading });
+  // doc 71 §4.4 item 4: each card shaped by the person's options (a filter over stored content, nothing new made)
+  body.cards = body.cards.map((c) => shapeSelfCard(c, layout.options?.[c.id]));
+  return { body, queued: v2.queued };
 }
 
 /** GET /api/self/v3/catalogue: the picker's tiles without card bodies. */

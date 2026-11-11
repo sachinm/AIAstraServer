@@ -2486,3 +2486,26 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   disk, the database holds roughly 150–200 kundlis beside the other tables before the guard stops writes. Owner: Sachin
   (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
   for the expected user count (or a decision to revisit §6.2 then).
+
+## Filed 2026-11-10 by the card picker and card options build (docs/reading-engine/71)
+
+- **P1 · Apply migration `20261110140000_board_layout_options_m49` before the API that reads `board_layout.options`
+  ships.** Additive (`ADD COLUMN IF NOT EXISTS options jsonb default '{}'`), but Prisma selects the column, so the new
+  API on an unmigrated database fails layout reads and writes. [deploy session] Done when staging has the column and
+  `GET /api/self/v3` answers 200 after the deploy.
+- **P2 · Card Length and Words do not change the written text yet (doc 71 Phase 2).** Today a Deep card shows every
+  stored part and says "Longer writing comes with a later reading"; a glance only hides parts. Writing to the chosen
+  length and with chart terms needs the Personalizer to take the options and a new card cache key, priced by one paid
+  replay. [server, with Sachin's yes for the replay] Done when a Deep card is longer and a glance is one sentence.
+- **P2 · The long arc is only honoured on This chapter and Chapters.** Other Self cards with View = The long arc show
+  the year and a plain note. [server] Done when card readings carry the life chapters, or the choice is offered only
+  where it applies.
+- **P2 · Love and Work cards are today's sub-areas, not doc 69's v3 cards.** The Partner you draw, What to build and
+  Leading people are "Coming soon" because no sub-area feeds them; the picker shows every card whatever the person's
+  status (doc 69 `showWhen` not built). [server + web, doc 69] Done when doc 69 cards replace the mapping in
+  `src/reading/boards/catalogue.ts`.
+- **P3 · Love and Work Plan option has no effect.** Those boards have no plan lines; the card says so. [doc 69] Done
+  when their v3 cards carry a step per period.
+- **P3 · The Work board's detail text is fixed copy with chart words** ("Natal Promise (10th Bhava & Dasamsa D10)",
+  "Vedic Timing Clocks") written in the page, not from the engine; Plain words now hides it for chosen cards, but the
+  default view still shows it. [web] Done when the copy comes from the engine's own rows or is removed.

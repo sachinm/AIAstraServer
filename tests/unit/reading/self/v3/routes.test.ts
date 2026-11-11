@@ -111,6 +111,28 @@ describe('GET /api/self/v3', () => {
 });
 
 describe('PUT /api/self/v3/layout', () => {
+  it("doc 71: options are stored, set that card's sections, and GET shapes the card with notes", async () => {
+    stored.k1 = latestFixture();
+    const put = await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'], options: { body: { length: 'glance', view: 'arc' }, mind: { words: 'terms' } } });
+    expect(put.status).toBe(200);
+    expect(await put.json()).toMatchObject({
+      options: { body: { length: 'glance', view: 'arc' }, mind: { words: 'terms' } },
+      sections: { body: ['line', 'year'], mind: ['line', 'year', 'stretch', 'confirm', 'details'] },
+    });
+    const get = await (await call('GET', '/api/self/v3', 'u1')).json();
+    const body = get.cards.find((c: any) => c.id === 'body');
+    expect(body.options).toEqual({ length: 'glance', view: 'arc', words: 'plain', plan: 'with' });
+    expect(body.optionNotes[0]).toMatch(/long arc is only/);
+    expect(get.cards.find((c: any) => c.id === 'year').options).toEqual({ length: 'usual', view: 'year', words: 'plain', plan: 'with' });
+    // a later PUT without options keeps them
+    await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
+    expect((await (await call('GET', '/api/self/v3', 'u1')).json()).layout.options).toEqual({ body: { length: 'glance', view: 'arc' }, mind: { words: 'terms' } });
+  });
+  it('doc 71: an unknown option is refused', async () => {
+    const r = await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'], options: { body: { length: 'huge' } } });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('unknown_option');
+  });
   it('stores the layout, GET returns it chosen, and no build is queued', async () => {
     stored.k1 = latestFixture();
     const put = await call('PUT', '/api/self/v3/layout', 'u1', { template: 'compact', cards: ['year', 'body', 'mind'], sections: { body: ['line', 'year', 'ladder'] } });
