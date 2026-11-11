@@ -26,6 +26,8 @@ const argv = process.argv.slice(2);
 const arg = (name: string) => (argv.indexOf(name) >= 0 ? argv[argv.indexOf(name) + 1] : undefined);
 const YES = argv.includes('--yes-spend');
 const WARM = argv.includes('--warm');
+/** doc 71: the cards in groups on one cached pack (board in threes first, the rest in sixes after) */
+const GROUP = argv.includes('--group');
 const KUNDLI = arg('--kundli') ?? 'c584c0a3-841b-451b-a2ed-f5709c5fb31d';
 const SEED = Number(arg('--seed') ?? Date.now() % 1_000_000);
 const CAP_USD = Number(arg('--cap') ?? 0.75);
@@ -36,11 +38,13 @@ const CARDS = 21;
 const READERS = 5;
 const BOARD_CARDS = 5;
 // readers + concordance + (Oracle + Personalizer) per card; with --warm the board again (no reader, no concordance)
-const PLANNED_CALLS = READERS + 1 + CARDS * 2 + (WARM ? BOARD_CARDS * 2 : 0);
+const PLANNED_CALLS = GROUP ? READERS + 1 + BOARD_CARDS + Math.ceil((CARDS - BOARD_CARDS) / 6) : READERS + 1 + CARDS * 2 + (WARM ? BOARD_CARDS * 2 : 0);
 const MAX_CALLS = PLANNED_CALLS + 8; // room for a repair on a few cards
 // 2026-11-10 replay fixes (docs/reading-engine/70-phase3-replay-2026-11-10.md "Fixes made"): readers about $0.10-0.116,
 // the trimmed concordance about $0.015, a card about $0.017-0.020 (Oracle + Personalizer), a repair about $0.015
-const EST_USD = 0.116 + 0.015 + CARDS * 0.02 + 0.015 + (WARM ? BOARD_CARDS * 0.02 : 0);
+// doc 71 Phase 0: a group call on the cached pack about $0.006 to read plus about $0.0045 a card to write; the pack's
+// creation, if Google bills it at the input rate, about $0.06 (not seen by this script's call ledger)
+const EST_USD = GROUP ? 0.116 + 0.015 + 5 * 0.006 + CARDS * 0.0045 + 0.06 + 0.02 : 0.116 + 0.015 + CARDS * 0.02 + 0.015 + (WARM ? BOARD_CARDS * 0.02 : 0);
 const key = process.env.GEMINI_API_KEY?.trim() ?? '';
 console.log(
   JSON.stringify(
@@ -77,6 +81,10 @@ process.env.SELF_V2_PRESSURE_PULL = '0';
 process.env.SELF_V3_BUILD = '1';
 process.env.READING_CLOCK_LAYER = '1';
 process.env.CARDS_READ_REST = '1';
+if (GROUP) {
+  process.env.CARDS_GROUP_PACK = '1';
+  process.env.READING_EXPLICIT_CACHE = '1';
+}
 
 const { PrismaClient } = await import('@prisma/client');
 const { runSelfSubTechniques } = await import('../src/reading/self/sub/index.js');
@@ -112,7 +120,7 @@ const layerWithMemory = (d: ClockLayerDeps, i: ClockLayerInput) =>
   );
 
 const AS_OF = new Date().toISOString().slice(0, 10);
-const OUT_DIR = `docs/reading-engine/replays/70-phase3-${AS_OF}`;
+const OUT_DIR = GROUP ? `docs/reading-engine/replays/71-groups-${AS_OF}` : `docs/reading-engine/replays/70-phase3-${AS_OF}`;
 
 // ------------------------------------------------------------------ the seeded board
 function rng(seed: number): () => number {
@@ -162,7 +170,7 @@ function dry<T extends object>(client: T): T {
 }
 
 // ------------------------------------------------------------------ spend ledger and guard
-interface CallRow { node: string; model: string; at: number; ms: number; promptTokens: number; cachedTokens: number; outputTokens: number; thoughtTokens: number; costUsd: number; finish: string | null }
+interface CallRow { cards?: string[]; node: string; model: string; at: number; ms: number; promptTokens: number; cachedTokens: number; outputTokens: number; thoughtTokens: number; costUsd: number; finish: string | null }
 const calls: CallRow[] = [];
 const t0 = performance.now();
 const spent = () => Math.round(calls.reduce((n, c) => n + c.costUsd, 0) * 1e6) / 1e6;
@@ -172,7 +180,8 @@ async function guardedCall(o: GeminiCallOptions) {
   const t = performance.now();
   const r = await realCallGemini(o);
   const u = { model: o.model, promptTokens: r.usage?.promptTokens ?? 0, cachedTokens: r.usage?.cachedTokens ?? 0, outputTokens: r.usage?.outputTokens ?? 0, thoughtTokens: r.usage?.thoughtTokens ?? 0 };
-  calls.push({ node: o.node, at: Math.round(performance.now() - t0), ms: Math.round(performance.now() - t), ...u, costUsd: usageCostUsd(u), finish: r.finishReason });
+  const asked = o.fullCache ? [...(o.fullCache.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!) : undefined;
+  calls.push({ cards: asked, node: o.node, at: Math.round(performance.now() - t0), ms: Math.round(performance.now() - t), ...u, costUsd: usageCostUsd(u), finish: r.finishReason });
   return r;
 }
 
@@ -219,7 +228,7 @@ try {
   );
 
   // timing: a card is ready when its Personalizer call returns
-  const readyAt = (id: SelfCardId) => calls.filter((c) => c.node.includes(`card.${id}.personalizer`)).map((c) => c.at + 0).pop() ?? null;
+  const readyAt = (id: SelfCardId) => calls.filter((c) => (GROUP ? (c.cards ?? []).includes(id) : c.node.includes(`card.${id}.personalizer`))).map((c) => c.at).pop() ?? null;
   const boardTimes = board.map(readyAt).filter((x): x is number => x !== null);
   const firstCardMs = boardTimes.length ? Math.min(...boardTimes) : null;
   const boardMs = boardTimes.length === board.length ? Math.max(...boardTimes) : null;
@@ -252,6 +261,8 @@ try {
     firstCardMs,
     boardMs,
     totalMs: Math.round(performance.now() - t0),
+    group: GROUP,
+    restMs: GROUP ? Math.max(0, ...READABLE_CARDS.map(readyAt).filter((x): x is number => x !== null)) : null,
     checks: {
       offered: offered.length,
       stored: stored.length,

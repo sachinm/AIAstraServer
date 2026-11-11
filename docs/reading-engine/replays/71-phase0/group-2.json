@@ -1,0 +1,428 @@
+{
+  "cards": [
+    {
+      "card": "lagna",
+      "oracle": {
+        "headline": "Your core direction asks for steady self-discipline as major periods place demands on personal footing.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The stretch asks for holding personal boundaries against external pressure under Jupiter and Sun rulership.",
+            "obstacle": "Conflicting commitments pull your personal energy into different directions simultaneously.",
+            "agreement": "Four clocks agree on mixed conditions, while one shows heavier strain.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Ma@2026-11-08"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "This span asks whether you can maintain core clarity without confirmed directional support.",
+            "obstacle": "Divergent signals create ambiguity around immediate personal priorities.",
+            "agreement": "No tone is shared by enough clocks, leaving signals contested.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The long period tests stamina and foundational purpose as annual rulerships shift across summer.",
+            "obstacle": "Fatigue and fluctuating outer expectations test steady self-definition.",
+            "agreement": "Four clocks lean mixed, reflecting sustained dual demands.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "confirm": {
+          "claimId": "lagna.footing_shift",
+          "from": "2026-09-12",
+          "to": "2026-11-11",
+          "text": "Since September 12, 2026, have you felt an increased burden regarding your personal independence?"
+        },
+        "gift": "A strong foundation provides broad vision and personal authority through benefic alignment on the lagna.",
+        "knot": "The tension between outer public image and inner personal ease causes recurring friction.",
+        "certainty": "possible",
+        "evidence": [
+          "house:D1.h1",
+          "planet:D1.Ju",
+          "point:D1.AL",
+          "pressure:annual:TP2026"
+        ]
+      },
+      "face": {
+        "line": "Your personal footing asks for clear boundaries until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Keep your personal priorities intact when outside requests multiply.",
+            "obstacle": "Too many demands arriving at once can pull you off course.",
+            "step": "If someone asks for extra time, then decline until tomorrow."
+          },
+          {
+            "span": "s2",
+            "asks": "Stay with your core routines despite unclear outside directions.",
+            "obstacle": "Mixed signals make it hard to choose where to focus.",
+            "step": "If priorities seem foggy, then write down your top two."
+          },
+          {
+            "span": "s3",
+            "asks": "Pace yourself steadily as demands gradually reshape your daily schedule.",
+            "obstacle": "Long stretches of shifting expectations can drain daily stamina.",
+            "step": "If daily fatigue builds up, then stop working after dinner."
+          }
+        ],
+        "confirm": "Since 12 Sep 2026, have you felt an increased strain on your independence?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "drive",
+      "oracle": {
+        "headline": "Ambition demands disciplined effort and measured risks while avoiding restless speculation through the year.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The period asks for steady application of effort while Saturn aspects constrain hasty progress.",
+            "obstacle": "Frustration over delayed recognition tempts reckless gambles or overextension.",
+            "agreement": "Four clocks suggest mixed conditions, balancing ambition and restraint.",
+            "evidence": [
+              "pressure:transit:Ra@2025-05-18",
+              "pressure:annual:TP2026/2/Ma@2026-11-08"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The span asks whether drive can be maintained quietly without outer consensus or clarity.",
+            "obstacle": "Uneven pacing creates friction in professional follow-through.",
+            "agreement": "Clocks are divided with no consensus tone reached across systems.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Sa@2027-01-29",
+              "pressure:annual:TP2026/2/Ju@2027-03-03"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Longer-term goals require persistent consolidation as major cycles shift into new rulerships.",
+            "obstacle": "Impatience with slow compounding results in premature structural changes.",
+            "agreement": "Four clocks agree on mixed pressure across key operational matters.",
+            "evidence": [
+              "pressure:annual:TP2027/2/Su@2027-09-01",
+              "pressure:transit:Ju@2027-11-26"
+            ]
+          }
+        ],
+        "confirm": {
+          "claimId": "drive.restless_effort",
+          "from": "2025-05-18",
+          "to": "2026-11-11",
+          "text": "Since May 18, 2025, have you experienced restless urgency regarding your professional trajectory?"
+        },
+        "gift": "Strategic persistence enables long-term victories against heavy competition in professional spheres.",
+        "knot": "The urge to force rapid outcomes clashes with periods requiring patience and measured delay.",
+        "certainty": "possible",
+        "evidence": [
+          "planet:D1.Ma",
+          "pressure:transit:Ra@2025-05-18",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27"
+        ]
+      },
+      "face": {
+        "line": "Your professional ambition asks for steady patience until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Channel your ambition into systematic tasks rather than seeking immediate leaps.",
+            "obstacle": "Impatience can prompt you to force results before they ripen.",
+            "step": "If frustration arises over delays, then finish one small pending task."
+          },
+          {
+            "span": "s2",
+            "asks": "Hold steady with established plans even when overall progress feels uncertain.",
+            "obstacle": "Inconsistent signals tempt you to alter course prematurely.",
+            "step": "If you question your current plan, then review your quarterly goals."
+          },
+          {
+            "span": "s3",
+            "asks": "Focus on consistent execution while major commitments settle through the year.",
+            "obstacle": "Scattered priorities can dilute your energy across competing projects.",
+            "step": "If multiple opportunities appear, then choose only one to advance."
+          }
+        ],
+        "confirm": "Since 18 May 2025, have you felt a restless urge to rush your career moves?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "presence",
+      "oracle": {
+        "headline": "Outer reputation requires calm consistency as public visibility intersects with private responsibilities.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The phase asks for balanced professional poise despite sudden pressures on resources.",
+            "obstacle": "Outer misunderstandings arise if commitments are not articulated precisely.",
+            "agreement": "Four clocks indicate mixed influence on persona and public standing.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Mo@2026-09-20"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "This span asks whether your projected image remains steady without unified period backing.",
+            "obstacle": "Contradictory feedback makes external perception feel inconsistent.",
+            "agreement": "Clocks are split and do not hold a shared tone for this interval.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Me@2026-12-04",
+              "pressure:annual:TP2026/2/Ju@2027-03-03"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The time asks for maintaining integrity in leadership and partnerships as cycles rotate.",
+            "obstacle": "Shifting expectations among peers create momentary alignment friction.",
+            "agreement": "Four clocks concur on mixed demands governing partnership and visibility.",
+            "evidence": [
+              "pressure:annual:TP2027",
+              "pressure:transit:Ra@2026-12-05"
+            ]
+          }
+        ],
+        "confirm": {
+          "claimId": "presence.image_strain",
+          "from": "2026-09-20",
+          "to": "2026-11-11",
+          "text": "Since September 20, 2026, have you felt a difference between your public impression and private comfort?"
+        },
+        "gift": "A dignified bearing commands natural respect in formal and community environments.",
+        "knot": "The pressure to display constant confidence strains your desire for quiet withdrawal.",
+        "certainty": "possible",
+        "evidence": [
+          "point:D1.AL",
+          "house:D1.h1",
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Mo@2026-09-20"
+        ]
+      },
+      "face": {
+        "line": "Your outward impression calls for calm consistency until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Present a steady face in public while managing background financial tasks.",
+            "obstacle": "Private stress can inadvertently leak into professional conversations.",
+            "step": "If an exchange becomes tense, then pause before responding."
+          },
+          {
+            "span": "s2",
+            "asks": "Rely on clear agreements rather than personal charisma to settle misunderstandings.",
+            "obstacle": "Mixed feedback from others can blur how you are being perceived.",
+            "step": "If someone misunderstands your intent, then follow up in writing."
+          },
+          {
+            "span": "s3",
+            "asks": "Protect your personal privacy while remaining approachable in your key relationships.",
+            "obstacle": "Public obligations can crowd out necessary quiet time.",
+            "step": "If socializing feels heavy, then leave after one hour."
+          }
+        ],
+        "confirm": "Since 20 Sep 2026, have you noticed a gap between how others see you and how you feel inside?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "yogas",
+      "oracle": {
+        "headline": "Natal wealth and resilience combinations activate through disciplined response to running friction.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The period asks for careful financial stewardship as wealth potential meets testing sub-periods.",
+            "obstacle": "Impatience hinders the steady accumulation indicated by your ninth-house combinations.",
+            "agreement": "Four clocks confirm mixed trends around resources and belief.",
+            "evidence": [
+              "promise:facts_dhana_yoga_lords_of_11_and_9",
+              "pressure:transit:Ke@2025-05-18",
+              "pressure:annual:TP2026/2/Mo@2026-09-20"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "This span asks whether core resilience can navigate unconfirmed and split conditions.",
+            "obstacle": "Competing influences obscure the tangible fruits of long-term efforts.",
+            "agreement": "No single tone is shared across clocks, reflecting divided energies.",
+            "evidence": [
+              "promise:facts_viparita_raja_yoga_lord_of_12_in_6",
+              "pressure:annual:TP2026/2/Sa@2027-01-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The interval asks for turning administrative obstacles into leverage through enduring discipline.",
+            "obstacle": "Bureaucratic hurdles test your patience before breakthroughs emerge.",
+            "agreement": "Four clocks reflect mixed conditions governing luck and standing.",
+            "evidence": [
+              "promise:facts_viparita_raja_yoga_lord_of_12_in_6",
+              "pressure:transit:Ju@2027-11-26"
+            ]
+          }
+        ],
+        "confirm": {
+          "claimId": "yogas.belief_testing",
+          "from": "2025-05-18",
+          "to": "2026-11-11",
+          "text": "Since May 18, 2025, has a major sense of detachment tested your long-held convictions?"
+        },
+        "gift": "The alignment of wealth and fortune lords creates enduring resource generation when properly structured.",
+        "knot": "The twelfth lord in the sixth requires facing setbacks directly before transforming them into advantage.",
+        "certainty": "likely",
+        "evidence": [
+          "promise:facts_dhana_yoga_lords_of_11_and_9",
+          "promise:facts_viparita_raja_yoga_lord_of_12_in_6",
+          "pressure:transit:Ke@2025-05-18"
+        ]
+      },
+      "face": {
+        "line": "Your enduring gifts require careful resource management until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Protect existing resources while laying groundwork for future financial returns.",
+            "obstacle": "Sudden expenses can disrupt your regular saving cadence.",
+            "step": "If unexpected costs arise, then review non-essential spending for the week."
+          },
+          {
+            "span": "s2",
+            "asks": "Rely on perseverance to resolve complex obstacles as circumstances fluctuate.",
+            "obstacle": "Slow resolution of lingering obligations creates mental clutter.",
+            "step": "If an old dispute resurfaces, then address the facts immediately."
+          },
+          {
+            "span": "s3",
+            "asks": "Transform difficult workloads into professional competence as new opportunities appear.",
+            "obstacle": "Demanding responsibilities require sustained focus over several months.",
+            "step": "If work demands multiply, then prioritize tasks by clear deadlines."
+          }
+        ],
+        "confirm": "Since 18 May 2025, have you experienced doubts regarding your guiding principles?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "purpose",
+      "oracle": {
+        "headline": "A deeper life direction emerges by resolving duty and overcoming detachment with steady moral clarity.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The stretch asks for quiet reflection and fidelity to duty while nodal transit tests faith.",
+            "obstacle": "Cynicism or detachment threatens dedication to foundational principles.",
+            "agreement": "Four clocks observe mixed conditions governing purpose and conviction.",
+            "evidence": [
+              "pressure:transit:Ke@2025-05-18",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "This span asks whether ethical conviction remains intact through ambiguous outer periods.",
+            "obstacle": "Lack of clear external validation dampens inner enthusiasm.",
+            "agreement": "Signals are split without sufficient clock consensus to confirm a single tone.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Sa@2027-01-29",
+              "pressure:transit:Ma@2026-11-12"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The cycle asks for grounding long-range ideals into practical service and enduring craft.",
+            "obstacle": "Distractions pull attention away from quiet philosophical integration.",
+            "agreement": "Four clocks point to mixed results affecting long-term life guidance.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Ve@2027-06-13",
+              "pressure:transit:Ju@2027-06-26"
+            ]
+          }
+        ],
+        "confirm": {
+          "claimId": "purpose.calling_shift",
+          "from": "2025-05-18",
+          "to": "2026-11-11",
+          "text": "Since May 18, 2025, have you questioned whether your daily effort aligns with true meaning?"
+        },
+        "gift": "A deep reservoir of philosophical understanding guides you through confusing external transitions.",
+        "knot": "A tendency toward spiritual isolation can cut you off from helpful mentors and peers.",
+        "certainty": "possible",
+        "evidence": [
+          "house:D1.h9",
+          "planet:D1.Su",
+          "pressure:transit:Ke@2025-05-18",
+          "pressure:annual:TP2026"
+        ]
+      },
+      "face": {
+        "line": "Your sense of meaning deepens through quiet focus until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Stay committed to your personal principles even when enthusiasm runs low.",
+            "obstacle": "A sense of detachment can make daily obligations feel hollow.",
+            "step": "If motivation drops, then focus on fulfilling one basic duty."
+          },
+          {
+            "span": "s2",
+            "asks": "Maintain your moral compass despite uncertain outer encouragement.",
+            "obstacle": "Absence of validation makes it tempting to abandon deeper pursuits.",
+            "step": "If doubt creeps in, then spend ten minutes reading something grounding."
+          },
+          {
+            "span": "s3",
+            "asks": "Anchor your beliefs into practical service as new horizons open.",
+            "obstacle": "Everyday busyness risks crowding out your deeper sense of mission.",
+            "step": "If daily tasks overwhelm, then set aside Sunday morning for reflection."
+          }
+        ],
+        "confirm": "Since 18 May 2025, have you felt disconnected from what used to inspire you?",
+        "pattern": null,
+        "ladder": null
+      }
+    }
+  ]
+}

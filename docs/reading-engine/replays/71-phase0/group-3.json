@@ -1,0 +1,405 @@
+{
+  "cards": [
+    {
+      "card": "learning",
+      "oracle": {
+        "headline": "Intellectual demands require patient revision while major periods realign focus toward foundational skill acquisition.",
+        "certainty": "possible",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "A mixed stretch tests mental discipline under active periods, asking for deliberate study rather than broad commitments.",
+            "obstacle": "Mental exhaustion or scattered focus disrupts retention.",
+            "agreement": "Clocks show split focus on study and discipline.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+              "pressure:transit:Ke@2025-05-18"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Clocks remain unaligned on mental matters, requiring consistent review while avoiding rushed certifications.",
+            "obstacle": "Conflicting schedules prevent sustained intellectual focus.",
+            "agreement": "No single tone is shared across clocks.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+              "pressure:transit:Ma@2026-11-12"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "A lengthy mixed window invites practical trade and craft learning under changing planetary rulerships.",
+            "obstacle": "Competing professional demands reduce dedicated study hours.",
+            "agreement": "Clocks mostly converge on mixed demands.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+              "pressure:transit:Sa@2027-06-03"
+            ]
+          }
+        ],
+        "gift": "A strong Mercury in its own sign grants sharp analytical capacity and natural talent for methodical crafts.",
+        "knot": "Debilitated nodes and combust elements periodically create doubt over intellectual direction.",
+        "pattern": "",
+        "confirm": null,
+        "evidence": [
+          "planet:D1.Me",
+          "house:D1.h10",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27"
+        ]
+      },
+      "face": {
+        "line": "Focus on consolidating practical technical knowledge until 25 Jan 2027 rather than starting broad new subjects.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Work quietly on one essential competence rather than scattering your attention across multiple new courses.",
+            "obstacle": "Mental fatigue makes sustained reading harder to complete.",
+            "step": "If your concentration wanders during evening reading, then switch to ten minutes of note review and stop."
+          },
+          {
+            "span": "s2",
+            "asks": "Keep your existing study routine simple and avoid committing to formal academic credentials right now.",
+            "obstacle": "Unexpected daily obligations disrupt your planned study calendar.",
+            "step": "If an unexpected task cancels your study block, then protect fifteen morning minutes just to maintain momentum."
+          },
+          {
+            "span": "s3",
+            "asks": "Apply your skills directly to real projects to see which techniques actually hold up under pressure.",
+            "obstacle": "Practical work assignments crowd out time reserved for structured lessons.",
+            "step": "If work pressure rises sharply, then focus only on learning tools that solve an immediate workplace problem."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "layers",
+      "oracle": {
+        "headline": "Physical and mental layers experience heavy pressure until steadier grounding returns late in the year.",
+        "certainty": "possible",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Physical vitality and mental ease require conservation as multiple influences press on the body.",
+            "obstacle": "Overextended stamina leads to immediate bodily heaviness.",
+            "agreement": "Four clocks note mixed pressure on personal vitality.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Signals diverge regarding inner peace and physical tone, warranting steady moderation across all daily routines.",
+            "obstacle": "Restless energy pushes past natural physical limits.",
+            "agreement": "Clocks fail to agree on a single governing tone.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+              "pressure:transit:Sa@2025-03-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The emotional layer stabilizes gradually as higher-level periods rebalance judgment and home stability.",
+            "obstacle": "Lingering environmental strain slows complete emotional recovery.",
+            "agreement": "Most clocks concur on mixed internal conditions.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+              "pressure:transit:Sa@2027-06-03"
+            ]
+          }
+        ],
+        "gift": "A friendly Jupiter protecting the house of vitality ensures inherent resilience and recuperative power.",
+        "knot": "The presence of Saturn in the eighth house brings recurring spells of bodily and mental weight.",
+        "pattern": "",
+        "confirm": null,
+        "evidence": [
+          "planet:D1.Ju",
+          "house:D1.h1",
+          "planet:D1.Sa",
+          "house:D1.h8"
+        ]
+      },
+      "face": {
+        "line": "Pace your physical reserves carefully until 25 Jan 2027 to avoid draining your stamina prematurely.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Treat your physical energy like a limited resource by cutting nonessential evening activities.",
+            "obstacle": "Carrying too many tasks creates immediate physical heaviness.",
+            "step": "If your body feels sluggish mid-afternoon, then drink a full glass of water and rest your eyes."
+          },
+          {
+            "span": "s2",
+            "asks": "Keep your daily rhythm steady and guard against sudden surges of unneeded effort.",
+            "obstacle": "Restless tension prompts you to overcommit physically.",
+            "step": "If you notice muscle stiffness building, then take a brisk five-minute walk to release tension."
+          },
+          {
+            "span": "s3",
+            "asks": "Give your mind regular quiet spaces so that emotional fatigue does not accumulate over time.",
+            "obstacle": "External domestic noise encroaches on quiet personal time.",
+            "step": "If household tension starts rising, then take twenty minutes of silence in a closed room."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "chapter",
+      "oracle": {
+        "headline": "A transitional period tests perseverance through structural friction before yielding new vocational openings.",
+        "certainty": "likely",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The active sub-sub-period under Saturn tests endurance in financial and operational tasks, demanding steady resolution.",
+            "obstacle": "Delays and heavy demands tax everyday patience.",
+            "agreement": "Four clocks acknowledge mixed strain across core houses.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+              "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Sun rulership brings clarity to guiding principles while conflicting clock verdicts call for cautious navigation.",
+            "obstacle": "Uneven timing creates friction between plans and execution.",
+            "agreement": "Clocks are held without consensus on general tone.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+              "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The arrival of Mercury as sub-period lord shifts attention toward contracts, partnerships, and professional negotiations.",
+            "obstacle": "Prolonged discussions test endurance before conclusions settle.",
+            "agreement": "Clocks agree on a mixed operational climate.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+              "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23"
+            ]
+          }
+        ],
+        "gift": "The strong Sun main period provides consistent inner dignity and alignment with duty across all challenges.",
+        "knot": "The Mars sub-period creates friction between high ambitions and practical everyday obstacles.",
+        "pattern": "",
+        "confirm": null,
+        "evidence": [
+          "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27"
+        ]
+      },
+      "face": {
+        "line": "Current demands ask for steady perseverance until 25 Jan 2027 while foundations are quietly being rebuilt.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Hold your ground on core responsibilities without taking on additional long-term promises.",
+            "obstacle": "Delays in getting simple approvals wear on your patience.",
+            "step": "If a necessary response gets delayed, then document the status clearly and move to another item."
+          },
+          {
+            "span": "s2",
+            "asks": "Stay focused on basic duties while the overall direction remains somewhat unpredictable.",
+            "obstacle": "Conflicting advice from colleagues creates temporary hesitation.",
+            "step": "If someone offers unsolicited advice, then thank them politely and stick to your verified checklist."
+          },
+          {
+            "span": "s3",
+            "asks": "Review agreements and contracts carefully to ensure expectations are balanced on both sides.",
+            "obstacle": "Prolonged back-and-forth negotiations consume excessive energy.",
+            "step": "If a conversation starts going in circles, then summarize terms in writing and end the meeting."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "chapters",
+      "oracle": {
+        "headline": "A twelve-year period of purposeful authority navigates through dense operational duties before major realignment.",
+        "certainty": "likely",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Saturn sub-sub-period anchors long-term commitments within the overarching Sun cycle, requiring disciplined financial focus.",
+            "obstacle": "Immediate resource constraints test the broader vision.",
+            "agreement": "Clocks broadly reflect mixed operational friction.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Sun sub-sub-period emphasizes moral authority, though split clock counts advise patience against premature moves.",
+            "obstacle": "Lack of unified momentum creates hesitation.",
+            "agreement": "No consensus exists among running clocks.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+              "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The shift toward Mercury sub-period until 2029 introduces long-term trade and status reorganizations.",
+            "obstacle": "Complex strategic shifts demand sustained focus.",
+            "agreement": "Clocks settle on mixed overarching pressures.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+              "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31"
+            ]
+          }
+        ],
+        "gift": "The governing Sun in its own sign establishes an enduring capacity to lead with integrity through major eras.",
+        "knot": "The transition between Saturn and Mars rulers challenges patience through prolonged structural testing.",
+        "pattern": "",
+        "confirm": null,
+        "evidence": [
+          "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+          "planet:D1.Su",
+          "house:D1.h9"
+        ]
+      },
+      "face": {
+        "line": "Your overarching twelve-year period rewards integrity, asking you to consolidate existing gains until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Maintain your long-range standards even when day-to-day administrative burdens feel unnecessarily slow.",
+            "obstacle": "Short-term resource constraints obscure the bigger picture.",
+            "step": "If financial worries cloud your outlook, then balance your basic budget and focus on today's tasks."
+          },
+          {
+            "span": "s2",
+            "asks": "Let your core principles guide decisions while the external pace remains quiet.",
+            "obstacle": "A temporary lack of momentum feels like stagnation.",
+            "step": "If progress feels paused, then refine internal systems rather than trying to force external movement."
+          },
+          {
+            "span": "s3",
+            "asks": "Prepare your professional affairs for renegotiation as upcoming years bring new collaborative opportunities.",
+            "obstacle": "Complex strategic reorganizations require sustained energy.",
+            "step": "If a promising opportunity appears, then write down its requirements before making any formal commitments."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "year",
+      "oracle": {
+        "headline": "The annual cycle demands careful stewardship of resources and vitality through structural recalibrations.",
+        "certainty": "likely",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Year periods under Moon and Mars demand conservation of energy and home stability under competing pressures.",
+            "obstacle": "Household concerns and expenditure create friction.",
+            "agreement": "Four clocks agree on a mixed operational climate.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Ma@2026-11-08"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The annual sub-periods under Mercury and Saturn suggest cautious attention to paperwork, lacking unified clock support.",
+            "obstacle": "Administrative friction interrupts professional routine.",
+            "agreement": "Divergent clock outputs leave this stretch unheld.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Me@2026-12-04",
+              "pressure:annual:TP2026/2/Sa@2027-01-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The transition toward the subsequent annual return closes out open financial matters and prepares new foundations.",
+            "obstacle": "Balancing lingering obligations with emerging projects.",
+            "agreement": "Four clocks recognize ongoing mixed conditions.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Ve@2027-06-13",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "gift": "The annual lord Venus offers resourcefulness and social grace to smooth over tense encounters.",
+        "knot": "The annual lagna placing stress on the twelfth house brings recurring unforeseen expenses.",
+        "pattern": "",
+        "confirm": null,
+        "evidence": [
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Mo@2026-09-20",
+          "pressure:annual:TP2026/2/Ma@2026-11-08"
+        ]
+      },
+      "face": {
+        "line": "Navigate this annual cycle by managing domestic expenses and safeguarding energy until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Keep home expenses predictable and refrain from initiating large renovations or discretionary outlays.",
+            "obstacle": "Household maintenance demands unexpected attention.",
+            "step": "If an unexpected domestic expense arises, then address the urgent repair and postpone cosmetic changes."
+          },
+          {
+            "span": "s2",
+            "asks": "Handle official paperwork and daily responsibilities with precision while external conditions stay fluid.",
+            "obstacle": "Routine administrative tasks take twice as long as expected.",
+            "step": "If administrative paperwork piles up, then set aside thirty uninterrupted minutes each morning to clear it."
+          },
+          {
+            "span": "s3",
+            "asks": "Resolve open accounts and wrap up seasonal obligations before the next cycle starts in autumn.",
+            "obstacle": "Lingering past obligations compete with current goals.",
+            "step": "If old commitments drain your schedule, then decline new social invites until your plate is clear."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    }
+  ]
+}

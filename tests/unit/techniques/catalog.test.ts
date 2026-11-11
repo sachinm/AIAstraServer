@@ -137,9 +137,9 @@ describe('technique catalogue', () => {
       expect(techniqueById(`work.reading.${id}`)?.status, `work.reading.${id}`).toBe('built');
     }
     // 135 built (including self/love/work reading panels, stage checks, oracle synthesizers and the 22 Self v2 rows of doc 66 §4.8, and the 3 Self v2 agent rows, and the 2 clock-layer rows of doc 70); 0 planned
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(139);
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(140);
     expect(TECHNIQUES.filter((t) => t.status === 'planned').map((t) => t.id)).toEqual([]);
-    expect(TECHNIQUES).toHaveLength(139);
+    expect(TECHNIQUES).toHaveLength(140);
   });
 
   it('the work families and the house-state layers are built', () => {

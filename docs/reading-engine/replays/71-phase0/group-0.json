@@ -1,0 +1,484 @@
+{
+  "cards": [
+    {
+      "card": "body",
+      "oracle": {
+        "headline": "Managing daily physical pace and reducing excess heat protects your baseline stamina through changes across the year.",
+        "certainty": "possible",
+        "pattern": "",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The annual lord presses the physical foundation while secondary periods activate the sixth house. Conserve baseline stamina and avoid overexertion through heat accumulation.",
+            "obstacle": "Sudden spikes in physical effort create heaviness.",
+            "agreement": "Clocks show mixed signals without a consolidated ledger consensus.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Ma@2026-11-08"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Clocks diverge on the overall tone while annual factors continue to press the lagna. Protect rest rhythms and steady the daily physical pace.",
+            "obstacle": "Dispersed physical demands strain stamina.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Shifting annual lords alter the balance between exertion and recuperation. Moderate physical expenditure against recurring bouts of heat.",
+            "obstacle": "Inconsistent schedules disrupt sustained stamina.",
+            "agreement": "Four of five clocks lean mixed on general trends.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "gift": "A well-placed lagna lord brings natural physical resilience when unprovoked by rush.",
+        "knot": "The presence of malefic rulers in dusthanas introduces periodic heat and fatigue under heavy exertion.",
+        "confirm": null,
+        "evidence": [
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:annual:TP2027"
+        ]
+      },
+      "face": {
+        "line": "Your physical stamina demands a steady daily pace until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Keep your daily pace manageable and avoid physical burnout by preserving rest.",
+            "obstacle": "Rushing through tasks increases bodily strain and heat.",
+            "step": "If you feel physical heaviness in the afternoon, then stop strenuous exertion immediately."
+          },
+          {
+            "span": "s2",
+            "asks": "Protect basic routines and avoid overextending your physical capacity across erratic weeks.",
+            "obstacle": "Irregular daily timing depletes natural energy stores.",
+            "step": "If your evening routine gets delayed, then commit to lying down early anyway."
+          },
+          {
+            "span": "s3",
+            "asks": "Balance active output with structured downtime as physical responsibilities shift through the year.",
+            "obstacle": "Inconsistent schedules disrupt physical stamina and recovery.",
+            "step": "If fatigue sets in after a busy day, then schedule two quiet hours."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "fitness",
+      "oracle": {
+        "headline": "Controlled strength training and steady output suit you far better than abrupt spikes in heavy resistance.",
+        "certainty": "possible",
+        "pattern": "",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Mars aspects the third house while the sixth house carries natural tension. Prioritize form and consistent movement over heavy max-effort straining.",
+            "obstacle": "Overestimating physical capacity leads to premature exhaustion.",
+            "agreement": "Clocks present mixed conditions without unified support.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Ma@2026-11-08",
+              "pressure:transit:Ra@2025-05-18"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Clocks remain unaligned on overall tone as the third house ruler experiences friction. Hold a defensive training volume and allow full recovery.",
+            "obstacle": "Rushing into intensified workloads creates stiffness.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Sub-periods transit the sixth house of resistance. Focus on functional strength and routine endurance rather than sporadic high-intensity output.",
+            "obstacle": "Inconsistent physical conditioning undermines strength gains.",
+            "agreement": "Clocks generally record mixed pressures on physical effort.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Su@2027-08-21",
+              "pressure:annual:TP2027/2/Ma@2027-10-23"
+            ]
+          }
+        ],
+        "gift": "A strong natural drive for effort builds durable functional power over time.",
+        "knot": "A tendency toward sudden impatience can disrupt steady athletic conditioning.",
+        "confirm": null,
+        "evidence": [
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:transit:Ra@2025-05-18",
+          "pressure:annual:TP2027/2/Ma@2027-10-23"
+        ]
+      },
+      "face": {
+        "line": "Consistent moderate training serves your physical strength best until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Stick to moderate physical training and avoid straining your baseline strength.",
+            "obstacle": "Pushing too hard too quickly brings muscular heaviness.",
+            "step": "If a workout feels exhausting early on, then reduce the load immediately."
+          },
+          {
+            "span": "s2",
+            "asks": "Maintain a baseline of steady activity without attempting sudden new athletic milestones.",
+            "obstacle": "Impatience makes regular exercise sessions erratic and counterproductive.",
+            "step": "If you lack motivation to exercise, then take a brisk thirty-minute walk."
+          },
+          {
+            "span": "s3",
+            "asks": "Focus on regular, measured physical work to steady your core stamina.",
+            "obstacle": "Sporadic intense training disrupts muscular recovery and stamina.",
+            "step": "If you complete a hard workout, then take the next day fully off."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "sleep",
+      "oracle": {
+        "headline": "Guarding quiet evening boundaries and unhooking from active thought restores your deep rest across the year.",
+        "certainty": "possible",
+        "pattern": "",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The twelfth lord and Saturn passage test peace in the fourth house. Create wind-down margins in the evening to preserve rest.",
+            "obstacle": "Mental residue from daytime pressures keeps nighttime alertness high.",
+            "agreement": "Clocks reflect mixed ambient pressures on quiet retreat.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026/2/Mo@2026-09-20"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Disagreement across timing systems leaves rest patterns sensitive to disturbance. Protect sleep duration by eliminating late-night stimulating engagements.",
+            "obstacle": "Lingering domestic tasks intrude on evening unwinding.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Saturn continues its aspect over the fourth house of peace. Establish immovable bedtimes to prevent cumulative physical exhaustion.",
+            "obstacle": "Erratic night schedules thin out physical replenishment.",
+            "agreement": "Clocks lean mixed regarding home tranquility and withdrawal.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:transit:Sa@2027-10-20"
+            ]
+          }
+        ],
+        "gift": "An innate capacity for inner calm provides deep renewal when given solitude.",
+        "knot": "Underlying mental restlessness easily encroaches on quiet evening transitions.",
+        "confirm": null,
+        "evidence": [
+          "pressure:transit:Sa@2025-03-29",
+          "pressure:annual:TP2026/2/Mo@2026-09-20",
+          "pressure:transit:Sa@2027-10-20"
+        ]
+      },
+      "face": {
+        "line": "Protecting quiet evenings keeps your rest steady through 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Establish an early evening boundary to allow your body to decompress.",
+            "obstacle": "Late mental stimulation cuts into your deep resting hours.",
+            "step": "If evening tasks begin to pile up, then shut your computer down early."
+          },
+          {
+            "span": "s2",
+            "asks": "Keep your sleeping environment quiet and predictable through uneven weekly schedules.",
+            "obstacle": "Unfinished household chores delay your natural wind-down time.",
+            "step": "If you find yourself tossing and turning, then read a book under low light."
+          },
+          {
+            "span": "s3",
+            "asks": "Defend a non-negotiable bedtime to ensure ongoing physical and mental recovery.",
+            "obstacle": "Irregular night schedules leave your mornings feeling groggy.",
+            "step": "If your evening routine is disrupted, then wake at your usual morning hour."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "blood",
+      "oracle": {
+        "headline": "Managing daily physical pace and balancing inner heat protects your long-term vitality across the year.",
+        "certainty": "possible",
+        "pattern": "",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Solar vitality interacts with Mars and Saturn in mutual aspects. Keep fluid intake consistent and avoid draining reserves during heat spikes.",
+            "obstacle": "Ignoring subtle bodily tiredness leads to prolonged sluggishness.",
+            "agreement": "Clocks show mixed indications without unified ledger consensus.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Ma@2026-11-08"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Conflicting clock systems indicate uneven daily stamina. Prioritize pacing and guard against sudden surges of physical fatigue.",
+            "obstacle": "Pushing past physical limits accelerates dryness and heat.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Planetary transitions influence constitutional heat and overall vigor. Maintain steady hydration and temper strenuous workloads with calm intervals.",
+            "obstacle": "Prolonged physical exertion without cooling down lowers stamina.",
+            "agreement": "Clocks mostly indicate mixed physical conditions.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "gift": "Strong solar placement provides resilient recovery once adequate rest is granted.",
+        "knot": "Internal heat accumulation under pressure can quickly sap enduring stamina.",
+        "confirm": null,
+        "evidence": [
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:annual:TP2027"
+        ]
+      },
+      "face": {
+        "line": "Managing physical warmth and daily hydration maintains your vitality until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Keep your physical pace measured to maintain steady energy reserves.",
+            "obstacle": "Internal physical heat causes sudden drops in stamina.",
+            "step": "If you sense rising physical fatigue, then drink water and rest your body."
+          },
+          {
+            "span": "s2",
+            "asks": "Guard against sharp drops in energy by pacing your daily output.",
+            "obstacle": "Ignoring early signs of tiredness leads to lingering bodily heaviness.",
+            "step": "If your stamina dips in the afternoon, then sit quietly for ten minutes."
+          },
+          {
+            "span": "s3",
+            "asks": "Balance periods of hard effort with structured cooling down to sustain stamina.",
+            "obstacle": "Overexertion in busy periods depletes baseline vitality.",
+            "step": "If your body feels dry or overheated, then step away from intense tasks."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "mind",
+      "oracle": {
+        "headline": "Cultivating steady reflection and detaching from temporary irritations preserves your mental clarity and peace.",
+        "certainty": "possible",
+        "pattern": "Ma>Mo",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The Moon receives the aspect of Mars, activating internal urgency. Ground your judgment in objective facts rather than immediate reactions.",
+            "obstacle": "Quick emotional reactions cloud rational consideration.",
+            "agreement": "Clocks show a mixed overall backdrop for mental peace.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026/2/Mo@2026-09-20"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Contradictory timing influences test mental equanimity. Pause before finalizing decisions to prevent second-guessing.",
+            "obstacle": "Fluctuating mental confidence complicates straightforward thinking.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The running periods transition toward Mercury-led reflection. Strengthen mental peace by systematically filtering out irrelevant distractions.",
+            "obstacle": "Mental clutter scatters thoughtful contemplation.",
+            "agreement": "Clocks lean mixed regarding internal mental ease.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:transit:Sa@2027-06-03"
+            ]
+          }
+        ],
+        "gift": "A discerning intellect allows you to analyze complex situations with remarkable depth.",
+        "knot": "Impulsive mental impatience periodically agitates an otherwise calm temperament.",
+        "confirm": null,
+        "evidence": [
+          "pressure:transit:Sa@2025-03-29",
+          "pressure:annual:TP2026/2/Mo@2026-09-20",
+          "pressure:transit:Sa@2027-06-03"
+        ]
+      },
+      "face": {
+        "line": "Grounding your thoughts in objective facts preserves mental clarity until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Filter out immediate emotional reactions and look at practical facts when making decisions.",
+            "obstacle": "Mental impatience tempts you to draw hasty conclusions.",
+            "step": "If an urgent thought creates restlessness, then wait twenty-four hours before responding."
+          },
+          {
+            "span": "s2",
+            "asks": "Maintain mental quiet by not overanalyzing changing situations.",
+            "obstacle": "Second-guessing your initial judgment causes needless internal friction.",
+            "step": "If doubts begin to spiral, then write down the key facts plainly."
+          },
+          {
+            "span": "s3",
+            "asks": "Keep your mind organized by focusing on one core thought at a time.",
+            "obstacle": "Mental clutter scatters your ability to think deeply.",
+            "step": "If racing thoughts distract you, then step outside for fresh air."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "sharpness",
+      "oracle": {
+        "headline": "Channeling your attention into structured deep work produces exceptional focus, while multitasking causes quick mental fatigue.",
+        "certainty": "possible",
+        "pattern": "",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Mercury in own sign gives technical insight, but Saturn aspects the house of intellect. Restrict focus to single tasks to prevent cognitive overload.",
+            "obstacle": "Attempting to track too many variables at once breeds fog.",
+            "agreement": "Clocks provide mixed signals on intellectual quickness.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:transit:Ra@2025-05-18"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Clocks diverge on environmental clarity. Schedule demanding analytical work during your naturally sharpest hours and avoid late fatigue.",
+            "obstacle": "Scattered daily interruptions break your train of thought.",
+            "agreement": "No tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:annual:TP2026",
+              "pressure:annual:TP2026/2/Sa@2027-01-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Mercury periods activate professional attention. Leverage clear written structures to maintain sharpness across long projects.",
+            "obstacle": "Mental stamina flags when analytical tasks lack clear boundaries.",
+            "agreement": "Clocks reflect mixed conditions for sustained concentration.",
+            "evidence": [
+              "pressure:transit:Sa@2027-06-03",
+              "pressure:annual:TP2027/2/Su@2027-09-01"
+            ]
+          }
+        ],
+        "gift": "Exalted or own-sign Mercury offers piercing logical analysis and sharp diagnostic perception.",
+        "knot": "Saturnian aspects can bring periods of heavy cognitive drag and perceived slowness.",
+        "confirm": null,
+        "evidence": [
+          "pressure:annual:TP2026",
+          "pressure:transit:Ra@2025-05-18",
+          "pressure:annual:TP2027/2/Su@2027-09-01"
+        ]
+      },
+      "face": {
+        "line": "Singular focus on key tasks keeps your thinking sharp until 25 Jan 2027.",
+        "spans": [
+          {
+            "span": "s1",
+            "asks": "Concentrate on one complex problem at a time to prevent cognitive fatigue.",
+            "obstacle": "Multitasking scatters your attention and brings mental fog.",
+            "step": "If your focus begins to wander, then close all extra workspace tabs."
+          },
+          {
+            "span": "s2",
+            "asks": "Tackle heavy analytical duties early in the morning when your mind is fresh.",
+            "obstacle": "Frequent interruptions disrupt your deeper thinking flow.",
+            "step": "If an interruption breaks your concentration, then pause before restarting the task."
+          },
+          {
+            "span": "s3",
+            "asks": "Use concise outlines to keep your thoughts sharp and decisions rapid.",
+            "obstacle": "Unstructured projects create unnecessary mental fatigue.",
+            "step": "If an analytical project feels overwhelming, then break it into three steps."
+          }
+        ],
+        "confirm": null,
+        "pattern": null,
+        "ladder": null
+      }
+    }
+  ]
+}

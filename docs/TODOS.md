@@ -2487,6 +2487,60 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
   for the expected user count (or a decision to revisit §6.2 then).
 
+## Filed 2026-11-10 by doc 71 (ready on click, one cache per person, person memory; branch `feat/self-v3`)
+
+- **P1 · open · Cache storage price and creation time for `gemini-3.8-flash` are not known.** Doc 71 §8 assumes about
+  $0.50 per million input tokens (inferred from the replay bill), a tenth of that cached, and a 150,000-token pack. At
+  $1 per million tokens per hour a 45-minute cache costs about $0.11, close to the reading itself. Owner: this branch,
+  doc 71 Phase 0. Done: measured pack size, creation time, storage and cached-read price written into doc 71 §8. Needs
+  Sachin's yes (paid call).
+- **P1 · open · Every call on a shared cache pays the cached rate on the whole pack.** A bigger pack is not free: ten
+  calls on 150,000 cached tokens is 1.5 million cached tokens. Doc 71 step 2 decides one pack or two from the Phase 0
+  numbers. Owner: this branch.
+- **P2 · open · A Gemini cache holds one system instruction.** The card path uses a different system prompt per agent,
+  so it cannot share one cache as written. Doc 71 §4.2 moves the card, clock, Personalizer and Clarifier roles into
+  one role library, as `packs/fullPrefix.ts` already does for questions. Owner: this branch.
+- **P2 · open · No per-area life memory and no per-person Personalizer brief exist.** `src/profile/facts.ts` holds a
+  fixed catalogue only. Doc 71 §4.5 and §4.6. Owner: this branch, doc 71 Phases 3 and 4.
+- **Decisions for Sachin (doc 71 §10):** clocks read before the click; Oracle and Personalizer in one call per group;
+  the ten memory areas; question limits of one per visit and three a week.
+- **P1 · open · Four card groups take 36 to 45 s, not 15 (doc 71 §12).** Measured 2026-11-11: the cache removed the
+  input wait (first token 2 to 4 s); output at about 125 tokens a second sets the time. Fix: seven groups of three
+  cards, then measure. Owner: this branch.
+- **P2 · open · The card pack repeats the card prompt 21 times and shared rows across cards (doc 71 §12).** 234k tokens
+  raw, 79k with each line once. Build the pack with each row once and cards naming rows by key. Owner: this branch.
+- **P2 · open · The Phase 0 test ran with an empty ledger (doc 71 §12).** Cards wrote "agreement" sentences without
+  ledger cells to stand on. The next replay runs the readers on the pack first. Owner: this branch.
+- **P2 · open · Gemini prices double on 2027-01-01** (input $1.50, output $7.50, cached $0.15, storage $1.00 per 1M per
+  hour). `PRICE_CHANGES` in `src/reading/llm/models.ts` has input, output and cached; storage is not modelled anywhere.
+  Owner: this branch.
+- **P2 · open · Card faces failed on "divided" and "annual cycle" (doc 71 §13).** `diagnosis` and `year`, first pass;
+  the repair was blocked by the replay's call limit. Watch the next replay; if the words recur, name them in the
+  Personalizer prompt. Owner: this branch.
+- **P2 · fixed · The group batcher sent every card alone (doc 71 §13).** A 25 ms timer; store lookups are database round
+  trips. Groups now wait for every card of the phase (3 s at most). Test in `tests/unit/reading/cards/cards.test.ts`.
+- **P2 · fixed · `gemini-3.8-flash` refuses thinking level "minimal"** (concordance, 2026-11-11). `allowsMinimal` in
+  `src/reading/llm/gemini.ts` now sends "low" for that model.
+- **P3 · open · Batch mode for the cards not on the board (doc 71 §13).** Half price; not built. Owner: this branch.
+
+## Filed 2026-11-11 by doc 72 (the Now card; server `feat/self-v3`, engine `feat/transit-natal-varga-houses`)
+
+- **P1 · fixed on the engine branch · `transit` counted D2-D60 natal houses from the natal D1 lagna.** Engine
+  `4349000` on `feat/transit-natal-varga-houses` (worktree `C:/Users/Owner/Documents/work/wt/radha-now-vargas`): each
+  chart counts from its own natal lagna and states it as `natal_lagna`; calc version 2. Not merged, not deployed. The
+  server shows D2-D60 natal houses only when `natal_lagna` is present, so it is safe before and after the release.
+- **P1 · open · `prashna` still counts every divisional chart from the natal D1 lagna** (`natal_lagna_sign` in
+  `src/jhora/prashna_export.py`, engine). Same fault as above. Owner: engine lane.
+- **P2 · open · The engine repo's remote answers "Repository not found"** (`origin` =
+  `https://github.com/sachinm/AIAstraRadha`, 2026-11-11). Fetch fails; the worktree was cut from local `develop`
+  (`8e31dd5`). Check the URL or access before the engine branch can be pushed. Owner: Sachin.
+- **P2 · open · 11 engine tests fail on the engine branch, none in the transit export** (not checked whether they fail
+  on `develop` too): 8 calc-version mismatches (`annual.tithi_pravesha`, `annual.tithi_pravesha_dasha` in
+  `test_doc34_annual.py` and `test_r5_annual.py`; `pressure_inventory` in `test_pressure_inventory.py`) and 3 time
+  limits under load (`dasha.sudasa` 7.2 s, `transit_contacts` Moon 400 days 6.9 s, `transit_range` 36 years 17.8 s).
+  Owner: engine lane.
+- **P2 · open · The Now card is not run against the real engine or model yet.** Tests use fakes. One paid call (about
+  $0.02) and the engine pulls on the test kundli need Sachin's yes. Owner: this branch.
 ## Filed 2026-11-10 by the card picker and card options build (docs/reading-engine/71)
 
 - **P1 · Apply migration `20261110140000_board_layout_options_m49` before the API that reads `board_layout.options`
@@ -2511,3 +2565,10 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   default view still shows it. [web] Done when the copy comes from the engine's own rows or is removed.
 
 - 2026-11-11 Turnstile input-first (found, not fixed): `requestMagicLink` still answers a malformed email with the success message (kept on purpose, tests/unit/auth/cognitoFlow.e2e.test.ts), and it spends the token because the server cannot refuse it. The web page validates first, so only a direct API call hits it. Step 2 (server-issued short-lived proof after one good check) is still open if this is not enough. Deploy the server before the web build: the web now selects `turnstileConsumed`, which an older server schema rejects.
+- **P2 · Card photos depend on `OVERLAY_ART_KEY` in the web build and on the key route.** Without the key the cards
+  show drawn art (by design). The packs are re-made every build with a new IV; the name changes only when the photos or
+  the key change, so browsers keep their cached ciphertext across deploys. [deploy session] Done when staging serves
+  `/_a/c.json` as JSON and the picker shows photos signed in.
+- **P3 · Weak photo picks to replace when better CC0 images turn up:** Gifts & knots (plain box), Practice & deity
+  (candles, not a diya), Distance or tension (a woman alone), Family banner reuses the Family card photo, Finding work.
+  [web] Done when swapped in `art/cards` (keep SOURCES.md current).

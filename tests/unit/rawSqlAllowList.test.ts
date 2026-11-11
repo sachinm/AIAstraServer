@@ -38,6 +38,7 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'scripts/self-v3-replay.ts': 'doc 68 replay: finds one test kundli id by prefix and swallows raw writes (storage dry); reads no sealed value',
   'scripts/cards-replay.ts': 'doc 70 Phase 3 replay: reads one test kundli user id through Prisma and swallows raw writes (storage dry); runs no raw SQL',
   'scripts/clock-rows-check.ts': 'doc 70 Phase 1 check: database size and one test kundli id by prefix; reads no sealed value',
+  'scripts/cache-pack-measure.ts': 'doc 71 Phase 0 measure: reads one test kundli user id through Prisma and swallows raw writes (storage dry); runs no raw SQL',
   'scripts/oracle-slice-sizes.ts': 'counts byte sizes of chart rows; reads no value (reviewed for B1; B4.2 reviews scripts again)',
 };
 

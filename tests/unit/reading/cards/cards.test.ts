@@ -346,3 +346,87 @@ describe('the card Oracle input and the pre-check (doc 70 Phase 3 replay fixes)'
     expect(r.status).toBe('repaired');
   });
 });
+
+describe('cards in groups on one cached pack (doc 71)', () => {
+  const groupReply = (o: GeminiCallOptions, bad: ReadonlySet<string> = new Set()) => {
+    const req = o.fullCache?.suffix[0] ?? o.parts[1]!;
+    const ids = [...req.matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+    // a card cites only its own ledger cells (the fixture ledger holds work_load_and_health only); others cite the natal key
+    const own = (id: string) => {
+      const o = goodOracle(id);
+      if ((SELF_CARDS.find((c) => c.id === id)?.matters as readonly string[] | undefined)?.includes('work_load_and_health')) return o;
+      return { ...o, spans: (o.spans as Array<Record<string, unknown>>).map((x) => ({ ...x, evidence: ['planet:D1.Mo'] })) };
+    };
+    return ok(JSON.stringify({ cards: ids.map((id) => ({ card: id, oracle: own(id), face: bad.has(id) && !req.startsWith('REPAIR') ? { ...personal(id), line: 'Saturn presses on you.' } : personal(id) })) }));
+  };
+
+  it('the pack holds every card brief, each matter row once, and the same bytes on every call', async () => {
+    const { buildCardPack } = await import('../../../../src/reading/cards/group.js');
+    const cards = [...BOARD, 'mind', 'sleep'] as SelfCardId[];
+    const base = { ctx, cards, frame, frameText: 'FRAME', frameKeys: [], prefix: { text: prefix.text, keys: prefix.keys }, ledger, slices, portrait: null, answers: '' };
+    const a = buildCardPack(base);
+    const b = buildCardPack(base);
+    expect(a.text).toBe(b.text);
+    expect(a.hash).toBe(b.hash);
+    for (const id of cards) expect(a.text).toContain(`## CARD BRIEF ${id}`);
+    const rowLines = a.text.split('\n').filter((l) => /^\s*-?\s*\{dasha:/.test(l));
+    expect(new Set(rowLines).size).toBe(rowLines.length);
+    expect(a.system).toContain('ROLE: CARD GROUP');
+    expect(a.system).toContain('ROLE: PERSONALIZER');
+    expect(a.text).not.toMatch(/radha|pyjhora/i);
+  });
+
+  it('the board goes first in groups of three, the rest after in groups of six; one pack, cached once', async () => {
+    const prisma = memPrisma();
+    const calls: GeminiCallOptions[] = [];
+    const ensured: string[] = [];
+    let boardDoneAt = -1;
+    const callGemini = async (o: GeminiCallOptions) => {
+      calls.push(o);
+      await new Promise((r) => setTimeout(r, 5));
+      if (o.node.startsWith('self.card.group.board')) boardDoneAt = calls.length;
+      return groupReply(o);
+    };
+    const r = await readCards(
+      { prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: true, groupPack: true, groupSizeBoard: 3, groupSizeRest: 6, ensureCache: (async (_m: string, _s: string, base: string) => (ensured.push(base), 'cachedContents/x')) as never },
+      input(BOARD),
+    );
+    expect(r.issues.filter((x) => x.check !== 'other')).toEqual([]);
+    expect(Object.keys(r.cards).length).toBe(r.order.length);
+    const board = calls.filter((c) => c.node.startsWith('self.card.group.board'));
+    const rest = calls.filter((c) => c.node.startsWith('self.card.group.rest'));
+    expect(board).toHaveLength(2);
+    expect(rest).toHaveLength(Math.ceil((r.order.length - BOARD.length) / 6));
+    expect(calls.indexOf(rest[0]!)).toBeGreaterThanOrEqual(boardDoneAt - 1);
+    expect(new Set(calls.map((c) => c.fullCache!.prefix)).size).toBe(1);
+    expect(ensured).toHaveLength(1);
+    expect(calls.every((c) => !c.node.startsWith('self.personalizer') && !c.node.startsWith('self.card.oracle'))).toBe(true);
+    const boardIds = board.flatMap((c) => [...c.fullCache!.suffix[0]!.matchAll(/^- (\w+): matters/gm)].map((m) => m[1]));
+    expect(boardIds.sort()).toEqual([...BOARD].sort());
+  });
+
+  it('a card whose face fails the checks is asked again once, alone with its reasons', async () => {
+    const prisma = memPrisma();
+    const calls: GeminiCallOptions[] = [];
+    const callGemini = async (o: GeminiCallOptions) => (calls.push(o), groupReply(o, new Set(['fitness'])));
+    const r = await readCards({ prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: false, groupPack: true, ensureCache: (async () => null) as never }, input(BOARD));
+    expect(Object.keys(r.cards).sort()).toEqual([...BOARD].sort());
+    const repair = calls.filter((c) => c.node.endsWith('.repair'));
+    expect(repair).toHaveLength(1);
+    expect(repair[0]!.fullCache!.suffix[0]).toMatch(/^REPAIR[\s\S]*- fitness: face:/);
+    expect(repair[0]!.fullCache!.suffix[0]).not.toMatch(/^- body: matters/m);
+  });
+
+  it('cards whose store lookups arrive far apart still go out together (the 2026-11-11 replay sent each alone)', async () => {
+    const base = memPrisma() as unknown as { areaBuild: { findUnique: (a: unknown) => Promise<unknown>; upsert: (a: unknown) => Promise<unknown> } };
+    let k = 0;
+    const slow = { findUnique: async (a: unknown) => (await new Promise((r) => setTimeout(r, 40 * (k++ % 5))), base.areaBuild.findUnique(a)), upsert: base.areaBuild.upsert };
+    const prisma = new Proxy({}, { get: (_t, p) => (p === 'areaBuild' ? slow : undefined) }) as never;
+    const calls: GeminiCallOptions[] = [];
+    const callGemini = async (o: GeminiCallOptions) => (calls.push(o), groupReply(o));
+    const r = await readCards({ prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: true, groupPack: true, groupSizeBoard: 1, groupSizeRest: 6, ensureCache: (async () => null) as never }, input(BOARD));
+    expect(Object.keys(r.cards).length).toBe(r.order.length);
+    expect(calls.filter((c) => c.node.startsWith('self.card.group.board'))).toHaveLength(BOARD.length);
+    expect(calls.filter((c) => c.node.startsWith('self.card.group.rest'))).toHaveLength(Math.ceil((r.order.length - BOARD.length) / 6));
+  });
+});
