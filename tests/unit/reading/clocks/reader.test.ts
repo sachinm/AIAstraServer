@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { sharedPrefix, validateClockSheet, type ReaderCheckContext } from '../../../../src/reading/clocks/reader.js';
+import { CELL_ASK_WORDS, CELL_MAX_WORDS, clockReaderSchema, sharedPrefix, validateClockSheet, type ReaderCheckContext } from '../../../../src/reading/clocks/reader.js';
+import { PROMPTS } from '../../../../src/reading/prompts/generated.js';
 import { pickClockLayerSlices } from '../../../../src/reading/clocks/run.js';
 import { parseRowLines, renderSliceSet } from '../../../../src/reading/slices/index.js';
 import { frame, inventories, natal } from '../slices/fixtures.js';
@@ -81,5 +82,17 @@ describe('validateClockSheet', () => {
     const v = validateClockSheet([cell({ span: 's2', tone: 'mixed', evidence: [`{${SA}}`, ME] }), cell({ matter: 'self_and_body', tone: 'mixed', evidence: ['pressure:dasha:vimsottari/1/Ra@2020-01-01'] }), cell()], ctx());
     expect(v.cells.map((c) => `${c.span}/${c.matter}`)).toEqual(['s1/career_and_standing', 's1/self_and_body', 's2/career_and_standing']);
     expect(v.cells[2]!.evidence).toEqual([SA, ME]);
+  });
+});
+
+describe('the reader asks for less than it accepts (doc 70 Phase 3 replay fixes)', () => {
+  it('the prompt and the schema ask for 15 words and three keys; the validator still allows 25 words', () => {
+    expect(CELL_ASK_WORDS).toBe(15);
+    expect(CELL_MAX_WORDS).toBe(25);
+    const item = (clockReaderSchema(['s1'], []).properties as { cells: { items: { properties: Record<string, { description?: string }> } } }).cells.items.properties;
+    expect(item.sentence!.description).toContain('at most 15 words');
+    expect(item.evidence!.description).toContain('at most three');
+    expect(PROMPTS['clock/reader']).toContain('at most 15 words');
+    expect(PROMPTS['clock/reader']).toContain('at most three');
   });
 });

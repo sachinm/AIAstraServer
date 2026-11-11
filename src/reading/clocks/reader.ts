@@ -42,6 +42,11 @@ import {
 export const CLOCK_READER_TIMEOUT_MS = 45_000;
 export const CLOCK_READER_MAX_OUTPUT_TOKENS = 8_192;
 export const CELL_MAX_WORDS = 25;
+/**
+ * What the prompt and the schema ask for: 15 words (the validator still allows CELL_MAX_WORDS, so an overshoot never
+ * drops a cell). The sentences only feed the concordance's words; the replay's readers wrote 16,963 output tokens.
+ */
+export const CELL_ASK_WORDS = 15;
 const TONES: readonly ClockTone[] = ['heavy', 'mixed', 'light'];
 
 export interface ClockCallDeps {
@@ -95,9 +100,9 @@ export function clockReaderSchema(spanIds: readonly string[], matters: readonly 
             span: { type: 'STRING', enum: [...spanIds] },
             matter: matters.length ? { type: 'STRING', enum: [...matters] } : { type: 'STRING' },
             tone: { type: 'STRING', enum: [...TONES] },
-            sentence: { type: 'STRING', description: `one sentence, at most ${CELL_MAX_WORDS} words` },
+            sentence: { type: 'STRING', description: `one short sentence, at most ${CELL_ASK_WORDS} words` },
             strength: { type: 'INTEGER', description: '1, 2 or 3' },
-            evidence: { type: 'ARRAY', items: { type: 'STRING' }, description: 'evidence keys from the input, without braces' },
+            evidence: { type: 'ARRAY', items: { type: 'STRING' }, description: 'at most three evidence keys from the input, without braces; at least one dated row of your clock' },
           },
           required: ['span', 'matter', 'tone', 'sentence', 'strength', 'evidence'],
         },
