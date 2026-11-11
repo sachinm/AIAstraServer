@@ -47,7 +47,8 @@ import {
 } from './types.js';
 
 export const CONCORDANCE_TIMEOUT_MS = 60_000;
-export const CONCORDANCE_MAX_OUTPUT_TOKENS = 12_288;
+/** the replay wrote 7,551 tokens for 34 cells with keys; words only are about 60 per cell, so 6 k leaves room for thought */
+export const CONCORDANCE_MAX_OUTPUT_TOKENS = 6_144;
 export const LEDGER_MAX_WORDS = 30;
 const TONES: readonly ClockTone[] = ['heavy', 'mixed', 'light'];
 const WRITTEN: readonly ConcordanceStatus[] = ['confirmed', 'leaning', 'contested'];
@@ -127,19 +128,27 @@ export function countConcordance(sheets: readonly ClockSheet[], spanOrder: reado
 // (b) the concordance call: the input, the schema, the validator
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** The counted cells the agent writes on (confirmed, leaning, contested), with each clock's line. */
+/**
+ * The counted cells the agent writes on (confirmed, leaning, contested), trimmed to what a sentence needs (doc 70 Phase 3
+ * replay fixes: the replay's concordance read 11 k uncached tokens and wrote 7.5 k, most of it evidence keys copied
+ * back): per confirmed or leaning cell, the sentences of the clocks that gave the agreed tone and the others by tone
+ * only; per contested cell, every clock's tone and sentence. No evidence keys (the ledger keeps the counted ones), no
+ * strengths, no pair table (code keeps it).
+ */
 export function renderCount(count: ConcordanceCount): string {
-  const L = [`# COUNTED CELLS (${count.systems.length} clocks read: ${count.systems.join(', ')})`];
+  const L = [`# COUNTED CELLS (${count.systems.length} clocks read: ${count.systems.join(', ')}; status and tone are final)`];
   for (const c of count.cells.filter((x) => WRITTEN.includes(x.status))) {
     L.push(`${c.id} status=${c.status} tone=${c.tone ?? 'none'} tally=heavy:${c.tally.heavy},mixed:${c.tally.mixed},light:${c.tally.light}`);
-    for (const k of c.clocks) L.push(`  ${k.system}: ${k.tone} strength=${k.strength} "${k.sentence}" evidence ${k.evidence.map((e) => `{${e}}`).join(' ')}`);
+    const speak = c.status === 'contested' ? c.clocks : c.clocks.filter((k) => k.tone === c.tone);
+    for (const k of speak) L.push(`  ${k.system}: ${k.tone} "${k.sentence}"`);
+    const apart = c.status === 'contested' ? [] : c.clocks.filter((k) => k.tone !== c.tone);
+    if (apart.length) L.push(`  apart: ${apart.map((k) => `${k.system}=${k.tone}`).join(', ')}`);
   }
   if (!count.cells.some((x) => WRITTEN.includes(x.status))) L.push('(no cell to write)');
-  L.push('## PAIRS (cells both read / cells they agree on)');
-  for (const p of count.pairs) L.push(`${p.a} & ${p.b}: ${p.both} / ${p.agree}`);
   return L.join('\n');
 }
 
+/** The words only: the id, a sentence (confirmed, leaning) or the sides (contested). Status, tone and keys stay the count's. */
 export function concordanceSchema(ids: readonly string[], systems: readonly string[]): Record<string, unknown> {
   return {
     type: 'OBJECT',
@@ -150,12 +159,10 @@ export function concordanceSchema(ids: readonly string[], systems: readonly stri
           type: 'OBJECT',
           properties: {
             id: { type: 'STRING', enum: [...ids] },
-            status: { type: 'STRING', enum: [...WRITTEN] },
-            tone: { type: 'STRING', enum: [...TONES, 'none'] },
             sentence: { type: 'STRING', description: `confirmed or leaning: one settled sentence, at most ${LEDGER_MAX_WORDS} words; contested: empty` },
             sides: {
               type: 'ARRAY',
-              description: 'contested only: one entry per tone given',
+              description: 'contested only: one entry per tone given; empty otherwise',
               items: {
                 type: 'OBJECT',
                 properties: {
@@ -166,9 +173,8 @@ export function concordanceSchema(ids: readonly string[], systems: readonly stri
                 required: ['tone', 'clocks', 'restsOn'],
               },
             },
-            evidence: { type: 'ARRAY', items: { type: 'STRING' }, description: "keys from this cell's clock lines, without braces" },
           },
-          required: ['id', 'status', 'tone', 'sentence', 'sides', 'evidence'],
+          required: ['id', 'sentence', 'sides'],
         },
       },
     },
@@ -226,15 +232,15 @@ export function validateLedger(rawCells: readonly unknown[], count: ConcordanceC
       continue;
     }
     done.add(id);
+    // the schema no longer asks for status, tone or keys; an answer that still gives them must give the count's
     const status = S(o.status);
-    if (status !== c.status) {
-      drop('status_changed', `status ${status || 'none'} is not the count's ${c.status}`);
+    if (status && status !== c.status) {
+      drop('status_changed', `status ${status} is not the count's ${c.status}`);
       continue;
     }
     const toneRaw = S(o.tone);
-    const tone = toneRaw === 'none' || !toneRaw ? null : toneRaw;
-    if (tone !== c.tone) {
-      drop('tone_changed', `tone ${toneRaw || 'none'} is not the count's ${c.tone ?? 'none'}`);
+    if (toneRaw && (toneRaw === 'none' ? null : toneRaw) !== c.tone) {
+      drop('tone_changed', `tone ${toneRaw} is not the count's ${c.tone ?? 'none'}`);
       continue;
     }
     const allowed = new Set(c.clocks.flatMap((k) => k.evidence));
@@ -275,7 +281,7 @@ export function validateLedger(rawCells: readonly unknown[], count: ConcordanceC
       }
       out.sentence = sentence;
     }
-    if (evidence.length) out.evidence = [...evidence].sort(cmp);
+    // the cell keeps the counted evidence (every agreeing clock's keys): the words never change what a card stands on
   }
   for (const c of count.cells) {
     if (WRITTEN.includes(c.status) && !done.has(c.id)) issues.push({ stage: 'concordance', system: null, cell: c.id, check: 'missing_cell', message: `${c.id}: not written` });
@@ -348,7 +354,8 @@ export async function runConcordance(deps: ClockCallDeps, i: ConcordanceInput): 
               node: 'reading.concordance',
               system: promptText(READER_SYSTEM_PROMPT),
               parts: [i.prefix.text, [promptText(CONCORDANCE_PROMPT), renderCount(count), 'Return the JSON document only.'].join('\n\n')],
-              thinking: 'low',
+              // the count is final and the words are short: the least thinking the model allows
+              thinking: 'minimal',
               maxOutputTokens: CONCORDANCE_MAX_OUTPUT_TOKENS,
               timeoutMs: limit,
               cachePrefix: true,

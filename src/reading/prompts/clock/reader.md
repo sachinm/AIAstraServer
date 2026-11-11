@@ -10,8 +10,8 @@ Each cell:
 - `span`: the span id from the FRAME (`s1`, `s2`, ...).
 - `matter`: one matter key, taken from the `matters=[...]` of a row you cite.
 - `tone`: `heavy`, `mixed` or `light`, following the `tone=` of the rows you cite. When the rows you cite in one cell do not share a tone, the tone is `mixed`.
-- `sentence`: one sentence of at most 25 words saying what this period does to this matter in this span, in plain chart terms (which period lord, which house, why). No dates other than the span's own edges.
+- `sentence`: one short sentence, at most 15 words, saying what this period does to this matter in this span, in plain chart terms (which period lord, which house, why). No dates other than the span's own edges.
 - `strength`: 1, 2 or 3, from the strength of the rows you cite (the strongest one).
-- `evidence`: the keys of the rows the cell rests on. At least one dated row of your clock (a `pressure:` key listed under that span in `CLOCK <system>`); you may add natal keys from NATAL CORE or rows from SKY WINDOW that explain it.
+- `evidence`: the keys of the rows the cell rests on, at most three. At least one dated row of your clock (a `pressure:` key listed under that span in `CLOCK <system>`); you may add one natal key from NATAL CORE or one row from SKY WINDOW that explains it.
 
 Return `{ "cells": [ ... ] }` and nothing else.

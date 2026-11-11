@@ -1,6 +1,8 @@
 /**
  * The card queue (docs/reading-engine/70 §4.1 "Trigger and queue", layers 4 and 5). Runs inside the v3 build step,
- * after the clock layer wrote the ledger:
+ * as soon as the clock layer has counted the sheets: the ledger it reads has every cell's status, tone, agree/of and
+ * evidence (all decided in code); the concordance's words follow when written, and a card read before them is the same
+ * card (the store key holds the grounding, not the words):
  *
  *   1  the cards asked for alone (POST, `queued` in today's state doc), then the board's cards in the person's order,
  *      CARDS_BOARD_PARALLEL at a time;
@@ -111,7 +113,9 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const spent = () => round6(spentToday + out.spentUsd);
 
   const frameRender = renderYearFrame(i.frame, clockLabel(i.frame.clock));
-  const ledgerHash = i.ledger ? shortHash(canonicalJson(i.ledger.cells.map((c) => [c.id, c.status, c.tone, c.sentence]))) : '-';
+  // the grounding only (status, tone, count, evidence): a card read on the counted ledger before the concordance wrote
+  // its words is the same card on the worded ledger, so a warm open serves it instead of reading it again
+  const ledgerHash = i.ledger ? shortHash(canonicalJson(i.ledger.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of, c.evidence]))) : '-';
   const frameHash = shortHash(canonicalJson(i.frame.spans.map((s) => [s.from, s.to, s.tone, s.held, s.clocks.map((c) => [c.system, c.tone])])));
   const portraitHash = shortHash(canonicalJson(i.portrait ?? null));
   const nowSpan = i.frame.spans.find((s) => s.place === 'now') ?? i.frame.spans[0]!;

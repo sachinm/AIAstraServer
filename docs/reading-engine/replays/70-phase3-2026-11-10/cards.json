@@ -1,0 +1,5156 @@
+{
+  "frame": {
+    "aliases": {
+      "transit:Ke@2025-05-18": "pressure:transit:Ke@2025-05-18",
+      "planet:D1.Mo": "pressure:transit:Sa@2027-06-03",
+      "house:D1.h9": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "transit:Ju@2026-06-02": "pressure:transit:Ju@2026-06-02",
+      "house:D1.h8": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "annual:TP2026": "pressure:annual:TP2026/2/Ju@2027-03-03",
+      "planet:TP.Ve": "pressure:annual:TP2026",
+      "house:TP.h1": "pressure:annual:TP2026/2/Me@2026-12-04",
+      "house:TP.h5": "pressure:annual:TP2026",
+      "house:TP.h12": "pressure:annual:TP2026",
+      "transit:Ma@2026-09-18": "pressure:transit:Ma@2026-09-18",
+      "annual:TP2026/2/Mo@2026-09-20": "pressure:annual:TP2026/2/Mo@2026-09-20",
+      "planet:TP.Mo": "pressure:annual:TP2026/2/Mo@2026-09-20",
+      "house:TP.h2": "pressure:annual:TP2026/2/Ju@2027-03-03",
+      "house:TP.h4": "pressure:annual:TP2026/2/Me@2026-12-04",
+      "dasha:chathuraaseethi_sama/3/Sa@2026-10-27": "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+      "planet:D1.Sa": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "house:D1.h2": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "house:D1.h3": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "dasha:chathuraaseethi_sama/2/Ma@2025-11-03": "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+      "activation:chathuraaseethi_sama/3/Sa@2026-10-27": "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+      "transit:Ma@2026-11-12": "pressure:transit:Ma@2026-11-12",
+      "annual:TP2026/2/Me@2026-12-04": "pressure:annual:TP2026/2/Me@2026-12-04",
+      "planet:TP.Me": "pressure:annual:TP2026/2/Me@2026-12-04",
+      "transit:Ke@2026-12-05": "pressure:transit:Ke@2026-12-05",
+      "transit:Ra@2026-12-05": "pressure:transit:Ra@2026-12-05",
+      "dasha:chathuraaseethi_sama/3/Su@2027-01-25": "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+      "planet:D1.Su": "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+      "activation:chathuraaseethi_sama/3/Su@2027-01-25": "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+      "transit:Ju@2027-01-25": "pressure:transit:Ju@2027-01-25",
+      "annual:TP2026/2/Ju@2027-03-03": "pressure:annual:TP2026/2/Ju@2027-03-03",
+      "planet:TP.Ju": "pressure:annual:TP2026/2/Ju@2027-03-03",
+      "house:TP.h7": "pressure:annual:TP2026/2/Ju@2027-03-03",
+      "house:TP.h10": "pressure:annual:TP2027/2/Su@2027-09-01",
+      "transit:Ma@2027-03-10": "pressure:transit:Ma@2027-03-10",
+      "dasha:chathuraaseethi_sama/3/Mo@2027-04-24": "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+      "activation:chathuraaseethi_sama/3/Mo@2027-04-24": "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+      "transit:Ma@2027-04-26": "pressure:transit:Ma@2027-04-26",
+      "transit:Sa@2027-06-03": "pressure:transit:Sa@2027-06-03",
+      "house:D1.h5": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "dasha:chathuraaseethi_sama/2/Me@2027-07-23": "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+      "planet:D1.Me": "pressure:dasha:narayana/3/Virgo@2026-10-07",
+      "house:D1.h7": "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+      "house:D1.h10": "pressure:dasha:narayana/3/Virgo@2026-10-07",
+      "dasha:chathuraaseethi_sama/1/Su@2022-05-31": "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+      "activation:chathuraaseethi_sama/2/Me@2027-07-23": "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+      "dasha:chathuraaseethi_sama/3/Me@2027-07-23": "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+      "activation:chathuraaseethi_sama/3/Me@2027-07-23": "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+      "annual:TP2027/2/Su@2027-09-01": "pressure:annual:TP2027/2/Su@2027-09-01",
+      "annual:TP2027": "pressure:annual:TP2027/2/Su@2027-09-01",
+      "planet:TP.Su": "pressure:annual:TP2027/2/Su@2027-09-01",
+      "dasha:vimsottari/3/Ra@2026-09-25": "pressure:dasha:vimsottari/3/Ra@2026-09-25",
+      "planet:D1.Ra": "pressure:dasha:yogini/3/Ra@2026-10-26",
+      "house:D1.h12": "pressure:dasha:yogini/3/Ra@2026-10-26",
+      "dasha:vimsottari/2/Su@2026-07-31": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "activation:vimsottari/3/Ra@2026-09-25": "pressure:dasha:vimsottari/3/Ra@2026-09-25",
+      "dasha:vimsottari/3/Sa@2026-12-17": "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+      "activation:vimsottari/3/Sa@2026-12-17": "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+      "dasha:vimsottari/3/Ve@2027-04-01": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "planet:D1.Ve": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "house:D1.h6": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "house:D1.h11": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "activation:vimsottari/3/Ve@2027-04-01": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+      "dasha:narayana/3/Virgo@2026-10-07": "pressure:dasha:narayana/3/Virgo@2026-10-07",
+      "dasha:narayana/2/Taurus@2026-09-06": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "activation:narayana/3/Virgo@2026-10-07": "pressure:dasha:narayana/3/Virgo@2026-10-07",
+      "dasha:narayana/3/Sagittarius@2027-01-06": "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+      "planet:D1.Ju": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "house:D1.h1": "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+      "activation:narayana/3/Sagittarius@2027-01-06": "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+      "dasha:narayana/3/Pisces@2027-04-07": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "house:D1.h4": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "activation:narayana/3/Pisces@2027-04-07": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+      "dasha:yogini/3/Ra@2026-10-26": "pressure:dasha:yogini/3/Ra@2026-10-26",
+      "dasha:yogini/2/Ra@2026-10-26": "pressure:dasha:yogini/3/Ra@2026-10-26",
+      "activation:yogini/3/Ra@2026-10-26": "pressure:dasha:yogini/3/Ra@2026-10-26",
+      "dasha:yogini/3/Sa@2027-01-25": "pressure:dasha:yogini/3/Sa@2027-01-25",
+      "dasha:yogini/2/Su@2026-12-10": "pressure:dasha:yogini/3/Sa@2027-01-25",
+      "activation:yogini/3/Sa@2027-01-25": "pressure:dasha:yogini/3/Sa@2027-01-25",
+      "dasha:yogini/3/Sa@2027-04-15": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "dasha:yogini/2/Ju@2027-03-12": "pressure:dasha:yogini/3/Sa@2027-04-15",
+      "activation:yogini/3/Sa@2027-04-15": "pressure:dasha:yogini/3/Sa@2027-04-15"
+    },
+    "asOf": "2026-11-10",
+    "to": "2028-01-18",
+    "clock": "chathuraaseethi_sama",
+    "spans": [
+      {
+        "id": "s1",
+        "from": "2026-10-27",
+        "to": "2027-01-25",
+        "place": "now",
+        "tone": "mixed",
+        "held": true,
+        "spineTone": "heavy",
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+            "polarity": "presses",
+            "flags": 3
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed",
+            "evidence": "pressure:annual:TP2026/2/Mo@2026-09-20",
+            "polarity": "presses",
+            "flags": 1
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:vimsottari/3/Ra@2026-09-25",
+            "polarity": "presses",
+            "flags": 2
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:narayana/3/Virgo@2026-10-07",
+            "polarity": "mixed",
+            "flags": 0
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:yogini/3/Ra@2026-10-26",
+            "polarity": "presses",
+            "flags": 2
+          }
+        ],
+        "agree": 4,
+        "of": 5,
+        "opensWith": "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+        "rows": [
+          {
+            "id": "pressure:transit:Ke@2025-05-18",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "luck_and_belief"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ma@2026-11-12",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "luck_and_belief"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "tone": "light",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2026-06-02",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          },
+          {
+            "id": "pressure:annual:TP2026",
+            "polarity": "presses",
+            "tone": "mixed",
+            "flags": 1,
+            "strength": 2,
+            "matters": [
+              "self_and_body",
+              "ideas_and_children",
+              "loss_rest_and_distance"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ma@2026-09-18",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s2",
+        "from": "2027-01-25",
+        "to": "2027-04-24",
+        "place": "next",
+        "tone": "mixed",
+        "held": false,
+        "spineTone": "light",
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "light",
+            "evidence": "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+            "polarity": "supports",
+            "flags": 0
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed",
+            "evidence": "pressure:annual:TP2026/2/Me@2026-12-04",
+            "polarity": "presses",
+            "flags": 1
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+            "polarity": "presses",
+            "flags": 4
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+            "polarity": "presses",
+            "flags": 2
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:yogini/3/Sa@2027-01-25",
+            "polarity": "presses",
+            "flags": 4
+          }
+        ],
+        "agree": 2,
+        "of": 5,
+        "opensWith": "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25",
+        "rows": [
+          {
+            "id": "pressure:transit:Ma@2026-11-12",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "luck_and_belief"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "tone": "light",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          },
+          {
+            "id": "pressure:annual:TP2026",
+            "polarity": "presses",
+            "tone": "mixed",
+            "flags": 1,
+            "strength": 2,
+            "matters": [
+              "self_and_body",
+              "ideas_and_children",
+              "loss_rest_and_distance"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ke@2026-12-05",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ju@2027-01-25",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ma@2027-03-10",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 2,
+            "matters": [
+              "sudden_and_hidden"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "s3",
+        "from": "2027-04-24",
+        "to": "2028-01-18",
+        "place": "later",
+        "tone": "mixed",
+        "held": true,
+        "spineTone": "mixed",
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+            "polarity": "presses",
+            "flags": 1
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed",
+            "evidence": "pressure:annual:TP2026/2/Ju@2027-03-03",
+            "polarity": "mixed",
+            "flags": 0
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+            "polarity": "presses",
+            "flags": 1
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed",
+            "evidence": "pressure:dasha:narayana/3/Pisces@2027-04-07",
+            "polarity": "presses",
+            "flags": 1
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy",
+            "evidence": "pressure:dasha:yogini/3/Sa@2027-04-15",
+            "polarity": "presses",
+            "flags": 3
+          }
+        ],
+        "agree": 4,
+        "of": 5,
+        "opensWith": "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+        "rows": [
+          {
+            "id": "pressure:transit:Ma@2027-04-26",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "luck_and_belief"
+            ]
+          },
+          {
+            "id": "pressure:transit:Sa@2027-06-03",
+            "polarity": "presses",
+            "tone": "heavy",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "ideas_and_children"
+            ]
+          },
+          {
+            "id": "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+            "polarity": "presses",
+            "tone": "mixed",
+            "flags": 1,
+            "strength": 3,
+            "matters": [
+              "partnership",
+              "career_and_standing"
+            ]
+          },
+          {
+            "id": "pressure:annual:TP2027/2/Su@2027-09-01",
+            "polarity": "presses",
+            "tone": "mixed",
+            "flags": 1,
+            "strength": 3,
+            "matters": [
+              "career_and_standing"
+            ]
+          },
+          {
+            "id": "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+            "polarity": "mixed",
+            "tone": "mixed",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "partnership",
+              "career_and_standing"
+            ]
+          },
+          {
+            "id": "pressure:transit:Ra@2026-12-05",
+            "polarity": "supports",
+            "tone": "light",
+            "flags": 0,
+            "strength": 3,
+            "matters": [
+              "money_in_hand"
+            ]
+          }
+        ]
+      }
+    ],
+    "saturn": [],
+    "years": [
+      {
+        "key": "pressure:annual:TP2026",
+        "label": "TP2026",
+        "from": "2026-09-12",
+        "to": "2027-09-01"
+      },
+      {
+        "key": "pressure:annual:TP2027",
+        "label": "TP2027",
+        "from": "2027-09-01",
+        "to": "2028-08-21"
+      }
+    ],
+    "clocksRead": [
+      "chathuraaseethi_sama",
+      "tithi_pravesha",
+      "vimsottari",
+      "narayana",
+      "yogini"
+    ],
+    "clocksSkipped": [
+      {
+        "system": "dwisatpathi",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "ashtottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "dwadasottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "panchottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "sataatbika",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shastihayani",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shodasottari",
+        "reason": "does not apply to this chart"
+      },
+      {
+        "system": "shattrimsa_sama",
+        "reason": "does not apply to this chart"
+      }
+    ],
+    "degraded": false
+  },
+  "ledger": {
+    "frameHash": "ba733168f55a27d4832caf59",
+    "sheetHashes": {
+      "chathuraaseethi_sama": "eb21a4baf6854ff67b194df0",
+      "narayana": "a45b9076fa30bf4c4b82f16f",
+      "tithi_pravesha": "5c8644dd36d09066d1e0c2f9",
+      "vimsottari": "c8f1bebe5a21bede084b5fb1",
+      "yogini": "7d1bb1f30db623264c9ebd66"
+    },
+    "pairs": [
+      {
+        "a": "chathuraaseethi_sama",
+        "b": "narayana",
+        "both": 14,
+        "agree": 12
+      },
+      {
+        "a": "chathuraaseethi_sama",
+        "b": "vimsottari",
+        "both": 16,
+        "agree": 15
+      },
+      {
+        "a": "chathuraaseethi_sama",
+        "b": "yogini",
+        "both": 15,
+        "agree": 14
+      },
+      {
+        "a": "chathuraaseethi_sama",
+        "b": "tithi_pravesha",
+        "both": 14,
+        "agree": 10
+      },
+      {
+        "a": "narayana",
+        "b": "vimsottari",
+        "both": 17,
+        "agree": 16
+      },
+      {
+        "a": "narayana",
+        "b": "yogini",
+        "both": 16,
+        "agree": 16
+      },
+      {
+        "a": "narayana",
+        "b": "tithi_pravesha",
+        "both": 18,
+        "agree": 14
+      },
+      {
+        "a": "vimsottari",
+        "b": "yogini",
+        "both": 22,
+        "agree": 21
+      },
+      {
+        "a": "vimsottari",
+        "b": "tithi_pravesha",
+        "both": 20,
+        "agree": 14
+      },
+      {
+        "a": "yogini",
+        "b": "tithi_pravesha",
+        "both": 21,
+        "agree": 16
+      }
+    ],
+    "byStatus": {
+      "confirmed": 28,
+      "leaning": 6,
+      "single": 2,
+      "contested": 0
+    },
+    "cells": [
+      {
+        "id": "ledger:s1/career_and_standing",
+        "span": "s1",
+        "matter": "career_and_standing",
+        "status": "leaning",
+        "tone": "mixed",
+        "agree": 2,
+        "of": 2,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Mercury may activate the tenth house, maintaining career momentum alongside mixed administrative responsibilities.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h10",
+          "planet:D1.Me",
+          "pressure:dasha:narayana/3/Virgo@2026-10-07",
+          "pressure:dasha:yogini/3/Me@2026-11-23"
+        ]
+      },
+      {
+        "id": "ledger:s1/effort_and_courage",
+        "span": "s1",
+        "matter": "effort_and_courage",
+        "status": "confirmed",
+        "tone": "heavy",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy"
+          }
+        ],
+        "sentence": "Saturn activating the third house imposes heavy friction, demanding deliberate effort and endurance.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h3",
+          "planet:D1.Sa",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+          "pressure:dasha:yogini/3/Sa@2026-11-29"
+        ]
+      },
+      {
+        "id": "ledger:s1/gains_and_network",
+        "span": "s1",
+        "matter": "gains_and_network",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Eleventh house activations bring mixed results regarding incoming gains, alliances, and social connections.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h11",
+          "planet:D1.Ve",
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:dasha:narayana/3/Libra@2026-11-06",
+          "pressure:dasha:yogini/3/Ve@2026-12-05"
+        ]
+      },
+      {
+        "id": "ledger:s1/home_and_peace",
+        "span": "s1",
+        "matter": "home_and_peace",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Fourth house activations call for careful management of domestic routines and internal stability.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h4",
+          "planet:D1.Ju",
+          "pressure:annual:TP2026/2/Me@2026-12-04",
+          "pressure:annual:TP2026/2/Mo@2026-09-20",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ju@2026-11-08",
+          "pressure:dasha:yogini/3/Ju@2026-11-12"
+        ]
+      },
+      {
+        "id": "ledger:s1/ideas_and_children",
+        "span": "s1",
+        "matter": "ideas_and_children",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 5,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Fifth house activations bring focused attention and mixed structural pressure to creative pursuits and children.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h5",
+          "planet:D1.Ju",
+          "planet:D1.Ma",
+          "pressure:annual:TP2026",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ju@2026-11-08",
+          "pressure:dasha:yogini/3/Ma@2026-11-17"
+        ]
+      },
+      {
+        "id": "ledger:s1/loss_rest_and_distance",
+        "span": "s1",
+        "matter": "loss_rest_and_distance",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 5,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Twelfth house influences stir expenditures, remote commitments, and demands for rest and retreat.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h12",
+          "planet:D1.Ma",
+          "planet:D1.Ra",
+          "pressure:annual:TP2026",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/3/Scorpio@2026-12-07",
+          "pressure:dasha:vimsottari/3/Ra@2026-09-25",
+          "pressure:dasha:yogini/2/Ra@2026-10-26"
+        ]
+      },
+      {
+        "id": "ledger:s1/luck_and_belief",
+        "span": "s1",
+        "matter": "luck_and_belief",
+        "status": "leaning",
+        "tone": "light",
+        "agree": 2,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "light"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "light"
+          }
+        ],
+        "sentence": "Ninth house operations under the Sun may provide steady ethical clarity, guidance, and foundational support.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h9",
+          "planet:D1.Su",
+          "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+          "pressure:dasha:vimsottari/2/Su@2026-07-31"
+        ]
+      },
+      {
+        "id": "ledger:s1/money_in_hand",
+        "span": "s1",
+        "matter": "money_in_hand",
+        "status": "confirmed",
+        "tone": "heavy",
+        "agree": 3,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Saturn governing the second house imposes strict financial discipline, delays, and limits on liquid resources.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h2",
+          "planet:D1.Sa",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+          "pressure:dasha:yogini/3/Sa@2026-11-29"
+        ]
+      },
+      {
+        "id": "ledger:s1/partnership",
+        "span": "s1",
+        "matter": "partnership",
+        "status": "single",
+        "tone": "mixed",
+        "agree": 1,
+        "of": 1,
+        "clocks": [
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": null,
+        "sides": null,
+        "evidence": [
+          "house:D1.h7",
+          "planet:D1.Me",
+          "pressure:dasha:yogini/3/Me@2026-11-23"
+        ]
+      },
+      {
+        "id": "ledger:s1/self_and_body",
+        "span": "s1",
+        "matter": "self_and_body",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "First house activations maintain physical vitality while requiring deliberate management of bodily stamina.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h1",
+          "planet:D1.Ju",
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:annual:TP2026/2/Me@2026-12-04",
+          "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ju@2026-11-08",
+          "pressure:dasha:yogini/3/Ju@2026-11-12"
+        ]
+      },
+      {
+        "id": "ledger:s1/sudden_and_hidden",
+        "span": "s1",
+        "matter": "sudden_and_hidden",
+        "status": "leaning",
+        "tone": "heavy",
+        "agree": 2,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Saturn in the eighth house may enforce heavy delays, sudden adjustments, and unpredicted obligations.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h8",
+          "planet:D1.Sa",
+          "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17"
+        ]
+      },
+      {
+        "id": "ledger:s1/work_load_and_health",
+        "span": "s1",
+        "matter": "work_load_and_health",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Sixth house planetary activity increases workload demands and requires steady health discipline.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h6",
+          "planet:D1.Ma",
+          "pressure:annual:TP2026/2/Ma@2026-11-08",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/2/Taurus@2026-09-06",
+          "pressure:dasha:narayana/3/Scorpio@2026-12-07",
+          "pressure:dasha:yogini/3/Ma@2026-11-17"
+        ]
+      },
+      {
+        "id": "ledger:s2/career_and_standing",
+        "span": "s2",
+        "matter": "career_and_standing",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Tenth house activations introduce administrative responsibilities, shifts in status, and ongoing professional demands.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h10",
+          "planet:D1.Me",
+          "pressure:annual:TP2026/2/Ju@2027-03-03",
+          "pressure:annual:TP2026/2/Sa@2027-01-29",
+          "pressure:dasha:vimsottari/3/Me@2027-02-01",
+          "pressure:dasha:yogini/3/Me@2027-04-03"
+        ]
+      },
+      {
+        "id": "ledger:s2/effort_and_courage",
+        "span": "s2",
+        "matter": "effort_and_courage",
+        "status": "confirmed",
+        "tone": "heavy",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy"
+          }
+        ],
+        "sentence": "Saturn continues to apply heavy friction to the third house, demanding patient, sustained personal resolve.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h3",
+          "planet:D1.Sa",
+          "pressure:dasha:narayana/3/Aquarius@2027-03-08",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+          "pressure:dasha:yogini/3/Sa@2027-01-25"
+        ]
+      },
+      {
+        "id": "ledger:s2/gains_and_network",
+        "span": "s2",
+        "matter": "gains_and_network",
+        "status": "leaning",
+        "tone": "mixed",
+        "agree": 2,
+        "of": 2,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Venus touching the eleventh house may bring social connections and alliances alongside minor operational tensions.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h11",
+          "planet:D1.Ve",
+          "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+          "pressure:dasha:yogini/3/Ve@2027-02-05"
+        ]
+      },
+      {
+        "id": "ledger:s2/home_and_peace",
+        "span": "s2",
+        "matter": "home_and_peace",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Fourth house stewardship preserves emotional and domestic stability amidst shifting household responsibilities.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h4",
+          "planet:D1.Ju",
+          "pressure:annual:TP2026/2/Me@2026-12-04",
+          "pressure:dasha:narayana/3/Pisces@2027-04-07",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:yogini/2/Ju@2027-03-12"
+        ]
+      },
+      {
+        "id": "ledger:s2/ideas_and_children",
+        "span": "s2",
+        "matter": "ideas_and_children",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Fifth house oversight sustains intellectual focus and creative duties under mixed period conditions.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h5",
+          "planet:D1.Ma",
+          "pressure:annual:TP2026",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/3/Pisces@2027-04-07",
+          "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18"
+        ]
+      },
+      {
+        "id": "ledger:s2/loss_rest_and_distance",
+        "span": "s2",
+        "matter": "loss_rest_and_distance",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Twelfth house planetary connections sustain recurring expenditures, secluded intervals, and travel obligations.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h12",
+          "planet:D1.Ma",
+          "planet:D1.Ra",
+          "pressure:annual:TP2026",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:yogini/3/Ra@2027-02-17"
+        ]
+      },
+      {
+        "id": "ledger:s2/luck_and_belief",
+        "span": "s2",
+        "matter": "luck_and_belief",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "light"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Ninth house operations support fundamental convictions while testing perspectives against shifting philosophical demands.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h9",
+          "pressure:annual:TP2026/2/Sa@2027-01-29",
+          "pressure:dasha:narayana/1/Leo@2017-09-06",
+          "pressure:dasha:narayana/2/Taurus@2026-09-06",
+          "pressure:dasha:vimsottari/2/Su@2026-07-31",
+          "pressure:dasha:vimsottari/3/Ve@2027-04-01"
+        ]
+      },
+      {
+        "id": "ledger:s2/money_in_hand",
+        "span": "s2",
+        "matter": "money_in_hand",
+        "status": "confirmed",
+        "tone": "heavy",
+        "agree": 3,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Saturn governing the second house enforces stringent budget controls, delayed funds, and financial restraint.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h2",
+          "planet:D1.Sa",
+          "pressure:dasha:narayana/3/Capricorn@2027-02-05",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17",
+          "pressure:dasha:yogini/3/Sa@2027-01-25"
+        ]
+      },
+      {
+        "id": "ledger:s2/partnership",
+        "span": "s2",
+        "matter": "partnership",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Seventh house activations prompt contractual discussions, agreements, and relational reassessments.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h7",
+          "planet:D1.Me",
+          "pressure:annual:TP2026/2/Ju@2027-03-03",
+          "pressure:dasha:vimsottari/3/Me@2027-02-01",
+          "pressure:dasha:yogini/3/Me@2027-04-03"
+        ]
+      },
+      {
+        "id": "ledger:s2/self_and_body",
+        "span": "s2",
+        "matter": "self_and_body",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "First house governance by Jupiter maintains basic stamina and vitality amidst periods of physical fatigue.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h1",
+          "planet:D1.Ju",
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Me@2026-12-04",
+          "pressure:dasha:narayana/3/Sagittarius@2027-01-06",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:yogini/2/Ju@2027-03-12"
+        ]
+      },
+      {
+        "id": "ledger:s2/sudden_and_hidden",
+        "span": "s2",
+        "matter": "sudden_and_hidden",
+        "status": "leaning",
+        "tone": "heavy",
+        "agree": 2,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "narayana",
+            "tone": "heavy"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": null,
+        "sides": null,
+        "evidence": [
+          "house:D1.h8",
+          "pressure:dasha:narayana/3/Aquarius@2027-03-08",
+          "pressure:dasha:narayana/3/Capricorn@2027-02-05",
+          "pressure:dasha:vimsottari/3/Sa@2026-12-17"
+        ]
+      },
+      {
+        "id": "ledger:s2/work_load_and_health",
+        "span": "s2",
+        "matter": "work_load_and_health",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Sixth house planetary activity sustains ongoing daily tasks, requiring attention to workloads and health disciplines.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h6",
+          "planet:D1.Ma",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/2/Taurus@2026-09-06",
+          "pressure:dasha:vimsottari/3/Ke@2027-03-15",
+          "pressure:dasha:vimsottari/3/Ve@2027-04-01"
+        ]
+      },
+      {
+        "id": "ledger:s3/career_and_standing",
+        "span": "s3",
+        "matter": "career_and_standing",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Tenth house governance stimulates vocational shifts, communications, and visible developments in public standing.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h10",
+          "planet:D1.Me",
+          "pressure:annual:TP2026/2/Ju@2027-03-03",
+          "pressure:annual:TP2027/2/Mo@2027-09-04",
+          "pressure:annual:TP2027/2/Su@2027-09-01",
+          "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+          "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+          "pressure:dasha:narayana/2/Gemini@2027-09-06",
+          "pressure:dasha:narayana/3/Gemini@2027-07-08",
+          "pressure:dasha:narayana/3/Virgo@2027-09-06",
+          "pressure:dasha:yogini/2/Me@2027-09-10"
+        ]
+      },
+      {
+        "id": "ledger:s3/effort_and_courage",
+        "span": "s3",
+        "matter": "effort_and_courage",
+        "status": "single",
+        "tone": "heavy",
+        "agree": 1,
+        "of": 1,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          }
+        ],
+        "sentence": null,
+        "sides": null,
+        "evidence": [
+          "house:D1.h3",
+          "planet:D1.Sa",
+          "pressure:dasha:vimsottari/3/Sa@2027-12-13"
+        ]
+      },
+      {
+        "id": "ledger:s3/gains_and_network",
+        "span": "s3",
+        "matter": "gains_and_network",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Eleventh house activations bring moderate networking expansion, shifting affiliations, and measured financial progress.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h11",
+          "planet:D1.Ve",
+          "pressure:annual:TP2027",
+          "pressure:annual:TP2027/2/Me@2027-11-18",
+          "pressure:dasha:vimsottari/3/Ju@2027-10-09",
+          "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+          "pressure:dasha:yogini/3/Ve@2027-04-26"
+        ]
+      },
+      {
+        "id": "ledger:s3/home_and_peace",
+        "span": "s3",
+        "matter": "home_and_peace",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "heavy"
+          }
+        ],
+        "sentence": "Jupiter ruling the fourth house sustains domestic affairs and inner equilibrium against occasional domestic disturbances.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h4",
+          "planet:D1.Ju",
+          "pressure:dasha:chathuraaseethi_sama/3/Ju@2027-10-20",
+          "pressure:dasha:narayana/3/Pisces@2027-04-07",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ju@2027-10-09",
+          "pressure:dasha:yogini/3/Ju@2027-08-30"
+        ]
+      },
+      {
+        "id": "ledger:s3/ideas_and_children",
+        "span": "s3",
+        "matter": "ideas_and_children",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 5,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Fifth house activity balances creative undertakings with responsibilities concerning intellectual plans and children.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h5",
+          "planet:D1.Ju",
+          "planet:D1.Ma",
+          "pressure:annual:TP2026",
+          "pressure:annual:TP2026/2/Ve@2027-06-13",
+          "pressure:annual:TP2027/2/Ju@2028-02-15",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:chathuraaseethi_sama/3/Ju@2027-10-20",
+          "pressure:dasha:narayana/3/Aries@2027-05-08",
+          "pressure:dasha:narayana/3/Pisces@2027-04-07",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ma@2027-06-29",
+          "pressure:dasha:yogini/2/Ma@2027-06-11"
+        ]
+      },
+      {
+        "id": "ledger:s3/loss_rest_and_distance",
+        "span": "s3",
+        "matter": "loss_rest_and_distance",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Twelfth house activations by Mars and Rahu prompt periodic expenditures, travel, and needs for retreat.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h12",
+          "planet:D1.Ma",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:vimsottari/3/Ma@2027-06-29",
+          "pressure:dasha:vimsottari/3/Ra@2027-07-28",
+          "pressure:dasha:yogini/2/Ma@2027-06-11"
+        ]
+      },
+      {
+        "id": "ledger:s3/luck_and_belief",
+        "span": "s3",
+        "matter": "luck_and_belief",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Ninth house activations stir shifting viewpoints, testing convictions and relationships with teachers.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h9",
+          "planet:D1.Mo",
+          "pressure:annual:TP2026/2/Ra@2027-05-04",
+          "pressure:annual:TP2027/2/Mo@2027-09-04",
+          "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+          "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+          "pressure:dasha:narayana/1/Leo@2017-09-06",
+          "pressure:dasha:narayana/3/Cancer@2027-08-07",
+          "pressure:dasha:narayana/3/Leo@2027-10-07",
+          "pressure:dasha:vimsottari/2/Mo@2027-05-20",
+          "pressure:dasha:vimsottari/2/Su@2026-07-31"
+        ]
+      },
+      {
+        "id": "ledger:s3/money_in_hand",
+        "span": "s3",
+        "matter": "money_in_hand",
+        "status": "leaning",
+        "tone": "heavy",
+        "agree": 2,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "vimsottari",
+            "tone": "heavy"
+          },
+          {
+            "system": "yogini",
+            "tone": "heavy"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Saturn governing the second house may impose tight financial discipline and strict budgeting constraints.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h2",
+          "planet:D1.Sa",
+          "pressure:dasha:vimsottari/3/Sa@2027-12-13",
+          "pressure:dasha:yogini/2/Sa@2027-12-10"
+        ]
+      },
+      {
+        "id": "ledger:s3/partnership",
+        "span": "s3",
+        "matter": "partnership",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 4,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Seventh house activations center attention on strategic negotiations, contractual discussions, and interpersonal alliances.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h7",
+          "planet:D1.Me",
+          "pressure:annual:TP2026/2/Ju@2027-03-03",
+          "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+          "pressure:dasha:chathuraaseethi_sama/3/Me@2027-07-23",
+          "pressure:dasha:narayana/2/Gemini@2027-09-06",
+          "pressure:dasha:narayana/3/Gemini@2027-07-08",
+          "pressure:dasha:yogini/2/Me@2027-09-10"
+        ]
+      },
+      {
+        "id": "ledger:s3/self_and_body",
+        "span": "s3",
+        "matter": "self_and_body",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 3,
+        "of": 3,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Lagna lord Jupiter upholds physical stamina and personal vitality despite periodic bodily tiredness.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h1",
+          "planet:D1.Ju",
+          "pressure:dasha:chathuraaseethi_sama/3/Ju@2027-10-20",
+          "pressure:dasha:vimsottari/1/Ju@2016-01-18",
+          "pressure:dasha:vimsottari/3/Ju@2027-10-09",
+          "pressure:dasha:yogini/3/Ju@2027-08-30"
+        ]
+      },
+      {
+        "id": "ledger:s3/sudden_and_hidden",
+        "span": "s3",
+        "matter": "sudden_and_hidden",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 5,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "mixed"
+          }
+        ],
+        "sentence": "Eighth house activations uncover unexpected circumstances, requiring steady emotional adjustments to sudden developments.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h8",
+          "planet:D1.Mo",
+          "pressure:annual:TP2027",
+          "pressure:annual:TP2027/2/Me@2027-11-18",
+          "pressure:dasha:chathuraaseethi_sama/3/Mo@2027-04-24",
+          "pressure:dasha:narayana/3/Cancer@2027-08-07",
+          "pressure:dasha:narayana/3/Cancer@2027-11-06",
+          "pressure:dasha:vimsottari/2/Mo@2027-05-20",
+          "pressure:dasha:vimsottari/3/Sa@2027-12-13",
+          "pressure:dasha:yogini/3/Mo@2027-05-19"
+        ]
+      },
+      {
+        "id": "ledger:s3/work_load_and_health",
+        "span": "s3",
+        "matter": "work_load_and_health",
+        "status": "confirmed",
+        "tone": "mixed",
+        "agree": 4,
+        "of": 5,
+        "clocks": [
+          {
+            "system": "chathuraaseethi_sama",
+            "tone": "mixed"
+          },
+          {
+            "system": "narayana",
+            "tone": "mixed"
+          },
+          {
+            "system": "vimsottari",
+            "tone": "mixed"
+          },
+          {
+            "system": "yogini",
+            "tone": "mixed"
+          },
+          {
+            "system": "tithi_pravesha",
+            "tone": "heavy"
+          }
+        ],
+        "sentence": "Sixth house influences maintain persistent workplace demands, requiring continuous attention to duties and daily routines.",
+        "sides": null,
+        "evidence": [
+          "house:D1.h6",
+          "planet:D1.Ma",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "pressure:dasha:narayana/3/Aries@2027-05-08",
+          "pressure:dasha:narayana/3/Taurus@2027-06-07",
+          "pressure:dasha:vimsottari/3/Ma@2027-06-29",
+          "pressure:dasha:vimsottari/3/Ve@2027-04-01",
+          "pressure:dasha:yogini/2/Ma@2027-06-11"
+        ]
+      }
+    ]
+  },
+  "cards": {
+    "sleep": {
+      "line": "Protect your evening quiet to sustain your stamina through 18 Jan 2028.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a strict buffer of quiet each evening until 25 Jan 2027 to keep daytime demands from draining your stamina.",
+          "obstacle": "Late mental tension and unsettled thoughts delaying your rest.",
+          "step": "If you notice your mind racing after dinner, then turn off all screens and dim the room lights.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish an unchanging bedtime routine from 25 Jan to 24 Apr 2027 to guard your rest against shifting schedules.",
+          "obstacle": "Sudden evening commitments disrupting your planned wind-down.",
+          "step": "If an unexpected task appears late in the day, then note it on paper and step away until morning.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate a steady rhythm of evening downtime between 24 Apr 2027 and 18 Jan 2028 by stopping effort early.",
+          "obstacle": "Late surges of restless physical energy keeping you awake.",
+          "step": "If heaviness sets in before your habitual bedtime, then lie down immediately and rest.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "sleep.late_agitation",
+        "text": "Between 2 Apr 2026 and 11 May 2026, did restlessness disrupt your evenings and delay your rest?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "mood": {
+      "line": "Your days settle into a steadier inner pace between 27 Oct 2026 and 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Anchor your days in a fixed home routine until 25 Jan 2027 to protect your stamina when quiet solitary tasks pull you inward.",
+          "obstacle": "A persistent pull toward isolation can quietly wear down your natural resilience.",
+          "step": "If you notice yourself pulling away from everyone, then take fifteen minutes of quiet rest before returning to the room.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "From 25 Jan – 24 Apr 2027, protect your basic stamina, drop optional obligations, and let outward demands wait while you rest.",
+          "obstacle": "Tension between necessary outside demands and an urgent pull to step back.",
+          "step": "If an extra request lands on your plate, then say no until your main duties are finished.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a regular evening habit of quiet contemplation from 24 Apr 2027 to steady your mind against recurring domestic duties.",
+          "obstacle": "Household disruptions and lingering obligations that cut into your restorative time.",
+          "step": "If household duties feel scattered, then write down the two tasks that must be finished and close down the rest.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "mood.past_restlessness",
+        "text": "Between 2 Apr 2026 and 11 May 2026, did you feel a notable surge of inner friction and impatience around domestic duties?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "purpose": {
+      "line": "Your standing and deeper principles ask for steady consolidation until 24 Apr 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Set aside regular time for quiet study and disciplined reflection on what you wish to hand on, keeping your principles steady.",
+          "obstacle": "Disagreements over long-held principles and a feeling of walking this stretch without your usual counsel.",
+          "step": "If you feel isolated in your views, then spend an hour writing down the standards you refuse to compromise.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Test your convictions quietly through daily practice without demanding quick recognition, holding firm to what you have already started.",
+          "obstacle": "Restlessness about whether your direction still holds weight when daily duties pull in opposite directions.",
+          "step": "If second thoughts disrupt your morning, then review the commitments you made before looking at new options.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Anchor your long-term focus into structured study and deliberate routines that outlast daily pressure, leaning on proven principles.",
+          "obstacle": "Moments of heavy self-doubt that make lasting commitments feel heavier than they need to be.",
+          "step": "If self-doubt slows your momentum, then complete one practical task that protects your long-term standing.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "purpose.sun_dasha_shift",
+        "text": "Around 31 May 2022, did a clear shift prompt you to rethink your direction and moral foundations?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "layers": {
+      "line": "Protect your daily stamina and keep home life steady until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a steady daily rhythm that preserves your stamina and keeps household life quiet without overextending your physical capacity.",
+          "obstacle": "Friction between necessary personal rest and competing household duties.",
+          "step": "If you notice rising physical fatigue by late afternoon, then stop non-essential tasks and rest for thirty minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish an even physical pace between 25 Jan 2027 and 24 Apr 2027 while keeping your domestic responsibilities grounded and manageable.",
+          "obstacle": "Mixed demands pulling you between home duties and physical recovery.",
+          "step": "If personal energy dips during the day, then take a quiet walk rather than forcing extra tasks.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate lasting personal rest habits through 18 Jan 2028 to keep your physical stamina protected against lingering outside demands.",
+          "obstacle": "Letting external duties disrupt the calm rhythm of your home.",
+          "step": "If domestic responsibilities begin to feel heavy in the evening, then pause and leave unresolved items until morning.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "layers.vitality_strain",
+        "text": "Between 1 May 2026 and 30 Jul 2026, did you feel pulled between physical tiredness and keeping home quiet?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "chapter": {
+      "line": "A demanding stretch calls for steady home routines and guarded stamina until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Protect your daily stamina while attending to essential maintenance and practical affairs around your home.",
+          "obstacle": "Balancing household duties alongside the need to preserve your daily physical reserve.",
+          "step": "If household tasks begin to crowd out your evening rest, then step away and leave the remaining chores for tomorrow.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Observe shifting public responsibilities quietly without committing to major domestic or personal realignments.",
+          "obstacle": "Conflicting demands between your public standing and your private rhythm.",
+          "step": "If someone asks for an immediate long-term pledge, then take forty-eight hours before responding.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish a clear rhythm for public communication while keeping your personal routines settled and predictable.",
+          "obstacle": "Handling new administrative details without disturbing your inner quiet.",
+          "step": "If daily correspondence piles up, then set aside one uninterrupted morning block to answer it.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "chapter.turn_to_mars",
+        "text": "Around 3 Nov 2025, did you enter a heavier stretch that asked for noticeably sharper stamina?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "fitness": {
+      "line": "Keep a steady rhythm in your physical habits until 25 Jan 2027 while your body values disciplined pacing over strain.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build lasting stamina through regular, measured movement three days a week instead of sharp spikes in effort.",
+          "obstacle": "A sense of bodily heaviness and slow daily momentum can tempt you to push harder than is wise.",
+          "step": "If you notice heaviness during physical activity, then cut your usual volume in half and focus on steady form.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Keep to the reliable routine you have set between 25 Jan and 24 Apr 2027 rather than introducing demanding new physical loads.",
+          "obstacle": "Uneven daily vitality can make recovery irregular if you increase effort before your stamina settles.",
+          "step": "If your stamina feels low upon waking, then trade hard training for thirty minutes of walking and deep rest.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish a sustainable, long-term exercise schedule between 24 Apr 2027 and 18 Jan 2028 that protects your baseline endurance.",
+          "obstacle": "Accumulated physical fatigue can drain your vitality if you skip designated quiet days between active sessions.",
+          "step": "If you feel lingering tiredness after two active days, then schedule a full day of quiet rest before exerting yourself again.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "fitness.friction_shift",
+        "text": "Between 20 Jun 2026 and 2 Aug 2026, did a sudden increase in daily physical strain force you to change your pace?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "body": {
+      "line": "Your physical stamina demands steady pacing and daily moderation until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Set a firm daily boundary around exertion, moderating your physical pace so morning stamina carries smoothly into late afternoon.",
+          "obstacle": "Sudden urges to rush through tasks, leaving unexpected physical heaviness by evening.",
+          "step": "If you notice sudden physical heat rising, then pause your exertion and drink a glass of water.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Guard your core vitality by anchoring two quiet intervals into your daily routine, keeping physical output steady without abrupt surges.",
+          "obstacle": "Energy dropping unevenly when daily demands compress your schedule.",
+          "step": "If your stamina wavers after midday, then sit quietly for ten minutes before resuming duties.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish an unbending evening rhythm for rest and deliberate quiet to keep reserves full against recurring daily wear.",
+          "obstacle": "Slowly accumulating physical tiredness from persistent day-to-day commitments.",
+          "step": "If heaviness sets into your limbs before dusk, then stop heavy physical efforts for the night.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "body.work_heat",
+        "text": "Did intense duties and elevated bodily heat test your stamina between 20 Jun 2026 and 2 Aug 2026?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "blood": {
+      "line": "Protect your daily stamina and pace your physical output carefully until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Establish a firm daily rhythm that protects your physical stamina. Concretely schedule your rest intervals and manage bodily heaviness through steady moderation.",
+          "obstacle": "A stubborn sense of physical drag can tempt you to push past reasonable limits.",
+          "step": "If you notice heaviness settling in by mid-afternoon, then stop physical tasks for ten quiet minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate your physical endurance between 25 Jan – 24 Apr 2027 by countering internal heat with extra fluids and deliberate pauses.",
+          "obstacle": "Sudden bouts of weariness will slow your pace if you rush physical efforts.",
+          "step": "If you feel sudden heat rising during effort, then drink a tall glass of water and sit down.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Sustain a balanced physical routine between 24 Apr 2027 – 18 Jan 2028, matching your daily activity to your actual reserve of stamina.",
+          "obstacle": "Ongoing routine obligations risk draining your energy if you skimp on regular rest.",
+          "step": "If the day brings heavy physical demands, then end your active hours an hour earlier.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "blood.heat_surge",
+        "text": "Between 20 Jun – 2 Aug 2026, did you feel a noticeable surge in physical heat and fatigue?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "mind": {
+      "line": "Clear domestic order keeps your thinking steady and grounded until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a quiet daily routine at home to protect your mental focus from routine material demands.",
+          "obstacle": "Worry over household obligations can scatter your attention and wear on your stamina.",
+          "step": "If household responsibilities begin to crowd your thoughts, then write down the top two tasks and set the rest aside until morning.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Maintain your existing household routines with steady patience instead of forcing immediate decisions on complex questions.",
+          "obstacle": "Sudden urges to settle open matters instantly can lead to hasty conclusions.",
+          "step": "If an unexpected domestic issue triggers an impulse to decide right away, then pause for twenty-four hours before responding.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Direct your mental energy into long-term personal projects and cementing stability in your living space.",
+          "obstacle": "Slow progress and minor delays can tempt you to abandon disciplined routines.",
+          "step": "If a key project stalls, then dedicate thirty uninterrupted minutes each morning to quiet, methodical preparation.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "mind.domestic_pressures",
+        "text": "Between 2 Apr and 11 May 2026, did domestic friction cause noticeable mental restlessness?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "sharpness": {
+      "line": "Your daily mental focus demands deliberate persistence and structured boundaries until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold steady focus on essential paperwork and decisions, dropping non-critical side matters while protecting daily quiet to preserve mental stamina.",
+          "obstacle": "Mental heaviness and fragmented concentration slow down your daily administrative pace.",
+          "step": "If your mind feels scattered by mid-afternoon, then close all open files and focus on one single document for twenty minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep your daily routines simple, drop impulsive adjustments, and pace your mental energy through uneven stretches of concentration.",
+          "obstacle": "Fluctuating daily stamina makes sustained mental effort feel unpredictable.",
+          "step": "If mental restlessness sets in during routine tasks, then take a brief ten-minute walk away from your desk before continuing.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a structured long-term plan for your affairs by setting aside two undisturbed mornings each week to organize complex files.",
+          "obstacle": "Heavy practical responsibilities make fresh, flexible problem-solving require extra effort.",
+          "step": "If an intricate problem stalls your morning planning, then map the facts out step by step on a single sheet of paper.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "sharpness.mercury_clarity",
+        "text": "Between 1 Feb 2026 and 1 May 2026, was your thinking sharp and did analytical clarity guide your major decisions?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "stuck": {
+      "line": "Your daily obligations require steady endurance until 25 Jan 2027 before the heavy background strain begins to shift.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold to a strict daily rhythm and protect your financial reserves while unexpected duties and sudden frictions press on your stamina.",
+          "obstacle": "Surprise delays and competing obligations wear down your patience.",
+          "step": "If an unexpected task appears, then finish your morning list before answering it.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep your regular duties moving without taking on fresh commitments, letting expenses settle as daily matters demand steady oversight until 24 Apr 2027.",
+          "obstacle": "Mixed demands stall forward momentum and keep unfinished matters open.",
+          "step": "If progress on an agreement stalls, then complete the routine chores in front of you.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Manage your outgoings carefully and protect your rest while shifting circumstances and persistent daily loads try your emotional composure.",
+          "obstacle": "Sudden changes disrupt your plans and trigger unnecessary restlessness.",
+          "step": "If sudden news disturbs your evening, then take a ten-minute walk before deciding anything.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "stuck.retreat_friction",
+        "text": "Between 3 Nov 2025 and 1 Feb 2026, did you face sharp demands alongside unexpected expenses or an urge to pull back?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "restores": {
+      "line": "Protect your quiet hours at home until 25 Jan 2027 to keep your daily stamina steady.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep to quiet domestic routines and solitary study until 25 Jan 2027. Hold your energy close, decline extra travel, and let quiet reading rebuild your daily reserves.",
+          "obstacle": "A sense of detachment can drain your outlook if you expect too much from the outside world.",
+          "step": "If the day feels scattered by evening, then sit with a book in a quiet room for thirty minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Step back from friction and protect low-demand spaces from 25 Jan to 24 Apr 2027. Drop unnecessary obligations and allow your body unhurried rest without forcing productivity.",
+          "obstacle": "Restlessness or sudden demands can tempt you to battle through fatigue instead of stepping away.",
+          "step": "If an unexpected task creates sudden irritation, then leave the room for five minutes before answering.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Set firm boundaries around your personal time from 24 Apr 2027 to 18 Jan 2028. Protect your home rhythm against outside demands so composure can return.",
+          "obstacle": "Mental heaviness and domestic duties may crowd out the solitary space you need.",
+          "step": "If domestic requests pile up at the end of the day, then mark one firm hour for quiet rest.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "restores.home_tension",
+        "text": "Between 2 Apr 2026 and 11 May 2026, did domestic strains or unsettled routines disrupt your peace at home?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "play": {
+      "line": "Carve out protected hours for personal craft and leisure before 25 Jan 2027 arrives.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Set aside two evenings a week purely for an unhurried craft, keeping routine obligations firmly outside that boundary.",
+          "obstacle": "Daily duties and chores threaten to crowd out restful hours.",
+          "step": "If an errand tempts you during your leisure hour, then leave it on your notepad until tomorrow.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Keep your social recreation simple and small, so outside coordination does not turn your downtime into another obligation.",
+          "obstacle": "Clashing calendars and overlapping commitments make real rest hard to reach.",
+          "step": "If someone invites you to a crowded gathering, then propose a quiet walk instead.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Commit to one steady creative pursuit through 18 Jan 2028, treating the practice with quiet patience rather than rushing results.",
+          "obstacle": "A sense of dryness can make your creative pastime feel like a chore.",
+          "step": "If your hobby feels heavy, then put your tools down after fifteen steady minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "play.venus_dasha_shift",
+        "text": "Between 12 Sep 2020 and 31 May 2022, did you experience an easier stretch with more room for leisure and social celebration?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "diagnosis": {
+      "line": "Heavy daily obligations ask you to protect your physical pace and conserve stamina until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep your daily rhythm steady and set a firm limit on contentious duties so that fatigue does not undercut your stamina.",
+          "obstacle": "Daily disputes and piled-up chores rapidly drain your physical reserves.",
+          "step": "If an administrative dispute lands on your desk, then defer your response until you have completed your morning walk.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold to existing arrangements and established habits instead of taking on fresh commitments, keeping your evenings clear for rest.",
+          "obstacle": "Mixed demands pull your attention in several directions at once.",
+          "step": "If someone asks you to lead a new commitment, then decline until the current responsibilities conclude.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Direct your steady energy into consolidating your standing and strengthening your long-term position through practical agreements.",
+          "obstacle": "Ongoing background duties still risk testing your daily endurance.",
+          "step": "If you plan your week, then block two uninterrupted hours each morning for your primary long-term task.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "diagnosis.past_workload_surge",
+        "text": "Between 3 Nov 2025 and 1 Feb 2026, did your daily duties or workplace friction intensify sharply?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "lagna": {
+      "line": "Your standing and stamina hold steady against heavy daily demands until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a fixed rhythm for your daily duties so heavy responsibilities do not deplete your physical stamina.",
+          "obstacle": "Taking on competing tasks all at once instead of pacing your day.",
+          "step": "If external requests begin piling up before noon, then finish one core obligation before opening another.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Protect your baseline rest and drop nonessential obligations while formal arrangements remain unsettled.",
+          "obstacle": "Trying to force firm commitments when terms and direction remain split.",
+          "step": "If someone asks for an immediate decision on an agreement, then defer your answer until the following morning.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate your public standing and formal agreements while keeping your physical pace deliberate and sustainable.",
+          "obstacle": "Letting extended negotiations wear down your endurance.",
+          "step": "If a meeting runs past an hour, then pause to drink water and reset your focus.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "lagna.focus_turn",
+        "text": "Between 3 Nov 2025 and 27 Oct 2026, did your focus shift toward heavy duties and structured accountability?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "drive": {
+      "line": "Your daily momentum meets steady resistance until 25 Jan 2027, asking you to consolidate rather than push forward.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold your current ground and protect your baseline stamina. Drop new ventures that demand fast returns and keep your daily routine simple until 25 Jan 2027.",
+          "obstacle": "Frustration when direct effort meets unexpected friction or slow replies.",
+          "step": "If you feel urged to force a delayed decision, then step away from your desk for twenty minutes.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep your administrative duties steady without committing to fresh initiatives. Notice where demands pull in two directions and protect your evenings until 24 Apr 2027.",
+          "obstacle": "Mixed signals about whether to act immediately or wait out the week.",
+          "step": "If a new task lands without a clear deadline, then set it aside until tomorrow morning.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build durable agreements and reinforce professional alliances between 24 Apr 2027 and 18 Jan 2028. Commit to two key shared projects each week.",
+          "obstacle": "Sudden heavy workloads that tempt you to sacrifice rest.",
+          "step": "If a project expands beyond its agreed scope, then reset the schedule before agreeing to continue.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "drive.sub_shift",
+        "text": "Around 3 Nov 2025, did you notice a significant shift in your daily workload and personal drive?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "presence": {
+      "line": "Your standing remains solid, but measured words serve you best through 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Carry your physical stamina with steady calm, keeping your daily speech plain and unhurried when dealing with others.",
+          "obstacle": "Speaking too bluntly or sounding guarded when pressure builds.",
+          "step": "If someone asks for an immediate reaction, then pause and give one clear sentence without defensiveness.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build shared agreements on careful footing between 25 Jan and 24 Apr 2027, relying on quiet competence rather than hurried promises.",
+          "obstacle": "Discussions stalling around money or terms that feel heavier than expected.",
+          "step": "If a conversation stalls over terms, then write down the points settled before discussing what remains.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Put formal terms into writing between 24 Apr 2027 and 18 Jan 2028, letting direct clarity replace unstated expectations.",
+          "obstacle": "A tendency to retreat into silence rather than clearing up friction.",
+          "step": "If you notice an unspoken disagreement, then state the factual issue out loud before ending the meeting.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "presence.best_window_grace",
+        "text": "Between 12 Sep 2020 and 31 May 2022, did you notice an ease in your personal standing and how others received you that felt distinctly lighter than usual?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "yogas": {
+      "line": "Your financial discipline and endurance will be tested through heavy obligations until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Keep your spending minimal and hold firmly to your core values while available cash runs tight and administrative duties mount.",
+          "obstacle": "Strict limits on ready cash and slow payments create immediate friction.",
+          "step": "If a cash outflow threatens your safety net, then defer every uncommitted expense until next month.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Move carefully through mixed demands without making sudden commitments or large purchases until your footing clears.",
+          "obstacle": "Unclear signals obscure the right financial choices and practical direction.",
+          "step": "If someone presses you for an urgent financial commitment, then ask for forty-eight hours to review the terms.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate your long-term standing through steady agreements and structured routines while maintaining tight control over your reserves.",
+          "obstacle": "Ongoing restrictions on liquid funds require careful budgeting during expansion.",
+          "step": "If an opportunity to formalise an agreement arises, then lock down the written terms before committing new funds.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": null,
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "learning": {
+      "line": "Your study demands methodical practice rather than quick results until 25 Jan 2027.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Set aside forty minutes each morning to master foundational methods rather than rushing into broad applications.",
+          "obstacle": "Restless distractions and mental tiredness tempt you to abandon basic drills.",
+          "step": "If your mind feels scattered during study, then close all extra tabs and write one core summary page.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Maintain a steady rhythm of review to test your working knowledge against practical, shifting requirements.",
+          "obstacle": "Doubts about your stamina and purpose will test your day-to-day discipline.",
+          "step": "If self-doubt slows your progress, then review your structured notes from last month before continuing.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Consolidate your technical skills into a formal body of knowledge that you can rely on and hand down.",
+          "obstacle": "Disagreements with advisers or established frameworks may shake your focus.",
+          "step": "If advice from others feels conflicting, then return to your verified reference materials to confirm the facts.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": null,
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "chapters": {
+      "line": "Your standing holds steady while daily duties test your stamina through 18 Jan 2028.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Keep a steady daily rhythm and protect your physical pace while sorting through paperwork and obligations.",
+          "obstacle": "Heavy physical tiredness when sudden procedural tasks pile up.",
+          "step": "If the morning feels heavy with admin tasks, then finish the two most pressing papers before noon and stop.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold your ground on routine responsibilities, drop extra outside projects, and conserve your stamina against competing pulls.",
+          "obstacle": "Conflicting obligations pulling you between personal duties and outside responsibilities.",
+          "step": "If conflicting demands land at once, then protect your evening rest by postponing non-essential meetings.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Shape your core responsibilities and set firm boundaries around your standing as public obligations shift.",
+          "obstacle": "Disagreements over key decisions under shifting oversight or differing viewpoints.",
+          "step": "If someone questions your standard approach, then state your baseline terms clearly in writing.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "chapters.saturn_closing",
+        "text": "Did a twelve-year chapter of heavy endurance draw to a close for you around May 2022?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    },
+    "year": {
+      "line": "Your standing and stamina require steady pacing through 25 Jan 2027 while you consolidate current responsibilities.",
+      "spans": [
+        {
+          "span": "s1",
+          "from": "2026-10-27",
+          "to": "2027-01-25",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a strict boundary around your daily energy and financial commitments until 25 Jan 2027, protecting your physical stamina while coordinating with useful contacts.",
+          "obstacle": "Sudden disputes and unexpected demands will tempt you to overspend your energy.",
+          "step": "If an unexpected friction arises during your day, then step back and delay your reply until tomorrow morning.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "mixed",
+              "agrees": true
+            }
+          ]
+        },
+        {
+          "span": "s2",
+          "from": "2027-01-25",
+          "to": "2027-04-24",
+          "tone": "mixed",
+          "mode": "get_through",
+          "asks": "Hold your ground from 25 Jan to 24 Apr 2027 without taking on fresh duties, dropping non-essential tasks to protect your stamina.",
+          "obstacle": "Unpredictable disruptions will test your patience and drain your physical reserve.",
+          "step": "If an unpredicted demand interrupts your morning, then strip one routine chore from your afternoon.",
+          "held": false,
+          "agreement": {
+            "agree": 2,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "light",
+              "agrees": false
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "heavy",
+              "agrees": false
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": false
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        },
+        {
+          "span": "s3",
+          "from": "2027-04-24",
+          "to": "2028-01-18",
+          "tone": "mixed",
+          "mode": "build",
+          "asks": "Build a consolidated daily routine from 24 Apr 2027 to 18 Jan 2028, securing your practical standing through consistent, patient execution.",
+          "obstacle": "Delays on creative choices will test your focus and slow progress.",
+          "step": "If a project stalls, then review your core checklist and complete one administrative item before noon.",
+          "held": true,
+          "agreement": {
+            "agree": 4,
+            "of": 5
+          },
+          "clocks": [
+            {
+              "system": "chathuraaseethi_sama",
+              "label": "Chaturaseeti Sama",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "tithi_pravesha",
+              "label": "Tithi Pravesha",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "vimsottari",
+              "label": "Vimshottari",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "narayana",
+              "label": "Narayana",
+              "tone": "mixed",
+              "agrees": true
+            },
+            {
+              "system": "yogini",
+              "label": "Yogini",
+              "tone": "heavy",
+              "agrees": false
+            }
+          ]
+        }
+      ],
+      "confirm": {
+        "claimId": "year.past_career_window",
+        "text": "Between 1 Feb 2026 and 1 May 2026, did your professional responsibilities increase alongside a heavier administrative load?"
+      },
+      "pattern": null,
+      "ladder": null,
+      "agreement": {
+        "agree": 4,
+        "of": 5
+      }
+    }
+  },
+  "issues": [
+    {
+      "stage": "oracle",
+      "area": "chapter",
+      "check": "unknown_evidence_key",
+      "message": "chapter: unknown evidence key pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+      "callId": "card.chapter"
+    },
+    {
+      "stage": "oracle",
+      "area": "mind",
+      "check": "unknown_evidence_key",
+      "message": "mind: span s1: cites none of this card's ledger cells (ledger:s1/home_and_peace, ledger:s1/ideas_and_children, ledger:s1/self_and_body)",
+      "callId": "card.mind"
+    },
+    {
+      "stage": "oracle",
+      "area": "mind",
+      "check": "unknown_evidence_key",
+      "message": "mind: span s2: cites none of this card's ledger cells (ledger:s2/home_and_peace, ledger:s2/ideas_and_children, ledger:s2/self_and_body)",
+      "callId": "card.mind"
+    },
+    {
+      "stage": "oracle",
+      "area": "mind",
+      "check": "unknown_evidence_key",
+      "message": "mind: span s3: cites none of this card's ledger cells (ledger:s3/home_and_peace, ledger:s3/ideas_and_children, ledger:s3/self_and_body)",
+      "callId": "card.mind"
+    },
+    {
+      "stage": "oracle",
+      "area": "yogas",
+      "check": "other",
+      "message": "yogas: confirm dropped: 2025-08-16..2026-01-18 not frame dates",
+      "callId": null
+    },
+    {
+      "stage": "oracle",
+      "area": "learning",
+      "check": "other",
+      "message": "learning: confirm dropped: 2025-08-16..2026-01-18 not frame dates",
+      "callId": null
+    }
+  ]
+}

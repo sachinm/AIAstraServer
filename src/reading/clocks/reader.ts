@@ -10,7 +10,7 @@
  * engine's polarity with `presses` heavy only at PRESSES_MIN_BAD_FLAGS stored bad flags; rows of more than one tone
  * allow only `mixed`). A bad cell is dropped and recorded; the sheet keeps the rest.
  *
- * Readers run in parallel, 45 s each, under a spend guard. Each sheet is stored with `withTechniqueOutput` (technique
+ * Each reader reads its clock slice cut to the frame (`trimSliceToRange`). Readers run in parallel, 45 s each, under a spend guard. Each sheet is stored with `withTechniqueOutput` (technique
  * `reading.clock.sheet`). Nothing here throws.
  */
 import type { PrismaClient } from '@prisma/client';
@@ -22,7 +22,9 @@ import { markAgentUsed } from '../self/v2/cache.js';
 import { normaliseEvidenceKey, promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
 import { cmp, parseRowLines, type SliceRowRef } from '../slices/render.js';
+import { frameRange, trimSliceToRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
+import { READER_INPUT_VERSION } from './layerCache.js';
 import {
   CLOCK_AGENT,
   CLOCK_READER_PROMPT,
@@ -40,6 +42,11 @@ import {
 export const CLOCK_READER_TIMEOUT_MS = 45_000;
 export const CLOCK_READER_MAX_OUTPUT_TOKENS = 8_192;
 export const CELL_MAX_WORDS = 25;
+/**
+ * What the prompt and the schema ask for: 15 words (the validator still allows CELL_MAX_WORDS, so an overshoot never
+ * drops a cell). The sentences only feed the concordance's words; the replay's readers wrote 16,963 output tokens.
+ */
+export const CELL_ASK_WORDS = 15;
 const TONES: readonly ClockTone[] = ['heavy', 'mixed', 'light'];
 
 export interface ClockCallDeps {
@@ -93,9 +100,9 @@ export function clockReaderSchema(spanIds: readonly string[], matters: readonly 
             span: { type: 'STRING', enum: [...spanIds] },
             matter: matters.length ? { type: 'STRING', enum: [...matters] } : { type: 'STRING' },
             tone: { type: 'STRING', enum: [...TONES] },
-            sentence: { type: 'STRING', description: `one sentence, at most ${CELL_MAX_WORDS} words` },
+            sentence: { type: 'STRING', description: `one short sentence, at most ${CELL_ASK_WORDS} words` },
             strength: { type: 'INTEGER', description: '1, 2 or 3' },
-            evidence: { type: 'ARRAY', items: { type: 'STRING' }, description: 'evidence keys from the input, without braces' },
+            evidence: { type: 'ARRAY', items: { type: 'STRING' }, description: 'at most three evidence keys from the input, without braces; at least one dated row of your clock' },
           },
           required: ['span', 'matter', 'tone', 'sentence', 'strength', 'evidence'],
         },
@@ -257,7 +264,7 @@ export interface ReadOneInput {
 
 /** The store key of one sheet: the clock, the frame, the shared prefix, its own slice, the prompts and the model. */
 export const sheetStoreKey = (system: string, i: Pick<ReadOneInput, 'frameHash' | 'prefix' | 'slice' | 'model'>): string =>
-  `${CLOCK_SHEET_TECHNIQUE}|sys=${system}|frame=${i.frameHash}|pre=${i.prefix.hash}|slice=${i.slice.hash}|p=${promptHash(READER_SYSTEM_PROMPT)}.${promptHash(CLOCK_READER_PROMPT)}|m=${i.model}`;
+  `${CLOCK_SHEET_TECHNIQUE}|sys=${system}|in=${READER_INPUT_VERSION}|frame=${i.frameHash}|pre=${i.prefix.hash}|slice=${i.slice.hash}|p=${promptHash(READER_SYSTEM_PROMPT)}.${promptHash(CLOCK_READER_PROMPT)}|m=${i.model}`;
 
 /** the span covering today (else the first): a sheet is reused until it ends (doc 70 §4.1 "Validity") */
 export function nowSpanOf(frame: YearFrameV3): { from: Date; to: Date } | null {
@@ -378,5 +385,8 @@ export async function readOneClock(deps: ClockCallDeps, i: ReadOneInput): Promis
 export async function readClocks(deps: ClockCallDeps, ctx: ClockCallContext, frame: YearFrameV3, slices: ClockLayerSlices, model: string): Promise<ClockReadResult[]> {
   const prefix = sharedPrefix(slices.shared);
   const overBudget = (deps.spentUsd ?? 0) >= deps.maxSpendUsd;
-  return Promise.all(slices.clocks.map((slice) => readOneClock(deps, { ctx, frame, prefix, slice, model, frameHash: slices.shared.frame.hash, overBudget })));
+  // each clock slice cut to the frame: a cell must cite a row of its own clock overlapping a frame span, so rows that end
+  // before the frame or start after it can never ground a cell (doc 70 Phase 3 replay fixes)
+  const range = frameRange(frame);
+  return Promise.all(slices.clocks.map((s) => readOneClock(deps, { ctx, frame, prefix, slice: trimSliceToRange(s, range), model, frameHash: slices.shared.frame.hash, overBudget })));
 }

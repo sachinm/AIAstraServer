@@ -477,8 +477,9 @@ const AGENT_SEED_SQL = `INSERT INTO agent_registry (id, title, kind, module, sub
 type RawCapable = { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => Promise<number> };
 
 /**
- * Upserts every definition into `agent_registry`. Idempotent; awaited at boot (server.ts, before listen) and before the
- * first run. With a real client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert
+ * Upserts every definition into `agent_registry`. Idempotent; awaited before the first run of each process
+ * (`withAgentRun`), again when a run's write finds its agent row missing, and by scripts/write-techniques-doc.ts. This is
+ * how every agent gets its row, the new ones included: there is no migration that inserts agent rows. With a real client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert
  * per row. Logs once and never throws.
  */
 export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
@@ -569,6 +570,16 @@ const isMissingColumn = (err: unknown): boolean => {
   if (e?.code === 'P2022' || e?.code === '42703' || e?.meta?.code === '42703') return true;
   const msg = e?.message ?? '';
   return /column .* does not exist/i.test(msg) || M29_AGENT_RUN_COLUMNS.some((c) => msg.includes(`Unknown argument \`${c}\``));
+};
+
+/**
+ * The run's agent has no `agent_registry` row (`agent_runs_agent_fkey`): the seed did not reach this database, for example
+ * a client whose raw SQL was swallowed (the replay's storage-dry proxy, doc 70 Phase 3 replay) or a seed that failed.
+ */
+export const isMissingAgentRow = (err: unknown): boolean => {
+  const e = err as { code?: string; message?: string; meta?: { field_name?: string; constraint?: string } } | null;
+  const where = `${e?.message ?? ''} ${e?.meta?.field_name ?? ''} ${e?.meta?.constraint ?? ''}`;
+  return /agent_runs_agent_fkey/.test(where) || (e?.code === 'P2003' && /agent/i.test(where));
 };
 
 function chartsOf(...lists: Array<ChartUsed[] | undefined>): ChartUsed[] | null {
@@ -662,18 +673,29 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
           ...(withTags ? { ...tags, charts_used: (tags.charts_used ?? undefined) as object | undefined } : {}),
         },
       });
+    const once = async () => {
+      if (Date.now() < m29MissingUntil) await write(false);
+      else {
+        try {
+          await write(true);
+        } catch (e) {
+          if (!isMissingColumn(e)) throw e;
+          m29MissingUntil = Date.now() + M29_RETRY_MS;
+          console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
+          await write(false);
+        }
+      }
+    };
     const persist = async () => {
       try {
-        if (Date.now() < m29MissingUntil) await write(false);
-        else {
-          try {
-            await write(true);
-          } catch (e) {
-            if (!isMissingColumn(e)) throw e;
-            m29MissingUntil = Date.now() + M29_RETRY_MS;
-            console.warn('[agents] run tag columns missing (migration M29 not applied); writing runs without them');
-            await write(false);
-          }
+        try {
+          await once();
+        } catch (e) {
+          // the agent's registry row is missing: seed again (idempotent upsert of every definition), then write once more
+          if (!isMissingAgentRow(e)) throw e;
+          seeded = false;
+          await seedAgentRegistry(prisma);
+          await once();
         }
       } catch (e) {
         if (!warned) console.warn(`[agents] run log failed: ${(e as Error).message}`);
