@@ -193,3 +193,57 @@ rubric from step 6. No flag turns on before that.
 
 Build Phase 0 and Phase 1 first. They need one small paid measurement and they settle every number in §8. Phase 2
 follows only if the measured cached-read and storage prices hold the cost under $0.25.
+
+## 12. Phase 0 results (2026-11-11, measured)
+
+Run: `scripts/cache-pack-measure.ts --yes-spend --cap 0.25 --ttl 600` on kundli `75b0d618` (test data), key ending
+`hbtQ`, `gemini-3.8-flash`. Output: `docs/reading-engine/replays/71-phase0/` (`summary.json`, `group-0..3.json`).
+
+How the pack was made: the v3 card path ran with a fake model that recorded every prompt (5 clock readers, 21 card
+Oracles), and the pack is the union of those prompts plus the 21 card briefs, with one role library as the system
+instruction. The ledger was empty in this run (the readers were not called), so the ledger lines are not in the pack
+and the cards could not cite ledger cells. That makes this a time and cost test, not a quality test.
+
+### Answer first
+
+- **Pack size: 79,435 tokens after each line is kept once.** Before that it was 234,429 tokens: 70% of it was the
+  card prompt written 21 times and the same rows written into several cards and clocks.
+- **The cache is created in 0.85 s.** Creating it on dashboard open costs no noticeable time.
+- **Four group calls on the cache, in parallel: first token in 2.2 to 4.3 s, done in 36 to 45 s.** All 21 cards came
+  back as valid JSON, 63 of 63 spans with evidence, no chart word on any face.
+- **Time follows output length, not input.** Each group wrote about 4,700 to 5,400 tokens at about 120 to 130 tokens
+  a second. The cache removed the input wait; the output is what is left.
+- **Cost: $0.098 for the four calls.** Each call read 79,435 cached tokens ($0.006) and wrote about 5,000 tokens
+  ($0.018). The creation charge is not stated by Google; at worst it is the input rate, $0.060. So $0.10 to $0.16.
+
+### Prices (pricing page, read 2026-11-11)
+
+| `gemini-3.8-flash` per 1M tokens | to 2026-12-31 | from 2027-01-01 |
+|---|---|---|
+| Input | $0.75 | $1.50 |
+| Output | $3.75 | $7.50 |
+| Cached input | $0.075 | $0.15 |
+| Cache storage per hour | $0.50 | $1.00 |
+| Batch | half of input, output and cached | same |
+
+Storage for this pack: $0.040 an hour now ($0.030 for 45 minutes), $0.079 an hour from January.
+Creation charge: the page does not say. No TTL limits.
+
+### What this changes in the plan
+
+1. **15 seconds needs more, smaller groups.** At about 125 tokens a second, a group of five cards takes about 40 s.
+   Seven groups of three cards (about 2,800 tokens each) should finish in 14 to 17 s; 21 single-card calls in 10 to
+   12 s. Each extra call reads the cached pack once, $0.006. Estimate, not measured:
+
+   | Split | Calls | Time to all 21 | Cost of the calls |
+   |---|---|---|---|
+   | 4 groups (measured) | 4 | 45 s | $0.098 |
+   | 7 groups of 3 | 7 | about 15 s | about $0.12 |
+   | 21 single cards | 21 | about 11 s | about $0.20 |
+
+2. **The pack keeps each row once.** The card data is written as a shared table of rows and each card's block names
+   its rows by key. Doc 71 §4.2 is amended: no repeated prompts, no repeated rows.
+3. **Per refresh, estimated: about $0.15 to $0.25** (5 readers and the concordance on the pack, 7 card groups,
+   storage while open, creation at worst rate). From 2027-01-01 every figure doubles.
+4. **Still to prove:** quality with the ledger in place, the readers and concordance on the same pack, and the
+   seven-group time. That is the next paid replay.

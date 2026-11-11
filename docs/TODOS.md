@@ -2504,3 +2504,13 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   fixed catalogue only. Doc 71 §4.5 and §4.6. Owner: this branch, doc 71 Phases 3 and 4.
 - **Decisions for Sachin (doc 71 §10):** clocks read before the click; Oracle and Personalizer in one call per group;
   the ten memory areas; question limits of one per visit and three a week.
+- **P1 · open · Four card groups take 36 to 45 s, not 15 (doc 71 §12).** Measured 2026-11-11: the cache removed the
+  input wait (first token 2 to 4 s); output at about 125 tokens a second sets the time. Fix: seven groups of three
+  cards, then measure. Owner: this branch.
+- **P2 · open · The card pack repeats the card prompt 21 times and shared rows across cards (doc 71 §12).** 234k tokens
+  raw, 79k with each line once. Build the pack with each row once and cards naming rows by key. Owner: this branch.
+- **P2 · open · The Phase 0 test ran with an empty ledger (doc 71 §12).** Cards wrote "agreement" sentences without
+  ledger cells to stand on. The next replay runs the readers on the pack first. Owner: this branch.
+- **P2 · open · Gemini prices double on 2027-01-01** (input $1.50, output $7.50, cached $0.15, storage $1.00 per 1M per
+  hour). `PRICE_CHANGES` in `src/reading/llm/models.ts` has input, output and cached; storage is not modelled anywhere.
+  Owner: this branch.
