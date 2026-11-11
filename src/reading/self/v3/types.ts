@@ -7,6 +7,7 @@
  *
  * Nothing here is astrological arithmetic. Every boundary, tone and evidence key is a stored engine value carried by id.
  */
+import type { BoardCardOptions, CardOptions } from '../../boards/cardOptions.js';
 import type { AreaCertainty } from '../areaDoc.js';
 import type {
   CardStatus,
@@ -132,16 +133,19 @@ export interface SelfBoardLayout {
   cards: SelfCardId[];
   /** per card, the sections switched on, when the person changed them; absent: the card's defaults */
   sections: Partial<Record<SelfCardId, SelfSectionId[]>>;
+  /** per card, how it reads (doc 71 §4.3), only the keys the person changed; absent: every card on its defaults */
+  options?: BoardCardOptions;
 }
 
 export interface SelfBoardLayoutView extends SelfBoardLayout {
+  options: BoardCardOptions;
   /** false until the person has pressed Done once: the page opens the picker */
   chosen: boolean;
   updatedAt: string | null;
 }
 
 /** PUT /api/self/v3/layout errors */
-export type LayoutError = 'unknown_template' | 'template_not_live' | 'unknown_card' | 'card_not_offered' | 'duplicate_card' | 'too_few_cards' | 'unknown_section' | 'fixed_section_off' | 'bad_body';
+export type LayoutError = 'unknown_option' | 'unknown_template' | 'template_not_live' | 'unknown_card' | 'card_not_offered' | 'duplicate_card' | 'too_few_cards' | 'unknown_section' | 'fixed_section_off' | 'bad_body';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Phase B: the year frame (doc 68 §4.5 items 2–3). Built in code from stored rows only.
@@ -342,6 +346,9 @@ export interface SelfV3CardView {
   /** the card's real first line for this person, for the picker tile; null until read */
   firstLine: string | null;
   defaultSections: SelfSectionId[];
+  /** doc 71: the card's options in force (defaults filled in) and the plain lines where one cannot be honoured yet */
+  options?: CardOptions;
+  optionNotes?: string[];
   rail: RailItem[];
   /** Phase B content; null while the card is filled from the v2 build */
   v3: SelfV3CardContent | null;

@@ -34,6 +34,7 @@ import { registerLifeReadingRoutes } from './src/routes/lifeReadingRoutes.js';
 import { registerSelfReadingRoutes } from './src/routes/selfReadingRoutes.js';
 import { registerSelfV2Routes } from './src/routes/selfV2Routes.js';
 import { registerSelfV3Routes } from './src/routes/selfV3Routes.js';
+import { registerBoardCardsRoutes } from './src/routes/boardCardsRoutes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { registerAssetRoutes } from './src/routes/assetRoutes.js';
@@ -363,6 +364,8 @@ registerSelfReadingRoutes(app, { prisma, requireUser: focusUser });
 // Self board v2 (docs/reading-engine/66 §4.5): mounted when SELF_V2_ENABLED=1 (unset: follows AREA_ENABLED)
 registerSelfV2Routes(app, { prisma, requireUser: focusUser });
 registerSelfV3Routes(app, { prisma, requireUser: focusUser });
+// Love and Work card picker and card options (docs/reading-engine/71): no model call, always on
+registerBoardCardsRoutes(app, { prisma, requireUser: focusUser });
 registerAdminLabRoutes(app, { prisma });
 // life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
 registerLifeReadingRoutes(app, { prisma, requireUser: focusUser });
