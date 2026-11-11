@@ -2486,3 +2486,21 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   disk, the database holds roughly 150–200 kundlis beside the other tables before the guard stops writes. Owner: Sachin
   (disk plan) with the deploy session (monitoring). Done: an alert at 60% disk on the Render database, and a disk plan
   for the expected user count (or a decision to revisit §6.2 then).
+
+## Filed 2026-11-10 by doc 71 (ready on click, one cache per person, person memory; branch `feat/self-v3`)
+
+- **P1 · open · Cache storage price and creation time for `gemini-3.8-flash` are not known.** Doc 71 §8 assumes about
+  $0.50 per million input tokens (inferred from the replay bill), a tenth of that cached, and a 150,000-token pack. At
+  $1 per million tokens per hour a 45-minute cache costs about $0.11, close to the reading itself. Owner: this branch,
+  doc 71 Phase 0. Done: measured pack size, creation time, storage and cached-read price written into doc 71 §8. Needs
+  Sachin's yes (paid call).
+- **P1 · open · Every call on a shared cache pays the cached rate on the whole pack.** A bigger pack is not free: ten
+  calls on 150,000 cached tokens is 1.5 million cached tokens. Doc 71 step 2 decides one pack or two from the Phase 0
+  numbers. Owner: this branch.
+- **P2 · open · A Gemini cache holds one system instruction.** The card path uses a different system prompt per agent,
+  so it cannot share one cache as written. Doc 71 §4.2 moves the card, clock, Personalizer and Clarifier roles into
+  one role library, as `packs/fullPrefix.ts` already does for questions. Owner: this branch.
+- **P2 · open · No per-area life memory and no per-person Personalizer brief exist.** `src/profile/facts.ts` holds a
+  fixed catalogue only. Doc 71 §4.5 and §4.6. Owner: this branch, doc 71 Phases 3 and 4.
+- **Decisions for Sachin (doc 71 §10):** clocks read before the click; Oracle and Personalizer in one call per group;
+  the ten memory areas; question limits of one per visit and three a week.
