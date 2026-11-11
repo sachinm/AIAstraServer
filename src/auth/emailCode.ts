@@ -309,6 +309,17 @@ export async function sendLoginCode(emailRaw: string): Promise<void> {
 }
 
 /**
+ * Cheap shape check for a typed code, with no secrets and no database: true when the code could be a real one
+ * for the active provider. Callers use it to refuse obvious typos BEFORE spending the single-use Turnstile token.
+ */
+export function isPlausibleLoginCode(codeRaw: string): boolean {
+  if (typeof codeRaw !== 'string') return false;
+  return getAuthProvider() === 'cognito'
+    ? COGNITO_CODE_RE.test(normalizeCognitoCode(codeRaw))
+    : normalizeMagicLinkCode(codeRaw).length === 8;
+}
+
+/**
  * Check a code for this email. On success the account { id, role } is returned (the caller issues the session).
  * Returns null for any failure (unknown email, wrong or expired code, malformed input).
  */

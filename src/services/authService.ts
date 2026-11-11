@@ -9,6 +9,8 @@ import {
   verifyLoginCode,
   createSignupIdentity,
   sendSignupCode,
+  isWellFormedEmail,
+  isPlausibleLoginCode,
 } from '../auth/emailCode.js';
 import { validateSignUpInput } from '../lib/validators.js';
 import { enqueueKundliSync } from './kundliQueueService.js';
@@ -24,6 +26,8 @@ const DEFAULT_EXPIRY = '7d';
 export const MAGIC_LINK_REQUEST_MESSAGE =
   "If that email is registered, we've sent it a code. Enter the code we emailed you. It works for 3 minutes.";
 
+export const INVALID_EMAIL_MESSAGE = 'Please enter a valid email address.';
+
 export const MAGIC_LINK_LOGIN_FAILED =
   'That code did not work. It may be mistyped or expired: codes last 3 minutes. Send a new code and try again.';
 
@@ -32,7 +36,14 @@ export const SIGNUP_CODE_MESSAGE =
 
 export type LoginResult =
   | { success: true; token: string; user: string; role: string }
-  | { success: false; message: string; code?: typeof ACCOUNT_LOCKED_CODE };
+  | { success: false; message: string; code?: typeof ACCOUNT_LOCKED_CODE; turnstileConsumed?: false };
+
+/**
+ * Marker on a refusal that happened BEFORE the Turnstile token was checked (bad email, malformed code, missing fields):
+ * `turnstileConsumed: false` means the single-use token is still good, so the web page keeps it instead of resetting
+ * the widget. Absent on every other outcome (the token went to Cloudflare, so it is spent).
+ */
+export const TURNSTILE_NOT_CONSUMED = { turnstileConsumed: false } as const;
 
 /** Stable code for a signup refused because the email is already registered. */
 export const EMAIL_EXISTS_CODE = 'EMAIL_EXISTS';
@@ -65,6 +76,7 @@ export type SignUpResult =
       success: false;
       message: string;
       code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE | typeof SIGNUP_EMAIL_LIMIT_CODE;
+      turnstileConsumed?: false;
     };
 
 /**
@@ -80,7 +92,7 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 
 export type MagicLinkRequestResult =
   | { success: true; message: string }
-  | { success: false; message: string };
+  | { success: false; message: string; turnstileConsumed?: false };
 
 /**
  * Request a login code by email. Always returns the same user-visible message when successful path.
@@ -90,6 +102,8 @@ export async function requestMagicLink(
   turnstileToken?: string | null,
   remoteIp?: string | null
 ): Promise<MagicLinkRequestResult> {
+  // No early email check here on purpose: a malformed address must get the same answer as an unknown one
+  // (tests/unit/auth/cognitoFlow.e2e.test.ts). The web page validates the address before asking for the token.
   const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
@@ -108,6 +122,12 @@ export async function loginWithMagicLink(
   turnstileToken?: string | null,
   remoteIp?: string | null
 ): Promise<LoginResult> {
+  if (typeof emailRaw !== 'string' || !isWellFormedEmail(emailRaw.trim())) {
+    return { success: false, message: INVALID_EMAIL_MESSAGE, ...TURNSTILE_NOT_CONSUMED };
+  }
+  if (!isPlausibleLoginCode(codeRaw)) {
+    return { success: false, message: MAGIC_LINK_LOGIN_FAILED, ...TURNSTILE_NOT_CONSUMED };
+  }
   const gate = await assertTurnstileIfConfigured(turnstileToken, remoteIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
@@ -177,6 +197,7 @@ export type SignupStartResult =
       success: false;
       message: string;
       code?: typeof EMAIL_EXISTS_CODE | typeof SIGNUP_RETRY_CODE | typeof SIGNUP_EMAIL_LIMIT_CODE;
+      turnstileConsumed?: false;
     };
 
 const startSignupSchema = z
@@ -196,11 +217,11 @@ export async function startSignup(
   turnstileToken?: string | null,
   clientIp?: string | null
 ): Promise<SignupStartResult> {
+  const parsed = startSignupSchema.safeParse(input);
+  if (!parsed.success) return { success: false, message: 'Invalid input', ...TURNSTILE_NOT_CONSUMED };
+
   const gate = await assertTurnstileIfConfigured(turnstileToken, clientIp);
   if (!gate.ok) return { success: false, message: gate.message };
-
-  const parsed = startSignupSchema.safeParse(input);
-  if (!parsed.success) return { success: false, message: 'Invalid input' };
   const { name, email } = parsed.data;
 
   const existing = await prisma.auth.findFirst({
@@ -263,14 +284,14 @@ export async function signup(
   turnstileToken?: string | null,
   clientIp?: string | null
 ): Promise<SignUpResult> {
+  const parsed = validateSignUpInput(input);
+  if (!parsed.success) {
+    return { success: false, message: 'Invalid input', ...TURNSTILE_NOT_CONSUMED };
+  }
+
   const gate = await assertTurnstileIfConfigured(turnstileToken, clientIp);
   if (!gate.ok) {
     return { success: false, message: gate.message };
-  }
-
-  const parsed = validateSignUpInput(input);
-  if (!parsed.success) {
-    return { success: false, message: 'Invalid input' };
   }
 
   const {
