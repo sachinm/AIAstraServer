@@ -2570,7 +2570,7 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · Weak photo picks to replace when better CC0 images turn up:** Gifts & knots (plain box), Practice & deity
   (candles, not a diya), Distance or tension (a woman alone), Family banner reuses the Family card photo, Finding work.
   [web] Done when swapped in `art/cards` (keep SOURCES.md current).
-- **P2 · Staging web is one commit behind develop: `58a3884` (regenerated `src/theme-light.css`) is not shipped.** The
+- **DONE 2026-11-11 (RC 528efbf) · Staging web is one commit behind develop: `58a3884` (regenerated `src/theme-light.css`) is not shipped.** The
   mobile fix 3f32a3e uses `!bg-[#0d0c24]`, which has no light value on staging, so that element stays dark navy in light
   mode; `src/lib/theme.test.ts` fails on the shipped d1b6653. Held by the deploy session to ship with the next web
   release (2026-11-11). [deploy session] Done when RC includes 58a3884.
