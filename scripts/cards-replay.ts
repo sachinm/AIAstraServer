@@ -14,7 +14,8 @@
  * board, and checks: every offered card stored, every card has text for every span, every span cites a confirmed or
  * leaning ledger cell or is not a build, no chart term and no engine name on a face. Writes go nowhere
  * (technique_outputs, area_builds, kundli_slices, reading_validation_failures and raw writes are swallowed and counted);
- * `agent_runs` rows are written as on any build. The explicit-cache regions are deleted at the end.
+ * `agent_runs` rows are written as on any build, and the agent registry is seeded first (an idempotent upsert of the
+ * agent definitions into `agent_registry`, as every server process does). The explicit-cache regions are deleted at the end.
  */
 import 'dotenv/config';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -81,6 +82,7 @@ const { callGemini: realCallGemini } = await import('../src/reading/llm/gemini.j
 const { usageCostUsd } = await import('../src/reading/llm/models.js');
 const { deleteIndividualCaches, explicitCacheEnabled } = await import('../src/reading/llm/promptCache.js');
 const { PROMPT_VERSION } = await import('../src/reading/prompts/generated.js');
+const { seedAgentRegistry } = await import('../src/agents/registry.js');
 type GeminiCallOptions = import('../src/reading/llm/gemini.js').GeminiCallOptions;
 type SelfCardId = import('../src/reading/self/v3/types.js').SelfCardId;
 type CardsRunResult = import('../src/reading/cards/run.js').CardsRunResult;
@@ -163,6 +165,10 @@ try {
   const k = await raw.kundli.findUnique({ where: { id: KUNDLI }, select: { user_id: true } });
   if (!k) throw new Error(`kundli ${KUNDLI} not found`);
   userId = k.user_id;
+  // the storage-dry proxy swallows raw SQL, so the agents' registry rows are seeded here with the plain client (the same
+  // idempotent upsert every server process runs before its first agent run); without them agent_runs hit
+  // agent_runs_agent_fkey (2026-11-10 replay)
+  summary.agentRegistrySeeded = await seedAgentRegistry(raw);
   const tp = performance.now();
   const sub = await runSelfSubTechniques({ prisma }, { userId, kundliId: KUNDLI, asOf: AS_OF });
   if ('status' in sub) throw new Error(`sub-techniques: ${sub.status}`);
