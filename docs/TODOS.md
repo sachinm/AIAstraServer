@@ -2509,3 +2509,10 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · The Work board's detail text is fixed copy with chart words** ("Natal Promise (10th Bhava & Dasamsa D10)",
   "Vedic Timing Clocks") written in the page, not from the engine; Plain words now hides it for chosen cards, but the
   default view still shows it. [web] Done when the copy comes from the engine's own rows or is removed.
+- **P2 · Card photos depend on `OVERLAY_ART_KEY` in the web build and on the key route.** Without the key the cards
+  show drawn art (by design). The packs are re-made every build with a new IV; the name changes only when the photos or
+  the key change, so browsers keep their cached ciphertext across deploys. [deploy session] Done when staging serves
+  `/_a/c.json` as JSON and the picker shows photos signed in.
+- **P3 · Weak photo picks to replace when better CC0 images turn up:** Gifts & knots (plain box), Practice & deity
+  (candles, not a diya), Distance or tension (a woman alone), Family banner reuses the Family card photo, Finding work.
+  [web] Done when swapped in `art/cards` (keep SOURCES.md current).
