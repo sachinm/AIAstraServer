@@ -5,13 +5,15 @@
  * count and cost (doc 70 §10 item 4).
  *
  *   DOTENV_CONFIG_PATH=<server .env> npx tsx scripts/cards-replay.ts                    (prints the estimate, exits 1)
- *   DOTENV_CONFIG_PATH=<server .env> npx tsx scripts/cards-replay.ts --yes-spend [--seed 42] [--kundli <id>] [--cap 0.75]
+ *   DOTENV_CONFIG_PATH=<server .env> npx tsx scripts/cards-replay.ts --yes-spend [--seed 42] [--kundli <id>] [--cap 0.75] [--warm]
  *
  * What it does, once: the v2 sub-techniques and the natal prefix (no model); then `runSelfV3Cards` with the per-card
  * reading on: the slices, five clock readers and the concordance (the ledger), then one Oracle and one Personalizer call
  * per card: the board first (one card drawn at random from each Self group, topped up at random to five, the seed
  * printed), then every other offered card (CARDS_READ_REST on). It records the time to the first card and to the whole
- * board, and checks: every offered card stored, every card has text for every span, every span cites a confirmed or
+ * board, and checks. With --warm, a second pass then opens the board again on the clock layer cached by the first pass
+ * (an in-memory stand-in for the `kundli_slices` row, since this run stores nothing): no reader and no concordance
+ * call, the five board cards read again, and the time to its first card and its board is recorded. Checks: every offered card stored, every card has text for every span, every span cites a confirmed or
  * leaning ledger cell or is not a build, no chart term and no engine name on a face. Writes go nowhere
  * (technique_outputs, area_builds, kundli_slices, reading_validation_failures and raw writes are swallowed and counted);
  * `agent_runs` rows are written as on any build, and the agent registry is seeded first (an idempotent upsert of the
@@ -23,6 +25,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 const argv = process.argv.slice(2);
 const arg = (name: string) => (argv.indexOf(name) >= 0 ? argv[argv.indexOf(name) + 1] : undefined);
 const YES = argv.includes('--yes-spend');
+const WARM = argv.includes('--warm');
 const KUNDLI = arg('--kundli') ?? 'c584c0a3-841b-451b-a2ed-f5709c5fb31d';
 const SEED = Number(arg('--seed') ?? Date.now() % 1_000_000);
 const CAP_USD = Number(arg('--cap') ?? 0.75);
@@ -31,9 +34,13 @@ const MODEL = process.env.READING_MODEL_ORACLE?.trim() || 'gemini-3.8-flash';
 // ------------------------------------------------------------------ the estimate, printed before anything runs
 const CARDS = 21;
 const READERS = 5;
-const PLANNED_CALLS = READERS + 1 + CARDS * 2; // readers + concordance + (Oracle + Personalizer) per card
-const MAX_CALLS = PLANNED_CALLS + 12; // room for one repair on about six cards
-const EST_USD = 0.05 + 0.02 + CARDS * 0.013 + 0.07; // doc 70 §4.1 budget, plus repairs
+const BOARD_CARDS = 5;
+// readers + concordance + (Oracle + Personalizer) per card; with --warm the board again (no reader, no concordance)
+const PLANNED_CALLS = READERS + 1 + CARDS * 2 + (WARM ? BOARD_CARDS * 2 : 0);
+const MAX_CALLS = PLANNED_CALLS + 8; // room for a repair on a few cards
+// 2026-11-10 replay fixes (docs/reading-engine/70-phase3-replay-2026-11-10.md "Fixes made"): readers about $0.10-0.116,
+// the trimmed concordance about $0.015, a card about $0.017-0.020 (Oracle + Personalizer), a repair about $0.015
+const EST_USD = 0.116 + 0.015 + CARDS * 0.02 + 0.015 + (WARM ? BOARD_CARDS * 0.02 : 0);
 const key = process.env.GEMINI_API_KEY?.trim() ?? '';
 console.log(
   JSON.stringify(
@@ -46,6 +53,7 @@ console.log(
       plannedCalls: PLANNED_CALLS,
       maxCalls: MAX_CALLS,
       estimateUsd: Math.round(EST_USD * 100) / 100,
+      warmPass: WARM,
       capUsd: CAP_USD,
     },
     null,
@@ -76,6 +84,7 @@ const { buildAreaBriefs } = await import('../src/reading/self/areas/index.js');
 const { buildFamilySlices, buildOracleSlice } = await import('../src/reading/self/v2/slices.js');
 const { runSelfV3Cards } = await import('../src/reading/self/v3/build.js');
 const { readCards } = await import('../src/reading/cards/run.js');
+const { runClockLayer } = await import('../src/reading/clocks/run.js');
 const { SELF_CARD_GROUPS } = await import('../src/reading/self/v3/types.js');
 const { READABLE_CARDS, cardDef } = await import('../src/reading/self/v3/cards.js');
 const { callGemini: realCallGemini } = await import('../src/reading/llm/gemini.js');
@@ -86,6 +95,21 @@ const { seedAgentRegistry } = await import('../src/agents/registry.js');
 type GeminiCallOptions = import('../src/reading/llm/gemini.js').GeminiCallOptions;
 type SelfCardId = import('../src/reading/self/v3/types.js').SelfCardId;
 type CardsRunResult = import('../src/reading/cards/run.js').CardsRunResult;
+type LayerCacheEntry = import('../src/reading/clocks/layerCache.js').LayerCacheEntry;
+type ClockLayerDeps = import('../src/reading/clocks/run.js').ClockLayerDeps;
+type ClockLayerInput = import('../src/reading/clocks/run.js').ClockLayerInput;
+
+// the clock layer cache in memory (the run stores nothing; kundli_slices writes are swallowed)
+const layerMem = new Map<string, LayerCacheEntry>();
+const layerWithMemory = (d: ClockLayerDeps, i: ClockLayerInput) =>
+  runClockLayer(
+    {
+      ...d,
+      readCache: async (_p, kundliId, key) => (layerMem.get(kundliId)?.key === key ? layerMem.get(kundliId)! : null),
+      writeCache: async (_p, kundliId, entry) => (layerMem.set(kundliId, entry), true),
+    },
+    i,
+  );
 
 const AS_OF = new Date().toISOString().slice(0, 10);
 const OUT_DIR = `docs/reading-engine/replays/70-phase3-${AS_OF}`;
@@ -189,6 +213,7 @@ try {
       cardsCapUsd: CAP_USD,
       loadBoard: async () => ({ cards: board, sections: {} }),
       readCards: async (d, i) => (run = await readCards(d, i)),
+      runClockLayer: layerWithMemory,
     },
     { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait: null, buildId: `replay-70-${SEED}` },
   );
@@ -238,6 +263,30 @@ try {
     cards: results.map((x) => ({ card: x.card, status: x.status, costUsd: x.costUsd, issues: x.issues.length })),
   });
   writeFileSync(`${OUT_DIR}/cards.json`, JSON.stringify({ frame: r.frame, ledger: r.ledger, cards: r.cards, issues: r.issues }, null, 2));
+
+  // --warm: the same board opened again on the cached clock layer (the cards are read again: their writes were swallowed)
+  if (WARM) {
+    const ws = Math.round(performance.now() - t0);
+    const sub2 = await runSelfSubTechniques({ prisma }, { userId, kundliId: KUNDLI, asOf: AS_OF });
+    if ('status' in sub2) throw new Error(`warm sub-techniques: ${sub2.status}`);
+    const fam2 = buildFamilySlices(sub2.ctx, sub2.loaded);
+    const slice2 = buildOracleSlice(sub2.ctx, fam2.packs, buildAreaBriefs(sub2.ctx)).slice;
+    const w = await runSelfV3Cards(
+      { prisma, callGemini: guardedCall, maxSpendUsd: CAP_USD, now: new Date(), force: false, informUsed: () => undefined, cardsRead: true, cardsReadRest: false, cardsCapUsd: CAP_USD, loadBoard: async () => ({ cards: board, sections: {} }), runClockLayer: layerWithMemory },
+      { ctx: sub2.ctx, pressure: sub2.loaded.pressure ?? null, oracleSlice: slice2, portrait: null, buildId: `replay-70-${SEED}-warm` },
+    );
+    const mine = calls.filter((c) => c.at > ws);
+    const at = (id: SelfCardId) => mine.filter((c) => c.node.includes(`card.${id}.personalizer`)).map((c) => c.at - ws).pop() ?? null;
+    const times = board.map(at).filter((x): x is number => x !== null);
+    summary.warm = {
+      clockLayer: w.clockLayer,
+      layerCalls: mine.filter((c) => c.node.startsWith('reading.')).length,
+      firstCardMs: times.length ? Math.min(...times) : null,
+      boardMs: times.length === board.length ? Math.max(...times) : null,
+      cards: Object.keys(w.cards).length,
+      usd: Math.round(mine.reduce((n, c) => n + c.costUsd, 0) * 1e6) / 1e6,
+    };
+  }
 } finally {
   if (userId) summary.cacheCleanup = await deleteIndividualCaches({ userId, kundliId: KUNDLI }).catch(() => ({ deleted: 0, failed: -1, memoryCleared: 0 }));
   summary.calls = calls;
