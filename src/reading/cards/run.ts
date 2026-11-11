@@ -15,7 +15,9 @@
  * rest stay "not read yet". A stored reading with the same key is served without a call. Never throws.
  */
 import type { PrismaClient } from '@prisma/client';
-import { getCardsBoardParallel, getCardsRestParallel, getCardsSpendCapUsd, isCardsReadRestEnabled } from '../../config/env.js';
+import { getCardsBoardParallel, getCardsGroupSizeBoard, getCardsGroupSizeRest, getCardsRestParallel, getCardsSpendCapUsd, isCardsGroupPackEnabled, isCardsReadRestEnabled } from '../../config/env.js';
+import { ensurePromptCache } from '../llm/promptCache.js';
+import { buildCardPack, CARD_GROUP_PROMPT, readCardGroup, splitGroups, type CardPack, type GroupCardResult } from './group.js';
 import { canonicalJson } from '../../techniques/pieces.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { AgreedLedger } from '../clocks/types.js';
@@ -47,6 +49,11 @@ export interface CardsRunDeps {
   readRest?: boolean;
   boardParallel?: number;
   restParallel?: number;
+  /** overrides: read in groups on one cached pack (doc 71), and the group sizes */
+  groupPack?: boolean;
+  groupSizeBoard?: number;
+  groupSizeRest?: number;
+  ensureCache?: typeof ensurePromptCache;
 }
 
 export interface CardsRunInput {
@@ -99,6 +106,70 @@ async function pool<T>(items: readonly T[], limit: number, fn: (x: T) => Promise
   await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
 }
 
+interface GroupShare {
+  result: GroupCardResult;
+  timings: SelfV2AgentTiming[];
+  issues: ValidationIssue[];
+}
+
+/** Longest a phase waits for its slowest store lookup before its groups go out anyway. */
+export const GROUP_GATHER_MS = 3_000;
+
+/**
+ * Collects the cards of one phase whose stored reading missed and reads them in groups of `size` (doc 71 §4.3). A card
+ * asks with `read(id)`; a card served from the store (or stopped by the cap) reports `settle(id)`. The groups go out as
+ * soon as every card of the phase has done one or the other (or after GROUP_GATHER_MS), in reading order. A group's cost
+ * is shared evenly by its cards. (The 2026-11-11 replay: a 25 ms timer sent every card alone, since each store lookup
+ * is a database round trip.)
+ */
+function groupBatcher(run: (cards: SelfCardId[], call: string) => Promise<{ cards: Partial<Record<SelfCardId, GroupCardResult>>; timings: SelfV2AgentTiming[]; issues: ValidationIssue[] }>, order: readonly SelfCardId[], phase: readonly SelfCardId[], size: number, label: string) {
+  const expected = new Set(phase);
+  const waiting = new Map<SelfCardId, (s: GroupShare) => void>();
+  const asked = new Set<SelfCardId>();
+  const settled = new Set<SelfCardId>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let n = 0;
+  const flush = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const ids = [...waiting.keys()].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    const resolvers = new Map(waiting);
+    waiting.clear();
+    for (const g of splitGroups(ids, size)) {
+      const call = `${label}.${n++}`;
+      void run(g, call).then(
+        (r) => {
+          const share = (t: SelfV2AgentTiming): SelfV2AgentTiming => ({ ...t, costUsd: round6(t.costUsd / g.length) });
+          for (const id of g)
+            resolvers.get(id)!({ result: r.cards[id] ?? { oracle: null, personal: null, problems: ['not returned'] }, timings: r.timings.map(share), issues: r.issues.filter((x) => x.area === id || x.area === null) });
+        },
+        (e) => {
+          for (const id of g) resolvers.get(id)!({ result: { oracle: null, personal: null, problems: [String((e as Error)?.message ?? e)] }, timings: [], issues: [] });
+        },
+      );
+    }
+  };
+  const maybeFlush = () => {
+    if (!waiting.size) return;
+    if ([...expected].every((id) => asked.has(id) || settled.has(id))) flush();
+    else if (!timer) timer = setTimeout(flush, GROUP_GATHER_MS);
+  };
+  return {
+    read(id: SelfCardId): Promise<GroupShare> {
+      return new Promise((resolve) => {
+        asked.add(id);
+        waiting.set(id, resolve);
+        maybeFlush();
+      });
+    },
+    settle(id: SelfCardId): void {
+      if (asked.has(id)) return;
+      settled.add(id);
+      maybeFlush();
+    },
+  };
+}
+
 export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<CardsRunResult> {
   const { ctx } = i;
   const out: CardsRunResult = { results: [], cards: {}, timings: [], issues: [], spentUsd: 0, capReached: false, order: [] };
@@ -123,6 +194,24 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const pHash = [READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash).join('.');
   const titles = i.board.map((id) => cardDef(id)?.title ?? id);
   const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
+
+  // doc 71: one pack for every card this run may read, cached once; the board's cards in small groups, the rest after
+  const grouped = deps.groupPack ?? isCardsGroupPackEnabled();
+  let pack: CardPack | null = null;
+  let packCache: Promise<string | null> = Promise.resolve(null);
+  let batch: ReturnType<typeof groupBatcher> | null = null;
+  const sectionsAll = i.sections as Partial<Record<SelfCardId, readonly string[]>>;
+  if (grouped) {
+    pack = buildCardPack({ ctx, cards: out.order, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, slices: i.slices, portrait: i.portrait, answers: i.answers });
+    packCache = (deps.ensureCache ?? ensurePromptCache)(i.model, pack.system, pack.text, owner).catch(() => null);
+  }
+  const runGroup = async (cards: SelfCardId[], call: string) => {
+    const cacheName = await packCache;
+    return readCardGroup(
+      { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed },
+      { ctx, pack: pack!, cacheName, cards, boardTitles: titles, sections: sectionsAll, frame: i.frame, dates: i.dates, model: i.model, call },
+    );
+  };
 
   const one = async (id: SelfCardId): Promise<void> => {
     if (done.has(id)) return;
@@ -151,7 +240,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       portraitHash,
       sectionsHash: shortHash(canonicalJson(sections ?? null)),
       confirmHash: ctx.stamps.confirmHash ?? '-',
-      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}`,
+      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}${grouped ? `.g${promptHash(CARD_GROUP_PROMPT)}` : ''}`,
     });
     const timings: SelfV2AgentTiming[] = [];
     const issues: ValidationIssue[] = [];
@@ -172,6 +261,14 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
           forceRefresh: Boolean(deps.force),
         },
         async () => {
+          if (batch) {
+            const g = await batch.read(id);
+            timings.push(...g.timings);
+            issues.push(...g.issues);
+            const gc = g.result.oracle && g.result.personal ? withClocks(cardContent(g.result.oracle, g.result.personal, i.frame), i.frame) : null;
+            if (!gc || !g.result.oracle || !g.result.personal) return { value: null, skipStore: true, summary: { card: id, status: g.result.oracle ? 'personalizer_failed' : 'oracle_failed' } };
+            return { value: { key, card: id, content: gc, oracle: g.result.oracle, personal: g.result.personal, ledgerHash, frameHash }, skipStore: false, summary: { card: id, status: 'grouped', spans: gc.spans.length } };
+          }
           const matterSlices = i.slices.filter((s) => def.matters.some((m) => s.id === `matter.${m}`));
           const oracle = await readCardOracle(
             { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed },
@@ -214,14 +311,34 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   };
 
   try {
-    await pool(order.first, deps.boardParallel ?? getCardsBoardParallel(), one);
-    await pool(order.rest, deps.restParallel ?? getCardsRestParallel(), one);
+    if (grouped) {
+      // the board first, all at once in small groups; then the rest in larger groups (doc 71 §12)
+      const phase = async (ids: SelfCardId[], size: number, label: string) => {
+        const b = groupBatcher(runGroup, out.order, ids, size, label);
+        batch = b;
+        await pool(ids, ids.length, async (id) => {
+          await one(id);
+          b.settle(id);
+        });
+      };
+      await phase(order.first, deps.groupSizeBoard ?? getCardsGroupSizeBoard(), 'board');
+      await phase(order.rest, deps.groupSizeRest ?? getCardsGroupSizeRest(), 'rest');
+    } else {
+      await pool(order.first, deps.boardParallel ?? getCardsBoardParallel(), one);
+      await pool(order.rest, deps.restParallel ?? getCardsRestParallel(), one);
+    }
     // cards queued while this ran (added to the board, or Try again) go next
     for (let round = 0; round < 3; round++) {
       const later = await readCardsState(deps.prisma, ctx.kundliId, now);
       const more = (Object.entries(later.cards) as Array<[SelfCardId, { state: string }]>).filter(([id, e]) => e.state === 'queued' && !done.has(id)).map(([id]) => id);
       if (!more.length) break;
-      await pool(more, deps.restParallel ?? getCardsRestParallel(), one);
+      // a card added after the pack was built is not in it: those go the one-card way
+      const b = grouped && more.every((id) => pack!.allowed[id]) ? groupBatcher(runGroup, [...out.order, ...more], more, deps.groupSizeBoard ?? getCardsGroupSizeBoard(), 'later') : null;
+      batch = b;
+      await pool(more, b ? more.length : (deps.restParallel ?? getCardsRestParallel()), async (id) => {
+        await one(id);
+        b?.settle(id);
+      });
     }
   } catch (e) {
     out.issues.push({ stage: 'oracle', area: null, check: 'call_failed', message: `cards: ${String((e as Error).message ?? e).slice(0, 200)}`, callId: null });

@@ -1,0 +1,414 @@
+{
+  "cards": [
+    {
+      "card": "mood",
+      "oracle": {
+        "headline": "Inner emotional weather stabilizes through slow patience across the coming spans.",
+        "certainty": "possible",
+        "pattern": "",
+        "confirm": {
+          "claimId": "mood.restless_past",
+          "from": "2025-03-29",
+          "to": "2026-11-11",
+          "text": "Did you feel an underlying heaviness in your inner ease and home peace since March 2025?"
+        },
+        "gift": "The Moon receives the benefic gaze of Jupiter to restore peace.",
+        "knot": "Combustion of the Moon by the Sun tests inner calm under heat.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The transit of Saturn over the fourth house demands steady emotional composure. Do not force rapid relief.",
+            "obstacle": "Feelings of delay or domestic restraint press on the mind.",
+            "agreement": "Four clocks hold a mixed tone while one presses heavily.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Signals remain split across running clocks so emotional patience is essential. Avoid impulsive reactions.",
+            "obstacle": "Internal friction arises between rest and demands.",
+            "agreement": "No single tone is shared by enough clocks.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Emotional balance requires giving up rigid expectations as long-term shifts proceed. Allow quiet periods.",
+            "obstacle": "Changing responsibilities disrupt emotional routines.",
+            "agreement": "Four clocks agree on a mixed tone while one presses.",
+            "evidence": [
+              "pressure:transit:Sa@2025-03-29",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "evidence": [
+          "pressure:transit:Sa@2025-03-29",
+          "planet:D1.Mo",
+          "house:D1.h4"
+        ]
+      },
+      "face": {
+        "line": "Your inner weather calls for quiet patience until 25 Jan 2027.",
+        "spans": [
+          {
+            "asks": "Hold your ground quietly and let domestic frictions pass without making them personal.",
+            "obstacle": "A lingering feeling that personal space is restricted.",
+            "step": "If an evening feels heavy, then step away from debate and rest early."
+          },
+          {
+            "asks": "Keep your daily expectations light while conflicting demands pull at your time.",
+            "obstacle": "Impatience with slow emotional recovery.",
+            "step": "If daily friction mounts, then write down the one task that truly matters today."
+          },
+          {
+            "asks": "Give yourself grace to reset routines without forcing sudden contentment.",
+            "obstacle": "Shifting commitments that blur your boundaries.",
+            "step": "If fatigue clouds your outlook, then take a quiet walk before making any decisions."
+          }
+        ],
+        "confirm": "Since 29 Mar 2025, have you felt an underlying heaviness in your inner peace?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "stuck",
+      "oracle": {
+        "headline": "Irritations and friction ease gradually as long cycles of pressure unwind.",
+        "certainty": "possible",
+        "pattern": "A habitual impulse to withdraw into solitude emerges whenever hidden obligations press on personal ease.",
+        "confirm": {
+          "claimId": "stuck.pressure_test",
+          "from": "2026-09-18",
+          "to": "2026-11-11",
+          "text": "Did sudden friction or unexpected hurdles test your resolve after September 2026?"
+        },
+        "gift": "The lord of the twelfth placed in the sixth creates protection over adversaries and debts.",
+        "knot": "Rahu situated in the twelfth house prompts escapism and sudden doubts.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Mars and Saturn transit difficult houses, indicating friction around delays. Protect energy by stepping back.",
+            "obstacle": "Unforeseen administrative or personal friction draining stamina.",
+            "agreement": "Clocks lean mixed while sub-period indicators add heavy pressure.",
+            "evidence": [
+              "pressure:transit:Ma@2026-09-18",
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Signals are split across clocks regarding hidden burdens. Avoid provoking conflicts or taking on unvetted tasks.",
+            "obstacle": "Sudden obstacles disrupt smooth schedules.",
+            "agreement": "Clocks disagree on the dominant tone.",
+            "evidence": [
+              "pressure:transit:Ke@2026-12-05",
+              "pressure:annual:TP2026/2/Sa@2027-01-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "The transition of major cycles requires managing ongoing workload without overextending. Keep obligations manageable.",
+            "obstacle": "Reoccurrence of lingering minor disputes.",
+            "agreement": "Four clocks record mixed conditions.",
+            "evidence": [
+              "pressure:annual:TP2027/2/Ma@2027-10-23",
+              "pressure:transit:Ma@2027-04-26"
+            ]
+          }
+        ],
+        "evidence": [
+          "pressure:transit:Ma@2026-09-18",
+          "house:D1.h6",
+          "house:D1.h12"
+        ]
+      },
+      "face": {
+        "line": "Managing small irritants steadily protects your peace until 25 Jan 2027.",
+        "spans": [
+          {
+            "asks": "Sidestep minor conflicts and refrain from fixing every sudden annoyance immediately.",
+            "obstacle": "Sudden demands that threaten to derail your schedule.",
+            "step": "If someone brings unexpected tension, then delay your response until tomorrow morning."
+          },
+          {
+            "asks": "Keep your daily workload simple while signals remain divided.",
+            "obstacle": "Frustration with obstacles outside your direct influence.",
+            "step": "If a plan encounters a roadblock, then switch to solitary routine work."
+          },
+          {
+            "asks": "Resolve lingering paperwork and background chores before taking on additional burdens.",
+            "obstacle": "Old obligations resurfacing when you seek progress.",
+            "step": "If past chores pile up, then dedicate twenty quiet minutes to clear one file."
+          }
+        ],
+        "confirm": "Since 18 Sep 2026, have unexpected hurdles tested your resolve?",
+        "pattern": "A habitual impulse to withdraw into solitude emerges whenever hidden obligations press on personal ease from 18 Sep 2026 until 18 Jan 2028.",
+        "ladder": null
+      }
+    },
+    {
+      "card": "restores",
+      "oracle": {
+        "headline": "Restoration arrives through quiet solitude and establishing steady domestic boundaries.",
+        "certainty": "possible",
+        "pattern": "",
+        "confirm": {
+          "claimId": "restores.home_retreat",
+          "from": "2025-05-18",
+          "to": "2026-11-11",
+          "text": "Did you find traditional methods of relaxation less effective after May 2025?"
+        },
+        "gift": "Jupiter placed in a friendly sign provides deep inner faith during solitude.",
+        "knot": "Ketu passing through the ninth house detaches from familiar spiritual comforts.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Restore energy by retreating into structured private space rather than external recreation.",
+            "obstacle": "Restlessness disturbing quiet contemplation.",
+            "agreement": "Clocks lean mixed, reflecting the need for deliberate quiet.",
+            "evidence": [
+              "pressure:transit:Ke@2025-05-18",
+              "pressure:annual:TP2026/2/Me@2026-12-04"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "With periods contested, replenishment comes from simple physical rest and unhurried hours.",
+            "obstacle": "Difficulty detaching from practical obligations.",
+            "agreement": "Clocks hold divergent views without consensus.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Sa@2027-01-29",
+              "pressure:transit:Sa@2025-03-29"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Patience and connection to grounding philosophy restore stamina as long periods turn.",
+            "obstacle": "External noise intruding on quiet routines.",
+            "agreement": "A solid four-clock consensus favors a steady, mixed approach.",
+            "evidence": [
+              "pressure:transit:Ju@2027-06-26",
+              "pressure:annual:TP2027/2/Mo@2027-09-04"
+            ]
+          }
+        ],
+        "evidence": [
+          "house:D1.h4",
+          "house:D1.h12",
+          "planet:D1.Ju"
+        ]
+      },
+      "face": {
+        "line": "Quiet private routines replenish your spirit through 25 Jan 2027.",
+        "spans": [
+          {
+            "asks": "Cultivate a firm boundary around your evenings to rebuild your inner reserves.",
+            "obstacle": "Mental chatter that makes true relaxation elusive.",
+            "step": "If your mind races after dinner, then turn off all screens thirty minutes before bed."
+          },
+          {
+            "asks": "Keep your leisure simple and avoid overcommitting to social outings.",
+            "obstacle": "Feeling pressured to entertain when you need rest.",
+            "step": "If an invitation feels draining, then decline politely and spend the evening reading."
+          },
+          {
+            "asks": "Lean into grounding, unhurried routines that restore physical and mental ease.",
+            "obstacle": "The urge to rush personal time.",
+            "step": "If tension gathers during the day, then take five deep, measured breaths by an open window."
+          }
+        ],
+        "confirm": "Since 18 May 2025, have traditional ways of relaxing felt less refreshing?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "play",
+      "oracle": {
+        "headline": "Creative joy and personal hobbies require deliberate carving of unburdened hours.",
+        "certainty": "possible",
+        "pattern": "",
+        "confirm": {
+          "claimId": "play.time_squeeze",
+          "from": "2026-09-20",
+          "to": "2026-11-11",
+          "text": "Did your creative pastimes or leisure hours feel restricted after September 2026?"
+        },
+        "gift": "The fifth house receives noble strength from Jupiter, sparking inspiring intellectual ideas.",
+        "knot": "The fifth lord enters the sixth house, pulling playful efforts into laborious tasks.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Maintain small creative outlets without turning them into demanding responsibilities.",
+            "obstacle": "Treating recreation like a performance checklist.",
+            "agreement": "Mixed frame across four clocks advises modest lightheartedness.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Ma@2026-11-08",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Clocks are contested, suggesting enjoyment comes in brief, unpressured interludes.",
+            "obstacle": "Guilt over taking unstructured downtime.",
+            "agreement": "Divergent clock verdicts prevent a unified prediction.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Me@2026-12-04",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "A Saturn transit asks for disciplined craft rather than scattered diversions.",
+            "obstacle": "Creative blocks stemming from mental weariness.",
+            "agreement": "Four clocks agree on a balanced mixed approach.",
+            "evidence": [
+              "pressure:transit:Sa@2027-06-03",
+              "pressure:annual:TP2026/2/Ve@2027-06-13"
+            ]
+          }
+        ],
+        "evidence": [
+          "house:D1.h5",
+          "planet:D1.Ve",
+          "planet:D1.Ju"
+        ]
+      },
+      "face": {
+        "line": "Carving out pressure-free creative moments protects your joy until 25 Jan 2027.",
+        "spans": [
+          {
+            "asks": "Protect small pockets of unstructured play without expecting tangible results.",
+            "obstacle": "Letting perfectionism turn a hobby into a chore.",
+            "step": "If you begin a pastime, then set aside the urge to evaluate its quality."
+          },
+          {
+            "asks": "Keep your leisure spontaneous while your calendar remains busy.",
+            "obstacle": "Struggling to find an open hour on the schedule.",
+            "step": "If a free moment appears unexpectedly, then use it for a light personal interest."
+          },
+          {
+            "asks": "Focus on a single craft or hobby that offers structured satisfaction.",
+            "obstacle": "Scattering attention across too many diversions.",
+            "step": "If you feel creatively stalled, then spend fifteen minutes practicing one basic skill."
+          }
+        ],
+        "confirm": "Since 20 Sep 2026, have your creative pastimes felt squeezed by obligations?",
+        "pattern": null,
+        "ladder": null
+      }
+    },
+    {
+      "card": "diagnosis",
+      "oracle": {
+        "headline": "Inner endurance meets external friction, calling for measured pace and firm boundaries.",
+        "certainty": "likely",
+        "pattern": "",
+        "confirm": {
+          "claimId": "diagnosis.weight_shift",
+          "from": "2025-11-03",
+          "to": "2026-11-11",
+          "text": "Did your overall workload demand significantly more grit and physical discipline since November 2025?"
+        },
+        "gift": "The Sun in its own sign anchors your core identity with undeniable authority.",
+        "knot": "The running sub-period lord situated in the sixth house continually pulls focus into solving frictions.",
+        "spans": [
+          {
+            "span": "s1",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Under the current sub-sub period, conserving physical and mental energy takes priority over expanding duties.",
+            "obstacle": "Overestimating daily stamina against multiple deadlines.",
+            "agreement": "A solid majority holds a mixed tone while key rows bring heavy friction.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/3/Sa@2026-10-27",
+              "pressure:annual:TP2026"
+            ]
+          },
+          {
+            "span": "s2",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Because clock verdicts are split, avoid speculative bets and hold established lines quietly.",
+            "obstacle": "Conflicting external advice creating unnecessary urgency.",
+            "agreement": "Clocks are contested with no shared agreement.",
+            "evidence": [
+              "pressure:annual:TP2026/2/Sa@2027-01-29",
+              "pressure:dasha:chathuraaseethi_sama/3/Su@2027-01-25"
+            ]
+          },
+          {
+            "span": "s3",
+            "tone": "mixed",
+            "mode": "get_through",
+            "asks": "Navigating running sub-period transitions requires steady adherence to core commitments.",
+            "obstacle": "Fatigue from prolonged vigilance.",
+            "agreement": "Four clocks agree on a mixed balance.",
+            "evidence": [
+              "pressure:dasha:chathuraaseethi_sama/2/Me@2027-07-23",
+              "pressure:annual:TP2027"
+            ]
+          }
+        ],
+        "evidence": [
+          "pressure:dasha:chathuraaseethi_sama/1/Su@2022-05-31",
+          "pressure:dasha:chathuraaseethi_sama/2/Ma@2025-11-03",
+          "house:D1.h1"
+        ]
+      },
+      "face": {
+        "line": "Conserving your energy and holding your ground anchors you until 25 Jan 2027.",
+        "spans": [
+          {
+            "asks": "Pace yourself deliberately and refuse to absorb other people's emergencies.",
+            "obstacle": "A tendency to take on too much personal responsibility.",
+            "step": "If a fresh demand arrives today, then check your energy before agreeing to help."
+          },
+          {
+            "asks": "Maintain your steady course and do not let conflicting opinions sway your focus.",
+            "obstacle": "Second-guessing your plans amid mixed feedback.",
+            "step": "If someone urges rapid change, then sleep on your choice before committing."
+          },
+          {
+            "asks": "Protect your core routines and let peripheral issues resolve themselves without intervention.",
+            "obstacle": "Exhaustion from managing constant small adjustments.",
+            "step": "If the daily workload swells, then delegate or postpone one non-essential chore."
+          }
+        ],
+        "confirm": "Since 3 Nov 2025, has your daily routine required noticeably more discipline to manage?",
+        "pattern": null,
+        "ladder": null
+      }
+    }
+  ]
+}

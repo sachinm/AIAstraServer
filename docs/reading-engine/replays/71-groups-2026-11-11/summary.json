@@ -1,0 +1,591 @@
+{
+  "kundli": "75b0d618-90b7-4db6-bff8-cc7bb0ed561f",
+  "asOf": "2026-11-11",
+  "seed": 42,
+  "board": [
+    "sleep",
+    "mood",
+    "purpose",
+    "layers",
+    "chapter"
+  ],
+  "promptVersion": "8e2adb0111ef",
+  "explicitCache": true,
+  "model": "gemini-3.8-flash",
+  "agentRegistrySeeded": 58,
+  "prepMs": 16598,
+  "status": "partial",
+  "gaps": [
+    "v3: clock layer partial (tithi_pravesha s3/loss_rest_and_distance: tone heavy against the cited rows (mixed, heavy); allowed mixed; tithi_pravesha s3/effort_and_courage: tone heavy against the cited rows (mixed, heavy); allowed mixed; tithi_pravesha s3/self_and_body: tone heavy against the cited rows (mixed, heavy); allowed mixed)",
+    "v3: concordance partial (concordance: Thinking level MINIMAL is not supported for this model. Please retry with other thinking level.)"
+  ],
+  "clockLayer": {
+    "status": "partial",
+    "prefixHash": "ed833b564324ac3c5f76cb66",
+    "spentUsd": 0.089538,
+    "sheets": [
+      {
+        "system": "chathuraaseethi_sama",
+        "status": "ok",
+        "cells": 20
+      },
+      {
+        "system": "narayana",
+        "status": "ok",
+        "cells": 22
+      },
+      {
+        "system": "vimsottari",
+        "status": "ok",
+        "cells": 29
+      },
+      {
+        "system": "yogini",
+        "status": "ok",
+        "cells": 36
+      },
+      {
+        "system": "tithi_pravesha",
+        "status": "partial",
+        "cells": 25
+      }
+    ],
+    "byStatus": {
+      "confirmed": 29,
+      "leaning": 5,
+      "single": 2,
+      "contested": 0
+    }
+  },
+  "ledger": {
+    "confirmed": 29,
+    "leaning": 5,
+    "single": 2,
+    "contested": 0
+  },
+  "firstCardMs": 64942,
+  "boardMs": 68209,
+  "totalMs": 98462,
+  "group": true,
+  "restMs": 95484,
+  "checks": {
+    "offered": 21,
+    "stored": 19,
+    "everySpan": 19,
+    "spansGrounded": "57/57",
+    "chartWordsOnFaces": [],
+    "pass": false
+  },
+  "cards": [
+    {
+      "card": "mood",
+      "status": "ok",
+      "costUsd": 0.012125,
+      "issues": 1
+    },
+    {
+      "card": "purpose",
+      "status": "ok",
+      "costUsd": 0.012248,
+      "issues": 0
+    },
+    {
+      "card": "chapter",
+      "status": "ok",
+      "costUsd": 0.011977,
+      "issues": 3
+    },
+    {
+      "card": "sleep",
+      "status": "ok",
+      "costUsd": 0.012095,
+      "issues": 0
+    },
+    {
+      "card": "layers",
+      "status": "ok",
+      "costUsd": 0.012536,
+      "issues": 0
+    },
+    {
+      "card": "blood",
+      "status": "ok",
+      "costUsd": 0.01181,
+      "issues": 0
+    },
+    {
+      "card": "fitness",
+      "status": "ok",
+      "costUsd": 0.012377,
+      "issues": 0
+    },
+    {
+      "card": "lagna",
+      "status": "ok",
+      "costUsd": 0.011532,
+      "issues": 0
+    },
+    {
+      "card": "stuck",
+      "status": "ok",
+      "costUsd": 0.011927,
+      "issues": 0
+    },
+    {
+      "card": "mind",
+      "status": "ok",
+      "costUsd": 0.012761,
+      "issues": 0
+    },
+    {
+      "card": "restores",
+      "status": "ok",
+      "costUsd": 0.012005,
+      "issues": 0
+    },
+    {
+      "card": "play",
+      "status": "ok",
+      "costUsd": 0.011936,
+      "issues": 0
+    },
+    {
+      "card": "sharpness",
+      "status": "ok",
+      "costUsd": 0.011948,
+      "issues": 0
+    },
+    {
+      "card": "presence",
+      "status": "ok",
+      "costUsd": 0.011599,
+      "issues": 0
+    },
+    {
+      "card": "yogas",
+      "status": "ok",
+      "costUsd": 0.012319,
+      "issues": 0
+    },
+    {
+      "card": "drive",
+      "status": "ok",
+      "costUsd": 0.012233,
+      "issues": 0
+    },
+    {
+      "card": "diagnosis",
+      "status": "failed",
+      "costUsd": 0.012732,
+      "issues": 3
+    },
+    {
+      "card": "learning",
+      "status": "ok",
+      "costUsd": 0.012105,
+      "issues": 0
+    },
+    {
+      "card": "chapters",
+      "status": "ok",
+      "costUsd": 0.012221,
+      "issues": 1
+    },
+    {
+      "card": "year",
+      "status": "failed",
+      "costUsd": 0.012341,
+      "issues": 3
+    },
+    {
+      "card": "body",
+      "status": "ok",
+      "costUsd": 0.011656,
+      "issues": 0
+    }
+  ],
+  "cacheCleanup": {
+    "deleted": 2,
+    "failed": 0,
+    "memoryCleared": 2
+  },
+  "calls": [
+    {
+      "node": "reading.clock.chathuraaseethi_sama",
+      "at": 41383,
+      "ms": 16585,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 39987,
+      "cachedTokens": 37249,
+      "outputTokens": 2190,
+      "thoughtTokens": 0,
+      "costUsd": 0.013059675,
+      "finish": "STOP"
+    },
+    {
+      "node": "reading.clock.narayana",
+      "at": 43526,
+      "ms": 18536,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 42574,
+      "cachedTokens": 37249,
+      "outputTokens": 2569,
+      "thoughtTokens": 0,
+      "costUsd": 0.016421175,
+      "finish": "STOP"
+    },
+    {
+      "node": "reading.clock.tithi_pravesha",
+      "at": 44643,
+      "ms": 19511,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 41286,
+      "cachedTokens": 37249,
+      "outputTokens": 2819,
+      "thoughtTokens": 0,
+      "costUsd": 0.016392675,
+      "finish": "STOP"
+    },
+    {
+      "node": "reading.clock.vimsottari",
+      "at": 47069,
+      "ms": 22053,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 41259,
+      "cachedTokens": 37249,
+      "outputTokens": 3321,
+      "thoughtTokens": 0,
+      "costUsd": 0.018254924999999998,
+      "finish": "STOP"
+    },
+    {
+      "node": "reading.clock.yogini",
+      "at": 49031,
+      "ms": 23958,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 48943,
+      "cachedTokens": 37249,
+      "outputTokens": 3692,
+      "thoughtTokens": 0,
+      "costUsd": 0.025409175,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "mood"
+      ],
+      "node": "self.card.group.board.1",
+      "at": 64942,
+      "ms": 12971,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1424,
+      "thoughtTokens": 0,
+      "costUsd": 0.012124649999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "purpose"
+      ],
+      "node": "self.card.group.board.2",
+      "at": 65956,
+      "ms": 13981,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1457,
+      "thoughtTokens": 0,
+      "costUsd": 0.0122484,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "chapter"
+      ],
+      "node": "self.card.group.board.4",
+      "at": 66469,
+      "ms": 13772,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1385,
+      "thoughtTokens": 0,
+      "costUsd": 0.0119769,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "sleep"
+      ],
+      "node": "self.card.group.board.0",
+      "at": 66850,
+      "ms": 14882,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1416,
+      "thoughtTokens": 0,
+      "costUsd": 0.01209465,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "layers"
+      ],
+      "node": "self.card.group.board.3",
+      "at": 68209,
+      "ms": 15909,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1534,
+      "thoughtTokens": 0,
+      "costUsd": 0.012535649999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "blood"
+      ],
+      "node": "self.card.group.rest.2",
+      "at": 83565,
+      "ms": 12980,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89473,
+      "cachedTokens": 89362,
+      "outputTokens": 1340,
+      "thoughtTokens": 0,
+      "costUsd": 0.0118104,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "fitness"
+      ],
+      "node": "self.card.group.rest.1",
+      "at": 84842,
+      "ms": 14645,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89473,
+      "cachedTokens": 89362,
+      "outputTokens": 1491,
+      "thoughtTokens": 0,
+      "costUsd": 0.01237665,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "lagna"
+      ],
+      "node": "self.card.group.rest.9",
+      "at": 85044,
+      "ms": 11763,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89467,
+      "cachedTokens": 89362,
+      "outputTokens": 1267,
+      "thoughtTokens": 0,
+      "costUsd": 0.01153215,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "stuck"
+      ],
+      "node": "self.card.group.rest.5",
+      "at": 85405,
+      "ms": 13656,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89474,
+      "cachedTokens": 89362,
+      "outputTokens": 1371,
+      "thoughtTokens": 0,
+      "costUsd": 0.0119274,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "mind"
+      ],
+      "node": "self.card.group.rest.3",
+      "at": 85527,
+      "ms": 14557,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1594,
+      "thoughtTokens": 0,
+      "costUsd": 0.01276065,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "restores"
+      ],
+      "node": "self.card.group.rest.6",
+      "at": 85721,
+      "ms": 13585,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1392,
+      "thoughtTokens": 0,
+      "costUsd": 0.01200465,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "play"
+      ],
+      "node": "self.card.group.rest.7",
+      "at": 86673,
+      "ms": 14165,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1374,
+      "thoughtTokens": 0,
+      "costUsd": 0.011935649999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "sharpness"
+      ],
+      "node": "self.card.group.rest.4",
+      "at": 86768,
+      "ms": 15404,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89471,
+      "cachedTokens": 89362,
+      "outputTokens": 1377,
+      "thoughtTokens": 0,
+      "costUsd": 0.011947649999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "presence"
+      ],
+      "node": "self.card.group.rest.11",
+      "at": 87530,
+      "ms": 13446,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89466,
+      "cachedTokens": 89362,
+      "outputTokens": 1285,
+      "thoughtTokens": 0,
+      "costUsd": 0.011598899999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "yogas"
+      ],
+      "node": "self.card.group.rest.12",
+      "at": 87618,
+      "ms": 13109,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89471,
+      "cachedTokens": 89362,
+      "outputTokens": 1476,
+      "thoughtTokens": 0,
+      "costUsd": 0.012318899999999999,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "diagnosis"
+      ],
+      "node": "self.card.group.rest.8",
+      "at": 87940,
+      "ms": 15038,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1586,
+      "thoughtTokens": 0,
+      "costUsd": 0.01273215,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "drive"
+      ],
+      "node": "self.card.group.rest.10",
+      "at": 88806,
+      "ms": 15152,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89471,
+      "cachedTokens": 89362,
+      "outputTokens": 1453,
+      "thoughtTokens": 0,
+      "costUsd": 0.01223265,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "learning"
+      ],
+      "node": "self.card.group.rest.13",
+      "at": 89844,
+      "ms": 14962,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89471,
+      "cachedTokens": 89362,
+      "outputTokens": 1419,
+      "thoughtTokens": 0,
+      "costUsd": 0.01210515,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "chapters"
+      ],
+      "node": "self.card.group.rest.14",
+      "at": 89994,
+      "ms": 14713,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1450,
+      "thoughtTokens": 0,
+      "costUsd": 0.01222065,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "year"
+      ],
+      "node": "self.card.group.rest.15",
+      "at": 91736,
+      "ms": 16016,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89470,
+      "cachedTokens": 89362,
+      "outputTokens": 1482,
+      "thoughtTokens": 0,
+      "costUsd": 0.01234065,
+      "finish": "STOP"
+    },
+    {
+      "cards": [
+        "body"
+      ],
+      "node": "self.card.group.rest.0",
+      "at": 95484,
+      "ms": 25684,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 89472,
+      "cachedTokens": 89362,
+      "outputTokens": 1299,
+      "thoughtTokens": 0,
+      "costUsd": 0.0116559,
+      "finish": "STOP"
+    }
+  ],
+  "totalUsd": 0.344018,
+  "swallowedWrites": 90
+}

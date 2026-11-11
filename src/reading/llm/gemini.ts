@@ -91,7 +91,8 @@ function apiKey(): string {
 
 const BUDGETS: Record<Thinking, number> = { off: 0, minimal: 0, low: 512, medium: 2048, high: 6144 };
 /** Gemini 3.x Flash and Flash-Lite accept `thinkingLevel: minimal`; Pro does not */
-const allowsMinimal = (model: string): boolean => /gemini-3[.\d]*-flash/.test(model);
+/** gemini-3.8-flash refuses `minimal` ("Thinking level MINIMAL is not supported", concordance, 2026-11-11): sent as `low` */
+const allowsMinimal = (model: string): boolean => /gemini-3[.\d]*-flash/.test(model) && !/gemini-3\.8-flash/.test(model);
 const isLegacyThinking = (model: string): boolean => /gemini-2\./.test(model);
 
 /** True when a call with this thinking setting still spends thought tokens (3.x maps `off` to `low`, so it always thinks). */
