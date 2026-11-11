@@ -2509,3 +2509,5 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · The Work board's detail text is fixed copy with chart words** ("Natal Promise (10th Bhava & Dasamsa D10)",
   "Vedic Timing Clocks") written in the page, not from the engine; Plain words now hides it for chosen cards, but the
   default view still shows it. [web] Done when the copy comes from the engine's own rows or is removed.
+
+- 2026-11-11 Turnstile input-first (found, not fixed): `requestMagicLink` still answers a malformed email with the success message (kept on purpose, tests/unit/auth/cognitoFlow.e2e.test.ts), and it spends the token because the server cannot refuse it. The web page validates first, so only a direct API call hits it. Step 2 (server-issued short-lived proof after one good check) is still open if this is not enough. Deploy the server before the web build: the web now selects `turnstileConsumed`, which an older server schema rejects.

@@ -162,11 +162,15 @@ const typeDefs = /* GraphQL */ `
     token: String
     user: ID
     role: String
+    "false when the request was refused before the Turnstile token was checked, so the token is still good and the page keeps it. Null otherwise (the token was spent)."
+    turnstileConsumed: Boolean
   }
 
   type MagicLinkRequestResult {
     success: Boolean!
     message: String
+    "false when the request was refused before the Turnstile token was checked, so the token is still good and the page keeps it. Null otherwise (the token was spent)."
+    turnstileConsumed: Boolean
   }
 
   type AskResult {
@@ -183,6 +187,8 @@ const typeDefs = /* GraphQL */ `
     token: String
     user: ID
     role: String
+    "false when the request was refused before the Turnstile token was checked, so the token is still good and the page keeps it. Null otherwise (the token was spent)."
+    turnstileConsumed: Boolean
   }
 
   "The Terms of Use version the sign-in and sign-up checkbox accepts (docs/auth/otp-consent-contract.md)."
@@ -199,6 +205,8 @@ const typeDefs = /* GraphQL */ `
     "EMAIL_EXISTS when the email already has a verified account; SIGNUP_RETRY on a transient failure; SIGNUP_EMAIL_LIMIT when the day's sign-up emails are used up (try tomorrow); terms_required / terms_outdated when the Terms box is required and missing or stale."
     code: String
     message: String!
+    "false when the request was refused before the Turnstile token was checked, so the token is still good and the page keeps it. Null otherwise (the token was spent)."
+    turnstileConsumed: Boolean
   }
 
   type CompleteProfileResult {
@@ -1183,7 +1191,8 @@ const resolvers = {
           note: terms.code,
           request: reqFacts,
         });
-        return { success: false, code: terms.code, message: terms.message };
+        // refused before Turnstile is checked, so the token is not spent
+        return { success: false, code: terms.code, message: terms.message, turnstileConsumed: false };
       }
       const clientIp = getClientIp(context.request);
       const res = await startSignup(rest, turnstileToken ?? null, clientIp);
@@ -1370,7 +1379,8 @@ const resolvers = {
           note: terms.code,
           request: reqFacts,
         });
-        return { success: false, code: terms.code, message: terms.message };
+        // refused before Turnstile is checked, so the token is not spent
+        return { success: false, code: terms.code, message: terms.message, turnstileConsumed: false };
       }
       const clientIp = getClientIp(context.request);
       const login = await loginWithMagicLink(email, code, turnstileToken ?? null, clientIp);
