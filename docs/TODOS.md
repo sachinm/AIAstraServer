@@ -2522,3 +2522,22 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P2 · fixed · `gemini-3.8-flash` refuses thinking level "minimal"** (concordance, 2026-11-11). `allowsMinimal` in
   `src/reading/llm/gemini.ts` now sends "low" for that model.
 - **P3 · open · Batch mode for the cards not on the board (doc 71 §13).** Half price; not built. Owner: this branch.
+
+## Filed 2026-11-11 by doc 72 (the Now card; server `feat/self-v3`, engine `feat/transit-natal-varga-houses`)
+
+- **P1 · fixed on the engine branch · `transit` counted D2-D60 natal houses from the natal D1 lagna.** Engine
+  `4349000` on `feat/transit-natal-varga-houses` (worktree `C:/Users/Owner/Documents/work/wt/radha-now-vargas`): each
+  chart counts from its own natal lagna and states it as `natal_lagna`; calc version 2. Not merged, not deployed. The
+  server shows D2-D60 natal houses only when `natal_lagna` is present, so it is safe before and after the release.
+- **P1 · open · `prashna` still counts every divisional chart from the natal D1 lagna** (`natal_lagna_sign` in
+  `src/jhora/prashna_export.py`, engine). Same fault as above. Owner: engine lane.
+- **P2 · open · The engine repo's remote answers "Repository not found"** (`origin` =
+  `https://github.com/sachinm/AIAstraRadha`, 2026-11-11). Fetch fails; the worktree was cut from local `develop`
+  (`8e31dd5`). Check the URL or access before the engine branch can be pushed. Owner: Sachin.
+- **P2 · open · 11 engine tests fail on the engine branch, none in the transit export** (not checked whether they fail
+  on `develop` too): 8 calc-version mismatches (`annual.tithi_pravesha`, `annual.tithi_pravesha_dasha` in
+  `test_doc34_annual.py` and `test_r5_annual.py`; `pressure_inventory` in `test_pressure_inventory.py`) and 3 time
+  limits under load (`dasha.sudasa` 7.2 s, `transit_contacts` Moon 400 days 6.9 s, `transit_range` 36 years 17.8 s).
+  Owner: engine lane.
+- **P2 · open · The Now card is not run against the real engine or model yet.** Tests use fakes. One paid call (about
+  $0.02) and the engine pulls on the test kundli need Sachin's yes. Owner: this branch.
