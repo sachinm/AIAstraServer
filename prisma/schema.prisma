@@ -72,6 +72,7 @@ model Auth {
   /// When the person last confirmed they are 18 or older (same checkbox as the Terms).
   age_confirmed_at           DateTime?              @map("age_confirmed_at") @db.Timestamptz(6)
   activity_days              UserActivityDay[]
+  feature_overrides          UserFeatureOverride[]
   admin_actions_done         AdminAction[]          @relation("AdminActionActor")
   admin_actions_on           AdminAction[]          @relation("AdminActionTarget")
   luckyPref                  LuckyPref?
@@ -1298,6 +1299,25 @@ model UserActivityDay {
   @@id([user_id, day])
   @@index([day], map: "user_activity_days_day")
   @@map("user_activity_days")
+}
+
+/// M52 (docs/reading-engine/75 §4.1): a staff-set board feature switch for one person (support or a pilot). History is
+/// kept; the newest row per (user_id, key) wins over env and the catalogue default (src/boards/features.ts).
+model UserFeatureOverride {
+  id         String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id    String   @map("user_id")
+  /// a `card.<board>.<id>` or `feature.*` key from the catalogue
+  key        String
+  /// off | on | premium
+  state      String
+  /// the admin account (admin_accounts) that set it
+  set_by     String   @map("set_by")
+  reason     String?
+  created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user       Auth     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "user_feature_overrides_user_id_fkey")
+
+  @@index([user_id, key, created_at(sort: Desc)], map: "user_feature_overrides_user_key_idx")
+  @@map("user_feature_overrides")
 }
 
 /// M40 (docs/reading-engine/60 §3): one research dossier per kundli, board and build content (every row read, the purview,

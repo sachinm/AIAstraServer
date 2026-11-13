@@ -140,7 +140,8 @@ describe('board options', () => {
     expect(saved.boardDefaults).toMatchObject({ ...DEFAULTS, confirm: true, motion: true });
     const get = await (await call('GET', '/api/self/v3', 'u1')).json();
     expect(get.layout.boardOptions).toEqual({ face: 'light', groupBy: 'years', confirm: false });
-    expect(get.cards.find((c: any) => c.id === 'body').options).toEqual({ ...DEFAULTS, face: 'breakdown', tools: ['calendar'], groupBy: 'years' });
+    // doc 75: the Breakdown face is off by default (feature.breakdown_face), so the card opens on Read
+    expect(get.cards.find((c: any) => c.id === 'body').options).toEqual({ ...DEFAULTS, face: 'read', tools: ['calendar'], groupBy: 'years' });
     expect(get.cards.find((c: any) => c.id === 'mind').options).toEqual({ ...DEFAULTS, face: 'light', groupBy: 'years' });
     // a later PUT without boardOptions keeps them
     await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
@@ -183,7 +184,8 @@ describe('ownership and roles', () => {
       const { options: _a, ...rest } = c;
       const { options: _b, ...plainRest } = p;
       expect(rest).toEqual(plainRest);
-      expect(c.options.face).toBe('research');
+      // doc 75: the Research face is off by default (feature.research_face), so a stored Research reads as Read
+      expect(c.options.face).toBe('read');
     }
   });
 });

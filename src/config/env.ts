@@ -1498,3 +1498,45 @@ export const DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES: readonly string[] = [
 export function getPersonalizerStereotypePhrases(): string[] {
   return listEnv('PERSONALIZER_STEREOTYPE_PHRASES', DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES).map((p) => p.toLowerCase());
 }
+
+/**
+ * Board feature keys switched off whatever their catalogue default (docs/reading-engine/75 §4.1). Env
+ * `BOARD_FEATURES_OFF` (comma list of `card.*` / `feature.*` keys; default none). Unknown keys are ignored by the reader.
+ */
+export function getBoardFeaturesOff(): string[] {
+  return listEnv('BOARD_FEATURES_OFF', []).map((k) => k.toLowerCase());
+}
+
+/**
+ * Board feature keys made premium, each with an optional minimum plan: `key` or `key=plus|unlimited`. Env
+ * `BOARD_FEATURES_PREMIUM` (comma list; default none). A missing or unknown plan reads as null (the catalogue's).
+ */
+export function getBoardFeaturesPremium(): Map<string, 'plus' | 'unlimited' | null> {
+  const out = new Map<string, 'plus' | 'unlimited' | null>();
+  for (const item of listEnv('BOARD_FEATURES_PREMIUM', [])) {
+    const [key, plan] = item.split('=').map((s) => s.trim().toLowerCase());
+    if (!key) continue;
+    out.set(key, plan === 'plus' || plan === 'unlimited' ? plan : null);
+  }
+  return out;
+}
+
+/** Most named periods a card sends. Env `BOARD_PERIODS_MAX` (1–12; default 6). */
+export function getBoardPeriodsMax(): number {
+  return parseClampedIntEnv('BOARD_PERIODS_MAX', 6, 1, 12);
+}
+
+/** How far back a passed period is still sent, in days. Env `BOARD_PERIODS_PAST_DAYS` (0–3650; default 180). */
+export function getBoardPeriodsPastDays(): number {
+  return parseClampedIntEnv('BOARD_PERIODS_PAST_DAYS', 180, 0, 3650);
+}
+
+/** Most key dates a card sends. Env `BOARD_KEY_DATES_MAX` (1–20; default 6). */
+export function getBoardKeyDatesMax(): number {
+  return parseClampedIntEnv('BOARD_KEY_DATES_MAX', 6, 1, 20);
+}
+
+/** How far back a passed key date is still sent, in days. Env `BOARD_KEY_DATES_PAST_DAYS` (0–365; default 60). */
+export function getBoardKeyDatesPastDays(): number {
+  return parseClampedIntEnv('BOARD_KEY_DATES_PAST_DAYS', 60, 0, 365);
+}

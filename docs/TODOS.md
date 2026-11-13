@@ -2705,3 +2705,33 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   Personalize, avatar) leaves the `UsageBar` text a few pixels, so the count truncates. Seen in
   `docs/screenshots/mobile-frame/10-board-phone.png`. Owner: web. Done: the quota reads in full on a 360 px phone, for
   example by moving Personalize into the menu drawer. Status: open.
+
+## Filed 2026-11-13 by the Self foundation card build (server `feat/self-foundation-server`, doc 75)
+
+- **P1 · A unit test calls the live Gemini API.** Running `tests/unit/reading/self/routes.test.ts` ("GET
+  /api/self/reading with the model layer on") logged `reading prompt cache create failed ... Your prepayment credits are
+  depleted` several times: the test reaches the real provider for a prompt cache create (it did not cost anything only
+  because the credits are depleted). Unit tests must never make a paid call. Seen 2026-11-13 in a local vitest run.
+  [server] Done when that file mocks the cache create (or the provider module) and a run with a dummy key makes no
+  network call.
+- **P1 · Gemini prepay credits are depleted** (the error above, 2026-11-13). Every live build and chat call fails until
+  topped up. [Sachin] Done when AI Studio billing shows credit and one Lab replay call succeeds.
+- **P2 · Apply migration `20261113100000_user_feature_overrides_m52`.** Additive (`user_feature_overrides`). Until
+  applied, GET /api/self/v3 reads no per-person overrides (fails soft, logged once per process) and env plus defaults
+  decide. [deploy session, Sachin's OK] Done when `prisma migrate status` is up to date on `aiastradb`.
+- **P2 · Why the live Self board opened on Research.** The code default is `read` (`CARD_FACE`); either the live Lambda
+  sets `CARD_FACE=research` or the person's `board_layout.board_options.face` was saved as Research by the save race.
+  Doc 75 now shows a stored Research or Breakdown face as Read while `feature.research_face` / `feature.breakdown_face`
+  are off. [deploy session] Done when the Lambda's `CARD_FACE` is read and noted here (no secrets).
+- **P2 · Feature switches have no admin page yet.** `src/boards/features.ts` is the catalogue; the admin mirror
+  (`aiadastra_admin/api/src/features.ts`), the Features page and the audited override write are not built. [admin]
+  Done when staff can set an override with its `admin_actions` row in one transaction.
+- **P3 · Stale guard only flags.** A card whose text names a passed day sends `stale: true` + `staleDates`; the rewrite
+  from stored spans on the next build (plan "The foundation card") is not built. [server] Done when the next build
+  rewrites those sentences and the flag clears.
+- **P3 · Period fill rate is unmeasured.** Phase A periods get text only from body paragraphs that name a window's
+  dates, so many cards will send one period or none. The release gate needs ≥ 95 % fill in a Lab cohort. [reading-dev]
+  Done when the Lab reports periods-with-text per card over the replay cohort.
+- **P3 · `CHART_TERMS` grew** (Sarvashtakavarga, SAV/BAV, Ganda Moola, Dwisaptati, Parashari, Jaimini, amsa). The
+  same list gates the v2 Personalizer, so a few more card sentences will be dropped there. [reading-dev] Done when a
+  replay shows no card left empty by the new terms.

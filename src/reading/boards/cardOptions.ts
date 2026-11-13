@@ -122,9 +122,11 @@ type OneParse = { ok: true; value: Partial<BoardOptions> } | { ok: false; detail
  * One options object. Strict (a PUT): an unknown key or value fails with its `detail`. Lenient (a stored row): unknown
  * keys and values are dropped. Either way a value equal to its default is dropped, so equal choices store equal rows.
  */
-function parseOne(prefix: string, value: Record<string, unknown>, strict: boolean, board: boolean): OneParse {
+function parseOne(prefix: string, value: Record<string, unknown>, strict: boolean, board: boolean, inForce: Partial<BoardOptions> = {}): OneParse {
   const allowed = cardOptionValues();
-  const defaults = defaultBoardOptions();
+  // doc 75: a card's value is dropped only when the board already puts it in force (a card may say Read under a
+  // Research board even though Read is the default)
+  const defaults: BoardOptions = { ...defaultBoardOptions(), ...(board ? {} : inForce) };
   const one: Partial<BoardOptions> = {};
   for (const [k, v] of Object.entries(value)) {
     if (board && (k === 'confirm' || k === 'motion')) {
@@ -164,13 +166,13 @@ function parseOne(prefix: string, value: Record<string, unknown>, strict: boolea
  * Validates a PUT body's `options`. Unknown keys or values are refused; options for a card not in `cards` are dropped;
  * a key equal to its default is dropped too, so equal choices store equal rows.
  */
-export function validateCardOptions(raw: unknown, cards: readonly string[]): OptionsCheck {
+export function validateCardOptions(raw: unknown, cards: readonly string[], board: Partial<BoardOptions> = {}): OptionsCheck {
   if (raw === undefined || raw === null) return { ok: true, options: {} };
   if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'bad_body' };
   const out: BoardCardOptions = {};
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: 'bad_body' };
-    const one = parseOne(id, value as Record<string, unknown>, true, false);
+    const one = parseOne(id, value as Record<string, unknown>, true, false, board);
     if (!one.ok) return { ok: false, error: 'unknown_option', detail: one.detail };
     if (cards.includes(id) && Object.keys(one.value).length) out[id] = one.value as Partial<CardOptions>;
   }
@@ -178,12 +180,12 @@ export function validateCardOptions(raw: unknown, cards: readonly string[]): Opt
 }
 
 /** A stored row's options as the page sees them: anything unknown is dropped, never an error on read. */
-export function optionsFromRow(raw: unknown, cards: readonly string[]): BoardCardOptions {
+export function optionsFromRow(raw: unknown, cards: readonly string[], board: Partial<BoardOptions> = {}): BoardCardOptions {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const out: BoardCardOptions = {};
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     if (!cards.includes(id) || !value || typeof value !== 'object' || Array.isArray(value)) continue;
-    const one = parseOne(id, value as Record<string, unknown>, false, false);
+    const one = parseOne(id, value as Record<string, unknown>, false, false, board);
     if (one.ok && Object.keys(one.value).length) out[id] = one.value as Partial<CardOptions>;
   }
   return out;

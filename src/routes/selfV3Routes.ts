@@ -5,8 +5,9 @@
  *   GET  /api/self/v3            → 200 SelfV3Response (status ok | pending | preparing) + ETag | 304 (If-None-Match equals
  *                                  the ETag; no body) | 404 SelfV3Response (no_kundli) | 503 { error: 'timeout' }
  *   GET  /api/self/v3/catalogue  → 200 { cards: SelfV3CatalogueEntry[] } | 404 { error: 'no_kundli' }
- *   PUT  /api/self/v3/layout     { template, cards, sections?, options?, boardOptions? } → 200 SelfBoardLayoutView &
- *                                  { reading?: { queued } } | 400 { error, detail? } | 404 | 503 { error: 'timeout' }
+ *   PUT  /api/self/v3/layout     { version, patch } (doc 75) or { template, cards, sections?, options?, boardOptions?,
+ *                                  version? } → 200 SelfBoardLayoutView & { reading?: { queued } } | 400 { error, detail? }
+ *                                  | 404 | 409 { error: 'stale_layout', layout } | 503 { error: 'timeout' }
  *   POST /api/self/v3/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
  *   POST /api/self/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404 no_kundli
  *                                       | 409 already_reading | 429 spend_cap | 503 off (doc 70 §4.2)
@@ -133,6 +134,7 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
     if (!userId) return;
     try {
       const r = await withinBudget(putSelfLayout(deps.prisma, userId, req.body, deps.cards ?? {}), budgetMs());
+      if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
       if (!r.ok) return res.status(r.status).json({ error: r.error, ...(r.detail ? { detail: r.detail } : {}) });
       return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
     } catch (e) {
