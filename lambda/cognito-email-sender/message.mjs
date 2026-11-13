@@ -32,7 +32,7 @@ const SAFETY = [
 ];
 
 const SITE_HTML = 'vedic-astrology<span>.</span>app';
-const FOOTER = 'AdAstra AI · Your Personal Vedic Astrology Assistant · vedic-astrology.app. This is an automatic email: replies are not read.';
+const FOOTER = 'AdAstra AI · Your Personal Vedic Astrologer · vedic-astrology.app. This is an automatic email: replies are not read.';
 
 const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -63,7 +63,7 @@ export function buildMessage(triggerSource, code, username) {
 
   const site = (s) => escape(s).replace('vedic-astrology.app', SITE_HTML);
   const html = `<div style="font-family:Georgia,serif;max-width:520px;margin:auto;color:#2b1d12;background:#fbf6ee;border:1px solid #e6d8c3;border-radius:12px;overflow:hidden">
-<div style="background:#2a1747;color:#f5e9ff;padding:16px 24px"><div style="font-size:20px;font-weight:bold">&#9734; AdAstra AI</div><div style="font-size:13px;color:#d9c2f0">Your Personal Vedic Astrology Assistant</div></div>
+<div style="background:#2a1747;color:#f5e9ff;padding:16px 24px"><div style="font-size:20px;font-weight:bold">&#9734; AdAstra AI</div><div style="font-size:13px;color:#d9c2f0">Your Personal Vedic Astrologer</div></div>
 <div style="padding:20px 24px">
 <p style="margin:0 0 12px">${escape(intro)}</p>
 <p style="font-family:Consolas,Menlo,monospace;font-size:30px;letter-spacing:6px;font-weight:bold;margin:8px 0;text-align:center;background:#fff;border:1px solid #e6d8c3;border-radius:8px;padding:12px">${escape(code)}</p>

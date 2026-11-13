@@ -2,8 +2,8 @@
  * The board layout (docs/reading-engine/68 §4.1, §4.5 item 8): validate, read and write the person's cards, order,
  * sections and template. No model call and no astrological content; a layout change never queues a build.
  */
-import type { PrismaClient } from '@prisma/client';
-import { optionsFromRow, sectionsFor, validateCardOptions } from '../../boards/cardOptions.js';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { boardOptionsFromRow, defaultBoardOptions, optionsFromRow, sectionsFor, validateBoardOptions, validateCardOptions } from '../../boards/cardOptions.js';
 import { cardDef, defaultSuggested, isCardOffered } from './cards.js';
 import {
   DEFAULT_TEMPLATE,
@@ -23,7 +23,7 @@ import {
 
 /** the layout before the person has chosen: the default template, no cards (the page opens the picker) */
 export function emptyLayout(): SelfBoardLayoutView {
-  return { template: DEFAULT_TEMPLATE, cards: [], sections: {}, options: {}, chosen: false, updatedAt: null };
+  return { template: DEFAULT_TEMPLATE, cards: [], sections: {}, options: {}, boardOptions: {}, boardDefaults: defaultBoardOptions(), chosen: false, updatedAt: null };
 }
 
 /** "Reset to suggested" and "Add the suggested eight" both mean this set */
@@ -36,7 +36,7 @@ export type LayoutCheck = { ok: true; layout: SelfBoardLayout } | { ok: false; e
 /** Validates a PUT body against the registry. Unknown keys are ignored; missing `sections` means none changed. */
 export function validateLayout(body: unknown): LayoutCheck {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { ok: false, error: 'bad_body' };
-  const b = body as { template?: unknown; cards?: unknown; sections?: unknown; options?: unknown };
+  const b = body as { template?: unknown; cards?: unknown; sections?: unknown; options?: unknown; boardOptions?: unknown };
 
   const template = b.template ?? DEFAULT_TEMPLATE;
   if (typeof template !== 'string' || !(SELF_TEMPLATES as readonly string[]).includes(template)) return { ok: false, error: 'unknown_template' };
@@ -82,13 +82,18 @@ export function validateLayout(body: unknown): LayoutCheck {
       if (!explicit) sections[def.id] = sectionsFor(opts.options[id]);
     }
   }
+  const board = validateBoardOptions(b.boardOptions);
+  if (!board.ok) return { ok: false, error: board.error, ...(board.detail ? { detail: board.detail } : {}) };
   const out: SelfBoardLayout = { template: template as SelfTemplateId, cards, sections };
   if (b.options !== undefined && b.options !== null) out.options = opts.options;
+  if (b.boardOptions !== undefined && b.boardOptions !== null) out.boardOptions = board.options;
   return { ok: true, layout: out };
 }
 
+const LAYOUT_SELECT = { template: true, cards: true, sections: true, options: true, board_options: true, updated_at: true } as const;
+
 /** A stored row as the page sees it. A row that no longer validates (a card withdrawn) drops what is unknown. */
-export function layoutFromRow(row: { template: string; cards: unknown; sections: unknown; options?: unknown; updated_at: Date } | null): SelfBoardLayoutView {
+export function layoutFromRow(row: { template: string; cards: unknown; sections: unknown; options?: unknown; board_options?: unknown; updated_at: Date } | null): SelfBoardLayoutView {
   if (!row) return emptyLayout();
   const template = (SELF_TEMPLATES_LIVE as readonly string[]).includes(row.template) ? (row.template as SelfTemplateId) : DEFAULT_TEMPLATE;
   const cards = (Array.isArray(row.cards) ? row.cards : [])
@@ -105,25 +110,38 @@ export function layoutFromRow(row: { template: string; cards: unknown; sections:
       sections[def.id] = on;
     }
   }
-  return { template, cards, sections, options: optionsFromRow(row.options, cards), chosen: cards.length > 0, updatedAt: row.updated_at.toISOString() };
+  return {
+    template,
+    cards,
+    sections,
+    options: optionsFromRow(row.options, cards),
+    boardOptions: boardOptionsFromRow(row.board_options),
+    boardDefaults: defaultBoardOptions(),
+    chosen: cards.length > 0,
+    updatedAt: row.updated_at.toISOString(),
+  };
 }
 
+/** One indexed row (board_layout_kundli_board_key); the board settings come in the same read. */
 export async function readLayout(prisma: PrismaClient, kundliId: string, board: BoardId = 'self'): Promise<SelfBoardLayoutView> {
-  const row = await prisma.boardLayout.findUnique({
-    where: { kundli_id_board: { kundli_id: kundliId, board } },
-    select: { template: true, cards: true, sections: true, options: true, updated_at: true },
-  });
+  const row = await prisma.boardLayout.findUnique({ where: { kundli_id_board: { kundli_id: kundliId, board } }, select: LAYOUT_SELECT });
   return layoutFromRow(row);
 }
 
 export async function writeLayout(prisma: PrismaClient, userId: string, kundliId: string, layout: SelfBoardLayout, board: BoardId = 'self'): Promise<SelfBoardLayoutView> {
-  // options are only written when the request carried them, so a PUT without options keeps the stored ones
-  const data = { template: layout.template, cards: layout.cards, sections: layout.sections, ...(layout.options ? { options: layout.options } : {}) };
+  // options and board options are only written when the request carried them, so a PUT without them keeps the stored ones
+  const data = {
+    template: layout.template,
+    cards: layout.cards,
+    sections: layout.sections,
+    ...(layout.options ? { options: layout.options } : {}),
+    ...(layout.boardOptions ? { board_options: { ...layout.boardOptions } as Prisma.InputJsonObject } : {}),
+  };
   const row = await prisma.boardLayout.upsert({
     where: { kundli_id_board: { kundli_id: kundliId, board } },
     create: { user_id: userId, kundli_id: kundliId, board, ...data },
     update: data,
-    select: { template: true, cards: true, sections: true, options: true, updated_at: true },
+    select: LAYOUT_SELECT,
   });
   return layoutFromRow(row);
 }

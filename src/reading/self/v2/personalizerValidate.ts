@@ -9,7 +9,14 @@
  * Words and patterns only; nothing astrological is computed.
  */
 import type { AreaDate } from '../areaDoc.js';
-import { getSelfV2BodyAdviceWords, getSelfV2NotWorkingStatuses, getSelfV2OracleEchoFlag, getSelfV2RoleWordsNotWorking } from '../../../config/env.js';
+import {
+  DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES,
+  getPersonalizerStereotypePhrases,
+  getSelfV2BodyAdviceWords,
+  getSelfV2NotWorkingStatuses,
+  getSelfV2OracleEchoFlag,
+  getSelfV2RoleWordsNotWorking,
+} from '../../../config/env.js';
 import { MATTER_PLAIN, mattersOfClaim } from '../v2words.js';
 import { wordCount } from '../words.js';
 import type {
@@ -92,6 +99,16 @@ export const wordsMatcher = (words: readonly string[]): RegExp | null =>
  * advice). Env `SELF_V2_BODY_ADVICE_WORDS`.
  */
 export const bodyAdviceWords = (): RegExp | null => wordsMatcher(getSelfV2BodyAdviceWords());
+
+/**
+ * Phrases that stereotype by gender (the voice changes flow and tone only; never "as a woman", pet names, "like a man").
+ * This is the default list; env `PERSONALIZER_STEREOTYPE_PHRASES` (comma list) replaces it at run time. A sentence that
+ * carries one is dropped like a chart term, whether or not a gender is stated.
+ */
+export const STEREOTYPE_PHRASES: readonly string[] = DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES;
+
+/** the matcher over the phrases in force (the env list or the default); null for an empty list */
+export const stereotypeMatcher = (): RegExp | null => wordsMatcher(getPersonalizerStereotypePhrases());
 
 /** the past-role markers that let a role word stand for a person no longer in that work ("in your former role") */
 const PAST_ROLE = /\b(former|formerly|past|previous|previously|used to|once|retired|retirement|earlier|years of work)\b/i;
@@ -240,6 +257,8 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
   if (c.roleWords?.test(text) && !PAST_ROLE.test(text)) return `role word against the stated work status (${text.match(c.roleWords)?.[0] ?? ''})`;
   if (c.stageWords?.test(text)) return `career-stage word the profile does not state (${text.match(c.stageWords)?.[0] ?? ''})`;
   if (c.gender === null && GENDERED_WORDS.test(text)) return `gendered word with no stated gender (${text.match(GENDERED_WORDS)?.[0] ?? ''})`;
+  const stereotype = stereotypeMatcher();
+  if (stereotype?.test(text)) return `gendered stereotype phrase (${text.match(stereotype)?.[0] ?? ''})`;
   const bad = daysIn(text).find((d) => !c.dates.days.has(d));
   if (bad) return `date ${bad} is not in the Oracle document`;
   const my = monthsAndYearsIn(text);
@@ -251,12 +270,27 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
 }
 
 /**
+ * A flagged stereotype sentence is dropped on its own, never the whole card: the text without the sentences that carry a
+ * phrase in force, and the sentences dropped. `text` is '' when nothing stands (the caller's empty-field behaviour then
+ * applies, so a card left with no body falls back as before).
+ */
+export function dropStereotypeSentences(text: string): { text: string; dropped: string[] } {
+  const stereotype = stereotypeMatcher();
+  if (!stereotype) return { text, dropped: [] };
+  const sentences = sentencesOf(text);
+  const dropped = sentences.filter((s) => stereotype.test(s));
+  if (!dropped.length) return { text, dropped };
+  return { text: sentences.filter((s) => !stereotype.test(s)).join(' ').trim(), dropped };
+}
+
+/**
  * The sentences of a text that carry no chart term or engine name; a sentence that carries one is dropped whole, never
  * cut and patched with an ellipsis (doc 66 replay run 2, failure 3: "A disciplined … calls for"). '' when none stands.
  */
 export function redactChartTerms(text: string): string {
+  const stereotype = stereotypeMatcher();
   return sentencesOf(text)
-    .filter((s) => !ENGINE_NAMES.test(s) && !CHART_TERMS.some((re) => re.test(s)))
+    .filter((s) => !ENGINE_NAMES.test(s) && !CHART_TERMS.some((re) => re.test(s)) && !stereotype?.test(s))
     .join(' ')
     .trim();
 }

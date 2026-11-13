@@ -28,7 +28,7 @@ import { claimKey, normaliseEvidenceKey, profileLines, promptText, shortHash } f
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
 import { cardDef } from '../self/v3/cards.js';
 import { checkOracleCard, oracleV3Schema, parseJson } from '../self/v3/oracle.js';
-import { checkPersonalCard, personalizerV3Schema, SELF_V3_PERSONALIZER_PROMPT, v3DateFrame } from '../self/v3/personalizer.js';
+import { checkPersonalCard, personalizerV3Schema, personalizerVoicePrefix, SELF_V3_PERSONALIZER_PROMPT, v3DateFrame } from '../self/v3/personalizer.js';
 import type { OracleCardV3, PersonalCardV3, SelfCardId, SelfSectionId, YearFrameV3 } from '../self/v3/types.js';
 import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
@@ -88,6 +88,8 @@ export function buildCardPack(i: CardPackInput): CardPack {
     `declined (never mention): ${p.declined.length ? p.declined.join(', ') : 'none'}`,
     `last answers: ${p.lastConfirms.map((c) => `${claimKey(c.claimId)}=${c.answer}`).join(', ') || 'none'}`,
     ...(i.portrait ? portraitLines(i.portrait) : ['## PORTRAIT: not built; write from THE PERSON only']),
+    // the Personalizer's voice for this person (same bytes for the same voice; the pack is per person, so it stays in the cached prefix)
+    ...[personalizerVoicePrefix(p.gender)].filter(Boolean),
     '# SPAN DATES',
     ...i.frame.spans.map((s) => `- ${s.id}: ${s.from} to ${s.to}`),
   );

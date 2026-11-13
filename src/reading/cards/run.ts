@@ -27,7 +27,7 @@ import type { markAgentUsed } from '../self/v2/cache.js';
 import { promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
 import { cardDef, isCardOffered, READABLE_CARDS } from '../self/v3/cards.js';
-import { personalizerV3Call, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT, type PersonalizerV3Input } from '../self/v3/personalizer.js';
+import { personalizerV3Call, personalizerVoiceToken, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT, type PersonalizerV3Input } from '../self/v3/personalizer.js';
 import { cardContent } from '../self/v3/store.js';
 import type { SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
 import { renderYearFrame } from '../self/v3/yearFrame.js';
@@ -191,7 +191,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const portraitHash = shortHash(canonicalJson(i.portrait ?? null));
   const nowSpan = i.frame.spans.find((s) => s.place === 'now') ?? i.frame.spans[0]!;
   const spanDates = new Map(i.frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
-  const pHash = [READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash).join('.');
+  const pHash = [...[READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash), personalizerVoiceToken(ctx.sub.profile?.gender)].join('.');
   const titles = i.board.map((id) => cardDef(id)?.title ?? id);
   const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
 

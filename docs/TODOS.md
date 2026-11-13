@@ -100,6 +100,10 @@ re-applied by it.
   1. **Sumit (`75b0d618-90b7-4db6-bff8-cc7bb0ed561f`)** has 402 ready `kundli_data` rows (including 250 `annual.*` rows across `2016–2035` with `divisional_chart_factor=2,7,9,10`), 893 `kundli_digest` rows (`200` `annual`), 10,260 `kundli_activation` rows, and 11 `kundli_transit_overlays` rows (`1975–2035`).
   2. **Sachin (`c584c0a3-841b-451b-a2ed-f5709c5fb31d`)** and **Archisha (`6514751c-9b30-45e6-bad6-0a56415e067b`)** have all 152 natal/varga/dasha/strength/avastha rows (702 and 694 `kundli_digest` rows; 12,586 and 8,298 `kundli_activation` rows), but only **12 `annual.*` rows** (`@current` and one single year in D1 only → only `2` `annual` digest rows) and **0 `kundli_transit_overlays` rows** in DB (even though `evals/fixtures/G1/catalog/transit_contacts.*.json` exists on disk for Sachin).
   3. Two active accounts named `"Sachin Mohan"` (`858f2f20-041c-4c74-8e7e-3fa4f251e19d`, born `1947-01-16 Delhi`, Leo Lagna; `3784ca07-66ba-4319-8b90-4a64073032ac`, born `1985-10-14 Pune`, Aquarius Lagna) store other people's charts under Sachin's display name, and deactivated `archishasinha` (`f3d117b0-6b60-48c9-8552-bd247b2d10aa`) has `01:28` AM (Virgo Lagna) instead of `13:28` PM (Pisces Lagna).
+  - 2026-11-10: Sachin's set now has 210 of 310 annual keys for 2006–2036 ready; 100 missing and 40 overlay years missing. The pull from the dev session failed (no local credentials can invoke `aiastra-pyjhora`; `aiastra-ops` was never granted it). Handed to the deploy sub-session with `scripts/pull-sachin-annual.ts` (disk-guarded) and `npm run transits:overlay` (month 1997–2036, day 2016–2019). Done 2026-11-10 by the deploy session and verified by dry run: 310/310 annual keys ready, overlay month 1997–2036 and day 2016–2019 all stored. Archisha (`6514751c`) still needs the same pull. Follow-up: give the dev machine a least-privilege invoke role for `aiastra-pyjhora`, or route every engine pull through the deploy session by rule.
+  - 2026-11-10 finding: the stored `kundli_transit_overlays` payload has no exact contacts on natal points (keys: rows, ingresses, stations, eclipses, lunations, sade_sati, dhaiya, double_transit). The only contacts for Sachin are in `evals/fixtures/G1` and stop at 2026, so a forward reading (2027–2036) can state sign and house transits but not "Rahu exact on natal Mercury on <date>". Done: the engine's contacts are stored with the overlay (or as their own rows) for the full span, and the transit-reading skill names where to read them.
+  - 2026-11-10 finding (money readings): no stored gains chart. The G1 export has D1, D2, D3, D4, D7, D9, D10, D12, D16, D20, D24, D27, D30, D60 and no D11 (nor D5, D6, D8, D40, D45), so a funding or income reading cannot cite the divisional chart of gains. Also no way to size money: nothing stores a person's own past inflows (date, amount, source) to calibrate period strength against, and a company has no chart of its own (incorporation date, time, place). Done: D11 pulled and digested; a decision from Sachin on a private "money ledger" fact type and on company charts.
+  - 2026-11-10 finding (date picking): `day_tables` hold November 2026 only (San Jose from October) and `kundli_day_overlays` for Sachin stop at November, so a "pick a date" question cannot look past 30 Nov 2026. Correction the same day: the chart of a chosen moment does exist (catalog type `prashna`, served by the live engine; nine answers saved untracked under `evals/fixtures/moment-charts/`), but no product path or script uses it for picking a start time, and December and January were pulled by hand through the deploy session. Done: day tables and overlays pulled a rolling 90 days ahead, and a "pick a time" path that casts `prashna` for the clean windows of a shortlisted day.
   - Status: open (digest rebuild with `dashaCharter`, `avasthaMultipliers`, `sunProximity`, `starChain`, `D1.K64M/K64L/KD22`, and `pendingKarmaHouses` completed 2026-11-06 for `c584c0a3`, `75b0d618`, `6514751c`, `858f2f20`, `3784ca07`). Done: run `topUpAnnualSet` and `npm run transits:overlay` for `c584c0a3` and `6514751c`, and relabel `858f2f20` / `3784ca07` with Sachin's OK.
 - **Fixed (2026-11-07):** `tests/unit/auth/emailOnlySignup.test.ts` and `tests/unit/auth/registrationV2.test.ts` now explicitly clear `COGNITO_*` and `RESEND_*` / `SMTP_*` environment variables and pin `AUTH_PROVIDER=local` in `beforeEach`/`afterEach`, preventing local `.env` Cognito pool calls during Vitest runs.
 - **`kundli_data` rows do not record which engine commit produced them, and the `current` annual rows look empty.** Checked
@@ -354,6 +358,24 @@ re-applied by it.
 - **`archishasinha` kundli rows are stale.** Its birth time was corrected 01:28 -> 13:28 on 2026-10-31 and the account
   deactivated (duplicate of `archisha`); its kundli, coordinates and 142 `kundli_data` rows were computed at the old
   time. Harmless while off. Done: rows deleted or rebuilt if the account is ever reactivated.
+- **Personalizer voice by gender (branch `feat/board-layout-vclean`, 2026-11-12): written without running anything.** The
+  voice (`prompts/personalizer/voice.md`, `personalizerVoicePrefix` in `src/reading/self/v3/personalizer.ts`, the stereotype
+  list in `personalizerValidate.ts`) and `tests/unit/reading/self/v3/voice.test.ts` were written with no `npm`, `tsc` or
+  `vitest` run (the worktree's `node_modules` was broken). `src/reading/prompts/generated.ts` was updated by hand; its
+  `PROMPT_VERSION` (`8a614959c7b2`) was computed with a PowerShell copy of `scripts/embed-prompts.mjs`'s hash, which
+  reproduced the old value `3771a563e8b6` before the change. Status: open. Done: `npx tsc --noEmit`, `npx vitest run
+  tests/unit/reading/self/v3 tests/unit/reading/prompts.test.ts tests/unit/reading/cards` and `node scripts/embed-prompts.mjs
+  --check` pass in CI or a working checkout.
+- **The voice is not measured.** Whether the three voices read differently and never stereotype is unproven: the first replay
+  on stored dossiers in the Lab (docs/reading-engine/65 §9; no paid call without a yes) must compare the same Oracle cards
+  written as woman, man and neutral, and count `STEREOTYPE_PHRASES` hits. Owner: Sachin's yes for the replay. Done: the
+  replay is in `docs/reading-engine/`.
+- **Voice only on the v3 card path.** The v2 Personalizer (`personalizer/self.md`) and the Now card (`cards/now.md`) still
+  write in one register for every gender. Done: the same `voice.md` is wired there, or a decision that they stay as they are.
+- **A stereotype phrase withholds the whole v3 card.** `textProblem` flags the phrase, and in the v3 face a problem in
+  the line or any span withholds the card (the repair pass re-asks once with the reason). A word such as `girl` may also
+  appear in a legitimate sentence about a person's daughter. Done: decide whether the face drops only the sentence, and
+  review the default list (`DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES` in `src/config/env.ts`) after the replay.
 
 ## P3: nice to have
 
@@ -1338,7 +1360,14 @@ gap or overlap per planet, and no stay disagrees with the sky's sign on any date
   research kundlis before it is generalised. Owner: reading-dev.
 
 - [ ] (2026-11-08, transit overlay) `kundli_transit_overlays` range rows for Sumit (`75b0d618-…`) carry only `bodies` + `sade_sati` per month for 2026–2029; no `double_transit`, `ingresses` or `stations` fields in the stored payload, so the Sumit career check used placements and the `contacts` rows only. Regenerate the 2026–2029 overlay with the current engine version (with `--step day`) so double transit and ingress dates come from the engine, not from reading the monthly sign table.
-- [ ] (2026-11-08, verification) Sumit career back-test used nine dated events (Dec 1999, Jan 2001, Nov 2002, 2004-05, 2006-07, 2009-10, Oct 2013, 2017-18, 2021). Annual D10 exists only from 2016 and the 2020 Tithi Pravesha chart was not pulled, so the 2021 promotion's year chart is only half checked. Candidate chart-specific rules to test on other charts: (a) Yogini mahadasha start within ~12 weeks of a career event (3 of 5 starts since 1999), (b) career clock (Chathuraaseethi Sama) sub-lord Mercury/Venus or MD Venus for promotions, Sun sub-lord + Vimshottari Rahu sub-period + slow planet entering the 7th for employer change, (c) Jupiter entering the 10th sign preceded a promotion by 1–12 months (2004, 2016–17).
+- [ ] (2026-11-10, transit sky) `transit_instants` holds Pune under two place keys, `18.52,73.85,5.5` (144 monthly rows 2026–2037) and `18.52,73.86,5.5` (296 rows 2025–2035, with partial daily rows in 2026–2027). Sumit's kundli stores lon 73.8567, which rounds to 73.86. Decide which key is canonical, make the sky job round the same way as the kundli, and stop writing the other key; do not delete rows until a reading path is confirmed not to read them.
+- [ ] (2026-11-08, verification) Sumit career back-test used nine dated events (Dec 1999, Jan 2001, Nov 2002, 2004-05, 2006-07, 2009-10, Oct 2013, 2017-18, 2021). Annual D10 exists only from 2016. Correction 2026-11-10: the 2020 Tithi Pravesha chart (19 Aug 2020–7 Sep 2021, D1/D9/D10) IS stored and covers the 2021 promotion: lagna Aries, Saturn own in the 10th, Sun+Moon+Mercury 5th, D10 Jupiter 11th; the check used TP2021 (from 7 Sep 2021), which also has Saturn own in the 10th, so the finding stands. The career clock's third level in `kundli_activation` (engine payload `levels=4`) matches the equal-division dates used, so that caveat is withdrawn. Candidate chart-specific rules to test on other charts: (a) Yogini mahadasha start within ~12 weeks of a career event (3 of 5 starts since 1999), (b) career clock (Chathuraaseethi Sama) sub-lord Mercury/Venus or MD Venus for promotions, Sun sub-lord + Vimshottari Rahu sub-period + slow planet entering the 7th for employer change, (c) Jupiter entering the 10th sign preceded a promotion by 1–12 months (2004, 2016–17).
+- [ ] (2026-11-10, reading accuracy) The 8 Nov Sumit answer read slow-planet sign changes off the monthly overlay rows (first-of-month sample) and got four dates wrong by up to a month. The shared range sky (`transit_range_skies.payload.ingresses`) has the real dates: Rahu/Ketu change 5 Dec 2026 (said "Jan 2027"); Jupiter retrograde into Cancer 25 Jan 2027 (said "Feb"); Saturn into Aries 3 Jun 2027 and back to Pisces 20 Oct 2027 (said "early Jul" and "Nov"); Jupiter into Virgo 26 Nov 2027 (said "early Dec"), back to Leo 28 Feb 2028, Virgo again 24 Jul 2028. Fix: the transit-reading skill and `src/reading/life/sky.ts` consumers must take ingress and station dates from the range sky's `ingresses`/`stations` lists, never from the monthly `bodies` table. Add that line to `.claude/skills/transit-reading/SKILL.md`.
+- [ ] (2026-11-10, transit overlay) The 10 Nov Sumit 3/6/9/12-month answer used three values not returned by the engine for this kundli: (a) Mercury and Mars retrograde spans and Mars crossings of natal Venus/Sun/Moon, found by a throwaway script comparing consecutive daily noon longitudes in `transit_instants` (day-level only); (b) the natal house of each eclipse and lunation, by matching its sign to the stored house cards; (c) Jupiter's aspect from Cancer onto the 12th, by rule. Fix: pull a `--step day` overlay for `75b0d618-…` for Nov 2026–Feb 2028 and have the shared range sky carry Mercury, Venus and Mars stations (it lists only Jupiter and Saturn stations today), so all three come from the engine.
+- [ ] (2026-11-10, transit sky) `transit_instants` San Jose daily rows come in two payload shapes: `payload.planets` (273 of 410 rows, 1 Nov 2026–15 Dec 2027) and `payload.charts.d1.planets` (137 rows, from about Aug 2027). Any reader that assumes one shape silently drops the other. Normalise on one shape (or make `SkyView` the only reader) and backfill.
+- [ ] (2026-11-10, transit sky) The shared range sky and Sumit's overlay stop at 31 Dec 2035 while the stored period tables and annual charts (`TP2036.*`) run through 2036. Any 2036 window is therefore read without a slow-planet trigger (the 10 Nov "promotions 1999–2036" answer says so). Fix: extend `transit_range_skies` and the kundli overlay to at least 31 Dec 2037 so the horizon of the sky matches the horizon of the annual rows.
+- [ ] (2026-11-10, career reading) Back-test on Sumit's record (month-by-month count over stored rows 1999–2026, a tally by a throwaway script, no astrological value computed): the conditional clock that applies to this chart gated every promotion. With Mercury or Venus as its sub-lord, 3 of 3 sub-periods since 2006 gave a promotion (2006–07, 2017–18, 2021). Without it, 4 of 5 other signals agreeing (main-clock Venus or Mercury sub, confirmer clocks, a sign clock on the 10th sign, Jupiter 7th/11th from the Moon or Saturn in the 10th) gave nothing in Jun 2010–Oct 2011 and Mar 2025–May 2026. Doc 42 §A.4 counts clocks as equal votes by family; for a kundli where `dasha.applicable` marks a conditional clock, consider making it a required vote for promotion dates in `src/reading/area/career.ts`, and add this record to the ledger. Also: the year-chart pattern "Scorpio year lagna with the Sun in its own 10th" hit 2 of 4 (2004, 2007 yes; 2012, 2014 no), so it stays a confirmer, not a trigger.
+- [ ] (2026-11-10, career reading) Back-test of the employer-change signature on Sumit's record (same kind of tally over stored rows, 1999–2026). Four legs: conditional-clock sub-lord Sun or Saturn; main-clock Rahu at level 2 or 3; a slow planet in the 7th (engine overlay `natal_house`); a sign-clock level-1 turn within 75 days. All four held in only two months of 27 years, Oct 2002 and Oct 2013, the two months he changed employer. Three of four also held in Sep 2010–Jan 2011 with no change, so three legs are not enough. The Jan 2001 start-up had only two strict legs (Rahu was the main-clock mahadasha only, and the sign-clock turn was level 2), so the earlier "3 of 3" wording in the 8 Nov answer overstated it. Record this in the career ledger and in doc 43 §6 as a per-kundli signature, not a general rule.
 
 ## Filed 2026-11-08 by the theme setting build (web `feat/theme-setting`, admin `feat/admin-theme`)
 
@@ -2563,6 +2592,8 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · The Work board's detail text is fixed copy with chart words** ("Natal Promise (10th Bhava & Dasamsa D10)",
   "Vedic Timing Clocks") written in the page, not from the engine; Plain words now hides it for chosen cards, but the
   default view still shows it. [web] Done when the copy comes from the engine's own rows or is removed.
+
+- 2026-11-11 Turnstile input-first (found, not fixed): `requestMagicLink` still answers a malformed email with the success message (kept on purpose, tests/unit/auth/cognitoFlow.e2e.test.ts), and it spends the token because the server cannot refuse it. The web page validates first, so only a direct API call hits it. Step 2 (server-issued short-lived proof after one good check) is still open if this is not enough. Deploy the server before the web build: the web now selects `turnstileConsumed`, which an older server schema rejects.
 - **P2 · Card photos depend on `OVERLAY_ART_KEY` in the web build and on the key route.** Without the key the cards
   show drawn art (by design). The packs are re-made every build with a new IV; the name changes only when the photos or
   the key change, so browsers keep their cached ciphertext across deploys. [deploy session] Done when staging serves
@@ -2574,3 +2605,103 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   mobile fix 3f32a3e uses `!bg-[#0d0c24]`, which has no light value on staging, so that element stays dark navy in light
   mode; `src/lib/theme.test.ts` fails on the shipped d1b6653. Held by the deploy session to ship with the next web
   release (2026-11-11). [deploy session] Done when RC includes 58a3884.
+
+## Filed 2026-11-12 by the board faces/tools build (server `feat/board-layout-vclean`)
+
+- **P2 · Confirm GET /api/self/v3 answers 200 after the deploy.** Migrations `20261112190000_board_layout_board_options_m50`
+  and `20261112190100_board_read_indexes_m51` were applied to `aiastradb` on 2026-11-12 (`prisma migrate status`: up to
+  date, 73 migrations). Only the post-deploy check is left. [deploy session] Done when GET /api/self/v3 and PUT
+  /api/self/v3/layout answer 200 on staging after the deploy; then delete this item.
+- **P2 · Chart details evidence keys go to every role.** GET /api/self/v3 sends `cards[].v2.details.evidence` (engine
+  row keys such as `planet:D1.Sa`) and Chart details paragraphs to every signed-in person, novice included; nothing on
+  the Self v2/v3 path gates on role. The new `face: 'research'` changes no content (tested), so it does not widen this,
+  but if evidence is meant to be practitioner-only (astrologer, researcher, aiastra_admin) the gate does not exist yet.
+  Found reading `src/reading/self/v2api/response.ts` `areaViews`. [Sachin: product decision; then server] Done when the
+  rule is decided and, if gated, a public user's body has `evidence: []` with a test.
+- **P2 · PUT /api/self/v3/layout starts the card build without awaiting it.** The cards are marked `queued` (awaited)
+  and the async Lambda invoke is fire-and-forget so the answer is not held. On Lambda the environment can freeze right
+  after the response, so the invoke may only leave on the next request (the page's GET poll, which also re-queues a
+  stuck build). [server] Done when a staging trace shows the invoke leaving within the PUT's invocation, or the queue
+  call moves before the response with a measured cost under 50 ms.
+- **P3 · Board-wide `length`, `words` and `plan` do not change a card's stored `sections`.** Sections are derived from
+  a card's own options on PUT (doc 71 §4.4 item 3); board options only change `cards[].options` (in force) and the
+  shaping (`view`, `plan`). [web + server] Done when the page derives visible sections from `cards[].options`, or PUT
+  derives them from the board options too.
+- **P3 · The catalogue picker no longer shows a first line, and a card read only in a Phase B (`self.v3.cards`) row shows
+  `not_read`.** GET /api/self/v3/catalogue now reads the chart id, the registry, `deps.suggest` and today's card-state
+  row only (no board read, no build queued), so `firstLine` is always null and `state` comes from the card-state row
+  (`done` shows as `ready`, `queued`/`reading`/`failed` as stored); a card whose reading lives only in the legacy
+  `self.v3.cards` row, or in a state row from an earlier day, reads `not_read` there. Found fixing the route
+  (`getSelfV3Catalogue`, `src/reading/self/v3/service.ts`). [Sachin: product decision; then server + web] Done when it
+  is decided whether the picker needs the first line and legacy-ready states; if so, a cheap stored read of the
+  newest card rows (not the board read) provides them, with a test; if not, the web stops using `firstLine` from the
+  catalogue.
+- **P3 · "a girl of seven" is still refused when the person states no gender.** With no stated gender,
+  `GENDERED_WORDS` (`src/reading/self/v2/personalizerValidate.ts`, `textProblem`, used by `checkPersonalCard` in
+  `src/reading/self/v3/personalizer.ts`) lists `girl` (also `boy`, `man`, `woman`, `he`, `she`, `husband`, `wife`...)
+  as a gendered word and `textProblem` returns a problem for the whole text, so a card with "your daughter, a girl of
+  seven" is rejected (not dropped sentence by sentence) for a person with no stated gender. The stereotype list no
+  longer holds `girl` (`ce81707`), and a stereotype sentence is dropped on its own, but the gendered-word check was not
+  changed. Found while testing the stereotype fix on 2026-11-12. [server; Sachin: decide whether words naming another
+  person (daughter, girl, boy, husband) count as gendering the reader, and whether a gendered sentence drops alone]
+  Done when the rule is decided and a test shows "a girl of seven" kept for a person with no stated gender.
+## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
+
+Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B) and the build sessions' side findings.
+
+- **P1 · No typecheck or test step runs in either deploy workflow.** `.github/workflows/deploy-api-lambda.yml` (server)
+  and `deploy-staging-amplify.yml` (web, on `release-candidate-staging` only) build and deploy on a push to
+  `release-candidate-staging` with no `tsc` and no tests; nothing runs on feature branches or `develop`. Sachin chose a
+  clean local install and local tests instead of a CI gate (2026-11-12), so the gate is manual. [deploy session] Done
+  when typecheck and the unit tests pass locally on `develop` before every merge into `release-candidate-staging`, or a
+  CI job exists.
+- **P2 · All Self cards read `not_read` for the test account, so no per-period text exists to show.** The per-period text
+  fix lands only on Phase A cards; Phase B cards carry `text: null`. Found in plan 73 §1. [reading-dev] Done when a
+  card-by-card read has run for the test account and a period shows its own text.
+- **P2 · Rail tones are null on every card.** `RailItem.tone` is null for all rails, so a period cannot be coloured by
+  how it presses. [server] Done when `railFromDates` and `railFromSpans` fill the tone from the engine's dated windows.
+- **P3 · Option notes show on cards where they do not apply** (`optionNotes`). [server + web] Done when a note appears
+  only on a card its option changes.
+- **P2 · The practitioner role set is hardcoded and disagrees with the TODO above.** `readerRole` treats `student`,
+  `astrologer` and `researcher` as practitioner; the evidence-keys item names `aiastra_admin`, which the code does not
+  include, and the set is not env-driven (AGENTS.md rule). The web hides evidence with `profile.role === 'practitioner'`
+  while the server sends it to every role, so this is display-only. [Sachin: decide the set; then server] Done when the
+  set is one env-driven list, used by the server to blank `evidence` for other roles, with a test.
+- **P2 · Check `SELF_V3_BUILD` and `READING_CLOCK_LAYER` on the live `aiastra-server-api` Lambda.** Without them the new
+  Self board does not build. The `aiastra-ops` key was invalid on 2026-11-01, so not read. [deploy session, Sachin's AWS
+  access] Done when both are read from the function configuration and their values noted here (no secrets).
+- **P3 · The registry has 26 cards, not 11** (plan 73 App. B item 7); the other 15 appear only with per-card reading on.
+  [docs] Done when the product doc says so.
+- **P3 · Love and Work have no v3 layout route** though they share the `board_layout` table. [server] Done when the
+  routes exist or the docs stop saying they share one.
+- **P3 · Prompt version hash was computed by hand.** `src/reading/prompts/generated.ts` was edited without the
+  generator (`scripts/embed-prompts.mjs`). [server] Done when `embed-prompts.mjs --check` passes in a clean install.
+- **P2 · CloudFront may strip `If-None-Match` or its response headers policy may drop `ETag` and the CORS headers.**
+  The app's CORS list already allows `If-None-Match` and exposes `ETag` (`server.ts`), but the edge sits in front of
+  the Lambda: cache policy `4135ea2d-…`, origin request policy `e1684868-…`, response headers policy `67f7725c-…`
+  (`aiastra-aws-terraform/environments/prod/imports.md`; `modules/edge/main.tf` is an empty stub, so they are not
+  readable as code). If the origin request policy does not forward `If-None-Match`, every GET returns 200 and the
+  304 path never fires (no breakage, no saving). [deploy session, Sachin's AWS access] Done when the three policies are
+  read, `If-None-Match` is forwarded and `ETag` passes through, and a repeat GET on staging returns 304.
+- **P2 · Web Self board redesign: not seen rendered, e2e not run, real IndexedDB path untested.** (`AIAstra_WEB`,
+  `feat/self-vclean`.) Vitest runs in jsdom, which has no IndexedDB, so `selfV3Cache` is tested through an in-memory
+  backend only (`fake-indexeddb` is not installed); the 1280 px one-row control layout, the banner heights and the touch
+  swipe carousels have not been viewed on a screen; `e2e/card-picker.spec.ts` was edited for the removed "Edit
+  sections" ids but not run. [web + Sachin's screenshots] Done when the staging build is opened at 1024, 1440 and 1920
+  px and on an iPad, every card and face is photographed into `docs/screenshots/`, and the e2e spec passes.
+- **P3 · Web: `caniuse-lite` is outdated** (vitest prints a Browserslist warning). [web] Done when
+  `npx update-browserslist-db@latest` is run in its own commit (it edits `package-lock.json`).
+- **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
+  when `AIAstra_WEB/AGENTS.md` says agents and CI use `test:run`.
+
+## Filed 2026-11-10 by the phone-frame session (web `fix/sky-mobile-cover`, merged into develop)
+
+- **P2 · Landing scroll icon can rest on the figure in portrait.** In `docs/screenshots/mobile-frame/01-landing-portrait.png`
+  (web repo) one parchment icon sits at about x 56 %, y 32 %, inside `KEEP_OUT_PORTRAIT` [30, 70, 30, 66] of
+  `src/lib/scrollPlacement.ts`. Either the placement runs before the portrait flag is read, or the keep-out is applied
+  to something other than the icon centre. Owner: web. Done: no icon centre inside the portrait keep-out on a phone.
+  Status: open.
+- **P3 · Phone header squeezes the question quota to "2…".** At 360 px the board header (menu, star, quota, chat,
+  Personalize, avatar) leaves the `UsageBar` text a few pixels, so the count truncates. Seen in
+  `docs/screenshots/mobile-frame/10-board-phone.png`. Owner: web. Done: the quota reads in full on a 360 px phone, for
+  example by moving Personalize into the menu drawer. Status: open.

@@ -149,7 +149,10 @@ app.use(
       'X-Requested-With',
       'X-Face-Box',
       'X-Admin-Lab-Token',
+      'If-None-Match',
     ],
+    // GET /api/self/v3 answers with an ETag the page sends back as If-None-Match (304 when unchanged)
+    exposedHeaders: ['ETag'],
     credentials: true,
     maxAge: 86400,
   })

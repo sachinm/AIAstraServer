@@ -1,5 +1,7 @@
 # Plans, question limits, payments and locale
 
+> November fundraising reference: [regional pricing experiments and revenue model](../fundraising/marketing-and-revenue.md). The offers there are proposals. This document describes the billing catalog and its design.
+
 Written 2026-11-01. Sachin asked for: a free plan everyone starts on, a progress bar that holds across
 conversations, a profile dropdown with an upgrade option, paid plans, USD and rupee prices by location, a language question at
 registration (English or Hindi), a US | India switch on the homepage, and access decoupled from charging: a paid flag plus a

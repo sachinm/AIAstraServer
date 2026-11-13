@@ -1,7 +1,7 @@
 /**
  * GET /api/self/v3 card views (docs/reading-engine/68 §4.5–§4.6). Pure: maps the v2 body (Phase A) and, when stored, the
  * v3 cards (Phase B) onto the registry. The period rail comes from the v3 spans, else from the v2 card's stored dates.
- * Every string that reaches the person is already redacted by the v2 mapping or passes `redactDeep` here.
+ * Every string that reaches the person is already redacted by the v2 mapping or passes `redactDeep` here, once.
  */
 import { dayLabel, redactDeep } from '../v2api/response.js';
 import type { SelfV2AreaView, SelfV2Response } from '../v2types.js';
@@ -34,7 +34,38 @@ export function railFromDates(dates: ReadonlyArray<{ from: string; to: string; l
       note: d.label || null,
       current: d.from <= today && today <= d.to,
       span: null,
+      text: null,
     }));
+}
+
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** The ways a stored paragraph writes this date: 2027-01-01, 1 Jan 2027 (dayLabel), 1 January 2027. */
+function dateMatcher(iso: string): RegExp | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return null;
+  const day = Number(m[3]);
+  const long = MONTHS_LONG[Number(m[2]) - 1];
+  const forms = [`${m[1]}-${m[2]}-${m[3]}`, dayLabel(iso), ...(long ? [`${day} ${long} ${m[1]}`] : [])];
+  return new RegExp(`(?<![\\d-])(?:${forms.map(escapeRe).join('|')})(?![\\d-])`, 'i');
+}
+
+/**
+ * Phase A per-period text (plain string matching on stored text): each body paragraph that names a period's `from` or
+ * `to` date goes to the first such period in rail order, and to no other; the rest are `standing`. A period no
+ * paragraph names keeps `text: null`.
+ */
+export function splitBodyByPeriods(body: readonly string[], rail: readonly RailItem[]): { rail: RailItem[]; standing: string[] } {
+  const matchers = rail.map((r) => [dateMatcher(r.from), dateMatcher(r.to)].filter((x): x is RegExp => Boolean(x)));
+  const texts: Array<string[] | null> = rail.map(() => null);
+  const standing: string[] = [];
+  for (const p of body) {
+    const i = matchers.findIndex((ms) => ms.some((re) => re.test(p)));
+    if (i < 0) standing.push(p);
+    else (texts[i] ??= []).push(p);
+  }
+  return { rail: rail.map((r, i) => ({ ...r, text: texts[i] ?? null })), standing };
 }
 
 /** Phase B rail: one bar per span the card reads. */
@@ -48,6 +79,7 @@ export function railFromSpans(c: SelfV3CardContent, today: string): RailItem[] {
     note: null,
     current: s.from <= today && today <= s.to,
     span: s.span,
+    text: null,
   }));
 }
 
@@ -74,6 +106,7 @@ export function cardViews(i: CardViewsInput): SelfV3CardView[] {
     const available = isCardOffered(def, Boolean(i.cardsRead));
     const status = v3 ? 'ok' : area ? area.status : 'pending';
     const state: CardReadState = i.states?.[def.id] ?? (v3 ? 'ready' : 'not_read');
+    const phaseA = v3 ? null : splitBodyByPeriods(v2card?.body ?? [], railFromDates(v2card?.dates ?? [], i.today));
     return {
       id: def.id,
       group: def.group,
@@ -87,7 +120,8 @@ export function cardViews(i: CardViewsInput): SelfV3CardView[] {
       state,
       firstLine: v3?.line ?? v2card?.headline ?? null,
       defaultSections: [...def.defaultSections],
-      rail: v3 ? railFromSpans(v3, i.today) : railFromDates(v2card?.dates ?? [], i.today),
+      rail: v3 ? railFromSpans(v3, i.today) : phaseA!.rail,
+      standing: phaseA?.standing ?? [],
       v3,
       v2: area ? { card: v2card, rangeLabel: area.rangeLabel ?? '', details: area.details } : null,
     } satisfies SelfV3CardView;

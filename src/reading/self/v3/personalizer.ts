@@ -10,14 +10,15 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
+import { getPersonalizerVoiceVersion, isPersonalizerVoiceByGenderEnabled } from '../../../config/env.js';
 import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
 import { markAgentUsed } from '../v2/cache.js';
 import { timingOf } from '../v2/oracle.js';
 import { portraitLines } from '../v2/portrait.js';
-import { bodyAdviceWords, roleWordsFor, textProblem, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
+import { bodyAdviceWords, dropStereotypeSentences, roleWordsFor, textProblem, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
 import { seniorStageWordsFor } from '../v2/profileFit.js';
-import { claimKey, profileLines, promptHash } from '../v2/slices.js';
-import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
+import { claimKey, profileLines, promptHash, promptText } from '../v2/slices.js';
+import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, StatedGender, ValidationIssue } from '../v2types.js';
 import { parseJson } from './oracle.js';
 import type { OracleCardV3, OracleV3Output, PersonalCardV3, SelfCardId, SelfSectionId } from './types.js';
 
@@ -27,6 +28,58 @@ export const LINE_MAX_WORDS = 20;
 export const ASKS_MAX_WORDS = 30;
 export const OBSTACLE_MAX_WORDS = 20;
 export const STEP_MAX_WORDS = 35;
+
+/** The voice prompt (prompts/personalizer/voice.md): three blocks, `## woman`, `## man` and `## neutral`, under shared guardrails. */
+export const PERSONALIZER_VOICE_PROMPT = 'personalizer/voice';
+export type PersonalizerVoice = 'woman' | 'man' | 'neutral';
+
+/**
+ * The voice for a stated gender: `woman` or `man` when it was stated, else `neutral` (not stated, non-binary, prefer not
+ * to say, anything unknown). `enabled` is env `PERSONALIZER_VOICE_BY_GENDER`; off gives `neutral` for everyone.
+ */
+export function personalizerVoiceOf(gender: StatedGender | string | null | undefined, enabled: boolean = isPersonalizerVoiceByGenderEnabled()): PersonalizerVoice {
+  if (!enabled) return 'neutral';
+  return gender === 'woman' || gender === 'man' ? gender : 'neutral';
+}
+
+/** The voice file split into its guardrails (everything above the first block) and its blocks. */
+export function parseVoiceBlocks(text: string): { guard: string; blocks: Partial<Record<PersonalizerVoice, string>> } {
+  const guard: string[] = [];
+  const found: Record<string, string[]> = {};
+  let cur = guard;
+  for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
+    const m = /^## (woman|man|neutral)\s*$/.exec(line);
+    if (m) {
+      cur = [`## ${m[1]}`];
+      found[m[1]!] = cur;
+    } else cur.push(line);
+  }
+  const blocks: Partial<Record<PersonalizerVoice, string>> = {};
+  for (const [k, v] of Object.entries(found)) blocks[k as PersonalizerVoice] = v.join('\n').trim();
+  return { guard: guard.join('\n').trim(), blocks };
+}
+
+/** The voice text for one voice: the shared guardrails, then that voice's block only; '' when the file lacks the block. */
+export function personalizerVoiceBlock(voice: PersonalizerVoice, text: string = promptText(PERSONALIZER_VOICE_PROMPT)): string {
+  const { guard, blocks } = parseVoiceBlocks(text);
+  const block = blocks[voice];
+  return block ? `${guard}\n\n${block}` : '';
+}
+
+/**
+ * The voice part of the cached prefix (`parts[0]`): the version, then the guardrails and the block for this person. It
+ * depends on the voice and its version only, never on the span, the day or the person, so the prefix stays stable per voice.
+ */
+export function personalizerVoicePrefix(gender: StatedGender | string | null | undefined): string {
+  const voice = personalizerVoiceOf(gender);
+  const block = personalizerVoiceBlock(voice);
+  return block ? `# VOICE ${getPersonalizerVoiceVersion()}: ${voice}\n${block}` : '';
+}
+
+/** The voice's part of a card cache key: version, voice and the voice file's hash (a changed voice never serves an old card). */
+export function personalizerVoiceToken(gender: StatedGender | string | null | undefined): string {
+  return `${getPersonalizerVoiceVersion()}.${personalizerVoiceOf(gender)}.${promptHash(PERSONALIZER_VOICE_PROMPT)}`;
+}
 
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 const S = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -130,7 +183,13 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     const why = textProblem(t, ctx);
     if (why) problems.push(`${label}: ${why}`);
   };
-  const line = S(o.line);
+  // a sentence with a stereotype phrase is dropped on its own; the card stands unless its field is left empty
+  const T = (label: string, v: unknown): string => {
+    const r = dropStereotypeSentences(S(v));
+    if (r.dropped.length) notes.push(`${label}: ${r.dropped.length} sentence(s) dropped (stereotype phrase)`);
+    return r.text;
+  };
+  const line = T('line', o.line);
   text('line', line, LINE_MAX_WORDS);
   const got = Array.isArray(o.spans) ? (o.spans as Array<Record<string, unknown>>) : [];
   const spans: PersonalCardV3['spans'] = [];
@@ -140,9 +199,9 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
       problems.push(`span ${os.span}: missing`);
       continue;
     }
-    const asks = S(g.asks);
-    const obstacle = S(g.obstacle);
-    const step = S(g.step);
+    const asks = T(`span ${os.span} asks`, g.asks);
+    const obstacle = T(`span ${os.span} obstacle`, g.obstacle);
+    const step = T(`span ${os.span} step`, g.step);
     text(`span ${os.span} asks`, asks, ASKS_MAX_WORDS);
     text(`span ${os.span} obstacle`, obstacle, OBSTACLE_MAX_WORDS);
     text(`span ${os.span} step`, step, STEP_MAX_WORDS);
@@ -150,7 +209,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     spans.push({ span: os.span, asks, obstacle, step });
   }
 
-  let confirm: string | null = S(o.confirm) || null;
+  let confirm: string | null = T('confirm', o.confirm) || null;
   if (confirm && !oracle.confirm) {
     notes.push('confirm dropped: the Oracle gave none');
     confirm = null;
@@ -161,7 +220,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
       confirm = null;
     }
   }
-  let pattern: string | null = S(o.pattern) || null;
+  let pattern: string | null = T('pattern', o.pattern) || null;
   if (pattern && (!sections.includes('pattern') || !oracle.pattern)) pattern = null;
   else if (pattern) {
     const why = textProblem(pattern, ctx);
@@ -173,7 +232,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
   let ladder: LadderSteps | null = null;
   const ld = (o.ladder ?? {}) as Record<string, unknown>;
   if (sections.includes('ladder')) {
-    const steps = { best: S(ld.best), practical: S(ld.practical), drift: S(ld.drift), floor: S(ld.floor) };
+    const steps = { best: T('ladder best', ld.best), practical: T('ladder practical', ld.practical), drift: T('ladder drift', ld.drift), floor: T('ladder floor', ld.floor) };
     const bad = Object.entries(steps).find(([, v]) => !v || textProblem(v, ctx));
     if (bad) notes.push(`ladder dropped: ${bad[0]} ${bad[1] ? textProblem(bad[1], ctx) : 'empty'}`);
     else ladder = steps;
@@ -222,7 +281,9 @@ export function personalizerV3Call(
   extra = '',
 ): PersonalizerV3Call {
   const suffix = personalizerV3Suffix(ctx.asOf, cards, spans, input);
-  return { call, cards, system, model, prefix: renderOracleCards(cards), suffix: extra ? `${suffix}\n\n${extra}` : suffix, cacheOwner: { userId: ctx.userId, kundliId: ctx.kundliId } };
+  // the voice leads the stable prefix: the same bytes for every call of the same voice, then the Oracle cards of this call
+  const prefix = [personalizerVoicePrefix(input.profile.gender), renderOracleCards(cards)].filter(Boolean).join('\n\n');
+  return { call, cards, system, model, prefix, suffix: extra ? `${suffix}\n\n${extra}` : suffix, cacheOwner: { userId: ctx.userId, kundliId: ctx.kundliId } };
 }
 
 export function personalizerV3Calls(

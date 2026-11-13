@@ -83,6 +83,11 @@ class MemoryPlanStore implements PlanStore {
     row.open_parts = row.open_parts.filter((p) => p !== part);
     return true;
   }
+  breakdownFailing = false;
+  async usageKeysSince(u: string, periodStart: Date) {
+    if (this.breakdownFailing) throw new Error('db down');
+    return this.usage.filter((r) => r.user_id === u && r.status !== 'released' && r.period_start.getTime() === periodStart.getTime()).map((r) => r.key);
+  }
 }
 
 const setup = (nowFn: () => Date = () => NOW, env: NodeJS.ProcessEnv = ENV) => {
@@ -374,6 +379,58 @@ describe('staff, the flag and failures', () => {
     expect((await gate.reserve('u1')).ok).toBe(true);
     expect(await gate.getStatus('u1')).toBeNull();
     err.mockRestore();
+  });
+});
+
+describe('the usage breakdown on me.plan', () => {
+  it('counts this month by kind, leaving out what was given back', async () => {
+    const { gate } = setup();
+    await ask(gate);
+    await ask(gate, { key: 'clarify:r1' });
+    await ask(gate, { key: 'cardchat:c1' });
+    await gate.reserveBoardRefresh('u1', 'self', '2026-11-15');
+    await gate.chargeClock('u1', '2026-11-15', 'kp');
+    const failed = await gate.reserve('u1', { key: 'clarify:r2' });
+    if (!failed.ok) throw new Error('expected a ticket');
+    await gate.release(failed.ticket);
+    expect(await gate.getStatus('u1')).toMatchObject({ used: 5, breakdown: { chat: 2, cardchat: 1, board_refresh: 2, other: 0 } });
+  });
+
+  it('leaves out an earlier month', async () => {
+    let now = NOW;
+    const { gate } = setup(() => now);
+    await ask(gate);
+    now = new Date('2026-12-02T00:00:00Z');
+    await ask(gate, { key: 'clarify:dec' });
+    expect((await gate.getStatus('u1'))?.breakdown).toEqual({ chat: 1, cardchat: 0, board_refresh: 0, other: 0 });
+  });
+
+  it('is null for staff and for Unlimited', async () => {
+    const staff = setup();
+    staff.store.role = 'superadmin';
+    await ask(staff.gate);
+    expect((await staff.gate.getStatus('u1'))?.breakdown).toBeNull();
+    const { store, gate } = setup();
+    await markPaid(store, 'u1', { plan: 'unlimited', interval: 'month', paidUntil: null, now: NOW, env: ENV });
+    await ask(gate);
+    expect((await gate.getStatus('u1'))?.breakdown).toBeNull();
+  });
+
+  it('is null when it cannot be read, and the status still comes back', async () => {
+    const { store, gate } = setup();
+    await ask(gate);
+    store.breakdownFailing = true;
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await gate.getStatus('u1')).toMatchObject({ used: 1, limit: 20, breakdown: null });
+    err.mockRestore();
+  });
+
+  it('is not read on the check or reserve path', async () => {
+    const { store, gate } = setup();
+    const spy = vi.spyOn(store, 'usageKeysSince');
+    await gate.check('u1');
+    await ask(gate);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
