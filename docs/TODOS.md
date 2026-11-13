@@ -2663,6 +2663,12 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   readable as code). If the origin request policy does not forward `If-None-Match`, every GET returns 200 and the
   304 path never fires (no breakage, no saving). [deploy session, Sachin's AWS access] Done when the three policies are
   read, `If-None-Match` is forwarded and `ETag` passes through, and a repeat GET on staging returns 304.
+- **P2 · Web Self board redesign: not seen rendered, e2e not run, real IndexedDB path untested.** (`AIAstra_WEB`,
+  `feat/self-vclean`.) Vitest runs in jsdom, which has no IndexedDB, so `selfV3Cache` is tested through an in-memory
+  backend only (`fake-indexeddb` is not installed); the 1280 px one-row control layout, the banner heights and the touch
+  swipe carousels have not been viewed on a screen; `e2e/card-picker.spec.ts` was edited for the removed "Edit
+  sections" ids but not run. [web + Sachin's screenshots] Done when the staging build is opened at 1024, 1440 and 1920
+  px and on an iPad, every card and face is photographed into `docs/screenshots/`, and the e2e spec passes.
 - **P3 · Web: `caniuse-lite` is outdated** (vitest prints a Browserslist warning). [web] Done when
   `npx update-browserslist-db@latest` is run in its own commit (it edits `package-lock.json`).
 - **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
