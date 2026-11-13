@@ -1456,3 +1456,46 @@ export function getBoardMotionDefault(): boolean {
 export function getSelfV3RouteBudgetMs(): number {
   return parseClampedIntEnv('SELF_V3_ROUTE_BUDGET_MS', 2000, 200, 10000);
 }
+
+/**
+ * The card Personalizer writes in a register that fits the person's stated gender (prompts/personalizer/voice.md: woman,
+ * man, neutral). Env `PERSONALIZER_VOICE_BY_GENDER` (default on; 0 / false / off / no turns it off, and every card then
+ * uses the neutral voice). The voice changes flow, opening and tone only, never a fact, date, tone or verdict.
+ */
+export function isPersonalizerVoiceByGenderEnabled(): boolean {
+  return boolEnv('PERSONALIZER_VOICE_BY_GENDER', true);
+}
+
+/** The voice prompt's version: part of the card cache key and the prefix, so a new voice never serves an old card. */
+export const PERSONALIZER_VOICE_VERSION = 'v1';
+
+/** The voice version in force: env `PERSONALIZER_VOICE_VERSION` when set, else the constant above (`v1`). */
+export function getPersonalizerVoiceVersion(): string {
+  return process.env.PERSONALIZER_VOICE_VERSION?.trim() || PERSONALIZER_VOICE_VERSION;
+}
+
+/**
+ * Phrases the Personalizer may not write on a card (a reviewed words table, not astrology): a sentence that carries one
+ * is dropped like a chart term. Lowercase, matched whole-word and case-insensitive. Env `PERSONALIZER_STEREOTYPE_PHRASES`
+ * (comma list) replaces this default.
+ */
+export const DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES: readonly string[] = [
+  'as a woman',
+  'as a man',
+  'like a man',
+  'like a woman',
+  'ladies',
+  'girl',
+  'sweetie',
+  'honey',
+  'sweetheart',
+  'ladylike',
+  'manly',
+  'womanly',
+  'emotional woman',
+  'man up',
+];
+
+export function getPersonalizerStereotypePhrases(): string[] {
+  return listEnv('PERSONALIZER_STEREOTYPE_PHRASES', DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES).map((p) => p.toLowerCase());
+}

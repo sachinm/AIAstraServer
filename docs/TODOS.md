@@ -354,6 +354,24 @@ re-applied by it.
 - **`archishasinha` kundli rows are stale.** Its birth time was corrected 01:28 -> 13:28 on 2026-10-31 and the account
   deactivated (duplicate of `archisha`); its kundli, coordinates and 142 `kundli_data` rows were computed at the old
   time. Harmless while off. Done: rows deleted or rebuilt if the account is ever reactivated.
+- **Personalizer voice by gender (branch `feat/board-layout-vclean`, 2026-11-12): written without running anything.** The
+  voice (`prompts/personalizer/voice.md`, `personalizerVoicePrefix` in `src/reading/self/v3/personalizer.ts`, the stereotype
+  list in `personalizerValidate.ts`) and `tests/unit/reading/self/v3/voice.test.ts` were written with no `npm`, `tsc` or
+  `vitest` run (the worktree's `node_modules` was broken). `src/reading/prompts/generated.ts` was updated by hand; its
+  `PROMPT_VERSION` (`8a614959c7b2`) was computed with a PowerShell copy of `scripts/embed-prompts.mjs`'s hash, which
+  reproduced the old value `3771a563e8b6` before the change. Status: open. Done: `npx tsc --noEmit`, `npx vitest run
+  tests/unit/reading/self/v3 tests/unit/reading/prompts.test.ts tests/unit/reading/cards` and `node scripts/embed-prompts.mjs
+  --check` pass in CI or a working checkout.
+- **The voice is not measured.** Whether the three voices read differently and never stereotype is unproven: the first replay
+  on stored dossiers in the Lab (docs/reading-engine/65 §9; no paid call without a yes) must compare the same Oracle cards
+  written as woman, man and neutral, and count `STEREOTYPE_PHRASES` hits. Owner: Sachin's yes for the replay. Done: the
+  replay is in `docs/reading-engine/`.
+- **Voice only on the v3 card path.** The v2 Personalizer (`personalizer/self.md`) and the Now card (`cards/now.md`) still
+  write in one register for every gender. Done: the same `voice.md` is wired there, or a decision that they stay as they are.
+- **A stereotype phrase withholds the whole v3 card.** `textProblem` flags the phrase, and in the v3 face a problem in
+  the line or any span withholds the card (the repair pass re-asks once with the reason). A word such as `girl` may also
+  appear in a legitimate sentence about a person's daughter. Done: decide whether the face drops only the sentence, and
+  review the default list (`DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES` in `src/config/env.ts`) after the replay.
 
 ## P3: nice to have
 
