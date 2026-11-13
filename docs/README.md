@@ -1,5 +1,7 @@
 # AdAstra — Internal Developer Documentation
 
+> [Fundraising, commercial strategy and consumer release](fundraising/README.md)
+
 Internal reference for developers working on the AdAstra astrology/kundli platform. Covers repo layout, modules, processes, UI, business logic, third-party integrations, and security (auth, JWT, encryption, DB).
 
 ---
