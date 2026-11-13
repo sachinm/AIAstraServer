@@ -1350,3 +1350,109 @@ export function getDashaDeepSweepMax(): number {
 export function getDashaDeepGlobalMax(): number {
   return parseClampedIntEnv('DASHA_DEEP_GLOBAL_MAX', 1, 1, 10);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Board card faces and tools (Self v3 redesign): which values a card's options may take, and the defaults. Each list
+// env is comma-separated and kept to the known values (unknown entries dropped, empty → the full list); a default that
+// is not in its list falls back to the list's first value. Nothing here is astrological.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const CARD_FACE_IDS = ['read', 'light', 'breakdown', 'research'] as const;
+export type CardFace = (typeof CARD_FACE_IDS)[number];
+export const CARD_TOOL_IDS = ['table', 'calendar', 'dates', 'timeframe', 'plan', 'info'] as const;
+export type CardTool = (typeof CARD_TOOL_IDS)[number];
+export const CARD_GROUP_BY_IDS = ['weeks', 'months', 'quarters', 'years', 'decades'] as const;
+export type CardGroupBy = (typeof CARD_GROUP_BY_IDS)[number];
+export const CARD_GROUPS_AS_IDS = ['swipe', 'accordion'] as const;
+export type CardGroupsAs = (typeof CARD_GROUPS_AS_IDS)[number];
+export const CARD_START_IDS = ['short', 'full'] as const;
+export type CardStart = (typeof CARD_START_IDS)[number];
+
+function knownListEnv<T extends string>(key: string, known: readonly T[]): T[] {
+  const raw = process.env[key]?.trim();
+  if (!raw) return [...known];
+  const list = raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is T => (known as readonly string[]).includes(s));
+  const unique = known.filter((k) => list.includes(k));
+  return unique.length ? unique : [...known];
+}
+
+function knownDefaultEnv<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const raw = process.env[key]?.trim().toLowerCase();
+  if (raw && (allowed as readonly string[]).includes(raw)) return raw as T;
+  return allowed.includes(fallback) ? fallback : allowed[0]!;
+}
+
+/** Faces a card may show. Env `CARD_FACES` (default read,light,breakdown,research). */
+export function getCardFaces(): CardFace[] {
+  return knownListEnv('CARD_FACES', CARD_FACE_IDS);
+}
+/** Env `CARD_FACE` (default `read`). */
+export function getCardFaceDefault(): CardFace {
+  return knownDefaultEnv('CARD_FACE', getCardFaces(), 'read');
+}
+
+/** Tools a card may switch on. Env `CARD_TOOLS` (default table,calendar,dates,timeframe,plan,info). */
+export function getCardTools(): CardTool[] {
+  return knownListEnv('CARD_TOOLS', CARD_TOOL_IDS);
+}
+/** Tools on by default, in `CARD_TOOLS` order. Env `CARD_TOOLS_DEFAULT` (comma-separated; default none; `none` = none). */
+export function getCardToolsDefault(): CardTool[] {
+  const raw = process.env.CARD_TOOLS_DEFAULT?.trim().toLowerCase();
+  if (!raw || raw === 'none') return [];
+  const asked = raw.split(',').map((s) => s.trim());
+  return getCardTools().filter((t) => asked.includes(t));
+}
+
+/** How a card's periods are grouped. Env `CARD_GROUP_BY_VALUES` (default weeks,months,quarters,years,decades). */
+export function getCardGroupByValues(): CardGroupBy[] {
+  return knownListEnv('CARD_GROUP_BY_VALUES', CARD_GROUP_BY_IDS);
+}
+/** Env `CARD_GROUP_BY` (default `quarters`). */
+export function getCardGroupByDefault(): CardGroupBy {
+  return knownDefaultEnv('CARD_GROUP_BY', getCardGroupByValues(), 'quarters');
+}
+
+/** How the groups are laid out. Env `CARD_GROUPS_AS_VALUES` (default swipe,accordion). */
+export function getCardGroupsAsValues(): CardGroupsAs[] {
+  return knownListEnv('CARD_GROUPS_AS_VALUES', CARD_GROUPS_AS_IDS);
+}
+/** Env `CARD_GROUPS_AS` (default `swipe`). */
+export function getCardGroupsAsDefault(): CardGroupsAs {
+  return knownDefaultEnv('CARD_GROUPS_AS', getCardGroupsAsValues(), 'swipe');
+}
+
+/** Whether a card opens short or in full. Env `CARD_START_VALUES` (default short,full). */
+export function getCardStartValues(): CardStart[] {
+  return knownListEnv('CARD_START_VALUES', CARD_START_IDS);
+}
+/** Env `CARD_START` (default `short`). */
+export function getCardStartDefault(): CardStart {
+  return knownDefaultEnv('CARD_START', getCardStartValues(), 'short');
+}
+
+function boolEnv(key: string, fallback: boolean): boolean {
+  const raw = process.env[key]?.trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes') return true;
+  if (raw === '0' || raw === 'false' || raw === 'off' || raw === 'no') return false;
+  return fallback;
+}
+
+/** Board setting: ask before an action that costs a question (AGENTS.md rule 7). Env `BOARD_CONFIRM_DEFAULT` (default on). */
+export function getBoardConfirmDefault(): boolean {
+  return boolEnv('BOARD_CONFIRM_DEFAULT', true);
+}
+/** Board setting: animations on. Env `BOARD_MOTION_DEFAULT` (default on). */
+export function getBoardMotionDefault(): boolean {
+  return boolEnv('BOARD_MOTION_DEFAULT', true);
+}
+
+/**
+ * Hard cap on the server time of the Self v3 board routes (GET /api/self/v3, PUT /api/self/v3/layout): past it the
+ * route answers 503 `{ error: 'timeout' }` instead of hanging. Env `SELF_V3_ROUTE_BUDGET_MS` (200–10000; default 2000).
+ */
+export function getSelfV3RouteBudgetMs(): number {
+  return parseClampedIntEnv('SELF_V3_ROUTE_BUDGET_MS', 2000, 200, 10000);
+}

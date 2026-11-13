@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BOARD_CARDS, catalogue } from '../../../../src/reading/boards/catalogue.js';
-import { OPTION_NOTE } from '../../../../src/reading/boards/cardOptions.js';
+import { OPTION_NOTE, defaultCardOptions } from '../../../../src/reading/boards/cardOptions.js';
 import { registerBoardCardsRoutes } from '../../../../src/routes/boardCardsRoutes.js';
 import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 
@@ -78,9 +78,17 @@ describe('layout', () => {
     expect(put.status).toBe(200);
     const get = await (await call('GET', '/api/board/love/v3/layout', 'u1')).json();
     expect(get).toMatchObject({ chosen: true, cards: ['love_where', 'love_meet'], options: { love_meet: { view: 'now', plan: 'without' } } });
-    expect(get.effective.love_meet.options).toEqual({ length: 'usual', view: 'now', words: 'plain', plan: 'without' });
+    expect(get.effective.love_meet.options).toEqual({ ...defaultCardOptions(), length: 'usual', view: 'now', words: 'plain', plan: 'without' });
     expect(get.effective.love_meet.notes).toEqual([OPTION_NOTE.noPlanLines]);
     expect(get.effective.love_where.notes).toEqual([]);
+  });
+  it('the redesign keys work here too, and a boardOptions field (Self only for now) is ignored', async () => {
+    const put = await call('PUT', '/api/board/love/v3/layout', 'u1', { cards: ['love_where', 'love_meet'], options: { love_meet: { face: 'light', tools: ['dates'] } }, boardOptions: { motion: false } });
+    expect(put.status).toBe(200);
+    const get = await (await call('GET', '/api/board/love/v3/layout', 'u1')).json();
+    expect(get.options).toEqual({ love_meet: { face: 'light', tools: ['dates'] } });
+    expect(get.effective.love_meet.options).toMatchObject({ face: 'light', tools: ['dates'] });
+    expect([...layouts.values()][0].board_options).toBeUndefined();
   });
   it('a PUT without options keeps the stored ones', async () => {
     await call('PUT', '/api/board/work/v3/layout', 'u1', { cards: ['work_where', 'work_money'], options: { work_money: { length: 'glance' } } });
