@@ -39,7 +39,7 @@ import type { ReadingClockSet } from '../clock.js';
 import { loadPressureInventory, loadReadingClockSet, type PressureInventoryDetail } from '../sub/pressure.js';
 import { readLayout } from './layout.js';
 import { ORACLE_V3_CALLS, runOracleV3, SELF_V3_ORACLE_PROMPT } from './oracle.js';
-import { personalizerV3Call, personalizerV3Calls, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
+import { personalizerV3Call, personalizerV3Calls, personalizerVoiceToken, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
 import { cardContent, SELF_V3_TECHNIQUE, type StoredSelfV3 } from './store.js';
 import type { SelfCardId, SelfSectionId, SelfV3CardContent, YearFrameV3 } from './types.js';
 import { buildYearFrameV3, frameDates, FRAME_MAX_OTHER_CLOCKS, loadStoredInventory, otherClocks, renderYearFrame } from './yearFrame.js';
@@ -133,6 +133,7 @@ export function v3StoreKey(ctx: SelfBuildContext, frame: YearFrameV3, oraclePref
     `portrait=${portraitHash}`,
     `sections=${shortHash(canonicalJson(sections))}`,
     `p=${promptHash(SELF_V3_ORACLE_PROMPT)}.${promptHash(SELF_V3_PERSONALIZER_PROMPT)}`,
+    `voice=${personalizerVoiceToken(ctx.sub.profile?.gender)}`,
   ].join('|') + '|';
 }
 

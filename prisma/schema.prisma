@@ -134,6 +134,8 @@ model Kundli {
   content            UserGeneratedContent[]
 
   @@index([user_id], map: "idx_kundlis_user_id")
+  /// the person's latest chart (findFirst where user_id orderBy created_at desc) without a sort
+  @@index([user_id, created_at(sort: Desc)], map: "idx_kundlis_user_created")
   @@index([digest_status], map: "idx_kundlis_digest_status")
   areaBuilds         AreaBuild[]
   techniqueOutputs   TechniqueOutput[]
@@ -1349,6 +1351,8 @@ model TechniqueOutput {
   kundli         Kundli    @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "technique_outputs_kundli_fkey")
 
   @@index([kundli_id, technique_id], map: "idx_technique_outputs_kundli_technique")
+  /// newest-first walk for the board reads (findFirst ... orderBy created_at desc); stops at the first match
+  @@index([kundli_id, technique_id, created_at(sort: Desc)], map: "idx_technique_outputs_kundli_technique_created")
   @@index([kundli_id, hit_count, last_hit_at, created_at], map: "idx_technique_outputs_recycle")
   @@index([valid_to], map: "idx_technique_outputs_valid_to")
   @@map("technique_outputs")
@@ -1565,6 +1569,8 @@ model BoardLayout {
   sections   Json     @default("{}")
   /// per card id, how it reads (length, view, words, plan), when the person changed it (docs/reading-engine/71)
   options    Json     @default("{}")
+  /// the board-wide settings (card option keys plus confirm and motion), when the person changed them
+  board_options Json  @default("{}") @map("board_options")
   created_at DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   kundli     Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "board_layout_kundli_fkey")

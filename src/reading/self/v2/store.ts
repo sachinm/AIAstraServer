@@ -69,9 +69,21 @@ export interface SelfV2Latest {
   stale?: Partial<Record<SelfV2AreaId, StaleArea>> | null;
   /** the build's Oracle quality (null on a row stored before 2026-11-09) */
   quality?: SelfV2Quality | null;
+  /**
+   * The Oracle row this read already holds, in the shape `latestStoredOutput` returns, so the board's refresh dates
+   * (`selfBoardDates`) need no second read of it. Null when no Oracle row is stored for the clock.
+   */
+  oracleRow?: HeldOracleRow | null;
 }
 
-type Row = { output: unknown; created_at?: Date | string | null };
+/** a stored `self.v2.oracle` row as the board read it: its output, when it was made and the end of its window */
+export interface HeldOracleRow {
+  value: { result?: SelfV2OracleResult };
+  madeAt: Date;
+  validTo: Date | null;
+}
+
+type Row = { output: unknown; created_at?: Date | string | null; valid_from?: Date | string | null; valid_to?: Date | string | null };
 type StorePrisma = {
   techniqueOutput?: { findFirst?: (q: { where: Record<string, unknown>; orderBy: Record<string, 'asc' | 'desc'> }) => Promise<Row | null> };
   areaBuild?: {
@@ -86,6 +98,17 @@ async function latestRow(prisma: PrismaClient, kundliId: string, technique: stri
   if (!p.techniqueOutput?.findFirst) return null;
   const key = clock ? { startsWith: keyPrefix, contains: `|clock=${clock}|` } : { startsWith: keyPrefix };
   return p.techniqueOutput.findFirst({ where: { kundli_id: kundliId, technique_id: technique, digest_version: key }, orderBy: { created_at: 'desc' } });
+}
+
+/** the row as `latestStoredOutput` would give it (made-at is `created_at`, else `valid_from`); null without either date */
+function heldOracleRow(row: Row | null): HeldOracleRow | null {
+  const made = row?.created_at ?? row?.valid_from;
+  if (!row || !made) return null;
+  return {
+    value: (row.output ?? {}) as HeldOracleRow['value'],
+    madeAt: made instanceof Date ? made : new Date(made),
+    validTo: row.valid_to ? (row.valid_to instanceof Date ? row.valid_to : new Date(row.valid_to)) : null,
+  };
 }
 
 const iso = (d: Date | string | null | undefined): string | null => (d ? (d instanceof Date ? d : new Date(d)).toISOString() : null);
@@ -115,6 +138,7 @@ export async function readSelfV2Latest(prisma: PrismaClient, kundliId: string, c
       frame: storedCards?.frame ?? null,
       stale: storedCards?.result?.stale ?? null,
       quality: storedCards?.result?.quality ?? null,
+      oracleRow: heldOracleRow(oracleRow),
     };
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'self v2 store read failed', error: (e as Error).message?.slice(0, 200) }));

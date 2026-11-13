@@ -7,7 +7,7 @@
  *
  * Nothing here is astrological arithmetic. Every boundary, tone and evidence key is a stored engine value carried by id.
  */
-import type { BoardCardOptions, CardOptions } from '../../boards/cardOptions.js';
+import type { BoardCardOptions, BoardOptions, CardOptions } from '../../boards/cardOptions.js';
 import type { AreaCertainty } from '../areaDoc.js';
 import type {
   CardStatus,
@@ -135,10 +135,16 @@ export interface SelfBoardLayout {
   sections: Partial<Record<SelfCardId, SelfSectionId[]>>;
   /** per card, how it reads (doc 71 §4.3), only the keys the person changed; absent: every card on its defaults */
   options?: BoardCardOptions;
+  /** the board-wide settings, only the keys the person changed; absent: unchanged by this write */
+  boardOptions?: Partial<BoardOptions>;
 }
 
 export interface SelfBoardLayoutView extends SelfBoardLayout {
   options: BoardCardOptions;
+  /** the board-wide settings the person changed (always an object; `{}` = every default) */
+  boardOptions: Partial<BoardOptions>;
+  /** the defaults in force (env-driven), so the page never hardcodes them */
+  boardDefaults: BoardOptions;
   /** false until the person has pressed Done once: the page opens the picker */
   chosen: boolean;
   updatedAt: string | null;
@@ -328,6 +334,11 @@ export interface RailItem {
   current: boolean;
   /** the SpanReading.span this bar opens, when the card is v3 */
   span: string | null;
+  /**
+   * Phase A: the stored card paragraphs that name this period's start or end date (each paragraph goes to one period
+   * at most); null when none does, and always null in Phase B (the page reads the span).
+   */
+  text: string[] | null;
 }
 
 export interface SelfV3CardView {
@@ -350,6 +361,8 @@ export interface SelfV3CardView {
   options?: CardOptions;
   optionNotes?: string[];
   rail: RailItem[];
+  /** Phase A: the card's paragraphs that belong to no period (shown whatever period is picked); [] in Phase B */
+  standing: string[];
   /** Phase B content; null while the card is filled from the v2 build */
   v3: SelfV3CardContent | null;
   /** Phase A content: the stored v2 card and its Chart details (engine names redacted) */

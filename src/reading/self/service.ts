@@ -171,13 +171,29 @@ export type SelfReadingResult =
   | { status: 'preparing' }
   | { status: 'ok'; built_at: string; cached: boolean; reading: SelfReading };
 
-export async function defaultSystemsPresent(prisma: PrismaClient, kundliId: string): Promise<SystemPresence[]> {
-  const [rows, appRow] = await Promise.all([
+/** the engine's stored `dasha.applicable` row (payload only); null or undefined when none is stored or readable */
+export type ApplicableRow = { payload?: unknown } | null | undefined;
+
+/** One read of `dasha.applicable`; never rejects. */
+export function readApplicableRow(prisma: PrismaClient, kundliId: string): Promise<ApplicableRow> {
+  return Promise.resolve(
+    prisma.kundliData?.findFirst?.({ where: { kundli_id: kundliId, data_type: 'dasha.applicable' }, select: { payload: true } }),
+  ).catch(() => null);
+}
+
+/**
+ * The systems with a stored activation and their family. `appRow`: the `dasha.applicable` row a caller already holds (or
+ * is reading), so one request reads it once; without it the row is read here.
+ */
+export async function defaultSystemsPresent(prisma: PrismaClient, kundliId: string, appRow?: ApplicableRow | Promise<ApplicableRow>): Promise<SystemPresence[]> {
+  const [rows, held] = await Promise.all([
     prisma.kundliActivation.groupBy({ by: ['system', 'family'], where: { kundli_id: kundliId, level: 1 } }),
-    prisma.kundliData
-      ?.findFirst?.({ where: { kundli_id: kundliId, data_type: 'dasha.applicable' }, select: { payload: true } })
-      .catch(() => null),
+    appRow === undefined ? readApplicableRow(prisma, kundliId) : appRow,
   ]);
+  return systemsWithFamily(rows, held);
+}
+
+function systemsWithFamily(rows: Array<{ system: string; family: string }>, appRow: ApplicableRow): SystemPresence[] {
   const applicable = appRow?.payload !== undefined ? applicableConditionalSystems(appRow.payload) : null;
   return rows.map((r: { system: string; family: string }) => ({
     system: r.system,
