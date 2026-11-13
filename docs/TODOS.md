@@ -2615,8 +2615,24 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   a card's own options on PUT (doc 71 §4.4 item 3); board options only change `cards[].options` (in force) and the
   shaping (`view`, `plan`). [web + server] Done when the page derives visible sections from `cards[].options`, or PUT
   derives them from the board options too.
-- **P3 · GET /api/self/v3/catalogue runs the whole board read** (and may queue a build) to list tiles. [server] Done
-  when it reads the registry, the layout and the card states only.
+- **P3 · The catalogue picker no longer shows a first line, and a card read only in a Phase B (`self.v3.cards`) row shows
+  `not_read`.** GET /api/self/v3/catalogue now reads the chart id, the registry, `deps.suggest` and today's card-state
+  row only (no board read, no build queued), so `firstLine` is always null and `state` comes from the card-state row
+  (`done` shows as `ready`, `queued`/`reading`/`failed` as stored); a card whose reading lives only in the legacy
+  `self.v3.cards` row, or in a state row from an earlier day, reads `not_read` there. Found fixing the route
+  (`getSelfV3Catalogue`, `src/reading/self/v3/service.ts`). [Sachin: product decision; then server + web] Done when it
+  is decided whether the picker needs the first line and legacy-ready states; if so, a cheap stored read of the
+  newest card rows (not the board read) provides them, with a test; if not, the web stops using `firstLine` from the
+  catalogue.
+- **P3 · "a girl of seven" is still refused when the person states no gender.** With no stated gender,
+  `GENDERED_WORDS` (`src/reading/self/v2/personalizerValidate.ts`, `textProblem`, used by `checkPersonalCard` in
+  `src/reading/self/v3/personalizer.ts`) lists `girl` (also `boy`, `man`, `woman`, `he`, `she`, `husband`, `wife`...)
+  as a gendered word and `textProblem` returns a problem for the whole text, so a card with "your daughter, a girl of
+  seven" is rejected (not dropped sentence by sentence) for a person with no stated gender. The stereotype list no
+  longer holds `girl` (`ce81707`), and a stereotype sentence is dropped on its own, but the gendered-word check was not
+  changed. Found while testing the stereotype fix on 2026-11-12. [server; Sachin: decide whether words naming another
+  person (daughter, girl, boy, husband) count as gendering the reader, and whether a gendered sentence drops alone]
+  Done when the rule is decided and a test shows "a girl of seven" kept for a person with no stated gender.
 ## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
 
 Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B) and the build sessions' side findings.

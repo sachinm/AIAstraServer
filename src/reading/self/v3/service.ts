@@ -14,7 +14,7 @@ import { readCardReadings } from '../../cards/store.js';
 import { CARD_STUCK_MS } from '../../cards/types.js';
 import { getSelfV2, writeConfirm, type SelfV2Deps } from '../v2api/service.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../buildEvent.js';
-import { cardDef, isCardOffered } from './cards.js';
+import { cardDef, isCardOffered, SELF_CARDS } from './cards.js';
 import { shapeSelfCard } from '../../boards/cardOptions.js';
 import { emptyLayout, readLayout, validateLayout, writeLayout } from './layout.js';
 import { buildSelfV3Response } from './response.js';
@@ -78,21 +78,35 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   return { body, queued: v2.queued };
 }
 
-/** GET /api/self/v3/catalogue: the picker's tiles without card bodies. */
+/**
+ * GET /api/self/v3/catalogue: the picker's tiles without card bodies. It reads the chart id, the registry, the suggested
+ * set and today's card states only: no board read (no stored build, clock, refresh or layout read) and no build queued.
+ * So `firstLine` is null, and a card whose reading is stored only in a Phase B row shows `not_read` here.
+ */
 export async function getSelfV3Catalogue(deps: SelfV3Deps, userId: string): Promise<SelfV3CatalogueEntry[] | null> {
-  const r = await getSelfV3(deps, userId);
-  if (r.body.status === 'no_kundli') return null;
-  return r.body.cards.map((c) => ({
-    id: c.id,
-    group: c.group,
-    title: c.title,
-    description: c.description,
-    suggested: c.suggested,
-    available: c.available,
-    unavailableReason: c.unavailableReason,
-    firstLine: c.firstLine,
-    state: c.state,
-  }));
+  const kundliId = await latestKundliId(deps.prisma, userId);
+  if (!kundliId) return null;
+  const now = (deps.now ?? (() => new Date()))();
+  const cardsRead = deps.cardsRead ?? isCardsReadEnabled();
+  const [suggested, doc] = await Promise.all([
+    deps.suggest ? deps.suggest(deps.prisma, userId, kundliId).catch(() => null) : Promise.resolve(null),
+    cardsRead ? readCardsState(deps.prisma, kundliId, now) : Promise.resolve(null),
+  ]);
+  const suggestedSet = suggested ? new Set<SelfCardId>(suggested) : null;
+  return SELF_CARDS.map((def) => {
+    const available = isCardOffered(def, cardsRead);
+    return {
+      id: def.id,
+      group: def.group,
+      title: def.title,
+      description: def.description,
+      suggested: available && (suggestedSet ? suggestedSet.has(def.id) : def.suggested),
+      available,
+      unavailableReason: available ? null : 'Coming soon',
+      firstLine: null,
+      state: doc ? cardStateOf(doc, def.id, doc.cards[def.id]?.state === 'done', now) : 'not_read',
+    };
+  });
 }
 
 export type PutLayoutResult =
