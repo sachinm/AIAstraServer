@@ -9,6 +9,7 @@ import { latestStoredOutput } from '../../techniques/outputStore.js';
 import { latestReadyBuild, refreshDue, storedValidity, type ReadingValidity } from '../area/validity.js';
 import type { SelfOracleResult } from './oracle.js';
 import type { ReadingBoardId } from './types.js';
+import type { HeldOracleRow } from './v2/store.js';
 import type { SelfV2OracleResult } from './v2types.js';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -41,8 +42,9 @@ export async function synthesisValidity(prisma: PrismaClient, kundliId: string, 
  * The Self v2 reading's dates (doc 66): the newest stored v2 Oracle document (`self.v2.oracle`, stored only when ok) and
  * its own `doc.validUntil`, else the end of its stored window. Null when no v2 reading has been made.
  */
-export async function v2SynthesisValidity(prisma: PrismaClient, kundliId: string, today: string): Promise<BoardValidity | null> {
-  const last = await latestStoredOutput<{ result?: SelfV2OracleResult }>(prisma, { techniqueId: 'self.v2.oracle', kundliId });
+export async function v2SynthesisValidity(prisma: PrismaClient, kundliId: string, today: string, held?: HeldOracleRow | null): Promise<BoardValidity | null> {
+  // `held`: the Oracle row the board read already has (GET /api/self/v2 reads it for the board clock); none: read it here
+  const last = held ?? (await latestStoredOutput<{ result?: SelfV2OracleResult }>(prisma, { techniqueId: 'self.v2.oracle', kundliId }));
   const r = last?.value?.result;
   if (!last || r?.status !== 'ok' || !r.output) return null;
   const valid_until = lastDay(r.output.doc?.validUntil, last.validTo);
@@ -56,8 +58,8 @@ export async function v2SynthesisValidity(prisma: PrismaClient, kundliId: string
  * Oracle's dates come first (no v1 synthesis is made then); a kundli with no v2 reading yet falls back to the v1 rule. `area` is the area reading's dates when the caller already has
  * them; without it the newest ready `self` area build is read (nothing is built). Null when neither exists.
  */
-export async function selfBoardDates(prisma: PrismaClient, kundliId: string, today: string, area?: ReadingValidity | null): Promise<BoardValidity | null> {
-  const made = (selfV2OwnsBoard() ? await v2SynthesisValidity(prisma, kundliId, today) : null) ?? (await synthesisValidity(prisma, kundliId, 'self', today));
+export async function selfBoardDates(prisma: PrismaClient, kundliId: string, today: string, area?: ReadingValidity | null, held?: HeldOracleRow | null): Promise<BoardValidity | null> {
+  const made = (selfV2OwnsBoard() ? await v2SynthesisValidity(prisma, kundliId, today, held) : null) ?? (await synthesisValidity(prisma, kundliId, 'self', today));
   if (made) return made;
   let v: ReadingValidity | null = area ? { made_at: area.made_at, valid_until: area.valid_until } : null;
   if (!v) {

@@ -12,9 +12,10 @@ import { queueSelfReadingBuild, readBuildMarker, readBuildMarkerDetail, type Bui
 import { buildView, type QueueMarkerView, type SelfV2BuildView, type V2MarkerView } from '../v2/progress.js';
 import { readSelfV2Marker } from '../v2/store.js';
 import { parseApplicability, resolveClockV2, type ApplicabilityRow, type ClockResolutionV2, type SystemPresence } from '../clock.js';
-import { defaultSystemsPresent } from '../service.js';
+import { defaultSystemsPresent, readApplicableRow, type ApplicableRow } from '../service.js';
 import type { Mood, ProfilePack, SelfV2AreaId, SelfV2RefreshView, SelfV2Response } from '../v2types.js';
-import { selfBoardDates, type BoardValidity } from '../synthesisValidity.js';
+import { selfBoardDates, selfV2OwnsBoard, type BoardValidity } from '../synthesisValidity.js';
+import type { HeldOracleRow } from '../v2/store.js';
 import { buildSelfV2Response, noKundliResponse } from './response.js';
 import { defaultReadSelfV2Latest, type ReadSelfV2Latest } from './storeContract.js';
 
@@ -36,7 +37,7 @@ export interface SelfV2Deps {
   /** the legacy panels' code lines per area, when the integrator has them (optional) */
   floors?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<Partial<Record<SelfV2AreaId, string[]>>>;
   /** the board's refresh dates (default: selfBoardDates, the rule the v1 board and POST /api/boards/self/refresh use) */
-  refreshDates?: (prisma: PrismaClient, kundliId: string, today: string) => Promise<BoardValidity | null>;
+  refreshDates?: (prisma: PrismaClient, kundliId: string, today: string, held?: HeldOracleRow | null) => Promise<BoardValidity | null>;
   /** today's You build marker (default: readBuildMarker, the `self.reading` row the build event marks) */
   buildMarker?: (prisma: PrismaClient, kundliId: string, now: Date) => Promise<BuildMarkerState>;
   /** the two markers the `build` progress view is made from (docs/loading-overlay/05); defaults read area_builds */
@@ -49,9 +50,17 @@ export interface SelfV2Deps {
  * `failed` come from today's You build marker: a fresh reading that failed is shown at once, not after the poll times out.
  * A build marked stuck (dead) is neither; the page's own timeout covers it.
  */
-async function refreshView(deps: SelfV2Deps, kundliId: string, today: string, now: Date, sharedMarker?: Promise<BuildMarkerState>): Promise<SelfV2RefreshView> {
+async function refreshView(
+  deps: SelfV2Deps,
+  kundliId: string,
+  today: string,
+  now: Date,
+  sharedMarker?: Promise<BuildMarkerState>,
+  held?: HeldOracleRow | null,
+): Promise<SelfV2RefreshView> {
+  const dates = deps.refreshDates ?? ((p, k, t, h) => selfBoardDates(p, k, t, null, h));
   const [d, marker] = await Promise.all([
-    (deps.refreshDates ?? selfBoardDates)(deps.prisma, kundliId, today).catch((e) => {
+    dates(deps.prisma, kundliId, today, held).catch((e) => {
       console.warn('[self:v2] refresh dates failed:', (e as Error).message);
       return null;
     }),
@@ -64,11 +73,12 @@ async function refreshView(deps: SelfV2Deps, kundliId: string, today: string, no
 
 const dayOf = (d: Date): string => d.toISOString().slice(0, 10);
 
-export async function defaultLoadApplicability(prisma: PrismaClient, kundliId: string): Promise<ApplicabilityRow[] | null> {
-  const row = await prisma.kundliData
-    ?.findFirst?.({ where: { kundli_id: kundliId, data_type: 'dasha.applicable' }, select: { payload: true } })
-    .catch(() => null);
-  return row?.payload !== undefined && row?.payload !== null ? parseApplicability(row.payload) : null;
+const applicabilityOf = (row: ApplicableRow): ApplicabilityRow[] | null =>
+  row?.payload !== undefined && row?.payload !== null ? parseApplicability(row.payload) : null;
+
+/** `row`: the `dasha.applicable` row a caller already holds (or is reading); without it the row is read here */
+export async function defaultLoadApplicability(prisma: PrismaClient, kundliId: string, row?: ApplicableRow | Promise<ApplicableRow>): Promise<ApplicabilityRow[] | null> {
+  return applicabilityOf(row === undefined ? await readApplicableRow(prisma, kundliId) : await row);
 }
 
 const defaultQueueBuild = (prisma: PrismaClient, userId: string, kundliId: string, clock?: string): Promise<QueueOutcome> =>
@@ -83,9 +93,11 @@ async function latestKundli(prisma: PrismaClient, userId: string) {
 }
 
 async function clockFor(deps: SelfV2Deps, kundliId: string, preferred: string | null): Promise<ClockResolutionV2> {
+  // the two default readers both want the engine's `dasha.applicable` row: it is read once and handed to both
+  const row = !deps.systemsPresent || !deps.loadApplicability ? readApplicableRow(deps.prisma, kundliId) : undefined;
   const [present, applicability] = await Promise.all([
-    (deps.systemsPresent ?? defaultSystemsPresent)(deps.prisma, kundliId),
-    (deps.loadApplicability ?? defaultLoadApplicability)(deps.prisma, kundliId),
+    deps.systemsPresent ? deps.systemsPresent(deps.prisma, kundliId) : defaultSystemsPresent(deps.prisma, kundliId, row),
+    deps.loadApplicability ? deps.loadApplicability(deps.prisma, kundliId) : defaultLoadApplicability(deps.prisma, kundliId, row),
   ]);
   return resolveClockV2(preferred, present, applicability);
 }
@@ -106,11 +118,13 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   const sharedMarker = !deps.buildMarker && !deps.progressMarkers ? markersP.then((m) => (m ? m.queue.state : readBuildMarker(prisma, kundli.id, 'self', now))) : undefined;
   const profileP = (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf);
   const floorsP = deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({});
-  const refreshP = refreshView(deps, kundli.id, asOf, now, sharedMarker);
+  // With the v2 build owning the board, the refresh dates come from the Oracle row the board read below already holds, so
+  // the block waits for that read and asks the database for nothing more; otherwise it reads its own rows now.
+  const refreshP = selfV2OwnsBoard() ? null : refreshView(deps, kundli.id, asOf, now, sharedMarker);
   // a rejection is read at the await below; until then it must not be reported as unhandled
   profileP.catch(() => undefined);
   const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
-  const [latest, profile, floors, refresh, markers] = await Promise.all([
+  const [latest, profile, floors, early, markers] = await Promise.all([
     // only the board clock's build: after a switch the old clock's cards are not served as the new one's
     (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
     profileP,
@@ -118,6 +132,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     refreshP,
     markersP,
   ]);
+  const refresh = early ?? (await refreshView(deps, kundli.id, asOf, now, sharedMarker, latest.oracleRow));
 
   const nothingStored = !latest.cards && !latest.oracle;
   let status: SelfV2Response['status'] = 'ok';

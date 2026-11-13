@@ -2615,10 +2615,6 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   a card's own options on PUT (doc 71 §4.4 item 3); board options only change `cards[].options` (in force) and the
   shaping (`view`, `plan`). [web + server] Done when the page derives visible sections from `cards[].options`, or PUT
   derives them from the board options too.
-- **P3 · GET /api/self/v3 reads `dasha.applicable` twice** (`defaultSystemsPresent` and `defaultLoadApplicability`, in
-  parallel), and `selfBoardDates` re-reads the newest `self.v2.oracle` row that `readSelfV2Latest` already read, then can
-  chain two more reads when no v2 build exists. Parallel, so ≈1–3 ms of database time, not latency. [server] Done when
-  the clock and refresh blocks take the rows the board read already holds.
 - **P3 · GET /api/self/v3/catalogue runs the whole board read** (and may queue a build) to list tiles. [server] Done
   when it reads the registry, the layout and the card states only.
 ## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
