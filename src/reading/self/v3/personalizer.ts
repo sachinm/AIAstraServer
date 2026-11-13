@@ -15,7 +15,7 @@ import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
 import { markAgentUsed } from '../v2/cache.js';
 import { timingOf } from '../v2/oracle.js';
 import { portraitLines } from '../v2/portrait.js';
-import { bodyAdviceWords, roleWordsFor, textProblem, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
+import { bodyAdviceWords, dropStereotypeSentences, roleWordsFor, textProblem, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
 import { seniorStageWordsFor } from '../v2/profileFit.js';
 import { claimKey, profileLines, promptHash, promptText } from '../v2/slices.js';
 import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, StatedGender, ValidationIssue } from '../v2types.js';
@@ -183,7 +183,13 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     const why = textProblem(t, ctx);
     if (why) problems.push(`${label}: ${why}`);
   };
-  const line = S(o.line);
+  // a sentence with a stereotype phrase is dropped on its own; the card stands unless its field is left empty
+  const T = (label: string, v: unknown): string => {
+    const r = dropStereotypeSentences(S(v));
+    if (r.dropped.length) notes.push(`${label}: ${r.dropped.length} sentence(s) dropped (stereotype phrase)`);
+    return r.text;
+  };
+  const line = T('line', o.line);
   text('line', line, LINE_MAX_WORDS);
   const got = Array.isArray(o.spans) ? (o.spans as Array<Record<string, unknown>>) : [];
   const spans: PersonalCardV3['spans'] = [];
@@ -193,9 +199,9 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
       problems.push(`span ${os.span}: missing`);
       continue;
     }
-    const asks = S(g.asks);
-    const obstacle = S(g.obstacle);
-    const step = S(g.step);
+    const asks = T(`span ${os.span} asks`, g.asks);
+    const obstacle = T(`span ${os.span} obstacle`, g.obstacle);
+    const step = T(`span ${os.span} step`, g.step);
     text(`span ${os.span} asks`, asks, ASKS_MAX_WORDS);
     text(`span ${os.span} obstacle`, obstacle, OBSTACLE_MAX_WORDS);
     text(`span ${os.span} step`, step, STEP_MAX_WORDS);
@@ -203,7 +209,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     spans.push({ span: os.span, asks, obstacle, step });
   }
 
-  let confirm: string | null = S(o.confirm) || null;
+  let confirm: string | null = T('confirm', o.confirm) || null;
   if (confirm && !oracle.confirm) {
     notes.push('confirm dropped: the Oracle gave none');
     confirm = null;
@@ -214,7 +220,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
       confirm = null;
     }
   }
-  let pattern: string | null = S(o.pattern) || null;
+  let pattern: string | null = T('pattern', o.pattern) || null;
   if (pattern && (!sections.includes('pattern') || !oracle.pattern)) pattern = null;
   else if (pattern) {
     const why = textProblem(pattern, ctx);
@@ -226,7 +232,7 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
   let ladder: LadderSteps | null = null;
   const ld = (o.ladder ?? {}) as Record<string, unknown>;
   if (sections.includes('ladder')) {
-    const steps = { best: S(ld.best), practical: S(ld.practical), drift: S(ld.drift), floor: S(ld.floor) };
+    const steps = { best: T('ladder best', ld.best), practical: T('ladder practical', ld.practical), drift: T('ladder drift', ld.drift), floor: T('ladder floor', ld.floor) };
     const bad = Object.entries(steps).find(([, v]) => !v || textProblem(v, ctx));
     if (bad) notes.push(`ladder dropped: ${bad[0]} ${bad[1] ? textProblem(bad[1], ctx) : 'empty'}`);
     else ladder = steps;

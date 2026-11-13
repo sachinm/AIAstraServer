@@ -1485,7 +1485,6 @@ export const DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES: readonly string[] = [
   'like a man',
   'like a woman',
   'ladies',
-  'girl',
   'sweetie',
   'honey',
   'sweetheart',

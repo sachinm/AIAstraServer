@@ -2650,10 +2650,6 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   [docs] Done when the product doc says so.
 - **P3 · Love and Work have no v3 layout route** though they share the `board_layout` table. [server] Done when the
   routes exist or the docs stop saying they share one.
-- **P2 · The default stereotype phrase list withholds a whole card on a harmless word.** `girl` is in the defaults of
-  `PERSONALIZER_STEREOTYPE_PHRASES` (`src/config/env.ts`); a sentence about a daughter drops the whole v3 card to the
-  repair pass. [server] Done when `girl` leaves the defaults and a flagged sentence is dropped without withholding the
-  card.
 - **P3 · Prompt version hash was computed by hand.** `src/reading/prompts/generated.ts` was edited without the
   generator (`scripts/embed-prompts.mjs`). [server] Done when `embed-prompts.mjs --check` passes in a clean install.
 - **P2 · CloudFront may strip `If-None-Match` or its response headers policy may drop `ETag` and the CORS headers.**

@@ -270,6 +270,20 @@ export function textProblem(text: string, c: TextCheckContext): string | null {
 }
 
 /**
+ * A flagged stereotype sentence is dropped on its own, never the whole card: the text without the sentences that carry a
+ * phrase in force, and the sentences dropped. `text` is '' when nothing stands (the caller's empty-field behaviour then
+ * applies, so a card left with no body falls back as before).
+ */
+export function dropStereotypeSentences(text: string): { text: string; dropped: string[] } {
+  const stereotype = stereotypeMatcher();
+  if (!stereotype) return { text, dropped: [] };
+  const sentences = sentencesOf(text);
+  const dropped = sentences.filter((s) => stereotype.test(s));
+  if (!dropped.length) return { text, dropped };
+  return { text: sentences.filter((s) => !stereotype.test(s)).join(' ').trim(), dropped };
+}
+
+/**
  * The sentences of a text that carry no chart term or engine name; a sentence that carries one is dropped whole, never
  * cut and patched with an ellipsis (doc 66 replay run 2, failure 3: "A disciplined … calls for"). '' when none stands.
  */
