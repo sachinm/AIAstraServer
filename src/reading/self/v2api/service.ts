@@ -49,13 +49,13 @@ export interface SelfV2Deps {
  * `failed` come from today's You build marker: a fresh reading that failed is shown at once, not after the poll times out.
  * A build marked stuck (dead) is neither; the page's own timeout covers it.
  */
-async function refreshView(deps: SelfV2Deps, kundliId: string, today: string, now: Date): Promise<SelfV2RefreshView> {
+async function refreshView(deps: SelfV2Deps, kundliId: string, today: string, now: Date, sharedMarker?: Promise<BuildMarkerState>): Promise<SelfV2RefreshView> {
   const [d, marker] = await Promise.all([
     (deps.refreshDates ?? selfBoardDates)(deps.prisma, kundliId, today).catch((e) => {
       console.warn('[self:v2] refresh dates failed:', (e as Error).message);
       return null;
     }),
-    (deps.buildMarker ?? ((p, k, n) => readBuildMarker(p, k, 'self', n)))(deps.prisma, kundliId, now).catch(() => 'none' as const),
+    (sharedMarker ?? (deps.buildMarker ?? ((p, k, n) => readBuildMarker(p, k, 'self', n)))(deps.prisma, kundliId, now)).catch(() => 'none' as const),
   ]);
   const building = marker === 'building';
   const failed = marker === 'failed' || marker === 'failed_recently';
@@ -90,23 +90,33 @@ async function clockFor(deps: SelfV2Deps, kundliId: string, preferred: string | 
   return resolveClockV2(preferred, present, applicability);
 }
 
-export type GetSelfV2Result = { body: SelfV2Response; queued: QueueOutcome | null };
+/** `kundliId`: the chart the body was read for (null without one), so a caller does not look it up again */
+export type GetSelfV2Result = { body: SelfV2Response; queued: QueueOutcome | null; kundliId?: string | null };
 
 /** GET /api/self/v2 for the signed-in person. */
 export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSelfV2Result> {
   const prisma = deps.prisma;
   const kundli = await latestKundli(prisma, userId);
-  if (!kundli) return { body: noKundliResponse(), queued: null };
+  if (!kundli) return { body: noKundliResponse(), queued: null, kundliId: null };
   const now = (deps.now ?? (() => new Date()))();
   const asOf = dayOf(now);
+  // everything that does not need the clock starts now and overlaps the clock read
+  const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
+  // on the default path the refresh block's build marker is the same `area_builds` row the progress markers read
+  const sharedMarker = !deps.buildMarker && !deps.progressMarkers ? markersP.then((m) => (m ? m.queue.state : readBuildMarker(prisma, kundli.id, 'self', now))) : undefined;
+  const profileP = (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf);
+  const floorsP = deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({});
+  const refreshP = refreshView(deps, kundli.id, asOf, now, sharedMarker);
+  // a rejection is read at the await below; until then it must not be reported as unhandled
+  profileP.catch(() => undefined);
   const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
   const [latest, profile, floors, refresh, markers] = await Promise.all([
     // only the board clock's build: after a switch the old clock's cards are not served as the new one's
     (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
-    (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf),
-    deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({}),
-    refreshView(deps, kundli.id, asOf, now),
-    (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null),
+    profileP,
+    floorsP,
+    refreshP,
+    markersP,
   ]);
 
   const nothingStored = !latest.cards && !latest.oracle;
@@ -138,8 +148,12 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
       });
     }
   }
-  const build = await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
-  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued };
+  // nothing was queued: the markers read above are still today's, so they are not read again
+  const build =
+    queued === null && markers
+      ? buildView(markers.queue, markers.v2, now, false)
+      : await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
+  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued, kundliId: kundli.id };
 }
 
 async function defaultProgressMarkers(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ queue: QueueMarkerView; v2: V2MarkerView }> {

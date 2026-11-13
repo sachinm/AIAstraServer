@@ -48,7 +48,8 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   if (v2.body.status === 'no_kundli') {
     return { body: buildSelfV3Response({ v2: v2.body, layout: emptyLayout(), today }), queued: null };
   }
-  const kundliId = await latestKundliId(deps.prisma, userId);
+  // the v2 read already resolved the chart; look it up again only for a caller whose v2 read did not say
+  const kundliId = v2.kundliId !== undefined ? v2.kundliId : await latestKundliId(deps.prisma, userId);
   if (!kundliId) return { body: buildSelfV3Response({ v2: v2.body, layout: emptyLayout(), today }), queued: v2.queued };
   const now = (deps.now ?? (() => new Date()))();
   const cardsRead = deps.cardsRead ?? isCardsReadEnabled();
@@ -71,8 +72,9 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   }
   const reading = doc ? boardReadingView(doc, layout.cards, v3Cards, now, true) : null;
   const body = buildSelfV3Response({ v2: v2.body, v3Cards: Object.keys(v3Cards).length ? v3Cards : null, suggested, layout, today, states, cardsRead, reading });
-  // doc 71 §4.4 item 4: each card shaped by the person's options (a filter over stored content, nothing new made)
-  body.cards = body.cards.map((c) => shapeSelfCard(c, layout.options?.[c.id]));
+  // doc 71 §4.4 item 4: each card shaped by the person's options, then the board's (a filter over stored content,
+  // nothing new made; no option adds a field, so no role-gated content follows a face)
+  body.cards = body.cards.map((c) => shapeSelfCard(c, layout.options?.[c.id], layout.boardOptions));
   return { body, queued: v2.queued };
 }
 
@@ -127,16 +129,21 @@ export async function putSelfLayout(prisma: PrismaClient, userId: string, body: 
   if (!(deps.cardsRead ?? isCardsReadEnabled()) || layout.cards.length < getCardsReadMin()) return { ok: true, layout };
   try {
     const now = (deps.now ?? (() => new Date()))();
-    const clock = await (deps.clockOf ?? preferredClock)(prisma, kundliId);
-    const read = clock ? await (deps.readCardReadings ?? readCardReadings)(prisma, kundliId, clock) : {};
-    const doc = await readCardsState(prisma, kundliId, now);
+    const [read, doc] = await Promise.all([
+      (deps.clockOf ?? preferredClock)(prisma, kundliId).then(
+        (clock): Promise<Partial<Record<SelfCardId, SelfV3CardContent>>> | Partial<Record<SelfCardId, SelfV3CardContent>> =>
+          clock ? (deps.readCardReadings ?? readCardReadings)(prisma, kundliId, clock) : {},
+      ),
+      readCardsState(prisma, kundliId, now),
+    ]);
     const queued = layout.cards.filter((id) => !read[id] && !['queued', 'reading'].includes(cardStateOf(doc, id, false, now)));
     if (queued.length) {
       await updateCardsState(prisma, userId, kundliId, now, (d) => {
         for (const id of queued) d.cards[id] = { state: 'queued', at: now.toISOString() };
         d.stage = d.stage === 'done' ? 'cards' : d.stage;
       });
-      await (deps.queueBuild ?? defaultQueue)(prisma, userId, kundliId);
+      // the cards are marked queued above; starting the build does not hold the answer
+      void (deps.queueBuild ?? defaultQueue)(prisma, userId, kundliId).catch((e) => console.warn('[self:v3] build queue failed:', (e as Error).message));
     }
     return { ok: true, layout, reading: { queued } };
   } catch (e) {
