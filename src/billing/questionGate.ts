@@ -7,6 +7,7 @@ import type { PrismaClient } from '@prisma/client';
 import { isQuotaExempt } from '../auth/roles.js';
 import { effectivePlan, monthFor, planQuota, plansEnabled, unlimitedDailyGuard, type PlanCode, type PlanWindow } from './plans.js';
 import { PrismaPlanStore, type BillingAccountRow, type PlanStore } from './store.js';
+import { breakdownOf, type UsageBreakdown } from './usageKinds.js';
 
 /** Twice the Lambda's 300 s limit, so such a reservation belongs to a dead run. */
 const STALE_RESERVATION_MS = 10 * 60_000;
@@ -26,6 +27,8 @@ export interface PlanStatus {
   window: PlanWindow;
   resets_at: string | null;
   exempt: boolean;
+  /** this month's questions by kind; only on `getStatus`, null for staff, Unlimited or when it could not be read */
+  breakdown?: UsageBreakdown | null;
 }
 
 /** A held question; `id` is null when nothing was counted. */
@@ -121,9 +124,21 @@ export class QuestionGate {
     try {
       await this.releaseStale(userId);
       const [account, exempt] = await Promise.all([this.store.getAccount(userId), this.isExempt(userId)]);
-      return this.status(account, exempt);
+      const status = this.status(account, exempt);
+      return { ...status, breakdown: await this.breakdown(userId, account, status) };
     } catch (err) {
       console.error('[plans] status failed:', (err as Error).message);
+      return null;
+    }
+  }
+
+  /** Read only for `getStatus`, never on the check or reserve path; a failure gives null, not a failed status. */
+  private async breakdown(userId: string, a: BillingAccountRow | null, status: PlanStatus): Promise<UsageBreakdown | null> {
+    if (status.exempt || status.limit === null || !this.store.usageKeysSince) return null;
+    try {
+      return breakdownOf(await this.store.usageKeysSince(userId, this.month(a, status.code).start));
+    } catch (err) {
+      console.error('[plans] usage breakdown failed:', (err as Error).message);
       return null;
     }
   }
