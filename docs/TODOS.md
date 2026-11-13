@@ -2621,13 +2621,6 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   the clock and refresh blocks take the rows the board read already holds.
 - **P3 · GET /api/self/v3/catalogue runs the whole board read** (and may queue a build) to list tiles. [server] Done
   when it reads the registry, the layout and the card states only.
-- **P2 · The `wt/server-board-layout` worktree's `node_modules` is incomplete** (no `.package-lock.json`; `@smithy/core`
-  and `merge-descriptors` missing; `@langchain/openai/node_modules/openai/resources/graders/*` truncated), so `tsc`
-  stops on a syntax error and 11 suites fail to load. The build session checked with a TypeScript-API run over its own
-  files and ran vitest with `NODE_PATH` pointing at the main checkout's `node_modules`; `tests/unit/reading/self/v3/
-  clockSet.test.ts` still cannot load (ESM import of the truncated `openai`). [Haiku install agent] Done when `npm ci` in
-  that folder completes and `npx tsc --noEmit` runs clean.
-
 ## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
 
 Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B) and the build sessions' side findings.
