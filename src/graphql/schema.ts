@@ -99,6 +99,15 @@ const typeDefs = /* GraphQL */ `
     window: String!
     resets_at: String
     exempt: Boolean!
+    "This month's questions by kind. Null for staff, Unlimited, or when it could not be read."
+    breakdown: UsageBreakdown
+  }
+
+  type UsageBreakdown {
+    chat: Int!
+    cardchat: Int!
+    board_refresh: Int!
+    other: Int!
   }
 
   type ChartStatus {

@@ -63,6 +63,8 @@ export interface PlanStore {
   findOpenPart(userId: string, part: string, since: Date): Promise<UsageRow | null>;
   /** true when this call removed the part, so a part is free only once */
   takeOpenPart(row: UsageRow, part: string): Promise<boolean>;
+  /** the keys of the month starting at `periodStart`, leaving out those given back */
+  usageKeysSince?(userId: string, periodStart: Date): Promise<string[]>;
 }
 
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: string } | null)?.code === 'P2002';
@@ -185,5 +187,13 @@ export class PrismaPlanStore implements PlanStore {
       data: { open_parts: row.open_parts.filter((p) => p !== part) },
     });
     return r.count === 1;
+  }
+
+  async usageKeysSince(userId: string, periodStart: Date): Promise<string[]> {
+    const rows = await this.db.questionUsage.findMany({
+      where: { user_id: userId, status: { not: 'released' }, period_start: periodStart },
+      select: { key: true },
+    });
+    return rows.map((r) => r.key);
   }
 }
