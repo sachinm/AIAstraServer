@@ -2593,13 +2593,10 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 
 ## Filed 2026-11-12 by the board faces/tools build (server `feat/board-layout-vclean`)
 
-- **P1 · Apply migrations `20261112190000_board_layout_board_options_m50` and `20261112190100_board_read_indexes_m51`
-  before this API ships.** m50 adds `board_layout.board_options` (Prisma selects it on every layout read and write: an
-  unmigrated database makes PUT /api/self/v3/layout 500 and GET fall back to an empty layout). m51 adds two read
-  indexes (`technique_outputs (kundli_id, technique_id, created_at DESC)`, `kundlis (user_id, created_at DESC)`); it is a
-  plain `CREATE INDEX`, which blocks writes to `technique_outputs` while it builds, so run it at a quiet time (or by hand
-  as `CREATE INDEX CONCURRENTLY` and mark it applied). Not applied by the build session. [deploy session] Done when
-  `prisma migrate status` is clean on staging and GET /api/self/v3 answers 200 after the deploy.
+- **P2 · Confirm GET /api/self/v3 answers 200 after the deploy.** Migrations `20261112190000_board_layout_board_options_m50`
+  and `20261112190100_board_read_indexes_m51` were applied to `aiastradb` on 2026-11-12 (`prisma migrate status`: up to
+  date, 73 migrations). Only the post-deploy check is left. [deploy session] Done when GET /api/self/v3 and PUT
+  /api/self/v3/layout answer 200 on staging after the deploy; then delete this item.
 - **P2 · Chart details evidence keys go to every role.** GET /api/self/v3 sends `cards[].v2.details.evidence` (engine
   row keys such as `planet:D1.Sa`) and Chart details paragraphs to every signed-in person, novice included; nothing on
   the Self v2/v3 path gates on role. The new `face: 'research'` changes no content (tested), so it does not widen this,
