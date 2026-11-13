@@ -2663,5 +2663,14 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   card.
 - **P3 · Prompt version hash was computed by hand.** `src/reading/prompts/generated.ts` was edited without the
   generator (`scripts/embed-prompts.mjs`). [server] Done when `embed-prompts.mjs --check` passes in a clean install.
+- **P2 · CloudFront may strip `If-None-Match` or its response headers policy may drop `ETag` and the CORS headers.**
+  The app's CORS list already allows `If-None-Match` and exposes `ETag` (`server.ts`), but the edge sits in front of
+  the Lambda: cache policy `4135ea2d-…`, origin request policy `e1684868-…`, response headers policy `67f7725c-…`
+  (`aiastra-aws-terraform/environments/prod/imports.md`; `modules/edge/main.tf` is an empty stub, so they are not
+  readable as code). If the origin request policy does not forward `If-None-Match`, every GET returns 200 and the
+  304 path never fires (no breakage, no saving). [deploy session, Sachin's AWS access] Done when the three policies are
+  read, `If-None-Match` is forwarded and `ETag` passes through, and a repeat GET on staging returns 304.
+- **P3 · Web: `caniuse-lite` is outdated** (vitest prints a Browserslist warning). [web] Done when
+  `npx update-browserslist-db@latest` is run in its own commit (it edits `package-lock.json`).
 - **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
   when `AIAstra_WEB/AGENTS.md` says agents and CI use `test:run`.
