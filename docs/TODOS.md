@@ -354,6 +354,24 @@ re-applied by it.
 - **`archishasinha` kundli rows are stale.** Its birth time was corrected 01:28 -> 13:28 on 2026-10-31 and the account
   deactivated (duplicate of `archisha`); its kundli, coordinates and 142 `kundli_data` rows were computed at the old
   time. Harmless while off. Done: rows deleted or rebuilt if the account is ever reactivated.
+- **Personalizer voice by gender (branch `feat/board-layout-vclean`, 2026-11-12): written without running anything.** The
+  voice (`prompts/personalizer/voice.md`, `personalizerVoicePrefix` in `src/reading/self/v3/personalizer.ts`, the stereotype
+  list in `personalizerValidate.ts`) and `tests/unit/reading/self/v3/voice.test.ts` were written with no `npm`, `tsc` or
+  `vitest` run (the worktree's `node_modules` was broken). `src/reading/prompts/generated.ts` was updated by hand; its
+  `PROMPT_VERSION` (`8a614959c7b2`) was computed with a PowerShell copy of `scripts/embed-prompts.mjs`'s hash, which
+  reproduced the old value `3771a563e8b6` before the change. Status: open. Done: `npx tsc --noEmit`, `npx vitest run
+  tests/unit/reading/self/v3 tests/unit/reading/prompts.test.ts tests/unit/reading/cards` and `node scripts/embed-prompts.mjs
+  --check` pass in CI or a working checkout.
+- **The voice is not measured.** Whether the three voices read differently and never stereotype is unproven: the first replay
+  on stored dossiers in the Lab (docs/reading-engine/65 §9; no paid call without a yes) must compare the same Oracle cards
+  written as woman, man and neutral, and count `STEREOTYPE_PHRASES` hits. Owner: Sachin's yes for the replay. Done: the
+  replay is in `docs/reading-engine/`.
+- **Voice only on the v3 card path.** The v2 Personalizer (`personalizer/self.md`) and the Now card (`cards/now.md`) still
+  write in one register for every gender. Done: the same `voice.md` is wired there, or a decision that they stay as they are.
+- **A stereotype phrase withholds the whole v3 card.** `textProblem` flags the phrase, and in the v3 face a problem in
+  the line or any span withholds the card (the repair pass re-asks once with the reason). A word such as `girl` may also
+  appear in a legitimate sentence about a person's daughter. Done: decide whether the face drops only the sentence, and
+  review the default list (`DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES` in `src/config/env.ts`) after the replay.
 
 ## P3: nice to have
 
@@ -2572,3 +2590,91 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · Weak photo picks to replace when better CC0 images turn up:** Gifts & knots (plain box), Practice & deity
   (candles, not a diya), Distance or tension (a woman alone), Family banner reuses the Family card photo, Finding work.
   [web] Done when swapped in `art/cards` (keep SOURCES.md current).
+
+## Filed 2026-11-12 by the board faces/tools build (server `feat/board-layout-vclean`)
+
+- **P2 · Confirm GET /api/self/v3 answers 200 after the deploy.** Migrations `20261112190000_board_layout_board_options_m50`
+  and `20261112190100_board_read_indexes_m51` were applied to `aiastradb` on 2026-11-12 (`prisma migrate status`: up to
+  date, 73 migrations). Only the post-deploy check is left. [deploy session] Done when GET /api/self/v3 and PUT
+  /api/self/v3/layout answer 200 on staging after the deploy; then delete this item.
+- **P2 · Chart details evidence keys go to every role.** GET /api/self/v3 sends `cards[].v2.details.evidence` (engine
+  row keys such as `planet:D1.Sa`) and Chart details paragraphs to every signed-in person, novice included; nothing on
+  the Self v2/v3 path gates on role. The new `face: 'research'` changes no content (tested), so it does not widen this,
+  but if evidence is meant to be practitioner-only (astrologer, researcher, aiastra_admin) the gate does not exist yet.
+  Found reading `src/reading/self/v2api/response.ts` `areaViews`. [Sachin: product decision; then server] Done when the
+  rule is decided and, if gated, a public user's body has `evidence: []` with a test.
+- **P2 · PUT /api/self/v3/layout starts the card build without awaiting it.** The cards are marked `queued` (awaited)
+  and the async Lambda invoke is fire-and-forget so the answer is not held. On Lambda the environment can freeze right
+  after the response, so the invoke may only leave on the next request (the page's GET poll, which also re-queues a
+  stuck build). [server] Done when a staging trace shows the invoke leaving within the PUT's invocation, or the queue
+  call moves before the response with a measured cost under 50 ms.
+- **P3 · Board-wide `length`, `words` and `plan` do not change a card's stored `sections`.** Sections are derived from
+  a card's own options on PUT (doc 71 §4.4 item 3); board options only change `cards[].options` (in force) and the
+  shaping (`view`, `plan`). [web + server] Done when the page derives visible sections from `cards[].options`, or PUT
+  derives them from the board options too.
+- **P3 · The catalogue picker no longer shows a first line, and a card read only in a Phase B (`self.v3.cards`) row shows
+  `not_read`.** GET /api/self/v3/catalogue now reads the chart id, the registry, `deps.suggest` and today's card-state
+  row only (no board read, no build queued), so `firstLine` is always null and `state` comes from the card-state row
+  (`done` shows as `ready`, `queued`/`reading`/`failed` as stored); a card whose reading lives only in the legacy
+  `self.v3.cards` row, or in a state row from an earlier day, reads `not_read` there. Found fixing the route
+  (`getSelfV3Catalogue`, `src/reading/self/v3/service.ts`). [Sachin: product decision; then server + web] Done when it
+  is decided whether the picker needs the first line and legacy-ready states; if so, a cheap stored read of the
+  newest card rows (not the board read) provides them, with a test; if not, the web stops using `firstLine` from the
+  catalogue.
+- **P3 · "a girl of seven" is still refused when the person states no gender.** With no stated gender,
+  `GENDERED_WORDS` (`src/reading/self/v2/personalizerValidate.ts`, `textProblem`, used by `checkPersonalCard` in
+  `src/reading/self/v3/personalizer.ts`) lists `girl` (also `boy`, `man`, `woman`, `he`, `she`, `husband`, `wife`...)
+  as a gendered word and `textProblem` returns a problem for the whole text, so a card with "your daughter, a girl of
+  seven" is rejected (not dropped sentence by sentence) for a person with no stated gender. The stereotype list no
+  longer holds `girl` (`ce81707`), and a stereotype sentence is dropped on its own, but the gendered-word check was not
+  changed. Found while testing the stereotype fix on 2026-11-12. [server; Sachin: decide whether words naming another
+  person (daughter, girl, boy, husband) count as gendering the reader, and whether a gendered sentence drops alone]
+  Done when the rule is decided and a test shows "a girl of seven" kept for a person with no stated gender.
+## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
+
+Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B) and the build sessions' side findings.
+
+- **P1 · No typecheck or test step runs in either deploy workflow.** `.github/workflows/deploy-api-lambda.yml` (server)
+  and `deploy-staging-amplify.yml` (web, on `release-candidate-staging` only) build and deploy on a push to
+  `release-candidate-staging` with no `tsc` and no tests; nothing runs on feature branches or `develop`. Sachin chose a
+  clean local install and local tests instead of a CI gate (2026-11-12), so the gate is manual. [deploy session] Done
+  when typecheck and the unit tests pass locally on `develop` before every merge into `release-candidate-staging`, or a
+  CI job exists.
+- **P2 · All Self cards read `not_read` for the test account, so no per-period text exists to show.** The per-period text
+  fix lands only on Phase A cards; Phase B cards carry `text: null`. Found in plan 73 §1. [reading-dev] Done when a
+  card-by-card read has run for the test account and a period shows its own text.
+- **P2 · Rail tones are null on every card.** `RailItem.tone` is null for all rails, so a period cannot be coloured by
+  how it presses. [server] Done when `railFromDates` and `railFromSpans` fill the tone from the engine's dated windows.
+- **P3 · Option notes show on cards where they do not apply** (`optionNotes`). [server + web] Done when a note appears
+  only on a card its option changes.
+- **P2 · The practitioner role set is hardcoded and disagrees with the TODO above.** `readerRole` treats `student`,
+  `astrologer` and `researcher` as practitioner; the evidence-keys item names `aiastra_admin`, which the code does not
+  include, and the set is not env-driven (AGENTS.md rule). The web hides evidence with `profile.role === 'practitioner'`
+  while the server sends it to every role, so this is display-only. [Sachin: decide the set; then server] Done when the
+  set is one env-driven list, used by the server to blank `evidence` for other roles, with a test.
+- **P2 · Check `SELF_V3_BUILD` and `READING_CLOCK_LAYER` on the live `aiastra-server-api` Lambda.** Without them the new
+  Self board does not build. The `aiastra-ops` key was invalid on 2026-11-01, so not read. [deploy session, Sachin's AWS
+  access] Done when both are read from the function configuration and their values noted here (no secrets).
+- **P3 · The registry has 26 cards, not 11** (plan 73 App. B item 7); the other 15 appear only with per-card reading on.
+  [docs] Done when the product doc says so.
+- **P3 · Love and Work have no v3 layout route** though they share the `board_layout` table. [server] Done when the
+  routes exist or the docs stop saying they share one.
+- **P3 · Prompt version hash was computed by hand.** `src/reading/prompts/generated.ts` was edited without the
+  generator (`scripts/embed-prompts.mjs`). [server] Done when `embed-prompts.mjs --check` passes in a clean install.
+- **P2 · CloudFront may strip `If-None-Match` or its response headers policy may drop `ETag` and the CORS headers.**
+  The app's CORS list already allows `If-None-Match` and exposes `ETag` (`server.ts`), but the edge sits in front of
+  the Lambda: cache policy `4135ea2d-…`, origin request policy `e1684868-…`, response headers policy `67f7725c-…`
+  (`aiastra-aws-terraform/environments/prod/imports.md`; `modules/edge/main.tf` is an empty stub, so they are not
+  readable as code). If the origin request policy does not forward `If-None-Match`, every GET returns 200 and the
+  304 path never fires (no breakage, no saving). [deploy session, Sachin's AWS access] Done when the three policies are
+  read, `If-None-Match` is forwarded and `ETag` passes through, and a repeat GET on staging returns 304.
+- **P2 · Web Self board redesign: not seen rendered, e2e not run, real IndexedDB path untested.** (`AIAstra_WEB`,
+  `feat/self-vclean`.) Vitest runs in jsdom, which has no IndexedDB, so `selfV3Cache` is tested through an in-memory
+  backend only (`fake-indexeddb` is not installed); the 1280 px one-row control layout, the banner heights and the touch
+  swipe carousels have not been viewed on a screen; `e2e/card-picker.spec.ts` was edited for the removed "Edit
+  sections" ids but not run. [web + Sachin's screenshots] Done when the staging build is opened at 1024, 1440 and 1920
+  px and on an iPad, every card and face is photographed into `docs/screenshots/`, and the e2e spec passes.
+- **P3 · Web: `caniuse-lite` is outdated** (vitest prints a Browserslist warning). [web] Done when
+  `npx update-browserslist-db@latest` is run in its own commit (it edits `package-lock.json`).
+- **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
+  when `AIAstra_WEB/AGENTS.md` says agents and CI use `test:run`.

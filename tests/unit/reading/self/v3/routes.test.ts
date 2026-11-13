@@ -12,11 +12,14 @@ import { fakeRequireUser } from '../../../../helpers/fakeAuth.js';
 import { PRESENT, latestFixture } from '../v2api/fixtures.js';
 
 const NOW = new Date('2026-11-09T12:00:00Z');
+const DEFAULTS = { length: 'usual', view: 'year', words: 'plain', plan: 'with', face: 'read', tools: [], groupBy: 'quarters', groupsAs: 'swipe', start: 'short' };
+let slowLatest = 0;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function fakePrisma() {
   const kundlis: Record<string, any> = {
     u1: { id: 'k1', user_id: 'u1', preferred_dasha: null, digest_status: 'ready' },
+    u2: { id: 'k2', user_id: 'u2', preferred_dasha: null, digest_status: 'ready' },
   };
   const layouts = new Map<string, any>();
   const prisma: any = {
@@ -51,10 +54,14 @@ beforeAll(() => {
   registerSelfV3Routes(app, {
     prisma: new Proxy({}, { get: (_t, k) => f.prisma[k as string] }) as never,
     enabled: true,
+    budgetMs: 1000,
     requireUser: fakeRequireUser((req) => (req.headers['x-user'] as string) ?? null),
     v3: {
       now: () => NOW,
-      readLatest: async (_p, kundliId) => stored[kundliId] ?? { ...NOTHING_STORED },
+      readLatest: async (_p, kundliId) => {
+        if (slowLatest) await new Promise((r) => setTimeout(r, slowLatest));
+        return stored[kundliId] ?? { ...NOTHING_STORED };
+      },
       systemsPresent: async () => PRESENT,
       queueBuild: async (_p, _u, k) => {
         queued.push(k);
@@ -74,14 +81,112 @@ beforeEach(() => {
   f = fakePrisma();
   stored = {};
   queued.length = 0;
+  slowLatest = 0;
 });
 
-const call = (method: string, path: string, user?: string, body?: unknown) =>
+const call = (method: string, path: string, user?: string, body?: unknown, extra: Record<string, string> = {}) =>
   fetch(`${base}${path}`, {
     method,
-    headers: { ...(user ? { 'x-user': user } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+    headers: { ...(user ? { 'x-user': user } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...extra },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
+
+describe('ETag on GET /api/self/v3', () => {
+  it('200 with a strong ETag, then 304 with no body for the same If-None-Match; private no-store kept', async () => {
+    stored.k1 = latestFixture();
+    const first = await call('GET', '/api/self/v3', 'u1');
+    expect(first.status).toBe(200);
+    const tag = first.headers.get('etag')!;
+    expect(tag).toMatch(/^"[A-Za-z0-9_-]{22}"$/);
+    await first.json();
+    const again = await call('GET', '/api/self/v3', 'u1', undefined, { 'if-none-match': tag });
+    expect(again.status).toBe(304);
+    expect(await again.text()).toBe('');
+    expect(again.headers.get('etag')).toBe(tag);
+    expect(again.headers.get('cache-control')).toBe(SELF_V2_CACHE_CONTROL);
+  });
+  it('a changed body gets a new tag and a 200', async () => {
+    stored.k1 = latestFixture();
+    const tag = (await call('GET', '/api/self/v3', 'u1')).headers.get('etag')!;
+    await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
+    const r = await call('GET', '/api/self/v3', 'u1', undefined, { 'if-none-match': tag });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('etag')).not.toBe(tag);
+  });
+});
+
+describe('route budget', () => {
+  it('past the budget the GET answers 503 timeout instead of hanging', async () => {
+    slowLatest = 1500;
+    const r = await call('GET', '/api/self/v3', 'u1');
+    expect(r.status).toBe(503);
+    expect(await r.json()).toEqual({ error: 'timeout' });
+    expect(r.headers.get('cache-control')).toBe(SELF_V2_CACHE_CONTROL);
+  });
+});
+
+describe('board options', () => {
+  it('PUT stores boardOptions; GET returns layout.boardOptions and each card in force (card, then board, then defaults)', async () => {
+    stored.k1 = latestFixture();
+    const put = await call('PUT', '/api/self/v3/layout', 'u1', {
+      template: 'seasons',
+      cards: ['year', 'body', 'mind'],
+      options: { body: { face: 'breakdown', tools: ['calendar'] } },
+      boardOptions: { face: 'light', groupBy: 'years', confirm: false, motion: true },
+    });
+    expect(put.status).toBe(200);
+    const saved = await put.json();
+    expect(saved.boardOptions).toEqual({ face: 'light', groupBy: 'years', confirm: false });
+    expect(saved.boardDefaults).toMatchObject({ ...DEFAULTS, confirm: true, motion: true });
+    const get = await (await call('GET', '/api/self/v3', 'u1')).json();
+    expect(get.layout.boardOptions).toEqual({ face: 'light', groupBy: 'years', confirm: false });
+    expect(get.cards.find((c: any) => c.id === 'body').options).toEqual({ ...DEFAULTS, face: 'breakdown', tools: ['calendar'], groupBy: 'years' });
+    expect(get.cards.find((c: any) => c.id === 'mind').options).toEqual({ ...DEFAULTS, face: 'light', groupBy: 'years' });
+    // a later PUT without boardOptions keeps them
+    await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
+    expect((await (await call('GET', '/api/self/v3', 'u1')).json()).layout.boardOptions).toEqual({ face: 'light', groupBy: 'years', confirm: false });
+  });
+  it('GET with no layout returns boardOptions as an empty object', async () => {
+    stored.k1 = latestFixture();
+    expect((await (await call('GET', '/api/self/v3', 'u1')).json()).layout.boardOptions).toEqual({});
+  });
+  it('an unknown board option is refused with unknown_option', async () => {
+    const r = await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'], boardOptions: { motion: 'yes' } });
+    expect(r.status).toBe(400);
+    expect(await r.json()).toEqual({ error: 'unknown_option', detail: 'board.motion=yes' });
+  });
+});
+
+describe('ownership and roles', () => {
+  it("PUT and GET only ever touch the caller's own chart; a userId naming another account is 403", async () => {
+    stored.k1 = latestFixture();
+    expect((await call('PUT', '/api/self/v3/layout', 'u1', { userId: 'u2', template: 'seasons', cards: ['year', 'body', 'mind'] })).status).toBe(403);
+    expect((await call('GET', '/api/self/v3?userId=u2', 'u1')).status).toBe(403);
+    // a kundli id in the body is ignored: the layout is written for the caller's own chart (k1), never k2
+    await call('PUT', '/api/self/v3/layout', 'u1', { kundliId: 'k2', kundli_id: 'k2', template: 'seasons', cards: ['year', 'body', 'mind'] });
+    expect([...f.layouts.keys()]).toEqual(['k1|self']);
+    expect((await (await call('GET', '/api/self/v3', 'u2')).json()).layout.chosen).toBe(false);
+  });
+  it('signed out: 401 on GET and PUT', async () => {
+    expect((await call('GET', '/api/self/v3')).status).toBe(401);
+    expect((await call('PUT', '/api/self/v3/layout', undefined, { template: 'seasons', cards: ['year', 'body', 'mind'] })).status).toBe(401);
+  });
+  it("a public user's card with face 'research' carries exactly the fields the default face does", async () => {
+    stored.k1 = latestFixture();
+    await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
+    const plain = await (await call('GET', '/api/self/v3', 'u1')).json();
+    await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'], options: { mind: { face: 'research' } }, boardOptions: { face: 'research' } });
+    const research = await (await call('GET', '/api/self/v3', 'u1')).json();
+    expect(research.profile.role).not.toMatch(/astrologer|researcher|admin/);
+    for (const c of research.cards) {
+      const p = plain.cards.find((x: any) => x.id === c.id);
+      const { options: _a, ...rest } = c;
+      const { options: _b, ...plainRest } = p;
+      expect(rest).toEqual(plainRest);
+      expect(c.options.face).toBe('research');
+    }
+  });
+});
 
 describe('GET /api/self/v3', () => {
   it('first visit: no layout chosen, every catalogue card listed, the v2 build fills the offered ones', async () => {
@@ -121,9 +226,9 @@ describe('PUT /api/self/v3/layout', () => {
     });
     const get = await (await call('GET', '/api/self/v3', 'u1')).json();
     const body = get.cards.find((c: any) => c.id === 'body');
-    expect(body.options).toEqual({ length: 'glance', view: 'arc', words: 'plain', plan: 'with' });
+    expect(body.options).toEqual({ ...DEFAULTS, length: 'glance', view: 'arc' });
     expect(body.optionNotes[0]).toMatch(/long arc is only/);
-    expect(get.cards.find((c: any) => c.id === 'year').options).toEqual({ length: 'usual', view: 'year', words: 'plain', plan: 'with' });
+    expect(get.cards.find((c: any) => c.id === 'year').options).toEqual(DEFAULTS);
     // a later PUT without options keeps them
     await call('PUT', '/api/self/v3/layout', 'u1', { template: 'seasons', cards: ['year', 'body', 'mind'] });
     expect((await (await call('GET', '/api/self/v3', 'u1')).json()).layout.options).toEqual({ body: { length: 'glance', view: 'arc' }, mind: { words: 'terms' } });
