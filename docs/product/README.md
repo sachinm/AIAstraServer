@@ -1,5 +1,7 @@
 # Product review docs
 
+> November product and release reference: [mobile launch, dashboard candidates and Life Projects](../fundraising/product-and-release.md).
+
 Written 2026-10-24 alongside the reading-engine plan. These cover the product surface around the readings; the reading method itself is in [`../reading-engine/`](../reading-engine/README.md).
 
 | File | What |

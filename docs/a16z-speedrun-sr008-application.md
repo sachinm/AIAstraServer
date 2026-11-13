@@ -1,5 +1,7 @@
 # a16z speedrun SR008 application: questions, answers, video
 
+> November follow-up: [current accelerator preparation and investor materials](fundraising/accelerator-prep.md). The SR008 notes below are historical.
+
 Updated 2026-11-01. Deadline: **Sunday 1 Nov 2026, 11:59 PM Pacific** (1:29 PM IST on Monday 2 Nov). A late application
 is still read, but for the next cohort.
 
