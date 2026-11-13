@@ -2572,3 +2572,40 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 - **P3 · Weak photo picks to replace when better CC0 images turn up:** Gifts & knots (plain box), Practice & deity
   (candles, not a diya), Distance or tension (a woman alone), Family banner reuses the Family card photo, Finding work.
   [web] Done when swapped in `art/cards` (keep SOURCES.md current).
+
+## Filed 2026-11-12 by the board faces/tools build (server `feat/board-layout-vclean`)
+
+- **P1 · Apply migrations `20261112190000_board_layout_board_options_m50` and `20261112190100_board_read_indexes_m51`
+  before this API ships.** m50 adds `board_layout.board_options` (Prisma selects it on every layout read and write: an
+  unmigrated database makes PUT /api/self/v3/layout 500 and GET fall back to an empty layout). m51 adds two read
+  indexes (`technique_outputs (kundli_id, technique_id, created_at DESC)`, `kundlis (user_id, created_at DESC)`); it is a
+  plain `CREATE INDEX`, which blocks writes to `technique_outputs` while it builds, so run it at a quiet time (or by hand
+  as `CREATE INDEX CONCURRENTLY` and mark it applied). Not applied by the build session. [deploy session] Done when
+  `prisma migrate status` is clean on staging and GET /api/self/v3 answers 200 after the deploy.
+- **P2 · Chart details evidence keys go to every role.** GET /api/self/v3 sends `cards[].v2.details.evidence` (engine
+  row keys such as `planet:D1.Sa`) and Chart details paragraphs to every signed-in person, novice included; nothing on
+  the Self v2/v3 path gates on role. The new `face: 'research'` changes no content (tested), so it does not widen this,
+  but if evidence is meant to be practitioner-only (astrologer, researcher, aiastra_admin) the gate does not exist yet.
+  Found reading `src/reading/self/v2api/response.ts` `areaViews`. [Sachin: product decision; then server] Done when the
+  rule is decided and, if gated, a public user's body has `evidence: []` with a test.
+- **P2 · PUT /api/self/v3/layout starts the card build without awaiting it.** The cards are marked `queued` (awaited)
+  and the async Lambda invoke is fire-and-forget so the answer is not held. On Lambda the environment can freeze right
+  after the response, so the invoke may only leave on the next request (the page's GET poll, which also re-queues a
+  stuck build). [server] Done when a staging trace shows the invoke leaving within the PUT's invocation, or the queue
+  call moves before the response with a measured cost under 50 ms.
+- **P3 · Board-wide `length`, `words` and `plan` do not change a card's stored `sections`.** Sections are derived from
+  a card's own options on PUT (doc 71 §4.4 item 3); board options only change `cards[].options` (in force) and the
+  shaping (`view`, `plan`). [web + server] Done when the page derives visible sections from `cards[].options`, or PUT
+  derives them from the board options too.
+- **P3 · GET /api/self/v3 reads `dasha.applicable` twice** (`defaultSystemsPresent` and `defaultLoadApplicability`, in
+  parallel), and `selfBoardDates` re-reads the newest `self.v2.oracle` row that `readSelfV2Latest` already read, then can
+  chain two more reads when no v2 build exists. Parallel, so ≈1–3 ms of database time, not latency. [server] Done when
+  the clock and refresh blocks take the rows the board read already holds.
+- **P3 · GET /api/self/v3/catalogue runs the whole board read** (and may queue a build) to list tiles. [server] Done
+  when it reads the registry, the layout and the card states only.
+- **P2 · The `wt/server-board-layout` worktree's `node_modules` is incomplete** (no `.package-lock.json`; `@smithy/core`
+  and `merge-descriptors` missing; `@langchain/openai/node_modules/openai/resources/graders/*` truncated), so `tsc`
+  stops on a syntax error and 11 suites fail to load. The build session checked with a TypeScript-API run over its own
+  files and ran vitest with `NODE_PATH` pointing at the main checkout's `node_modules`; `tests/unit/reading/self/v3/
+  clockSet.test.ts` still cannot load (ESM import of the truncated `openai`). [Haiku install agent] Done when `npm ci` in
+  that folder completes and `npx tsc --noEmit` runs clean.
