@@ -2627,3 +2627,41 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   files and ran vitest with `NODE_PATH` pointing at the main checkout's `node_modules`; `tests/unit/reading/self/v3/
   clockSet.test.ts` still cannot load (ESM import of the truncated `openai`). [Haiku install agent] Done when `npm ci` in
   that folder completes and `npx tsc --noEmit` runs clean.
+
+## Filed 2026-11-12: plan 73 findings and the fix batch (to be fixed together, one branch)
+
+Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B) and the build sessions' side findings.
+
+- **P1 · No typecheck or test step runs in either deploy workflow.** `.github/workflows/deploy-api-lambda.yml` (server)
+  and `deploy-staging-amplify.yml` (web, on `release-candidate-staging` only) build and deploy on a push to
+  `release-candidate-staging` with no `tsc` and no tests; nothing runs on feature branches or `develop`. Sachin chose a
+  clean local install and local tests instead of a CI gate (2026-11-12), so the gate is manual. [deploy session] Done
+  when typecheck and the unit tests pass locally on `develop` before every merge into `release-candidate-staging`, or a
+  CI job exists.
+- **P2 · All Self cards read `not_read` for the test account, so no per-period text exists to show.** The per-period text
+  fix lands only on Phase A cards; Phase B cards carry `text: null`. Found in plan 73 §1. [reading-dev] Done when a
+  card-by-card read has run for the test account and a period shows its own text.
+- **P2 · Rail tones are null on every card.** `RailItem.tone` is null for all rails, so a period cannot be coloured by
+  how it presses. [server] Done when `railFromDates` and `railFromSpans` fill the tone from the engine's dated windows.
+- **P3 · Option notes show on cards where they do not apply** (`optionNotes`). [server + web] Done when a note appears
+  only on a card its option changes.
+- **P2 · The practitioner role set is hardcoded and disagrees with the TODO above.** `readerRole` treats `student`,
+  `astrologer` and `researcher` as practitioner; the evidence-keys item names `aiastra_admin`, which the code does not
+  include, and the set is not env-driven (AGENTS.md rule). The web hides evidence with `profile.role === 'practitioner'`
+  while the server sends it to every role, so this is display-only. [Sachin: decide the set; then server] Done when the
+  set is one env-driven list, used by the server to blank `evidence` for other roles, with a test.
+- **P2 · Check `SELF_V3_BUILD` and `READING_CLOCK_LAYER` on the live `aiastra-server-api` Lambda.** Without them the new
+  Self board does not build. The `aiastra-ops` key was invalid on 2026-11-01, so not read. [deploy session, Sachin's AWS
+  access] Done when both are read from the function configuration and their values noted here (no secrets).
+- **P3 · The registry has 26 cards, not 11** (plan 73 App. B item 7); the other 15 appear only with per-card reading on.
+  [docs] Done when the product doc says so.
+- **P3 · Love and Work have no v3 layout route** though they share the `board_layout` table. [server] Done when the
+  routes exist or the docs stop saying they share one.
+- **P2 · The default stereotype phrase list withholds a whole card on a harmless word.** `girl` is in the defaults of
+  `PERSONALIZER_STEREOTYPE_PHRASES` (`src/config/env.ts`); a sentence about a daughter drops the whole v3 card to the
+  repair pass. [server] Done when `girl` leaves the defaults and a flagged sentence is dropped without withholding the
+  card.
+- **P3 · Prompt version hash was computed by hand.** `src/reading/prompts/generated.ts` was edited without the
+  generator (`scripts/embed-prompts.mjs`). [server] Done when `embed-prompts.mjs --check` passes in a clean install.
+- **P3 · The web repo's `npm test` runs `vitest` in watch mode.** The repo already has `npm run test:run`. [docs] Done
+  when `AIAstra_WEB/AGENTS.md` says agents and CI use `test:run`.
