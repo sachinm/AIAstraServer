@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { KUNDLI_JSON_FIELDS, authToAstroKundliParams } from '../lib/astroKundliClient.js';
+import { KUNDLI_JSON_FIELDS, authToAstroKundliParams, fetchFullKundliBatch } from '../lib/astroKundliClient.js';
 import {
   getNodeEnv,
   getAstroKundliEndpointLabel,
@@ -406,6 +406,37 @@ export async function processOneKundliRow(prisma: PrismaClient, row: KundliRowWi
       const t = legacyType.get(field);
       const item = t ? reg.items[t.id] : undefined;
       if (item?.status === 'ready' && isJsonFieldFilled(item.payload)) dataUpdate[field] = item.payload as object;
+    }
+
+    // Single-trip batched calculation fallback: if any legacy columns remain unfilled from registration items,
+    // fetch all missing legacy fields in one single round trip via fetchFullKundliBatch, eliminating 9 round trips.
+    const missingLegacyFields = KUNDLI_JSON_FIELDS.filter(
+      (field) => !isJsonFieldFilled((freshKundli as Record<string, unknown>)[field]) && !dataUpdate[field]
+    );
+    if (missingLegacyFields.length > 0) {
+      try {
+        const authParams = authToAstroKundliParams({
+          date_of_birth: auth.date_of_birth,
+          place_of_birth: auth.place_of_birth,
+          time_of_birth: auth.time_of_birth,
+        });
+        const coords = row.lat != null && row.lon != null && row.tz != null
+          ? { lat: row.lat, lon: row.lon, tz: row.tz }
+          : null;
+        const batchCharts = await fetchFullKundliBatch(authParams, coords);
+        for (const field of missingLegacyFields) {
+          if (isJsonFieldFilled(batchCharts[field])) {
+            dataUpdate[field] = batchCharts[field] as object;
+          }
+        }
+      } catch (batchErr) {
+        queueLogError({
+          event: 'kundli_batch_fetch_failed',
+          kundli_id: kundliId,
+          user_id: userId,
+          error: (batchErr as Error).message,
+        });
+      }
     }
     if (Object.keys(dataUpdate).length > 0) {
       try {

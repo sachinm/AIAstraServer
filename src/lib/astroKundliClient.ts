@@ -77,6 +77,7 @@ export interface AstroKundliVimsottariDasa {
 
 /** Export endpoint: POST {baseUrl}/api/export-horoscope. Local dev: ASTROKUNDLI_BASE_URL_LOCAL=http://localhost:8765 */
 const HOROSCOPE_PATH = '/api/export-horoscope';
+const BATCH_KUNDLI_PATH = '/api/calculate-full-kundli';
 /** Per-request timeout (each of the 8 data points is one request). Remote hosts (e.g. Render) often need >45s under load. Override with ASTROKUNDLI_TIMEOUT_MS. */
 const DEFAULT_TIMEOUT_MS = 120_000;
 const HEALTH_CHECK_TIMEOUT_MS = 45_000;
@@ -717,6 +718,25 @@ export async function fetchHoroscopeChart(
   return callRadha(() => fetchHoroscopeChartImpl(params, type, extra));
 }
 
+export interface FullKundliBatchResponse {
+  status?: string;
+  calc_versions?: Record<string, string>;
+  charts?: Record<string, unknown>;
+  error?: string;
+}
+
+/**
+ * Fetch all 10 legacy Kundli charts in a single batched calculation call to Radha (/api/calculate-full-kundli).
+ * If the batched endpoint returns a 404/501 or is unreachable, provides graceful backward-compatible fallback
+ * to individual export-horoscope calls.
+ */
+export async function fetchFullKundliBatch(
+  params: AstroKundliRequestParams,
+  coords?: { lat: number | null; lon: number | null; tz: number | null } | null
+): Promise<Record<KundliJsonField, Prisma.JsonValue>> {
+  return callRadha(() => fetchFullKundliBatchImpl(params, coords));
+}
+
 /** Generic export call for the reading-engine types (`facts`, `transits`). `extra` is merged into the request body. */
 export async function fetchEngineExport(
   params: AstroKundliRequestParams,
@@ -875,4 +895,157 @@ async function fetchHoroscopeChartImpl(
     }
     throw new Error(String(err));
   }
+}
+
+async function fetchFullKundliBatchImpl(
+  params: AstroKundliRequestParams,
+  coords?: { lat: number | null; lon: number | null; tz: number | null } | null
+): Promise<Record<KundliJsonField, Prisma.JsonValue>> {
+  const transport = getAstroKundliTransport();
+  const apiKey = getAstroKundliApiKey();
+
+  const body = {
+    dob: params.dob,
+    tob: params.tob,
+    place: params.place,
+    ayanamsa: params.ayanamsa ?? 'LAHIRI',
+    ...(coords && coords.lat != null && coords.lon != null && coords.tz != null
+      ? { lat: coords.lat, lon: coords.lon, tz: coords.tz }
+      : {}),
+    fields: [...KUNDLI_JSON_FIELDS],
+  };
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers['X-API-Key'] = apiKey;
+  }
+
+  const timeoutMs = getHoroscopeTimeoutMs();
+  const startedAt = Date.now();
+
+  const targetLabel =
+    transport === 'lambda'
+      ? `${lambdaTargetLabel()}${BATCH_KUNDLI_PATH}`
+      : `${getAstroKundliBaseUrl()}${BATCH_KUNDLI_PATH}`;
+
+  console.log('[AstroKundli] batch outgoing', {
+    transport,
+    url: targetLabel,
+    method: 'POST',
+    fieldsCount: KUNDLI_JSON_FIELDS.length,
+    timeoutMs,
+    hasApiKey: Boolean(apiKey),
+  });
+
+  try {
+    let status: number;
+    let ok: boolean;
+    let json: FullKundliBatchResponse | undefined;
+
+    if (transport === 'lambda') {
+      const result = await invokeAstroKundliLambda(
+        'POST',
+        BATCH_KUNDLI_PATH,
+        body,
+        headers,
+        timeoutMs
+      );
+      status = result.statusCode;
+      ok = status >= 200 && status < 300;
+      if (result.parsed && typeof result.parsed === 'object') {
+        json = result.parsed as FullKundliBatchResponse;
+      } else {
+        try {
+          json = JSON.parse(result.bodyText) as FullKundliBatchResponse;
+        } catch {
+          json = { error: result.bodyText || `HTTP ${status}` };
+        }
+      }
+    } else {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(targetLabel, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        status = res.status;
+        ok = res.ok;
+        json = (await res.json().catch(() => ({}))) as FullKundliBatchResponse;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    console.log('[AstroKundli] batch response', {
+      transport,
+      url: targetLabel,
+      status,
+      ok,
+      durationMs: Date.now() - startedAt,
+      responseBytes: JSON.stringify(json ?? null).length,
+    });
+
+    if (status === 404 || status === 501) {
+      console.warn('[AstroKundli] batch calculation returned HTTP ' + status + ', falling back to sequential calls');
+      return await fallbackSequentialCharts(params, coords);
+    }
+
+    if (!ok) {
+      const base =
+        json?.error ?? (typeof json === 'object' && json && 'message' in json
+          ? String((json as { message?: string }).message)
+          : `HTTP ${status}`);
+      const detail = typeof json === 'object' && json && 'detail' in json ? String((json as { detail?: unknown }).detail).slice(0, 300) : '';
+      throw new RadhaHttpError(detail ? `${base}: ${detail}` : base, status);
+    }
+
+    const charts = json?.charts;
+    if (!charts || typeof charts !== 'object') {
+      console.warn('[AstroKundli] batch response missing charts map, falling back to sequential calls');
+      return await fallbackSequentialCharts(params, coords);
+    }
+
+    const result: Partial<Record<KundliJsonField, Prisma.JsonValue>> = {};
+    for (const field of KUNDLI_JSON_FIELDS) {
+      const chartData = (charts as Record<string, unknown>)[field];
+      if (chartData !== undefined && chartData !== null) {
+        if (typeof chartData === 'object' && 'error' in (chartData as Record<string, unknown>)) {
+          console.warn(`[AstroKundli] batch subfield ${field} error:`, (chartData as Record<string, unknown>).error);
+        }
+        result[field] = chartData as Prisma.JsonValue;
+      }
+    }
+    return result as Record<KundliJsonField, Prisma.JsonValue>;
+  } catch (err) {
+    if (err instanceof RadhaHttpError && (err.status === 404 || err.status === 501)) {
+      return await fallbackSequentialCharts(params, coords);
+    }
+    console.error('[AstroKundli] batch error', {
+      transport,
+      url: targetLabel,
+      durationMs: Date.now() - startedAt,
+      error: engineErrorForLog(err),
+    });
+    if (err instanceof Error) {
+      throw err;
+    }
+    throw new Error(String(err));
+  }
+}
+
+async function fallbackSequentialCharts(
+  params: AstroKundliRequestParams,
+  coords?: { lat: number | null; lon: number | null; tz: number | null } | null
+): Promise<Record<KundliJsonField, Prisma.JsonValue>> {
+  const result: Partial<Record<KundliJsonField, Prisma.JsonValue>> = {};
+  for (const field of KUNDLI_JSON_FIELDS) {
+    result[field] = await fetchHoroscopeChart(params, field, coords);
+  }
+  return result as Record<KundliJsonField, Prisma.JsonValue>;
 }
