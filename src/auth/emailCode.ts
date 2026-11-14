@@ -13,6 +13,9 @@ import { prisma } from '../lib/prisma.js';
 import { hashPassword, comparePassword } from '../lib/hash.js';
 import { generateMagicLinkCode, normalizeMagicLinkCode } from '../lib/magicLinkCode.js';
 import { sendMagicLinkEmail } from '../services/emailService.js';
+import { getOtpLockoutMinutes, getOtpMaxFailedAttempts } from '../config/env.js';
+import { recordAccountEvent } from '../audit/accountEvents.js';
+import { recordAppError } from '../telemetry/appErrors.js';
 import { getCognitoAuth } from './cognitoClient.js';
 
 export type AuthProvider = 'local' | 'cognito';
@@ -64,6 +67,76 @@ export function getAuthProvider(): AuthProvider {
 // local provider (legacy): server-made 8-character code
 // ---------------------------------------------------------------------------------------------------------
 
+function isOtpLocked(until: Date | string | null | undefined, now: Date = new Date()): boolean {
+  if (!until) return false;
+  const dt = until instanceof Date ? until : new Date(until);
+  return Number.isFinite(dt.getTime()) && dt.getTime() > now.getTime();
+}
+
+async function recordOtpFailureAttempt(
+  user: { id: string; failed_otp_attempts?: number | null },
+  providerReason: string
+): Promise<boolean> {
+  const maxAttempts = getOtpMaxFailedAttempts();
+  const nextAttempts = (user.failed_otp_attempts ?? 0) + 1;
+  const lockedNow = nextAttempts >= maxAttempts;
+  const lockUntil = lockedNow ? new Date(Date.now() + getOtpLockoutMinutes() * 60_000) : null;
+
+  try {
+    await prisma.auth.update({
+      where: { id: user.id },
+      data: lockedNow
+        ? {
+            failed_otp_attempts: nextAttempts,
+            otp_locked_until: lockUntil,
+            magic_link_code_hash: null,
+            magic_link_expires_at: null,
+            cognito_session: null,
+            cognito_session_expires_at: null,
+          }
+        : { failed_otp_attempts: nextAttempts },
+    });
+  } catch {
+    /* non-fatal in mocked or transitional stores */
+  }
+
+  if (lockedNow) {
+    void recordAppError(prisma, {
+      source: 'server_auth',
+      severity: 'warn',
+      category: 'otp_locked',
+      errorCode: 'OTP_LOCKED',
+      statusCode: 401,
+      userId: user.id,
+      operation: 'verifyLoginCode',
+      message: `Account OTP locked after ${nextAttempts} failed attempts (${providerReason})`,
+      meta: { attempts: nextAttempts, lockoutMinutes: getOtpLockoutMinutes(), reason: providerReason },
+    });
+    const accModel = (prisma as unknown as { accountEvent?: { create?: unknown } })?.accountEvent;
+    if (accModel?.create) {
+      void recordAccountEvent(prisma, {
+        userId: user.id,
+        action: 'otp_locked',
+        outcome: 'refused',
+        note: providerReason,
+        after: { failed_otp_attempts: nextAttempts, lockout_minutes: getOtpLockoutMinutes() },
+      });
+    }
+  }
+  return lockedNow;
+}
+
+async function clearOtpFailureAttempts(userId: string): Promise<void> {
+  try {
+    await prisma.auth.update({
+      where: { id: userId },
+      data: { failed_otp_attempts: 0, otp_locked_until: null },
+    });
+  } catch {
+    /* non-fatal */
+  }
+}
+
 /**
  * Create a fresh code for the account with this email (if any), store its hash, and email the plain code.
  * Never reveals whether the email exists; send failures are logged, not thrown.
@@ -74,10 +147,10 @@ async function legacySendLoginCode(emailRaw: string): Promise<void> {
 
   const user = await prisma.auth.findFirst({
     where: { email: { equals: email, mode: 'insensitive' } },
-    select: { id: true, email: true, locked_at: true },
+    select: { id: true, email: true, locked_at: true, otp_locked_until: true },
   });
   // a locked account gets no code; the caller answers exactly as for an unknown address
-  if (!user || user.locked_at) return;
+  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until)) return;
 
   const plain = generateMagicLinkCode();
   const hash = await hashPassword(plain);
@@ -118,8 +191,14 @@ async function legacyVerifyLoginCode(
       locked_at: true,
       magic_link_code_hash: true,
       magic_link_expires_at: true,
+      failed_otp_attempts: true,
+      otp_locked_until: true,
     },
   });
+  if (user && isOtpLocked(user.otp_locked_until)) {
+    noteOtpFailure(emailRaw, 'otp_locked');
+    return null;
+  }
   if (!user?.magic_link_code_hash || !user.magic_link_expires_at) {
     noteOtpFailure(emailRaw, 'unknown_or_unset');
     return null;
@@ -131,13 +210,19 @@ async function legacyVerifyLoginCode(
 
   const match = await comparePassword(code, user.magic_link_code_hash);
   if (!match) {
-    noteOtpFailure(emailRaw, 'wrong_code');
+    const lockedNow = await recordOtpFailureAttempt(user, 'wrong_code');
+    noteOtpFailure(emailRaw, lockedNow ? 'otp_locked' : 'wrong_code');
     return null;
   }
 
   await prisma.auth.update({
     where: { id: user.id },
-    data: { magic_link_code_hash: null, magic_link_expires_at: null },
+    data: {
+      magic_link_code_hash: null,
+      magic_link_expires_at: null,
+      failed_otp_attempts: 0,
+      otp_locked_until: null,
+    },
   });
   // checked only after the code matched, so a locked address cannot be told apart by guessing
   return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
@@ -178,6 +263,8 @@ async function findAccountByEmail(email: string) {
       locked_at: true,
       cognito_session: true,
       cognito_session_expires_at: true,
+      failed_otp_attempts: true,
+      otp_locked_until: true,
     },
   });
 }
@@ -193,7 +280,7 @@ async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
   // Only accounts we hold are sent to Cognito: unknown emails are a silent no-op, like the local provider.
   const user = await findAccountByEmail(email);
   // a locked account gets no code; the caller answers exactly as for an unknown address
-  if (!user || user.locked_at) return;
+  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until)) return;
 
   try {
     const cognito = getCognitoAuth();
@@ -259,6 +346,10 @@ async function cognitoVerifyLoginCode(
     noteOtpFailure(emailRaw, 'unknown_or_unset');
     return null; // creates nothing: an account row must already exist
   }
+  if (isOtpLocked(user.otp_locked_until)) {
+    noteOtpFailure(emailRaw, 'otp_locked');
+    return null;
+  }
 
   try {
     const cognito = getCognitoAuth();
@@ -269,13 +360,17 @@ async function cognitoVerifyLoginCode(
       new Date() <= (user.cognito_session_expires_at as Date);
 
     if (hasSession) {
-      // Sign-in code. A wrong code keeps the session so the user can retry (Cognito limits attempts).
+      // Sign-in code. A wrong code keeps the session so the user can retry (unless brute-force locked).
       const answered = await cognito.answerEmailOtp(user.email, code, stored as string);
       if (answered.status !== 'ok') {
-        noteOtpFailure(emailRaw, 'cognito_otp_failed');
+        const lockedNow = await recordOtpFailureAttempt(user, 'cognito_otp_failed');
+        noteOtpFailure(emailRaw, lockedNow ? 'otp_locked' : 'cognito_otp_failed');
         return null;
       }
       await clearStoredSession(user.id, stored);
+      if ((user.failed_otp_attempts ?? 0) > 0 || user.otp_locked_until) {
+        await clearOtpFailureAttempts(user.id);
+      }
       return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
     }
 
@@ -283,8 +378,12 @@ async function cognitoVerifyLoginCode(
     // ConfirmSignUp fails for confirmed users.
     const confirmed = await cognito.confirmSignUp(user.email, code);
     if (confirmed.status !== 'confirmed') {
-      noteOtpFailure(emailRaw, 'cognito_confirm_failed');
+      const lockedNow = await recordOtpFailureAttempt(user, 'cognito_confirm_failed');
+      noteOtpFailure(emailRaw, lockedNow ? 'otp_locked' : 'cognito_confirm_failed');
       return null;
+    }
+    if ((user.failed_otp_attempts ?? 0) > 0 || user.otp_locked_until) {
+      await clearOtpFailureAttempts(user.id);
     }
     return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
   } catch (err) {

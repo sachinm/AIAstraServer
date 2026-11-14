@@ -25,6 +25,8 @@ export interface GraphQLContext {
   userId: string | null;
   role: string | null;
   locked?: boolean;
+  authUnavailable?: boolean;
+  requestId?: string | null;
   prisma: import('@prisma/client').PrismaClient;
   request: Request;
 }

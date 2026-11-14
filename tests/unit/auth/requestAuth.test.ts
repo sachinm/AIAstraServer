@@ -64,20 +64,25 @@ describe('authenticateRequest', () => {
     expect(await authenticateRequest(bearer(sign({ sub: 'gone' })), s.deps)).toMatchObject({ userId: null, reason: 'deleted' });
   });
 
-  it('a database error falls back to the token role, not locked, and logs no personal data', async () => {
+  it('fails closed on a database error (never trusts stale JWT role/lock) and logs no personal data', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const createdErrors: unknown[] = [];
+    const fakePrisma = { appErrorEvent: { create: async (args: unknown) => createdErrors.push(args) } } as never;
     const deps: RequestAuthDeps = {
       secret: SECRET,
+      prisma: fakePrisma,
       readRow: async () => {
         throw Object.assign(new Error('pool timeout for u1@example.com'), { code: 'P1001' });
       },
     };
     const a = await authenticateRequest(bearer(sign({ sub: 'u1', role: 'astrologer' })), deps);
-    expect(a).toEqual({ userId: 'u1', role: 'astrologer', locked: false });
+    expect(a).toEqual({ userId: null, role: null, locked: false, reason: 'auth_unavailable' });
+    await tick();
     expect(warn).toHaveBeenCalledTimes(1);
     const line = String(warn.mock.calls[0]![0]);
     expect(line).toContain('P1001');
     expect(line).not.toContain('u1');
+    expect(createdErrors).toHaveLength(1);
   });
 
   it('caches the row for 30 s: a second request does not read again', async () => {
@@ -201,6 +206,12 @@ describe('requireUser on REST routes', () => {
     const optional = makeOptionalUser(s.deps);
     expect(await optional(req(bearer(sign({ sub: 'locked' }))))).toBeNull();
     expect(await optional(req(bearer(sign({ sub: 'ok' }))))).toBe('ok');
+    const s2 = { deps: { secret: SECRET, readRow: async () => { throw new Error('db down'); } } };
+    const req503 = makeRequireUser(s2.deps);
+    const res503 = fakeRes();
+    expect(await req503(req(bearer(sign({ sub: 'ok' }))), res503 as never)).toBeNull();
+    expect(res503.code).toBe(503);
+    expect(res503.body).toMatchObject({ code: 'auth_unavailable' });
   });
 });
 

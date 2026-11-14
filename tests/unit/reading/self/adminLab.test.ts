@@ -6,7 +6,7 @@ import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { digestView } from '../../../../src/reading/digest/load.js';
 import type { ActivationRow } from '../../../../src/reading/digest/activation.js';
-import { registerAdminLabRoutes } from '../../../../src/routes/adminLabRoutes.js';
+import { registerAdminLabRoutes, signAdminServiceHeaders } from '../../../../src/routes/adminLabRoutes.js';
 
 const FIX = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../fixtures/self/research-calibration.json'), 'utf8')) as {
   digest: Array<{ section: string; key: string; row: unknown }>;
@@ -122,7 +122,35 @@ beforeAll(() => {
 });
 afterAll(() => server.close());
 
-const post = (body: unknown, token = 'lab-secret') => fetch(`${base}/api/admin-lab/run`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-lab-token': token }, body: JSON.stringify(body) });
+const signedGet = (pathAndQuery: string, token = 'lab-secret') =>
+  fetch(`${base}${pathAndQuery}`, {
+    headers: signAdminServiceHeaders({
+      secret: token,
+      method: 'GET',
+      pathAndQuery,
+      actorId: 'admin-qa',
+      actorRole: 'superadmin',
+    }),
+  });
+
+const post = (body: unknown, token = 'lab-secret') => {
+  const payload = JSON.stringify(body);
+  return fetch(`${base}/api/admin-lab/run`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...signAdminServiceHeaders({
+        secret: token,
+        method: 'POST',
+        pathAndQuery: '/api/admin-lab/run',
+        body: payload,
+        actorId: 'admin-qa',
+        actorRole: 'superadmin',
+      }),
+    },
+    body: payload,
+  });
+};
 
 describe('admin lab', () => {
   it('refuses without the token, without consent, and an unknown technique', async () => {
@@ -142,7 +170,7 @@ describe('admin lab', () => {
     expect(j.dossier.trigger).toBe('manual');
     expect(j.dossier.date_of_birth).toBeUndefined();
     expect(Object.keys(j.dossier.data).length).toBeGreaterThan(10);
-    expect(actions.at(-1)).toMatchObject({ action: 'lab.run', target_user_id: 'u1' });
+    expect(actions.at(-1)).toMatchObject({ action: 'lab.run', actor_admin_id: 'admin-qa', target_user_id: 'u1' });
   });
   it('one technique runs only that panel (the diagnosis brings its four inputs)', async () => {
     const one = await (await post({ userId: 'u1', technique: 'self.reading.body', force: true })).json();
@@ -151,20 +179,31 @@ describe('admin lab', () => {
     expect(diag.reading.panels.map((p: any) => p.id).sort()).toEqual(['chapters', 'diagnosis', 'lagna', 'struggle', 'yogas']);
   });
   it('lists and reads stored dossiers behind the token', async () => {
-    const h = { 'x-admin-lab-token': 'lab-secret' };
     expect((await fetch(`${base}/api/admin-lab/dossiers?userId=u1`)).status).toBe(403);
-    const list = await (await fetch(`${base}/api/admin-lab/dossiers?userId=u1`, { headers: h })).json();
+    const list = await (await signedGet('/api/admin-lab/dossiers?userId=u1')).json();
     expect(list.items.length).toBeGreaterThanOrEqual(1);
-    const one = await (await fetch(`${base}/api/admin-lab/runs/d1`, { headers: h })).json();
+    const one = await (await signedGet('/api/admin-lab/runs/d1')).json();
     expect(one.id).toBe('d1');
     expect(one.date_of_birth).toBeUndefined();
   });
-  it('returns un-obfuscated person and birth details on GET /api/admin-lab/people and /api/admin-lab/people/:userId, and accepts X-Astra-Authorization LabToken fallback', async () => {
+  it('returns un-obfuscated person and birth details on GET /api/admin-lab/people and /api/admin-lab/people/:userId with HMAC auth, and rejects legacy static headers', async () => {
     expect((await fetch(`${base}/api/admin-lab/people`)).status).toBe(403);
     expect((await fetch(`${base}/api/admin-lab/people/u1`)).status).toBe(403);
-    const listRes = await fetch(`${base}/api/admin-lab/people`, {
-      headers: { 'X-Astra-Authorization': 'LabToken lab-secret' },
-    });
+    expect(
+      (
+        await fetch(`${base}/api/admin-lab/people`, {
+          headers: { 'X-Astra-Authorization': 'LabToken lab-secret' },
+        })
+      ).status
+    ).toBe(403);
+    expect(
+      (
+        await fetch(`${base}/api/admin-lab/people`, {
+          headers: { 'x-admin-lab-token': 'lab-secret' },
+        })
+      ).status
+    ).toBe(403);
+    const listRes = await signedGet('/api/admin-lab/people');
     expect(listRes.status).toBe(200);
     const listJson = await listRes.json();
     expect(listJson.items).toEqual([
@@ -198,9 +237,7 @@ describe('admin lab', () => {
       },
     ]);
 
-    const detailRes = await fetch(`${base}/api/admin-lab/people/u1`, {
-      headers: { 'x-admin-lab-token': 'lab-secret' },
-    });
+    const detailRes = await signedGet('/api/admin-lab/people/u1');
     expect(detailRes.status).toBe(200);
     expect(await detailRes.json()).toEqual({
       userId: 'u1',
@@ -216,9 +253,7 @@ describe('admin lab', () => {
       digestStatus: 'ready',
       preferredClock: 'dwisatpathi',
     });
-    const fallbackRes = await fetch(`${base}/api/admin-lab/people/u3`, {
-      headers: { 'x-admin-lab-token': 'lab-secret' },
-    });
+    const fallbackRes = await signedGet('/api/admin-lab/people/u3');
     expect(fallbackRes.status).toBe(200);
     expect(await fallbackRes.json()).toEqual({
       userId: 'u3',
@@ -234,7 +269,7 @@ describe('admin lab', () => {
       digestStatus: 'ready',
       preferredClock: 'dwisatpathi',
     });
-    expect((await fetch(`${base}/api/admin-lab/people/u9`, { headers: { 'x-admin-lab-token': 'lab-secret' } })).status).toBe(404);
+    expect((await signedGet('/api/admin-lab/people/u9')).status).toBe(404);
   });
 });
 
@@ -262,7 +297,7 @@ describe('admin lab: the served shape (docs/admin/10 §5 mirror test)', () => {
     expect(j.dossier.audit.unresolvedKeys).toBe(0);
     expect(j.dossier.audit.scope).toBe('body');
     expect(j.dossier.clocks.applicable).toBe(true);
-    const list = await (await fetch(`${base}/api/admin-lab/dossiers?userId=u1`, { headers: { 'x-admin-lab-token': 'lab-secret' } })).json();
+    const list = await (await signedGet('/api/admin-lab/dossiers?userId=u1')).json();
     expect(list.items.some((r: any) => r.technique === 'body')).toBe(true);
     expect(offending(list)).toEqual([]);
   });

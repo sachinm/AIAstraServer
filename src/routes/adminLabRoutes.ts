@@ -1,26 +1,18 @@
 /**
  * The server surface of the admin Techniques Lab (docs/admin/10): run one board technique, or the whole board, for a
  * person with a kundli (QA: Sachin, 2026-11-07, no research flag needed) through the same build the person's board uses, with trigger 'manual', and read the stored
- * dossiers. Mounted only when ADMIN_LAB=1; every call needs the header `x-admin-lab-token` equal to ADMIN_LAB_TOKEN
- * (compared in constant time). Birth fields are stripped from every response. Every run writes `agent_runs` (through
- * the build) and an `admin_actions` row (`lab.run`, ids only, never output).
- *
- *   GET  /api/admin-lab/people                                  → people with a kundli, masked
- *   GET  /api/admin-lab/people/:userId                          → that person's name and birth date, time and place (QA, Sachin 2026-11-07)
- *   POST /api/admin-lab/run { userId, board:'self', technique?: '<panel id>'|'all', force?, asOf?: 'YYYY-MM-DD' } → 200 LabRun |
- *        400 bad_request | bad_as_of | unknown_technique | board_not_built (love, work) | 403 | 404
- *   GET  /api/admin-lab/runs/:id                                → the stored dossier
- *   GET  /api/admin-lab/dossiers?userId=&board=                 → the person's dossiers, newest first
- *   GET  /api/admin-lab/chart-data/:userId?part=&years=         → every stored chart row, opened (./adminChartData.ts)
- *   GET  /api/admin-lab/loads/:userId?board=&limit=             → the latest builds with their agent runs and answers (./adminLoads.ts)
+ * dossiers. Mounted only when ADMIN_LAB=1; authenticated via HMAC-SHA256 staff-attributed headers signed with `ADMIN_LAB_TOKEN`
+ * (checked in constant time within `ADMIN_HMAC_SKEW_SECONDS`). Birth fields are stripped from dossier/run responses.
  */
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
+import { getAdminHmacSkewSeconds } from '../config/env.js';
 import { getBoardReading, type SelfDeps } from '../reading/self/service.js';
 import { stripBirthFields } from '../reading/self/dossier.js';
 import { chartDataHandler } from './adminChartData.js';
 import { loadsHandler } from './adminLoads.js';
+import { recordAppError } from '../telemetry/appErrors.js';
 import {
   SELF_PANEL_IDS,
   LOVE_PANEL_IDS,
@@ -34,34 +26,125 @@ export interface AdminLabDeps {
   enabled?: boolean;
   token?: string;
   self?: Omit<SelfDeps, 'prisma'>;
+  now?: () => number;
+}
+
+export interface VerifiedAdminActor {
+  actorId: string;
+  actorRole: 'admin' | 'superadmin';
 }
 
 export function isAdminLabEnabled(): boolean {
   return process.env.ADMIN_LAB?.trim() === '1';
 }
 
-function tokenOk(given: unknown, want: string | undefined): boolean {
-  if (!want || typeof given !== 'string' || !given) return false;
-  const a = Buffer.from(given);
-  const b = Buffer.from(want);
-  return a.length === b.length && timingSafeEqual(a, b);
+function sha256Hex(raw: Buffer | string): string {
+  return createHash('sha256').update(raw).digest('hex');
 }
 
-function extractLabToken(req: express.Request): string | undefined {
-  const direct = req.header('x-admin-lab-token')?.trim();
-  if (direct) return direct;
-  const astra = req.header('x-astra-authorization')?.trim();
-  if (astra && /^LabToken\s+/i.test(astra)) {
-    return astra.replace(/^LabToken\s+/i, '').trim();
+function constantTimeEqualHex(given: string, expected: string): boolean {
+  if (!given || !expected || given.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(given, 'utf8'), Buffer.from(expected, 'utf8'));
+}
+
+/** Sign an outbound/test request to `/api/admin-lab/*` using the shared HMAC-SHA256 service contract. */
+export function signAdminServiceHeaders(opts: {
+  secret: string;
+  method: string;
+  pathAndQuery: string;
+  body?: string;
+  actorId: string;
+  actorRole: 'admin' | 'superadmin' | string;
+  timestampSec?: number;
+}): Record<string, string> {
+  const timestamp = String(opts.timestampSec ?? Math.floor(Date.now() / 1000));
+  const bodyHash = sha256Hex(opts.body ?? '');
+  const canonical = `${timestamp}\n${opts.method.toUpperCase()}\n${opts.pathAndQuery}\n${bodyHash}\n${opts.actorId}\n${opts.actorRole}`;
+  const sig = createHmac('sha256', opts.secret).update(canonical).digest('hex');
+  return {
+    'X-Admin-Service-Timestamp': timestamp,
+    'X-Admin-Service-Signature': `v1=${sig}`,
+    'X-Admin-Actor-Id': opts.actorId,
+    'X-Admin-Actor-Role': opts.actorRole,
+    'X-Amz-Content-Sha256': bodyHash,
+  };
+}
+
+export function verifyAdminServiceRequest(
+  req: express.Request,
+  secret: string | undefined,
+  nowMs: number = Date.now()
+): { ok: true; actor: VerifiedAdminActor } | { ok: false; reason: string } {
+  if (!secret) return { ok: false, reason: 'missing_secret' };
+
+  const tsRaw = req.header('x-admin-service-timestamp')?.trim() ?? '';
+  const sigHeader = req.header('x-admin-service-signature')?.trim() ?? '';
+  const actorId = req.header('x-admin-actor-id')?.trim() ?? '';
+  const actorRole = req.header('x-admin-actor-role')?.trim() ?? '';
+  const bodyHashHeader = req.header('x-amz-content-sha256')?.trim() ?? '';
+
+  if (!tsRaw || !sigHeader || !actorId || !actorRole) {
+    return { ok: false, reason: 'missing_hmac_headers' };
   }
-  return undefined;
+  if (actorRole !== 'admin' && actorRole !== 'superadmin') {
+    return { ok: false, reason: 'invalid_actor_role' };
+  }
+
+  const tsSec = Number(tsRaw);
+  if (!Number.isInteger(tsSec) || tsSec <= 0) {
+    return { ok: false, reason: 'invalid_timestamp' };
+  }
+  const skew = Math.abs(Math.floor(nowMs / 1000) - tsSec);
+  if (skew > getAdminHmacSkewSeconds()) {
+    return { ok: false, reason: 'timestamp_expired' };
+  }
+
+  const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody;
+  const fallbackBody =
+    req.method === 'GET' || req.method === 'HEAD' || req.body === undefined || req.body === null
+      ? ''
+      : typeof req.body === 'string'
+        ? req.body
+        : JSON.stringify(req.body);
+  const actualBodyHash = sha256Hex(rawBody ?? fallbackBody);
+  if (bodyHashHeader && !constantTimeEqualHex(bodyHashHeader.toLowerCase(), actualBodyHash)) {
+    return { ok: false, reason: 'body_hash_mismatch' };
+  }
+
+  const sigMatch = /^v1=([0-9a-f]{64})$/i.exec(sigHeader);
+  if (!sigMatch) {
+    return { ok: false, reason: 'malformed_signature' };
+  }
+
+  const pathAndQuery = req.originalUrl || req.url;
+  const canonical = `${tsRaw}\n${req.method.toUpperCase()}\n${pathAndQuery}\n${actualBodyHash}\n${actorId}\n${actorRole}`;
+  const expectedSig = createHmac('sha256', secret).update(canonical).digest('hex');
+  if (!constantTimeEqualHex(sigMatch[1]!.toLowerCase(), expectedSig)) {
+    return { ok: false, reason: 'signature_mismatch' };
+  }
+
+  return { ok: true, actor: { actorId, actorRole } };
 }
 
 export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps): boolean {
   if (!(deps.enabled ?? isAdminLabEnabled())) return false;
   const token = deps.token ?? process.env.ADMIN_LAB_TOKEN?.trim();
   const guard: express.RequestHandler = (req, res, next) => {
-    if (!tokenOk(extractLabToken(req), token)) return void res.status(403).json({ error: 'forbidden' });
+    const check = verifyAdminServiceRequest(req, token, (deps.now ?? Date.now)());
+    if (!check.ok) {
+      void recordAppError(deps.prisma, {
+        source: 'rbac',
+        severity: 'warn',
+        category: 'admin_lab_auth_denied',
+        errorCode: 'FORBIDDEN',
+        statusCode: 403,
+        operation: `${req.method} ${req.path}`,
+        message: `Admin lab request rejected (${check.reason})`,
+        meta: { reason: check.reason },
+      });
+      return void res.status(403).json({ error: 'forbidden' });
+    }
+    (req as express.Request & { adminActor?: VerifiedAdminActor }).adminActor = check.actor;
     next();
   };
   const selfDeps: SelfDeps = { prisma: deps.prisma, ...(deps.self ?? {}) };
@@ -185,8 +268,17 @@ export function registerAdminLabRoutes(app: express.Express, deps: AdminLabDeps)
         ...(typeof b.asOf === 'string' ? { asOf: b.asOf } : {}),
         ...(isStage ? {} : { only: tech as BoardPanelId }),
       });
+      const actor = (req as express.Request & { adminActor?: VerifiedAdminActor }).adminActor;
       await deps.prisma.adminAction
-        ?.create?.({ data: { action: 'lab.run', actor_kind: 'admin', target_user_id: b.userId, after: { board, technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object } })
+        ?.create?.({
+          data: {
+            action: 'lab.run',
+            actor_kind: 'admin',
+            actor_admin_id: actor && actor.actorId !== 'system' ? actor.actorId : null,
+            target_user_id: b.userId,
+            after: { board, technique: tech, force: b.force === true, asOf: typeof b.asOf === 'string' ? b.asOf : null } as object,
+          },
+        })
         .catch(() => undefined);
       if (r.status !== 'ok') return res.status(r.status === 'no_kundli' ? 404 : 202).json({ status: r.status });
       const dossier = r.reading.dossierId ? await deps.prisma.readingDossier.findUnique({ where: { id: r.reading.dossierId } }) : null;
