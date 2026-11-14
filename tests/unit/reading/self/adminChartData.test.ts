@@ -2,7 +2,7 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { registerAdminLabRoutes } from '../../../../src/routes/adminLabRoutes.js';
+import { registerAdminLabRoutes, signAdminServiceHeaders } from '../../../../src/routes/adminLabRoutes.js';
 import { parsePart, parseYears, yearOfVariant } from '../../../../src/routes/adminChartData.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -115,7 +115,16 @@ beforeAll(() => {
 });
 afterAll(() => server.close());
 
-const get = (path: string, token = 'lab-secret') => fetch(`${base}${path}`, { headers: { 'x-admin-lab-token': token } });
+const get = (path: string, token = 'lab-secret') =>
+  fetch(`${base}${path}`, {
+    headers: signAdminServiceHeaders({
+      secret: token,
+      method: 'GET',
+      pathAndQuery: path,
+      actorId: 'admin-qa',
+      actorRole: 'superadmin',
+    }),
+  });
 
 describe('chart data review route', () => {
   it('refuses without the token, a bad part or bad years, and an unknown person', async () => {

@@ -200,8 +200,12 @@ async function deleteRemoteCachedContent(cacheName: string): Promise<void> {
   try {
     const apiKey = getGeminiApiKey();
     const base = getGeminiCachedContentsApiBase();
-    const url = `${base}/${cacheName}?key=${encodeURIComponent(apiKey)}`;
-    await undiciFetch(url, { method: 'DELETE', dispatcher: getAgent() });
+    const url = `${base}/${cacheName}`;
+    await undiciFetch(url, {
+      method: 'DELETE',
+      headers: { 'x-goog-api-key': apiKey },
+      dispatcher: getAgent(),
+    });
   } catch {
     /* best-effort */
   }
@@ -219,7 +223,7 @@ async function createRemoteCachedContent(
   const apiKey = getGeminiApiKey();
   const modelId = getGeminiChatModelId();
   const ttlSec = getGeminiCacheTtlSeconds();
-  const url = `${getGeminiCachedContentsApiBase()}/cachedContents?key=${encodeURIComponent(apiKey)}`;
+  const url = `${getGeminiCachedContentsApiBase()}/cachedContents`;
 
   const body = {
     model: `models/${modelId}`,
@@ -242,7 +246,7 @@ async function createRemoteCachedContent(
 
   const res = await undiciFetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(body),
     dispatcher: getAgent(),
   });

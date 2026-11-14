@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createYoga } from 'graphql-yoga';
 import { config } from 'dotenv';
@@ -55,7 +56,20 @@ import { handleKundliSyncEvent, parseKundliSyncEvent } from './src/services/kund
 import { handleKundliDigestEvent, parseKundliDigestEvent } from './src/reading/digest/event.js';
 import { handleDashaDeepEvent, parseDashaDeepEvent } from './src/workers/dashaDeep.js';
 import { withDashaDeepFocus } from './src/workers/dashaDeepFocus.js';
-import { isDashaDeepWorker } from './src/config/env.js';
+import { isDashaDeepWorker, isGraphqlErrorMaskingEnabled } from './src/config/env.js';
+import {
+  extractRequestIdFromReq,
+  extractRequestIp,
+  recordAppError,
+  registerAppErrorRoutes,
+  requestIdMiddleware,
+  sweepAppErrorEvents,
+} from './src/telemetry/appErrors.js';
+import {
+  createGraphqlMaskError,
+  graphqlArmorAndObservabilityPlugin,
+  runWithGraphqlObsContext,
+} from './src/graphql/armorAndMasking.js';
 import { handleSelfReadingBuildEvent, parseSelfReadingBuildEvent } from './src/reading/self/buildEvent.js';
 import {
   logChatProviderError,
@@ -66,6 +80,14 @@ import {
 
 getJwtSecret(); // Fail fast if JWT_SECRET not set
 const app = express();
+app.disable('x-powered-by');
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+app.use(requestIdMiddleware);
 
 // Behind Render (and most PaaS), the proxy sets X-Forwarded-For. express-rate-limit requires
 // trust proxy to be enabled or it throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
@@ -88,7 +110,13 @@ if (trustProxyEnabled) {
   app.set('trust proxy', 1);
 }
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+    },
+  })
+);
 // no response is cached anywhere (GraphQL with or without a bearer token, REST, SSE): docs/privacy/02 §4.2
 app.use(noStoreMiddleware);
 
@@ -112,8 +140,9 @@ app.post('/events', async (req, res) => {
   const kundliSync = parseKundliSyncEvent(req.body);
   if (kundliSync) return res.json(await handleKundliSyncEvent(kundliSync, { prisma }));
   if (!isCacheSweepEvent(req.body)) return res.status(204).end();
-  // the visit log's retention runs with the sweep; a failure there must not stop the sweep's answer
+  // the visit log and error telemetry retentions run with the sweep; failures must not stop the sweep's answer
   await new PrismaAssistantStore(prisma).purge(new Date()).catch((err: Error) => console.warn(JSON.stringify({ msg: 'assistant purge failed', error: err.message.slice(0, 200) })));
+  await sweepAppErrorEvents(prisma).catch((err: Error) => console.warn(JSON.stringify({ msg: 'app_error_events purge failed', error: err.message.slice(0, 200) })));
   res.json(await runScheduledSweep());
 });
 
@@ -137,7 +166,7 @@ app.use(
       ? true // allow any origin in dev so dev:network works from any host (e.g. LAN IP)
       : prodOrigins?.length
         ? prodOrigins
-        : true,
+        : false, // fail closed when CORS_ORIGINS is unset outside local/dev
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: [
       'Content-Type',
@@ -145,14 +174,19 @@ app.use(
       'X-Astra-Authorization',
       'X-Astra-Page',
       'X-Astra-Session',
+      'X-Request-Id',
       'X-Amz-Content-Sha256',
       'X-Requested-With',
       'X-Face-Box',
       'X-Admin-Lab-Token',
+      'X-Admin-Service-Timestamp',
+      'X-Admin-Service-Signature',
+      'X-Admin-Actor-Id',
+      'X-Admin-Actor-Role',
       'If-None-Match',
     ],
-    // GET /api/self/v3 answers with an ETag the page sends back as If-None-Match (304 when unchanged)
-    exposedHeaders: ['ETag'],
+    // GET /api/self/v3 answers with an ETag; clients correlate errors via X-Request-Id
+    exposedHeaders: ['ETag', 'X-Request-Id'],
     credentials: true,
     maxAge: 86400,
   })
@@ -172,9 +206,12 @@ app.get('/health', (_req, res) => {
 const yoga = createYoga({
   schema,
   context: buildContext,
-  // a locked account may run only `me` and `logout` (docs/admin/01 §4.1.2)
-  plugins: [lockGuardPlugin()],
-  maskedErrors: false,
+  // lockGuardPlugin enforces account locks / fail-closed auth; armor & masking bound depth/aliases and record app_error_events
+  plugins: [lockGuardPlugin(), graphqlArmorAndObservabilityPlugin({ prisma })],
+  maskedErrors: {
+    maskError: createGraphqlMaskError({ prisma }),
+    isDev: !isGraphqlErrorMaskingEnabled(),
+  },
 });
 
 const graphqlRateLimit = rateLimit({
@@ -200,7 +237,9 @@ app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
     ...graphqlLogFields(req.body),
   });
   try {
-    await (yoga as unknown as express.RequestHandler)(req, res, next);
+    await runWithGraphqlObsContext(req, async () => {
+      await (yoga as unknown as express.RequestHandler)(req, res, next);
+    });
   } finally {
     console.log('[GraphQL] completed', {
       path: req.path,
@@ -383,6 +422,8 @@ registerAssetRoutes(app, { requireUser });
 registerPageTimingRoutes(app, { prisma, optionalUser, requireUser: focusUser });
 // research staging & Self dashboard QA routes (docs/admin/09)
 registerResearchRoutes(app, { prisma, requireUser });
+// dual-plane client JS, React boundary, and CSP violation ingestion (M52)
+registerAppErrorRoutes(app, { prisma, optionalUser });
 
 // REST /query – requires JWT; uses userId from token (same user only)
 app.post('/query', async (req, res) => {
@@ -435,16 +476,65 @@ app.post('/query', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Error processing query:', err);
+    const requestId = extractRequestIdFromReq(req as express.Request & { requestId?: string });
+    console.error('Error processing query:', (err as Error)?.message ?? 'unknown');
+    void recordAppError(prisma, {
+      source: 'server_rest',
+      severity: 'error',
+      category: 'server_5xx',
+      errorCode: String((err as { code?: unknown })?.code ?? (err as Error)?.name ?? 'QUERY_FAILED'),
+      statusCode: 500,
+      page: typeof req.headers['x-astra-page'] === 'string' ? req.headers['x-astra-page'] : '/dashboard/chat',
+      operation: 'POST /query',
+      message: (err as Error)?.message ?? String(err),
+      stack: (err as Error)?.stack,
+      requestId,
+      sessionId: typeof req.headers['x-astra-session'] === 'string' ? req.headers['x-astra-session'] : null,
+      ip: extractRequestIp(req),
+      userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+    });
     res.status(500).json({
       success: false,
       error: {
         message: 'Query failed.',
-        details: (err as Error)?.message,
+        ...(isGraphqlErrorMaskingEnabled() ? {} : { details: (err as Error)?.message }),
+        ...(requestId ? { requestId } : {}),
         timestamp: new Date().toISOString(),
       },
     });
   }
+});
+
+// Terminal REST error handler: masks internal/Prisma details on wire and records to app_error_events for Admin.
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(err);
+  const requestId = extractRequestIdFromReq(req as express.Request & { requestId?: string });
+  const statusCode =
+    typeof (err as { status?: unknown })?.status === 'number' &&
+    (err as { status: number }).status >= 400 &&
+    (err as { status: number }).status < 600
+      ? (err as { status: number }).status
+      : 500;
+  void recordAppError(prisma, {
+    source: 'server_rest',
+    severity: statusCode >= 500 ? 'error' : 'warn',
+    category: statusCode >= 500 ? 'server_5xx' : 'server_4xx',
+    errorCode: String((err as { code?: unknown })?.code ?? (err as Error)?.name ?? `HTTP_${statusCode}`),
+    statusCode,
+    page: typeof req.headers['x-astra-page'] === 'string' ? req.headers['x-astra-page'] : '/',
+    operation: `${req.method} ${req.path}`,
+    message: (err as Error)?.message ?? String(err),
+    stack: (err as Error)?.stack,
+    requestId,
+    sessionId: typeof req.headers['x-astra-session'] === 'string' ? req.headers['x-astra-session'] : null,
+    ip: extractRequestIp(req),
+    userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : null,
+  });
+  return res.status(statusCode).json({
+    code: statusCode >= 500 ? 'internal_error' : 'request_error',
+    error: statusCode >= 500 ? 'Internal server error.' : 'Request could not be completed.',
+    ...(requestId ? { requestId } : {}),
+  });
 });
 
 /** The longest boot waits for the registry seeds (they log and give up on their own on failure). */

@@ -1498,3 +1498,57 @@ export const DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES: readonly string[] = [
 export function getPersonalizerStereotypePhrases(): string[] {
   return listEnv('PERSONALIZER_STEREOTYPE_PHRASES', DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES).map((p) => p.toLowerCase());
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Phase 1 Enterprise Security Hardening & Dual-Plane Error Telemetry (M52 / ASVS 5.0 L2)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Maximum AST depth accepted by GraphQL operations. Env `GRAPHQL_MAX_DEPTH` (default 6, range 2..20). */
+export function getGraphqlMaxDepth(): number {
+  return parseClampedIntEnv('GRAPHQL_MAX_DEPTH', 6, 2, 20);
+}
+
+/** Maximum aliased fields allowed in one GraphQL document. Env `GRAPHQL_MAX_ALIASES` (default 15, range 1..100). */
+export function getGraphqlMaxAliases(): number {
+  return parseClampedIntEnv('GRAPHQL_MAX_ALIASES', 15, 1, 100);
+}
+
+/** Maximum total selection nodes permitted in a single GraphQL operation. Env `GRAPHQL_MAX_SELECTIONS` (default 250, range 10..2000). */
+export function getGraphqlMaxSelections(): number {
+  return parseClampedIntEnv('GRAPHQL_MAX_SELECTIONS', 250, 10, 2000);
+}
+
+/** Allow `__schema` / `__type` GraphQL introspection queries. Env `GRAPHQL_INTROSPECTION` (default false in production). */
+export function isGraphqlIntrospectionEnabled(): boolean {
+  return boolEnv('GRAPHQL_INTROSPECTION', getNodeEnv() !== 'production');
+}
+
+/** Mask unexpected internal/Prisma errors on GraphQL responses. Env `GRAPHQL_MASK_ERRORS` (default true outside local/dev). */
+export function isGraphqlErrorMaskingEnabled(): boolean {
+  return boolEnv('GRAPHQL_MASK_ERRORS', !isDevOrLocal());
+}
+
+/** Failed email OTP verification attempts before locking the account. Env `OTP_MAX_FAILED_ATTEMPTS` (default 5, range 3..20). */
+export function getOtpMaxFailedAttempts(): number {
+  return parseClampedIntEnv('OTP_MAX_FAILED_ATTEMPTS', 5, 3, 20);
+}
+
+/** Lock duration in minutes after hitting OTP failure limit. Env `OTP_LOCKOUT_MINUTES` (default 15, range 1..1440). */
+export function getOtpLockoutMinutes(): number {
+  return parseClampedIntEnv('OTP_LOCKOUT_MINUTES', 15, 1, 1440);
+}
+
+/** Retention window in days for `app_error_events`. Env `ERROR_TELEMETRY_RETENTION_DAYS` (default 30, range 1..365). */
+export function getErrorTelemetryRetentionDays(): number {
+  return parseClampedIntEnv('ERROR_TELEMETRY_RETENTION_DAYS', 30, 1, 365);
+}
+
+/** Max events accepted in a single client error batch. Env `CLIENT_ERROR_BATCH_MAX` (default 20, range 1..100). */
+export function getClientErrorBatchMax(): number {
+  return parseClampedIntEnv('CLIENT_ERROR_BATCH_MAX', 20, 1, 100);
+}
+
+/** Replay tolerance window in seconds for signed Admin service requests. Env `ADMIN_HMAC_SKEW_SECONDS` (default 60, range 5..600). */
+export function getAdminHmacSkewSeconds(): number {
+  return parseClampedIntEnv('ADMIN_HMAC_SKEW_SECONDS', 60, 5, 600);
+}

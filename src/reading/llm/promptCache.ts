@@ -147,7 +147,11 @@ export class CacheDeleteError extends Error {
 }
 
 async function geminiDelete(name: string, apiKey: string): Promise<void> {
-  const res = await fetch(`${apiRoot()}/${name}?key=${encodeURIComponent(apiKey)}`, { method: 'DELETE', signal: AbortSignal.timeout(10_000) });
+  const res = await fetch(`${apiRoot()}/${name}`, {
+    method: 'DELETE',
+    headers: { 'x-goog-api-key': apiKey },
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok && res.status !== 404) throw new CacheDeleteError(res.status);
 }
 
@@ -162,9 +166,9 @@ export function goneOnDelete(err: unknown, expiresAt: Date | null | undefined, n
 }
 
 async function geminiExtend(name: string, apiKey: string): Promise<string | undefined> {
-  const res = await fetch(`${apiRoot()}/${name}?updateMask=ttl&key=${encodeURIComponent(apiKey)}`, {
+  const res = await fetch(`${apiRoot()}/${name}?updateMask=ttl`, {
     method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({ ttl: `${ttlSeconds()}s` }),
     signal: AbortSignal.timeout(10_000),
   });
@@ -182,7 +186,10 @@ async function geminiList(apiKey: string): Promise<ListedCache[]> {
   const out: ListedCache[] = [];
   let pageToken = '';
   for (let page = 0; page < 50; page++) {
-    const res = await fetch(`${cachedContentsUrl()}?pageSize=100${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`${cachedContentsUrl()}?pageSize=100${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`, {
+      headers: { 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(10_000),
+    });
     const json = (await res.json().catch(() => ({}))) as { cachedContents?: ListedCache[]; nextPageToken?: string; error?: { message?: string } };
     if (!res.ok) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
     out.push(...(json.cachedContents ?? []));
@@ -215,7 +222,12 @@ async function adoptOrCreate(key: string, e: Entry, model: string, system: strin
       contents: [{ role: 'user', parts: [{ text: base }] }],
       ttl: `${ttlSeconds()}s`,
     };
-    const res = await fetch(`${cachedContentsUrl()}?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`${cachedContentsUrl()}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
     const json = (await res.json()) as { name?: string; expireTime?: string; error?: { message?: string } };
     if (!res.ok || !json.name) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
     const created = Date.now();

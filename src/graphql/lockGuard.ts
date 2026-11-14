@@ -10,12 +10,22 @@
  */
 import { GraphQLError, Kind, type DocumentNode, type FragmentDefinitionNode, type OperationDefinitionNode, type SelectionSetNode } from 'graphql';
 import type { Plugin } from 'graphql-yoga';
-import { ACCOUNT_LOCKED_CODE } from '../auth/requestAuth.js';
+import {
+  ACCOUNT_LOCKED_CODE,
+  AUTH_UNAVAILABLE_CODE,
+  AUTH_UNAVAILABLE_MESSAGE,
+} from '../auth/requestAuth.js';
 
 export const LOCKED_ALLOWED_FIELDS: ReadonlySet<string> = new Set(['me', 'logout', '__typename', '__schema', '__type']);
 
 export function lockedError(): GraphQLError {
   return new GraphQLError('Account locked', { extensions: { code: ACCOUNT_LOCKED_CODE } });
+}
+
+export function authUnavailableError(): GraphQLError {
+  return new GraphQLError(AUTH_UNAVAILABLE_MESSAGE, {
+    extensions: { code: AUTH_UNAVAILABLE_CODE, http: { status: 503 } },
+  });
 }
 
 /** Root field names of the operation that will run, through inline fragments and fragment spreads. */
@@ -46,7 +56,11 @@ export function rootFieldNames(document: DocumentNode, operationName?: string | 
 export function lockGuardPlugin(): Plugin {
   return {
     onExecute({ args, setResultAndStopExecution }) {
-      const ctx = args.contextValue as { locked?: boolean } | undefined;
+      const ctx = args.contextValue as { locked?: boolean; authUnavailable?: boolean } | undefined;
+      if (ctx?.authUnavailable) {
+        setResultAndStopExecution({ errors: [authUnavailableError()] });
+        return;
+      }
       if (!ctx?.locked) return;
       if (rootFieldNames(args.document, args.operationName).every((n) => LOCKED_ALLOWED_FIELDS.has(n))) return;
       setResultAndStopExecution({ errors: [lockedError()] });

@@ -343,12 +343,15 @@ export async function chatWithGemini(
   };
 
   const apiKey = getGeminiApiKey();
-  const url = `${streamPath}?alt=sse&key=${encodeURIComponent(apiKey)}`;
+  const url = `${streamPath}?alt=sse`;
 
   const tBeforeGemini = Date.now();
   const res = await undiciFetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify(requestBody),
     dispatcher: getGeminiUndiciAgent(),
   });

@@ -17,6 +17,9 @@ export interface GraphQLContext {
    * (src/graphql/lockGuard.ts) before any resolver starts.
    */
   locked?: boolean;
+  /** Set when authenticateRequest failed closed due to an auth DB failure (`503 AUTH_UNAVAILABLE`). */
+  authUnavailable?: boolean;
+  requestId?: string | null;
   prisma: PrismaClient;
   request: Request;
 }
@@ -28,5 +31,14 @@ export interface GraphQLContext {
  */
 export async function buildContext({ request }: GraphQLContextParams, deps: RequestAuthDeps = {}): Promise<GraphQLContext> {
   const auth = await authenticateRequest(request.headers, deps);
-  return { userId: auth.userId, role: auth.role, locked: auth.locked, prisma, request };
+  const requestId = request.headers.get('x-request-id') ?? null;
+  return {
+    userId: auth.userId,
+    role: auth.role,
+    locked: auth.locked,
+    authUnavailable: auth.reason === 'auth_unavailable',
+    requestId,
+    prisma,
+    request,
+  };
 }
