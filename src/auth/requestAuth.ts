@@ -9,18 +9,21 @@
  *  - row missing                              -> { userId: null, reason: 'deleted' }
  *  - `locked_at` set                          -> { userId, role, locked: true }
  *  - row `token_version` > token `tv`         -> { userId: null, reason: 'revoked' }   (a token without `tv` is tv = 1)
+ *  - auth store unreachable (DB error)        -> { userId: null, reason: 'auth_unavailable' } (fail closed -> 503)
  *  - otherwise                                -> { userId, role: canonicalRole(row.role), locked: false }
- *
- * A database error falls back to the token's role and not locked: a bug of ours must not lock everyone out.
  */
 import jwt from 'jsonwebtoken';
 import type express from 'express';
+import type { PrismaClient } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { canonicalRole, type RoleId } from './roles.js';
 import { getJwtSecret } from './jwtSecret.js';
+import { recordAppError } from '../telemetry/appErrors.js';
 
 export const ACCOUNT_LOCKED_CODE = 'ACCOUNT_LOCKED';
 export const ACCOUNT_LOCKED_MESSAGE = 'This account is locked.';
+export const AUTH_UNAVAILABLE_CODE = 'AUTH_UNAVAILABLE';
+export const AUTH_UNAVAILABLE_MESSAGE = 'Authentication service temporarily unavailable.';
 
 const CACHE_TTL_MS = 30_000;
 const CACHE_MAX = 5_000;
@@ -38,7 +41,7 @@ export interface RequestAuth {
   role: RoleId | null;
   locked: boolean;
   /** why a valid token was refused */
-  reason?: 'deleted' | 'revoked';
+  reason?: 'deleted' | 'revoked' | 'auth_unavailable';
 }
 
 export interface RequestAuthDeps {
@@ -50,6 +53,8 @@ export interface RequestAuthDeps {
   touchActivity?: (userId: string, at: Date) => Promise<unknown>;
   now?: () => number;
   secret?: string;
+  /** Optional Prisma client for recording `auth_unavailable` telemetry (skipped when mocked readRow has no prisma). */
+  prisma?: PrismaClient;
 }
 
 type HeaderSource = Headers | Record<string, string | string[] | undefined>;
@@ -137,9 +142,20 @@ export async function authenticateRequest(headers: HeaderSource, deps: RequestAu
       entry = { row: await (deps.readRow ?? prismaReadRow)(userId), at: now };
       remember(userId, entry.row, now);
     } catch (err) {
-      // no user id, email or token in the line
-      console.warn(JSON.stringify({ msg: 'request auth: auth row read failed, using the token role', code: (err as { code?: string }).code ?? (err as Error).name }));
-      return { userId, role: canonicalRole(claims.role), locked: false };
+      // Fail closed (SEC-01): never honour unverified JWT claims when lock/role DB check fails.
+      const code = String((err as { code?: string }).code ?? (err as Error).name ?? 'unknown');
+      console.warn(JSON.stringify({ msg: 'request auth: auth row read failed, failing closed', code }));
+      const telemetryDb = deps.prisma ?? (deps.readRow ? null : prisma);
+      void recordAppError(telemetryDb, {
+        source: 'server_auth',
+        severity: 'critical',
+        category: 'auth_unavailable',
+        errorCode: AUTH_UNAVAILABLE_CODE,
+        statusCode: 503,
+        message: `Auth verification unavailable (${code})`,
+        meta: { dbCode: code },
+      });
+      return { userId: null, role: null, locked: false, reason: 'auth_unavailable' };
     }
   }
 
@@ -171,7 +187,8 @@ export function makeRequireUser(deps: RequestAuthDeps = {}): RequireUser {
     if (a.userId && !a.locked) return a.userId;
     if (!res.headersSent) {
       // `error` is kept for clients that read the old body
-      if (a.locked) res.status(401).json({ code: 'account_locked', error: 'Account locked', message: ACCOUNT_LOCKED_MESSAGE });
+      if (a.reason === 'auth_unavailable') res.status(503).json({ code: 'auth_unavailable', error: AUTH_UNAVAILABLE_MESSAGE });
+      else if (a.locked) res.status(401).json({ code: 'account_locked', error: 'Account locked', message: ACCOUNT_LOCKED_MESSAGE });
       else if (a.reason === 'revoked') res.status(401).json({ code: 'session_revoked', error: 'Unauthorized' });
       else res.status(401).json({ code: 'unauthorized', error: 'Unauthorized' });
     }

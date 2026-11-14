@@ -2,7 +2,7 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { registerAdminLabRoutes } from '../../../../src/routes/adminLabRoutes.js';
+import { registerAdminLabRoutes, signAdminServiceHeaders } from '../../../../src/routes/adminLabRoutes.js';
 import { localDateOf, parsePlace, parseWindow, placeOfKey, TRANSIT_MAX_BYTES } from '../../../../src/routes/adminChartData.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -101,7 +101,16 @@ beforeAll(() => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 afterAll(() => server.close());
-const get = (path: string) => fetch(`${base}${path}`, { headers: { 'x-admin-lab-token': 'lab-secret' } });
+const get = (path: string) =>
+  fetch(`${base}${path}`, {
+    headers: signAdminServiceHeaders({
+      secret: 'lab-secret',
+      method: 'GET',
+      pathAndQuery: path,
+      actorId: 'admin-qa',
+      actorRole: 'superadmin',
+    }),
+  });
 
 describe('chart data review, transit part', () => {
   it('serves the sky for the place with most rows (both offset keys, one date each), the ranges, overlays and snapshots overlapping the window', async () => {

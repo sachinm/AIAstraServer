@@ -232,11 +232,12 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
     else o.signal.addEventListener('abort', fromCaller, { once: true });
   }
   const clear = () => clearTimeout(timer);
-  let res = await undiciFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), dispatcher: getAgent(), signal: controller.signal });
+  const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() };
+  let res = await undiciFetch(url, { method: 'POST', headers, body: JSON.stringify(body), dispatcher: getAgent(), signal: controller.signal });
   if ([429, 500, 503].includes(res.status)) {
     await res.text().catch(() => '');
     await sleep(400 + Math.floor(Math.random() * 500));
-    res = await undiciFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), dispatcher: getAgent(), signal: controller.signal });
+    res = await undiciFetch(url, { method: 'POST', headers, body: JSON.stringify(body), dispatcher: getAgent(), signal: controller.signal });
   }
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
@@ -287,7 +288,7 @@ async function callGeminiWithCache(o: GeminiCallOptions): Promise<GeminiResult> 
 
 async function callGeminiOnce(o: GeminiCallOptions, cache: ChosenCache | null): Promise<GeminiResult> {
   const t0 = Date.now();
-  const url = `${getGeminiModelsBaseUrl()}/${o.model}:generateContent?key=${encodeURIComponent(apiKey())}`;
+  const url = `${getGeminiModelsBaseUrl()}/${o.model}:generateContent`;
   const { res, clear } = await post(url, buildRequestBody(o, cache?.name ?? null, cache?.kind), o);
   const waitMs = Date.now() - t0;
   try {
@@ -317,7 +318,7 @@ async function streamGeminiCall(
   onThought?: (delta: string) => void
 ): Promise<GeminiResult> {
   const t0 = Date.now();
-  const url = `${getGeminiModelsBaseUrl()}/${o.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey())}`;
+  const url = `${getGeminiModelsBaseUrl()}/${o.model}:streamGenerateContent?alt=sse`;
   const cache = cacheFor(o);
   let posted: Awaited<ReturnType<typeof post>>;
   try {

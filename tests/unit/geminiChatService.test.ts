@@ -101,7 +101,8 @@ describe('chatWithGemini', () => {
     const call = mockUndiciFetch.mock.calls[0];
     expect(String(call[0])).toContain('streamGenerateContent');
     expect(String(call[0])).toContain('alt=sse');
-    expect(String(call[0])).toContain('key=test-gemini-key');
+    expect(String(call[0])).not.toContain('key=');
+    expect((call[1] as { headers?: Record<string, string> })?.headers?.['x-goog-api-key']).toBe('test-gemini-key');
     expect((call[1] as { method?: string })?.method).toBe('POST');
     expect((call[1] as { dispatcher?: unknown }).dispatcher).toBeDefined();
     const body = JSON.parse((call[1] as { body: string }).body);

@@ -71,6 +71,9 @@ model Auth {
   terms_accepted_at          DateTime?              @map("terms_accepted_at") @db.Timestamptz(6)
   /// When the person last confirmed they are 18 or older (same checkbox as the Terms).
   age_confirmed_at           DateTime?              @map("age_confirmed_at") @db.Timestamptz(6)
+  /// M52 (SEC-01): DB-backed OTP verification brute-force counter and temporary lock across Lambdas.
+  failed_otp_attempts        Int                    @default(0) @map("failed_otp_attempts")
+  otp_locked_until           DateTime?              @map("otp_locked_until") @db.Timestamptz(6)
   activity_days              UserActivityDay[]
   admin_actions_done         AdminAction[]          @relation("AdminActionActor")
   admin_actions_on           AdminAction[]          @relation("AdminActionTarget")
@@ -1598,4 +1601,37 @@ model KundliSlice {
 
   @@unique([kundli_id, slice_id], name: "kundli_slice_key", map: "kundli_slices_kundli_slice_key")
   @@map("kundli_slices")
+}
+
+/// M52: Dual-plane security & runtime error telemetry (masked to consumers, PII-redacted for Admin observability).
+model AppErrorEvent {
+  id                String   @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  created_at        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// web_js | web_react | web_network | web_csp | graphql | server_rest | server_auth | rbac
+  source            String   @db.VarChar(32)
+  /// warn | error | critical
+  severity          String   @default("error") @db.VarChar(16)
+  category          String   @db.VarChar(64)
+  error_code        String   @map("error_code") @db.VarChar(80)
+  status_code       Int?     @map("status_code")
+  page              String?  @db.VarChar(120)
+  operation         String?  @db.VarChar(160)
+  message_redacted  String   @map("message_redacted")
+  stack_fingerprint String?  @map("stack_fingerprint") @db.VarChar(32)
+  stack_preview     String?  @map("stack_preview")
+  request_id        String?  @map("request_id") @db.VarChar(64)
+  session_id        String?  @map("session_id") @db.VarChar(64)
+  user_id           String?  @map("user_id")
+  ip_masked         String?  @map("ip_masked") @db.VarChar(64)
+  user_agent        String?  @map("user_agent") @db.VarChar(300)
+  meta              Json     @default("{}")
+
+  @@index([created_at(sort: Desc)], map: "app_error_events_created_idx")
+  @@index([source, created_at(sort: Desc)], map: "app_error_events_source_created_idx")
+  @@index([category, created_at(sort: Desc)], map: "app_error_events_category_created_idx")
+  @@index([error_code, created_at(sort: Desc)], map: "app_error_events_code_created_idx")
+  @@index([stack_fingerprint, created_at(sort: Desc)], map: "app_error_events_fp_created_idx")
+  @@index([request_id], map: "app_error_events_request_idx")
+  @@index([user_id, created_at(sort: Desc)], map: "app_error_events_user_created_idx")
+  @@map("app_error_events")
 }
