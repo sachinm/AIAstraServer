@@ -20,27 +20,44 @@ export function prismaPoolUrl(rawUrl: string, env: Record<string, string | undef
   const explicitLimit = Number(env.PRISMA_POOLER_CONNECTION_LIMIT || env.PRISMA_CONNECTION_LIMIT || 0);
   const isLambda = Boolean(env.AWS_LAMBDA_FUNCTION_NAME || env.LAMBDA_TASK_ROOT);
 
-  let wanted: number;
-  if (explicitLimit > 0) {
-    wanted = explicitLimit;
-  } else if (isLambda) {
-    wanted = 2;
-  } else {
-    const fetchers = Math.max(DEFAULT_FETCHERS, Number(env.CHART_DATA_FETCH_CONCURRENCY) || 0, Number(env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER) || 0);
-    wanted = fetchers + POOL_MARGIN;
-  }
+  const authority = rawUrl.split('?')[0]!;
+  const isPooler = authority.includes(POOLER_PORT) || /:6432(?:\/|$)/.test(authority);
 
   const currentMatch = /[?&]connection_limit=(\d+)/.exec(rawUrl);
   const current = currentMatch ? Number(currentMatch[1]) : 0;
-  let url = rawUrl;
-  if (explicitLimit > 0 || isLambda) {
-    url = setParam(rawUrl, 'connection_limit', String(wanted));
+  const hasExplicitUrlLimit = Boolean(currentMatch && current > 0);
+
+  const fetchers = Math.max(DEFAULT_FETCHERS, Number(env.CHART_DATA_FETCH_CONCURRENCY) || 0, Number(env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER) || 0);
+
+  let wanted: number;
+  if (explicitLimit > 0) {
+    wanted = explicitLimit;
+  } else if (isPooler) {
+    // Render :6432 PgBouncer URLs respect explicit connection_limit or cap per-Lambda pool at connection_limit=2
+    if (hasExplicitUrlLimit) {
+      wanted = current;
+    } else if (isLambda) {
+      wanted = 2;
+    } else {
+      wanted = fetchers + POOL_MARGIN;
+    }
+  } else if (isLambda) {
+    wanted = hasExplicitUrlLimit ? current : 2;
   } else {
-    url = current >= wanted ? rawUrl : setParam(rawUrl, 'connection_limit', String(wanted));
+    // Direct connection non-Lambda: keep higher connection_limit or raise to fetchers + POOL_MARGIN
+    wanted = current >= (fetchers + POOL_MARGIN) ? current : (fetchers + POOL_MARGIN);
+  }
+
+  let url = rawUrl;
+  if (isPooler && hasExplicitUrlLimit && explicitLimit === 0) {
+    url = rawUrl;
+  } else if (!isPooler && !isLambda && current >= wanted) {
+    url = rawUrl;
+  } else {
+    url = setParam(rawUrl, 'connection_limit', String(wanted));
   }
 
   if (!/[?&]pool_timeout=\d+/.test(url)) url = setParam(url, 'pool_timeout', String(POOL_TIMEOUT_SECONDS));
-  const authority = url.split('?')[0]!;
-  if (authority.includes(POOLER_PORT) && !/[?&]pgbouncer=/.test(url)) url = setParam(url, 'pgbouncer', 'true');
+  if (isPooler && !/[?&]pgbouncer=/.test(url)) url = setParam(url, 'pgbouncer', 'true');
   return url;
 }

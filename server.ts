@@ -537,20 +537,28 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   });
 });
 
-/** The longest boot waits for the registry seeds (they log and give up on their own on failure). */
-const BOOT_SEED_WAIT_MS = 4_000;
+/** Decoupled background execution for agent and technique registry seeding. */
+function seedRegistriesInBackground(): void {
+  void Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)])
+    .then((results) => {
+      for (const res of results) {
+        if (res.status === 'rejected') {
+          console.warn('[boot] registry seed failed:', res.reason);
+        }
+      }
+    })
+    .catch((err: unknown) => {
+      console.warn('[boot] unexpected error during background registry seeding:', err);
+    });
+}
 
 async function start(): Promise<void> {
   await checkDatabaseConnection();
   const nodeEnv = getNodeEnv();
   console.log(`✅ Database connected | NODE_ENV=${nodeEnv}`);
-  // The agent registry and the technique catalogue (docs/admin/03 §4.1): awaited before listen, because on Lambda the
-  // process freezes after each response and an unawaited seed never finishes. One statement each; capped so a slow
-  // database never holds the cold start for more than BOOT_SEED_WAIT_MS.
-  await Promise.race([
-    Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)]),
-    new Promise((resolve) => setTimeout(resolve, BOOT_SEED_WAIT_MS)),
-  ]);
+  // The agent registry and technique catalogue: decoupled from the request boot path so the server
+  // listens immediately without the blocking 4,000ms barrier. Seeds execute non-blocking in the background.
+  seedRegistriesInBackground();
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureAdmins();

@@ -96,6 +96,31 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Render PostgreSQL PgBouncer Connection Bloat & Cross-Cloud Waterfall Latency (P1)**
+  - **Measured / Observed Latencies**: 180ms – 450ms per database round trip when Lambda in AWS us-east-1 connects to Render PostgreSQL (Frankfurt / Oregon) with uncapped connections or without transaction pooling. Sequential query waterfalls across chat/board loading taking 1,200ms – 2,800ms.
+  - **Root Cause**: Uncapped connection limits (`connection_limit=6` on Lambda instances with multiple fetchers causing connection exhaustion on PgBouncer) and missing `pgbouncer=true` causing prepared statement errors/leaks; sequential DB round trips over cross-cloud WAN.
+  - **Remediation**: Enforce `connection_limit=2` for Lambda in `src/lib/prismaUrl.ts` (`PRISMA_POOLER_CONNECTION_LIMIT`), recognize port 6432, enforce `pgbouncer=true`, and utilize batched queries / caching.
+
+- **Lambda Request Boot Seeding Barrier (P1)**
+  - **Measured / Observed Latencies**: 4,000ms delay during cold starts.
+  - **Root Cause**: Blocking `await Promise.race([Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)]), new Promise((resolve) => setTimeout(resolve, BOOT_SEED_WAIT_MS))])` in `server.ts` before `app.listen()`. If database connection was slow or PgBouncer was queuing, Lambda cold starts hung for the full 4,000ms.
+  - **Remediation**: Decoupled registry seeding from the synchronous request boot path in `server.ts`; invoked `seedAgentRegistry` and `seedTechniqueRegistry` asynchronously in background (`seedRegistriesInBackground()`) without blocking `app.listen()`.
+
+- **Consumer Web Monolithic Bundle & Un-chunked Vendor Dependencies (P2)**
+  - **Measured / Observed Latencies**: Initial JS bundle download and parse > 1.4 MB on consumer first-load; main-thread parse/compile time 400ms – 900ms on mobile devices; LCP degradation > 2.5s.
+  - **Root Cause**: All 12+ page routes (`LandingPage`, `SignIn`, `SignUp`, `BirthDetails`, `Dashboard`, `ChatSection`, `YouPage`, `LovePage`, `WorkPage`, `LuckyTimesPage`, `ProfileSection`, etc.) statically imported into `routes.tsx`; monolithic Rollup output combining React, Lucide icons, and Turnstile.
+  - **Remediation**: Dynamic route code-splitting via `React.lazy()` with accessible `<Suspense>` fallback (`RouteLoadingFallback`); Rollup `manualChunks` in `vite.config.ts` separating `vendor-react` (`react`, `react-dom`, `react-router-dom`), `vendor-ui` (`lucide-react`), and `vendor-turnstile` (`@marsidev/react-turnstile`).
+
+- **Prisma Query Profiler Null `db_ms` Telemetry Gap (P2)**
+  - **Measured / Observed Latencies**: Unknown/untracked DB latency in `page_execution_logs` (`db_ms = null`, `queryCount = 0`).
+  - **Root Cause**: `recordPageExecution` in `pageTiming.ts` hardcoded `db_ms: null` and lacked active ALS query instrumentation in `prisma.ts`, blinding operations to slow queries.
+  - **Remediation**: Implemented `AsyncLocalStorage` profiler (`pageTimingStorage`, `runWithPageContext`, `recordDbQuery`) in `src/telemetry/pageTiming.ts` and `src/lib/prisma.ts` measuring Prisma query execution duration and query count in active request context; recorded integer `db_ms` and `queryCount` into `page_execution_logs`.
+
+- **Dashboard Progressive NDJSON Streaming vs. Monolithic GraphQL Waterfall (P2)**
+  - **Measured / Observed Latencies**: 1,800ms – 3,500ms when loading full dashboard (charts, biodata, content, timeline) via single monolithic query.
+  - **Root Cause**: Client waiting for heaviest section (e.g. AI-derived content or deep timeline) before rendering fast sections (profile, biodata).
+  - **Remediation**: Instrumented `GET /api/dashboard/sections-stream` with progressive NDJSON line streaming to render `profile` and `biodata` in `< 100ms` while heavier sections stream concurrently, tracking per-section execution logs.
+
 - **Annual (±10 yr) and `kundli_transit_overlays` parity gap on Sachin (`c584c0a3`) and Archisha (`6514751c`) vs. Sumit (`75b0d618`), plus duplicate/misnamed DB accounts.** Audited 2026-11-06 across PostgreSQL:
   1. **Sumit (`75b0d618-90b7-4db6-bff8-cc7bb0ed561f`)** has 402 ready `kundli_data` rows (including 250 `annual.*` rows across `2016–2035` with `divisional_chart_factor=2,7,9,10`), 893 `kundli_digest` rows (`200` `annual`), 10,260 `kundli_activation` rows, and 11 `kundli_transit_overlays` rows (`1975–2035`).
   2. **Sachin (`c584c0a3-841b-451b-a2ed-f5709c5fb31d`)** and **Archisha (`6514751c-9b30-45e6-bad6-0a56415e067b`)** have all 152 natal/varga/dasha/strength/avastha rows (702 and 694 `kundli_digest` rows; 12,586 and 8,298 `kundli_activation` rows), but only **12 `annual.*` rows** (`@current` and one single year in D1 only → only `2` `annual` digest rows) and **0 `kundli_transit_overlays` rows** in DB (even though `evals/fixtures/G1/catalog/transit_contacts.*.json` exists on disk for Sachin).
