@@ -35,34 +35,23 @@ Do not work through a plan one item at a time when its items are independent.
 
 ## How a plan is written
 
-A plan is not a list of patches. Before any code, write it under `docs/<topic>/` (or as a numbered doc in an existing
-topic folder) and cover, in this order:
+Before any code, write the plan under `docs/<topic>/` covering:
 
-1. **Start.** The system as it is today, with the facts checked (code, logs, AWS config, DB), not assumed. Name the
-   files, Lambdas, tables and env vars involved, and the symptom each problem shows the user.
-2. **End goal.** What the user gets when it is done, stated as behaviour: what they see, how long it takes, what can no
-   longer go wrong.
-3. **Deliverable.** The exact things that ship: code paths, migrations, infra changes, env vars, docs, tests.
-4. **Exactly how it works when done**, one section each for:
-   - **Backend:** every flow end to end (request in, work done, state written, response out), with concurrency, limits,
-     timeouts, retries and failure handling stated as numbers.
-   - **API:** each endpoint, query or event touched: request, response, status codes, errors the client must handle.
-   - **Frontend experience:** what each screen does at each state, what it polls or streams, what it shows while
-     waiting and when something fails.
-   - **UI/UX:** the words on screen, the states (pending, building, ready, failed), timings the user notices.
-5. **Architecture.** The components and how they talk (a diagram or a flow list), what runs where (request path, async
-   invocation, scheduled sweep, Radha, DB), and what each boundary guarantees.
-6. **Ingredients.** Everything the build needs: libraries, env vars, IAM, EventBridge rules, migrations, fixtures, test
-   data, and who provides each (agent, deploy session, Sachin).
-7. **Action steps in sequence.** Numbered, each with the files it touches, what "done" is, and which steps can run in
-   parallel (see "Work in parallel by default").
-8. **Development phases.** Group the steps into phases that each leave the system working and shippable, with the
-   check that closes each phase (tests, a screenshot, a log line) and what is deferred to the next.
-9. **One recommendation.** Where there is a choice, lead with the chosen design and why; alternatives go in a short
-   verdict table. Not a menu.
+1. **Start.** Current system checked against code, logs, AWS config and DB — name files, Lambdas, tables, env vars and user symptoms.
+2. **End goal.** User-visible behaviour, target timings and eliminated failure modes.
+3. **Deliverable.** Exact code paths, migrations, infra/env changes, docs and tests.
+4. **How it works when done:**
+   - **Backend:** end-to-end flow with numeric concurrency, limits, timeouts, retries and failure handling.
+   - **API:** every endpoint/query/event: request, response, status codes and client errors.
+   - **Frontend experience:** per-state UI behaviour, polling/streaming, loading and error views.
+   - **UI/UX:** copy on screen, states (pending, building, ready, failed) and user-noticed timings.
+5. **Architecture.** Component interactions, execution boundaries (request path, async invoke, scheduled sweep, Radha, DB) and boundary guarantees.
+6. **Ingredients.** Libraries, env vars, IAM, EventBridge rules, migrations, fixtures/test data and owner (agent, deploy session, Sachin).
+7. **Action steps in sequence.** Numbered, owning files, definition of done and parallelizable steps.
+8. **Development phases.** Shippable checkpoints with closing verification (tests, screenshot, log line) and deferred items.
+9. **One recommendation.** Lead with the chosen design and why; brief verdict table for alternatives, not a menu.
 
-Decide what a staff engineer could decide; ask only for decisions that are Sachin's (production, money, data writes,
-product behaviour). The plan is the thing to review; code follows it.
+Decide what a staff engineer could decide; ask only for Sachin's decisions (production, money, data writes, product behaviour). Plans are for review; code follows them.
 
 ## Branches, migrations and deploys
 
@@ -148,45 +137,25 @@ The admin panel's Techniques and Agents pages read what is registered and tagged
 
 ## Board and technique machinery: how every change is made (Sachin, 2026-11-09)
 
-This is the modus operandi for any change to a dashboard (Self, Love, Work, Today, Lucky times) and for adding or
-editing a technique. The machinery runs very fast, does as much as it can in code, and spends model tokens only on
-cached prefixes. The worked example is docs/reading-engine/66 §4.8.
+Modus operandi for dashboard changes (Self, Love, Work, Today, Lucky times) and adding/editing techniques: fast, code-first, model tokens spent only on cached prefixes (`docs/reading-engine/66 §4.8`).
 
-1. **Sub-techniques run once; areas select.** Everything a board's areas share is a sub-technique (`<board>.sub.<name>`)
-   that runs once per build over one build context, reads the stored engine rows once, and writes its typed output to
-   `technique_outputs` under a key that carries the digest version, the clock and the boundary stamps that can change it.
-   An area technique is a pure selection over sub-technique outputs into an `AreaBrief`; no area reads the database, and a
-   test asserts it. A boundary rebuild runs only the sub-techniques whose stamp fired.
-2. **Code first, model second.** Before any model call the code produces the ledgers the model would otherwise rediscover:
-   what the chart promises and threatens (gift, knot, grace, with its source row), and what is live now (what could go
-   wrong, from where, from who, since when, until when, and what holds it), with dates from the engine's windows. The
-   model reasons over the ledger and the briefs, confirms or rejects with evidence, adds what code cannot (patterns,
-   interactions, counsel), and never recomputes a date. Node still derives nothing astrological: ledgers join engine rows
-   with reviewed words tables, nothing more.
-3. **Types first, then registration.** Every sub-technique and every model agent has its `Input` and `Output` types
-   exported from the board's `types.ts` before any code uses it, a validator (Zod or `responseSchema`), an `AGENTS` row
-   (`src/agents/registry.ts`) for an agent, a `TECHNIQUES` row (`src/techniques/catalog.ts`) with `selectors` and
-   `contract` for a technique, and summaries that hold counts, ids, tones and scores only. The contracts test fails on a
-   row without them; a plan that adds an agent lists its types in the deliverable.
-4. **Every agent has a slice and a cache plan, prepared before it runs.** Each agent's input is built from the build
-   context (never from the database) as a stable prefix (≥ 1,024 tokens; pad a short family with rows it may legitimately
-   read) plus a variable suffix. The slice is registered in `SUBAGENT_DIGEST_SPECS` (`src/reading/oracle/digestSlices.ts`)
-   and `src/techniques/subagentCachePlan.ts`, with `cachePrefix: true` and `cacheOwner: { userId, kundliId }` and the stable
-   individual prefix in `parts[0]`. The build warms every agent's prefix in parallel before the first agent call
-   (`READING_EXPLICIT_CACHE=1`), and the Lab shows cached versus total tokens per agent for every build.
-5. **Every cache region is in the ledger so the 45-minute sweep can remove it.** A created region (Gemini explicit cache
-   or any provider's) exists only with its `llm_cache_entries` row (`name`, `provider`, `user_id`, `kundli_id`,
-   `prefix_hash`, `model`, `created_at`, `last_used_at`, `expires_at`); reusable outputs go to `reading_findings_cache` or
-   `technique_outputs`. After each use the agent calls `informIndividualCacheUsed({ userId, kundliId })`
-   (`src/reading/llm/cacheSweep.ts`), and `recycleIndividualCaches` deletes the individual's regions and rows after
-   `READING_CACHE_RECYCLE_MINUTES` (45) of inactivity; `runScheduledSweep` is the safety net. A region whose id is not in
-   the ledger is a defect: file it and fix it before merge.
-6. **Budgets are stated and measured.** A board plan states, and the build logs per agent: wall time, prompt tokens,
-   cached tokens, output tokens and cost. Targets unless the plan says otherwise: code layers under 1 s, cold build under
-   30 s, a rebuild that changes only the person's profile under 10 s, cached share of model input above 70 % on a warm
-   build. A change that misses its budget is not merged; a replay in the Lab is the gate.
-7. **No paid call without a yes.** Every phase states key, model, call count and cost, and runs its first replay on
-   stored dossiers in the Lab before any live build (docs/reading-engine/65 §9).
+1. **Sub-techniques run once; areas select.** Shared board logic is a `<board>.sub.<name>` sub-technique running once per build over one build context and stored engine rows, writing typed output to `technique_outputs` keyed by digest version, clock and boundary stamps. Area techniques are pure selections over sub-technique outputs into an `AreaBrief` (no DB reads; asserted by test). Boundary rebuilds re-run only invalidated sub-techniques.
+2. **Code first, model second.** Code first builds ledgers from engine rows + reviewed word tables (what the chart promises/threatens — gift, knot, grace + source row — and what is live now with dates from engine windows). Models reason over ledgers and briefs, confirm/reject with evidence, add counsel/patterns, and never recompute dates or derive astrology in Node.
+3. **Types first, then registration.** Export sub-technique and agent `Input`/`Output` types from the board's `types.ts` before use, with a validator (Zod or `responseSchema`), an `AGENTS` row (`src/agents/registry.ts`), a `TECHNIQUES` row (`src/techniques/catalog.ts`) with `selectors` + `contract` (checked by `tests/unit/techniques/contracts.test.ts`), and count/id/tone/score-only summaries. Plans adding an agent list its types in deliverables.
+4. **Every agent has a slice and cache plan.** Build agent inputs from build context (never DB) as a stable prefix (`>= 1,024` tokens, padded from allowed rows if short) + variable suffix; register in `SUBAGENT_DIGEST_SPECS` (`src/reading/oracle/digestSlices.ts`) and `src/techniques/subagentCachePlan.ts` with `cachePrefix: true`, `cacheOwner: { userId, kundliId }` and stable prefix in `parts[0]`. Warm all prefixes in parallel before the first call (`READING_EXPLICIT_CACHE=1`); Lab displays cached vs total tokens.
+5. **Every cache region is in the ledger for 45-min cleanup.** Every explicit cache region requires an `llm_cache_entries` row (`name`, `provider`, `user_id`, `kundli_id`, `prefix_hash`, `model`, `created_at`, `last_used_at`, `expires_at`); reusable outputs go to `reading_findings_cache` or `technique_outputs`. Consumers call `informIndividualCacheUsed({ userId, kundliId })` (`src/reading/llm/cacheSweep.ts`), and `recycleIndividualCaches` deletes used regions after `READING_CACHE_RECYCLE_MINUTES` (45); `runScheduledSweep` is the safety net. Unregistered regions are merge-blocking defects.
+6. **Budgets are stated and measured.** Plans state, and builds log per agent: wall time, prompt/cached/output tokens and cost. Default targets: code `< 1 s`, cold build `< 30 s`, profile-only rebuild `< 10 s`, warm cached input share `> 70 %`. Lab replay gates merge.
+7. **No paid call without a yes.** Phases state key, model, call count and cost, replaying first on stored Lab dossiers (`docs/reading-engine/65 §9`).
+
+## Enterprise security, scale & Admin error reconciliation (Sachin, 2026-11-13)
+
+Applies to every session and `/teamwork` swarm across `AIAstra_Server`, `AIAstra_WEB` and `aiadastra_admin` (full checklist in `.agents/rules/enterprise-security-observability.md`):
+
+1. **Fail closed, never open.** Auth/lock reads (`src/auth/requestAuth.ts`), OTP brute-force limits (`src/auth/emailCode.ts`), and `CORS_ORIGINS` fail closed (`503 auth_unavailable` / 15-min OTP lock / `origin: false`) on DB or config failure.
+2. **Mask to consumers; capture & correlate for Admin.** GraphQL/REST mask internal/Prisma errors on the wire (`INTERNAL_SERVER_ERROR` + `requestId`) while keeping allowlisted domain codes (`UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_LOCKED`, `BAD_USER_INPUT`). Every server 5xx, GraphQL error, RBAC denial, depth/alias block, client JS/React crash and CSP violation writes a PII-redacted row to `app_error_events` (joined via `request_id`/`session_id`) for `aiadastra_admin` (`Usage › Errors`, `People › Security`).
+3. **Audit every staff read; sign service calls.** Staff inspections of customer charts/profiles (`chart.inspect`, `lab.person_view`) record `admin_actions` and authenticate `aiadastra_admin` -> `AIAstra_Server` with HMAC-signed staff-attributed headers, never anonymous static tokens.
+4. **Headers, CSP & header-only secrets.** Web and API ship `Content-Security-Policy`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Strict-Transport-Security` and `Permissions-Policy`. Provider keys (`x-goog-api-key`) go in headers, never URLs.
+5. **Scale & `/teamwork` gate.** Enforce GraphQL depth/alias caps (`src/config/env.ts`), small per-Lambda DB pools, bounded LLM fan-out and `<=100ms` UI / `<=500ms` cached API / `<=10s` interactive AI deadlines; `/teamwork` verifiers check ASVS 5.0 L2 + Admin error capture before approval.
 
 ## Tracking files
 
