@@ -123,12 +123,14 @@ type Outcome = 'passed' | 'failed' | 'error';
 
 /**
  * Returns true if the value is considered "filled" for a Kundli JSON column
- * (non-null and, for objects, non-empty).
+ * (non-null and, for objects, non-empty and not an engine error payload).
  */
 export function isJsonFieldFilled(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === 'object' && !Array.isArray(value)) {
-    return Object.keys(value as Record<string, unknown>).length > 0;
+    const obj = value as Record<string, unknown>;
+    if ('error' in obj) return false;
+    return Object.keys(obj).length > 0;
   }
   return true;
 }

@@ -1015,8 +1015,13 @@ async function fetchFullKundliBatchImpl(
     for (const field of KUNDLI_JSON_FIELDS) {
       const chartData = (charts as Record<string, unknown>)[field];
       if (chartData !== undefined && chartData !== null) {
-        if (typeof chartData === 'object' && 'error' in (chartData as Record<string, unknown>)) {
+        if (
+          typeof chartData === 'object' &&
+          !Array.isArray(chartData) &&
+          'error' in (chartData as Record<string, unknown>)
+        ) {
           console.warn(`[AstroKundli] batch subfield ${field} error:`, (chartData as Record<string, unknown>).error);
+          continue;
         }
         result[field] = chartData as Prisma.JsonValue;
       }
@@ -1044,8 +1049,16 @@ async function fallbackSequentialCharts(
   coords?: { lat: number | null; lon: number | null; tz: number | null } | null
 ): Promise<Record<KundliJsonField, Prisma.JsonValue>> {
   const result: Partial<Record<KundliJsonField, Prisma.JsonValue>> = {};
+  const extra =
+    coords && coords.lat != null && coords.lon != null && coords.tz != null
+      ? { lat: coords.lat, lon: coords.lon, tz: coords.tz }
+      : {};
   for (const field of KUNDLI_JSON_FIELDS) {
-    result[field] = await fetchHoroscopeChart(params, field, coords);
+    const now = Date.now();
+    const startAt = Math.max(now, radhaNextStartAt);
+    radhaNextStartAt = startAt + radhaLimits().spacingMs;
+    if (startAt > now) await sleep(startAt - now);
+    result[field] = await fetchHoroscopeChartImpl(params, field, extra);
   }
   return result as Record<KundliJsonField, Prisma.JsonValue>;
 }
