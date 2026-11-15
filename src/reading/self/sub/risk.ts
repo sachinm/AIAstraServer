@@ -33,8 +33,11 @@ export function subRisk(asOf: string, periods: PeriodFrame | null, windows: Wind
       continue;
     }
     const pk = planetKey('D1', w.planet);
-    const knot = knots.find((k) => k.evidence.includes(pk));
-    const holds = graces.filter((x) => x.evidence.includes(pk) || (knot && x.cancels === knot.id)).map((x) => x.id);
+    const knot = knots.find((k) => k.source.yogaId && k.evidence.includes(pk)) ?? knots.find((k) => k.evidence.includes(pk));
+    const isNeechaVargottamaKnot = knots.some((k) => k.id === `promise:${w.planet}.neecha_vargottama_vakra`);
+    const holds = isNeechaVargottamaKnot
+      ? graces.filter((x) => Boolean(knot && x.cancels === knot.id)).map((x) => x.id)
+      : graces.filter((x) => x.evidence.includes(pk) || (knot && x.cancels === knot.id)).map((x) => x.id);
     rows.push({
       id: `risk:${w.rowId}`,
       matter,

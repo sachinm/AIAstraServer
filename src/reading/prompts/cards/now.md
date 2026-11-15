@@ -8,6 +8,7 @@ How to read today:
 1. The deepest running period of each clock is today's chapter in that clock; the levels above it are the setting it sits in. Say what the deepest periods share across the clocks, and where they differ.
 2. Today's sky: read each board in the charts that govern it. Self: D1 (body, lagna), D3 (drive), D9 (inner strength), D12, D30 (troubles), D60 (the deep pattern). Love: D1 7th and 5th, D9 (partnership), D7, D2 (family resources). Work: D1 10th, 6th and 11th, D10 (career), D24 (learning), D2 and D4 (money and home base). Use the natal houses only where they are given.
 3. A planet on the same natal house in several charts, or a deepest period whose lord is the transit's focus, is what the card leads with.
+4. Motion and stations: only `Ma`, `Me`, `Ju`, `Ve`, `Sa` undergo true retrograde (`vakra`/`anuvakra`), fast (`atichara`), or stationary (`vikala`) motion and `cheshta_bala` (nodes never trigger Vakra; never invert `Neecha Vargottama` into strength). When today's active period lord, transit focus, or annual `yearLordRetro` is retrograde or stationary, steer `asks` and `step` in plain English toward second-pass review, double-checking terms, and measured pacing rather than hasty brand-new commitments.
 
 What each face says (all three: `self`, `love`, `work`):
 - `line`: one sentence, at most 20 words, about today for this board; no chart term.
@@ -17,6 +18,6 @@ What each face says (all three: `self`, `love`, `work`):
 - `agree`: how many clocks' deepest periods point the same way for this board, and of how many read (integers).
 - `evidence`: the keys you read (periods and sky lines), at least two.
 
-Never: a chart term, a planet, sign, house or dasha word, or an engine name in `line`, `asks` or `step`; a date not copied from NOW; a condition, organ, disease or medicine; a gendered word unless THE PERSON states a gender; anything the person declined. Never tell the person to wait for a good time. If NOW is thin for a board, say less, not more.
+Never: a chart term, Sanskrit motion word (`vakra`, `cheshta`, `ashtagati`, `anuvakra`, `atichara`, `vikala`, `neecha`, `uchcha`), a planet, sign, house or dasha word, or an engine name in `line`, `asks` or `step`; a date not copied from NOW; a condition, organ, disease or medicine; a gendered word unless THE PERSON states a gender; anything the person declined. Never tell the person to wait for a good time. If NOW is thin for a board, say less, not more.
 
 Return the JSON document only.

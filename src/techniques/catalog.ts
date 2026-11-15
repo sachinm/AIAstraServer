@@ -241,7 +241,7 @@ const WORK_EXTRA_BUILT: TechniqueDef[] = [
     charts: [c('annual', 'tithi_pravesha'), c('annual', 'tithi_pravesha_dasha'), c('annual', 'mudda'), c('annual', 'patyayini'), c('annual', 'sahams'), c('divisional', 'D10')],
     algorithm: [
       'Tithi Pravesha led (doc 66 §4.10): runningTithiPravesha picks the TP D1 row whose return moment has passed (tp_start ≤ the person\'s local now < tp_end; before the return of this year the previous year\'s TP is in force; never the calendar birthday, never the Varsha year in its place)',
-      "Grade the year chart's houses 10, 6 and 1 (lord in the house or kendra/trikona without debility supports; in a dusthana or debilitated tests)",
+      "Grade the year chart's houses 10, 6 and 1 (lord in the house or kendra/trikona without debility supports; in a dusthana or debilitated tests), plus D10 and TP D10 operating posture (yearLordRetro iterative_review vs linear_build)",
       'Read the houses of the rajya and karma sahams (kendra supports, dusthana tests) and the TP year dasha lord covering the month, only when the engine bounds that dasha to the year',
       'Cast one vote (support, test or neutral) as the annual family of the present tone',
     ],
@@ -298,7 +298,7 @@ const WORK_EXTRA_BUILT: TechniqueDef[] = [
     status: 'built',
     charts: [c('divisional', 'D1'), c('divisional', 'D10'), c('divisional', 'D9'), c('divisional', 'D60')],
     algorithm: [
-      'For the running lord of the main, conditional and karaka clocks, read its place and dignity in D1, D10, D9 and D60',
+      'For the running lord of the main, conditional and karaka clocks, read its place, dignity, retro/motionState, cheshtaBala and vargaReckoning in D1, D10, D9 and D60 under the configured Vakra dignity regime (never inverting Neecha Vargottama)',
       'A dasha vote counts only when D1 and D10 agree on its side; D9 breaks a tie',
       'D60 confirms only when the birth time is recorded to the minute, and never decides alone',
       "When D1 and D10 disagree, the family's vote is split and not counted",
@@ -384,6 +384,7 @@ export function scenarioAlgorithm(s: ScenarioRule): string[] {
     'General: abhijit overlap of 10 minutes or more (+2); amrita gadiya overlap (+2); good muhurtas covering half the piece (+1)',
     "Personal: overlay when the person has a chart: tara good +1 / bad −1, chandra bala good +1 / bad −1 (the engine's verdicts)",
     "Personal: the hora lord's functional nature for this chart, when the digest gives it: benefic +1 / malefic −1; it never opens a gated piece",
+    'General: when the stored day row carries planet_motion, apply LUCKY_RETROGRADE_* karaka penalties for retrograde, stationary or combust significators of the act (no-op when planet_motion is absent)',
     `General: keep pieces scoring ${s.floor} or more; show the best two in time order`,
   ];
   return steps;
@@ -518,11 +519,11 @@ interface LayerTarget {
 const BUILT_LAYER_STEPS = (t: { houses: string; houseNumbers: number[]; vargas: string[] }): Record<string, string[]> => ({
   promise: [
     `For each of ${t.houses}: read the D1 house card from the digest`,
-    "The lord in the house itself or in a house the engine labels kendra or trikona: +2; the lord's dignity exalted, own or moolatrikona: +2",
+    "The lord in the house itself or in a house the engine labels kendra or trikona: +2; the lord's dignity exalted, own or moolatrikona: +2 (moderated by evaluateVakraDignityRegime for retrograde Vakra-capable lords, never inverting Neecha Vargottama)",
     'Each occupant and each graha drishti whose functional nature the engine labels benefic: +1 (malefic: −1, kept for the score only)',
     'SAV of the house ≥ 28: +1; a yoga in the register whose houses or planets include the house or its lord: +1 to +2 by class',
     "The lord's avastha scales the supports: x0.5 when mrita or sushupta, x1.25 when jagrat or deepta",
-    "The area's planets: dignified in D1 +1; shadbala ratio ≥ 1.2 +1",
+    "The area's planets: dignified in D1 +1; shadbala ratio ≥ 1.2 +1; strong Cheshta Bala on retrograde benefics noted in evidence",
     'Each support becomes one plain line; the digest keys go in its evidence',
   ],
   affliction: [
@@ -693,8 +694,8 @@ const SELF_EXTRA_BUILT: TechniqueDef[] = [
       'Compute three 10-year life windows relative to today (asOf) and native age (Last 10 Years, Who You Are Now, and Next 10 Years)',
       'Anchor the core temperament from D1 Lagna, Lagna lord (Paka Lagna), D9 Navamsa maturation of L1 and Moon, Sun, and Atmakaraka (AK)',
       'For subjects over age 36, validate D1+D9 mutual confirmation (detecting Vargottama, Neecha Bhanga via D9, False Promise, and Drudha Karma)',
-      'Select the dominant Mahadasha/Antardasha across 40+ dasha systems and active Tithi Pravesha year lord from runningTithiPravesha',
-      'Translate the ruling planet nature, D1/D9 dignity, and activated house themes into plain-language traits, growth lessons, and practical shifts with zero chart jargon on the surface',
+      'Select the dominant Mahadasha/Antardasha across 40+ dasha systems and active Tithi Pravesha year lord (including yearLordRetro iterative_review posture) from runningTithiPravesha',
+      'Translate the ruling planet nature, D1/D9 dignity, 5-planet Vakra iterative refinement (without inverting Neecha Vargottama), and activated house themes into plain-language traits, growth lessons, and practical shifts with zero chart jargon on the surface',
     ],
     source: 'BPHS Ch. 46-51 (Vimshottari Dasha Phala); Sanjay Rath Crux of Vedic Astrology (Lagna, Paka Lagna & D9 Maturation); docs/reading-engine/76',
     code: 'src/reading/area/selfCharacterAndJoy.ts buildSelfCharacterArc; houseLayers.ts buildBoard',
@@ -734,7 +735,7 @@ const SELF_EXTRA_BUILT: TechniqueDef[] = [
     ],
     algorithm: [
       'Read the Moon (Chandra: Manas) in D1 and D9: sign, house, dignity, Janma Nakshatra (StarProfile.moonStar), benefic/malefic drishti, and the 4th house (Sukha Bhava) to map emotional rhythm and what restores inner peace',
-      'Read Mercury (Budha: Buddhi, play, wit & curiosity) in D1, D9, and D24: sign, house, dignity, and aspects alongside the 5th house (creative joy) and 3rd house (hands-on craft) to map conversational style and intellectual flow',
+      'Read Mercury (Budha: Buddhi, play, wit & curiosity) in D1, D9, and D24: sign, house, dignity, retrograde/motionState, and aspects alongside the 5th house (creative joy) and 3rd house (hands-on craft) to map conversational style and second-pass intellectual flow',
       'Synthesize four plain-language joy & fulfillment pillars: Everyday Joy & Flow (Moon + 4H), Mind, Curiosity & Play (Mercury + 5H), Social & Creative Recharge (3H + 11H + Moon/Mercury), and Restorative Sanctuary (D9 Moon + 4H/12H)',
       'Keep all astrological identifiers inside structured evidence[] while rendering 100% digested plain English on the board',
     ],
@@ -881,7 +882,8 @@ const GENERAL: TechniqueDef[] = [
     charts: ['D2', 'D4', 'D7', 'D9', 'D10', 'D12', 'D24', 'D30', 'D60', 'D16', 'D20', 'D27', 'D40', 'D45', 'D81', 'D108', 'D144'].map((v) => c('divisional', v)),
     algorithm: [
       ...CODE_READER_STEPS('varga_dynamics', "the house and planet cards of D1 and of each frame varga the digest holds (D9 for marriage, D10 for career, D2, D4, D7, D24, D12, D30, D60 by frame); the deeper set (D16, D20, D27, D40, D45, D81, D108, D144) joins when the question type is why_meaning or the horizon is life"),
-      "For each frame house and varga: the D1 lord strong (exalted, moolatrikona, own) in D1 and in the varga supports (weight 2); debilitated in both obstructs (weight 2); strong in one and debilitated in the other is neutral (weight 1, promise and form disagree)",
+      'Check Neecha Vargottama (debilitated in the same sign across D1 and D9) first: never boost it — emit a fixed Drudha Karma boundary claim even when retrograde; non-debilitated D9 Vargottama supports (weight 2)',
+      "For each frame house and varga: the D1 lord strong (exalted, moolatrikona, own) in D1 and in the varga supports (weight 2); debilitated in both obstructs (weight 2); strong in one and debilitated in the other is neutral (weight 1, promise and form disagree); divisional retrograde motion (vargaReckoning, vargaSandhi, Vakra regime) emits a cited form claim",
       'A planet occupying the frame house in D1 and the same house in the varga is neutral (weight 1, the bond repeats)',
     ],
     special: 'Code-path reader first (doc 53 step 5); a model reader on the same contract (R03 curriculum) waits for the spend yes',
@@ -915,7 +917,7 @@ const GENERAL: TechniqueDef[] = [
     board: 'chat',
     status: 'built',
     charts: [c('natal', 'facts'), c('annual', 'tithi_pravesha'), c('annual', 'tithi_pravesha_dasha'), c('annual', 'varsha'), c('annual', 'sahams'), c('annual', 'mudda'), c('annual', 'patyayini'), c('annual', 'tajaka')],
-    algorithm: [...ANALYST_STEPS('base, frame, annual'), 'Runs when the graph or the digest has the Tithi Pravesha / Varsha year charts (current, previous and next year in D1, D9, D10), their year dashas, sahams, muntha, year lord and Tajaka yogas for the question', "The current year is the running Tithi Pravesha (packs/digestSource.ts annualFromDigest and oracle/digestSlices.ts through runningTithiPravesha: the TP whose return moment has passed, tp_start <= now < tp_end; before the return of this year the previous year's TP); Varsha and Mudda only confirm (prompts/annual.md carries the rule)"],
+    algorithm: [...ANALYST_STEPS('base, frame, annual'), 'Runs when the graph or the digest has the Tithi Pravesha / Varsha year charts (current, previous and next year in D1, D9, D10), their year dashas, sahams, muntha, year lord (including yearLordRetro / horaLordRetro / lagnaLordRetro motion flags) and Tajaka yogas for the question', "The current year is the running Tithi Pravesha (packs/digestSource.ts annualFromDigest and oracle/digestSlices.ts through runningTithiPravesha: the TP whose return moment has passed, tp_start <= now < tp_end; before the return of this year the previous year's TP), distinguishing iterative_review (yearLordRetro) from linear_build; Varsha and Mudda only confirm (prompts/annual.md carries the rule)"],
     special: 'Becomes general.annual_set in D3 (doc 53 §4.4): the current, previous and next year (TP and VP, D1, D9, D10) with their year dashas, sahams, muntha, year lord and Tajaka yogas when served; the id stays so tagged runs keep joining. Selected for horizons within 24 months (so the oracle reader R11 runs only then too). Reads the digest when it is ready for base and the multi-year annual set',
     source: 'docs/reading-engine/28 §5; 53 §4.4',
     code: 'src/reading/nodes/specialists.ts; packs/selector.ts ANALYST_SECTIONS.annual; packs/digestSource.ts overlayDigest',
@@ -963,10 +965,10 @@ const GENERAL: TechniqueDef[] = [
     status: 'built',
     charts: [c('natal', 'yogas'), c('natal', 'doshas'), c('natal', 'strength'), c('ashtakavarga', 'sav'), c('natal', 'avasthas')],
     algorithm: [
-      ...CODE_READER_STEPS('strength_yoga', "the D1 yoga register rows that join a frame house or a frame lord or karaka, the SAV of the frame houses and the shadbala of the frame lords"),
+      ...CODE_READER_STEPS('strength_yoga', "the D1 yoga register rows that join a frame house or a frame lord or karaka, the SAV of the frame houses, the shadbala and Vakra/Cheshta Bala motion fields of the frame lords/karakas, and TP yearLordRetro flags when present"),
       'A yoga the engine lists as present supports (weight 2) and goes to graces; a row of class dosha obstructs (weight 2)',
       'SAV of a frame house: 28 or more supports, 22 or less obstructs (weight 1)',
-      "Shadbala ratio of a frame lord (the engine's rupas over the required): 1 or more supports, below 1 obstructs (weight 1); the rank is quoted",
+      "Shadbala ratio of a frame lord (the engine's rupas over the required): 1 or more supports, below 1 obstructs (weight 1); the rank is quoted; retrograde/stationary frame bodies and high Cheshta Bala (>= threshold) or TP yearLordRetro emit cited motion claims (never inverting Neecha Vargottama)",
     ],
     special: 'Code-path reader first (doc 53 step 5); a model reader on the same contract (R05, R06 curricula) waits for the spend yes',
     source: 'docs/reading-engine/53 §4.4; 33 R5, R6; BPHS ch. 27, 34-41, 66-72',
@@ -1022,7 +1024,7 @@ const GENERAL: TechniqueDef[] = [
     algorithm: [
       "The person named in the question (mother, father, spouse, child, sibling; oracle/readers.ts personIn), else the person subject's (spouse for marriage, child for children, sibling for siblings), maps to a house, a varga and a natural karaka of the owner's chart (codeReaders/rules.ts PERSON_SIGNIFIERS); the reading never uses another person's birth data",
       ...CODE_READER_STEPS('person', "the person's house cards in D1 and the relationship varga and the karaka's planet cards"),
-      "The lord of the person's house, its occupants and the karaka: strong (exalted, moolatrikona, own) supports, debilitated obstructs (weight 2); the house's SAV by the 28 / 22 rule (weight 1); every claim is about the person",
+      "The lord of the person's house, its occupants and the karaka: strong (exalted, moolatrikona, own) supports, debilitated obstructs (weight 2); retrograde or stationary house lords and karakas emit cited iterative bond claims; the house's SAV by the 28 / 22 rule (weight 1); every claim is about the person",
     ],
     special: 'Selected for the person subjects and, by an any-of rule in src/techniques/use.ts, for the clarify slot other_person on any subject; the oracle flow keeps its model reader R13 beside it',
     source: 'docs/reading-engine/53 §4.4; 33 R13; BPHS ch. 3, 32 (karakas)',
@@ -1474,10 +1476,10 @@ const RESEARCH: TechniqueDef[] = [
     charts: RESEARCH_SELF_CHARTS,
     algorithm: [
       'Independently read the staged research_digests, research_activations, and generated Self Dashboard run (board_data, house_varga_matrix, temporal_data, trace_data, reading_prose)',
-      'Verify Gate 1 (D1 House & Lordship Integrity) and Gate 2 (Divisional Varga Agreement across D9, D10, D20, D24, D12, D2, D4, D7, D60)',
-      'Verify Gate 3 (Multi-Clock Dasha Convergence across 7 families and MD/AD/PD/Sookshma dates) and Gate 4 (Ashtakavarga SAV >= 28 / <= 22 & Shadbala ratio >= 1.0 bounds)',
+      'Verify Gate 1 (D1 House & Lordship Integrity) and Gate 2 (Divisional Varga Agreement across D9, D10, D20, D24, D12, D2, D4, D7, D60, including strict non-inversion of Neecha Vargottama)',
+      'Verify Gate 3 (Multi-Clock Dasha Convergence across 7 families, active retrograde dasha lords, and MD/AD/PD/Sookshma dates) and Gate 4 (Ashtakavarga SAV >= 28 / <= 22 & Shadbala / Cheshta Bala bounds)',
       'Verify Gate 5 (Yoga, Avastha & Neecha Bhanga / Jupiter Protection floor) and Gate 6 (Nakshatra Janma/Cusp Star & daily Tara/Chandra Bala consistency)',
-      'Verify Gate 7 (November, Thanksgiving Week, December, and New Year chronological continuity) and Gate 8 (SOUL.md Rule 0, 4-Tier Sattvic/Rajasic/Mediocre/Baseline Playbook, and zero banned engine names)',
+      'Verify Gate 7 (November, Thanksgiving Week, December, and New Year chronological continuity plus TP yearLordRetro tracking) and Gate 8 (SOUL.md Rule 0, 4-Tier Sattvic/Rajasic/Mediocre/Baseline Playbook, zero Sanskrit motion jargon on Read face, and zero banned engine names)',
       'Compute the 0-100% accuracy score, pass/warn/fail verdict (pass >= RESEARCH_VERIFIER_PASS_SCORE, default 95%), passed check receipts, and any missed astrological factors',
     ],
     source: 'docs/admin/09 §4.1.4; SOUL.md; BPHS ch. 6-7, 27, 34-41, 46-51, 66-72; Jaimini Upadesa Sutras',
@@ -2051,7 +2053,7 @@ const SELF_V2: TechniqueDef[] = [
     'Self v2 S3: dated windows around today (degraded: activation and the stored sky overlay until kundli_pressure lands)',
     [c('dasha', 'primary clock L1-L3'), c('transit', 'stored sky overlay'), c('natal', 'functional nature')],
     [
-      'Rows: every primary-clock activation row overlapping asOf ±36 months (matters from its stored houses through SELF.matters) and the sky overlay ingresses of SELF_V2_WINDOW_TRANSIT_PLANETS (house_from_lagna, house_from_moon as stored), Sade Sati and dhaiya spans',
+      'Rows: every primary-clock activation row overlapping asOf ±36 months (matters from its stored houses through SELF.matters, incorporating retrograde/stationary lord polarity) and the sky overlay ingresses of SELF_V2_WINDOW_TRANSIT_PLANETS, planetary stations (turns retrograde / turns direct), Sade Sati and dhaiya spans, plus degraded TP yearLordRetro windows',
       'Polarity: the period lord D1 card functional label through FUNCTIONAL_POLARITY (malefic presses, benefic supports, neutral mixed); transits and sign periods mixed; strength 2 for every row (the engine stores no grade); degraded true with gaps',
       'strip = rows overlapping asOf ±6 months; heaviestNow = the live pressing row by strength then soonest end; easesAt = its end when stored; nextSupportFrom = the first supporting row starting after asOf',
       'startedLast12m = rows that started in the last 12 months; endingNext6m = rows ending in the next 6 months; byMatter groups the strip; since/until only where the stored row has them',
@@ -2071,7 +2073,7 @@ const SELF_V2: TechniqueDef[] = [
       'Each D1 yoga/dosha row (varga rows left out): kind from its stored class through PROMISE_KIND_BY_CLASS (cancellation grace; dosha, affliction knot; raja, mahapurusha, dhana, viparita gift); rows with no such class are left out with a gap',
       'Duplicates by name and kind are dropped; matter = SELF.matters of the first stored house, who = SELF.people of every stored house; evidence = the yoga key and its planets',
       'A knot whose stored dosha details say hasExceptions adds a grace that cancels it',
-      'A planet whose D1 dashaCharter isYogi adds a gift, isAvayogi a knot, on the matter of its stored house; strength 2 (the engine stores no grade) with a gap',
+      'A planet whose D1 dashaCharter isYogi adds a gift, isAvayogi a knot, on the matter of its stored house; retrograde Vakra-capable planets add nuanced gift/knot/grace entries via evaluateVakraDignityRegime (never inverting Neecha Vargottama)',
     ],
     [inp('yoga', 'D1 yogas and doshas with class and details', 'yoga_row'), inp('planet', 'D1 cards (house, owns, dasha_charter yogi flags)', 'planet_card')],
     'src/reading/self/sub/promise.ts subPromise; src/reading/self/v2words.ts PROMISE_KIND_BY_CLASS, SELF_MATTERS, SELF_PEOPLE',
@@ -2086,7 +2088,7 @@ const SELF_V2: TechniqueDef[] = [
     [
       'Join of S2, S3 and S4 only: every S3 row live at asOf whose polarity presses and that has a planet and stored houses',
       'matter = its first matter; what = RISK_WHAT[planet]; from = planet, first stored house, window id and the yoga id of an S4 knot naming the same planet; who = SELF.people of its houses',
-      'since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot',
+      'since/until = the window dates where stored; holds = S4 graces naming the same planet or cancelling that knot (strictly excluding Neecha Vargottama Vakra knots from cancellation)',
       'top3 = the three rows with the highest engine strength, then the soonest until',
       'An engine annual row (the Tithi Pravesha year) that presses on a matter is a risk row like any other, with from.chart = year',
     ],

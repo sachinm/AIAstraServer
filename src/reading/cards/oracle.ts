@@ -54,6 +54,19 @@ export function renderCardLedger(cells: readonly LedgerCell[]): { text: string; 
   return { text: L.join('\n'), keys: [...keys].sort(cmp) };
 }
 
+export interface ActiveTimingMotionSignals {
+  mdRetro?: boolean;
+  adRetro?: boolean;
+  mdStationary?: boolean;
+  adStationary?: boolean;
+  mdMotionState?: string | null;
+  adMotionState?: string | null;
+  mdCheshtaBala?: number | null;
+  tpYearLordRetro?: boolean;
+  tpOperatingPosture?: string | null;
+  stationCount?: number;
+}
+
 export interface ActiveTimingBlockInput {
   clock?: { primary?: string } | null;
   frameClock?: string | null;
@@ -70,6 +83,7 @@ export interface ActiveTimingBlockInput {
   ageYears?: number | null;
   spans?: Array<{ tone?: string; id?: string }>;
   card?: SelfCardId | null;
+  motion?: ActiveTimingMotionSignals | null;
 }
 
 /**
@@ -84,19 +98,34 @@ export function renderActiveTimingAndVargaBlock(input: ActiveTimingBlockInput): 
   const activeYear = input.year;
   const spans = input.spans ?? [];
 
+  const motion = input.motion;
   const lines: string[] = [
     '# ACTIVE DASHA & TIMING WINDOWS',
     `- Active Reading Clock: ${activeClock}`,
-    ...(runningMd ? [`- Current Mahadasha: ${runningMd.lord} (${runningMd.from} to ${runningMd.to})`] : []),
-    ...(runningAd ? [`- Current Antardasha: ${runningAd.lord} (${runningAd.from} to ${runningAd.to})`] : []),
+    ...(runningMd
+      ? [
+          `- Current Mahadasha: ${runningMd.lord} (${runningMd.from} to ${runningMd.to})${motion?.mdStationary ? ' [stationary/vikala — pivotal pause]' : motion?.mdRetro ? ` [retrograde/${motion.mdMotionState ?? 'vakra'}${typeof motion.mdCheshtaBala === 'number' ? `, Cheshta=${motion.mdCheshtaBala.toFixed(1)}` : ''} — iterative second-pass delivery]` : ''}`,
+        ]
+      : []),
+    ...(runningAd
+      ? [
+          `- Current Antardasha: ${runningAd.lord} (${runningAd.from} to ${runningAd.to})${motion?.adStationary ? ' [stationary/vikala]' : motion?.adRetro ? ` [retrograde/${motion.adMotionState ?? 'vakra'} — review & rework]` : ''}`,
+        ]
+      : []),
     ...(activeYear
       ? [
           `- Running Tithi Pravesha Year: ${activeYear.from?.slice(0, 4) ?? ''} (${activeYear.from ?? ''} to ${activeYear.to ?? ''})`,
-          `- Annual Year Lord: ${activeYear.yearLord ?? 'unresolved'}`,
+          `- Annual Year Lord: ${activeYear.yearLord ?? 'unresolved'}${motion?.tpYearLordRetro ? ' [retrograde in annual chart — iterative_review posture]' : ''}`,
+          ...(motion?.tpOperatingPosture
+            ? [`- Annual Operating Posture: ${motion.tpOperatingPosture}`]
+            : []),
           ...(activeYear.shortClock
             ? [`- Annual Short Clock: ${activeYear.shortClock.lord} (${activeYear.shortClock.from} to ${activeYear.shortClock.to})`]
             : []),
         ]
+      : []),
+    ...(typeof motion?.stationCount === 'number' && motion.stationCount > 0
+      ? [`- Active Sky Stations in Window: ${motion.stationCount} station event(s) — honor review/turning-point pacing around station dates.`]
       : []),
     ...(isMature
       ? [
@@ -183,6 +212,50 @@ export function checkAgainstLedger(card: OracleCardV3, frame: YearFrameV3, cells
   return problems;
 }
 
+function inferMotionSignalsFromPrefix(
+  prefixText: string,
+  periods: ActiveTimingBlockInput['periods'],
+  windows: SelfBuildContext['sub']['windows'],
+): ActiveTimingMotionSignals | null {
+  const md = periods?.running?.lord;
+  const ad = periods?.runningSub?.lord;
+  const checkPlanetLine = (p: string | undefined) => {
+    if (!p) return { retro: false, stationary: false, motionState: null as string | null, cheshta: null as number | null };
+    const re = new RegExp(`\\{planet:D1\\.${p}\\}[^\\n]*`, 'i');
+    const line = re.exec(prefixText)?.[0] ?? '';
+    const retro = /\bretro(?:grade)?(?:=true)?\b|\bvakra\b|\banuvakra\b/i.test(line) && !/\bretro=false\b/i.test(line);
+    const stationary = /\bvikala\b|\bstationary(?:=true)?\b/i.test(line) && !/\bstationary=false\b/i.test(line);
+    const motionMatch = /\bmotion(?:State)?=([a-z_]+)/i.exec(line);
+    const cheshtaMatch = /\bcheshta(?:Bala)?=([0-9]+(?:\.[0-9]+)?)/i.exec(line);
+    return {
+      retro,
+      stationary,
+      motionState: motionMatch?.[1] ?? (stationary ? 'vikala' : retro ? 'vakra' : null),
+      cheshta: cheshtaMatch ? Number(cheshtaMatch[1]) : null,
+    };
+  };
+  const mdInfo = checkPlanetLine(md);
+  const adInfo = checkPlanetLine(ad);
+  const tpYearLordRetro = /\byearLordRetro=true\b|\bposture=iterative_review\b/i.test(prefixText);
+  const tpPostureMatch = /\b(?:operatingPosture|posture)=(linear_build|iterative_review|protective_pacing)\b/i.exec(prefixText);
+  const stationCount = (windows?.strip ?? []).filter((w) => w.rowId.includes('station')).length;
+  if (!mdInfo.retro && !mdInfo.stationary && !adInfo.retro && !adInfo.stationary && !tpYearLordRetro && !tpPostureMatch && stationCount === 0) {
+    return null;
+  }
+  return {
+    mdRetro: mdInfo.retro,
+    mdStationary: mdInfo.stationary,
+    mdMotionState: mdInfo.motionState,
+    mdCheshtaBala: mdInfo.cheshta,
+    adRetro: adInfo.retro,
+    adStationary: adInfo.stationary,
+    adMotionState: adInfo.motionState,
+    tpYearLordRetro,
+    tpOperatingPosture: tpPostureMatch?.[1] ?? (tpYearLordRetro ? 'iterative_review' : null),
+    stationCount,
+  };
+}
+
 /**
  * The card's call, uncached part. The matter rows are cut to the frame and each row is listed once; rows and promise
  * entries already in the shared prefix are named by key only (`cardMatterRows`). The replay's cards read 13.6 k to
@@ -193,6 +266,7 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
   const range = frameRange(i.frame);
   const rows = cardMatterRows(i.matterSlices, range, new Set(i.prefix.keys));
   const matter = i.matterSlices.length ? rows.text : '';
+  const motion = inferMotionSignalsFromPrefix(i.prefix.text, i.ctx.sub.periods, i.ctx.sub.windows);
   const timingBlock = renderActiveTimingAndVargaBlock({
     clock: i.ctx.sub.clock,
     frameClock: i.frame.clock,
@@ -201,6 +275,7 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
     ageYears: i.ctx.sub.profile?.ageYears,
     spans: i.frame.spans,
     card: i.card,
+    motion,
   });
   const text = [
     promptText(CARD_ORACLE_PROMPT),

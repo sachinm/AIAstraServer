@@ -30,6 +30,56 @@ import {
   resolveActiveMahadasha,
   type D1D9ConfirmationResult,
 } from '../dasha/dashaAssessment.js';
+import {
+  evaluateVakraDignityRegime,
+  getPlanetVakraPlaybook,
+} from '../dasha/retrogradeRules.js';
+
+function chapterRetrogradeNote(
+  view: DigestView,
+  lordCode: string | null | undefined,
+  stage: 'past' | 'now' | 'next',
+  isMature: boolean,
+): { sentence: string; citations: string[] } {
+  if (!lordCode) return { sentence: '', citations: [] };
+  const playbook = getPlanetVakraPlaybook(lordCode);
+  if (!playbook) return { sentence: '', citations: [] };
+  const d1 = view.planet('D1', lordCode);
+  const d9 = view.planet('D9', lordCode);
+  const isD1Debil = /debil|neecha|fall/i.test(d1?.dignity ?? '');
+  const isD9Debil = /debil|neecha|fall/i.test(d9?.dignity ?? '');
+  const isVargottama = Boolean(d1?.sign && d9?.sign && d1.sign === d9.sign);
+  const isNeechaVargottama = isVargottama && isD1Debil && isD9Debil;
+  const vakra = evaluateVakraDignityRegime({
+    planet: lordCode,
+    d1Card: d1,
+    d9Card: d9,
+    isMature,
+    isNeechaVargottama,
+  });
+  const d9Retro = d9?.retro === true;
+  if (!vakra.isRetrograde && !vakra.isStationary && !d9Retro) {
+    return { sentence: '', citations: vakra.citations };
+  }
+  const citations = [...vakra.citations];
+  if (d9Retro) citations.push(`D9.p.${lordCode}.retro:true`);
+  if (isNeechaVargottama) {
+    const sentence =
+      stage === 'past'
+        ? ` That decade asked you to respect firm personal limits rather than forcing quick fixes.`
+        : stage === 'now'
+          ? ` Steady boundaries and realistic pacing protect your footing far better than pushing through resistance.`
+          : ` Ahead, clear boundaries and patient craftsmanship keep your progress durable.`;
+    return { sentence, citations };
+  }
+  const sentence =
+    stage === 'past'
+      ? ` That chapter unfolded iteratively rather than in a straight line, forging ${playbook.plainGift}.`
+      : stage === 'now'
+        ? ` Progress right now rewards deliberate second-pass refinement—${playbook.plainGift}. ${playbook.plainCounsel}`
+        : ` Over the coming decade, growth compounds through unconventional, self-verified mastery—${playbook.plainGift}.`;
+  return { sentence, citations };
+}
 
 function plainConfirmationSentence(
   confirmation: D1D9ConfirmationResult | null | undefined,
@@ -620,8 +670,19 @@ export function buildSelfCharacterArc(
   let nextSummary = nextTheme.nextSummary;
 
   if (activeAssessment.tithiPravesha?.yearLord) {
+    const posture = activeAssessment.tithiPravesha.operatingPosture;
     nowSummary += ` The current annual chapter adopts a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady pacing'} stance.`;
+    if (posture === 'iterative_review') {
+      const annualShift = getPlanetVakraPlaybook(activeAssessment.tithiPravesha.yearLord)?.plainAnnualShift;
+      nowSummary += ` ${annualShift ?? 'This year rewards auditing commitments, refining terms, and consolidating existing work before locking brand-new initiatives.'}`;
+    }
   }
+  const pastRetro = chapterRetrogradeNote(view, pastMd?.lord, 'past', isMature);
+  const nowRetro = chapterRetrogradeNote(view, nowMd?.lord, 'now', isMature);
+  const nextRetro = chapterRetrogradeNote(view, nextMd?.lord, 'next', isMature);
+  if (pastRetro.sentence) pastSummary += pastRetro.sentence;
+  if (nowRetro.sentence) nowSummary += nowRetro.sentence;
+  if (nextRetro.sentence) nextSummary += nextRetro.sentence;
   if (isMature) {
     const l1Note = plainConfirmationSentence(l1Confirm, 'foundation');
     nowSummary += l1Note
@@ -649,6 +710,7 @@ export function buildSelfCharacterArc(
   const pastDecadeEvidence = [
     `vimsottari:past_10y:${pastMd?.lord ?? l1Code}/${pastAd?.lord ?? akCode} (${pastFrom}..${asOf})`,
     `D1.p.${pastMd?.lord ?? l1Code}.h${pastHouse}`,
+    ...pastRetro.citations,
   ];
   if (isMature && pastMdConfirm) {
     pastDecadeEvidence.push(...pastMdConfirm.citations);
@@ -672,14 +734,18 @@ export function buildSelfCharacterArc(
     `D1.point.AK=${akCode} (H${akCard?.house ?? 1})`,
     `active_dasha:${activeAssessment.activeMahadasha?.system ?? nowMd?.system ?? 'active'}:${nowMd?.lord ?? l1Code}/${nowAd?.lord ?? akCode}`,
     `dasha_concordance:${activeAssessment.multiClockConcordance.concordance}(agreeing=${activeAssessment.multiClockConcordance.agreeingClocks})`,
+    ...nowRetro.citations,
   ];
   if (activeAssessment.vargaPlacement) {
     presentNowEvidence.push(`varga:${activeAssessment.vargaPlacement.varga}:${activeAssessment.vargaPlacement.status}`);
   }
   if (activeAssessment.tithiPravesha) {
     presentNowEvidence.push(
-      `annual:TP${activeAssessment.tithiPravesha.year}:yearLord=${activeAssessment.tithiPravesha.yearLord}:stance=${activeAssessment.tithiPravesha.stance}`,
+      `annual:TP${activeAssessment.tithiPravesha.year}:yearLord=${activeAssessment.tithiPravesha.yearLord}:stance=${activeAssessment.tithiPravesha.stance}:posture=${activeAssessment.tithiPravesha.operatingPosture ?? 'linear_build'}`,
     );
+    if (activeAssessment.tithiPravesha.yearLordRetro) {
+      presentNowEvidence.push(`annual:TP${activeAssessment.tithiPravesha.year}:yearLordRetro=true`);
+    }
     if (activeAssessment.tithiPravesha.shortClock) {
       presentNowEvidence.push(
         `annual:TP${activeAssessment.tithiPravesha.year}:shortClock=${activeAssessment.tithiPravesha.shortClock.system}:${activeAssessment.tithiPravesha.shortClock.lord}`,
@@ -714,6 +780,7 @@ export function buildSelfCharacterArc(
     `vimsottari:next_10y:${nextMd?.lord ?? akCode}/${nextAd?.lord ?? l1Code} (${asOf}..${nextTo})`,
     `D9.p.${nextMd?.lord ?? akCode} (${view.planet('D9', nextMd?.lord ?? akCode)?.dignity ?? 'friendly'})`,
     `D1.p.${nextMd?.lord ?? akCode}.h${nextHouse}`,
+    ...nextRetro.citations,
   ];
   if (isMature && nextMdConfirm) {
     nextDecadeEvidence.push(...nextMdConfirm.citations);
@@ -762,6 +829,21 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
   const moonStyle = SIGN_MIND_STYLE[moonSign] ?? SIGN_MIND_STYLE.Taurus!;
   const mercuryStyle = SIGN_MIND_STYLE[mercurySign] ?? SIGN_MIND_STYLE.Virgo!;
 
+  const h4LordCode = h4?.lord ?? 'Mo';
+  const h5LordCode = h5?.lord ?? 'Su';
+  const h4LordCard = view.planet('D1', h4LordCode);
+  const h5LordCard = view.planet('D1', h5LordCode);
+  const meRetro = meD1?.retro === true;
+  const h4LordRetro = h4LordCard?.retro === true && Boolean(getPlanetVakraPlaybook(h4LordCode));
+  const h5LordRetro = h5LordCard?.retro === true && Boolean(getPlanetVakraPlaybook(h5LordCode));
+
+  const mentalPlayWhy = meRetro
+    ? `${mercuryStyle.joyActivities[0]!.whyItFits} Your mind thrives on second-pass curiosity—revisiting ideas, catching subtle details others skim past, and refining frameworks until they truly hold.`
+    : mercuryStyle.joyActivities[0]!.whyItFits;
+  const restorativeJoyWhy = h5LordRetro
+    ? `${mercuryStyle.joyActivities[1]!.whyItFits} Polishing, editing, and returning to a meaningful craft on a second pass brings deeper joy than rushing a first draft.`
+    : mercuryStyle.joyActivities[1]!.whyItFits;
+
   const joyItems: SelfPersonalityJoyItem[] = [
     {
       id: 'emotional_core',
@@ -779,12 +861,13 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       id: 'mental_play',
       title: mercuryStyle.joyActivities[0]!.title,
       whatYouEnjoy: mercuryStyle.joyActivities[0]!.title,
-      whyItFeelsGood: mercuryStyle.joyActivities[0]!.whyItFits,
-      whyItFits: mercuryStyle.joyActivities[0]!.whyItFits,
+      whyItFeelsGood: mentalPlayWhy,
+      whyItFits: mentalPlayWhy,
       evidence: [
         `D1.Me:${mercurySign} (H${meD1?.house ?? 5}, ${meD1?.dignity ?? 'friendly'})`,
         `D9.Me:${meD9?.sign ?? mercurySign} (${meD9?.dignity ?? 'friendly'})`,
         `D24.Me:${meD24?.sign ?? mercurySign} (${meD24?.dignity ?? 'friendly'})`,
+        ...(meRetro ? ['D1.Me.retro:true'] : []),
       ],
     },
     {
@@ -794,34 +877,45 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       whyItFeelsGood: moonStyle.joyActivities[1]!.whyItFits,
       whyItFits: moonStyle.joyActivities[1]!.whyItFits,
       evidence: [
-        `D1.h4:${h4?.sign ?? 'Cancer'} (lord=${h4?.lord ?? 'Mo'}, SAV=${h4?.sav ?? 28})`,
+        `D1.h4:${h4?.sign ?? 'Cancer'} (lord=${h4LordCode}, SAV=${h4?.sav ?? 28})`,
         `D1.Mo.aspected_by:${(moD1?.aspectedBy ?? []).join(',') || 'benefic'}`,
+        ...(h4LordRetro ? [`D1.p.${h4LordCode}.retro:true`] : []),
       ],
     },
     {
       id: 'restorative_joy',
       title: mercuryStyle.joyActivities[1]!.title,
       whatYouEnjoy: mercuryStyle.joyActivities[1]!.title,
-      whyItFeelsGood: mercuryStyle.joyActivities[1]!.whyItFits,
-      whyItFits: mercuryStyle.joyActivities[1]!.whyItFits,
+      whyItFeelsGood: restorativeJoyWhy,
+      whyItFits: restorativeJoyWhy,
       evidence: [
-        `D1.h5:${h5?.sign ?? 'Leo'} (lord=${h5?.lord ?? 'Su'}, SAV=${h5?.sav ?? 29})`,
+        `D1.h5:${h5?.sign ?? 'Leo'} (lord=${h5LordCode}, SAV=${h5?.sav ?? 29})`,
         `D1.h3:${h3?.sign ?? 'Gemini'} (lord=${h3?.lord ?? 'Me'})`,
+        ...(h5LordRetro ? [`D1.p.${h5LordCode}.retro:true`] : []),
       ],
     },
   ];
 
   const h4Sav = h4?.sav ?? 28;
-  const rechargeRule =
+  const baseRechargeRule =
     h4Sav >= 30
       ? 'You recharge fastest in a calm, well-ordered home base with unhurried evenings and one-on-one time with people you trust.'
       : 'Protect quiet solo transitions between work and evening commitments so your mind can fully put down the day.';
+  const rechargeRule = h4LordRetro
+    ? `${baseRechargeRule} Give yourself unhurried space to revisit and process experiences privately; second-pass reflection is how your inner calm settles.`
+    : baseRechargeRule;
+  const emotionalMindStyle = h4LordRetro
+    ? `${moonStyle.moonTone} You process life most honestly when you have quiet room to reflect privately rather than reacting on the spot.`
+    : moonStyle.moonTone;
+  const intellectualWitStyle = meRetro
+    ? `${mercuryStyle.mercuryTone} Rather than settling for surface answers, you naturally circle back for a second look—auditing assumptions, editing carefully, and refining ideas until they hold up.`
+    : mercuryStyle.mercuryTone;
 
   return {
     headline: `${moonStyle.moonShort} paired with ${mercuryStyle.mercuryShort}`,
     personalitySummary: `People experience you as ${moonStyle.moonSummary}—with a mind that ${mercuryStyle.mercurySummary}.`,
-    emotionalMindStyle: moonStyle.moonTone,
-    intellectualWitStyle: mercuryStyle.mercuryTone,
+    emotionalMindStyle,
+    intellectualWitStyle,
     whatFeelsGood: joyItems,
     pillars: joyItems,
     rechargeRule,
@@ -834,6 +928,10 @@ export function buildSelfPersonalityAndJoy(view: DigestView): SelfPersonalityAnd
       `D24.Me:${meD24?.sign ?? mercurySign}`,
       `D1.h4.sav:${h4Sav}`,
       `D1.h5.sav:${h5?.sav ?? 29}`,
+      ...(meRetro ? ['D1.Me.retro:true'] : []),
+      ...(typeof meD1?.cheshtaBala === 'number' ? [`D1.Me.cheshtaBala:${meD1.cheshtaBala.toFixed(1)}`] : []),
+      ...(h4LordRetro ? [`D1.p.${h4LordCode}.retro:true`] : []),
+      ...(h5LordRetro ? [`D1.p.${h5LordCode}.retro:true`] : []),
     ],
   };
 }
@@ -1050,7 +1148,17 @@ export function buildLoveRelationshipArc(
 
   if (activeAssessment.tithiPravesha?.yearLord) {
     nowSummary += ` The current annual cycle adopts a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive, shared building' : 'patient, understanding'} rhythm.`;
+    if (activeAssessment.tithiPravesha.operatingPosture === 'iterative_review') {
+      const annualShift = getPlanetVakraPlaybook(activeAssessment.tithiPravesha.yearLord)?.plainAnnualShift;
+      nowSummary += ` ${annualShift ?? 'This year rewards honest repair, clarifying expectations, and revisiting unfinished relationship agreements before rushing new promises.'}`;
+    }
   }
+  const pastLoveRetro = chapterRetrogradeNote(view, pastMd?.lord, 'past', isMature);
+  const nowLoveRetro = chapterRetrogradeNote(view, nowMd?.lord, 'now', isMature);
+  const nextLoveRetro = chapterRetrogradeNote(view, nextMd?.lord, 'next', isMature);
+  if (pastLoveRetro.sentence) pastSummary += pastLoveRetro.sentence;
+  if (nowLoveRetro.sentence) nowSummary += nowLoveRetro.sentence;
+  if (nextLoveRetro.sentence) nextSummary += nextLoveRetro.sentence;
   if (isMature) {
     const l7Note = plainConfirmationSentence(l7Confirm, 'foundation');
     nowSummary += l7Note
@@ -1362,7 +1470,17 @@ export function buildWorkCharacterArc(
 
   if (activeAssessment.tithiPravesha?.yearLord) {
     nowSummary += ` The annual cycle brings focused vocational direction, favoring a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady'} stride.`;
+    if (activeAssessment.tithiPravesha.operatingPosture === 'iterative_review') {
+      const annualShift = getPlanetVakraPlaybook(activeAssessment.tithiPravesha.yearLord)?.plainAnnualShift;
+      nowSummary += ` ${annualShift ?? 'Work plans and professional commitments this year reward auditing terms, restructuring workflows, and refining scope before scaling.'}`;
+    }
   }
+  const pastWorkRetro = chapterRetrogradeNote(view, pastMd?.lord, 'past', isMature);
+  const nowWorkRetro = chapterRetrogradeNote(view, nowMd?.lord, 'now', isMature);
+  const nextWorkRetro = chapterRetrogradeNote(view, nextMd?.lord, 'next', isMature);
+  if (pastWorkRetro.sentence) pastSummary += pastWorkRetro.sentence;
+  if (nowWorkRetro.sentence) nowSummary += nowWorkRetro.sentence;
+  if (nextWorkRetro.sentence) nextSummary += nextWorkRetro.sentence;
   if (isMature) {
     const l10Note = plainConfirmationSentence(l10Confirm, 'foundation');
     nowSummary += l10Note

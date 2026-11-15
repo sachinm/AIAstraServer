@@ -7,10 +7,12 @@
  * Node selects digest rows, reads the engine's labels into a side (labels.ts), counts and sums weights. It derives
  * nothing astrological.
  */
+import { getRetrogradeScoreWeights } from '../../config/env.js';
+import { annualPlanetMotion } from '../dasha/retrogradeRules.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { AnnualRow, DigestView, HouseCard } from '../digest/types.js';
 import type { LifeArea } from './areas.js';
-import { covers, dignitySide, houseClassSide, natureSide, planetSide, sideValue, type Side } from './labels.js';
+import { covers, dignitySide, houseClassSide, natureSide, planetSide, planetSideWithVakra, sideValue, type Side } from './labels.js';
 import type { SkyView } from './sky.js';
 
 export type Layer = 'd1' | 'varga' | 'dasha' | 'annual' | 'transit';
@@ -90,16 +92,51 @@ function houseLines(view: DigestView, varga: string, card: HouseCard, w: number,
   const key = `house:${varga}.h${card.house}`;
   const out: RawLine[] = [];
   if (card.lord) {
-    out.push({ fact: `${key}/lordDignity`, w, side: dignitySide(card.lordDignity), planet: card.lord, note: `${varga} house ${card.house} lord ${card.lord}: ${card.lordDignity ?? 'dignity not served'}` });
+    const d1Lord = varga === 'D1' ? view.planet('D1', card.lord) : view.planet(varga, card.lord);
+    const d9Lord = view.planet('D9', card.lord);
+    const vakraInfo = varga === 'D1' ? planetSideWithVakra(card.lord, d1Lord, d9Lord) : null;
+    let lordDigSide = dignitySide(card.lordDignity);
+    if (vakraInfo?.isNeechaVargottama) {
+      lordDigSide = 'test';
+    } else if (
+      vakraInfo &&
+      lordDigSide === 'test' &&
+      d1Lord?.retro === true &&
+      getRetrogradeScoreWeights().neechaUplift > 0 &&
+      planetSide(d1Lord, d9Lord, card.lord) !== 'test'
+    ) {
+      lordDigSide = 'neutral';
+    }
+    const lordW = vakraInfo ? w * vakraInfo.weightMultiplier : w;
+    const motionSuffix = vakraInfo?.motionNote ? ` [${vakraInfo.motionNote}]` : '';
+    out.push({
+      fact: `${key}/lordDignity`,
+      w: lordW,
+      side: lordDigSide,
+      planet: card.lord,
+      note: `${varga} house ${card.house} lord ${card.lord}: ${card.lordDignity ?? 'dignity not served'}${motionSuffix}`,
+    });
     if (full && card.lordHouse) {
       const placed = view.house(varga, card.lordHouse);
       out.push({ fact: `${key}/lordHouse`, w: w * 0.75, side: houseClassSide(placed), planet: card.lord, note: `${varga} house ${card.house} lord in house ${card.lordHouse} (${(placed?.class ?? []).join(', ') || 'class not served'})` });
     }
   }
   for (const o of card.occupants ?? []) {
+    const pCard = view.planet(varga, o.planet);
+    const d9Card = view.planet('D9', o.planet);
+    const occVakra = varga === 'D1' && (o.retro || pCard?.retro || pCard?.isStationary) ? planetSideWithVakra(o.planet, pCard, d9Card) : null;
     const d = dignitySide(o.dignity);
-    const side = d !== 'neutral' ? d : natureSide(o.nature);
-    out.push({ fact: `${key}/occupant.${o.planet}`, w: w * 0.5, side, planet: o.planet, note: `${o.planet} in ${varga} house ${card.house}${o.dignity ? ` (${o.dignity})` : ''}${o.nature ? `, ${o.nature}` : ''}` });
+    let side = d !== 'neutral' ? d : natureSide(o.nature);
+    if (occVakra?.isNeechaVargottama) side = 'test';
+    else if (occVakra && side === 'test' && !occVakra.isNeechaVargottama && occVakra.side !== 'test') side = occVakra.side;
+    const occW = occVakra ? w * 0.5 * occVakra.weightMultiplier : w * 0.5;
+    out.push({
+      fact: `${key}/occupant.${o.planet}`,
+      w: occW,
+      side,
+      planet: o.planet,
+      note: `${o.planet} in ${varga} house ${card.house}${o.dignity ? ` (${o.dignity})` : ''}${o.nature ? `, ${o.nature}` : ''}${occVakra?.motionNote ? ` [${occVakra.motionNote}]` : o.retro ? ' [retro]' : ''}`,
+    });
   }
   if (full && typeof card.sav === 'number') {
     const side: Side = card.sav >= 28 ? 'support' : card.sav <= 24 ? 'test' : 'neutral';
@@ -137,12 +174,12 @@ export function periodLord(view: DigestView, row: ActivationRow): string | null 
   return view.houses('D1').find((h) => h.sign === row.sign)?.lord ?? null;
 }
 
-/** The side of a period for an area: silent unless it activates one of the area's houses; then its lord's side (with 6/8/12 AD-from-MD friction from dashaCharter). */
+/** The side of a period for an area: silent unless it activates one of the area's houses; then its lord's side (with 6/8/12 AD-from-MD friction from dashaCharter and Vakra dignity moderation). */
 export function periodSide(view: DigestView, row: ActivationRow, houses: number[]): Side | 'silent' {
   if (!row.houses?.some((h) => houses.includes(h))) return 'silent';
   const lord = periodLord(view, row);
   if (!lord) return 'neutral';
-  const base = planetSide(view.planet('D1', lord));
+  const base = planetSide(view.planet('D1', lord), view.planet('D9', lord), lord);
   if (row.parentLord && row.lord) {
     const cell = view.planet('D1', row.parentLord)?.dashaCharter?.fruition?.[row.lord];
     if (cell && (cell.fruitionClass === 'dusthana_reversal_crisis' || cell.isShadAshtaka68)) {
@@ -163,12 +200,19 @@ export function promiseScale(view: DigestView, area: LifeArea, now: NowInputs): 
     const card = view.house('D1', h);
     if (card) d1.push(...houseLines(view, 'D1', card, h === primary ? 2 : 1, true));
   }
+  const lords = new Set(area.houses.map((h) => view.house('D1', h)?.lord).filter((x): x is string => !!x));
   for (const k of area.karakas) {
     const p = view.planet('D1', k);
     if (!p) continue;
-    d1.push({ fact: `planet:D1.${k}/karaka`, w: 1, side: planetSide(p), planet: k, note: `karaka ${k}: ${p.dignity ?? 'no dignity'}, ${p.functional ?? 'functional not served'}${p.combust ? ', combust' : ''}` });
+    const vakra = planetSideWithVakra(k, p, view.planet('D9', k));
+    d1.push({
+      fact: `planet:D1.${k}/karaka`,
+      w: 1 * vakra.weightMultiplier,
+      side: vakra.side,
+      planet: k,
+      note: `karaka ${k}: ${p.dignity ?? 'no dignity'}, ${p.functional ?? 'functional not served'}${p.combust ? ', combust' : ''}${vakra.motionNote ? `, ${vakra.motionNote}` : ''}`,
+    });
   }
-  const lords = new Set(area.houses.map((h) => view.house('D1', h)?.lord).filter((x): x is string => !!x));
   for (const y of view.yogas()) {
     const touches = y.houses.some((h) => area.houses.includes(h)) || y.planets.some((p) => lords.has(p));
     if (!touches) continue;
@@ -264,11 +308,28 @@ export function promiseScale(view: DigestView, area: LifeArea, now: NowInputs): 
   return { area: area.id, lines, score, promiseRatio: Math.round(promiseRatio * 100) / 100, verdict, withholding: named('test'), helpers: named('support'), available, owningVarga: owning };
 }
 
-/** A year chart's side for a house: its D1 card's lord dignity and occupants, averaged. Null when the card is not there. */
+/** A year chart's side for a house: its D1 card's lord dignity and occupants, averaged, moderated by annual yearLordRetro / planet motion when present. Null when the card is not there. */
 export function annualSide(view: DigestView, a: AnnualRow, house: number): { side: Side; lord: string | null; note: string } | null {
   const card = a.houses.find((h) => h.house === house && (h.varga ?? 'D1') === 'D1');
   if (!card) return null;
   const parts = houseLines(view, `${a.kind}${a.year}`, card, 1, false);
-  const v = parts.length ? parts.reduce((s, p) => s + sideValue(p.side), 0) / parts.length : 0.5;
-  return { side: v > 0.55 ? 'support' : v < 0.45 ? 'test' : 'neutral', lord: card.lord, note: `${a.kind} ${a.year} house ${house}: lord ${card.lord ?? '?'} ${card.lordDignity ?? ''}`.trim() };
+  let v = parts.length ? parts.reduce((s, p) => s + sideValue(p.side), 0) / parts.length : 0.5;
+  const lordMotion = card.lord ? annualPlanetMotion(a, card.lord) : null;
+  const yearLordRetro = a.kind === 'TP' && a.yearLordRetro === true;
+  if (yearLordRetro && v > 0.55) {
+    v -= 0.08;
+  }
+  if (lordMotion?.isStationary && v > 0.5) {
+    v -= 0.06;
+  }
+  const motionNotes: string[] = [];
+  if (yearLordRetro) motionNotes.push('yearLord retro');
+  if (lordMotion?.retro) motionNotes.push(`lord ${lordMotion.motionState ?? 'retro'}`);
+  else if (lordMotion?.isStationary) motionNotes.push('lord stationary');
+  const suffix = motionNotes.length ? ` [${motionNotes.join(', ')}]` : '';
+  return {
+    side: v > 0.55 ? 'support' : v < 0.45 ? 'test' : 'neutral',
+    lord: card.lord,
+    note: `${a.kind} ${a.year} house ${house}: lord ${card.lord ?? '?'} ${card.lordDignity ?? ''}`.trim() + suffix,
+  };
 }

@@ -56,12 +56,16 @@ const NAME_TO_CODE: Record<string, PlanetCode> = {
   rahu: 'Ra', raagu: 'Ra', ragu: 'Ra', ketu: 'Ke', kethu: 'Ke', kethu_: 'Ke',
 };
 
-/** 'Raagu☊' / 'Jupiter' / 'Ju' -> planet code; null for anything else (e.g. a sign) */
+/** 'Raagu☊' / 'Jupiter' / 'Saturn (R)' / 'Saturn℞' / 'Ju' -> planet code; null for anything else (e.g. a sign) */
 export function lordCode(name: unknown): PlanetCode | null {
   if (typeof name !== 'string') return null;
-  const t = name.trim();
-  if ((PLANET_CODES as readonly string[]).includes(t)) return t as PlanetCode;
-  const letters = t.replace(/[^A-Za-z]/g, '').toLowerCase();
+  const stripped = name
+    .trim()
+    .replace(/℞/g, '')
+    .replace(/(?:\s*\((?:r|rx|retro|retrograde|vakri|combust|c)\)\s*)+$/i, '')
+    .trim();
+  if ((PLANET_CODES as readonly string[]).includes(stripped)) return stripped as PlanetCode;
+  const letters = stripped.replace(/[^A-Za-z]/g, '').toLowerCase();
   return NAME_TO_CODE[letters] ?? null;
 }
 

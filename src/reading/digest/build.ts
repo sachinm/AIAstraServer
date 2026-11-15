@@ -15,7 +15,7 @@ import { lordCode } from '../timeline/dashas.js';
 import { ARUDHA_ARGALA_VARGAS, AVASTHA_VARGAS, VARGA_FACTORS } from '../chartData/catalog.js';
 import { buildActivationRows, dashaSystemOfKey, LIFELONG_MAX_LEVEL, type ActivationRowInput } from './activation.js';
 import { deleteKundliTechniqueOutputs } from '../../techniques/outputStore.js';
-import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type DoshaDetails, type HouseCard, type PlanetCard, type PointRow, type StarProfile, type SunProximity, type YogaRow } from './types.js';
+import { DIGEST_VERSION, FACTS_ITEM, itemKey, type AnnualPlanetCard, type AnnualRow, type AntardashaFruitionCell, type AvasthaMultipliers, type DashaCharterDigest, type DigestRowInput, type DigestSource, type DigestStatus, type DoshaDetails, type HouseCard, type PendingKarmaSource, type PlanetCard, type PointRow, type ShadbalaComponentsDigest, type StarProfile, type SunProximity, type YogaRow } from './types.js';
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -179,9 +179,10 @@ function drishti(aspects: Ref | null, kind: 'graha_drishti' | 'rasi_drishti'): A
 function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
   if (!t.houses) return [];
   const planetRows = t.planets ? arr(t.planets.value) : [];
-  const dignityOf = (p: string): { dignity: string | null; i: number } => {
+  const planetRowOf = (p: string): { row: Obj | null; dignity: string | null; i: number } => {
     const i = planetRows.findIndex((r) => planetCode(r) === p);
-    return { dignity: i >= 0 ? str((planetRows[i] as Obj).dignity) : null, i };
+    const row = i >= 0 && isObj(planetRows[i]) ? (planetRows[i] as Obj) : null;
+    return { row, dignity: row ? str(row.dignity) : null, i };
   };
   const graha = drishti(t.aspects, 'graha_drishti');
   const rasi = drishti(t.aspects, 'rasi_drishti');
@@ -207,11 +208,21 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
       .map(planetCode)
       .filter((p): p is string => Boolean(p))
       .map((p) => {
-        const d = dignityOf(p);
+        const d = planetRowOf(p);
         if (d.i >= 0 && t.planets) source.push(src.of(t.planets, `[${d.i}].dignity`));
         const n = natureOf(t.argala, p);
         if (n.path && t.argala) source.push(src.of(t.argala, n.path));
-        return { planet: p, dignity: d.dignity, nature: n.nature };
+        const occRetro = d.row ? (bool(d.row.retrograde) ?? bool(d.row.is_retrograde) ?? bool(d.row.retro)) : null;
+        const occCombust = d.row ? bool(d.row.combust) : null;
+        const occMotionState = d.row ? str(d.row.motion_state) : null;
+        return {
+          planet: p,
+          dignity: d.dignity,
+          nature: n.nature,
+          ...(occRetro != null ? { retro: occRetro } : {}),
+          ...(occCombust != null ? { combust: occCombust } : {}),
+          ...(occMotionState != null ? { motionState: occMotionState } : {}),
+        };
       });
     const aspectedGraha = graha.filter((g) => g.houses.includes(h));
     const aspectedRasi = rasi.filter((g) => g.houses.includes(h));
@@ -288,6 +299,12 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
     }
 
     const lordSign = isObj(raw.lord_sign) ? str((raw.lord_sign as Obj).sign) : str(raw.lord_sign);
+    const lordEntry = lord ? planetRowOf(lord) : { row: null, dignity: null, i: -1 };
+    const lordRetro =
+      bool(raw.lord_retro) ??
+      bool(raw.lord_retrograde) ??
+      (lordEntry.row ? (bool(lordEntry.row.retrograde) ?? bool(lordEntry.row.is_retrograde) ?? bool(lordEntry.row.retro)) : null);
+    const lordCombust = bool(raw.lord_combust) ?? (lordEntry.row ? bool(lordEntry.row.combust) : null);
     out.push({
       key: `${t.varga}.h${h}`,
       row: {
@@ -298,6 +315,8 @@ function houseCards(t: ChartTables, src: Sources): Built<HouseCard>[] {
         lordHouse: int(raw.lord_house),
         lordSign,
         lordDignity: str(raw.lord_dignity),
+        ...(lordRetro != null ? { lordRetro } : {}),
+        ...(lordCombust != null ? { lordCombust } : {}),
         coLord,
         occupants,
         aspectedGraha: uniq(aspectedGraha.map((g) => g.planet)),
@@ -333,6 +352,11 @@ function readPlanetAvasthas(
   chain: string[];
   dignity: string | null;
   combust: boolean | null;
+  retro: boolean | null;
+  motionState: string | null;
+  isStationary: boolean | null;
+  cheshtaBala: number | null;
+  vakraDignityRegime: string | null;
   sources: DigestSource[];
 } {
   const avasthas: Record<string, string> = {};
@@ -340,9 +364,14 @@ function readPlanetAvasthas(
   let chain: string[] = [];
   let dignity: string | null = null;
   let combust: boolean | null = null;
+  let retro: boolean | null = null;
+  let motionState: string | null = null;
+  let isStationary: boolean | null = null;
+  let cheshtaBala: number | null = null;
+  let vakraDignityRegime: string | null = null;
   const sources: DigestSource[] = [];
   if (!avRef || !isObj(avRef.value)) {
-    return { avasthas, avasthaMultipliers, chain, dignity, combust, sources };
+    return { avasthas, avasthaMultipliers, chain, dignity, combust, retro, motionState, isStationary, cheshtaBala, vakraDignityRegime, sources };
   }
   const avRows = arr((avRef.value as Obj).planets);
   const ai = avRows.findIndex((a) => planetCode(a) === p);
@@ -363,6 +392,11 @@ function readPlanetAvasthas(
     }
     dignity = str(avObj.dignity);
     combust = bool(avObj.combust);
+    retro = bool(avObj.retrograde) ?? bool(avObj.is_retrograde) ?? bool(avObj.retro);
+    motionState = str(avObj.motion_state);
+    isStationary = bool(avObj.is_stationary);
+    cheshtaBala = num(avObj.cheshta_bala);
+    vakraDignityRegime = str(avObj.vakra_dignity_regime);
     sources.push(src.of(avRef, `planets[${ai}]`));
   }
   if (includeChain) {
@@ -373,7 +407,7 @@ function readPlanetAvasthas(
       sources.push(src.of(avRef, `lunar_astro.dispositor_chains.rasi[${ci}].chain`));
     }
   }
-  return { avasthas, avasthaMultipliers, chain, dignity, combust, sources };
+  return { avasthas, avasthaMultipliers, chain, dignity, combust, retro, motionState, isStationary, cheshtaBala, vakraDignityRegime, sources };
 }
 
 function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
@@ -410,7 +444,8 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
     const aspectedBy = graha.filter((x) => x.planets.includes(p));
     for (const x of aspectedBy) source.push(src.of(t.aspects!, `graha_drishti[${x.i}].aspected_planets`));
 
-    const { avasthas, avasthaMultipliers, chain, sources: avSources } = readPlanetAvasthas(t.avasthas, p, src, Boolean(t.d1));
+    const avInfo = readPlanetAvasthas(t.avasthas, p, src, Boolean(t.d1));
+    const { avasthas, avasthaMultipliers, chain, sources: avSources } = avInfo;
     source.push(...avSources);
     let starChain: string[] = [];
     const sci = starChains.findIndex((c) => planetCode(c) === p);
@@ -483,11 +518,24 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
     let shadbalaRatio: number | null = null;
     let shadbalaRank: number | null = null;
     let shadbalaRupa: number | null = null;
+    let shadbalaComponents: ShadbalaComponentsDigest | null = null;
     const si = shad.findIndex((s) => planetCode(s) === p);
     if (si >= 0) {
-      shadbalaRatio = num((shad[si] as Obj).ratio);
-      shadbalaRank = int((shad[si] as Obj).rank);
-      shadbalaRupa = num((shad[si] as Obj).total_rupas);
+      const shadObj = shad[si] as Obj;
+      shadbalaRatio = num(shadObj.ratio);
+      shadbalaRank = int(shadObj.rank);
+      shadbalaRupa = num(shadObj.total_rupas);
+      const comps = isObj(shadObj.components) ? (shadObj.components as Obj) : null;
+      if (comps) {
+        shadbalaComponents = {
+          sthana: num(comps.sthana),
+          dig: num(comps.dig),
+          kala: num(comps.kala),
+          cheshta: num(comps.cheshta),
+          naisargika: num(comps.naisargika),
+          drik: num(comps.drik),
+        };
+      }
       source.push(src.of(t.d1!.shadbala!, `planets[${si}]`));
     }
 
@@ -542,6 +590,26 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
     }
 
     const sign = str(raw.sign);
+    const bodyShad = body && isObj(body.shadbala) ? (body.shadbala as Obj) : null;
+    const retroVal = bool(raw.retrograde) ?? bool(raw.is_retrograde) ?? bool(raw.retro) ?? avInfo.retro ?? (body ? bool(body.retro) : null);
+    const combustVal = bool(raw.combust) ?? avInfo.combust ?? (body ? bool(body.combust) : null);
+    const isMeanRetrograde = bool(raw.is_mean_retrograde) ?? (body ? bool(body.is_mean_retrograde) : null);
+    const motionKind = (str(raw.motion_kind) ?? (body ? str(body.motion_kind) : null)) as PlanetCard['motionKind'];
+    const speedDegPerDay = num(raw.speed_deg_per_day) ?? (body ? (num(body.speed_deg_per_day) ?? num(body.speed)) : null);
+    const meanDailyMotionDeg = num(raw.mean_daily_motion_deg) ?? (body ? num(body.mean_daily_motion_deg) : null);
+    const speedRatioToMean = num(raw.speed_ratio_to_mean) ?? (body ? num(body.speed_ratio_to_mean) : null);
+    const motionState = str(raw.motion_state) ?? avInfo.motionState ?? (body ? str(body.motion_state) : null);
+    const isStationary = bool(raw.is_stationary) ?? avInfo.isStationary ?? (body ? bool(body.is_stationary) : null);
+    const stationKind = (str(raw.station_kind) ?? (body ? str(body.station_kind) : null)) as PlanetCard['stationKind'];
+    const cheshtaBala =
+      num(raw.cheshta_bala) ??
+      avInfo.cheshtaBala ??
+      (shadbalaComponents ? shadbalaComponents.cheshta ?? null : null) ??
+      (bodyShad ? num(bodyShad.cheshta) : null);
+    const vargaReckoning = str(raw.varga_reckoning);
+    const vargaSandhi = bool(raw.varga_sandhi);
+    const vakraDignityRegime = str(raw.vakra_dignity_regime) ?? avInfo.vakraDignityRegime ?? (body ? str(body.vakra_dignity_regime) : null);
+
     out.push({
       key: `${t.varga}.${p}`,
       row: {
@@ -554,8 +622,16 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
         pada: star ? int(star.pada) : null,
         starLord: star ? planetCode(star.lord) : null,
         dignity: str(raw.dignity),
-        retro: bool(raw.retrograde),
-        combust: bool(raw.combust),
+        retro: retroVal,
+        ...(isMeanRetrograde != null ? { isMeanRetrograde } : {}),
+        ...(motionKind != null ? { motionKind } : {}),
+        ...(speedDegPerDay != null ? { speedDegPerDay } : {}),
+        ...(meanDailyMotionDeg != null ? { meanDailyMotionDeg } : {}),
+        ...(speedRatioToMean != null ? { speedRatioToMean } : {}),
+        ...(motionState != null ? { motionState } : {}),
+        ...(isStationary != null ? { isStationary } : {}),
+        ...(stationKind != null ? { stationKind } : {}),
+        combust: combustVal,
         war: Array.isArray(wars) ? wars.length > 0 : null,
         dispositor: planetCode(raw.sign_lord),
         dispositorHouse: int(raw.sign_lord_house),
@@ -565,6 +641,11 @@ function planetCards(t: ChartTables, src: Sources): Built<PlanetCard>[] {
         shadbalaRatio,
         shadbalaRank,
         ...(shadbalaRupa != null ? { shadbalaRupa } : {}),
+        ...(cheshtaBala != null ? { cheshtaBala } : {}),
+        ...(shadbalaComponents ? { shadbalaComponents } : {}),
+        ...(vargaReckoning != null ? { vargaReckoning } : {}),
+        ...(vargaSandhi != null ? { vargaSandhi } : {}),
+        ...(vakraDignityRegime != null ? { vakraDignityRegime } : {}),
         natural,
         functional,
         owns: uniq(owns).sort(byNum),
@@ -591,35 +672,65 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
   const r = ref(items, `varga.d${f}`);
   if (!r) return [];
   const avRef = ref(items, natalKey('avasthas', f));
-  const rows = arr(r.value);
+  const rawVal = r.value;
+  const rows = Array.isArray(rawVal)
+    ? rawVal
+    : isObj(rawVal) && Array.isArray((rawVal as Obj).planets)
+    ? ((rawVal as Obj).planets as unknown[])
+    : [];
   const signOf = new Map<string, string>();
   const parsed = rows
     .map((row, i) => ({ row, i }))
     .filter(({ row }) => isObj(row))
-    .map(({ row, i }) => ({ i, o: row as Obj, p: planetCode((row as Obj).body) }))
+    .map(({ row, i }) => ({
+      i,
+      o: row as Obj,
+      p: planetCode((row as Obj).name ?? (row as Obj).body ?? (row as Obj).planet ?? row),
+    }))
     .filter((x): x is { i: number; o: Obj; p: string } => Boolean(x.p));
   for (const x of parsed) {
-    const s = RASI_LABELS[String(x.o.rasi ?? '')];
+    const s = str(x.o.sign) ?? RASI_LABELS[String(x.o.rasi ?? '')];
     if (s) signOf.set(x.p, s);
   }
+  const hasPlanetsProp = isObj(rawVal) && Array.isArray((rawVal as Obj).planets);
   return parsed.map(({ i, o, p }) => {
-    const sign = signOf.get(p) ?? null;
+    const sign = signOf.get(p) ?? str(o.sign) ?? null;
     const pada = Number(o.pada);
     const av = readPlanetAvasthas(avRef, p, src);
+    const isMeanRetrograde = bool(o.is_mean_retrograde);
+    const motionKind = str(o.motion_kind) as PlanetCard['motionKind'];
+    const speedDegPerDay = num(o.speed_deg_per_day);
+    const meanDailyMotionDeg = num(o.mean_daily_motion_deg);
+    const speedRatioToMean = num(o.speed_ratio_to_mean);
+    const motionState = str(o.motion_state) ?? av.motionState;
+    const isStationary = bool(o.is_stationary) ?? av.isStationary;
+    const stationKind = str(o.station_kind) as PlanetCard['stationKind'];
+    const cheshtaBala = num(o.cheshta_bala) ?? av.cheshtaBala;
+    const vargaReckoning = str(o.varga_reckoning);
+    const vargaSandhi = bool(o.varga_sandhi);
+    const vakraDignityRegime = str(o.vakra_dignity_regime) ?? av.vakraDignityRegime;
     return {
       key: `D${f}.${p}`,
       row: {
         varga: `D${f}`,
         planet: p,
         sign,
-        house: int(o.house),
-        degree: degreeOf(o.longitude),
+        house: int(o.house_from_lagna) ?? int(o.house),
+        degree: num(o.longitude_in_sign) ?? num(o.deg_in_sign) ?? degreeOf(o.longitude),
         star: str(o.nakshatra),
         pada: Number.isInteger(pada) && pada > 0 ? pada : null,
         starLord: planetCode(o.star_lord) ?? planetCode(o.nakshatra_lord),
         dignity: str(o.dignity) ?? av.dignity,
-        retro: bool(o.retro) ?? bool(o.is_retrograde),
-        combust: av.combust,
+        retro: bool(o.retro) ?? bool(o.is_retrograde) ?? bool(o.retrograde) ?? av.retro,
+        ...(isMeanRetrograde != null ? { isMeanRetrograde } : {}),
+        ...(motionKind != null ? { motionKind } : {}),
+        ...(speedDegPerDay != null ? { speedDegPerDay } : {}),
+        ...(meanDailyMotionDeg != null ? { meanDailyMotionDeg } : {}),
+        ...(speedRatioToMean != null ? { speedRatioToMean } : {}),
+        ...(motionState != null ? { motionState } : {}),
+        ...(isStationary != null ? { isStationary } : {}),
+        ...(stationKind != null ? { stationKind } : {}),
+        combust: bool(o.combust) ?? av.combust,
         war: null,
         dispositor: null,
         dispositorHouse: null,
@@ -628,6 +739,10 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
         ...(av.avasthaMultipliers ? { avasthaMultipliers: av.avasthaMultipliers } : {}),
         shadbalaRatio: null,
         shadbalaRank: null,
+        ...(cheshtaBala != null ? { cheshtaBala } : {}),
+        ...(vargaReckoning != null ? { vargaReckoning } : {}),
+        ...(vargaSandhi != null ? { vargaSandhi } : {}),
+        ...(vakraDignityRegime != null ? { vakraDignityRegime } : {}),
         natural: null,
         functional: null,
         owns: [],
@@ -635,7 +750,7 @@ function placementCards(items: Record<string, unknown>, f: number, src: Sources)
         aspectedBy: [],
         conjunctions: sign ? [...signOf.entries()].filter(([q, s]) => q !== p && s === sign).map(([q]) => q) : [],
       },
-      source: [src.of(r, `[${i}]`), ...av.sources],
+      source: [src.of(r, hasPlanetsProp ? `planets[${i}]` : `[${i}]`), ...av.sources],
     };
   });
 }
@@ -670,7 +785,17 @@ function factHouseCards(items: Record<string, unknown>, t: ChartTables, src: Sou
       const n = natureOf(t.argala, p);
       if (b) source.push(src.of(f.ref, `bodies.${p}.dignity`));
       if (n.path && t.argala) source.push(src.of(t.argala, n.path));
-      return { planet: p, dignity: b ? str(b.dignity) : null, nature: n.nature };
+      const occRetro = b ? (bool(b.retro) ?? bool(b.is_retrograde)) : null;
+      const occCombust = b ? bool(b.combust) : null;
+      const occMotionState = b ? str(b.motion_state) : null;
+      return {
+        planet: p,
+        dignity: b ? str(b.dignity) : null,
+        nature: n.nature,
+        ...(occRetro != null ? { retro: occRetro } : {}),
+        ...(occCombust != null ? { combust: occCombust } : {}),
+        ...(occMotionState != null ? { motionState: occMotionState } : {}),
+      };
     });
     const by = isObj(fh.aspected_by) ? (fh.aspected_by as Obj) : {};
     const a = isObj(fh.argala) ? (fh.argala as Obj) : null;
@@ -699,6 +824,9 @@ function factHouseCards(items: Record<string, unknown>, t: ChartTables, src: Sou
       source.push(src.of(f.ref, `arudhas.A${h}`));
     }
     const c = isObj(fh.cusp_nak) ? (fh.cusp_nak as Obj) : null;
+    const lordBody = lord && isObj(bodies[lord]) ? (bodies[lord] as Obj) : null;
+    const lordRetro = bool(fh.lord_retro) ?? (lordBody ? (bool(lordBody.retro) ?? bool(lordBody.is_retrograde)) : null);
+    const lordCombust = bool(fh.lord_combust) ?? (lordBody ? bool(lordBody.combust) : null);
     out.push({
       key: `D1.h${h}`,
       row: {
@@ -709,6 +837,8 @@ function factHouseCards(items: Record<string, unknown>, t: ChartTables, src: Sou
         lordHouse: int(fh.lord_house),
         lordSign: signLabel(fh.lord_sign),
         lordDignity: str(fh.lord_dignity),
+        ...(lordRetro != null ? { lordRetro } : {}),
+        ...(lordCombust != null ? { lordCombust } : {}),
         coLord: pair.find((x) => x !== lord) ?? null,
         occupants,
         aspectedGraha: codes(by.graha),
@@ -740,6 +870,16 @@ function factPlanetCards(items: Record<string, unknown>, t: ChartTables, src: So
     const shad = isObj(b.shadbala) ? (b.shadbala as Obj) : null;
     const to = isObj(b.aspects_to) ? (b.aspects_to as Obj) : {};
     const by = isObj(b.aspected_by) ? (b.aspected_by as Obj) : {};
+    const isMeanRetrograde = bool(b.is_mean_retrograde);
+    const motionKind = str(b.motion_kind) as PlanetCard['motionKind'];
+    const speedDegPerDay = num(b.speed_deg_per_day) ?? num(b.speed);
+    const meanDailyMotionDeg = num(b.mean_daily_motion_deg);
+    const speedRatioToMean = num(b.speed_ratio_to_mean);
+    const motionState = str(b.motion_state);
+    const isStationary = bool(b.is_stationary);
+    const stationKind = str(b.station_kind) as PlanetCard['stationKind'];
+    const cheshtaBala = num(b.cheshta_bala) ?? (shad ? num(shad.cheshta) : null);
+    const vakraDignityRegime = str(b.vakra_dignity_regime);
     out.push({
       key: `D1.${p}`,
       row: {
@@ -752,7 +892,15 @@ function factPlanetCards(items: Record<string, unknown>, t: ChartTables, src: So
         pada: nak ? int(nak.pada) : null,
         starLord: nak ? planetCode(nak.lord) : planetCode(b.star_lord),
         dignity: str(b.dignity),
-        retro: bool(b.retro),
+        retro: bool(b.retro) ?? bool(b.is_retrograde),
+        ...(isMeanRetrograde != null ? { isMeanRetrograde } : {}),
+        ...(motionKind != null ? { motionKind } : {}),
+        ...(speedDegPerDay != null ? { speedDegPerDay } : {}),
+        ...(meanDailyMotionDeg != null ? { meanDailyMotionDeg } : {}),
+        ...(speedRatioToMean != null ? { speedRatioToMean } : {}),
+        ...(motionState != null ? { motionState } : {}),
+        ...(isStationary != null ? { isStationary } : {}),
+        ...(stationKind != null ? { stationKind } : {}),
         combust: bool(b.combust),
         war: null,
         dispositor: planetCode(b.sign_lord),
@@ -761,6 +909,8 @@ function factPlanetCards(items: Record<string, unknown>, t: ChartTables, src: So
         avasthas: {},
         shadbalaRatio: shad ? num(shad.ratio) : null,
         shadbalaRank: shad ? int(shad.rank) : null,
+        ...(cheshtaBala != null ? { cheshtaBala } : {}),
+        ...(vakraDignityRegime != null ? { vakraDignityRegime } : {}),
         natural: nature ? str(nature.natural) : null,
         functional: nature ? str(nature.functional) : null,
         owns: arr(b.owns).map(int).filter((h): h is number => h != null),
@@ -791,11 +941,23 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
     const occupants = codes(x.occupants).map((p) => {
       const pv = isObj(planetsObj[p]) ? (planetsObj[p] as Obj) : null;
       if (pv) source.push(src.of(fx.ref, `vargas.${varga}.planets.${p}.dignity`));
-      return { planet: p, dignity: pv ? str(pv.dignity) : null, nature: null };
+      const occRetro = pv ? (bool(pv.retro) ?? bool(pv.is_retrograde)) : null;
+      const occCombust = pv ? bool(pv.combust) : null;
+      const occMotionState = pv ? str(pv.motion_state) : null;
+      return {
+        planet: p,
+        dignity: pv ? str(pv.dignity) : null,
+        nature: null,
+        ...(occRetro != null ? { retro: occRetro } : {}),
+        ...(occCombust != null ? { combust: occCombust } : {}),
+        ...(occMotionState != null ? { motionState: occMotionState } : {}),
+      };
     });
     const lord = planetCode(x.lord);
     const lp = lord && isObj(planetsObj[lord]) ? (planetsObj[lord] as Obj) : null;
     if (lp) source.push(src.of(fx.ref, `vargas.${varga}.planets.${lord}`));
+    const lordRetro = lp ? (bool(lp.retro) ?? bool(lp.is_retrograde)) : null;
+    const lordCombust = lp ? bool(lp.combust) : null;
     const cls = Array.isArray(x.class)
       ? x.class.map(str).filter((c): c is string => Boolean(c))
       : Array.isArray(x.classification)
@@ -803,7 +965,26 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
         : [];
     houses.push({
       key: `${varga}.h${h}`,
-      row: { varga, house: h, sign: signLabel(x.sign), lord, lordHouse: lp ? int(lp.house) : null, lordSign: lp ? signLabel(lp.sign) : null, lordDignity: lp ? str(lp.dignity) : null, coLord: null, occupants, aspectedGraha: [], aspectedRasi: [], argala: null, sav: null, class: cls, cuspStar: null, arudha: null },
+      row: {
+        varga,
+        house: h,
+        sign: signLabel(x.sign),
+        lord,
+        lordHouse: lp ? int(lp.house) : null,
+        lordSign: lp ? signLabel(lp.sign) : null,
+        lordDignity: lp ? str(lp.dignity) : null,
+        ...(lordRetro != null ? { lordRetro } : {}),
+        ...(lordCombust != null ? { lordCombust } : {}),
+        coLord: null,
+        occupants,
+        aspectedGraha: [],
+        aspectedRasi: [],
+        argala: null,
+        sav: null,
+        class: cls,
+        cuspStar: null,
+        arudha: null,
+      },
       source,
     });
   }
@@ -817,6 +998,15 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
     const av = pl ? null : readPlanetAvasthas(avRef, p, src);
     const owned = houses.filter((h) => h.row.lord === p);
     const avMultipliers = pl?.row.avasthaMultipliers ?? av?.avasthaMultipliers ?? null;
+    const isMeanRetrograde = bool(pv.is_mean_retrograde) ?? pl?.row.isMeanRetrograde ?? null;
+    const motionKind = (str(pv.motion_kind) as PlanetCard['motionKind']) ?? pl?.row.motionKind ?? null;
+    const speedDegPerDay = num(pv.speed_deg_per_day) ?? pl?.row.speedDegPerDay ?? null;
+    const motionState = str(pv.motion_state) ?? pl?.row.motionState ?? av?.motionState ?? null;
+    const isStationary = bool(pv.is_stationary) ?? pl?.row.isStationary ?? av?.isStationary ?? null;
+    const cheshtaBala = num(pv.cheshta_bala) ?? pl?.row.cheshtaBala ?? av?.cheshtaBala ?? null;
+    const vargaReckoning = str(pv.varga_reckoning) ?? pl?.row.vargaReckoning ?? null;
+    const vargaSandhi = bool(pv.varga_sandhi) ?? pl?.row.vargaSandhi ?? null;
+    const vakraDignityRegime = str(pv.vakra_dignity_regime) ?? pl?.row.vakraDignityRegime ?? av?.vakraDignityRegime ?? null;
     planets.push({
       key: `${varga}.${p}`,
       row: {
@@ -829,8 +1019,13 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
         pada: pl?.row.pada ?? null,
         starLord: pl?.row.starLord ?? null,
         dignity: str(pv.dignity) ?? pl?.row.dignity ?? av?.dignity ?? null,
-        retro: pl?.row.retro ?? null,
-        combust: pl?.row.combust ?? av?.combust ?? null,
+        retro: bool(pv.retro) ?? bool(pv.is_retrograde) ?? pl?.row.retro ?? av?.retro ?? null,
+        ...(isMeanRetrograde != null ? { isMeanRetrograde } : {}),
+        ...(motionKind != null ? { motionKind } : {}),
+        ...(speedDegPerDay != null ? { speedDegPerDay } : {}),
+        ...(motionState != null ? { motionState } : {}),
+        ...(isStationary != null ? { isStationary } : {}),
+        combust: bool(pv.combust) ?? pl?.row.combust ?? av?.combust ?? null,
         war: null,
         dispositor: null,
         dispositorHouse: null,
@@ -839,6 +1034,10 @@ function factVargaCards(items: Record<string, unknown>, f: number, src: Sources)
         ...(avMultipliers ? { avasthaMultipliers: avMultipliers } : {}),
         shadbalaRatio: null,
         shadbalaRank: null,
+        ...(cheshtaBala != null ? { cheshtaBala } : {}),
+        ...(vargaReckoning != null ? { vargaReckoning } : {}),
+        ...(vargaSandhi != null ? { vargaSandhi } : {}),
+        ...(vakraDignityRegime != null ? { vakraDignityRegime } : {}),
         natural: null,
         functional: null,
         owns: owned.map((h) => h.row.house).sort(byNum),
@@ -1194,6 +1393,74 @@ function annualRows(items: Record<string, unknown>, src: Sources): Built<AnnualR
         }
       }
     }
+    const pObj = payload as Obj;
+    if (yearLord === undefined && pObj.year_lord != null) {
+      yearLord = planetCode(pObj.year_lord);
+      source.push(src.of({ key, at: 'year_lord', value: pObj.year_lord }));
+    }
+    let horaLord: string | null | undefined;
+    if (pObj.hora_lord != null) {
+      horaLord = planetCode(pObj.hora_lord);
+      source.push(src.of({ key, at: 'hora_lord', value: pObj.hora_lord }));
+    }
+    const annualPlanets: Record<string, AnnualPlanetCard> = {};
+    const mergeAnnualPlanet = (rawP: unknown) => {
+      if (!isObj(rawP)) return;
+      const code = planetCode(rawP) ?? planetCode(rawP.body) ?? planetCode(rawP.planet);
+      if (!code) return;
+      const prev = annualPlanets[code];
+      const retro = bool(rawP.retrograde) ?? bool(rawP.is_retrograde) ?? bool(rawP.retro) ?? prev?.retro ?? null;
+      const isMeanRetrograde = bool(rawP.is_mean_retrograde) ?? prev?.isMeanRetrograde;
+      const motionKind = (str(rawP.motion_kind) as AnnualPlanetCard['motionKind']) ?? prev?.motionKind;
+      const speedDegPerDay = num(rawP.speed_deg_per_day) ?? prev?.speedDegPerDay;
+      const motionState = str(rawP.motion_state) ?? prev?.motionState;
+      const isStationary = bool(rawP.is_stationary) ?? prev?.isStationary;
+      const combust = bool(rawP.combust) ?? prev?.combust;
+      const cheshtaBala = num(rawP.cheshta_bala) ?? prev?.cheshtaBala;
+      const vargaReckoning = str(rawP.varga_reckoning) ?? prev?.vargaReckoning;
+      const vargaSandhi = bool(rawP.varga_sandhi) ?? prev?.vargaSandhi;
+      annualPlanets[code] = {
+        planet: code,
+        sign: str(rawP.sign) ?? RASI_LABELS[String(rawP.rasi ?? '')] ?? signLabel(rawP.sign) ?? prev?.sign ?? null,
+        house: int(rawP.house_from_lagna) ?? int(rawP.house) ?? prev?.house ?? null,
+        degree: num(rawP.longitude_in_sign) ?? num(rawP.deg_in_sign) ?? degreeOf(rawP.longitude) ?? prev?.degree ?? null,
+        dignity: str(rawP.dignity) ?? prev?.dignity ?? null,
+        retro,
+        ...(isMeanRetrograde != null ? { isMeanRetrograde } : {}),
+        ...(motionKind != null ? { motionKind } : {}),
+        ...(speedDegPerDay != null ? { speedDegPerDay } : {}),
+        ...(motionState != null ? { motionState } : {}),
+        ...(isStationary != null ? { isStationary } : {}),
+        ...(combust != null ? { combust } : {}),
+        ...(cheshtaBala != null ? { cheshtaBala } : {}),
+        ...(vargaReckoning != null ? { vargaReckoning } : {}),
+        ...(vargaSandhi != null ? { vargaSandhi } : {}),
+      };
+    };
+    if (Array.isArray(pObj.planets)) {
+      for (const rp of pObj.planets) mergeAnnualPlanet(rp);
+      source.push(src.of({ key, at: 'planets', value: pObj.planets }));
+    } else if (isObj(pObj.planets)) {
+      for (const [pk, rp] of Object.entries(pObj.planets as Obj)) {
+        if (isObj(rp)) mergeAnnualPlanet({ code: pk, ...rp });
+      }
+      source.push(src.of({ key, at: 'planets', value: pObj.planets }));
+    }
+    if (Array.isArray(pObj.dignities)) {
+      for (const rd of pObj.dignities) mergeAnnualPlanet(rd);
+      if (!cards.length) source.push(src.of({ key, at: 'dignities', value: pObj.dignities }));
+    }
+    const hasAnnualPlanets = Object.keys(annualPlanets).length > 0;
+    const ylCard = yearLord ? annualPlanets[yearLord] : undefined;
+    const hlCard = horaLord ? annualPlanets[horaLord] : undefined;
+    const lagnaLordCode = cards.find((c) => c.row.house === 1)?.row.lord ?? null;
+    const llCard = lagnaLordCode ? annualPlanets[lagnaLordCode] : undefined;
+    const yearLordRetro = bool(pObj.year_lord_retrograde) ?? bool(pObj.year_lord_retro) ?? ylCard?.retro;
+    const yearLordMotionState = str(pObj.year_lord_motion_state) ?? ylCard?.motionState;
+    const yearLordCombust = bool(pObj.year_lord_combust) ?? ylCard?.combust;
+    const horaLordRetro = bool(pObj.hora_lord_retrograde) ?? bool(pObj.hora_lord_retro) ?? hlCard?.retro;
+    const lagnaLordRetro = bool(pObj.lagna_lord_retrograde) ?? bool(pObj.lagna_lord_retro) ?? llCard?.retro;
+
     out.push({
       key: `${kind}${year}.${varga}`,
       row: {
@@ -1202,10 +1469,17 @@ function annualRows(items: Record<string, unknown>, src: Sources): Built<AnnualR
         varga,
         lagna: lagnaRef ? str(lagnaRef.value) : null,
         houses: cards.map((c) => c.row),
+        ...(hasAnnualPlanets ? { planets: annualPlanets } : {}),
         dashas,
         sahams,
         ...(muntha !== undefined ? { muntha } : {}),
         ...(yearLord !== undefined ? { yearLord } : {}),
+        ...(yearLordRetro != null ? { yearLordRetro } : {}),
+        ...(yearLordMotionState != null ? { yearLordMotionState } : {}),
+        ...(yearLordCombust != null ? { yearLordCombust } : {}),
+        ...(horaLord !== undefined ? { horaLord } : {}),
+        ...(horaLordRetro != null ? { horaLordRetro } : {}),
+        ...(lagnaLordRetro != null ? { lagnaLordRetro } : {}),
         ...(tajakaYogas !== undefined ? { tajakaYogas } : {}),
         ...(start ? { start, end, startBasis } : {}),
       },
@@ -1256,10 +1530,32 @@ function starProfile(items: Record<string, unknown>, planets: Map<string, Built<
   if (pendingKarmaHouses.length && av) {
     source.push(src.of(av, 'lunar_astro.pending_karma.pending_karma_houses'));
   }
+  const pkSrcRaw = av && isObj(av.value) ? resolvePath(av.value, 'lunar_astro.pending_karma.pending_karma_sources') : null;
+  const pendingKarmaSources: PendingKarmaSource[] = Array.isArray(pkSrcRaw)
+    ? pkSrcRaw
+        .filter(isObj)
+        .map((s) => ({
+          house: int(s.house) ?? 0,
+          source: (str(s.source) as PendingKarmaSource['source']) ?? 'retrograde',
+          planet: planetCode(s.planet) ?? str(s.planet),
+        }))
+        .filter((s) => s.house >= 1 && s.house <= 12)
+    : [];
+  if (pendingKarmaSources.length && av) {
+    source.push(src.of(av, 'lunar_astro.pending_karma.pending_karma_sources'));
+  }
   if (!moonStar && !lagnaStar && !taras.length && !pendingKarmaHouses.length) return null;
   return {
     key: 'profile',
-    row: { moonStar, moonStarLord, lagnaStar, taras, gandanta, ...(pendingKarmaHouses.length ? { pendingKarmaHouses } : {}) },
+    row: {
+      moonStar,
+      moonStarLord,
+      lagnaStar,
+      taras,
+      gandanta,
+      ...(pendingKarmaHouses.length ? { pendingKarmaHouses } : {}),
+      ...(pendingKarmaSources.length ? { pendingKarmaSources } : {}),
+    },
     source,
   };
 }

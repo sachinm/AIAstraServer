@@ -20,7 +20,8 @@
  *  - tone        doc 45 §7 from the family votes, scaled to the families present
  */
 import { runningTithiPravesha } from '../annual/tithiPravesha.js';
-import { evaluateActiveDashaWithVargaAndTP } from '../dasha/dashaAssessment.js';
+import { evaluateActiveDashaWithVargaAndTP, isAgeMatureD9 } from '../dasha/dashaAssessment.js';
+import { annualPlanetMotion, evaluateVakraDignityRegime, getPlanetVakraPlaybook } from '../dasha/retrogradeRules.js';
 import type { AnnualRow, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -188,6 +189,31 @@ function lordState(view: DigestView, lord: string | null): PlanetCard | null {
   return lord ? view.planet('D1', lord) : null;
 }
 
+function vakraOf(view: DigestView, planet: string | null | undefined, isMature = false) {
+  if (!planet) return null;
+  const d1 = view.planet('D1', planet);
+  const d9 = view.planet('D9', planet);
+  const isNeechaVargottama = !!(d1 && d9 && d1.sign && d1.sign === d9.sign && isBad(d1.dignity) && isBad(d9.dignity));
+  const evalResult = evaluateVakraDignityRegime({
+    planet,
+    d1Card: d1,
+    d9Card: d9,
+    isMature,
+    isNeechaVargottama,
+  });
+  return { ...evalResult, isNeechaVargottama };
+}
+
+function motionTag(card: { retro?: boolean | null; isStationary?: boolean | null; motionState?: string | null; cheshtaBala?: number | null } | null | undefined): string {
+  if (!card) return '';
+  const parts: string[] = [];
+  if (card.isStationary) parts.push('stationary');
+  else if (card.retro) parts.push('retro');
+  if (card.motionState) parts.push(`motion=${card.motionState}`);
+  if (typeof card.cheshtaBala === 'number') parts.push(`cheshta=${card.cheshtaBala.toFixed(1)}`);
+  return parts.length ? ` [${parts.join(', ')}]` : '';
+}
+
 /** The running rows on a date: the period covers it (from ≤ d < to, as stored). */
 export function runningOn(rows: ActivationRow[], date: string): ActivationRow[] {
   return rows.filter((r) => r.from <= date && date < r.to);
@@ -208,7 +234,7 @@ export function releaseOf(running: ActivationRow[], planet: string | null | unde
 
 // ---------------------------------------------------------------- layer 1: promise
 
-export function promiseLayer(view: DigestView, cfg: AreaConfig): LayerRow[] {
+export function promiseLayer(view: DigestView, cfg: AreaConfig, isMature = false): LayerRow[] {
   const out: LayerRow[] = [];
   const seenYoga = new Set<string>();
   for (const h of cfg.primary) {
@@ -217,21 +243,41 @@ export function promiseLayer(view: DigestView, cfg: AreaConfig): LayerRow[] {
     const key = `D1.h${h}`;
     const theme = `h${h}`;
     const rows: LayerRow[] = [];
+    const ls = lordState(view, card.lord);
+    const lv = vakraOf(view, card.lord, isMature);
+    const lTag = motionTag(ls);
     if (card.lord && card.lordHouse != null) {
       const at = view.house('D1', card.lordHouse);
-      if (card.lordHouse === h || hasClass(at, GOOD_PLACE)) rows.push({ layer: 'promise', side: 'support', weight: 2, kind: 'placed_well', theme, planet: card.lord, evidence: [`${key} lord ${card.lord} in h${card.lordHouse} (${at?.class.join('/') || 'own'})`] });
+      if (card.lordHouse === h || hasClass(at, GOOD_PLACE)) rows.push({ layer: 'promise', side: 'support', weight: 2, kind: 'placed_well', theme, planet: card.lord, evidence: [`${key} lord ${card.lord} in h${card.lordHouse} (${at?.class.join('/') || 'own'})${lTag}`] });
     }
-    const ls = lordState(view, card.lord);
-    if (card.lord && isGood(card.lordDignity ?? ls?.dignity)) rows.push({ layer: 'promise', side: 'support', weight: 2, kind: 'strong', theme, planet: card.lord, evidence: [`D1.${card.lord} dignity ${card.lordDignity ?? ls?.dignity}`] });
+    if (card.lord && isGood(card.lordDignity ?? ls?.dignity)) {
+      const strongWeight = lv?.regime === 'uccha_vakra' ? Math.max(1, 2 + lv.scoreDelta) : lv?.regime === 'swakshetra_vakra' ? 2 + lv.scoreDelta : 2;
+      rows.push({ layer: 'promise', side: 'support', weight: strongWeight, kind: 'strong', theme, planet: card.lord, evidence: [`D1.${card.lord} dignity ${card.lordDignity ?? ls?.dignity}${lTag}`, ...(lv?.citations ?? [])] });
+    } else if (card.lord && lv && lv.regime === 'neecha_vakra' && !lv.isNeechaVargottama && lv.scoreDelta > 0) {
+      rows.push({ layer: 'promise', side: 'support', weight: lv.scoreDelta, kind: 'cancelled', theme, planet: card.lord, evidence: [`D1.${card.lord} neecha_vakra uplift${lTag}`, ...lv.citations] });
+    }
+    if (card.lord && lv && !lv.isNeechaVargottama && lv.isCheshtaStrong && typeof lv.cheshtaBala === 'number' && !isBad(card.lordDignity ?? ls?.dignity)) {
+      rows.push({ layer: 'promise', side: 'support', weight: 0.5, kind: 'reserves', theme, planet: card.lord, evidence: [`D1.${card.lord} cheshta_bala ${lv.cheshtaBala.toFixed(1)}`, ...lv.citations] });
+    }
     for (const o of card.occupants) {
-      const nature = o.nature ?? view.planet('D1', o.planet)?.functional ?? null;
-      if (isBenefic(nature)) rows.push({ layer: 'promise', side: 'support', weight: 1, kind: 'helped', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet} (${nature})`] });
-      else if (isMalefic(nature)) rows.push({ layer: 'promise', side: 'test', weight: 1, kind: 'pressed', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet} (${nature})`] });
+      const oCard = view.planet('D1', o.planet);
+      const nature = o.nature ?? oCard?.functional ?? null;
+      const ov = vakraOf(view, o.planet, isMature);
+      const oTag = motionTag({ retro: o.retro ?? oCard?.retro, isStationary: oCard?.isStationary, motionState: o.motionState ?? oCard?.motionState, cheshtaBala: oCard?.cheshtaBala });
+      if (isBenefic(nature)) {
+        const w = ov?.isRetrograde && !ov.isNeechaVargottama ? Math.max(0.75, 1 + ov.scoreDelta) : 1;
+        rows.push({ layer: 'promise', side: 'support', weight: w, kind: 'helped', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet} (${nature})${oTag}`, ...(ov?.citations ?? [])] });
+      } else if (isMalefic(nature)) {
+        const w = ov?.isStationary || ov?.isRetrograde ? 1.25 : 1;
+        rows.push({ layer: 'promise', side: 'test', weight: w, kind: 'pressed', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet} (${nature})${oTag}`, ...(ov?.citations ?? [])] });
+      }
     }
     for (const p of card.aspectedGraha) {
-      const f = view.planet('D1', p)?.functional ?? null;
-      if (isBenefic(f)) rows.push({ layer: 'promise', side: 'support', weight: 1, kind: 'helped', theme, planet: p, evidence: [`${key} aspected_by ${p} (${f})`] });
-      else if (isMalefic(f)) rows.push({ layer: 'promise', side: 'test', weight: 1, kind: 'pressed', theme, planet: p, evidence: [`${key} aspected_by ${p} (${f})`] });
+      const pCard = view.planet('D1', p);
+      const f = pCard?.functional ?? null;
+      const pTag = motionTag(pCard);
+      if (isBenefic(f)) rows.push({ layer: 'promise', side: 'support', weight: 1, kind: 'helped', theme, planet: p, evidence: [`${key} aspected_by ${p} (${f})${pTag}`] });
+      else if (isMalefic(f)) rows.push({ layer: 'promise', side: 'test', weight: 1, kind: 'pressed', theme, planet: p, evidence: [`${key} aspected_by ${p} (${f})${pTag}`] });
     }
     if (card.sav != null && card.sav >= 28) rows.push({ layer: 'promise', side: 'support', weight: 1, kind: 'reserves', theme, evidence: [`${key} sav ${card.sav}`] });
     else if (card.sav != null && card.sav <= 22) rows.push({ layer: 'promise', side: 'test', weight: 1, kind: 'placed_hard', theme, evidence: [`${key} sav ${card.sav}`] });
@@ -254,9 +300,19 @@ export function promiseLayer(view: DigestView, cfg: AreaConfig): LayerRow[] {
   for (const ref of cfg.karakas) {
     const p = resolvePlanet(view, ref);
     const pc = p ? view.planet('D1', p) : null;
-    if (!pc) continue;
-    if (isGood(pc.dignity)) out.push({ layer: 'promise', side: 'support', weight: 1, kind: 'strong', theme: ref, planet: p, evidence: [`D1.${p} dignity ${pc.dignity}`] });
-    if (pc.shadbalaRatio != null && pc.shadbalaRatio >= 1.2) out.push({ layer: 'promise', side: 'support', weight: 1, kind: 'reserves', theme: ref, planet: p, evidence: [`D1.${p} shadbala_ratio ${pc.shadbalaRatio}`] });
+    if (!pc || !p) continue;
+    const kv = vakraOf(view, p, isMature);
+    const kTag = motionTag(pc);
+    if (isGood(pc.dignity)) {
+      const w = kv?.regime === 'uccha_vakra' ? Math.max(0.5, 1 + kv.scoreDelta) : 1;
+      out.push({ layer: 'promise', side: 'support', weight: w, kind: 'strong', theme: ref, planet: p, evidence: [`D1.${p} dignity ${pc.dignity}${kTag}`, ...(kv?.citations ?? [])] });
+    } else if (kv && kv.regime === 'neecha_vakra' && !kv.isNeechaVargottama && kv.scoreDelta > 0) {
+      out.push({ layer: 'promise', side: 'support', weight: kv.scoreDelta, kind: 'cancelled', theme: ref, planet: p, evidence: [`D1.${p} neecha_vakra uplift${kTag}`, ...kv.citations] });
+    }
+    if (pc.shadbalaRatio != null && pc.shadbalaRatio >= 1.2) out.push({ layer: 'promise', side: 'support', weight: 1, kind: 'reserves', theme: ref, planet: p, evidence: [`D1.${p} shadbala_ratio ${pc.shadbalaRatio}${kTag}`] });
+    else if (kv && !kv.isNeechaVargottama && kv.isCheshtaStrong && typeof kv.cheshtaBala === 'number' && !isBad(pc.dignity)) {
+      out.push({ layer: 'promise', side: 'support', weight: 0.5, kind: 'reserves', theme: ref, planet: p, evidence: [`D1.${p} cheshta_bala ${kv.cheshtaBala.toFixed(1)}`, ...kv.citations] });
+    }
   }
   return out;
 }
@@ -268,7 +324,7 @@ function cancelled(view: DigestView, planet: string): string | null {
   return y ? y.id : null;
 }
 
-export function afflictionLayer(view: DigestView, cfg: AreaConfig, running: ActivationRow[]): LayerRow[] {
+export function afflictionLayer(view: DigestView, cfg: AreaConfig, running: ActivationRow[], isMature = false): LayerRow[] {
   const out: LayerRow[] = [];
   const add = (r: Omit<LayerRow, 'layer' | 'side' | 'until'>) => out.push({ layer: 'affliction', side: 'test', until: releaseOf(running, r.planet), ...r });
   for (const h of cfg.primary) {
@@ -276,24 +332,37 @@ export function afflictionLayer(view: DigestView, cfg: AreaConfig, running: Acti
     if (!card) continue;
     const key = `D1.h${h}`;
     const theme = `h${h}`;
-    if (card.lord && card.lordHouse != null && card.lordHouse !== h && hasClass(view.house('D1', card.lordHouse), HARD_PLACE)) {
-      add({ weight: 2, kind: 'placed_hard', theme, planet: card.lord, evidence: [`${key} lord ${card.lord} in h${card.lordHouse} (dusthana)`] });
-    }
     const ls = lordState(view, card.lord);
-    if (card.lord && isBad(card.lordDignity ?? ls?.dignity) && !cancelled(view, card.lord)) add({ weight: 2, kind: 'weak', theme, planet: card.lord, evidence: [`D1.${card.lord} dignity ${card.lordDignity ?? ls?.dignity}`] });
+    const lv = vakraOf(view, card.lord, isMature);
+    const lTag = motionTag(ls);
+    if (card.lord && card.lordHouse != null && card.lordHouse !== h && hasClass(view.house('D1', card.lordHouse), HARD_PLACE)) {
+      add({ weight: 2, kind: 'placed_hard', theme, planet: card.lord, evidence: [`${key} lord ${card.lord} in h${card.lordHouse} (dusthana)${lTag}`] });
+    }
+    if (card.lord && isBad(card.lordDignity ?? ls?.dignity) && !cancelled(view, card.lord)) {
+      const debilWeight = lv && lv.regime === 'neecha_vakra' && !lv.isNeechaVargottama ? Math.max(1, 2 - lv.scoreDelta) : 2;
+      add({ weight: debilWeight, kind: 'weak', theme, planet: card.lord, evidence: [`D1.${card.lord} dignity ${card.lordDignity ?? ls?.dignity}${lTag}`, ...(lv?.citations ?? [])] });
+    }
     // combustion gives no release (doc 46 §B.3), except cazimi (empowered at heart of Sun)
     if (card.lord && ls?.combust && ls.sunProximity?.zone !== 'cazimi') out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme, planet: card.lord, until: null, evidence: [`D1.${card.lord} combust`] });
     if (card.lord && ls?.war) add({ weight: 1, kind: 'conflict', theme, planet: card.lord, evidence: [`D1.${card.lord} planetary_war`] });
-    for (const o of card.occupants) if (cfg.heavy.includes(o.planet)) add({ weight: 1.5, kind: 'pressed', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet}`] });
-    for (const p of card.aspectedGraha) if (cfg.heavy.includes(p) && !card.occupants.some((o) => o.planet === p)) add({ weight: 1, kind: 'pressed', theme, planet: p, evidence: [`${key} aspected_by ${p}`] });
+    for (const o of card.occupants) if (cfg.heavy.includes(o.planet)) {
+      const oc = view.planet('D1', o.planet);
+      add({ weight: oc?.isStationary || o.retro || oc?.retro ? 1.75 : 1.5, kind: 'pressed', theme, planet: o.planet, evidence: [`${key} occupant ${o.planet}${motionTag(oc)}`] });
+    }
+    for (const p of card.aspectedGraha) if (cfg.heavy.includes(p) && !card.occupants.some((o) => o.planet === p)) add({ weight: 1, kind: 'pressed', theme, planet: p, evidence: [`${key} aspected_by ${p}${motionTag(view.planet('D1', p))}`] });
   }
   for (const ref of cfg.karakas) {
     const p = resolvePlanet(view, ref);
     const pc = p ? view.planet('D1', p) : null;
     if (!pc || !p) continue;
+    const kv = vakraOf(view, p, isMature);
+    const kTag = motionTag(pc);
     for (const c of pc.conjunctions) if (cfg.heavy.includes(c)) add({ weight: 1.5, kind: 'pressed', theme: ref, planet: c, evidence: [`D1.${p} conjunct ${c}`] });
     for (const a of pc.aspectedBy) if (cfg.heavy.includes(a) && !pc.conjunctions.includes(a)) add({ weight: 1, kind: 'pressed', theme: ref, planet: a, evidence: [`D1.${p} aspected_by ${a}`] });
-    if (isBad(pc.dignity) && !cancelled(view, p)) add({ weight: 1, kind: 'weak', theme: ref, planet: p, evidence: [`D1.${p} dignity ${pc.dignity}`] });
+    if (isBad(pc.dignity) && !cancelled(view, p)) {
+      const debilWeight = kv && kv.regime === 'neecha_vakra' && !kv.isNeechaVargottama ? Math.max(0.5, 1 - kv.scoreDelta) : 1;
+      add({ weight: debilWeight, kind: 'weak', theme: ref, planet: p, evidence: [`D1.${p} dignity ${pc.dignity}${kTag}`, ...(kv?.citations ?? [])] });
+    }
     if (pc.combust && pc.sunProximity?.zone !== 'cazimi') out.push({ layer: 'affliction', side: 'test', weight: 1, kind: 'overshadowed', theme: ref, planet: p, until: null, evidence: [`D1.${p} combust`] });
   }
   if (cfg.gandantaMoon && (view.star()?.gandanta ?? []).some((g) => g === 'Mo' || /moon/i.test(g))) {
@@ -377,19 +446,26 @@ export interface Graded {
   evidence: string[];
 }
 
-/** A period lord's polarity to the area: functional nature, D1 and inner-varga dignity, what it lords (engine labels). */
-export function gradePlanet(view: DigestView, cfg: AreaConfig, p: string): { score: number; evidence: string[] } {
+/** A period lord's polarity to the area: functional nature, D1 and inner-varga dignity, motion/Cheshta regime, what it lords (engine labels). */
+export function gradePlanet(view: DigestView, cfg: AreaConfig, p: string, isMature = false): { score: number; evidence: string[] } {
   let score = 0;
   const ev: string[] = [];
   const d1 = view.planet('D1', p);
   const inner = cfg.vargas.find((v) => v !== 'D1') ?? 'D9';
   const dn = view.planet(inner, p);
+  const vakra = vakraOf(view, p, isMature);
   if (isBenefic(d1?.functional)) (score += 1), ev.push(`D1.${p} functional ${d1!.functional}`);
   else if (isMalefic(d1?.functional)) (score -= 1), ev.push(`D1.${p} functional ${d1!.functional}`);
-  if (isGood(d1?.dignity)) (score += 1), ev.push(`D1.${p} dignity ${d1!.dignity}`);
-  else if (isBad(d1?.dignity)) (score -= 1), ev.push(`D1.${p} dignity ${d1!.dignity}`);
+  if (isGood(d1?.dignity)) (score += 1), ev.push(`D1.${p} dignity ${d1!.dignity}${motionTag(d1)}`);
+  else if (isBad(d1?.dignity)) (score -= 1), ev.push(`D1.${p} dignity ${d1!.dignity}${motionTag(d1)}`);
   if (isGood(dn?.dignity)) (score += 1), ev.push(`${inner}.${p} dignity ${dn!.dignity}`);
   else if (isBad(dn?.dignity)) (score -= 1), ev.push(`${inner}.${p} dignity ${dn!.dignity}`);
+  if (vakra && vakra.scoreDelta !== 0 && !vakra.isNeechaVargottama) {
+    score += vakra.scoreDelta;
+    ev.push(...vakra.citations);
+  } else if (vakra?.isNeechaVargottama) {
+    ev.push(...vakra.citations);
+  }
   const owns = d1?.owns ?? [];
   if (owns.some((h) => cfg.primary.includes(h))) (score += 1), ev.push(`D1.${p} owns ${owns.join(',')}`);
   else if (owns.some((h) => hasClass(view.house('D1', h), HARD_PLACE))) (score -= 1), ev.push(`D1.${p} owns ${owns.join(',')} (dusthana)`);
@@ -398,7 +474,7 @@ export function gradePlanet(view: DigestView, cfg: AreaConfig, p: string): { sco
 
 const gradeOf = (s: number): Grade | null => (Math.abs(s) >= 3 ? 'strong' : Math.abs(s) === 2 ? 'moderate' : Math.abs(s) >= 1 ? 'weak' : null);
 
-export function gradeRow(view: DigestView, cfg: AreaConfig, row: ActivationRow): Graded {
+export function gradeRow(view: DigestView, cfg: AreaConfig, row: ActivationRow, isMature = false): Graded {
   let planet = row.lord;
   let bonus = 0;
   const ev: string[] = [`act:${row.system}/L${row.level}/${row.lord ?? row.sign}/${row.from}..${row.to}`];
@@ -409,7 +485,7 @@ export function gradeRow(view: DigestView, cfg: AreaConfig, row: ActivationRow):
     if (card && cfg.primary.includes(card.house)) (bonus += 1), ev.push(`D1.h${card.house} sign ${row.sign}`);
   }
   if (!planet) return { row, planet: null, score: 0, side: null, grade: null, evidence: ev };
-  const g = gradePlanet(view, cfg, planet);
+  const g = gradePlanet(view, cfg, planet, isMature);
   if (row.parentLord && row.lord) {
     const cell = view.planet('D1', row.parentLord)?.dashaCharter?.fruition?.[row.lord];
     if (cell) {
@@ -495,8 +571,10 @@ export function annualLayer(view: DigestView, cfg: AreaConfig, asOf: string): { 
     const card = year.houses.find((c) => c.house === h);
     if (!card || card.lordHouse == null) continue;
     const at = year.houses.find((c) => c.house === card.lordHouse);
-    if ((card.lordHouse === h || hasClass(at, GOOD_PLACE)) && !isBad(card.lordDignity)) rows.push({ layer: 'annual', side: 'support', weight: 1, kind: 'year_backs', theme: `h${h}`, planet: card.lord, evidence: [`${tag}.h${h} lord ${card.lord} in h${card.lordHouse}`] });
-    else if (card.lordHouse !== h && hasClass(at, HARD_PLACE)) rows.push({ layer: 'annual', side: 'test', weight: 1, kind: 'year_tests', theme: `h${h}`, planet: card.lord, evidence: [`${tag}.h${h} lord ${card.lord} in h${card.lordHouse} (dusthana)`] });
+    const lMotion = annualPlanetMotion(year, card.lord);
+    const rSuffix = card.lordRetro || lMotion.retro ? ' [retro]' : '';
+    if ((card.lordHouse === h || hasClass(at, GOOD_PLACE)) && !isBad(card.lordDignity)) rows.push({ layer: 'annual', side: 'support', weight: 1, kind: 'year_backs', theme: `h${h}`, planet: card.lord, evidence: [`${tag}.h${h} lord ${card.lord} in h${card.lordHouse}${rSuffix}`] });
+    else if (card.lordHouse !== h && hasClass(at, HARD_PLACE)) rows.push({ layer: 'annual', side: 'test', weight: 1, kind: 'year_tests', theme: `h${h}`, planet: card.lord, evidence: [`${tag}.h${h} lord ${card.lord} in h${card.lordHouse} (dusthana)${rSuffix}`] });
   }
   for (const s of year.sahams) {
     if (s.house == null) continue;
@@ -528,12 +606,21 @@ export function vargaLayer(view: DigestView, cfg: AreaConfig): LayerRow[] {
         }
       }
       if (d1?.lord) {
+        const d1Lord = view.planet('D1', d1.lord);
         const vLord = view.planet(v, d1.lord);
         if (vLord) {
-          if (isGood(vLord.dignity)) {
-            out.push({ layer: 'varga', side: 'support', weight: 1, kind: 'backed', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}`] });
+          const isNeechaVargottama = v === 'D9' && !!d1Lord?.sign && d1Lord.sign === vLord.sign && isBad(d1Lord.dignity) && isBad(vLord.dignity);
+          const vExtra = [
+            vLord.retro ? 'retro' : null,
+            vLord.vargaReckoning ? `reckoning=${vLord.vargaReckoning}` : null,
+            vLord.vargaSandhi ? 'varga_sandhi' : null,
+            isNeechaVargottama ? 'neecha_vargottama' : null,
+          ].filter(Boolean);
+          const vSuffix = vExtra.length ? ` [${vExtra.join(', ')}]` : '';
+          if (isGood(vLord.dignity) && !isNeechaVargottama) {
+            out.push({ layer: 'varga', side: 'support', weight: 1, kind: 'backed', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}${vSuffix}`] });
           } else if (isBad(vLord.dignity)) {
-            out.push({ layer: 'varga', side: 'test', weight: 1, kind: 'weak', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}`] });
+            out.push({ layer: 'varga', side: 'test', weight: isNeechaVargottama ? 1.5 : 1, kind: 'weak', theme, planet: d1.lord, evidence: [`${v}.${d1.lord} dignity ${vLord.dignity}${vSuffix}`] });
           }
         }
       }
@@ -866,8 +953,18 @@ export function aheadWindows(view: DigestView, cfg: AreaConfig, graded: Graded[]
 export function buildBoard(input: BoardInput): BuiltBoard {
   const { view, cfg, asOf } = input;
   const notes: string[] = [];
-  const promise = promiseLayer(view, cfg);
-  const affliction = afflictionLayer(view, cfg, input.running);
+  const areaVarga = (cfg.vargas.find((v) => v !== 'D1' && v !== 'D9') ?? 'D9') as 'D10' | 'D7' | 'D9' | 'D30';
+  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
+    view,
+    activation: input.activation,
+    asOf,
+    ageYears: input.ageYears ?? null,
+    birthDate: input.birthDate ?? null,
+    varga: areaVarga,
+  });
+  const isMature = activeAssessment.isMature;
+  const promise = promiseLayer(view, cfg, isMature);
+  const affliction = afflictionLayer(view, cfg, input.running, isMature);
   const protection = protectionLayer(view, cfg);
   const varga = vargaLayer(view, cfg);
   const nakshatra = nakshatraLayer(view, cfg, input.running);
@@ -875,7 +972,11 @@ export function buildBoard(input: BoardInput): BuiltBoard {
   if (transit === null) notes.push('The slow-moving sky is not stored for this chart yet; the board reads the timing clocks and the year chart only.');
   const annual = annualLayer(view, cfg, asOf);
   if (!annual.year) notes.push("This year's chart is not stored yet.");
-  const graded = input.activation.map((r) => gradeRow(view, cfg, r));
+  else if (activeAssessment.tithiPravesha?.operatingPosture === 'iterative_review') {
+    const ylPb = getPlanetVakraPlaybook(activeAssessment.tithiPravesha.yearLord);
+    notes.push(ylPb ? ylPb.plainAnnualShift : 'This year favors refining plans, renegotiating terms, and building on a deliberate second pass.');
+  }
+  const graded = input.activation.map((r) => gradeRow(view, cfg, r, isMature));
 
   // the month series: activation families only (the sky and the year chart speak for now)
   const months = monthsBetween(addMonthsIso(asOf, -12), addMonthsIso(asOf, 24));
@@ -926,16 +1027,6 @@ export function buildBoard(input: BoardInput): BuiltBoard {
     .sort((a, b) => b.month.localeCompare(a.month))
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
-
-  const areaVarga = (cfg.vargas.find((v) => v !== 'D1' && v !== 'D9') ?? 'D9') as 'D10' | 'D7' | 'D9' | 'D30';
-  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
-    view,
-    activation: input.activation,
-    asOf,
-    ageYears: input.ageYears ?? null,
-    birthDate: input.birthDate ?? null,
-    varga: areaVarga,
-  });
 
   const characterArc =
     cfg.area === 'self'

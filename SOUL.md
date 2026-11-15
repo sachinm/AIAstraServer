@@ -35,3 +35,15 @@ Every coding agent and every runtime astrological reading/synthesis agent must r
   2. **Pragmatic High-Leverage (`Rajasic` Way — Contractual, Structural & Commercial Leverage)**
   3. **Mediocre (`Mixed/Passive` Way — Partial Return with Ongoing Friction)**
   4. **Fundamental Baseline / Neutral Floor (Zero-Loss & Anti-Combustion Rule — How Not to Go Negative)**
+
+## 4. Retrograde Planets (*Vakra*), *Cheshta Bala*, *Ashtagati* & Non-Inversion of *Neecha Vargottama* (`docs/reading-engine/77`)
+
+- **5-Planet True *Vakra* Scope (`Ma`, `Me`, `Ju`, `Ve`, `Sa`):** Only the five starry planets (`Mars`, `Mercury`, `Jupiter`, `Venus`, `Saturn`) undergo true astronomical retrogression (*Vakra*), stations (*Vikala*), 8-fold motion states (*Ashtagati*: `vikala`, `anuvakra`, `vakra`, `manda`, `mandatara`, `sama`, `chara`, `atichara`), and *Cheshta Bala*. `Sun` and `Moon` are never retrograde; `Rahu` and `Ketu`'s mean retrograde motion is their baseline norm and **never** triggers *Vakra* boosts, dignity reversals, or *Cheshta Bala*.
+- **`nuanced_parashari` Dignity Regime & Strict Non-Inversion of *Neecha Vargottama*:**
+  - Under the default `nuanced_parashari` regime, a retrograde planet carries elevated motional effort (*Cheshta Bala*) — internalized, iterative, second-pass, and unconventional — rather than straight-line first-pass delivery.
+  - Exalted retrograde (*Uccha Vakra*) retains strong capacity while introducing revision cycles, over-engineering risk, or delayed outward sign-off; non-vargottama debilitated retrograde (*Neecha Vakra*) can construct unconventional workarounds when redeemed by `D9` or cancellation.
+  - **ABSOLUTE INVARIANT — NEVER INVERT *NEECHA VARGOTTAMA*:** When a planet is debilitated in the **same sign across `D1` and `D9`** (*Neecha Vargottama*), it is a fixed structural boundary (*Drudha Karma*). Even if retrograde with high *Cheshta Bala*, **never** flip or upgrade *Neecha Vargottama* into exaltation or strength; prescribe clear protective boundaries and structured workarounds instead.
+- **Active Dasha & Annual *Tithi Pravesha* (`yearLordRetro`) Posture:**
+  - When the active Mahadasha/Antardasha lord or the running *Tithi Pravesha* Year Lord (`yearLordRetro === true`) is retrograde, shift the temporal posture from `linear_build` to `iterative_review` (auditing, renegotiating terms, restructuring existing systems, and refining second drafts rather than rushing irreversible brand-new commitments, especially across ` Vikala` station windows).
+- **Zero Sanskrit Motion Jargon on Consumer Read/Short Faces:**
+  - Consumer-facing `Read` and `Short` card prose (`headline`, `line`, `asks`, `step`, `plainBehavior`, `plainCounsel`) must translate motion states into 100% plain English (*"second-pass review"*, *"renegotiating terms"*, *"deliberate pacing around turning points"*) and **never** leak Sanskrit or chart jargon (`Vakra`, `Cheshta Bala`, `Ashtagati`, `Anuvakra`, `Atichara`, `Vikala`, `Neecha`, `Uchcha`, `Mahadasha`, `Tithi Pravesha`, `D9`, `D10`) or internal engine names. Technical terms belong exclusively in structured `evidence` / `Research` layers.

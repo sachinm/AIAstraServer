@@ -14,6 +14,7 @@ import { getD9MaturityAgeYears } from '../../config/env.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { AnnualRow, DigestView, PlanetCard } from '../digest/types.js';
 import { runningTithiPravesha, tpRowIn, type RunningTithiPravesha, type TpShortClock } from '../annual/tithiPravesha.js';
+import { annualPlanetMotion, evaluateVakraDignityRegime, type RetrogradeDignityRegime } from './retrogradeRules.js';
 
 export type D1D9ConfirmationVerdict =
   | 'confirmed_strong'
@@ -37,6 +38,11 @@ export interface D1D9ConfirmationResult {
   scoreAdjustment: number;
   summary: string;
   citations: string[];
+  isRetrograde?: boolean;
+  isStationary?: boolean;
+  motionState?: string | null;
+  cheshtaBala?: number | null;
+  vakraRegime?: RetrogradeDignityRegime;
 }
 
 export interface ActiveDashaAssessmentResult {
@@ -67,6 +73,8 @@ export interface ActiveDashaAssessmentResult {
     varga: string;
     mahadashaLordCard: PlanetCard | null;
     antardashaLordCard: PlanetCard | null;
+    mahadashaLordRetro?: boolean;
+    antardashaLordRetro?: boolean;
     status: 'support' | 'test' | 'neutral';
     tpAnnualVargaRow?: AnnualRow | null;
   } | null;
@@ -77,6 +85,12 @@ export interface ActiveDashaAssessmentResult {
     yearLord: string;
     shortClock: TpShortClock | null;
     stance: 'build' | 'get_through';
+    operatingPosture?: 'linear_build' | 'iterative_review' | 'protective_pacing';
+    yearLordRetro?: boolean | null;
+    yearLordMotionState?: string | null;
+    horaLord?: string | null;
+    horaLordRetro?: boolean | null;
+    lagnaLordRetro?: boolean | null;
     yearLordConfirm?: D1D9ConfirmationResult | null;
     yearLordConfirmation?: D1D9ConfirmationResult | null;
     tpD9Row?: AnnualRow | null;
@@ -235,6 +249,30 @@ export function evaluateD1D9MutualConfirmation(
     }
   }
 
+  // 9. Retrograde (Vakra) + Cheshta Bala + Ashtagati evaluation (docs/reading-engine/77 §3.2)
+  const vakraEval = evaluateVakraDignityRegime({
+    planet: planetCode,
+    d1Card: d1,
+    d9Card: d9,
+    isMature,
+    isNeechaVargottama,
+  });
+
+  if (vakraEval.isRetrograde || vakraEval.isStationary) {
+    // INVARIANT: Neecha Vargottama is NEVER inverted into strength by retrograde motion.
+    if (!isNeechaVargottama) {
+      scoreAdjustment = Number((scoreAdjustment + vakraEval.scoreDelta).toFixed(2));
+    } else if (vakraEval.scoreDelta < 0) {
+      scoreAdjustment = Number((scoreAdjustment + vakraEval.scoreDelta).toFixed(2));
+    }
+    for (const c of vakraEval.citations) {
+      if (!citations.includes(c)) citations.push(c);
+    }
+    if (vakraEval.plainNote) {
+      summary = `${summary} ${vakraEval.plainNote}`.trim();
+    }
+  }
+
   return {
     planet: planetCode,
     isMature,
@@ -250,6 +288,15 @@ export function evaluateD1D9MutualConfirmation(
     scoreAdjustment,
     summary,
     citations,
+    ...(vakraEval.isRetrograde || vakraEval.isStationary
+      ? {
+          isRetrograde: vakraEval.isRetrograde,
+          isStationary: vakraEval.isStationary,
+          motionState: vakraEval.motionState,
+          cheshtaBala: vakraEval.cheshtaBala,
+          vakraRegime: vakraEval.regime,
+        }
+      : {}),
   };
 }
 
@@ -380,6 +427,8 @@ export function evaluateActiveDashaWithVargaAndTP(params: {
       antardashaLordCard: adVargaCard,
       status,
       tpAnnualVargaRow,
+      ...(mdVargaCard?.retro != null ? { mahadashaLordRetro: mdVargaCard.retro } : {}),
+      ...(adVargaCard?.retro != null ? { antardashaLordRetro: adVargaCard.retro } : {}),
     };
   }
 
@@ -502,6 +551,23 @@ export function evaluateActiveDashaWithVargaAndTP(params: {
     const startStr = tpInfo.from ?? (tpInfo.start ? tpInfo.start.slice(0, 10) : '');
     const endStr = tpInfo.to ?? (tpInfo.end ? tpInfo.end.slice(0, 10) : '');
 
+    const ylAnnualMotion = isYearLordResolved ? annualPlanetMotion(tpInfo.row, yearLord) : { retro: null, motionState: null, combust: null };
+    const yearLordRetro = tpInfo.row.yearLordRetro ?? ylAnnualMotion.retro ?? null;
+    const yearLordMotionState = tpInfo.row.yearLordMotionState ?? ylAnnualMotion.motionState ?? null;
+    const horaLord = tpInfo.row.horaLord ?? null;
+    const horaMotion = horaLord ? annualPlanetMotion(tpInfo.row, horaLord) : { retro: null, motionState: null, combust: null };
+    const horaLordRetro = tpInfo.row.horaLordRetro ?? horaMotion.retro ?? null;
+    const tpLagnaLord = tpInfo.row.houses?.find((h) => h.house === 1)?.lord ?? null;
+    const lagnaMotion = tpLagnaLord ? annualPlanetMotion(tpInfo.row, tpLagnaLord) : { retro: null, motionState: null, combust: null };
+    const lagnaLordRetro = tpInfo.row.lagnaLordRetro ?? lagnaMotion.retro ?? null;
+
+    const operatingPosture: 'linear_build' | 'iterative_review' | 'protective_pacing' =
+      stance === 'get_through'
+        ? 'protective_pacing'
+        : yearLordRetro === true || horaLordRetro === true || lagnaLordRetro === true
+          ? 'iterative_review'
+          : 'linear_build';
+
     tithiPravesha = {
       year: tpInfo.year,
       start: startStr,
@@ -514,6 +580,12 @@ export function evaluateActiveDashaWithVargaAndTP(params: {
       tpD9Row,
       tpVargaRow,
       yearLordVargaCard,
+      yearLordRetro,
+      yearLordMotionState,
+      horaLord,
+      horaLordRetro,
+      lagnaLordRetro,
+      operatingPosture,
     };
   } else {
     gaps.push('annual: no Tithi Pravesha year in force covering asOf');
@@ -524,8 +596,15 @@ export function evaluateActiveDashaWithVargaAndTP(params: {
   if (isMature) {
     narrativeContext += ` Having reached full karmic maturity (post-36), indications are mutually validated by the inner dharmic chart.`;
   }
+  if (mdConfirm?.isRetrograde) {
+    narrativeContext += ` Results unfold through deliberate second-pass refinement, internal conviction, and revisiting unfinished commitments rather than a straight one-pass push.`;
+  }
   if (tithiPravesha) {
-    narrativeContext += ` The current annual cycle adopts a ${tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady pacing'} stance.`;
+    if (tithiPravesha.operatingPosture === 'iterative_review') {
+      narrativeContext += ` The current annual cycle supports constructive progress through iterative review, renegotiation, and careful pacing rather than rushing first drafts.`;
+    } else {
+      narrativeContext += ` The current annual cycle adopts a ${tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady pacing'} stance.`;
+    }
   }
 
   return {
