@@ -78,6 +78,9 @@ export const CHART_TERMS: readonly RegExp[] = [
   /\b(annual\s+(chart|cycle|framework)|solar\s+return)\b/i,
   /\d+\s*°|\b\d+\s+degrees?\b/i,
   /\b\d+\s+(of\s+\d+\s+)?(clocks|systems)\b/i,
+  // doc 75 browser audit 2026-11-13: terms that reached the Read prose
+  /\b(sarvashtakavarga|bhinnashtakavarga|ganda\s*moola|ganda\s*mula|dwisaptati|parashar\w*|jaimini|trimsamsa|amsa)\b/i,
+  /\b(SAV|BAV)\b/,
 ];
 
 /** the calculation engine's names (SOUL.md §1) */

@@ -16,8 +16,11 @@ import { getSelfV2, writeConfirm, type SelfV2Deps } from '../v2api/service.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../buildEvent.js';
 import { cardDef, isCardOffered, SELF_CARDS } from './cards.js';
 import { shapeSelfCard } from '../../boards/cardOptions.js';
-import { emptyLayout, readLayout, validateLayout, writeLayout } from './layout.js';
-import { buildSelfV3Response } from './response.js';
+import { emptyLayout, mergeLayoutPatch, readLayout, validateLayout, writeLayout, writeLayoutVersioned } from './layout.js';
+import { applySelfFeatures, buildSelfV3Response } from './response.js';
+import { featureContext, readFeatureOverrides, resolveFeatures, type FeatureState } from '../../../boards/features.js';
+import { effectivePlan, type PlanCode } from '../../../billing/plans.js';
+import { PrismaPlanStore } from '../../../billing/store.js';
 import { readSelfV3Cards } from './store.js';
 import type { CardReadError, CardReadState, LayoutError, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CatalogueEntry, SelfV3Response } from './types.js';
 
@@ -30,7 +33,16 @@ export interface SelfV3Deps extends SelfV2Deps {
   cardsRead?: boolean;
   /** doc 70 Phase 3 test seam: the stored per-card readings (default `readCardReadings`) */
   readCardReadings?: typeof readCardReadings;
+  /** doc 75: the person's plan (default: their billing account through `effectivePlan`; `free` when it cannot be read) */
+  planOf?: (prisma: PrismaClient, userId: string) => Promise<PlanCode>;
+  /** doc 75: the person's feature overrides (default `readFeatureOverrides`; none when the table cannot be read) */
+  featureOverrides?: (prisma: PrismaClient, userId: string) => Promise<Map<string, FeatureState>>;
 }
+
+/** until migration m52 is applied the overrides table is missing; that is said once per process, not per GET */
+let overridesWarned = false;
+
+const defaultPlanOf = async (prisma: PrismaClient, userId: string): Promise<PlanCode> => effectivePlan(await new PrismaPlanStore(prisma).getAccount(userId));
 
 async function latestKundliId(prisma: PrismaClient, userId: string): Promise<string | null> {
   const k = await prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
@@ -53,7 +65,7 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   if (!kundliId) return { body: buildSelfV3Response({ v2: v2.body, layout: emptyLayout(), today }), queued: v2.queued };
   const now = (deps.now ?? (() => new Date()))();
   const cardsRead = deps.cardsRead ?? isCardsReadEnabled();
-  const [layout, legacy, suggested, perCard, doc] = await Promise.all([
+  const [layout, legacy, suggested, perCard, doc, plan, overrides] = await Promise.all([
     readLayout(deps.prisma, kundliId).catch((e) => {
       console.warn('[self:v3] layout read failed:', (e as Error).message);
       return emptyLayout();
@@ -62,6 +74,12 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
     deps.suggest ? deps.suggest(deps.prisma, userId, kundliId).catch(() => null) : Promise.resolve(null),
     cardsRead ? (deps.readCardReadings ?? readCardReadings)(deps.prisma, kundliId, v2.body.clock.system).catch(() => ({})) : Promise.resolve({}),
     cardsRead ? readCardsState(deps.prisma, kundliId, now) : Promise.resolve(null),
+    (deps.planOf ?? defaultPlanOf)(deps.prisma, userId).catch((): PlanCode => 'free'),
+    (deps.featureOverrides ?? readFeatureOverrides)(deps.prisma, userId).catch((e) => {
+      if (!overridesWarned) console.warn('[self:v3] feature overrides read failed (logged once):', (e as Error).message);
+      overridesWarned = true;
+      return new Map<string, FeatureState>();
+    }),
   ]);
   // a card read on its own (doc 70) wins over the Phase B three-call card
   const v3Cards: Partial<Record<SelfCardId, SelfV3CardContent>> = { ...(legacy ?? {}), ...perCard };
@@ -75,7 +93,7 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   // doc 71 §4.4 item 4: each card shaped by the person's options, then the board's (a filter over stored content,
   // nothing new made; no option adds a field, so no role-gated content follows a face)
   body.cards = body.cards.map((c) => shapeSelfCard(c, layout.options?.[c.id], layout.boardOptions));
-  return { body, queued: v2.queued };
+  return { body: applySelfFeatures(body, resolveFeatures(featureContext(plan, overrides))), queued: v2.queued };
 }
 
 /**
@@ -111,6 +129,7 @@ export async function getSelfV3Catalogue(deps: SelfV3Deps, userId: string): Prom
 
 export type PutLayoutResult =
   | { ok: true; layout: SelfBoardLayoutView; reading?: { queued: SelfCardId[] } }
+  | { ok: false; status: 409; error: 'stale_layout'; layout: SelfBoardLayoutView; detail?: string }
   | { ok: false; status: 400 | 404; error: LayoutError | 'no_kundli'; detail?: string };
 
 export interface CardsQueueDeps {
@@ -135,11 +154,34 @@ async function preferredClock(prisma: PrismaClient, kundliId: string): Promise<s
  * `queued` and the build is queued; changing the board re-reads nothing already read.
  */
 export async function putSelfLayout(prisma: PrismaClient, userId: string, body: unknown, deps: CardsQueueDeps = {}): Promise<PutLayoutResult> {
-  const check = validateLayout(body);
-  if (!check.ok) return { ok: false, status: 400, error: check.error, ...(check.detail ? { detail: check.detail } : {}) };
+  const b = body && typeof body === 'object' && !Array.isArray(body) ? (body as { version?: unknown; patch?: unknown }) : null;
+  const versioned = Boolean(b && (b.patch !== undefined || b.version !== undefined));
+  let layout: SelfBoardLayoutView;
+  if (!versioned) {
+    const check = validateLayout(body);
+    if (!check.ok) return { ok: false, status: 400, error: check.error, ...(check.detail ? { detail: check.detail } : {}) };
+    const kundliId = await latestKundliId(prisma, userId);
+    if (!kundliId) return { ok: false, status: 404, error: 'no_kundli' };
+    layout = await writeLayout(prisma, userId, kundliId, check.layout);
+    return queueAfterLayout(prisma, userId, kundliId, layout, deps);
+  }
+  // doc 75 §4.1: a patch on the version the page holds; a stale version is refused with the layout now stored
+  if (b!.version !== undefined && typeof b!.version !== 'string') return { ok: false, status: 400, error: 'bad_body' };
   const kundliId = await latestKundliId(prisma, userId);
   if (!kundliId) return { ok: false, status: 404, error: 'no_kundli' };
-  const layout = await writeLayout(prisma, userId, kundliId, check.layout);
+  const current = await readLayout(prisma, kundliId);
+  if (typeof b!.version === 'string' && b!.version !== current.version) return { ok: false, status: 409, error: 'stale_layout', layout: current };
+  const merged = b!.patch !== undefined ? mergeLayoutPatch(current, b!.patch) : { ok: true as const, body: body as Record<string, unknown> };
+  if (!merged.ok) return { ok: false, status: 400, error: merged.error };
+  const check = validateLayout(merged.body);
+  if (!check.ok) return { ok: false, status: 400, error: check.error, ...(check.detail ? { detail: check.detail } : {}) };
+  const w = await writeLayoutVersioned(prisma, userId, kundliId, check.layout, current.version);
+  if (!w.ok) return { ok: false, status: 409, error: 'stale_layout', layout: w.layout };
+  layout = w.layout;
+  return queueAfterLayout(prisma, userId, kundliId, layout, deps);
+}
+
+async function queueAfterLayout(prisma: PrismaClient, userId: string, kundliId: string, layout: SelfBoardLayoutView, deps: CardsQueueDeps): Promise<PutLayoutResult> {
   if (!(deps.cardsRead ?? isCardsReadEnabled()) || layout.cards.length < getCardsReadMin()) return { ok: true, layout };
   try {
     const now = (deps.now ?? (() => new Date()))();

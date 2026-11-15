@@ -24,6 +24,8 @@ import type {
   Strength,
 } from '../v2types.js';
 import type { SelfV2BuildView } from '../v2/progress.js';
+import type { FeatureGrant } from '../../../boards/features.js';
+import type { PlanCode } from '../../../billing/plans.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The card registry (doc 68 §4.3)
@@ -73,6 +75,10 @@ export interface SelfCardDef {
   title: string;
   /** one line for the picker tile, plain words */
   description: string;
+  /** doc 75: the one plain line under the name in the card header, saying what the card answers (default: description) */
+  subtitle?: string;
+  /** doc 75: this card's periods are shown inside that card; it is not suggested, but a saved layout still shows it */
+  foldedInto?: SelfCardId;
   /** the v2 area whose stored card fills this card in Phase A; null for a card v2 never read */
   v2Area: SelfCardIdV2 | null;
   /** marked "Suggested for you" when nothing in the chart or the profile says otherwise (never ticked for the person) */
@@ -148,10 +154,12 @@ export interface SelfBoardLayoutView extends SelfBoardLayout {
   /** false until the person has pressed Done once: the page opens the picker */
   chosen: boolean;
   updatedAt: string | null;
+  /** doc 75: the layout's version for PUT (`updated_at`, ISO with ms); '' before the first save */
+  version: string;
 }
 
 /** PUT /api/self/v3/layout errors */
-export type LayoutError = 'unknown_option' | 'unknown_template' | 'template_not_live' | 'unknown_card' | 'card_not_offered' | 'duplicate_card' | 'too_few_cards' | 'unknown_section' | 'fixed_section_off' | 'bad_body';
+export type LayoutError = 'stale_layout' | 'unknown_option' | 'unknown_template' | 'template_not_live' | 'unknown_card' | 'card_not_offered' | 'duplicate_card' | 'too_few_cards' | 'unknown_section' | 'fixed_section_off' | 'bad_body';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Phase B: the year frame (doc 68 §4.5 items 2–3). Built in code from stored rows only.
@@ -341,10 +349,53 @@ export interface RailItem {
   text: string[] | null;
 }
 
+/** doc 75 §4.2: one named period of a card, with its own headline and text (dates and tone copied from a stored window) */
+export interface CardPeriod {
+  /** 'p1' … in start order */
+  id: string;
+  /** "Heavy stretch", the Oracle's own short label, or by place ("This stretch", "Next stretch") */
+  name: string;
+  /** "Heavy stretch · 29 Mar 2025 – 3 Jun 2027" */
+  label: string;
+  from: IsoDate;
+  to: IsoDate;
+  headline: string;
+  text: string[];
+  tone: SpanTone | null;
+  current: boolean;
+  passed: boolean;
+  /** the v3 span id, when the period is a span */
+  span: string | null;
+}
+
+/** doc 75 §4.2: a turning point named by the card's own windows */
+export interface KeyDate {
+  date: IsoDate;
+  /** "Heavy stretch ends", "Next stretch begins" */
+  label: string;
+  tone: SpanTone | null;
+  passed: boolean;
+}
+
 export interface SelfV3CardView {
   id: SelfCardId;
   group: SelfCardGroup;
   title: string;
+  /** doc 75: the one plain line under the name in the header */
+  subtitle: string;
+  /** doc 75: set on a card whose periods are shown inside another card (This chapter → chapters) */
+  foldedInto: SelfCardId | null;
+  /** doc 75: named, start-ordered, de-duplicated periods, each with its own text */
+  periods: CardPeriod[];
+  /** doc 75: the card's turning points in plain words */
+  keyDates: KeyDate[];
+  /** doc 75: the Read text names a day that was ahead when it was written and has now passed */
+  stale: boolean;
+  staleDates: IsoDate[];
+  /** doc 75: the in-card features allowed for this person (an `off` one is absent) */
+  features: Record<string, FeatureGrant>;
+  /** doc 75: the card is premium and the plan does not cover it; every content field is empty */
+  locked: { minPlan: PlanCode } | null;
   description: string;
   suggested: boolean;
   sensitive: boolean;
@@ -388,6 +439,8 @@ export interface SelfV3Response {
   cards: SelfV3CardView[];
   /** doc 70 §4.2: the board's reading progress; null when nothing is known yet */
   reading: BoardReadingView | null;
+  /** doc 75: the board's allowed features (`feature.*` keys; an `off` one is absent) */
+  features: Record<string, FeatureGrant>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

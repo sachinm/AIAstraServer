@@ -33,8 +33,9 @@ import type { OracleCardV3, PersonalCardV3, SelfCardId, SelfSectionId, YearFrame
 import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
-import { cardCells, checkAgainstLedger, precheckCard, renderCardLedger } from './oracle.js';
+import { cardCells, checkAgainstLedger, precheckCard, renderActiveTimingAndVargaBlock, renderCardLedger } from './oracle.js';
 import { CARD_ORACLE_AGENT, CARD_ORACLE_PROMPT, CARD_READING_TECHNIQUE, cardBriefPrompt } from './types.js';
+import { isAgeMatureD9 } from '../dasha/dashaAssessment.js';
 
 export const CARD_GROUP_PROMPT = 'cards/group';
 export const CARD_GROUP_TIMEOUT_MS = 90_000;
@@ -93,6 +94,18 @@ export function buildCardPack(i: CardPackInput): CardPack {
     '# SPAN DATES',
     ...i.frame.spans.map((s) => `- ${s.id}: ${s.from} to ${s.to}`),
   );
+
+  // Active Mahadasha & Tithi Pravesh timing windows & divisional chart routing (docs/reading-engine/76)
+  const timingBlock = renderActiveTimingAndVargaBlock({
+    clock: i.ctx.sub.clock,
+    frameClock: i.frame.clock,
+    periods: i.ctx.sub.periods,
+    year: i.ctx.sub.year,
+    ageYears: p.ageYears,
+    spans: i.frame.spans,
+  });
+  L.push(...timingBlock);
+
   L.push('# CARD BRIEFS');
   for (const id of ids) L.push(`## CARD BRIEF ${id}\n${promptText(cardBriefPrompt(id))}`);
   const cells: CardPack['cells'] = {};
