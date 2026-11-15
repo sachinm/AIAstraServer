@@ -14,6 +14,8 @@ import { isKeyRef, PiiUnavailableError, requirePiiKeys, type PiiKeyProvider } fr
 
 export const PII_PREFIX = 'pii2:';
 export const PII_GZIP_PREFIX = 'pii2z:';
+export const PII2_V1_PREFIX = 'pii2:v1:';
+export const PII2Z_V1_PREFIX = 'pii2z:v1:';
 export const LEGACY_PREFIX = 'enc:';
 export const GZIP_OVER_BYTES = 4096;
 
@@ -30,7 +32,13 @@ export type SealedJson = { $pii: string };
 const aad = (ctx: SealContext, keyRef: string): Buffer => Buffer.from(`${ctx.table}.${ctx.column}.${keyRef}`, 'utf8');
 
 export function isSealedText(v: unknown): v is string {
-  return typeof v === 'string' && (v.startsWith(PII_PREFIX) || v.startsWith(PII_GZIP_PREFIX));
+  return (
+    typeof v === 'string' &&
+    (v.startsWith(PII_PREFIX) ||
+      v.startsWith(PII_GZIP_PREFIX) ||
+      v.startsWith(PII2_V1_PREFIX) ||
+      v.startsWith(PII2Z_V1_PREFIX))
+  );
 }
 
 export function isSealedJson(v: unknown): v is SealedJson {
@@ -50,8 +58,58 @@ export function isSealed(v: unknown): boolean {
 export function keyRefOf(v: unknown): string | null {
   const s = isSealedJson(v) ? v.$pii : isSealedText(v) ? v : null;
   if (!s) return null;
+  if (s.startsWith(PII2_V1_PREFIX) || s.startsWith(PII2Z_V1_PREFIX)) {
+    const prefix = s.startsWith(PII2Z_V1_PREFIX) ? PII2Z_V1_PREFIX : PII2_V1_PREFIX;
+    const body = s.slice(prefix.length);
+    const parts = body.split(':');
+    if (parts.length >= 5) {
+      return parts.slice(0, parts.length - 4).join(':');
+    }
+    return null;
+  }
   const parts = s.split(':');
   return parts.length === 4 && isKeyRef(parts[1]!) ? parts[1]! : null;
+}
+
+export function sealEnvelopeV1(
+  plain: string,
+  keyId: string,
+  wrappedDekHex: string,
+  plaintextDek: Buffer
+): string {
+  const raw = Buffer.from(plain, 'utf8');
+  const zipped = raw.length > GZIP_OVER_BYTES;
+  const body = zipped ? gzipSync(raw) : raw;
+  const iv = randomBytes(IV_LEN);
+  const cipher = createCipheriv('aes-256-gcm', plaintextDek, iv);
+  const ct = Buffer.concat([cipher.update(body), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  const prefix = zipped ? PII2Z_V1_PREFIX : PII2_V1_PREFIX;
+  return `${prefix}${keyId}:${wrappedDekHex}:${iv.toString('hex')}:${ct.toString('hex')}:${tag.toString('hex')}`;
+}
+
+export function openEnvelopeV1(
+  ivHex: string,
+  ciphertextHex: string,
+  tagHex: string,
+  plaintextDek: Buffer,
+  zipped: boolean = false
+): string {
+  const iv = Buffer.from(ivHex, 'hex');
+  const ct = Buffer.from(ciphertextHex, 'hex');
+  const tag = Buffer.from(tagHex, 'hex');
+  if (iv.length !== IV_LEN || tag.length !== TAG_LEN) {
+    throw new PiiUnavailableError('malformed envelope components');
+  }
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', plaintextDek, iv);
+    decipher.setAuthTag(tag);
+    const body = Buffer.concat([decipher.update(ct), decipher.final()]);
+    return (zipped ? gunzipSync(body) : body).toString('utf8');
+  } catch {
+    throw new PiiUnavailableError('cannot decrypt envelope ciphertext');
+  }
 }
 
 /** Seals one string under a data key already in hand. */
@@ -90,10 +148,19 @@ export function openTextWithKey(sealed: string, ctx: SealContext, dek: Buffer): 
 export async function sealValue(value: unknown, ctx: SealContext & { kind: 'text' | 'json' }, keyRef: string, keys: PiiKeyProvider = requirePiiKeys()): Promise<unknown> {
   if (value === null || value === undefined) return value;
   if (isSealed(value)) return value; // idempotent: the backfill skips values already sealed
+  if (ctx.kind !== 'json' && typeof value !== 'string') throw new PiiUnavailableError(`${ctx.table}.${ctx.column} is a text column`);
+
+  if (typeof keys.generateDataKey === 'function') {
+    const { plaintext, wrapped, keyId } = await keys.generateDataKey();
+    const str = ctx.kind === 'json' ? JSON.stringify(value) : (value as string);
+    const envelope = sealEnvelopeV1(str, keyId, wrapped.toString('hex'), plaintext);
+    if (ctx.kind === 'json') return { $pii: envelope } satisfies SealedJson;
+    return envelope;
+  }
+
   const dek = await keys.dataKey(keyRef);
   if (ctx.kind === 'json') return { $pii: sealTextWithKey(JSON.stringify(value), ctx, keyRef, dek) } satisfies SealedJson;
-  if (typeof value !== 'string') throw new PiiUnavailableError(`${ctx.table}.${ctx.column} is a text column`);
-  return sealTextWithKey(value, ctx, keyRef, dek);
+  return sealTextWithKey(value as string, ctx, keyRef, dek);
 }
 
 /**
@@ -103,9 +170,40 @@ export async function sealValue(value: unknown, ctx: SealContext & { kind: 'text
 export async function openValue(value: unknown, ctx: SealContext & { kind: 'text' | 'json' }, keys?: PiiKeyProvider | null): Promise<unknown> {
   if (isSealedJson(value) || isSealedText(value)) {
     const s = isSealedJson(value) ? value.$pii : (value as string);
+    const provider = keys ?? requirePiiKeys();
+
+    if (s.startsWith(PII2_V1_PREFIX) || s.startsWith(PII2Z_V1_PREFIX)) {
+      const zipped = s.startsWith(PII2Z_V1_PREFIX);
+      const prefix = zipped ? PII2Z_V1_PREFIX : PII2_V1_PREFIX;
+      const body = s.slice(prefix.length);
+      const parts = body.split(':');
+      if (parts.length < 5) throw new PiiUnavailableError('malformed sealed envelope value');
+      const tagHex = parts[parts.length - 1]!;
+      const ctHex = parts[parts.length - 2]!;
+      const ivHex = parts[parts.length - 3]!;
+      const wrappedDekHex = parts[parts.length - 4]!;
+      const keyId = parts.slice(0, parts.length - 4).join(':');
+
+      let plaintextDek: Buffer;
+      if (typeof provider.decryptDataKey === 'function') {
+        plaintextDek = await provider.decryptDataKey(Buffer.from(wrappedDekHex, 'hex'), keyId);
+      } else {
+        plaintextDek = await provider.dataKey(keyId);
+      }
+
+      const text = openEnvelopeV1(ivHex, ctHex, tagHex, plaintextDek, zipped);
+      if (ctx.kind === 'json') {
+        try {
+          return JSON.parse(text) as unknown;
+        } catch {
+          throw new PiiUnavailableError(`cannot open ${ctx.table}.${ctx.column}`);
+        }
+      }
+      return text;
+    }
+
     const keyRef = keyRefOf(s);
     if (!keyRef) throw new PiiUnavailableError('malformed sealed value');
-    const provider = keys ?? requirePiiKeys();
     const text = openTextWithKey(s, ctx, await provider.dataKey(keyRef));
     if (ctx.kind === 'json') {
       try {

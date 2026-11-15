@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createYoga } from 'graphql-yoga';
+import { createYoga, type Plugin } from 'graphql-yoga';
 import { config } from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,9 +13,11 @@ import { prisma } from './src/lib/prisma.js';
 import { scheduleChartCatalogSyncOnStart } from './src/services/chartCatalogSync.js';
 import { runRagQuery } from './src/services/kundliService.js';
 import { schema } from './src/graphql/schema.js';
-import { buildContext, getJwtSecret } from './src/graphql/context.js';
+import { buildContext, getJwtSecret, type GraphQLContext } from './src/graphql/context.js';
 import { ensureAdmins } from './src/ensureAdmins.js';
 import { optionalUser, requireUser } from './src/auth/requestAuth.js';
+import { csrfProtectionMiddleware } from './src/auth/csrf.js';
+import { registerChatRoutes } from './src/chat/chatRoutes.js';
 import { lockGuardPlugin } from './src/graphql/lockGuard.js';
 import { checkDatabaseConnection } from './src/lib/dbCheck.js';
 import { graphqlLogFields } from './src/lib/logRedact.js';
@@ -184,6 +186,8 @@ app.use(
       'X-Admin-Actor-Id',
       'X-Admin-Actor-Role',
       'If-None-Match',
+      'X-CSRF-Token',
+      'Last-Event-ID',
     ],
     // GET /api/self/v3 answers with an ETag; clients correlate errors via X-Request-Id
     exposedHeaders: ['ETag', 'X-Request-Id'],
@@ -192,6 +196,7 @@ app.use(
   })
 );
 
+app.use(csrfProtectionMiddleware);
 app.use(pageTimingMiddleware(prisma, optionalUser));
 
 /**
@@ -203,11 +208,24 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, env: getNodeEnv() });
 });
 
+function cookiePlugin(): Plugin {
+  return {
+    onResponse({ response, serverContext }) {
+      const ctx = serverContext as unknown as GraphQLContext | undefined;
+      if (ctx?.cookiesToSet?.length) {
+        for (const c of ctx.cookiesToSet) {
+          response.headers.append('Set-Cookie', c);
+        }
+      }
+    },
+  };
+}
+
 const yoga = createYoga({
   schema,
   context: buildContext,
   // lockGuardPlugin enforces account locks / fail-closed auth; armor & masking bound depth/aliases and record app_error_events
-  plugins: [lockGuardPlugin(), graphqlArmorAndObservabilityPlugin({ prisma })],
+  plugins: [lockGuardPlugin(), graphqlArmorAndObservabilityPlugin({ prisma }), cookiePlugin()],
   maskedErrors: {
     maskError: createGraphqlMaskError({ prisma }),
     isDev: !isGraphqlErrorMaskingEnabled(),
@@ -255,136 +273,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 // background (at most once per 6 h per kundli; a no-op without DASHA_DEEP_WORKER_FUNCTION). docs/reading-engine/67
 const focusUser = withDashaDeepFocus(requireUser, prisma);
 
-/**
- * SSE chat: streams `{type:"token",delta}` then `{type:"done",chatId,answer}`.
- * Same persistence as GraphQL `ask`. JWT via X-Astra-Authorization or Authorization.
- */
-app.post('/api/chat/ask-stream', async (req, res) => {
-  // 401 unauthorized / session_revoked / account_locked is written here, before any SSE frame
-  const userId = await focusUser(req, res);
-  if (!userId) return;
-  const { question, chatId, clarify, focus, parts } = req.body as {
-    question?: string;
-    chatId?: string | null;
-    clarify?: boolean;
-    /** one part of a multi-part question, answered on its own (the client sends it after a `next` event) */
-    focus?: string;
-    /** the parts still to come after `focus` */
-    parts?: unknown;
-  };
-  if (!question || typeof question !== 'string' || !question.trim()) {
-    return res.status(400).json({ error: 'question is required' });
-  }
-  const isSubject = (v: unknown): v is SubjectId => typeof v === 'string' && (SUBJECT_IDS as readonly string[]).includes(v);
-  if (focus !== undefined && !isSubject(focus)) {
-    return res.status(400).json({ error: 'focus is not a known subject' });
-  }
-  const focusParts: SubjectId[] = Array.isArray(parts) ? parts.filter(isSubject).slice(0, 8) : [];
-
-  const pre = await validateAskForUser(prisma, userId);
-  if (!pre.ok) {
-    return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
-  }
-
-  // the question limit (docs/billing/README.md), before any model runs, the clarifier included
-  const gate = questionGate(prisma);
-  const allowed = await gate.check(userId, focus ? { focus } : {});
-  if (!allowed.ok) return res.status(402).json(quotaBody(allowed.usage));
-
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', SSE_CACHE_CONTROL);
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.status(200);
-  if (typeof res.flushHeaders === 'function') {
-    res.flushHeaders();
-  }
-
-  /** Reduce Nagle delays on small SSE frames (token deltas). */
-  req.socket?.setNoDelay?.(true);
-
-  type ResWithFlush = express.Response & { flush?: () => void };
-  const flush = () => (res as ResWithFlush).flush?.();
-
-  const writeSse = (obj: unknown) => {
-    res.write(`data: ${JSON.stringify(obj)}\n\n`);
-    flush();
-  };
-
-  /**
-   * SSE comment lines (ignored by our client parser). Many proxies buffer until enough bytes;
-   * periodic pings keep the connection “live” during long time-to-first-token (e.g. Gemini).
-   */
-  const ssePingMs = Math.max(
-    5000,
-    Math.min(60_000, Number(process.env.CHAT_SSE_PING_MS) || 12_000)
-  );
-  let pingTimer: ReturnType<typeof setInterval> | undefined;
-  const writeSseComment = () => {
-    try {
-      res.write(': ping\n\n');
-      flush();
-    } catch {
-      /* client gone */
-    }
-  };
-  pingTimer = setInterval(writeSseComment, ssePingMs);
-  writeSseComment();
-
-  let ticket: QuestionTicket | null = null;
-  try {
-    const q = question.trim();
-    // A continuation part skips the clarifier: the person already chose the order, and each part gets its own reading.
-    const focusIntent = focus ? await intentForFocus(q, new Date().toISOString().slice(0, 10), focus as SubjectId, focusParts) : undefined;
-    // clarify agent (docs/reading-engine/17): only for clients that can render the clarify card
-    if (!focusIntent && clarify === true && (await clarifyOnAsk({ prisma, requireUser }, userId, q, { write: writeSse }))) return;
-    const held = await gate.reserve(userId, focus ? { focus } : {});
-    if (!held.ok) {
-      writeSse({ type: 'error', code: 'quota_exhausted', usage: held.usage, message: 'Question limit reached' });
-      return;
-    }
-    ticket = held.ticket;
-    writeSse({ type: 'start' });
-    const usageNow = await gate.getStatus(userId);
-    if (usageNow) writeSse({ type: 'usage', usage: usageNow });
-    let openParts: string[] = [];
-    // where the question is asked (optional browser location `lat/lon/tz`, rounded); absent -> the birth place
-    const questionPlace = parseClientPlace(req.body);
-    const chatResult = await chatWithConfiguredProvider(prisma, userId, q, {
-      ...(questionPlace ? { questionPlace } : {}),
-      onDelta: (delta) => {
-        if (delta) writeSse({ type: 'token', delta });
-      },
-      // reading engine: intent / stage / windows / next events let the UI show progress and continue (no `thought`: B0.2)
-      onEvent: (event) => {
-        openParts = partsFromEvent(event) ?? openParts;
-        writeSse(event);
-      },
-      ...(focusIntent ? { intent: focusIntent } : {}),
-    });
-    // a continuation is stored with its part, so the chat history reads as the parts in order
-    const storedQ = focusIntent ? `[${FRAMES[focus as SubjectId].label}] ${q}` : q;
-    const { chatId: finalChatId, messageId } = await persistAskTurn(prisma, userId, chatId ?? null, storedQ, chatResult, true);
-    if (wasDeclined(chatResult)) await gate.release(ticket);
-    else await gate.commit(ticket, { chatId: finalChatId, messageId, openParts });
-    const usage = await gate.getStatus(userId);
-    writeSse({
-      type: 'done',
-      chatId: finalChatId,
-      answer: chatResult.answerText,
-      ...(usage ? { usage } : {}),
-      ...(chatResult.reading ? { runId: chatResult.reading.runId, grounding: { dropped: chatResult.reading.droppedClaims } } : {}),
-    });
-  } catch (e) {
-    logChatProviderError('ask-stream', e);
-    if (ticket) await gate.release(ticket);
-    const usage = await gate.getStatus(userId);
-    writeSse({ type: 'error', message: publicMessageFromChatProviderError(e), ...(usage ? { usage } : {}) });
-  } finally {
-    if (pingTimer) clearInterval(pingTimer);
-    res.end();
-  }
-});
+registerChatRoutes(app, { prisma, requireUser: focusUser });
 
 registerClarifyRoutes(app, { prisma, requireUser: focusUser });
 registerBillingRoutes(app, { prisma, requireUser, optionalUser });

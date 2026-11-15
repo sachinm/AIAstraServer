@@ -265,7 +265,7 @@ describe('annual (Tithi Pravesh) specialist', () => {
     const { out, stage } = await runGraph(intent, 'Should I change jobs in the next 6 months?', impl, { annual });
     expect(annual).toHaveBeenCalledTimes(1);
     expect(seen[0]).toMatch(/"annual":\{"year_used":2026/);
-    const f = out.reconciled!.findings.find((x) => x.analyst === 'annual')!;
+    const f = out.reconciled!.findings.find((x: any) => x.analyst === 'annual')!;
     expect(f.claims[0]!.evidence).toEqual(['annual.chart.bodies.Ju.h', 'annual.dasha.running.lord']);
     expect(out.reconciled!.layers.L5).toBe(2);
     expect(out.reconciled!.verdict.score).toBe(3 * 1 + 2 * 1 + 2 * 1 + 1 * 2);
@@ -365,7 +365,7 @@ describe('prashna specialist', () => {
     expect(prashna).toHaveBeenCalledTimes(1);
     expect(prashna).toHaveBeenCalledWith({ at: '2026-10-24T04:45:00.000Z', place: { lat: 18.52, lon: 73.86, tz: 5.5 }, runId: 'run-r28' });
     expect(out.reconciled!.layers.L6).toBe(2);
-    expect(out.reconciled!.findings.find((f) => f.analyst === 'prashna')!.claims[0]!.evidence).toEqual(['prashna.lagna_lord.h', 'prashna.moon.h']);
+    expect(out.reconciled!.findings.find((f: any) => f.analyst === 'prashna')!.claims[0]!.evidence).toEqual(['prashna.lagna_lord.h', 'prashna.moon.h']);
     expect(stage('prashna').at(-1)).toMatchObject({ status: 'done', retried: false, capped: false });
   });
 
@@ -456,7 +456,7 @@ describe('transit specialist at the asked date', () => {
     expect(t.transit_at.at).toBe('2027-03-15 12:00:00');
     expect(Object.keys(t.transit_at.charts)).toEqual(['D1', 'D9', 'D10']);
     expect(t.transit_at.charts.D1.bodies.Sa).toMatchObject({ h: 3, natal_h: 7 });
-    expect(out.reconciled!.findings.find((f) => f.analyst === 'transit')!.claims[0]!.evidence).toEqual(['transit_at.charts.D1.bodies.Sa.natal_h']);
+    expect(out.reconciled!.findings.find((f: any) => f.analyst === 'transit')!.claims[0]!.evidence).toEqual(['transit_at.charts.D1.bodies.Sa.natal_h']);
     await runGraph(intent, 'Will I get married in March 2027?', impl, { transitAt });
     expect(transitAt).toHaveBeenCalledTimes(2);
   });

@@ -226,6 +226,26 @@ model ChatLog {
   @@map("chat_logs")
 }
 
+/// Resumable generative AI state machine turn (M4 Feature 20).
+/// Buffers monotonic SSE events so clients can reconnect and resume mid-stream without losing tokens or duplicating quota.
+model ChatTurn {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  kundliId  String?  @map("kundli_id")
+  sessionId String?  @map("session_id")
+  question  String
+  status    String   @default("pending")
+  seq       Int      @default(0)
+  events    Json     @default("[]")
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt(sort: Desc)], map: "chat_turns_user_created_idx")
+  @@index([status], map: "chat_turns_status_idx")
+  @@map("chat_turns")
+}
+
 /// Chart-facts dossier per kundli and facts version (reading engine M2).
 model KundliFacts {
   id            String   @id @default(dbgenerated("(uuid_generate_v4())::text"))

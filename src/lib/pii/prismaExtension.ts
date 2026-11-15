@@ -14,7 +14,7 @@
 import { Prisma } from '@prisma/client';
 import { SEALED_MODELS, sealedColumn, type SealedModel } from './fields.js';
 import { blindIndex } from './blindIndex.js';
-import { piiConfig, piiKeys, PiiUnavailableError, type PiiKeyProvider, type PiiWriteMode } from './keys.js';
+import { piiConfig, piiKeys, PiiUnavailableError, SYSTEM_KEY_REF, isKeyRef, type PiiKeyProvider, type PiiWriteMode } from './keys.js';
 import { openValue, sealValue } from './seal.js';
 
 export const PII_GUARD = 'PII_GUARD';
