@@ -151,7 +151,12 @@ export function buildCalendar(pack: EvidencePack, intent: Pick<Intent, 'horizon'
     (Array.isArray(s.stations) ? s.stations : []).forEach((st: Rec, i: number) => {
       const d = str(st?.date);
       if (!inH(d)) return;
-      const what = st.kind === 'retro_start' ? 'turns retrograde' : st.kind === 'retro_end' ? 'turns direct' : `station (${st.kind})`;
+      const what =
+        st.kind === 'retro_start' || st.kind === 'retrograde'
+          ? 'turns retrograde'
+          : st.kind === 'retro_end' || st.kind === 'direct'
+            ? 'turns direct'
+            : `station (${st.kind})`;
       add({ date: d, kind: 'station', label: `${st.planet} ${what}`, evidence: `${prefix}.stations.${i}` });
     });
     // double transit windows (clipped to the horizon: an edge on the horizon bound is the clip, not a real edge)

@@ -14,11 +14,13 @@
  * a transit or rasi period has no engine polarity, so it is 'mixed'. The engine stores no 1–3 strength grade yet, so
  * every row is 2 and `degraded` is true; a gap says so. "Since" / "until" are kept only where the stored row has them.
  */
+import { runningTithiPravesha } from '../../annual/tithiPravesha.js';
+import { annualPlanetMotion, evaluateVakraDignityRegime, isTrueVakraCapable } from '../../dasha/retrogradeRules.js';
 import { addMonthsIso } from '../../timeline/months.js';
 import { activationKey } from '../slices.js';
 import { FUNCTIONAL_POLARITY, mattersOf } from '../v2words.js';
 import type { ClockResolution, Matter, Polarity, Strength, WindowRef, WindowRow, WindowSetDetail } from '../v2types.js';
-import type { SubEnv } from './common.js';
+import { planetKey, type SubEnv } from './common.js';
 import { getWindowTransitPlanets, isLive, overlaps } from './config.js';
 
 /** the row range S3 reads around asOf (doc 66 §4.3: −3 y … +3 y) */
@@ -51,6 +53,25 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
     // the Self board reads levels 1–3 only (doc 67)
     if (r.level > 3 || r.system !== clock.primary || !overlaps(r.from, r.to, lo, hi)) continue;
     const id = activationKey(r);
+    const d1Card = r.lord ? env.view.planet('D1', r.lord) : null;
+    const d9Card = r.lord ? env.view.planet('D9', r.lord) : null;
+    const isD1Debil = /debil|neecha|fall/i.test(d1Card?.dignity ?? '');
+    const isD9Debil = /debil|neecha|fall/i.test(d9Card?.dignity ?? '');
+    const isNeechaVargottama = Boolean(d1Card?.sign && d9Card?.sign && d1Card.sign === d9Card.sign && isD1Debil && isD9Debil);
+    const vakra = r.lord
+      ? evaluateVakraDignityRegime({
+          planet: r.lord,
+          d1Card,
+          d9Card,
+          isMature: true,
+          isNeechaVargottama,
+        })
+      : null;
+    let pol = polarityOf(env, r.lord);
+    if (vakra?.isStationary && pol === 'mixed') {
+      pol = 'presses';
+    }
+    const ev = [id, ...(r.lord && (vakra?.isRetrograde || vakra?.isStationary) ? [planetKey('D1', r.lord)] : [])];
     rows.push({
       rowId: id,
       kind: 'dasha',
@@ -59,13 +80,13 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
       houses: [...r.houses],
       houseFromMoon: null,
       matters: mattersOf(r.houses),
-      polarity: polarityOf(env, r.lord),
+      polarity: pol,
       strength: DEGRADED_STRENGTH,
       from: r.from,
       to: r.to,
       sinceKnown: true,
       untilKnown: true,
-      evidence: [id],
+      evidence: ev,
     });
   }
   const sky = env.sky;
@@ -84,12 +105,33 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
         houses,
         houseFromMoon: Number.isInteger(x.house_from_moon) ? x.house_from_moon : null,
         matters: mattersOf(houses),
-        polarity: 'mixed',
+        polarity: x.retro_on_entry ? 'presses' : 'mixed',
         strength: DEGRADED_STRENGTH,
         from: x.from,
         to: x.to,
         sinceKnown: !x.starts_before_range,
         untilKnown: !x.ends_after_range,
+        evidence: [id],
+      });
+    }
+    for (const st of sky.stations ?? []) {
+      if ((!keep.has(st.planet) && !isTrueVakraCapable(st.planet)) || st.date < lo || st.date > hi) continue;
+      const id = `sky:station/${st.planet}/${st.kind}@${st.date}`;
+      const houses = Number.isInteger(st.house_from_lagna) ? [st.house_from_lagna] : [];
+      if (!houses.length) env.g.add(`windows: ${id} house_from_lagna missing`);
+      rows.push({
+        rowId: id,
+        kind: 'station',
+        planet: st.planet,
+        houses,
+        houseFromMoon: Number.isInteger(st.house_from_moon) ? st.house_from_moon : null,
+        matters: mattersOf(houses),
+        polarity: st.kind === 'retrograde' ? 'presses' : 'mixed',
+        strength: DEGRADED_STRENGTH,
+        from: st.date,
+        to: st.date,
+        sinceKnown: true,
+        untilKnown: true,
         evidence: [id],
       });
     }
@@ -115,6 +157,32 @@ export function windowRows(env: SubEnv, clock: ClockResolution): WindowRow[] {
           sinceKnown: !s.starts_before_range,
           untilKnown: !s.ends_after_range,
           evidence: [id],
+        });
+      }
+    }
+    const tp = runningTithiPravesha(env.view, env.asOf);
+    if (tp.row && tp.year != null && tp.from && tp.to && tp.row.yearLord && overlaps(tp.from, tp.to, lo, hi)) {
+      const ylMotion = annualPlanetMotion(tp.row, tp.row.yearLord);
+      const isYlRetro = tp.row.yearLordRetro === true || ylMotion.retro || ylMotion.isStationary;
+      if (isYlRetro) {
+        const tpId = `annual:TP${tp.year}.D1`;
+        const ylCard = env.view.planet('D1', tp.row.yearLord);
+        const houses = ylCard ? [ylCard.house, ...ylCard.owns].filter((h): h is number => typeof h === 'number' && Number.isInteger(h) && h >= 1 && h <= 12) : [];
+        rows.push({
+          rowId: tpId,
+          kind: 'annual',
+          level: 1,
+          planet: tp.row.yearLord,
+          houses,
+          houseFromMoon: null,
+          matters: mattersOf(houses),
+          polarity: ylMotion.isStationary ? 'presses' : 'mixed',
+          strength: DEGRADED_STRENGTH,
+          from: tp.from,
+          to: tp.to,
+          sinceKnown: true,
+          untilKnown: true,
+          evidence: [`${tpId}#yearLord`],
         });
       }
     }

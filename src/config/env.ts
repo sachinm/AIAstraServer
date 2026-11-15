@@ -879,12 +879,21 @@ export function getReadingClocksMin(): number {
  * on; the server's stopgap counts them (selection over a stored list, no astrology). Env `PRESSES_BAD_FLAGS`.
  */
 export function getPressesBadFlags(): string[] {
-  return listEnv('PRESSES_BAD_FLAGS', ['functional_malefic', 'in_dusthana', 'kashta_over_ishta', 'shadbala_ratio_below_0.8', '2_12_from_parent', '6_8_from_parent']);
+  return listEnv('PRESSES_BAD_FLAGS', [
+    'functional_malefic',
+    'in_dusthana',
+    'kashta_over_ishta',
+    'shadbala_ratio_below_0.8',
+    '2_12_from_parent',
+    '6_8_from_parent',
+    'lord_stationary',
+    'retrograde_pass',
+  ]);
 }
 
 /** The engine's "good" flags in `reasons` (shown in provenance only). Env `PRESSES_GOOD_FLAGS`. */
 export function getPressesGoodFlags(): string[] {
-  return listEnv('PRESSES_GOOD_FLAGS', ['functional_benefic', 'yogakaraka']);
+  return listEnv('PRESSES_GOOD_FLAGS', ['functional_benefic', 'yogakaraka', 'neecha_vakra', 'cheshta_strong']);
 }
 
 /**
@@ -1680,4 +1689,113 @@ export function getRateLimitChartCalcPer10m(): number {
 /** Gemini chat LLM rate limit per minute per user (token bucket). Env `RATE_LIMIT_GEMINI_PER_MIN` (default 20, range 1..500). */
 export function getRateLimitGeminiPerMin(): number {
   return parseClampedIntEnv('RATE_LIMIT_GEMINI_PER_MIN', 20, 1, 500);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Retrograde Planets (Vakra Grahas), Ashtagati, Station Horizon & Lucky Motion Gates (docs/reading-engine/77)
+// ---------------------------------------------------------------------------------------------------------------------
+
+export type RetrogradeDignityModel = 'nuanced_parashari' | 'uttara_kalamrita_strict';
+
+/**
+ * Classical dignity × retrograde interaction model (docs/reading-engine/77 §2):
+ * - `nuanced_parashari` (default): BPHS Cheshta Bala uplift on non-vargottama debilitation + non-linear perfectionism on exaltation.
+ * - `uttara_kalamrita_strict`: Uttara Kalamrita Ch. 2 Sloka 6 polarity inversion on non-vargottama placements (for Lab A/B replay).
+ * Env: `RETROGRADE_DIGNITY_MODEL`.
+ */
+export function getRetrogradeDignityModel(): RetrogradeDignityModel {
+  const raw = process.env.RETROGRADE_DIGNITY_MODEL?.trim().toLowerCase();
+  if (raw === 'uttara_kalamrita_strict') return 'uttara_kalamrita_strict';
+  return 'nuanced_parashari';
+}
+
+/**
+ * Version identifier stamped onto `kundli_digest` rows (`DIGEST_VERSION`).
+ * Override via `DIGEST_VERSION` env var (default `'d1.2026-11-15-vakra'`).
+ */
+export function getDigestVersion(): string {
+  const raw = process.env.DIGEST_VERSION?.trim();
+  return raw && raw.length > 0 ? raw : 'd1.2026-11-15-vakra';
+}
+
+/**
+ * Maximum annual engine fetches per `ensureAnnualSet` sweep run (`DIGEST_ANNUAL_MAX_CALLS`, 0..500, default 40).
+ */
+export function getDigestAnnualMaxCalls(): number {
+  return parseClampedIntEnv('DIGEST_ANNUAL_MAX_CALLS', 40, 0, 500);
+}
+
+export interface RetrogradeScoreWeights {
+  /** Uplift applied to non-vargottama debilitated retrograde planets in `nuanced_parashari` mode (default 0.75). */
+  neechaUplift: number;
+  /** Moderation applied to exalted retrograde planets in `nuanced_parashari` mode (default -0.35, e.g. +1.5 -> +1.15). */
+  ucchaModeration: number;
+  /** Cheshta Bala virupa threshold (0..60) above which a planet carries high directional effort potency (default 45). */
+  cheshtaStrongVirupas: number;
+  /** Score penalty applied when a Tithi Pravesha annual chart's year lord is retrograde (default 1.0). */
+  tpYearLordRetroPenalty: number;
+}
+
+/**
+ * Numeric weights for retrograde dignity & Cheshta Bala scoring (`RETROGRADE_NEECHA_SCORE_UPLIFT`,
+ * `RETROGRADE_UCCHA_SCORE_MODERATION`, `RETROGRADE_CHESHTA_STRONG_VIRUPAS`, `RETROGRADE_TP_YEAR_LORD_PENALTY`).
+ */
+export function getRetrogradeScoreWeights(): RetrogradeScoreWeights {
+  return {
+    neechaUplift: parseClampedFloatEnv('RETROGRADE_NEECHA_SCORE_UPLIFT', 0.75, 0, 2.5),
+    ucchaModeration: parseClampedFloatEnv('RETROGRADE_UCCHA_SCORE_MODERATION', -0.35, -1.5, 0),
+    cheshtaStrongVirupas: parseClampedFloatEnv('RETROGRADE_CHESHTA_STRONG_VIRUPAS', 45, 15, 60),
+    tpYearLordRetroPenalty: parseClampedFloatEnv('RETROGRADE_TP_YEAR_LORD_PENALTY', 1.0, 0, 5.0),
+  };
+}
+
+const DEFAULT_TRANSIT_RANGE_BODIES = ['Sa', 'Ju', 'Ma', 'Me', 'Ve', 'Ra', 'Ke'] as const;
+const ALLOWED_RANGE_BODIES = new Set(['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']);
+
+/**
+ * Default planet codes requested for shared `transit_range` sky caches (`TRANSIT_RANGE_BODIES`),
+ * covering all 5 retrograde-capable taragrahas (`Sa, Ju, Ma, Me, Ve`) plus the lunar nodes (`Ra, Ke`).
+ */
+export function getTransitRangeBodies(): Array<'Su' | 'Mo' | 'Ma' | 'Me' | 'Ju' | 'Ve' | 'Sa' | 'Ra' | 'Ke'> {
+  const raw = listEnv('TRANSIT_RANGE_BODIES', DEFAULT_TRANSIT_RANGE_BODIES);
+  const filtered = raw.filter((p): p is 'Su' | 'Mo' | 'Ma' | 'Me' | 'Ju' | 'Ve' | 'Sa' | 'Ra' | 'Ke' => ALLOWED_RANGE_BODIES.has(p));
+  return filtered.length ? filtered : [...DEFAULT_TRANSIT_RANGE_BODIES];
+}
+
+export interface LuckyRetrogradeAvoidConfig {
+  mercuryRetroAvoidScenarios: string[];
+  venusRetroAvoidScenarios: string[];
+  marsRetroAvoidScenarios: string[];
+  combustKarakaPenalty: number;
+  retrogradeKarakaPenalty: number;
+  stationaryKarakaPenalty: number;
+}
+
+/**
+ * Configurable Lucky Times planetary motion & combustion gates (`docs/reading-engine/77 §4.4`):
+ * - `LUCKY_MERCURY_RETRO_AVOID_SCENARIOS` (default: contract signing, major purchases/investments, product launches)
+ * - `LUCKY_VENUS_RETRO_AVOID_SCENARIOS` (default: courtship initiation, luxury/aesthetic purchases)
+ * - `LUCKY_MARS_RETRO_AVOID_SCENARIOS` (default: high-conflict confrontations, surgeries/risky launches)
+ */
+export function getLuckyRetrogradeAvoidMap(): LuckyRetrogradeAvoidConfig {
+  return {
+    mercuryRetroAvoidScenarios: listEnv('LUCKY_MERCURY_RETRO_AVOID_SCENARIOS', [
+      'work.sign_contract',
+      'money.invest_buy',
+      'work.launch',
+      'work.pitch',
+    ]),
+    venusRetroAvoidScenarios: listEnv('LUCKY_VENUS_RETRO_AVOID_SCENARIOS', [
+      'love.ask_out',
+      'love.first_date',
+      'love.propose_commit',
+    ]),
+    marsRetroAvoidScenarios: listEnv('LUCKY_MARS_RETRO_AVOID_SCENARIOS', [
+      'work.negotiate_raise',
+      'health.procedure',
+    ]),
+    combustKarakaPenalty: parseClampedIntEnv('LUCKY_COMBUST_KARAKA_PENALTY', 2, 0, 5),
+    retrogradeKarakaPenalty: parseClampedIntEnv('LUCKY_RETROGRADE_KARAKA_PENALTY', 2, 0, 5),
+    stationaryKarakaPenalty: parseClampedIntEnv('LUCKY_STATIONARY_KARAKA_PENALTY', 3, 0, 5),
+  };
 }

@@ -5,9 +5,9 @@ Highlight:
 - Each frame lord in the varga: who shares its sign; same sign in D1 and D9 (vargottama).
 - Always D9 (varga_d9) and D30 (varga_d30). In D30 name which planets share a sign with Rahu, Ketu or Saturn.
 - D12 for a parent question: the planet with the 1st (father) and the 4th (mother) sign.
-- D9 degree junctions: a frame lord in the last or first degree of a water sign, from varga_d9.<P>.longitude.
+- D9 degree junctions: a frame lord in the last or first degree of a water sign, from varga_d9.<P>.longitude; also note `vargaSandhi` and `vargaReckoning` (`inverse_vakra` vs `standard`) when present on retrograde (`Ma`, `Me`, `Ju`, `Ve`, `Sa`) cards.
 
-Rules: a varga refines the main chart and never overrules it. One claim states the form in plain words (kind form). Two longitudes visibly within 1 degree in a varga make an exact bond (weight 3). A varga reading with no support in the main chart is a pointer, not a claim.
+Rules: a varga refines the main chart and never overrules it. Check `Neecha Vargottama` (debilitated in the same sign across D1 and D9) BEFORE any Vargottama boost: NEVER invert or boost `Neecha Vargottama` even when retrograde (`Vakra`); treat it as a fixed boundary. Non-vargottama retrograde planets follow `nuanced_parashari` iterative delivery. Never output internal engine names. One claim states the form in plain words (kind form). Two longitudes visibly within 1 degree in a varga make an exact bond (weight 3). A varga reading with no support in the main chart is a pointer, not a claim.
 
 Important patterns:
 - The same pair sharing a sign in D1, D9 and D30: the bond is in every layer (weight 3). State the three layers in the claim.

@@ -13,11 +13,18 @@ import {
   getLifeCharterHorizonYears,
   getLifeCharterMaxAreasPerAd,
   getLifeCharterMinRemainingYears,
+  getRetrogradeScoreWeights,
 } from '../../config/env.js';
+import {
+  annualPlanetMotion,
+  evaluateVakraDignityRegime,
+  getPlanetVakraPlaybook,
+  isTrueVakraCapable,
+} from '../dasha/retrogradeRules.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { AnnualRow, AntardashaFruitionCell, DigestView } from '../digest/types.js';
 import { LIFE_AREAS, type LifeArea, type LifeAreaId } from './areas.js';
-import { addYears, covers, dignitySide, overlaps, planetName, planetSide, type Side } from './labels.js';
+import { addYears, covers, dignitySide, overlaps, planetName, planetSide, planetSideWithVakra, type Side } from './labels.js';
 import {
   ANNUAL_WEIGHTS,
   FAMILY_WEIGHTS,
@@ -86,6 +93,8 @@ export interface LifeAntardashaRow {
     transit_houses: number[];
     ad_avastha?: string | null;
     ad_effective_multiplier?: number | null;
+    ad_motion?: string | null;
+    ad_cheshta_bala?: number | null;
   };
 }
 
@@ -117,6 +126,8 @@ export interface LifeMahadashaCharter {
     avastha: string | null;
     effective_multiplier?: number | null;
     ripeness?: string | null;
+    md_motion?: string | null;
+    md_cheshta_bala?: number | null;
   };
 }
 
@@ -570,12 +581,17 @@ function scoreAdForArea(
 
   const primary = area.houses[0]!;
   const owning = owningVargaOf(view, area);
-  const adD1Side = planetSide(adCard);
-  const adD9Side = dignitySide(view.planet('D9', adLord)?.dignity ?? null);
+  const adD9Card = view.planet('D9', adLord);
+  const adVakra = planetSideWithVakra(adLord, adCard, adD9Card);
+  const adD1Side = adVakra.side;
+  const adD9Side = dignitySide(adD9Card?.dignity ?? null);
   const adOwnSide = owning ? dignitySide(view.planet(owning, adLord)?.dignity ?? null) : 'neutral';
 
   let side: Side = adD1Side;
-  if (fBonus.isCrisis) {
+  if (adVakra.isNeechaVargottama) {
+    // Strict invariant: never invert Neecha Vargottama into support
+    side = 'test';
+  } else if (fBonus.isCrisis) {
     side = side === 'support' ? 'neutral' : 'test';
   } else if (side === 'test' && fBonus.isSupportive) {
     side = fBonus.pts >= 4 || adD9Side === 'support' || adOwnSide === 'support' ? 'support' : 'neutral';
@@ -583,11 +599,19 @@ function scoreAdForArea(
     side = 'support';
   }
 
-  // Base promise points (out of 55) + Vimshottari weight + 9×9 fruition bonus + avastha delivery multiplier
+  // Base promise points (out of 55) + Vimshottari weight + 9×9 fruition bonus + avastha & Vakra delivery
+  const weights = getRetrogradeScoreWeights();
   const promisePts = (LAYER_WEIGHTS.d1 + LAYER_WEIGHTS.varga) * promise.promiseRatio;
   let dashaPts = side === 'test' ? -FAMILY_WEIGHTS.vimshottari : FAMILY_WEIGHTS.vimshottari;
   if (touchesAd && area.houses[0] && adHouses.has(area.houses[0])) dashaPts += 3;
   dashaPts += fBonus.pts;
+  if (adCard?.isStationary && isTrueVakraCapable(adLord)) {
+    dashaPts -= 2;
+  } else if (adVakra.isNeechaVargottama) {
+    dashaPts -= 2;
+  } else if (isTrueVakraCapable(adLord) && (adCard?.retro || (typeof adCard?.cheshtaBala === 'number' && adCard.cheshtaBala >= weights.cheshtaStrongVirupas))) {
+    dashaPts += side === 'test' ? -1 : 1.5;
+  }
   const adEff = adCard?.avasthaMultipliers?.effective ?? null;
   if (adEff != null) {
     if (adEff >= 0.85 && side !== 'test') dashaPts += 2;
@@ -620,8 +644,10 @@ function scoreAdForArea(
     for (const a of annualFn(y)) {
       if (a.varga !== 'D1') continue;
       const s = annualSide(view, a, primary);
+      const tpRetro = a.kind === 'TP' && (a.yearLordRetro === true || Boolean(adLord && annualPlanetMotion(a, adLord)?.retro));
       if (s?.side === 'support') {
-        annualPts = Math.max(annualPts, ANNUAL_WEIGHTS.TP + ANNUAL_WEIGHTS.VP);
+        const baseAnnual = ANNUAL_WEIGHTS.TP + ANNUAL_WEIGHTS.VP;
+        annualPts = Math.max(annualPts, tpRetro ? Math.max(2, baseAnnual - getRetrogradeScoreWeights().tpYearLordRetroPenalty) : baseAnnual);
         const tag = `${a.kind}${a.year}`;
         if (!annualYears.includes(tag)) annualYears.push(tag);
       } else if (s?.side === 'test' && side === 'test') {
@@ -857,12 +883,27 @@ function buildAntardashaTimeline(
     const allAnnuals = [...new Set(top.flatMap((x) => x.annualYears))];
     const allTransits = [...new Set(top.flatMap((x) => x.transitHouses))].sort((a, b) => a - b);
     const adCardForEv = view.planet('D1', adLord);
+    const adD9ForEv = view.planet('D9', adLord);
+    const adVakraForEv = evaluateVakraDignityRegime(adLord, adCardForEv, adD9ForEv);
     const adAvastha = adCardForEv?.avasthas ? Object.values(adCardForEv.avasthas).filter(Boolean).join(', ') || null : null;
     const adEffMult = adCardForEv?.avasthaMultipliers?.effective ?? null;
+    const adMotion =
+      adCardForEv?.isStationary === true
+        ? 'stationary'
+        : adCardForEv?.motionState ?? (adCardForEv?.retro === true ? 'vakra' : null);
+    const adCheshtaBala = typeof adCardForEv?.cheshtaBala === 'number' ? adCardForEv.cheshtaBala : null;
     const adLinks = [...fBonus.links];
     if (adEffMult != null) {
       if (adEffMult >= 0.85) adLinks.push('high_avastha_delivery');
       else if (adEffMult <= 0.12) adLinks.push('dormant_avastha_delivery');
+    }
+    if (adCardForEv?.isStationary === true) {
+      adLinks.push('stationary_pivot');
+    } else if (adCardForEv?.retro === true && isTrueVakraCapable(adLord)) {
+      adLinks.push(adVakraForEv.isNeechaVargottama ? 'neecha_vargottama_boundary' : 'vakra_iterative_delivery');
+    }
+    if (adCheshtaBala != null && adCheshtaBala >= getRetrogradeScoreWeights().cheshtaStrongVirupas && isTrueVakraCapable(adLord)) {
+      adLinks.push('high_cheshta_bala');
     }
     if (top.some((x) => mdTouch.pendingKarmaHouses.includes(x.area.houses[0]!))) {
       adLinks.push('pending_karma_axis');
@@ -894,6 +935,8 @@ function buildAntardashaTimeline(
         transit_houses: allTransits,
         ...(adAvastha ? { ad_avastha: adAvastha } : {}),
         ...(adEffMult != null ? { ad_effective_multiplier: adEffMult } : {}),
+        ...(adMotion ? { ad_motion: adMotion } : {}),
+        ...(adCheshtaBala != null ? { ad_cheshta_bala: adCheshtaBala } : {}),
       },
     });
   }
@@ -1049,6 +1092,21 @@ export function buildMahadashaCharter(
       `Keep extra patience and clear boundaries around ${joinPhrases(guarded.slice(0, 2))}, especially during the careful sub-periods marked below.`,
     );
   }
+  const mdCardForEv = view.planet('D1', primary.lord);
+  const mdD9ForEv = view.planet('D9', primary.lord);
+  const mdVakra = evaluateVakraDignityRegime(primary.lord, mdCardForEv, mdD9ForEv);
+  if (mdCardForEv?.retro === true && isTrueVakraCapable(primary.lord)) {
+    summaryParts.push(
+      mdVakra.isNeechaVargottama
+        ? 'Keep clear personal boundaries and measured pacing throughout this chapter rather than overextending early.'
+        : 'Progress in this chapter favors second-pass refinement, renegotiating terms, and deliberate review over rushed first drafts.',
+    );
+  }
+  const mdMotion =
+    mdCardForEv?.isStationary === true
+      ? 'stationary'
+      : mdCardForEv?.motionState ?? (mdCardForEv?.retro === true ? 'vakra' : null);
+  const mdCheshtaBala = typeof mdCardForEv?.cheshtaBala === 'number' ? mdCardForEv.cheshtaBala : null;
   const charterSummary =
     summaryParts.join(' ') ||
     `This ${primary.remainingYears}-year chapter unfolds through ${antardashas.length} distinct sub-periods, each shifting which part of your life steps to the front.`;
@@ -1093,6 +1151,8 @@ export function buildMahadashaCharter(
       avastha: mdTouch.avastha,
       ...(mdTouch.effectiveMultiplier != null ? { effective_multiplier: mdTouch.effectiveMultiplier } : {}),
       ...(mdTouch.ripeness ? { ripeness: mdTouch.ripeness } : {}),
+      ...(mdMotion ? { md_motion: mdMotion } : {}),
+      ...(mdCheshtaBala != null ? { md_cheshta_bala: mdCheshtaBala } : {}),
     },
   };
 }

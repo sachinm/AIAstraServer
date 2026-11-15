@@ -15,6 +15,9 @@
  * The cap is what makes the grid selective; the scarcity tie-break keeps every marker signified (without it, G1's
  * Jupiter, lord of the 4th and 7th, is primary for five markers and education is left with no significator at all).
  */
+import { getRetrogradeScoreWeights } from '../../config/env.js';
+import { evaluateVakraDignityRegime, isTrueVakraCapable } from '../dasha/retrogradeRules.js';
+import type { PlanetCard as DigestPlanetCard } from '../digest/types.js';
 import { PLANET_CODES, type PlanetCode } from '../facts/constants.js';
 import { DUSTHANAS, pointOf, type Foundation } from './foundation.js';
 import { MARKERS, MARKER_IDS, type MarkerId } from './markers.js';
@@ -47,13 +50,51 @@ function cap(entries: Partial<Record<MarkerId, SigEntry>>, n: number, scarcity: 
   return Object.fromEntries(ranked.slice(0, n).map((m) => [m, entries[m]!])) as Partial<Record<MarkerId, SigEntry>>;
 }
 
+interface MotionCardExtras {
+  motionState?: string | null;
+  isStationary?: boolean;
+  cheshtaBala?: number | null;
+  d9Sign?: string | number | null;
+  d9Dignity?: string | null;
+}
+
 export function buildSignification(f: Foundation, capN = 3): Signification {
   const sig: SigTable = {};
   const adv: SigTable = {};
+  const weights = getRetrogradeScoreWeights();
   for (const p of PLANET_CODES) {
     const card = f.planets[p];
     if (!card) continue;
-    const afflicted = isDusthana(card.house) || card.debilitated;
+    const extras = card as typeof card & MotionCardExtras;
+    const isD9Debil = /debil|neecha|fall/i.test(String(extras.d9Dignity ?? ''));
+    const isVargottama = extras.d9Sign != null && String(extras.d9Sign) === String(card.sign);
+    const isNeechaVargottama = Boolean(isVargottama && card.debilitated && isD9Debil);
+    const vakra = isTrueVakraCapable(p)
+      ? evaluateVakraDignityRegime({
+          planet: p,
+          d1Card: {
+            retro: card.retro,
+            dignity: card.dignity,
+            sign: String(card.sign),
+            motionState: extras.motionState ?? null,
+            isStationary: extras.isStationary ?? false,
+            cheshtaBala: extras.cheshtaBala ?? null,
+          } as unknown as DigestPlanetCard,
+          d9Card:
+            extras.d9Sign != null || extras.d9Dignity != null
+              ? ({
+                  sign: String(extras.d9Sign ?? ''),
+                  dignity: extras.d9Dignity ?? null,
+                } as unknown as DigestPlanetCard)
+              : null,
+          isMature: true,
+          isNeechaVargottama,
+        })
+      : null;
+    // Never invert Neecha Vargottama; non-vargottama debilitated retrograde outside dusthanas receives Cheshta uplift
+    const redeemedByVakra =
+      Boolean(card.debilitated && !isNeechaVargottama && vakra && vakra.regime === 'neecha_vakra' && vakra.scoreDelta >= weights.neechaUplift);
+    const afflicted = isDusthana(card.house) || (card.debilitated && !redeemedByVakra);
     const s: Partial<Record<MarkerId, SigEntry>> = {};
     const a: Partial<Record<MarkerId, SigEntry>> = {};
     for (const id of MARKER_IDS) {
@@ -69,11 +110,44 @@ export function buildSignification(f: Foundation, capN = 3): Signification {
       };
       const natural = m.karakas.includes(p);
       const chara = m.charaKarakas.find((k) => f.chara[k] === p);
-      if (card.owns.includes(h1)) take(3, true, false, true, `houses.${h1}.lord`);
-      if (natural && card.strongDignity) take(3, false, true, false, `karakas.natural.${p}`, `bodies.${p}.dignity`);
+      if (card.owns.includes(h1)) {
+        take(
+          3,
+          true,
+          false,
+          true,
+          `houses.${h1}.lord`,
+          ...(redeemedByVakra ? [`bodies.${p}.retro`] : []),
+        );
+      }
+      if (natural && card.strongDignity) {
+        const ucchaVal =
+          vakra?.regime === 'uccha_vakra'
+            ? Math.max(2.25, Math.round((3 + weights.ucchaModeration) * 100) / 100)
+            : 3;
+        take(
+          ucchaVal,
+          false,
+          true,
+          false,
+          `karakas.natural.${p}`,
+          `bodies.${p}.dignity`,
+          ...(vakra?.regime === 'uccha_vakra' ? [`bodies.${p}.retro`] : []),
+        );
+      }
       if (chara) take(3, false, false, false, `karakas.chara.${chara}`);
       if (card.house === h1) take(2, true, false, false, `bodies.${p}.house`);
-      if (natural) take(2, false, true, false, `karakas.natural.${p}`);
+      if (natural) {
+        let natVal = 2;
+        const natEv = [`karakas.natural.${p}`];
+        if (!card.debilitated && vakra && (vakra.isRetrograde || (typeof extras.cheshtaBala === 'number' && extras.cheshtaBala >= weights.cheshtaStrongVirupas))) {
+          natVal = 2.25;
+          if (card.retro) natEv.push(`bodies.${p}.retro`);
+        } else if (extras.motionState === 'atichara') {
+          natVal = 1.75;
+        }
+        take(natVal, false, true, false, ...natEv);
+      }
       const h1Lord = f.houses[h1]?.lord;
       if (h1Lord && f.planets[h1Lord]?.signLord === p) take(2, false, false, false, `houses.${h1}.lord`, `bodies.${h1Lord}.sign_lord`);
       const secondary = m.houses.slice(1);

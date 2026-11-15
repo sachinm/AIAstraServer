@@ -7,6 +7,7 @@
  * day with plain-word reason keys. Node only cuts the engine's windows by the engine's avoid bands and adds the scores
  * the scenario table (scenarios.ts, cited) assigns; it derives no astrological value.
  */
+import { getLuckyRetrogradeAvoidMap } from '../../config/env.js';
 import { isAmritaSiddhi, karanaName, normalizeStarGroup, normalizeTithiGroup, scenarioById, starGroupOf, tithiGroupOf, yogaName, type KaranaName, type Lord, type ScenarioRule, type StarGroup, type TithiGroup, type Weekday, type YogaName } from './scenarios.js';
 
 /** The engine's CLOCK: hours from the local midnight of the row's date (may exceed 24). */
@@ -20,6 +21,16 @@ export interface Span {
   start: T;
   end: T;
 }
+export interface DayPlanetMotion {
+  is_retrograde?: boolean;
+  retro?: boolean;
+  is_stationary?: boolean;
+  stationary?: boolean;
+  motion_state?: string | null;
+  is_combust?: boolean;
+  combust?: boolean;
+}
+
 export interface DayRow {
   date: string;
   weekday?: string;
@@ -38,6 +49,10 @@ export interface DayRow {
   /** Full day yoga and karana spans when provided by the engine (E6), with fallback to panchanga_at_noon. */
   yogas?: LimbAtNoon[];
   karanas?: LimbAtNoon[];
+  /** Optional planetary motion / station / combustion map from `day_tables` (`planet_motion`, `muhurta.planet_motion`, or `planets`). */
+  planet_motion?: Record<string, DayPlanetMotion>;
+  planets?: Record<string, DayPlanetMotion>;
+  muhurta?: { planet_motion?: Record<string, DayPlanetMotion> };
   panchanga_at_noon?: {
     tithi?: { number?: number; lord?: string; group?: string; start_hours?: number; end_hours?: number };
     nakshatra?: { number?: number; lord?: string; group?: string; start_hours?: number; end_hours?: number };
@@ -246,10 +261,75 @@ function limbSpans(row: DayRow) {
   };
 }
 
+const MOTION_PLANET_ALIASES: ReadonlyArray<{ code: string; name: Lord; keys: readonly string[] }> = [
+  { code: 'Me', name: 'Mercury', keys: ['Me', 'me', 'Mercury', 'mercury'] },
+  { code: 'Ve', name: 'Venus', keys: ['Ve', 've', 'Venus', 'venus'] },
+  { code: 'Ma', name: 'Mars', keys: ['Ma', 'ma', 'Mars', 'mars'] },
+  { code: 'Ju', name: 'Jupiter', keys: ['Ju', 'ju', 'Jupiter', 'jupiter'] },
+  { code: 'Sa', name: 'Saturn', keys: ['Sa', 'sa', 'Saturn', 'saturn'] },
+];
+
+const SCENARIO_KARAKA_CODES: Readonly<Record<string, readonly string[]>> = {
+  'work.sign_contract': ['Me'],
+  'money.invest_buy': ['Ju', 'Ve', 'Me'],
+  'home.buy_sign': ['Ve', 'Ma'],
+  'home.move_in': ['Ve', 'Ma'],
+  'love.marriage': ['Ve', 'Ju'],
+  'love.propose_commit': ['Ve', 'Ju'],
+  'love.ask_out': ['Ve'],
+  'love.first_date': ['Ve'],
+  'travel.depart': ['Me', 'Ma'],
+  'travel.set_out': ['Me'],
+};
+
+function evaluateScenarioMotionAdjustments(row: DayRow, scenarioId: string): { penalty: number; reasons: string[] } {
+  const source = row.muhurta?.planet_motion ?? row.planet_motion ?? row.planets;
+  if (!source || typeof source !== 'object') {
+    return { penalty: 0, reasons: [] };
+  }
+  const cfg = getLuckyRetrogradeAvoidMap();
+  const checkedCodes = new Set<string>(SCENARIO_KARAKA_CODES[scenarioId] ?? []);
+  if (cfg.mercuryRetroAvoidScenarios.includes(scenarioId)) checkedCodes.add('Me');
+  if (cfg.venusRetroAvoidScenarios.includes(scenarioId)) checkedCodes.add('Ve');
+  if (cfg.marsRetroAvoidScenarios.includes(scenarioId)) checkedCodes.add('Ma');
+  if (checkedCodes.size === 0) {
+    return { penalty: 0, reasons: [] };
+  }
+
+  let penalty = 0;
+  const reasons: string[] = [];
+  for (const meta of MOTION_PLANET_ALIASES) {
+    if (!checkedCodes.has(meta.code)) continue;
+    const entry = meta.keys.map((k) => source[k]).find((v): v is DayPlanetMotion => Boolean(v && typeof v === 'object'));
+    if (!entry) continue;
+    const motionState = (entry.motion_state ?? '').toLowerCase();
+    const isStationary = entry.is_stationary === true || entry.stationary === true || motionState === 'vikala';
+    const isRetrograde = entry.is_retrograde === true || entry.retro === true || motionState === 'vakra' || motionState === 'anuvakra';
+    const isCombust = entry.is_combust === true || entry.combust === true;
+
+    if (isStationary) {
+      penalty += cfg.stationaryKarakaPenalty;
+      reasons.push(`motion_avoid:${meta.name}:stationary`);
+    } else if (isRetrograde) {
+      penalty += cfg.retrogradeKarakaPenalty;
+      reasons.push(`motion_avoid:${meta.name}:retrograde`);
+    }
+    if (isCombust && cfg.combustKarakaPenalty > 0) {
+      penalty += cfg.combustKarakaPenalty;
+      reasons.push(`motion_avoid:${meta.name}:combust`);
+    }
+  }
+  return { penalty, reasons };
+}
+
 export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: PersonalDay, chart?: ChartMarks): ScenarioDay {
   const weekday = (row.weekday ?? '') as Weekday;
   const dayReasons: string[] = [];
   if (rule.dayAvoid.includes(weekday)) return { scenario: rule.id, windows: [], verdict: 'avoid_day', dayReasons: [`weekday_avoid:${weekday}`] };
+  const motionAdj = evaluateScenarioMotionAdjustments(row, rule.id);
+  for (const mr of motionAdj.reasons) {
+    if (!dayReasons.includes(mr)) dayReasons.push(mr);
+  }
 
   const tithiObj = row.panchanga_at_noon?.tithi;
   const tithiNo = tithiObj?.number;
@@ -373,6 +453,10 @@ export function scenarioDay(row: DayRow, rule: ScenarioRule, personal?: Personal
       if (goodMin >= (piece.to - piece.from) / 2) {
         score += 1;
         reasons.push('good_muhurta');
+      }
+      if (motionAdj.penalty > 0) {
+        score -= motionAdj.penalty;
+        reasons.push(...motionAdj.reasons);
       }
       if (score >= rule.floor) windows.push({ from: Math.ceil(piece.from), to: Math.floor(piece.to), score, reasons: scoped(reasons), reasonKeys: reasons });
     }

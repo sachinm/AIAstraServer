@@ -10,6 +10,7 @@ Highlight:
 - Running Vimshottari lords with end dates.
 - Each present yoga and dosha, one claim each, planets named.
 - Chara karakas (karaka_chara) and the sign of the soul-significator in varga_d9.
+- Retrograde motion (`Ma`, `Me`, `Ju`, `Ve`, `Sa` only; Rahu and Ketu never count as Vakra): note `retro`, `motionState` (`vikala`/`anuvakra`/`vakra`/`atichara`), `isStationary`, and `cheshtaBala` when present. Under `nuanced_parashari`, retrograde lords deliver through second-pass effort; NEVER invert `Neecha Vargottama` (debilitated in the same sign across D1 and D9) into strength. Never output internal engine names.
 
 Rules: quote the number with every strength. A yoga or dosha that is not a present entry is never mentioned. A planet in two lists is both.
 

@@ -1,7 +1,7 @@
 Seek: the year's theme and the named events of the year, and which planet runs the months.
 
 Highlight:
-- annual_tithi_pravesha.lagna and .planets.<name>: sign and house_from_lagna, planets in the year's kendras, and the year's valid dates.
+- annual_tithi_pravesha.lagna and .planets.<name>: sign and house_from_lagna, planets in the year's kendras, the year's valid dates, and `yearLord` / `yearLordRetro` / `horaLordRetro` / `lagnaLordRetro` when given (`yearLordRetro=true` sets an `iterative_review` posture focused on restructuring, auditing and renegotiation rather than straight-line `linear_build`; only `Ma`, `Me`, `Ju`, `Ve`, `Sa` undergo true Vakra, and `Neecha Vargottama` is never inverted). Never output internal engine names.
 - annual_varsha: year lord and muntha only if the section gives them, as confirmation of the Tithi Pravesha year; otherwise a gap.
 - annual_sahams.sahams.<key>: sign and house_from_lagna for each saham that fits the frame (marriage, children, work, travel, wealth, loss, grief, illness, quarrels). Compare a saham's longitude with a natal planet's longitude in varga_d1; if visibly within 2 degrees, say so.
 - annual_mudda.periods and annual_patyayini.periods: lord, start, end, and what the lord is in the natal chart (dignities.planets). Mudda is the Varshaphala clock: it confirms the Tithi Pravesha year and never picks it.

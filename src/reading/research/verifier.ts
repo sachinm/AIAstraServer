@@ -7,6 +7,7 @@
  * November/Thanksgiving/December/New Year temporal continuity, and SOUL.md governance.
  */
 import { getResearchVerifierPassScore } from '../../config/env.js';
+import { evaluateVakraDignityRegime, isTrueVakraCapable } from '../dasha/retrogradeRules.js';
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
 import type {
@@ -21,6 +22,8 @@ import type {
 } from './types.js';
 
 const BANNED_ENGINE_TERMS = /\b(Radha|pyjhora|AIAstra_Radha|jhora)\b/i;
+const BANNED_SANSKRIT_MOTION_JARGON = /\b(vakra|cheshta|anuvakra|atichara|ashtagati|vikala)\b/i;
+const VAKRA_PLANETS = ['Ma', 'Me', 'Ju', 'Ve', 'Sa'] as const;
 
 export function buildTenStepTechnicalTrace(params: {
   subject: ResearchPresetSubject;
@@ -98,8 +101,9 @@ export function buildTenStepTechnicalTrace(params: {
       classicalRulesApplied: [
         'A D1 promise only delivers its full ceiling when confirmed by own/exalted/friendly dignity in its owning varga (D9 for Self/Dharma, D10 for Karma/Work, D24 for Knowledge).',
         'Varga improvement from D1 debility to D9 friendly/own triggers constructive mid-life maturation.',
+        'Neecha Vargottama (debilitated in the same sign across D1 and D9) sets a fixed Drudha Karma boundary and is never inverted into strength, even when retrograde (Vakra).',
       ],
-      combinationFormula: `VargaAgreement = Count(D9, D10, D24, D20, D12 lords in >= friendly dignity) / TotalPrimaryVargas`,
+      combinationFormula: `VargaAgreement = Count(D9, D10, D24, D20, D12 lords in >= friendly dignity) / TotalPrimaryVargas + NeechaVargottamaNonInversionGuard`,
       intermediateVerdict: `Owning vargas D9, D10, and D24 confirm ${boardSnapshot.charterAnalysis.fitScore}% vocation charter alignment for ${subject.professionTitle}.`,
       oracleProseClaim: prose.charterAndVocationNarrative,
     },
@@ -123,9 +127,9 @@ export function buildTenStepTechnicalTrace(params: {
       ],
       classicalRulesApplied: [
         'Houses with SAV >= 28 bindus hold high structural carrying capacity; houses <= 22 bindus require deliberate pacing during malefic transits.',
-        'Planets with Shadbala ratio >= 1.20 Rupa deliver results decisively during their MD/AD/PD windows.',
+        'Planets with Shadbala ratio >= 1.20 Rupa deliver results decisively during their MD/AD/PD windows; 5-planet Vakra Cheshta Bala scales iterative second-pass effort without overriding Neecha Vargottama.',
       ],
-      combinationFormula: `CapacityGate = I(SAV_h >= 28 → +1.0, SAV_h <= 22 → -1.0) + I(ShadbalaRatio >= 1.20 → +1.0)`,
+      combinationFormula: `CapacityGate = I(SAV_h >= 28 → +1.0, SAV_h <= 22 → -1.0) + I(ShadbalaRatio >= 1.20 → +1.0) + CheshtaBalaVakraGate`,
       intermediateVerdict: `High SAV in H10 (${subject.savByHouse[10]} bindus) and H1 (${subject.savByHouse[1]} bindus) with AK Shadbala >= 1.20 confirms strong execution stamina.`,
       oracleProseClaim: `Your strongest structural reserves sit in ${subject.savByHouse[10]! >= 30 ? 'career execution and public trust' : 'personal resilience and steady focus'}.`,
     },
@@ -205,8 +209,9 @@ export function buildTenStepTechnicalTrace(params: {
       classicalRulesApplied: [
         '5-Family Convergence Gate (Main Vimshottari, Conditional, Rasi/Narayana, Karaka, and Short Clocks Yogini + Tithi Ashtottari).',
         'A window is marked Confirmed when >= 3 clock families agree with the Main Clock polarity.',
+        'When an active Mahadasha or Antardasha lord is retrograde (5-planet Vakra: Ma, Me, Ju, Ve, Sa), delivery shifts toward iterative review, renegotiation, and second-pass refinement under nuanced_parashari dignity rules.',
       ],
-      combinationFormula: `FamilyVote(f) = sign(Σ LevelWeight_L × GradePlanet(lord)); Tone = f(SupportFamilies, TestFamilies)`,
+      combinationFormula: `FamilyVote(f) = sign(Σ LevelWeight_L × GradePlanet(lord) × VakraPostureModifier); Tone = f(SupportFamilies, TestFamilies)`,
       intermediateVerdict: `Running ${ds.mdLord}/${ds.adLord} with ${temporal.runningClocks.filter((c) => c.vote === 'support').length} supporting clock families produces tone '${boardSnapshot.productionBoard.tone.tone}' (${boardSnapshot.productionBoard.tone.confidence}).`,
       oracleProseClaim: prose.currentMentalEmotionalWeather,
     },
@@ -231,8 +236,9 @@ export function buildTenStepTechnicalTrace(params: {
       classicalRulesApplied: [
         'Muntha in Kendra/Trikona/Upachaya (1, 2, 3, 4, 5, 9, 10, 11) with dignified Year Lord supports annual progress.',
         'Muntha in 6/8/12 shifts the annual charter toward health maintenance, debt/workload cleanup, and careful pacing.',
+        'When Tithi Pravesha yearLordRetro is true, annual operating posture shifts from linear_build to iterative_review (restructuring and revisiting open commitments).',
       ],
-      combinationFormula: `AnnualScore = MunthaHousePolarity + YearLordDignity + Σ(KendraSahamSupports)`,
+      combinationFormula: `AnnualScore = MunthaHousePolarity + YearLordDignity + YearLordRetroPosture + Σ(KendraSahamSupports)`,
       intermediateVerdict: temporal.annualSummary.annualVerdict,
       oracleProseClaim: boardSnapshot.productionBoard.year?.note ?? temporal.annualSummary.annualVerdict,
     },
@@ -385,20 +391,42 @@ export function verifySelfDashboardRun(params: {
     const missingVargas = requiredVargas.filter((v) => !presentVargas.includes(v));
     const h1Vargas = houseMatrix.find((r) => r.house === 1)?.vargaChecks ?? [];
     const h10Vargas = houseMatrix.find((r) => r.house === 10)?.vargaChecks ?? [];
-    const passed = missingVargas.length === 0 && h1Vargas.length >= 4 && h10Vargas.length >= 4;
+    const step2 = trace.find((t) => t.stepNumber === 2);
+    const neechaVargottamaRetro = VAKRA_PLANETS.filter((p) => {
+      const d1p = view.planet('D1', p);
+      const d9p = view.planet('D9', p);
+      return Boolean(d1p?.retro && evaluateVakraDignityRegime(p, d1p, d9p).isNeechaVargottama);
+    });
+    const step2Text = `${(step2?.classicalRulesApplied ?? []).join(' ')} ${step2?.combinationFormula ?? ''}`;
+    const nvAccounted =
+      neechaVargottamaRetro.length === 0 ||
+      (/Neecha\s*Vargottama|NonInversion/i.test(step2Text) &&
+        !neechaVargottamaRetro.some((p) =>
+          boardSnapshot.productionBoard.supports.some(
+            (s) => s.evidence.includes(`planet:D1.${p}`) && /exalt|invert|reversal\s+to\s+strength/i.test(s.text),
+          ),
+        ));
+    const passed = missingVargas.length === 0 && h1Vargas.length >= 4 && h10Vargas.length >= 4 && nvAccounted;
+    const missed = missingVargas.map((v) => `Missing divisional varga ${v}`);
+    if (!nvAccounted) {
+      missed.push(`Neecha Vargottama retrograde non-inversion check failed for ${neechaVargottamaRetro.join(', ')}`);
+    }
     gates.push({
       gateId: 'varga_alignment_check',
       title: 'Gate 2 — 10-Varga Cross-Verification (D9, D10, D20, D24, D12, D2, D4, D7, D60)',
       passed,
-      score: passed ? 15 : Math.max(0, 15 - missingVargas.length * 3),
+      score: passed ? 15 : Math.max(0, 15 - missingVargas.length * 3 - (nvAccounted ? 0 : 5)),
       maxScore: 15,
-      checkedItems: requiredVargas.length,
+      checkedItems: requiredVargas.length + VAKRA_PLANETS.length,
       receipts: [
         `All ${presentVargas.length} divisional vargas hydrated and cross-checked (${requiredVargas.join(', ')}).`,
         `1H & 10H owning varga cells verified (${h1Vargas.length} and ${h10Vargas.length} checks).`,
+        neechaVargottamaRetro.length > 0
+          ? `Verified Neecha Vargottama retrograde non-inversion guard for ${neechaVargottamaRetro.join(', ')}.`
+          : 'Verified zero Neecha Vargottama retrograde inversions across D1 + D9.',
       ],
       warnings: [],
-      missedFactors: missingVargas.map((v) => `Missing divisional varga ${v}`),
+      missedFactors: missed,
     });
   }
 
@@ -411,20 +439,37 @@ export function verifySelfDashboardRun(params: {
     const hasRasi = families.has('rasi');
     const hasKaraka = families.has('karaka');
     const clockCount = temporal.runningClocks.length;
-    const passed = hasVimshottari && hasYogini && hasTithiAshtottari && hasRasi && hasKaraka && clockCount >= 5;
+    const activeDashaLords = [subject.dashaSeed.mdLord, subject.dashaSeed.adLord].filter((p) => isTrueVakraCapable(p));
+    const retroActiveDashaLords = activeDashaLords.filter((p) => view.planet('D1', p)?.retro === true);
+    const step6 = trace.find((t) => t.stepNumber === 6);
+    const step6Text = `${(step6?.classicalRulesApplied ?? []).join(' ')} ${step6?.combinationFormula ?? ''}`;
+    const retroDashaAccounted =
+      retroActiveDashaLords.length === 0 || /retrograde|Vakra|VakraPostureModifier|iterative/i.test(step6Text);
+    const passed =
+      hasVimshottari && hasYogini && hasTithiAshtottari && hasRasi && hasKaraka && clockCount >= 5 && retroDashaAccounted;
+    const missed: string[] = [];
+    if (!(hasVimshottari && hasYogini && hasTithiAshtottari && hasRasi && hasKaraka && clockCount >= 5)) {
+      missed.push('Incomplete multi-clock dasha family coverage');
+    }
+    if (!retroDashaAccounted) {
+      missed.push(`Retrograde active dasha lord (${retroActiveDashaLords.join(', ')}) unaccounted in Step 6 trace formula/rules`);
+    }
     gates.push({
       gateId: 'multi_clock_dasha_convergence',
       title: 'Gate 3 — Multi-Clock Dasha Convergence (Vimshottari, Yogini, Tithi Ashtottari, Narayana, Karaka)',
       passed,
       score: passed ? 15 : 10,
       maxScore: 15,
-      checkedItems: activations.length,
+      checkedItems: activations.length + activeDashaLords.length,
       receipts: [
         `Verified ${activations.length} staged activation periods across ${families.size} dasha families.`,
         `Active MD/AD (${subject.dashaSeed.mdLord}/${subject.dashaSeed.adLord}) and ${subject.dashaSeed.pdWindows.length} PD windows aligned with board tone '${boardSnapshot.productionBoard.tone.tone}'.`,
+        retroActiveDashaLords.length > 0
+          ? `Retrograde active dasha lord (${retroActiveDashaLords.join(', ')}) accounted in Step 6 classical rules & combinationFormula.`
+          : 'Active MD/AD lords checked for retrograde motion state.',
       ],
       warnings: [],
-      missedFactors: passed ? [] : ['Incomplete multi-clock dasha family coverage'],
+      missedFactors: missed,
     });
   }
 
@@ -515,45 +560,70 @@ export function verifySelfDashboardRun(params: {
       ids.includes('december_core') &&
       ids.includes('new_year_transition');
     const weeksOk = temporal.weeklyTimeline.length >= 8;
-    const passed = hasAllFour && weeksOk;
+    const tpRow = view.annual(temporal.annualSummary.year).find((a) => a.kind === 'TP' && a.varga === 'D1');
+    const step7 = trace.find((t) => t.stepNumber === 7);
+    const step7Text = `${(step7?.classicalRulesApplied ?? []).join(' ')} ${step7?.combinationFormula ?? ''}`;
+    const tpRetroAccounted =
+      tpRow?.yearLordRetro !== true || /yearLordRetro|YearLordRetroPosture|iterative_review/i.test(step7Text);
+    const passed = hasAllFour && weeksOk && tpRetroAccounted;
+    const missed: string[] = [];
+    if (!(hasAllFour && weeksOk)) missed.push('Holiday milestone or weekly continuity gap');
+    if (!tpRetroAccounted) missed.push('TP yearLordRetro === true unaccounted in Step 7 trace formula/rules');
     gates.push({
       gateId: 'temporal_zoom_holiday_continuity',
       title: 'Gate 7 — November, Thanksgiving Week, December & New Year Temporal Continuity',
       passed,
       score: passed ? 15 : 9,
       maxScore: 15,
-      checkedItems: temporal.holidayMilestones.length + temporal.weeklyTimeline.length,
+      checkedItems: temporal.holidayMilestones.length + temporal.weeklyTimeline.length + 1,
       receipts: [
         `Verified all 4 holiday milestones (November Lead, Thanksgiving Week Nov 23–29, December Core, New Year Transition Dec 28–Jan 5).`,
         `Verified ${temporal.weeklyTimeline.length}-week continuous timeline and ${temporal.dailyStrip.length}-day zoom-in with zero date gaps.`,
+        tpRow?.yearLordRetro === true
+          ? `Verified TP ${temporal.annualSummary.year} yearLordRetro (${tpRow.yearLord}) iterative_review posture in Step 7.`
+          : `Checked TP ${temporal.annualSummary.year} yearLord motion state.`,
       ],
       warnings: [],
-      missedFactors: passed ? [] : ['Holiday milestone or weekly continuity gap'],
+      missedFactors: missed,
     });
   }
 
-  // Gate 8: SOUL.md Governance, 4-Tier Playbook & Zero Engine Name Leakage (10 pts)
+  // Gate 8: SOUL.md Governance, 4-Tier Playbook & Zero Engine Name / Sanskrit Motion Jargon Leakage (10 pts)
   {
     const serializedProse = JSON.stringify(prose);
     const serializedBoard = JSON.stringify(boardSnapshot.productionBoard);
+    const consumerBoardLines = [
+      ...boardSnapshot.productionBoard.supports.map((s) => s.text),
+      ...boardSnapshot.productionBoard.pressures.map((p) => p.text),
+      boardSnapshot.productionBoard.year?.note ?? '',
+      boardSnapshot.productionBoard.characterArc?.headline ?? '',
+      ...(boardSnapshot.productionBoard.characterArc?.windows.map((w) => `${w.headline} ${w.summary} ${w.anchorTrait}`) ?? []),
+      boardSnapshot.productionBoard.personalityAndJoy?.headline ?? '',
+      ...(boardSnapshot.productionBoard.personalityAndJoy?.pillars.map((p) => `${p.title} ${p.whatYouEnjoy} ${p.whyItFeelsGood}`) ?? []),
+    ].join(' ');
     const hasEngineLeak =
       BANNED_ENGINE_TERMS.test(serializedProse) || BANNED_ENGINE_TERMS.test(serializedBoard);
+    const hasMotionJargonLeak =
+      BANNED_SANSKRIT_MOTION_JARGON.test(serializedProse) || BANNED_SANSKRIT_MOTION_JARGON.test(consumerBoardLines);
     const validTier = ['sattvic', 'rajasic', 'mediocre', 'baseline'].includes(prose.playbook.tier);
     const hasTenSteps = trace.length === 10 && trace.every((s) => s.dataPulled.length > 0 && s.dataExcluded.length > 0);
-    const passed = !hasEngineLeak && validTier && hasTenSteps;
+    const passed = !hasEngineLeak && !hasMotionJargonLeak && validTier && hasTenSteps;
+    const missed: string[] = [];
+    if (hasEngineLeak) missed.push('Banned engine identifier leaked in prose');
+    if (hasMotionJargonLeak) missed.push('Sanskrit motion jargon (vakra/cheshta/anuvakra/atichara) leaked in Read-face prose');
     gates.push({
       gateId: 'soul_governance_and_redaction',
       title: 'Gate 8 — SOUL.md Governance, 4-Tier Playbook & Zero Engine Name Leakage',
       passed,
       score: passed ? 10 : 0,
       maxScore: 10,
-      checkedItems: 12,
+      checkedItems: 14,
       receipts: [
-        `Zero banned internal engine names found across reading prose and board output.`,
+        `Zero banned internal engine names and zero Sanskrit motion jargon leaked across Read-face prose and board copy.`,
         `4-Tier Behavioral Playbook ('${prose.playbook.tier}') and all 10 technical trace steps (pulled vs excluded) verified.`,
       ],
       warnings: [],
-      missedFactors: hasEngineLeak ? ['Banned engine identifier leaked in prose'] : [],
+      missedFactors: missed,
     });
   }
 

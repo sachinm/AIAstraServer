@@ -5,6 +5,7 @@
  * stored once), only the rows that are missing, at most DIGEST_ANNUAL_MAX_CALLS engine calls per run (default 40) so one
  * event never runs long: the sweep keeps filling. Nearest years first. Nothing here computes astrology.
  */
+import { getDigestAnnualMaxCalls } from '../../config/env.js';
 import { ensureChartData, type ChartItem, type EnsureDeps, type EnsureOptions } from '../chartData/store.js';
 
 /** The engine options of the year chart in a divisional chart; D1 is the plain key */
@@ -15,8 +16,7 @@ export const ANNUAL_YEAR_TYPES = ['annual.tithi_pravesha_dasha', 'annual.mudda',
 export const ANNUAL_SPAN_YEARS = 10;
 
 export function annualMaxCalls(): number {
-  const n = Number(process.env.DIGEST_ANNUAL_MAX_CALLS);
-  return Number.isInteger(n) && n >= 0 && n <= 500 ? n : 40;
+  return getDigestAnnualMaxCalls();
 }
 
 /** The years of the set, nearest to `year` first: year, year+1, year-1, year+2 … */

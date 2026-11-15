@@ -21,7 +21,16 @@ import type { Band, SystemId } from '../timeline/types.js';
 import type { DigestView } from '../digest/types.js';
 import type { ActivationRow } from '../digest/activation.js';
 import { runningTithiPravesha } from '../annual/tithiPravesha.js';
-import { evaluateD1D9MutualConfirmation, isAgeMatureD9 } from '../dasha/dashaAssessment.js';
+import {
+  evaluateActiveDashaWithVargaAndTP,
+  evaluateD1D9MutualConfirmation,
+  isAgeMatureD9,
+} from '../dasha/dashaAssessment.js';
+import {
+  annualPlanetMotion,
+  evaluateVakraDignityRegime,
+  getPlanetVakraPlaybook,
+} from '../dasha/retrogradeRules.js';
 import { hasClass, isBad, isGood } from './houseLayers.js';
 import {
   buildWorkCharacterArc,
@@ -177,6 +186,9 @@ export interface D10CheckResult {
   d9Side: Side;
   agrees: boolean;
   split: boolean;
+  d1Retro?: boolean;
+  d10Retro?: boolean;
+  operatingPosture?: 'linear_build' | 'iterative_review' | 'protective_pacing';
 }
 
 const CAREER_HOUSES = [10, 6, 1, 2, 11];
@@ -184,9 +196,12 @@ const WORK_DUSTHANA = [6, 8, 12];
 const GOOD_CLASS = /kendra|trikona/i;
 const BAD_CLASS = /dusthana/i;
 
-function planetSideInVarga(view: DigestView, varga: string, planet: string): Side {
+function planetSideInVarga(view: DigestView, varga: string, planet: string, isMature = false): Side {
   const p = view.planet(varga, planet);
   if (!p) return 'neutral';
+  const d1 = view.planet('D1', planet);
+  const d9 = view.planet('D9', planet);
+  const isNeechaVargottama = !!(d1 && d9 && d1.sign && d1.sign === d9.sign && isBad(d1.dignity) && isBad(d9.dignity));
   let score = 0;
   if (isGood(p.dignity)) score += 1;
   else if (isBad(p.dignity)) score -= 1;
@@ -195,6 +210,16 @@ function planetSideInVarga(view: DigestView, varga: string, planet: string): Sid
     if (p.house === 10 || p.house === 1 || p.house === 11 || hasClass(hCard, GOOD_CLASS)) score += 1;
     else if (WORK_DUSTHANA.includes(p.house) || hasClass(hCard, BAD_CLASS)) score -= 1;
   }
+  const vakra = evaluateVakraDignityRegime({
+    planet,
+    d1Card: p,
+    d9Card: d9,
+    isMature,
+    isNeechaVargottama,
+  });
+  if (!isNeechaVargottama && vakra.scoreDelta !== 0) {
+    score += vakra.scoreDelta;
+  }
   return score >= 1 ? 'support' : score <= -1 ? 'test' : 'neutral';
 }
 
@@ -202,26 +227,36 @@ function planetSideInVarga(view: DigestView, varga: string, planet: string): Sid
  * work.d10_check (doc 43 §8.1, doc 46 §B.7, doc 53 §4.5):
  * Checks whether D1 and D10 agree on a running period lord's career side, with D9 breaking a tie when one is neutral.
  * When D1 and D10 directly oppose each other (one support, one test), `split` is true and the vote does not count.
- * Incorporates age > 36 D9 maturity validation.
+ * Incorporates age > 36 D9 maturity validation and D1/D10 retrograde operating posture.
  */
 export function workD10Check(view: DigestView, planet: string, ageYears?: number | null): D10CheckResult {
   const isMature = isAgeMatureD9(ageYears);
-  const d1Side = planetSideInVarga(view, 'D1', planet);
-  const d10Side = planetSideInVarga(view, 'D10', planet);
-  const d9Side = planetSideInVarga(view, 'D9', planet);
+  const d1Side = planetSideInVarga(view, 'D1', planet, isMature);
+  const d10Side = planetSideInVarga(view, 'D10', planet, isMature);
+  const d9Side = planetSideInVarga(view, 'D9', planet, isMature);
+  const d1Card = view.planet('D1', planet);
+  const d10Card = view.planet('D10', planet);
+  const d1Retro = d1Card?.retro === true;
+  const d10Retro = d10Card?.retro === true;
   let split = (d1Side === 'support' && d10Side === 'test') || (d1Side === 'test' && d10Side === 'support');
   if (isMature && d9Side === 'test' && (d1Side === 'support' || d10Side === 'support')) {
     split = true;
   }
   const agrees = !split && (d1Side === d10Side ? d1Side !== 'neutral' : d9Side !== 'neutral');
-  return { planet, d1Side, d10Side, d9Side, agrees, split };
+  const operatingPosture =
+    d1Side === 'test' || d10Side === 'test'
+      ? 'protective_pacing'
+      : d1Retro || d10Retro
+        ? 'iterative_review'
+        : 'linear_build';
+  return { planet, d1Side, d10Side, d9Side, agrees, split, d1Retro, d10Retro, operatingPosture };
 }
 
 /**
  * work.annual_family (doc 43 §8.1 family 5, doc 46 §B.6, doc 53 §4.5):
  * Reads the running Tithi Pravesha year chart (D1 and D10; the TP whose return moment has passed, doc 66 §4.10), the TP
  * year dasha lord when the engine bounds it to the year, and the rajya/karma sahams to cast the annual family's vote.
- * Incorporates post-36 D1+D9 confirmation for yearLord.
+ * Incorporates post-36 D1+D9 confirmation and TP yearLordRetro / D10 retrograde nuances.
  */
 export function workAnnualVote(view: DigestView, asOf: string, ageYears?: number | null): FamilyVote | null {
   const tp = runningTithiPravesha(view, asOf);
@@ -238,6 +273,13 @@ export function workAnnualVote(view: DigestView, asOf: string, ageYears?: number
       if (confirm.verdict === 'confirmed_strong' || confirm.verdict === 'd9_redeemed') score += 1;
       else if (confirm.verdict === 'd9_weakened' || confirm.verdict === 'confirmed_weak') score -= 1;
     }
+    const ylMotion = annualPlanetMotion(yr, yr.yearLord);
+    if ((yr.yearLordRetro || ylMotion.retro) && isBad(ylMotion.dignity)) {
+      const d1 = view.planet('D1', yr.yearLord);
+      const d9 = view.planet('D9', yr.yearLord);
+      const isNeechaVargottama = !!(d1 && d9 && d1.sign && d1.sign === d9.sign && isBad(d1.dignity) && isBad(d9.dignity));
+      if (!isNeechaVargottama) score += 0.5;
+    }
   }
   for (const h of [10, 1, 6, 2, 11]) {
     const c = yr.houses.find((x) => x.house === h);
@@ -251,14 +293,18 @@ export function workAnnualVote(view: DigestView, asOf: string, ageYears?: number
     const h10 = d10Yr.houses.find((x) => x.house === 10);
     if (h10?.lordHouse != null) {
       const at10 = d10Yr.houses.find((x) => x.house === h10.lordHouse);
-      if ((h10.lordHouse === 10 || hasClass(at10, GOOD_CLASS)) && !isBad(h10.lordDignity)) score += 1;
-      else if (hasClass(at10, BAD_CLASS)) score -= 1;
+      const h10Motion = annualPlanetMotion(d10Yr, h10.lord);
+      if ((h10.lordHouse === 10 || hasClass(at10, GOOD_CLASS)) && !isBad(h10.lordDignity)) {
+        score += h10Motion.retro ? 0.75 : 1;
+      } else if (hasClass(at10, BAD_CLASS)) {
+        score -= 1;
+      }
     }
   }
   // the TP year dasha period, only when bounded to the year (a lifetime dasha is not the year's clock)
   if (tp.shortClock) {
     leadPlanet = leadPlanet ?? tp.shortClock.lord;
-    const side = planetSideInVarga(view, 'D10', tp.shortClock.lord);
+    const side = planetSideInVarga(view, 'D10', tp.shortClock.lord, isMature);
     if (side === 'support') score += 1;
     else if (side === 'test') score -= 1;
   }
@@ -510,6 +556,27 @@ export function careerMap(build: PastBuild, asOf: string, digest?: CareerDigestI
 
   const characterArc = digest?.view ? buildWorkCharacterArc(digest.view, digest.activation ?? [], asOf, { ageYears: digest.ageYears ?? null }) : undefined;
   const vocationBlueprint = digest?.view ? buildWorkVocationAndPersonality(digest.view) : undefined;
+  if (digest?.view) {
+    const dashaD10 = evaluateActiveDashaWithVargaAndTP({
+      view: digest.view,
+      activation: digest.activation ?? [],
+      asOf,
+      ageYears: digest.ageYears ?? null,
+      varga: 'D10',
+    });
+    const activeRetroLord =
+      (dashaD10.vargaPlacement?.antardashaLordRetro ? dashaD10.activeAntardasha?.lord : null) ??
+      (dashaD10.vargaPlacement?.mahadashaLordRetro ? dashaD10.activeMahadasha?.lord : null) ??
+      (dashaD10.tithiPravesha?.yearLordRetro ? dashaD10.tithiPravesha.yearLord : null);
+    if (dashaD10.tithiPravesha?.operatingPosture === 'iterative_review' || activeRetroLord) {
+      const pb = getPlanetVakraPlaybook(activeRetroLord);
+      notes.push(
+        pb
+          ? pb.plainAnnualShift
+          : 'Current career timing favors iterative restructuring, contract review, and second-pass refinement over rushed linear launches.',
+      );
+    }
+  }
 
   return {
     asOf,
