@@ -10,6 +10,7 @@ import { buildFactsForKundli, scheduleFactsBuild, type BuildResult } from '../re
 import { ReadingUnavailableError, runReading, type ReadingRunRecord } from '../reading/run.js';
 import type { Intent, ReadingEmitter } from '../reading/types.js';
 import { declinedFor, storedQuestion } from '../reading/policy/declined.js';
+import { checkRateLimit, RateLimitExceededError } from '../lib/redis/rateLimiter.js';
 
 export type ChatTurnResult = ChatWithGroqResult & {
   /** Present when the reading engine answered; persisted as a reading_runs row. */
@@ -65,6 +66,10 @@ export async function chatWithConfiguredProvider(
     options?.onDelta?.(declined.reply);
     const stored = storedQuestion(question, declined);
     return { answerText: declined.reply, requestPayload: { engine: 'policy', declined: declined.id, category: declined.category }, responsePayload: { engine: 'policy', declined: declined.id }, storedQuestion: stored };
+  }
+  const rl = await checkRateLimit('gemini_api', userId, { prisma });
+  if (!rl.allowed) {
+    throw new RateLimitExceededError('gemini_api', rl.retryAfterSec);
   }
   try {
     if (provider === 'gemini' && isReadingEngineEnabled()) {

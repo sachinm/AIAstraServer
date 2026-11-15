@@ -16,6 +16,12 @@ import jwt from 'jsonwebtoken';
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { isRedisEnabled } from '../config/env.js';
+import {
+  cacheAuthSessionInRedis,
+  checkSessionRevocationAndCache,
+  invalidateCachedSessionInRedis,
+} from '../lib/redis/sessionStore.js';
 import { canonicalRole, type RoleId } from './roles.js';
 import { getJwtSecret } from './jwtSecret.js';
 import { recordAppError } from '../telemetry/appErrors.js';
@@ -118,6 +124,7 @@ const cache = new Map<string, { row: AuthRow | null; at: number }>();
 /** Drops one user so the next request reads the row again (call after changing their lock, role or token version). */
 export function forgetUser(userId: string): void {
   cache.delete(userId);
+  void invalidateCachedSessionInRedis(userId).catch(() => undefined);
 }
 
 export function resetRequestAuthForTests(): void {
@@ -147,12 +154,29 @@ export async function authenticateRequest(headers: HeaderSource, deps: RequestAu
   if (!userId) return NOBODY;
   const tv = typeof claims.tv === 'number' ? claims.tv : 1;
   const now = (deps.now ?? Date.now)();
+  const redisActive = isRedisEnabled();
 
   let entry = cache.get(userId);
+  if (redisActive) {
+    const redisOutcome = await checkSessionRevocationAndCache(userId, token, tv);
+    if (redisOutcome.status === 'revoked') {
+      cache.delete(userId);
+      return { ...NOBODY, reason: 'revoked' };
+    }
+    if (redisOutcome.status === 'hit') {
+      entry = { row: redisOutcome.row, at: now };
+      remember(userId, redisOutcome.row, now);
+    }
+  }
+
   if (!entry || now - entry.at >= CACHE_TTL_MS) {
     try {
-      entry = { row: await (deps.readRow ?? prismaReadRow)(userId), at: now };
-      remember(userId, entry.row, now);
+      const freshRow = await (deps.readRow ?? prismaReadRow)(userId);
+      entry = { row: freshRow, at: now };
+      remember(userId, freshRow, now);
+      if (redisActive) {
+        void cacheAuthSessionInRedis(userId, freshRow).catch(() => undefined);
+      }
     } catch (err) {
       // Fail closed (SEC-01): never honour unverified JWT claims when lock/role DB check fails.
       const code = String((err as { code?: string }).code ?? (err as Error).name ?? 'unknown');

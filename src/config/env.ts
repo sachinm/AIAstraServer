@@ -1603,3 +1603,81 @@ export function getBoardKeyDatesPastDays(): number {
 export function getD9MaturityAgeYears(): number {
   return parseClampedFloatEnv('D9_MATURITY_AGE_YEARS', 36, 18, 100);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Phase 4 Upstash Serverless Redis & Distributed Rate Limiting
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Upstash Redis REST base URL (`REDIS_REST_URL`). Unset/blank disables Redis cleanly. */
+export function getRedisRestUrl(): string {
+  return process.env.REDIS_REST_URL?.trim() || '';
+}
+
+/** Upstash Redis REST bearer token (`REDIS_REST_TOKEN`). */
+export function getRedisRestToken(): string {
+  return process.env.REDIS_REST_TOKEN?.trim() || '';
+}
+
+/**
+ * True ONLY when `REDIS_ENABLED` is not disabled (`0`/`false`/`off`/`no`) AND both
+ * `REDIS_REST_URL` and `REDIS_REST_TOKEN` are non-empty trimmed strings.
+ */
+export function isRedisEnabled(): boolean {
+  if (!boolEnv('REDIS_ENABLED', true)) return false;
+  return Boolean(getRedisRestUrl() && getRedisRestToken());
+}
+
+/** Per-command HTTP abort timeout in milliseconds. Env `REDIS_COMMAND_TIMEOUT_MS` (default 150, range 25..2000). */
+export function getRedisCommandTimeoutMs(): number {
+  return parseClampedIntEnv('REDIS_COMMAND_TIMEOUT_MS', 150, 25, 2000);
+}
+
+/** Circuit breaker failures within window before opening. Env `REDIS_CB_FAILURE_THRESHOLD` (default 5, range 1..50). */
+export function getRedisCircuitFailureThreshold(): number {
+  return parseClampedIntEnv('REDIS_CB_FAILURE_THRESHOLD', 5, 1, 50);
+}
+
+/** Circuit breaker sliding failure window in ms. Env `REDIS_CB_WINDOW_MS` (default 30000, range 1000..300000). */
+export function getRedisCircuitWindowMs(): number {
+  return parseClampedIntEnv('REDIS_CB_WINDOW_MS', 30_000, 1_000, 300_000);
+}
+
+/** Circuit breaker OPEN cooldown in ms before HALF_OPEN probe. Env `REDIS_CB_COOLDOWN_MS` (default 60000, range 1000..600000). */
+export function getRedisCircuitCooldownMs(): number {
+  return parseClampedIntEnv('REDIS_CB_COOLDOWN_MS', 60_000, 1_000, 600_000);
+}
+
+/** Redis session auth cache TTL in seconds. Env `REDIS_SESSION_TTL_SECONDS` (default 900, range 60..86400). */
+export function getRedisSessionTtlSeconds(): number {
+  return parseClampedIntEnv('REDIS_SESSION_TTL_SECONDS', 900, 60, 86_400);
+}
+
+/** Redis SSE turn buffer sliding TTL in seconds. Env `REDIS_SSE_BUFFER_TTL_SECONDS` (default 600, range 60..3600). */
+export function getRedisSseBufferTtlSeconds(): number {
+  return parseClampedIntEnv('REDIS_SSE_BUFFER_TTL_SECONDS', 600, 60, 3_600);
+}
+
+/** Max SSE events retained per turn in Redis. Env `REDIS_SSE_BUFFER_MAX_EVENTS` (default 500, range 50..5000). */
+export function getRedisSseBufferMaxEvents(): number {
+  return parseClampedIntEnv('REDIS_SSE_BUFFER_MAX_EVENTS', 500, 50, 5_000);
+}
+
+/** OTP send rate limit per 15 minutes per email hash. Env `RATE_LIMIT_OTP_PER_15M` (default 5, range 1..100). */
+export function getRateLimitOtpPer15m(): number {
+  return parseClampedIntEnv('RATE_LIMIT_OTP_PER_15M', 5, 1, 100);
+}
+
+/** GraphQL IP rate limit per minute. Env `RATE_LIMIT_GRAPHQL_PER_MIN` (default 120, range 10..5000). */
+export function getRateLimitGraphqlPerMin(): number {
+  return parseClampedIntEnv('RATE_LIMIT_GRAPHQL_PER_MIN', 120, 10, 5_000);
+}
+
+/** Chart rebuild rate limit per 10 minutes per user. Env `RATE_LIMIT_CHART_CALC_PER_10M` (default 6, range 1..100). */
+export function getRateLimitChartCalcPer10m(): number {
+  return parseClampedIntEnv('RATE_LIMIT_CHART_CALC_PER_10M', 6, 1, 100);
+}
+
+/** Gemini chat LLM rate limit per minute per user (token bucket). Env `RATE_LIMIT_GEMINI_PER_MIN` (default 20, range 1..500). */
+export function getRateLimitGeminiPerMin(): number {
+  return parseClampedIntEnv('RATE_LIMIT_GEMINI_PER_MIN', 20, 1, 500);
+}
