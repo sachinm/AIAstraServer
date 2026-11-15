@@ -106,7 +106,10 @@ Please give a brief and accurate answer, only based on the above data.
     new SystemMessage(systemPrompt),
     new HumanMessage(userPrompt),
   ];
-  const response = await getLLMClient().invoke(messages);
+  const llm = getLLMClient();
+  const response = await llm.invoke(
+    messages as unknown as Parameters<typeof llm.invoke>[0]
+  );
   const content = response?.content;
   return {
     answer:
@@ -139,7 +142,9 @@ async function generateWithLLM({
     new HumanMessage(userPrompt),
   ];
   const jsonLLM = createJSONLLMClient(0.4);
-  const response = await jsonLLM.invoke(messages);
+  const response = await jsonLLM.invoke(
+    messages as unknown as Parameters<typeof jsonLLM.invoke>[0]
+  );
   const raw = (response?.content as string) || '';
   return safeJSONParse(raw, label);
 }
