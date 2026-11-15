@@ -21,6 +21,46 @@
 import type { ActivationRow } from '../digest/activation.js';
 import type { DigestView } from '../digest/types.js';
 import { addMonthsIso } from '../timeline/months.js';
+import { runningTithiPravesha } from '../annual/tithiPravesha.js';
+import {
+  ageInYears,
+  evaluateActiveDashaWithVargaAndTP,
+  evaluateD1D9MutualConfirmation,
+  isAgeMatureD9,
+  resolveActiveMahadasha,
+  type D1D9ConfirmationResult,
+} from '../dasha/dashaAssessment.js';
+
+function plainConfirmationSentence(
+  confirmation: D1D9ConfirmationResult | null | undefined,
+  scope: 'foundation' | 'chapter' = 'chapter',
+): string {
+  if (!confirmation || confirmation.verdict === 'neutral') return '';
+  if (confirmation.verdict === 'confirmed_strong') {
+    if (scope === 'foundation') {
+      return confirmation.isVargottama
+        ? 'Surface expression and deeper intent pull in full harmony, giving durable staying power.'
+        : 'Outer direction and inner backing reinforce each other reliably.';
+    }
+    return confirmation.isVargottama
+      ? 'This chapter carries rare inner consistency, letting steady effort build without self-doubt.'
+      : 'What shows up externally has solid inner support during this stretch.';
+  }
+  if (confirmation.verdict === 'd9_redeemed') {
+    return scope === 'foundation'
+      ? 'Early awkwardness settles with age into steadier, hard-earned assurance.'
+      : 'What starts with friction steadies into dependable ground as the chapter unfolds.';
+  }
+  if (confirmation.verdict === 'd9_weakened') {
+    return scope === 'foundation'
+      ? 'Initial promise meets quieter inner tests over time, favoring pacing over haste.'
+      : 'Early momentum benefits from patience and measured follow-through rather than rushing outcomes.';
+  }
+  return scope === 'foundation'
+    ? 'Deep-rooted patterns ask for patience, grounded habits, and realistic pacing rather than shortcuts.'
+    : 'Progress here comes through steady discipline and clear boundaries rather than quick leaps.';
+}
+
 
 export interface SelfCharacterArcStage {
   id: 'past_10y' | 'now' | 'next_10y';
@@ -418,11 +458,25 @@ function dominantPeriodForSpan(
   toIso: string,
   level: 1 | 2,
 ): ActivationRow | null {
-  const candidates = activation.filter(
-    (r) => r.family === 'vimshottari' && r.level === level && r.lord && r.to > fromIso && r.from < toIso,
+  const eligible = activation.filter(
+    (r) => r.level === level && r.lord && r.to > fromIso && r.from < toIso,
   );
-  if (candidates.length === 0) return null;
-  return candidates.sort(
+  if (eligible.length === 0) return null;
+
+  const conditional = eligible.filter((r) => r.family === 'conditional');
+  const vimshottari = eligible.filter((r) => r.family === 'vimshottari');
+  const rasi = eligible.filter((r) => r.family === 'rasi');
+
+  const pool =
+    conditional.length > 0
+      ? conditional
+      : vimshottari.length > 0
+      ? vimshottari
+      : rasi.length > 0
+      ? rasi
+      : eligible;
+
+  return pool.sort(
     (a, b) => overlapDays(b.from, b.to, fromIso, toIso) - overlapDays(a.from, a.to, fromIso, toIso),
   )[0]!;
 }
@@ -460,7 +514,7 @@ export function buildSelfCharacterArc(
   view: DigestView,
   activation: ActivationRow[],
   asOf: string,
-  opts?: { ageYears?: number | null },
+  opts?: { ageYears?: number | null; birthDate?: string | null },
 ): SelfCharacterArc {
   const refYear = Number(asOf.slice(0, 4)) || 2026;
   const pastFrom = addMonthsIso(asOf, -120);
@@ -476,10 +530,9 @@ export function buildSelfCharacterArc(
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
   const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
-  const nowMd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 1 && r.from <= asOf && asOf < r.to) ?? pastMd;
-  const nowAd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 2 && r.from <= asOf && asOf < r.to) ?? pastAd;
+  const activeNow = resolveActiveMahadasha(activation, asOf);
+  const nowMd = activeNow.mdRow ?? pastMd;
+  const nowAd = activeNow.adRow ?? pastAd;
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
   const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
 
@@ -527,7 +580,13 @@ export function buildSelfCharacterArc(
   const nowTheme = HOUSE_CHARACTER_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[10]!;
   const nextTheme = HOUSE_CHARACTER_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[9]!;
 
-  const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
+  const resolvedAge =
+    typeof opts?.ageYears === 'number' && !isNaN(opts.ageYears)
+      ? opts.ageYears
+      : ageInYears(opts?.birthDate, asOf);
+  const isMature = isAgeMatureD9(resolvedAge);
+
+  const age = typeof resolvedAge === 'number' && resolvedAge > 0 ? Math.floor(resolvedAge) : null;
   const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
   const pastSpanYears = age !== null ? Math.max(1, age - (pastStartAge ?? 0)) : 10;
   const pastAgeTag =
@@ -537,6 +596,64 @@ export function buildSelfCharacterArc(
   const nowAgeTag = age !== null ? `Age ${age} (${refYear})` : `${refYear}`;
   const nextAgeTag = age !== null ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
 
+  // Evaluate D1+D9 mutual confirmation for key identity and dasha markers
+  const l1Confirm = evaluateD1D9MutualConfirmation(view, l1Code, isMature);
+  const akConfirm = evaluateD1D9MutualConfirmation(view, akCode, isMature);
+  const suConfirm = evaluateD1D9MutualConfirmation(view, 'Su', isMature);
+  const moConfirm = evaluateD1D9MutualConfirmation(view, 'Mo', isMature);
+  const pastMdConfirm = pastMd?.lord ? evaluateD1D9MutualConfirmation(view, pastMd.lord, isMature) : null;
+  const nowMdConfirm = nowMd?.lord ? evaluateD1D9MutualConfirmation(view, nowMd.lord, isMature) : null;
+  const nextMdConfirm = nextMd?.lord ? evaluateD1D9MutualConfirmation(view, nextMd.lord, isMature) : null;
+
+  // Running Tithi Pravesh annual & active dasha assessment with D30
+  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
+    view,
+    activation,
+    asOf,
+    ageYears: resolvedAge,
+    varga: 'D30',
+  });
+  const tpInfo = runningTithiPravesha(view, asOf);
+
+  let pastSummary = pastTheme.pastSummary;
+  let nowSummary = nowTheme.nowSummary;
+  let nextSummary = nextTheme.nextSummary;
+
+  if (activeAssessment.tithiPravesha?.yearLord) {
+    nowSummary += ` The current annual chapter adopts a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady pacing'} stance.`;
+  }
+  if (isMature) {
+    const l1Note = plainConfirmationSentence(l1Confirm, 'foundation');
+    nowSummary += l1Note
+      ? ` Having reached karmic maturity (post-36), outer direction and deeper inner alignment pull together: ${l1Note}`
+      : ` Having reached karmic maturity (post-36), your outer direction is weighed against deeper inner alignment.`;
+    const nowNote = plainConfirmationSentence(nowMdConfirm, 'chapter');
+    if (nowNote && !nowSummary.includes(nowNote)) {
+      nowSummary += ` ${nowNote}`;
+    }
+    const pastNote = plainConfirmationSentence(pastMdConfirm, 'chapter');
+    if (pastNote) {
+      pastSummary += ` ${pastNote}`;
+    }
+    const nextNote = plainConfirmationSentence(nextMdConfirm, 'chapter');
+    if (nextNote) {
+      nextSummary += ` ${nextNote}`;
+    }
+  }
+  if (activeAssessment.vargaPlacement?.status === 'support') {
+    nowSummary += ` Physical vitality and resilience provide a stable foundation.`;
+  } else if (activeAssessment.vargaPlacement?.status === 'test') {
+    nowSummary += ` Energy reserves call for measured pacing and deliberate recuperation.`;
+  }
+
+  const pastDecadeEvidence = [
+    `vimsottari:past_10y:${pastMd?.lord ?? l1Code}/${pastAd?.lord ?? akCode} (${pastFrom}..${asOf})`,
+    `D1.p.${pastMd?.lord ?? l1Code}.h${pastHouse}`,
+  ];
+  if (isMature && pastMdConfirm) {
+    pastDecadeEvidence.push(...pastMdConfirm.citations);
+  }
+
   const pastDecade: SelfCharacterArcStage = {
     id: 'past_10y',
     stage: 'past_10y',
@@ -545,13 +662,40 @@ export function buildSelfCharacterArc(
     ageSpanLabel: pastAgeTag,
     windowLabel: pastAgeTag,
     headline: pastTheme.pastHeadline,
-    summary: pastTheme.pastSummary,
+    summary: pastSummary,
     anchorTrait: pastTheme.pastTrait,
-    evidence: [
-      `vimsottari:past_10y:${pastMd?.lord ?? l1Code}/${pastAd?.lord ?? akCode} (${pastFrom}..${asOf})`,
-      `D1.p.${pastMd?.lord ?? l1Code}.h${pastHouse}`,
-    ],
+    evidence: pastDecadeEvidence,
   };
+
+  const presentNowEvidence = [
+    `D1.h1:${h1?.sign ?? 'Aries'} (L1=${l1Code} in H${l1Card?.house ?? 1}, D9=${d9L1Card?.dignity ?? 'friendly'})`,
+    `D1.point.AK=${akCode} (H${akCard?.house ?? 1})`,
+    `active_dasha:${activeAssessment.activeMahadasha?.system ?? nowMd?.system ?? 'active'}:${nowMd?.lord ?? l1Code}/${nowAd?.lord ?? akCode}`,
+    `dasha_concordance:${activeAssessment.multiClockConcordance.concordance}(agreeing=${activeAssessment.multiClockConcordance.agreeingClocks})`,
+  ];
+  if (activeAssessment.vargaPlacement) {
+    presentNowEvidence.push(`varga:${activeAssessment.vargaPlacement.varga}:${activeAssessment.vargaPlacement.status}`);
+  }
+  if (activeAssessment.tithiPravesha) {
+    presentNowEvidence.push(
+      `annual:TP${activeAssessment.tithiPravesha.year}:yearLord=${activeAssessment.tithiPravesha.yearLord}:stance=${activeAssessment.tithiPravesha.stance}`,
+    );
+    if (activeAssessment.tithiPravesha.shortClock) {
+      presentNowEvidence.push(
+        `annual:TP${activeAssessment.tithiPravesha.year}:shortClock=${activeAssessment.tithiPravesha.shortClock.system}:${activeAssessment.tithiPravesha.shortClock.lord}`,
+      );
+    }
+  }
+  if (isMature) {
+    presentNowEvidence.push(
+      ...l1Confirm.citations,
+      ...akConfirm.citations,
+      ...suConfirm.citations,
+      ...moConfirm.citations,
+      ...(nowMdConfirm ? nowMdConfirm.citations : []),
+      ...(activeAssessment.tithiPravesha?.yearLordConfirmation ? activeAssessment.tithiPravesha.yearLordConfirmation.citations : []),
+    );
+  }
 
   const presentNow: SelfCharacterArcStage = {
     id: 'now',
@@ -561,14 +705,19 @@ export function buildSelfCharacterArc(
     ageSpanLabel: nowAgeTag,
     windowLabel: nowAgeTag,
     headline: nowTheme.nowHeadline,
-    summary: nowTheme.nowSummary,
+    summary: nowSummary,
     anchorTrait: nowTheme.nowTrait,
-    evidence: [
-      `D1.h1:${h1?.sign ?? 'Aries'} (L1=${l1Code} in H${l1Card?.house ?? 1}, D9=${d9L1Card?.dignity ?? 'friendly'})`,
-      `D1.point.AK=${akCode} (H${akCard?.house ?? 1})`,
-      `vimsottari:now:${nowMd?.lord ?? l1Code}/${nowAd?.lord ?? akCode}`,
-    ],
+    evidence: presentNowEvidence,
   };
+
+  const nextDecadeEvidence = [
+    `vimsottari:next_10y:${nextMd?.lord ?? akCode}/${nextAd?.lord ?? l1Code} (${asOf}..${nextTo})`,
+    `D9.p.${nextMd?.lord ?? akCode} (${view.planet('D9', nextMd?.lord ?? akCode)?.dignity ?? 'friendly'})`,
+    `D1.p.${nextMd?.lord ?? akCode}.h${nextHouse}`,
+  ];
+  if (isMature && nextMdConfirm) {
+    nextDecadeEvidence.push(...nextMdConfirm.citations);
+  }
 
   const nextDecade: SelfCharacterArcStage = {
     id: 'next_10y',
@@ -578,13 +727,9 @@ export function buildSelfCharacterArc(
     ageSpanLabel: nextAgeTag,
     windowLabel: nextAgeTag,
     headline: nextTheme.nextHeadline,
-    summary: nextTheme.nextSummary,
+    summary: nextSummary,
     anchorTrait: nextTheme.nextTrait,
-    evidence: [
-      `vimsottari:next_10y:${nextMd?.lord ?? akCode}/${nextAd?.lord ?? l1Code} (${asOf}..${nextTo})`,
-      `D9.p.${nextMd?.lord ?? akCode} (${view.planet('D9', nextMd?.lord ?? akCode)?.dignity ?? 'friendly'})`,
-      `D1.p.${nextMd?.lord ?? akCode}.h${nextHouse}`,
-    ],
+    evidence: nextDecadeEvidence,
   };
 
   return {
@@ -802,7 +947,7 @@ export function buildLoveRelationshipArc(
   view: DigestView,
   activation: ActivationRow[],
   asOf: string,
-  opts?: { ageYears?: number | null },
+  opts?: { ageYears?: number | null; birthDate?: string | null },
 ): SelfCharacterArc {
   const refYear = Number(asOf.slice(0, 4)) || 2026;
   const pastFrom = addMonthsIso(asOf, -120);
@@ -818,10 +963,9 @@ export function buildLoveRelationshipArc(
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
   const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
-  const nowMd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 1 && r.from <= asOf && asOf < r.to) ?? pastMd;
-  const nowAd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 2 && r.from <= asOf && asOf < r.to) ?? pastAd;
+  const activeNow = resolveActiveMahadasha(activation, asOf);
+  const nowMd = activeNow.mdRow ?? pastMd;
+  const nowAd = activeNow.adRow ?? pastAd;
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
   const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
 
@@ -865,7 +1009,13 @@ export function buildLoveRelationshipArc(
   const nowTheme = LOVE_STAGE_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[nowHouse] ?? LOVE_STAGE_THEMES[5]!;
   const nextTheme = LOVE_STAGE_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[nextHouse] ?? LOVE_STAGE_THEMES[4]!;
 
-  const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
+  const resolvedAge =
+    typeof opts?.ageYears === 'number' && !isNaN(opts.ageYears)
+      ? opts.ageYears
+      : ageInYears(opts?.birthDate, asOf);
+  const isMature = isAgeMatureD9(resolvedAge);
+
+  const age = typeof resolvedAge === 'number' && resolvedAge > 0 ? Math.floor(resolvedAge) : null;
   const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
   const pastSpanYears = age !== null ? Math.max(1, age - (pastStartAge ?? 0)) : 10;
   const pastAgeTag =
@@ -875,6 +1025,64 @@ export function buildLoveRelationshipArc(
   const nowAgeTag = age !== null ? `Age ${age} (${refYear})` : `${refYear}`;
   const nextAgeTag = age !== null ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
 
+  // Evaluate D1+D9 mutual confirmation for relationship karakas and active dasha lords
+  const l7Confirm = evaluateD1D9MutualConfirmation(view, l7Code, isMature);
+  const veConfirm = evaluateD1D9MutualConfirmation(view, 'Ve', isMature);
+  const dkConfirm = evaluateD1D9MutualConfirmation(view, dkCode, isMature);
+  const pastMdConfirm = pastMd?.lord ? evaluateD1D9MutualConfirmation(view, pastMd.lord, isMature) : null;
+  const nowMdConfirm = nowMd?.lord ? evaluateD1D9MutualConfirmation(view, nowMd.lord, isMature) : null;
+  const nextMdConfirm = nextMd?.lord ? evaluateD1D9MutualConfirmation(view, nextMd.lord, isMature) : null;
+
+  // Saptamsha (D7) contextual checks & active dasha assessment
+  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
+    view,
+    activation,
+    asOf,
+    ageYears: resolvedAge,
+    varga: 'D7',
+  });
+  const veD7 = view.planet('D7', 'Ve');
+  const l7D7 = view.planet('D7', l7Code);
+
+  let pastSummary = pastTheme.pastSummary;
+  let nowSummary = nowTheme.nowSummary;
+  let nextSummary = nextTheme.nextSummary;
+
+  if (activeAssessment.tithiPravesha?.yearLord) {
+    nowSummary += ` The current annual cycle adopts a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive, shared building' : 'patient, understanding'} rhythm.`;
+  }
+  if (isMature) {
+    const l7Note = plainConfirmationSentence(l7Confirm, 'foundation');
+    nowSummary += l7Note
+      ? ` With relationship patterns maturing into lasting clarity (post-36), you look for enduring emotional truth over temporary excitement: ${l7Note}`
+      : ` With relationship patterns maturing into lasting clarity (post-36), you look for enduring emotional truth over temporary excitement.`;
+    const nowNote = plainConfirmationSentence(nowMdConfirm, 'chapter');
+    if (nowNote && !nowSummary.includes(nowNote)) {
+      nowSummary += ` ${nowNote}`;
+    }
+    const pastNote = plainConfirmationSentence(pastMdConfirm, 'chapter');
+    if (pastNote) {
+      pastSummary += ` ${pastNote}`;
+    }
+    const nextNote = plainConfirmationSentence(nextMdConfirm, 'chapter');
+    if (nextNote) {
+      nextSummary += ` ${nextNote}`;
+    }
+  }
+  if (activeAssessment.vargaPlacement?.status === 'support') {
+    nowSummary += ` Deeper mutual respect and shared values support lasting harmony.`;
+  } else if (activeAssessment.vargaPlacement?.status === 'test') {
+    nowSummary += ` Partnership expectations require patience, mindful communication, and clear boundaries.`;
+  }
+
+  const pastDecadeEvidence = [
+    `D1.h7:${h7?.sign ?? 'Libra'} (lord=${l7Code}, H${pastHouse})`,
+    `vimsottari:past_10y:${pastMd?.lord ?? l7Code}/${pastAd?.lord ?? dkCode} (${pastFrom}..${asOf})`,
+  ];
+  if (isMature && pastMdConfirm) {
+    pastDecadeEvidence.push(...pastMdConfirm.citations);
+  }
+
   const pastDecade: SelfCharacterArcStage = {
     id: 'past_10y',
     stage: 'past_10y',
@@ -883,13 +1091,47 @@ export function buildLoveRelationshipArc(
     ageSpanLabel: pastAgeTag,
     windowLabel: pastAgeTag,
     headline: pastTheme.pastHeadline,
-    summary: pastTheme.pastSummary,
+    summary: pastSummary,
     anchorTrait: pastTheme.pastTrait,
-    evidence: [
-      `D1.h7:${h7?.sign ?? 'Libra'} (lord=${l7Code}, H${pastHouse})`,
-      `vimsottari:past_10y:${pastMd?.lord ?? l7Code}/${pastAd?.lord ?? dkCode} (${pastFrom}..${asOf})`,
-    ],
+    evidence: pastDecadeEvidence,
   };
+
+  const presentNowEvidence = [
+    `D1.Ve:${veD1?.sign ?? 'Taurus'} (H${veD1?.house ?? 7})`,
+    `D9.Ve:${veD9?.sign ?? 'Libra'} (${veD9?.dignity ?? 'friendly'})`,
+    `D1.point.DK:${dkCode}`,
+    `D1.point.UL:H${ulPoint?.house ?? 7}`,
+    `active_dasha:${activeAssessment.activeMahadasha?.system ?? nowMd?.system ?? 'active'}:${nowMd?.lord ?? l7Code}/${nowAd?.lord ?? dkCode}`,
+    `dasha_concordance:${activeAssessment.multiClockConcordance.concordance}(agreeing=${activeAssessment.multiClockConcordance.agreeingClocks})`,
+  ];
+  if (activeAssessment.vargaPlacement) {
+    presentNowEvidence.push(`varga:${activeAssessment.vargaPlacement.varga}:${activeAssessment.vargaPlacement.status}`);
+  }
+  if (activeAssessment.tithiPravesha) {
+    presentNowEvidence.push(
+      `annual:TP${activeAssessment.tithiPravesha.year}:yearLord=${activeAssessment.tithiPravesha.yearLord}:stance=${activeAssessment.tithiPravesha.stance}`,
+    );
+    if (activeAssessment.tithiPravesha.shortClock) {
+      presentNowEvidence.push(
+        `annual:TP${activeAssessment.tithiPravesha.year}:shortClock=${activeAssessment.tithiPravesha.shortClock.system}:${activeAssessment.tithiPravesha.shortClock.lord}`,
+      );
+    }
+  }
+  if (veD7) {
+    presentNowEvidence.push(`D7.p.Ve:${veD7.sign ?? 'Unknown'}(${veD7.dignity ?? 'neutral'})`);
+  }
+  if (l7D7) {
+    presentNowEvidence.push(`D7.p.${l7Code}:${l7D7.sign ?? 'Unknown'}(${l7D7.dignity ?? 'neutral'})`);
+  }
+  if (isMature) {
+    presentNowEvidence.push(
+      ...l7Confirm.citations,
+      ...veConfirm.citations,
+      ...dkConfirm.citations,
+      ...(nowMdConfirm ? nowMdConfirm.citations : []),
+      ...(activeAssessment.tithiPravesha?.yearLordConfirmation ? activeAssessment.tithiPravesha.yearLordConfirmation.citations : []),
+    );
+  }
 
   const presentNow: SelfCharacterArcStage = {
     id: 'now',
@@ -899,15 +1141,18 @@ export function buildLoveRelationshipArc(
     ageSpanLabel: nowAgeTag,
     windowLabel: nowAgeTag,
     headline: nowTheme.nowHeadline,
-    summary: nowTheme.nowSummary,
+    summary: nowSummary,
     anchorTrait: nowTheme.nowTrait,
-    evidence: [
-      `D1.Ve:${veD1?.sign ?? 'Taurus'} (H${veD1?.house ?? 7})`,
-      `D9.Ve:${veD9?.sign ?? 'Libra'} (${veD9?.dignity ?? 'friendly'})`,
-      `D1.point.DK:${dkCode}`,
-      `D1.point.UL:H${ulPoint?.house ?? 7}`,
-    ],
+    evidence: presentNowEvidence,
   };
+
+  const nextDecadeEvidence = [
+    `vimsottari:next_10y:${nextMd?.lord ?? dkCode}/${nextAd?.lord ?? l7Code} (${asOf}..${nextTo})`,
+    `D9.h7:${view.house('D9', 7)?.sign ?? 'Libra'} (H${nextHouse})`,
+  ];
+  if (isMature && nextMdConfirm) {
+    nextDecadeEvidence.push(...nextMdConfirm.citations);
+  }
 
   const nextDecade: SelfCharacterArcStage = {
     id: 'next_10y',
@@ -917,12 +1162,9 @@ export function buildLoveRelationshipArc(
     ageSpanLabel: nextAgeTag,
     windowLabel: nextAgeTag,
     headline: nextTheme.nextHeadline,
-    summary: nextTheme.nextSummary,
+    summary: nextSummary,
     anchorTrait: nextTheme.nextTrait,
-    evidence: [
-      `vimsottari:next_10y:${nextMd?.lord ?? dkCode}/${nextAd?.lord ?? l7Code} (${asOf}..${nextTo})`,
-      `D9.h7:${view.house('D9', 7)?.sign ?? 'Libra'} (H${nextHouse})`,
-    ],
+    evidence: nextDecadeEvidence,
   };
 
   return {
@@ -1020,7 +1262,7 @@ export function buildWorkCharacterArc(
   view: DigestView,
   activation: ActivationRow[],
   asOf: string,
-  opts?: { ageYears?: number | null },
+  opts?: { ageYears?: number | null; birthDate?: string | null },
 ): SelfCharacterArc {
   const refYear = Number(asOf.slice(0, 4)) || 2026;
   const pastFrom = addMonthsIso(asOf, -120);
@@ -1034,10 +1276,9 @@ export function buildWorkCharacterArc(
 
   const pastMd = dominantPeriodForSpan(activation, pastFrom, asOf, 1);
   const pastAd = dominantPeriodForSpan(activation, pastFrom, asOf, 2);
-  const nowMd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 1 && r.from <= asOf && asOf < r.to) ?? pastMd;
-  const nowAd =
-    activation.find((r) => r.family === 'vimshottari' && r.level === 2 && r.from <= asOf && asOf < r.to) ?? pastAd;
+  const activeNow = resolveActiveMahadasha(activation, asOf);
+  const nowMd = activeNow.mdRow ?? pastMd;
+  const nowAd = activeNow.adRow ?? pastAd;
   const nextMd = dominantPeriodForSpan(activation, asOf, nextTo, 1) ?? nowMd;
   const nextAd = dominantPeriodForSpan(activation, addMonthsIso(asOf, 24), nextTo, 2) ?? nowAd;
 
@@ -1080,7 +1321,13 @@ export function buildWorkCharacterArc(
   const nowTheme = HOUSE_CHARACTER_THEMES[nowHouse] ?? HOUSE_CHARACTER_THEMES[10]!;
   const nextTheme = HOUSE_CHARACTER_THEMES[nextHouse] ?? HOUSE_CHARACTER_THEMES[9]!;
 
-  const age = typeof opts?.ageYears === 'number' && opts.ageYears > 0 ? Math.floor(opts.ageYears) : null;
+  const resolvedAge =
+    typeof opts?.ageYears === 'number' && !isNaN(opts.ageYears)
+      ? opts.ageYears
+      : ageInYears(opts?.birthDate, asOf);
+  const isMature = isAgeMatureD9(resolvedAge);
+
+  const age = typeof resolvedAge === 'number' && resolvedAge > 0 ? Math.floor(resolvedAge) : null;
   const pastStartAge = age !== null ? Math.max(0, age - 10) : null;
   const pastSpanYears = age !== null ? Math.max(1, age - (pastStartAge ?? 0)) : 10;
   const pastAgeTag =
@@ -1090,6 +1337,64 @@ export function buildWorkCharacterArc(
   const nowAgeTag = age !== null ? `Age ${age} (${refYear})` : `${refYear}`;
   const nextAgeTag = age !== null ? `Ages ${age}–${age + 10} (${refYear}–${refYear + 10})` : `${refYear}–${refYear + 10}`;
 
+  // Evaluate D1+D9 mutual confirmation for career lords and active dasha
+  const l10Confirm = evaluateD1D9MutualConfirmation(view, l10Code, isMature);
+  const saConfirm = evaluateD1D9MutualConfirmation(view, 'Sa', isMature);
+  const amkConfirm = evaluateD1D9MutualConfirmation(view, amkCode, isMature);
+  const pastMdConfirm = pastMd?.lord ? evaluateD1D9MutualConfirmation(view, pastMd.lord, isMature) : null;
+  const nowMdConfirm = nowMd?.lord ? evaluateD1D9MutualConfirmation(view, nowMd.lord, isMature) : null;
+  const nextMdConfirm = nextMd?.lord ? evaluateD1D9MutualConfirmation(view, nextMd.lord, isMature) : null;
+
+  // Dasamsa (D10) vocational checks & active dasha assessment
+  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
+    view,
+    activation,
+    asOf,
+    ageYears: resolvedAge,
+    varga: 'D10',
+  });
+  const l10D10 = view.planet('D10', l10Code);
+  const saD10 = view.planet('D10', 'Sa');
+
+  let pastSummary = pastTheme.pastSummary;
+  let nowSummary = nowTheme.nowSummary;
+  let nextSummary = nextTheme.nextSummary;
+
+  if (activeAssessment.tithiPravesha?.yearLord) {
+    nowSummary += ` The annual cycle brings focused vocational direction, favoring a ${activeAssessment.tithiPravesha.stance === 'build' ? 'constructive building' : 'deliberate, steady'} stride.`;
+  }
+  if (isMature) {
+    const l10Note = plainConfirmationSentence(l10Confirm, 'foundation');
+    nowSummary += l10Note
+      ? ` With career maturity past 36, professional capability is grounded in seasoned execution: ${l10Note}`
+      : ` With career maturity past 36, professional capability is grounded in seasoned execution.`;
+    const nowNote = plainConfirmationSentence(nowMdConfirm, 'chapter');
+    if (nowNote && !nowSummary.includes(nowNote)) {
+      nowSummary += ` ${nowNote}`;
+    }
+    const pastNote = plainConfirmationSentence(pastMdConfirm, 'chapter');
+    if (pastNote) {
+      pastSummary += ` ${pastNote}`;
+    }
+    const nextNote = plainConfirmationSentence(nextMdConfirm, 'chapter');
+    if (nextNote) {
+      nextSummary += ` ${nextNote}`;
+    }
+  }
+  if (activeAssessment.vargaPlacement?.status === 'support') {
+    nowSummary += ` Vocational alignment and leadership capacity provide clear strategic leverage.`;
+  } else if (activeAssessment.vargaPlacement?.status === 'test') {
+    nowSummary += ` Work demands call for disciplined focus and careful handling of responsibilities.`;
+  }
+
+  const pastDecadeEvidence = [
+    `D1.h10:${h10?.sign ?? 'Capricorn'} (lord=${l10Code}, H${pastHouse})`,
+    `vimsottari:past_10y:${pastMd?.lord ?? l10Code}/${pastAd?.lord ?? amkCode} (${pastFrom}..${asOf})`,
+  ];
+  if (isMature && pastMdConfirm) {
+    pastDecadeEvidence.push(...pastMdConfirm.citations);
+  }
+
   const pastDecade: SelfCharacterArcStage = {
     id: 'past_10y',
     stage: 'past_10y',
@@ -1098,13 +1403,45 @@ export function buildWorkCharacterArc(
     ageSpanLabel: pastAgeTag,
     windowLabel: pastAgeTag,
     headline: pastTheme.pastHeadline,
-    summary: pastTheme.pastSummary,
+    summary: pastSummary,
     anchorTrait: pastTheme.pastTrait,
-    evidence: [
-      `D1.h10:${h10?.sign ?? 'Capricorn'} (lord=${l10Code}, H${pastHouse})`,
-      `vimsottari:past_10y:${pastMd?.lord ?? l10Code}/${pastAd?.lord ?? amkCode} (${pastFrom}..${asOf})`,
-    ],
+    evidence: pastDecadeEvidence,
   };
+
+  const presentNowEvidence = [
+    `D10.h10:${d10H10?.sign ?? 'Capricorn'} (lord=${d10H10?.lord ?? l10Code})`,
+    `D1.point.AmK:${amkCode}`,
+    `active_dasha:${activeAssessment.activeMahadasha?.system ?? nowMd?.system ?? 'active'}:${nowMd?.lord ?? l10Code}/${nowAd?.lord ?? amkCode}`,
+    `dasha_concordance:${activeAssessment.multiClockConcordance.concordance}(agreeing=${activeAssessment.multiClockConcordance.agreeingClocks})`,
+  ];
+  if (activeAssessment.vargaPlacement) {
+    presentNowEvidence.push(`varga:${activeAssessment.vargaPlacement.varga}:${activeAssessment.vargaPlacement.status}`);
+  }
+  if (activeAssessment.tithiPravesha) {
+    presentNowEvidence.push(
+      `annual:TP${activeAssessment.tithiPravesha.year}:yearLord=${activeAssessment.tithiPravesha.yearLord}:stance=${activeAssessment.tithiPravesha.stance}`,
+    );
+    if (activeAssessment.tithiPravesha.shortClock) {
+      presentNowEvidence.push(
+        `annual:TP${activeAssessment.tithiPravesha.year}:shortClock=${activeAssessment.tithiPravesha.shortClock.system}:${activeAssessment.tithiPravesha.shortClock.lord}`,
+      );
+    }
+  }
+  if (l10D10) {
+    presentNowEvidence.push(`D10.p.${l10Code}:${l10D10.sign ?? 'Unknown'}(${l10D10.dignity ?? 'neutral'})`);
+  }
+  if (saD10) {
+    presentNowEvidence.push(`D10.p.Sa:${saD10.sign ?? 'Unknown'}(${saD10.dignity ?? 'neutral'})`);
+  }
+  if (isMature) {
+    presentNowEvidence.push(
+      ...l10Confirm.citations,
+      ...saConfirm.citations,
+      ...amkConfirm.citations,
+      ...(nowMdConfirm ? nowMdConfirm.citations : []),
+      ...(activeAssessment.tithiPravesha?.yearLordConfirmation ? activeAssessment.tithiPravesha.yearLordConfirmation.citations : []),
+    );
+  }
 
   const presentNow: SelfCharacterArcStage = {
     id: 'now',
@@ -1114,14 +1451,18 @@ export function buildWorkCharacterArc(
     ageSpanLabel: nowAgeTag,
     windowLabel: nowAgeTag,
     headline: nowTheme.nowHeadline,
-    summary: nowTheme.nowSummary,
+    summary: nowSummary,
     anchorTrait: nowTheme.nowTrait,
-    evidence: [
-      `D10.h10:${d10H10?.sign ?? 'Capricorn'} (lord=${d10H10?.lord ?? l10Code})`,
-      `D1.point.AmK:${amkCode}`,
-      `vimsottari:now:${nowMd?.lord ?? l10Code}/${nowAd?.lord ?? amkCode}`,
-    ],
+    evidence: presentNowEvidence,
   };
+
+  const nextDecadeEvidence = [
+    `vimsottari:next_10y:${nextMd?.lord ?? amkCode}/${nextAd?.lord ?? l10Code} (${asOf}..${nextTo})`,
+    `D10.p.${nextMd?.lord ?? amkCode}.h${nextHouse}`,
+  ];
+  if (isMature && nextMdConfirm) {
+    nextDecadeEvidence.push(...nextMdConfirm.citations);
+  }
 
   const nextDecade: SelfCharacterArcStage = {
     id: 'next_10y',
@@ -1131,12 +1472,9 @@ export function buildWorkCharacterArc(
     ageSpanLabel: nextAgeTag,
     windowLabel: nextAgeTag,
     headline: nextTheme.nextHeadline,
-    summary: nextTheme.nextSummary,
+    summary: nextSummary,
     anchorTrait: nextTheme.nextTrait,
-    evidence: [
-      `vimsottari:next_10y:${nextMd?.lord ?? amkCode}/${nextAd?.lord ?? l10Code} (${asOf}..${nextTo})`,
-      `D10.p.${nextMd?.lord ?? amkCode}.h${nextHouse}`,
-    ],
+    evidence: nextDecadeEvidence,
   };
 
   return {

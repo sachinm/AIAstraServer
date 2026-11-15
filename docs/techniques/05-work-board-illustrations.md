@@ -927,3 +927,49 @@ flowchart LR
     GATE -->|"MISS"| S1
     S3 --> OUT
 ```
+
+---
+
+## Page 23 of 23 — `work.character_arc`: Career Authority and Ambition Evolution Across Three Decades (Last 10 Years · Standing Today · Next 10 Years)
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `work.character_arc` — Career authority and ambition evolution across three decades (Last 10 Years · Standing Today · Next 10 Years) |
+| **Category / Board / Status** | `work` · `work` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas}`, `divisional:{D1,D10,D9}`, `jaimini:{charakaraka,arudhas}`, `annual:tithi_pravesha`, `dasha:{vimshottari,conditional,rasi}` |
+| **Selectors** | `boards: ['work']`, `subjects: ['career_work']`, `houses: [10, 6, 1, 2, 11]`, `vargas: ['D1', 'D9', 'D10']` |
+| **Reader Pieces** | `reader:house/house_card` (`D1,D10_h10,6,1,2,11`) · `reader:planet/planet_card` · `reader:point/point_row` (`AmK, AK, A10`) · `reader:activation/activation_row` · `reader:annual/annual_row` |
+| **Agent Piece** | `agent:area.career_map` (`buildWorkCharacterArc`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:work_character_arc.v1` |
+| **Date-Range Window Cache** | `freshness: 'dasha'` (`[runningPeriod.from, runningPeriod.to)` from `kundli_activation`) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/area/selfCharacterAndJoy.ts buildWorkCharacterArc; houseLayers.ts buildBoard` (`BPHS Ch. 6-7, 46-51; Sanjay Rath Crux of Vedic Astrology (Dasamsa & D9 Maturation); docs/reading-engine/76`) |
+
+```mermaid
+flowchart LR
+    subgraph Inputs["Digest + Activation Slicers (Freshness: dasha, Scope: kundli)"]
+        P_HC["reader:house/house_card<br/>(D1,D10_h10,6,1,2,11)"]
+        P_PC["reader:planet/planet_card<br/>(10th lord, Saturn, AmK & decade MD/AD lords)"]
+        P_ACT["reader:activation/activation_row<br/>(40+ dasha systems from -10y to +10y)"]
+        P_ANN["reader:annual/annual_row<br/>(Tithi Pravesha year and year lord)"]
+    end
+
+    subgraph CacheGate["Date-Range Window Cache Gate"]
+        GATE{"piece.cache.date_range_window<br/>validityWindow: dasha [runningPeriod.from, runningPeriod.to)<br/>scope: kundli"}
+    end
+
+    subgraph ArcBuilder["3-Decade Career Evolution Builder (buildWorkCharacterArc)"]
+        A1["1. Past 10 Years (asOf - 10y .. asOf): dominant MD/AD period<br/>+ 10th lord & Saturn D1/D10/D9 placement, dignity, and avastha"]
+        A2["2. Standing Today (asOf): 10th house, Amatyakaraka (AmK), Dasamsa (D10),<br/>active dasha across 40+ systems, D1+D9 confirmation (>36), and annual TP year lord"]
+        A3["3. Next 10 Years (asOf .. asOf + 10y): upcoming/continuing periods<br/>+ leadership execution and D10/D9 maturation"]
+        A1 --> A2 --> A3
+    end
+
+    subgraph Output["Work Board 3-Decade Character Arc"]
+        OUT["output:work_character_arc.v1<br/>Past 10y · Standing Today · Next 10y plain-English career cards with digest evidence"]
+    end
+
+    P_HC & P_PC & P_ACT & P_ANN --> GATE
+    GATE -->|"HIT"| OUT
+    GATE -->|"MISS"| A1
+    A3 --> OUT
+```

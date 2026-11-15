@@ -1540,3 +1540,13 @@ export function getBoardKeyDatesMax(): number {
 export function getBoardKeyDatesPastDays(): number {
   return parseClampedIntEnv('BOARD_KEY_DATES_PAST_DAYS', 60, 0, 365);
 }
+
+/**
+ * Classical Vedic planetary maturation age threshold for D9 (Navamsha) and divisional charts (docs/reading-engine/76).
+ * Native age > D9_MATURITY_AGE_YEARS triggers full D1+D9 mutual confirmation and varga routing.
+ * Env: `D9_MATURITY_AGE_YEARS` (default 36, clamped to 18..100).
+ */
+export function getD9MaturityAgeYears(): number {
+  return parseClampedFloatEnv('D9_MATURITY_AGE_YEARS', 36, 18, 100);
+}
+

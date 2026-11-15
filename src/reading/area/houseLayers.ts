@@ -20,6 +20,7 @@
  *  - tone        doc 45 §7 from the family votes, scaled to the families present
  */
 import { runningTithiPravesha } from '../annual/tithiPravesha.js';
+import { evaluateActiveDashaWithVargaAndTP } from '../dasha/dashaAssessment.js';
 import type { AnnualRow, DigestView, HouseCard, PlanetCard } from '../digest/types.js';
 import type { ActivationFamily, ActivationRow } from '../digest/activation.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -30,11 +31,20 @@ import {
   buildLoveRelationshipArc,
   buildSelfCharacterArc,
   buildSelfPersonalityAndJoy,
+  buildWorkCharacterArc,
+  buildWorkVocationAndPersonality,
   type SelfCharacterArc,
   type SelfPersonalityAndJoy,
 } from './selfCharacterAndJoy.js';
 
-export { buildLoveBondingAndChemistry, buildLoveRelationshipArc, type SelfCharacterArc, type SelfPersonalityAndJoy } from './selfCharacterAndJoy.js';
+export {
+  buildLoveBondingAndChemistry,
+  buildLoveRelationshipArc,
+  buildWorkCharacterArc,
+  buildWorkVocationAndPersonality,
+  type SelfCharacterArc,
+  type SelfPersonalityAndJoy,
+} from './selfCharacterAndJoy.js';
 
 export type Tone = 'demanding' | 'easing' | 'steady' | 'closing' | 'open';
 export type Confidence = 'confirmed' | 'likely' | 'split';
@@ -636,6 +646,8 @@ export interface BoardInput {
   transit: TransitRangePayload | null;
   /** optional person age in years on `asOf` for 3-decade age labels on the Self board */
   ageYears?: number | null;
+  /** optional birthDate ISO string for age resolution when ageYears is omitted */
+  birthDate?: string | null;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -915,18 +927,32 @@ export function buildBoard(input: BoardInput): BuiltBoard {
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
 
+  const areaVarga = (cfg.vargas.find((v) => v !== 'D1' && v !== 'D9') ?? 'D9') as 'D10' | 'D7' | 'D9' | 'D30';
+  const activeAssessment = evaluateActiveDashaWithVargaAndTP({
+    view,
+    activation: input.activation,
+    asOf,
+    ageYears: input.ageYears ?? null,
+    birthDate: input.birthDate ?? null,
+    varga: areaVarga,
+  });
+
   const characterArc =
     cfg.area === 'self'
-      ? buildSelfCharacterArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null })
+      ? buildSelfCharacterArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null, birthDate: input.birthDate ?? null })
       : cfg.area === 'love'
-        ? buildLoveRelationshipArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null })
-        : undefined;
+        ? buildLoveRelationshipArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null, birthDate: input.birthDate ?? null })
+        : cfg.area === 'career'
+          ? buildWorkCharacterArc(view, input.activation, asOf, { ageYears: input.ageYears ?? null, birthDate: input.birthDate ?? null })
+          : undefined;
   const personalityAndJoy =
     cfg.area === 'self'
       ? buildSelfPersonalityAndJoy(view)
       : cfg.area === 'love'
         ? buildLoveBondingAndChemistry(view)
-        : undefined;
+        : cfg.area === 'career'
+          ? buildWorkVocationAndPersonality(view)
+          : undefined;
 
   return {
     board: {

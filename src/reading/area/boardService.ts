@@ -18,6 +18,7 @@ import { asRangePayload, type TransitRangePayload } from '../chartData/transitRa
 import { openRow } from '../../lib/pii/rawSql.js';
 import { getShadeShortHorizonMonths } from '../../config/env.js';
 import { addMonthsIso } from '../timeline/months.js';
+import { ageInYears } from '../dasha/dashaAssessment.js';
 import { buildBoard, type AreaBoardBody, type AreaConfig, type BuiltBoard } from './houseLayers.js';
 import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resolveAreaShades } from './shadeResolver.js';
 
@@ -136,13 +137,15 @@ export async function getFact(prisma: PrismaClient, userId: string, key: string)
   return f?.value ?? null;
 }
 
-async function getUserAgeYears(prisma: PrismaClient, userId: string, asOf: string): Promise<number | null> {
+export async function getUserAgeYears(prisma: PrismaClient, userId: string, asOf: string): Promise<number | null> {
   try {
     const authModel = (prisma as unknown as { auth?: { findUnique?: (q: unknown) => Promise<{ date_of_birth?: string | null } | null> } }).auth;
     if (!authModel?.findUnique) return null;
     const row = await authModel.findUnique({ where: { id: userId }, select: { date_of_birth: true } });
     const dob = row?.date_of_birth;
     if (!dob || !/^\d{4}/.test(dob)) return null;
+    const fractional = ageInYears(dob, asOf);
+    if (fractional !== null) return fractional;
     const birthYear = Number(dob.slice(0, 4));
     const refYear = Number(asOf.slice(0, 4));
     if (!Number.isFinite(birthYear) || !Number.isFinite(refYear) || refYear <= birthYear) return null;

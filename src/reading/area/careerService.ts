@@ -15,6 +15,7 @@ import { kundliInputs, type TimelineInputs } from '../timeline/inputs.js';
 import { buildTimelineSpan } from '../timeline/pipeline.js';
 import { addDaysIso, addMonthsIso, monthEnd, monthOf } from '../timeline/months.js';
 import { careerMap, type CareerMap } from './career.js';
+import { activationSpan, getUserAgeYears } from './boardService.js';
 import { loadAreaFacts, loadTechniqueGovernance, recordTechniqueDecisions, resolveCareerShades } from './shadeResolver.js';
 
 export const WORK_STATUS = ['yes', 'between_jobs', 'own_business', 'studying'] as const;
@@ -116,10 +117,12 @@ export async function getCareer(deps: CareerDeps, userId: string, opts: { force?
         if (!inputs) return { value: null, skipStore: true };
         let builtContext: { runningPeriod?: DateSpan | null; year?: DateSpan | null } = {};
         const builtMap = await withAgentRun(deps.prisma, 'area.career_map', { userId, task: `career ${asOf}`, technique: 'work.present_tone', kundliId: kundli.id }, async () => {
-          const [view, activation, areaFacts] = await Promise.all([
+          const actSpan = activationSpan(asOf);
+          const [view, activation, areaFacts, ageYears] = await Promise.all([
             (deps.loadDigest ?? realLoadDigest)(deps.prisma, kundli.id).catch(() => null),
-            (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: asOf, to: asOf, maxLevel: 3 }).catch(() => []),
+            (deps.activationFor ?? realActivationFor)(deps.prisma, kundli.id, { from: actSpan.from, to: actSpan.to, maxLevel: 3 }).catch(() => []),
             loadAreaFacts(deps.prisma, userId, 'career', { key: 'work.status', value: work }),
+            getUserAgeYears(deps.prisma, userId, asOf),
             loadTechniqueGovernance(deps.prisma),
           ]);
           builtContext = {
@@ -127,7 +130,7 @@ export async function getCareer(deps: CareerDeps, userId: string, opts: { force?
             year: runningYearSpan(view, nowAt),
           };
           const build = buildTimelineSpan(inputs, span);
-          const m = careerMap(build, asOf, view ? { view, activation } : undefined);
+          const m = careerMap(build, asOf, view ? { view, activation, ageYears } : undefined);
           const receipts = resolveCareerShades({
             map: m,
             view,

@@ -21,6 +21,7 @@ import type { Band, SystemId } from '../timeline/types.js';
 import type { DigestView } from '../digest/types.js';
 import type { ActivationRow } from '../digest/activation.js';
 import { runningTithiPravesha } from '../annual/tithiPravesha.js';
+import { evaluateD1D9MutualConfirmation, isAgeMatureD9 } from '../dasha/dashaAssessment.js';
 import { hasClass, isBad, isGood } from './houseLayers.js';
 import {
   buildWorkCharacterArc,
@@ -166,6 +167,7 @@ const supportAt = (cells: MonthCell[], i: number, min: Band = 'moderate') => !!c
 export interface CareerDigestInput {
   view?: DigestView | null;
   activation?: ActivationRow[];
+  ageYears?: number | null;
 }
 
 export interface D10CheckResult {
@@ -200,12 +202,17 @@ function planetSideInVarga(view: DigestView, varga: string, planet: string): Sid
  * work.d10_check (doc 43 §8.1, doc 46 §B.7, doc 53 §4.5):
  * Checks whether D1 and D10 agree on a running period lord's career side, with D9 breaking a tie when one is neutral.
  * When D1 and D10 directly oppose each other (one support, one test), `split` is true and the vote does not count.
+ * Incorporates age > 36 D9 maturity validation.
  */
-export function workD10Check(view: DigestView, planet: string): D10CheckResult {
+export function workD10Check(view: DigestView, planet: string, ageYears?: number | null): D10CheckResult {
+  const isMature = isAgeMatureD9(ageYears);
   const d1Side = planetSideInVarga(view, 'D1', planet);
   const d10Side = planetSideInVarga(view, 'D10', planet);
   const d9Side = planetSideInVarga(view, 'D9', planet);
-  const split = (d1Side === 'support' && d10Side === 'test') || (d1Side === 'test' && d10Side === 'support');
+  let split = (d1Side === 'support' && d10Side === 'test') || (d1Side === 'test' && d10Side === 'support');
+  if (isMature && d9Side === 'test' && (d1Side === 'support' || d10Side === 'support')) {
+    split = true;
+  }
   const agrees = !split && (d1Side === d10Side ? d1Side !== 'neutral' : d9Side !== 'neutral');
   return { planet, d1Side, d10Side, d9Side, agrees, split };
 }
@@ -214,14 +221,24 @@ export function workD10Check(view: DigestView, planet: string): D10CheckResult {
  * work.annual_family (doc 43 §8.1 family 5, doc 46 §B.6, doc 53 §4.5):
  * Reads the running Tithi Pravesha year chart (D1 and D10; the TP whose return moment has passed, doc 66 §4.10), the TP
  * year dasha lord when the engine bounds it to the year, and the rajya/karma sahams to cast the annual family's vote.
+ * Incorporates post-36 D1+D9 confirmation for yearLord.
  */
-export function workAnnualVote(view: DigestView, asOf: string): FamilyVote | null {
+export function workAnnualVote(view: DigestView, asOf: string, ageYears?: number | null): FamilyVote | null {
   const tp = runningTithiPravesha(view, asOf);
   const yr = tp.row;
   if (!yr) return null;
+  const isMature = isAgeMatureD9(ageYears);
   const d10Yr = view.annual(yr.year).find((a) => a.kind === yr.kind && a.varga === 'D10') ?? null;
   let score = 0;
   let leadPlanet: string | null = null;
+  if (yr.yearLord) {
+    leadPlanet = yr.yearLord;
+    if (isMature) {
+      const confirm = evaluateD1D9MutualConfirmation(view, yr.yearLord, true);
+      if (confirm.verdict === 'confirmed_strong' || confirm.verdict === 'd9_redeemed') score += 1;
+      else if (confirm.verdict === 'd9_weakened' || confirm.verdict === 'confirmed_weak') score -= 1;
+    }
+  }
   for (const h of [10, 1, 6, 2, 11]) {
     const c = yr.houses.find((x) => x.house === h);
     if (!c || c.lordHouse == null) continue;
@@ -320,7 +337,7 @@ export function presentState(build: PastBuild, cells: MonthCell[], i: number, di
     const seenPlanets = new Set<string>();
     const mainVote = votes.find((v) => v.family === 'main');
     if (mainVote?.planet) {
-      const check = workD10Check(view, mainVote.planet);
+      const check = workD10Check(view, mainVote.planet, digest.ageYears);
       if (check.split) mainVote.vote = 'neutral';
       else seenPlanets.add(mainVote.planet);
     }
@@ -336,7 +353,7 @@ export function presentState(build: PastBuild, cells: MonthCell[], i: number, di
       votes.push(kar);
       extraAvailable += 1;
     }
-    const ann = workAnnualVote(view, asOf);
+    const ann = workAnnualVote(view, asOf, digest.ageYears);
     if (ann) {
       votes.push(ann);
       extraAvailable += 1;
@@ -491,7 +508,7 @@ export function careerMap(build: PastBuild, asOf: string, digest?: CareerDigestI
     .slice(0, 3)
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  const characterArc = digest?.view ? buildWorkCharacterArc(digest.view, digest.activation ?? [], asOf) : undefined;
+  const characterArc = digest?.view ? buildWorkCharacterArc(digest.view, digest.activation ?? [], asOf, { ageYears: digest.ageYears ?? null }) : undefined;
   const vocationBlueprint = digest?.view ? buildWorkVocationAndPersonality(digest.view) : undefined;
 
   return {

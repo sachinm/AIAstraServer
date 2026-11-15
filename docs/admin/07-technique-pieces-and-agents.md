@@ -22,10 +22,10 @@ change, so it is not made again and its agent is skipped until the window ends.
 
 ## 1. Counts
 
-- 140 techniques, 139 distinct pieces, 52 of them shared by two or more techniques.
-- By kind: 13 reader (13 shared), 17 prompt (3 shared), 54 output (20 shared), 55 agent (16 shared).
-- 107 recipe families; 43 techniques share their recipe with at least one other.
-- Freshness: 34 natal, 11 annual, 44 dasha, 17 daily, 20 transit, 14 question. Scope: 129 same for every question, 11 per question.
+- 142 techniques, 141 distinct pieces, 52 of them shared by two or more techniques.
+- By kind: 13 reader (13 shared), 17 prompt (3 shared), 56 output (20 shared), 55 agent (16 shared).
+- 109 recipe families; 43 techniques share their recipe with at least one other.
+- Freshness: 34 natal, 11 annual, 46 dasha, 17 daily, 20 transit, 14 question. Scope: 131 same for every question, 11 per question.
 
 ## 2. The machinery
 
@@ -230,8 +230,8 @@ flowchart LR
 | `reading.step` | Reading step | code | reading/step | 0 | — |
 | `lucky.day_tables` | Day tables puller | engine pull | lucky_times/data | 1 | self |
 | `lucky.day_overlay` | Personal day overlay puller | engine pull | lucky_times/personal | 1 | self |
-| `area.career_inputs` | Career inputs loader | engine pull | area/career | 9 | work |
-| `area.career_map` | Career map builder | code | area/career | 9 | work |
+| `area.career_inputs` | Career inputs loader | engine pull | area/career | 10 | work |
+| `area.career_map` | Career map builder | code | area/career | 10 | work |
 | `digest.build` | Kundli digest builder | code | digest/build | 1 | general |
 | `digest.annual_set` | Annual set puller | engine pull | digest/annual | 1 | general |
 | `dasha.deep_pull` | Deep dasha levels puller | engine pull | digest/activation | 0 | — |
@@ -260,7 +260,7 @@ flowchart LR
 | `work.reading_panel` | Work reading panel | code | work/reading | 11 | work |
 | `lineman.work` | Work reading lineman agent | model | work/lineman | 1 | work |
 | `work.reading_oracle` | Work reading oracle | model | work/reading | 1 | work |
-| `area.love_board` | Love board builder | code | area/love | 11 | love |
+| `area.love_board` | Love board builder | code | area/love | 12 | love |
 | `life.dashboard` | Life reading dashboard | code | life/dashboard | 4 | general |
 | `lucky.scenario_windows` | Scenario windows builder | code | lucky_times/scenarios | 15 | self, love, work |
 | `research.self_dashboard_builder` | Research Self Dashboard QA builder | code | area/research_self | 1 | self |
@@ -659,6 +659,7 @@ flowchart LR
   f_self_card_reading --- a_agent_self_card_oracle
   f_self_card_reading --- a_agent_self_card_personalizer
   r_reader_activation_activation_row --> f_self_character_arc
+  r_reader_annual_annual_row --> f_self_character_arc
   r_reader_house_house_card --> f_self_character_arc
   r_reader_planet_planet_card --> f_self_character_arc
   r_reader_point_point_row --> f_self_character_arc
@@ -817,7 +818,7 @@ flowchart LR
 | `self.annual` | This year's chart for houses 1, 4 and 5 with the Moon | `annual/annual_row` TP and VP of the current, previous and next year, houses 1,4,5,9,12, their sahams and year dashas | code | `area_board.v1` | `area.self_board` |  | annual · kundli |
 | `self.varga` | Owning divisional chart of houses 1, 4 and 5 with the Moon | `house/house_card` D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12<br/>`planet/planet_card` D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK<br/>`point/point_row` arudhas of houses 1,4,5,9,12 in D1, D9, D20, D24, D12, D4, D7, D60 | code | `area_board.v1` | `area.self_board` |  | natal · kundli |
 | `self.nakshatra` | Nakshatra charter of houses 1, 4 and 5 with the Moon | `star/star_profile` Moon star, lagna star and the tara table<br/>`house/house_card` D1,D9,D20,D24,D12,D4,D7,D60 houses 1,4,5,9,12 (cusp_star column)<br/>`planet/planet_card` D1 and D9 cards of the lagna lord, the Moon, the Sun, the 4th and 5th lords, Mercury, Jupiter, Ketu and AK | code | `area_board.v1` | `area.self_board` |  | natal · kundli |
-| `self.character_arc` | Character evolution across 3 decades (Last 10 Years -> Who You Are Now -> Next 10 Years) | `house/house_card` D1,D9,D10 houses 1,4,5,9,10<br/>`planet/planet_card` D1,D9,D10 cards of L1, Su, Mo, AK and running MD/AD lords<br/>`point/point_row` AK, AmK, AL<br/>`activation/activation_row` vimshottari and rasi periods from -10 years to +10 years | code | `self_character_arc.v1` | `area.self_board` |  | dasha · kundli |
+| `self.character_arc` | Character evolution across 3 decades (Last 10 Years -> Who You Are Now -> Next 10 Years) | `house/house_card` D1,D9,D10 houses 1,4,5,9,10<br/>`planet/planet_card` D1,D9,D10 cards of L1, Su, Mo, AK and running MD/AD lords<br/>`point/point_row` AK, AmK, AL<br/>`activation/activation_row` vimshottari and rasi periods from -10 years to +10 years<br/>`annual/annual_row` current Tithi Pravesha year and year lord | code | `self_character_arc.v1` | `area.self_board` |  | dasha · kundli |
 | `self.personality_joy` | Vedic Moon & Mercury personality and what brings joy & fulfillment | `house/house_card` D1,D9,D24 houses 1,3,4,5,11,12<br/>`planet/planet_card` D1,D9,D24 cards of Mo, Me, L4, L5, L3, Ju, Ve<br/>`star/star_profile` Moon star, lagna star and tara table | code | `self_personality_joy.v1` | `area.self_board` |  | natal · kundli |
 | `self.reading.diagnosis` | You reading: Who you are, in short (three sentences built from the other panels, shown first) | `findings/findings_in` claims of self.reading.lagna, struggle, yogas, chapters | code | `board_diagnosis.v1` | `self.reading_panel` |  | dasha · kundli |
 | `self.reading.clock` | You reading: the reading clock (preferred, applicable or default dasha system, and the confirming clocks) | `activation/activation_row` systems present and their family (conditional = engine says applies) | code | `self_clock.v1` | `self.reading_panel` |  | dasha · kundli |
@@ -865,7 +866,7 @@ flowchart LR
 | `reading.clock.sheet` | Clock sheet: one period clock read alone, span by span | `activation/activation_row` one clock slice (its periods to level 3) and the shared slices of the stored pressure inventories | `common/reader-system.md` | `clock_sheet.v1` | `reading.clock` |  | dasha · kundli |
 | `reading.concordance` | Agreed ledger: where the clocks agree, counted in code | `activation/activation_row` the clock sheets of the reading set, counted per span and matter | `concordance.md` | `agreed_ledger.v1` | `reading.concordance` |  | dasha · kundli |
 
-## 6. Love (27 techniques)
+## 6. Love (28 techniques)
 
 ```mermaid
 flowchart LR
@@ -902,6 +903,7 @@ flowchart LR
     f_love_reading_purview["love.reading.purview<br/>Love reading: the whole-chart purview check (board.purview, Love instance)<br/>purview.v1 · question"]
     f_love_reading_struggle["love.reading.struggle<br/>Love reading: what tests it (board.struggle filtered to love)<br/>board_struggle.v1 · dasha"]
     f_love_reading_year["love.reading.year<br/>Love reading: this year (board.year filtered to love)<br/>board_year.v1 · annual"]
+    f_love_relationship_arc["love.relationship_arc<br/>Relationship and emotional bond evolution across 3 decades (Last 10 Years -#gt; Where Your Heart Stands Now -#gt; Next 10 Years)<br/>love_relationship_arc.v1 · dasha"]
     f_love_transit["love.transit<br/>Transits over house 7<br/>area_board.v1 · transit"]
     f_love_varga["love.varga<br/>Owning divisional chart of house 7<br/>area_board.v1 · natal"]
     f_research_love_dashboard_qa["research.love_dashboard_qa<br/>Research Love Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year relationship zoom-in<br/>research_love_dashboard.v1 · transit"]
@@ -985,6 +987,12 @@ flowchart LR
   f_love_reading_struggle --- a_agent_love_reading_panel
   r_reader_annual_annual_row --> f_love_reading_year
   f_love_reading_year --- a_agent_love_reading_panel
+  r_reader_activation_activation_row --> f_love_relationship_arc
+  r_reader_annual_annual_row --> f_love_relationship_arc
+  r_reader_house_house_card --> f_love_relationship_arc
+  r_reader_planet_planet_card --> f_love_relationship_arc
+  r_reader_point_point_row --> f_love_relationship_arc
+  f_love_relationship_arc --- a_agent_area_love_board
   r_reader_house_house_card --> f_love_transit
   r_reader_transit_transit_row --> f_love_transit
   f_love_transit --- a_agent_area_love_board
@@ -1021,6 +1029,7 @@ flowchart LR
 | `love.meet` | Meeting someone | `findings/findings_in` the eight Love layers of this kundli (love.promise … love.nakshatra) | code | `board_subarea.v1` | `area.love_board` |  | question · kundli |
 | `love.health` | How the relationship is | `findings/findings_in` the eight Love layers of this kundli (love.promise … love.nakshatra) | code | `board_subarea.v1` | `area.love_board` |  | question · kundli |
 | `love.reconcile` | Strain and reconciling | `findings/findings_in` the eight Love layers of this kundli (love.promise … love.nakshatra) | code | `board_subarea.v1` | `area.love_board` |  | question · kundli |
+| `love.relationship_arc` | Relationship and emotional bond evolution across 3 decades (Last 10 Years -> Where Your Heart Stands Now -> Next 10 Years) | `house/house_card` D1,D9,D7 houses 7,5,4,8,2,11<br/>`planet/planet_card` D1,D9,D7 cards of 7th lord, Venus, DK and running MD/AD lords<br/>`point/point_row` DK, UL<br/>`activation/activation_row` vimshottari, conditional, and rasi periods from -10 to +10 years<br/>`annual/annual_row` running Tithi Pravesha year and year lord | code | `love_relationship_arc.v1` | `area.love_board` |  | dasha · kundli |
 | `love.reading.clock` | Love reading: the reading clock and confirming clocks (Love instance) | `activation/activation_row` distinct (system, family) at level 1 | code | `self_clock.v1` | `love.reading_panel` |  | dasha · kundli |
 | `love.reading.diagnosis` | Love reading: your love life, in short (three sentences from the Love panels and chapters) | `findings/findings_in` claims of love.reading.heart, partner, bond, circle, chapters | code | `board_diagnosis.v1` | `love.reading_panel` |  | question · kundli |
 | `love.reading.chapters` | Love reading: your chapters for love (board.chapters filtered to the love houses) | `activation/activation_row` reading clock L1-L2 and confirming clocks L1, houses 7,5,11,2,8,4,12<br/>`planet/planet_card` D1 cards of the chapter lords | code | `board_chapters.v1` | `love.reading_panel` |  | dasha · kundli |
@@ -1035,7 +1044,7 @@ flowchart LR
 | `love.reading.oracle` | Love reading: AI family sub-agents, Love Lineman, and Love Oracle synthesis | `house/house_card` D1 and divisional house cards 1..12<br/>`planet/planet_card` D1 and divisional planet cards with avasthas and dasha_charter<br/>`yoga/yoga_row` D1 yogas, doshas, and cancellations<br/>`point/point_row` D1/D9 chara karakas, arudha padas, and Lunar Astro points<br/>`star/star_profile` Moon star, lagna star, gandanta, and pending karma houses<br/>`annual/annual_row` running Tithi Pravesha and Varsha annual charts<br/>`activation/activation_row` reading clock L1-L3 and confirming clocks L1 | `oracle/self.md` | `self_reading.v1` | `love.reading_oracle`, `family.rasi`, `family.varga`, `family.dasha`, `family.year`, `family.sky`, `lineman.love` |  | dasha · kundli |
 | `research.love_dashboard_qa` | Research Love Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year relationship zoom-in | `house/house_card` D1,D9,D10,D20,D24,D12,D2,D4,D7,D60 houses 1..12<br/>`planet/planet_card` D1,D9,D10,D20,D24,D12,D2,D4,D7,D60 every planet<br/>`yoga/yoga_row` all yogas, doshas and cancellations<br/>`point/point_row` AK, AmK, DK, AL, UL, SL, HL, GL, K64M, K64L, KD22, BB<br/>`star/star_profile` Moon star, lagna star, tara table, gandanta and pending karma<br/>`activation/activation_row` every served system covering Nov-Jan and ±30 years (levels 1..4)<br/>`annual/annual_row` TP and VP of the current and next year with year dashas and sahams<br/>`transit/transit_row` Sa, Ju, Ra, Ke slow transits, sade sati, and daily tara/chandra bala overlay | code | `research_love_dashboard.v1` | `research.love_dashboard_builder` | `research.technical_verifier` | transit · kundli |
 
-## 7. Work (29 techniques)
+## 7. Work (30 techniques)
 
 ```mermaid
 flowchart LR
@@ -1060,6 +1069,7 @@ flowchart LR
     f_work_reading_3["work.reading.* (3)<br/>3 techniques<br/>board_panel.v1 · natal"]
     f_research_work_dashboard_qa["research.work_dashboard_qa<br/>Research Work Dashboard deep-dive & Nov/Thanksgiving/Dec/New Year career zoom-in<br/>research_work_dashboard.v1 · transit"]
     f_work_annual_family["work.annual_family<br/>This year's chart (annual family)<br/>family_vote.v1 · annual"]
+    f_work_character_arc["work.character_arc<br/>Career authority and ambition evolution across 3 decades (Last 10 Years -#gt; Standing Today -#gt; Next 10 Years)<br/>work_character_arc.v1 · dasha"]
     f_work_conditional_family["work.conditional_family<br/>Conditional clock<br/>family_vote.v1 · dasha"]
     f_work_d10_check["work.d10_check<br/>D1 and D10 agreement on each dasha vote<br/>vote_check.v1 · dasha"]
     f_work_karaka_family["work.karaka_family<br/>Karaka clock<br/>family_vote.v1 · dasha"]
@@ -1110,6 +1120,13 @@ flowchart LR
   r_reader_annual_annual_row --> f_work_annual_family
   f_work_annual_family --- a_agent_area_career_inputs
   f_work_annual_family --- a_agent_area_career_map
+  r_reader_activation_activation_row --> f_work_character_arc
+  r_reader_annual_annual_row --> f_work_character_arc
+  r_reader_house_house_card --> f_work_character_arc
+  r_reader_planet_planet_card --> f_work_character_arc
+  r_reader_point_point_row --> f_work_character_arc
+  f_work_character_arc --- a_agent_area_career_inputs
+  f_work_character_arc --- a_agent_area_career_map
   r_reader_activation_activation_row --> f_work_conditional_family
   f_work_conditional_family --- a_agent_area_career_inputs
   f_work_conditional_family --- a_agent_area_career_map
@@ -1182,6 +1199,7 @@ flowchart LR
 | `work.conditional_family` | Conditional clock | `activation/activation_row` conditional systems named by dasha.applicable, levels 1–3, periods covering this month ±1, houses 10,6,1 | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | `work.present_tone` | dasha · kundli |
 | `work.karaka_family` | Karaka clock | `activation/activation_row` karaka dasha level 3, periods covering this month ±1<br/>`point/point_row` AmK and the 10th lord in D1 and D10<br/>`planet/planet_card` D10 card of the running karaka lord | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | `work.present_tone` | dasha · kundli |
 | `work.d10_check` | D1 and D10 agreement on each dasha vote | `activation/activation_row` running lords of the main, conditional and karaka clocks this month<br/>`planet/planet_card` D1, D10, D9, D60 cards of those lords<br/>`house/house_card` D10 houses 10,6,1,2,11 | code | `vote_check.v1` | `area.career_inputs`, `area.career_map` | `work.present_tone` | dasha · kundli |
+| `work.character_arc` | Career authority and ambition evolution across 3 decades (Last 10 Years -> Standing Today -> Next 10 Years) | `house/house_card` D1,D10 houses 10,6,1,2,11<br/>`planet/planet_card` D1,D9,D10 cards of 10th lord, Saturn, AmK and running MD/AD lords<br/>`point/point_row` AmK, AK, A10<br/>`activation/activation_row` vimshottari, conditional, and rasi periods from -10 to +10 years<br/>`annual/annual_row` running Tithi Pravesha year and year lord | code | `work_character_arc.v1` | `area.career_inputs`, `area.career_map` |  | dasha · kundli |
 | `lucky.work.sign_contract` | Sign a contract | `panchang/panchang_day` the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br/>`panchang/panchang_day` the person's overlay for the same days (tara, chandra bala, grade) | code | `windows.v1` | `lucky.scenario_windows` |  | daily · kundli |
 | `lucky.work.send_resume` | Send a resume or application | `panchang/panchang_day` the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br/>`panchang/panchang_day` the person's overlay for the same days (tara, chandra bala, grade) | code | `windows.v1` | `lucky.scenario_windows` |  | daily · kundli |
 | `lucky.work.interview` | Interview or pitch | `panchang/panchang_day` the place's day rows today −7 … today +14 (five limbs, horas, avoid bands, good spans)<br/>`panchang/panchang_day` the person's overlay for the same days (tara, chandra bala, grade) | code | `windows.v1` | `lucky.scenario_windows` |  | daily · kundli |
@@ -1207,145 +1225,147 @@ flowchart LR
 
 | Kind | Piece | Freshness | Used by | Areas | Filters |
 |---|---|---|---|---|---|
-| reader | `planet/planet_card` | natal | 77 of 140 | general, self, love, work | 44 |
-| reader | `activation/activation_row` | dasha | 65 of 140 | general, self, love, work | 43 |
-| reader | `house/house_card` | natal | 59 of 140 | general, self, love, work | 39 |
-| reader | `point/point_row` | natal | 32 of 140 | general, self, love, work | 24 |
-| reader | `yoga/yoga_row` | natal | 31 of 140 | general, self, love, work | 18 |
-| reader | `annual/annual_row` | annual | 23 of 140 | general, self, love, work | 15 |
-| reader | `transit/transit_row` | transit | 21 of 140 | general, self, love, work | 11 |
-| reader | `panchang/panchang_day` | daily | 17 of 140 | self, love, work | 3 |
-| reader | `findings/findings_in` | question | 14 of 140 | general, self, love, work | 10 |
-| reader | `star/star_profile` | natal | 14 of 140 | general, self, love, work | 8 |
-| reader | `text/text_in` | question | 4 of 140 | general | 3 |
-| reader | `person/person_pack` | natal | 2 of 140 | self | 2 |
-| reader | `prashna/prashna_card` | question | 2 of 140 | general | 2 |
-| prompt | `common/reader-system.md` |  | 3 of 140 | self |  |
-| prompt | `oracle/self.md` |  | 3 of 140 | self, love, work |  |
-| prompt | `personalizer/self.md` |  | 2 of 140 | self |  |
-| prompt | `db:clarify.system` |  | 1 of 140 | general |  |
-| prompt | `annual.md` |  | 1 of 140 | general |  |
-| prompt | `concordance.md` |  | 1 of 140 | self |  |
-| prompt | `intake.md` |  | 1 of 140 | general |  |
-| prompt | `oracle/self-areas-v2.md` |  | 1 of 140 | self |  |
-| prompt | `oracle/self-cards-v3.md` |  | 1 of 140 | self |  |
-| prompt | `oracle/system.md` |  | 1 of 140 | general |  |
-| prompt | `oracle/validator.md` |  | 1 of 140 | general |  |
-| prompt | `prashna.md` |  | 1 of 140 | general |  |
-| prompt | `readers/_shared.md` |  | 1 of 140 | general |  |
-| prompt | `v2/dasha.md` |  | 1 of 140 | general |  |
-| prompt | `v2/nakshatra.md` |  | 1 of 140 | general |  |
-| prompt | `v2/promise.md` |  | 1 of 140 | general |  |
-| prompt | `v2/transit.md` |  | 1 of 140 | general |  |
-| output | `area_board.v1` |  | 16 of 140 | self, love |  |
-| output | `windows.v1` |  | 13 of 140 | self, love, work |  |
-| output | `self_v2.area_brief` |  | 12 of 140 | self |  |
-| output | `findings.v2` |  | 11 of 140 | general |  |
-| output | `board_panel.v1` |  | 8 of 140 | love, work |  |
-| output | `self_panel.v1` |  | 8 of 140 | self |  |
-| output | `career_map.v1` |  | 5 of 140 | work |  |
-| output | `board_diagnosis.v1` |  | 3 of 140 | self, love, work |  |
-| output | `board_subarea.v1` |  | 3 of 140 | love |  |
-| output | `code_audit.v1` |  | 3 of 140 | self, love, work |  |
-| output | `family_vote.v1` |  | 3 of 140 | work |  |
-| output | `purview.v1` |  | 3 of 140 | self, love, work |  |
-| output | `self_clock.v1` |  | 3 of 140 | self, love, work |  |
-| output | `self_reading.v1` |  | 3 of 140 | self, love, work |  |
-| output | `board_chapters.v1` |  | 2 of 140 | love, work |  |
-| output | `board_struggle.v1` |  | 2 of 140 | love, work |  |
-| output | `board_year.v1` |  | 2 of 140 | love, work |  |
-| output | `intent.v1` |  | 2 of 140 | general |  |
-| output | `kundli_digest.v1` |  | 2 of 140 | general |  |
-| output | `self_v3_cards.v1` |  | 2 of 140 | self |  |
-| output | `agreed_ledger.v1` |  | 1 of 140 | self |  |
-| output | `answer.markdown` |  | 1 of 140 | general |  |
-| output | `clock_sheet.v1` |  | 1 of 140 | self |  |
-| output | `day_bands.v1` |  | 1 of 140 | self |  |
-| output | `day_overlay.v1` |  | 1 of 140 | self |  |
-| output | `day_tables.v1` |  | 1 of 140 | self |  |
-| output | `kundli_activation.v1` |  | 1 of 140 | general |  |
-| output | `life_charter.v1` |  | 1 of 140 | general |  |
-| output | `life_promise.v1` |  | 1 of 140 | general |  |
-| output | `life_reading.v2` |  | 1 of 140 | general |  |
-| output | `life_windows.v1` |  | 1 of 140 | general |  |
-| output | `limbs.v1` |  | 1 of 140 | self |  |
-| output | `now_card.v1` |  | 1 of 140 | self |  |
-| output | `research_love_dashboard.v1` |  | 1 of 140 | love |  |
-| output | `research_self_dashboard.v1` |  | 1 of 140 | self |  |
-| output | `research_verifier_audit.v1` |  | 1 of 140 | self |  |
-| output | `research_work_dashboard.v1` |  | 1 of 140 | work |  |
-| output | `self_character_arc.v1` |  | 1 of 140 | self |  |
-| output | `self_personality_joy.v1` |  | 1 of 140 | self |  |
-| output | `self_v2_cards.v1` |  | 1 of 140 | self |  |
-| output | `self_v2_hero.v1` |  | 1 of 140 | self |  |
-| output | `self_v2_oracle.v1` |  | 1 of 140 | self |  |
-| output | `self_v2.body_facts` |  | 1 of 140 | self |  |
-| output | `self_v2.clock_resolution` |  | 1 of 140 | self |  |
-| output | `self_v2.mind_facts` |  | 1 of 140 | self |  |
-| output | `self_v2.period_frame` |  | 1 of 140 | self |  |
-| output | `self_v2.presence_facts` |  | 1 of 140 | self |  |
-| output | `self_v2.profile_pack` |  | 1 of 140 | self |  |
-| output | `self_v2.promise_ledger` |  | 1 of 140 | self |  |
-| output | `self_v2.risk_ledger` |  | 1 of 140 | self |  |
-| output | `self_v2.window_set` |  | 1 of 140 | self |  |
-| output | `self_v2.year_frame` |  | 1 of 140 | self |  |
-| output | `validator.v1` |  | 1 of 140 | general |  |
-| output | `vote_check.v1` |  | 1 of 140 | work |  |
-| agent | `self.reading_panel` |  | 24 of 140 | self |  |
-| agent | `lucky.scenario_windows` |  | 15 of 140 | self, love, work |  |
-| agent | `area.love_board` |  | 11 of 140 | love |  |
-| agent | `love.reading_panel` |  | 11 of 140 | love |  |
-| agent | `work.reading_panel` |  | 11 of 140 | work |  |
-| agent | `area.self_board` |  | 10 of 140 | self |  |
-| agent | `self.sub` |  | 10 of 140 | self |  |
-| agent | `area.career_inputs` |  | 9 of 140 | work |  |
-| agent | `area.career_map` |  | 9 of 140 | work |  |
-| agent | `family.dasha` |  | 4 of 140 | self, love, work |  |
-| agent | `family.rasi` |  | 4 of 140 | self, love, work |  |
-| agent | `family.sky` |  | 4 of 140 | self, love, work |  |
-| agent | `family.varga` |  | 4 of 140 | self, love, work |  |
-| agent | `family.year` |  | 4 of 140 | self, love, work |  |
-| agent | `life.dashboard` |  | 4 of 140 | general |  |
-| agent | `self.personalizer` |  | 3 of 140 | self |  |
-| agent | `digest.activation` |  | 1 of 140 | general |  |
-| agent | `digest.annual_set` |  | 1 of 140 | general |  |
-| agent | `digest.build` |  | 1 of 140 | general |  |
-| agent | `lineman.love` |  | 1 of 140 | love |  |
-| agent | `lineman.self` |  | 1 of 140 | self |  |
-| agent | `lineman.work` |  | 1 of 140 | work |  |
-| agent | `love.reading_oracle` |  | 1 of 140 | love |  |
-| agent | `lucky.day_overlay` |  | 1 of 140 | self |  |
-| agent | `lucky.day_tables` |  | 1 of 140 | self |  |
-| agent | `reading.analyst.annual` |  | 1 of 140 | general |  |
-| agent | `reading.analyst.dasha` |  | 1 of 140 | general |  |
-| agent | `reading.analyst.nakshatra` |  | 1 of 140 | general |  |
-| agent | `reading.analyst.prashna` |  | 1 of 140 | general |  |
-| agent | `reading.analyst.promise` |  | 1 of 140 | general |  |
-| agent | `reading.analyst.transit` |  | 1 of 140 | general |  |
-| agent | `reading.clarify` |  | 1 of 140 | general |  |
-| agent | `reading.clarify_monitor` |  | 1 of 140 | general |  |
-| agent | `reading.clock` |  | 1 of 140 | self |  |
-| agent | `reading.code.jaimini` |  | 1 of 140 | general |  |
-| agent | `reading.code.person` |  | 1 of 140 | general |  |
-| agent | `reading.code.strength_yoga` |  | 1 of 140 | general |  |
-| agent | `reading.code.varga_dynamics` |  | 1 of 140 | general |  |
-| agent | `reading.concordance` |  | 1 of 140 | self |  |
-| agent | `reading.intake` |  | 1 of 140 | general |  |
-| agent | `reading.oracle` |  | 1 of 140 | general |  |
-| agent | `reading.reader` |  | 1 of 140 | general |  |
-| agent | `reading.synth` |  | 1 of 140 | general |  |
-| agent | `reading.validator` |  | 1 of 140 | general |  |
-| agent | `research.love_dashboard_builder` |  | 1 of 140 | love |  |
-| agent | `research.self_dashboard_builder` |  | 1 of 140 | self |  |
-| agent | `research.technical_verifier` |  | 1 of 140 | self |  |
-| agent | `research.work_dashboard_builder` |  | 1 of 140 | work |  |
-| agent | `self.card.oracle` |  | 1 of 140 | self |  |
-| agent | `self.card.personalizer` |  | 1 of 140 | self |  |
-| agent | `self.now` |  | 1 of 140 | self |  |
-| agent | `self.oracle.v2` |  | 1 of 140 | self |  |
-| agent | `self.oracle.v3` |  | 1 of 140 | self |  |
-| agent | `self.reading_oracle` |  | 1 of 140 | self |  |
-| agent | `work.reading_oracle` |  | 1 of 140 | work |  |
+| reader | `planet/planet_card` | natal | 79 of 142 | general, self, love, work | 46 |
+| reader | `activation/activation_row` | dasha | 67 of 142 | general, self, love, work | 44 |
+| reader | `house/house_card` | natal | 61 of 142 | general, self, love, work | 40 |
+| reader | `point/point_row` | natal | 34 of 142 | general, self, love, work | 26 |
+| reader | `yoga/yoga_row` | natal | 31 of 142 | general, self, love, work | 18 |
+| reader | `annual/annual_row` | annual | 26 of 142 | general, self, love, work | 17 |
+| reader | `transit/transit_row` | transit | 21 of 142 | general, self, love, work | 11 |
+| reader | `panchang/panchang_day` | daily | 17 of 142 | self, love, work | 3 |
+| reader | `findings/findings_in` | question | 14 of 142 | general, self, love, work | 10 |
+| reader | `star/star_profile` | natal | 14 of 142 | general, self, love, work | 8 |
+| reader | `text/text_in` | question | 4 of 142 | general | 3 |
+| reader | `person/person_pack` | natal | 2 of 142 | self | 2 |
+| reader | `prashna/prashna_card` | question | 2 of 142 | general | 2 |
+| prompt | `common/reader-system.md` |  | 3 of 142 | self |  |
+| prompt | `oracle/self.md` |  | 3 of 142 | self, love, work |  |
+| prompt | `personalizer/self.md` |  | 2 of 142 | self |  |
+| prompt | `db:clarify.system` |  | 1 of 142 | general |  |
+| prompt | `annual.md` |  | 1 of 142 | general |  |
+| prompt | `concordance.md` |  | 1 of 142 | self |  |
+| prompt | `intake.md` |  | 1 of 142 | general |  |
+| prompt | `oracle/self-areas-v2.md` |  | 1 of 142 | self |  |
+| prompt | `oracle/self-cards-v3.md` |  | 1 of 142 | self |  |
+| prompt | `oracle/system.md` |  | 1 of 142 | general |  |
+| prompt | `oracle/validator.md` |  | 1 of 142 | general |  |
+| prompt | `prashna.md` |  | 1 of 142 | general |  |
+| prompt | `readers/_shared.md` |  | 1 of 142 | general |  |
+| prompt | `v2/dasha.md` |  | 1 of 142 | general |  |
+| prompt | `v2/nakshatra.md` |  | 1 of 142 | general |  |
+| prompt | `v2/promise.md` |  | 1 of 142 | general |  |
+| prompt | `v2/transit.md` |  | 1 of 142 | general |  |
+| output | `area_board.v1` |  | 16 of 142 | self, love |  |
+| output | `windows.v1` |  | 13 of 142 | self, love, work |  |
+| output | `self_v2.area_brief` |  | 12 of 142 | self |  |
+| output | `findings.v2` |  | 11 of 142 | general |  |
+| output | `board_panel.v1` |  | 8 of 142 | love, work |  |
+| output | `self_panel.v1` |  | 8 of 142 | self |  |
+| output | `career_map.v1` |  | 5 of 142 | work |  |
+| output | `board_diagnosis.v1` |  | 3 of 142 | self, love, work |  |
+| output | `board_subarea.v1` |  | 3 of 142 | love |  |
+| output | `code_audit.v1` |  | 3 of 142 | self, love, work |  |
+| output | `family_vote.v1` |  | 3 of 142 | work |  |
+| output | `purview.v1` |  | 3 of 142 | self, love, work |  |
+| output | `self_clock.v1` |  | 3 of 142 | self, love, work |  |
+| output | `self_reading.v1` |  | 3 of 142 | self, love, work |  |
+| output | `board_chapters.v1` |  | 2 of 142 | love, work |  |
+| output | `board_struggle.v1` |  | 2 of 142 | love, work |  |
+| output | `board_year.v1` |  | 2 of 142 | love, work |  |
+| output | `intent.v1` |  | 2 of 142 | general |  |
+| output | `kundli_digest.v1` |  | 2 of 142 | general |  |
+| output | `self_v3_cards.v1` |  | 2 of 142 | self |  |
+| output | `agreed_ledger.v1` |  | 1 of 142 | self |  |
+| output | `answer.markdown` |  | 1 of 142 | general |  |
+| output | `clock_sheet.v1` |  | 1 of 142 | self |  |
+| output | `day_bands.v1` |  | 1 of 142 | self |  |
+| output | `day_overlay.v1` |  | 1 of 142 | self |  |
+| output | `day_tables.v1` |  | 1 of 142 | self |  |
+| output | `kundli_activation.v1` |  | 1 of 142 | general |  |
+| output | `life_charter.v1` |  | 1 of 142 | general |  |
+| output | `life_promise.v1` |  | 1 of 142 | general |  |
+| output | `life_reading.v2` |  | 1 of 142 | general |  |
+| output | `life_windows.v1` |  | 1 of 142 | general |  |
+| output | `limbs.v1` |  | 1 of 142 | self |  |
+| output | `love_relationship_arc.v1` |  | 1 of 142 | love |  |
+| output | `now_card.v1` |  | 1 of 142 | self |  |
+| output | `research_love_dashboard.v1` |  | 1 of 142 | love |  |
+| output | `research_self_dashboard.v1` |  | 1 of 142 | self |  |
+| output | `research_verifier_audit.v1` |  | 1 of 142 | self |  |
+| output | `research_work_dashboard.v1` |  | 1 of 142 | work |  |
+| output | `self_character_arc.v1` |  | 1 of 142 | self |  |
+| output | `self_personality_joy.v1` |  | 1 of 142 | self |  |
+| output | `self_v2_cards.v1` |  | 1 of 142 | self |  |
+| output | `self_v2_hero.v1` |  | 1 of 142 | self |  |
+| output | `self_v2_oracle.v1` |  | 1 of 142 | self |  |
+| output | `self_v2.body_facts` |  | 1 of 142 | self |  |
+| output | `self_v2.clock_resolution` |  | 1 of 142 | self |  |
+| output | `self_v2.mind_facts` |  | 1 of 142 | self |  |
+| output | `self_v2.period_frame` |  | 1 of 142 | self |  |
+| output | `self_v2.presence_facts` |  | 1 of 142 | self |  |
+| output | `self_v2.profile_pack` |  | 1 of 142 | self |  |
+| output | `self_v2.promise_ledger` |  | 1 of 142 | self |  |
+| output | `self_v2.risk_ledger` |  | 1 of 142 | self |  |
+| output | `self_v2.window_set` |  | 1 of 142 | self |  |
+| output | `self_v2.year_frame` |  | 1 of 142 | self |  |
+| output | `validator.v1` |  | 1 of 142 | general |  |
+| output | `vote_check.v1` |  | 1 of 142 | work |  |
+| output | `work_character_arc.v1` |  | 1 of 142 | work |  |
+| agent | `self.reading_panel` |  | 24 of 142 | self |  |
+| agent | `lucky.scenario_windows` |  | 15 of 142 | self, love, work |  |
+| agent | `area.love_board` |  | 12 of 142 | love |  |
+| agent | `love.reading_panel` |  | 11 of 142 | love |  |
+| agent | `work.reading_panel` |  | 11 of 142 | work |  |
+| agent | `area.career_inputs` |  | 10 of 142 | work |  |
+| agent | `area.career_map` |  | 10 of 142 | work |  |
+| agent | `area.self_board` |  | 10 of 142 | self |  |
+| agent | `self.sub` |  | 10 of 142 | self |  |
+| agent | `family.dasha` |  | 4 of 142 | self, love, work |  |
+| agent | `family.rasi` |  | 4 of 142 | self, love, work |  |
+| agent | `family.sky` |  | 4 of 142 | self, love, work |  |
+| agent | `family.varga` |  | 4 of 142 | self, love, work |  |
+| agent | `family.year` |  | 4 of 142 | self, love, work |  |
+| agent | `life.dashboard` |  | 4 of 142 | general |  |
+| agent | `self.personalizer` |  | 3 of 142 | self |  |
+| agent | `digest.activation` |  | 1 of 142 | general |  |
+| agent | `digest.annual_set` |  | 1 of 142 | general |  |
+| agent | `digest.build` |  | 1 of 142 | general |  |
+| agent | `lineman.love` |  | 1 of 142 | love |  |
+| agent | `lineman.self` |  | 1 of 142 | self |  |
+| agent | `lineman.work` |  | 1 of 142 | work |  |
+| agent | `love.reading_oracle` |  | 1 of 142 | love |  |
+| agent | `lucky.day_overlay` |  | 1 of 142 | self |  |
+| agent | `lucky.day_tables` |  | 1 of 142 | self |  |
+| agent | `reading.analyst.annual` |  | 1 of 142 | general |  |
+| agent | `reading.analyst.dasha` |  | 1 of 142 | general |  |
+| agent | `reading.analyst.nakshatra` |  | 1 of 142 | general |  |
+| agent | `reading.analyst.prashna` |  | 1 of 142 | general |  |
+| agent | `reading.analyst.promise` |  | 1 of 142 | general |  |
+| agent | `reading.analyst.transit` |  | 1 of 142 | general |  |
+| agent | `reading.clarify` |  | 1 of 142 | general |  |
+| agent | `reading.clarify_monitor` |  | 1 of 142 | general |  |
+| agent | `reading.clock` |  | 1 of 142 | self |  |
+| agent | `reading.code.jaimini` |  | 1 of 142 | general |  |
+| agent | `reading.code.person` |  | 1 of 142 | general |  |
+| agent | `reading.code.strength_yoga` |  | 1 of 142 | general |  |
+| agent | `reading.code.varga_dynamics` |  | 1 of 142 | general |  |
+| agent | `reading.concordance` |  | 1 of 142 | self |  |
+| agent | `reading.intake` |  | 1 of 142 | general |  |
+| agent | `reading.oracle` |  | 1 of 142 | general |  |
+| agent | `reading.reader` |  | 1 of 142 | general |  |
+| agent | `reading.synth` |  | 1 of 142 | general |  |
+| agent | `reading.validator` |  | 1 of 142 | general |  |
+| agent | `research.love_dashboard_builder` |  | 1 of 142 | love |  |
+| agent | `research.self_dashboard_builder` |  | 1 of 142 | self |  |
+| agent | `research.technical_verifier` |  | 1 of 142 | self |  |
+| agent | `research.work_dashboard_builder` |  | 1 of 142 | work |  |
+| agent | `self.card.oracle` |  | 1 of 142 | self |  |
+| agent | `self.card.personalizer` |  | 1 of 142 | self |  |
+| agent | `self.now` |  | 1 of 142 | self |  |
+| agent | `self.oracle.v2` |  | 1 of 142 | self |  |
+| agent | `self.oracle.v3` |  | 1 of 142 | self |  |
+| agent | `self.reading_oracle` |  | 1 of 142 | self |  |
+| agent | `work.reading_oracle` |  | 1 of 142 | work |  |
 
 ## 9. Recipe families
 
@@ -1396,6 +1416,7 @@ flowchart LR
 | `love.reading.purview` | 1 | `activation/activation_row`, `findings/findings_in`, `planet/planet_card`, `yoga/yoga_row` | code | `purview.v1` | `love.reading_panel` | question |
 | `love.reading.struggle` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card`, `yoga/yoga_row` | code | `board_struggle.v1` | `love.reading_panel` | dasha |
 | `love.reading.year` | 1 | `annual/annual_row` | code | `board_year.v1` | `love.reading_panel` | annual |
+| `love.relationship_arc` | 1 | `activation/activation_row`, `annual/annual_row`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `love_relationship_arc.v1` | `area.love_board` | dasha |
 | `love.transit` | 1 | `house/house_card`, `transit/transit_row` | code | `area_board.v1` | `area.love_board` | transit |
 | `love.varga` | 1 | `house/house_card`, `planet/planet_card`, `point/point_row` | code | `area_board.v1` | `area.love_board` | natal |
 | `lucky.avoid_bands` | 1 | `panchang/panchang_day` | code | `day_bands.v1` | `lucky.scenario_windows` | daily |
@@ -1412,7 +1433,7 @@ flowchart LR
 | `self.affliction` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card`, `yoga/yoga_row` | code | `area_board.v1` | `area.self_board` | dasha |
 | `self.annual` | 1 | `annual/annual_row` | code | `area_board.v1` | `area.self_board` | annual |
 | `self.card.reading` | 1 | `activation/activation_row` | `common/reader-system.md` | `self_v3_cards.v1` | `self.card.oracle`, `self.card.personalizer` | dasha |
-| `self.character_arc` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `self_character_arc.v1` | `area.self_board` | dasha |
+| `self.character_arc` | 1 | `activation/activation_row`, `annual/annual_row`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `self_character_arc.v1` | `area.self_board` | dasha |
 | `self.nakshatra` | 1 | `house/house_card`, `planet/planet_card`, `star/star_profile` | code | `area_board.v1` | `area.self_board` | natal |
 | `self.now` | 1 | `activation/activation_row` | `common/reader-system.md` | `now_card.v1` | `self.now` | dasha |
 | `self.personality_joy` | 1 | `house/house_card`, `planet/planet_card`, `star/star_profile` | code | `self_personality_joy.v1` | `area.self_board` | natal |
@@ -1446,6 +1467,7 @@ flowchart LR
 | `self.v3.cards` | 1 | `activation/activation_row` | `oracle/self-cards-v3.md` | `self_v3_cards.v1` | `self.oracle.v3`, `self.personalizer` | dasha |
 | `self.varga` | 1 | `house/house_card`, `planet/planet_card`, `point/point_row` | code | `area_board.v1` | `area.self_board` | natal |
 | `work.annual_family` | 1 | `annual/annual_row` | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | annual |
+| `work.character_arc` | 1 | `activation/activation_row`, `annual/annual_row`, `house/house_card`, `planet/planet_card`, `point/point_row` | code | `work_character_arc.v1` | `area.career_inputs`, `area.career_map` | dasha |
 | `work.conditional_family` | 1 | `activation/activation_row` | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | dasha |
 | `work.d10_check` | 1 | `activation/activation_row`, `house/house_card`, `planet/planet_card` | code | `vote_check.v1` | `area.career_inputs`, `area.career_map` | dasha |
 | `work.karaka_family` | 1 | `activation/activation_row`, `planet/planet_card`, `point/point_row` | code | `family_vote.v1` | `area.career_inputs`, `area.career_map` | dasha |
@@ -1470,7 +1492,7 @@ the same stored output.
 |---|---|---|---|---|
 | natal | open: valid until the digest version or the contract changes | 34 | 29 | 5 |
 | annual | the running year chart (fallback `TECHNIQUE_ANNUAL_FALLBACK_DAYS`, default 90 days) | 11 | 10 | 1 |
-| dasha | the running dasha period (fallback `TECHNIQUE_DASHA_FALLBACK_DAYS`, default 30 days) | 44 | 43 | 1 |
+| dasha | the running dasha period (fallback `TECHNIQUE_DASHA_FALLBACK_DAYS`, default 30 days) | 46 | 45 | 1 |
 | daily | the local day at the place (UTC day when no place is given) | 17 | 17 | 0 |
 | transit | a `TECHNIQUE_TRANSIT_WINDOW_HOURS` window aligned to the clock (default 2 hours) | 20 | 19 | 1 |
 | question | not reusable: made for each question | 14 | 11 | 3 |
@@ -1482,12 +1504,12 @@ Reader pieces applied with many different filters: each filter is free text toda
 
 | Reader piece | Distinct filters |
 |---|---|
-| `planet/planet_card` | 44 |
-| `activation/activation_row` | 43 |
-| `house/house_card` | 39 |
-| `point/point_row` | 24 |
+| `planet/planet_card` | 46 |
+| `activation/activation_row` | 44 |
+| `house/house_card` | 40 |
+| `point/point_row` | 26 |
 | `yoga/yoga_row` | 18 |
-| `annual/annual_row` | 15 |
+| `annual/annual_row` | 17 |
 | `transit/transit_row` | 11 |
 | `findings/findings_in` | 10 |
 | `star/star_profile` | 8 |
@@ -1524,6 +1546,7 @@ Pieces used by one technique only (candidates to fold into a shared piece, or ge
 - `output:life_reading.v2`
 - `output:life_windows.v1`
 - `output:limbs.v1`
+- `output:love_relationship_arc.v1`
 - `output:now_card.v1`
 - `output:research_love_dashboard.v1`
 - `output:research_self_dashboard.v1`
@@ -1546,6 +1569,7 @@ Pieces used by one technique only (candidates to fold into a shared piece, or ge
 - `output:self_v2.year_frame`
 - `output:validator.v1`
 - `output:vote_check.v1`
+- `output:work_character_arc.v1`
 - `agent:digest.activation`
 - `agent:digest.annual_set`
 - `agent:digest.build`
