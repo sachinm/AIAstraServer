@@ -23,20 +23,22 @@ export function resolveWorkspacePath(repoName: WorkspaceRepo, subPath = ''): str
   }
 
   // 2. Candidate directory roots across local development and worktree layouts
-  // Prioritize worktrees where origin/develop and active milestone branches reside
+  // Prioritize active execution directory (if in target repo), followed by latest milestone worktrees
+  const isCurrentRepo = process.cwd().toLowerCase().includes(repoName.toLowerCase());
   const candidates: string[] = [
-    // Worktree locations first (active Phase 1 / develop worktrees)
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_m1`, subPath),
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_m2`, subPath),
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_m3`, subPath),
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_m4`, subPath),
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_m5`, subPath),
-    path.resolve(process.cwd(), '..', 'worktrees', `${repoName}_e2e`, subPath),
-    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m1`, subPath),
-    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m2`, subPath),
-    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m3`, subPath),
-    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m4`, subPath),
+    // Current working directory only if executing inside the target repository or its worktree
+    ...(isCurrentRepo ? [path.resolve(process.cwd(), subPath)] : []),
+    // Worktree locations (prioritize latest integrated milestone m5 -> m4 -> m3 -> m2 -> m1)
+    path.resolve(process.cwd(), '..', `${repoName}_m5`, subPath),
+    path.resolve(process.cwd(), '..', `${repoName}_m4`, subPath),
+    path.resolve(process.cwd(), '..', `${repoName}_m3`, subPath),
+    path.resolve(process.cwd(), '..', `${repoName}_m2`, subPath),
+    path.resolve(process.cwd(), '..', `${repoName}_m1`, subPath),
     path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m5`, subPath),
+    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m4`, subPath),
+    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m3`, subPath),
+    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m2`, subPath),
+    path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_m1`, subPath),
     path.resolve('C:/Users/Owner/Documents/work/worktrees', `${repoName}_e2e`, subPath),
     // Standard workspace directories
     path.resolve(process.cwd(), '..', repoName, subPath),
