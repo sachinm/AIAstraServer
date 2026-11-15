@@ -8,7 +8,7 @@
  */
 
 /** Fields no reader needs: engine internals and day numbers. Cutting them is most of the size saving. */
-const DROP = /(_jd$|^sign_index$|^nakshatra_index$|^chart_method$|^notes?$|^rule_basis$|^at_used$|^return_instant$|^before_birth$|^duration_years$|^balance_at_birth$|^rule$|^unit$|^components$|^orientation$|^levels$|^level$|^id$)/;
+const DROP = /(_jd$|^sign_index$|^nakshatra_index$|^chart_method$|^notes?$|^rule_basis$|^at_used$|^return_instant$|^before_birth$|^duration_years$|^balance_at_birth$|^rule$|^unit$|^orientation$|^levels$|^level$|^id$)/;
 /** The field that names a row, in order of preference. */
 const ROW_NAMES = ['body', 'planet', 'name', 'label', 'key', 'house', 'id'];
 

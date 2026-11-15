@@ -5,7 +5,9 @@
  * builder selects, counts, joins and dates engine fields (doc 46 §C.3; tests/unit/reading/digest/noAstrologyInNode.test.ts).
  */
 
-export const DIGEST_VERSION = 'd1.2026-11-09';
+import { getDigestVersion } from '../../config/env.js';
+
+export const DIGEST_VERSION = getDigestVersion();
 
 export type DigestSection = 'house' | 'planet' | 'yoga' | 'point' | 'annual' | 'star';
 export const DIGEST_SECTIONS: readonly DigestSection[] = ['house', 'planet', 'yoga', 'point', 'annual', 'star'];
@@ -31,8 +33,19 @@ export interface HouseCard {
   lordHouse: number | null;
   lordSign: string | null;
   lordDignity: string | null;
+  /** true when the house lord is astronomically retrograde in this chart instant */
+  lordRetro?: boolean | null;
+  /** true when the house lord is combust in this chart instant */
+  lordCombust?: boolean | null;
   coLord: string | null;
-  occupants: Array<{ planet: string; dignity: string | null; nature: string | null }>;
+  occupants: Array<{
+    planet: string;
+    dignity: string | null;
+    nature: string | null;
+    retro?: boolean | null;
+    combust?: boolean | null;
+    motionState?: string | null;
+  }>;
   aspectedGraha: string[];
   aspectedRasi: string[];
   argala: { primary: string[]; secondary: string[]; obstructed: string[] } | null;
@@ -86,6 +99,15 @@ export interface SunProximity {
   zone: string | null;
 }
 
+export interface ShadbalaComponentsDigest {
+  sthana?: number | null;
+  dig?: number | null;
+  kala?: number | null;
+  cheshta?: number | null;
+  naisargika?: number | null;
+  drik?: number | null;
+}
+
 export interface PlanetCard {
   varga: string;
   planet: string;
@@ -97,6 +119,26 @@ export interface PlanetCard {
   starLord: string | null;
   dignity: string | null;
   retro: boolean | null;
+  /** true on Rahu/Ketu (mean nodal backward motion) while `retro` remains false for Parashari Vakra/Cheshta rules */
+  isMeanRetrograde?: boolean | null;
+  /** 'direct' | 'vakra' | 'pratiloma' as emitted by the engine */
+  motionKind?: string | null;
+  /** longitudinal speed in degrees/day from the engine */
+  speedDegPerDay?: number | null;
+  /** true when |speed| <= station threshold in the engine (Stambhana / Vikala) */
+  isStationary?: boolean | null;
+  /** Station classification ('entry_station' | 'exit_station' | null) from the engine */
+  stationKind?: string | null;
+  /** 8-fold Ashtagati state ('vikala' | 'anuvakra' | 'vakra' | 'mandatara' | 'manda' | 'sama' | 'chara' | 'atichara' | 'pratiloma') */
+  motionState?: string | null;
+  /** Cheshta Bala in virupas (0..60) from the engine */
+  cheshtaBala?: number | null;
+  /** Varga-specific reckoning direction ('direct' | 'reverse') from the engine */
+  vargaReckoning?: string | null;
+  /** true when near an amsa boundary in D1 for this varga */
+  vargaSandhi?: boolean | null;
+  /** Engine-classified Vakra × Dignity regime ('direct' | 'uccha_vakra' | 'neecha_vakra' | 'swakshetra_vakra' | 'anuvakra' | 'vikala_stationary' | 'vakra') */
+  vakraDignityRegime?: string | null;
   combust: boolean | null;
   war: boolean | null;
   dispositor: string | null;
@@ -108,6 +150,7 @@ export interface PlanetCard {
   shadbalaRatio: number | null;
   shadbalaRank: number | null;
   shadbalaRupa?: number | null;
+  shadbalaComponents?: ShadbalaComponentsDigest | null;
   natural: string | null;
   functional: string | null;
   owns: number[];
@@ -152,16 +195,43 @@ export interface PointRow {
   planet?: string;
 }
 
+export interface AnnualPlanetCard {
+  planet: string;
+  sign: string | null;
+  house: number | null;
+  degree: number | null;
+  dignity: string | null;
+  retro: boolean | null;
+  isStationary?: boolean | null;
+  stationKind?: string | null;
+  isMeanRetrograde?: boolean | null;
+  motionKind?: string | null;
+  motionState?: string | null;
+  speedDegPerDay?: number | null;
+  cheshtaBala?: number | null;
+  combust?: boolean | null;
+  vargaReckoning?: string | null;
+  vargaSandhi?: boolean | null;
+}
+
 export interface AnnualRow {
   kind: 'TP' | 'VP';
   year: number;
   varga: string;
   lagna: string | null;
   houses: HouseCard[];
+  /** Planet placements and motion states at the annual return moment (`ret_jd`), keyed by planet code */
+  planets?: Record<string, AnnualPlanetCard>;
   dashas: Array<{ system: string; periods: Array<{ lord: string; from: string; to: string }> }>;
   sahams: Array<{ name: string; sign: string | null; house: number | null }>;
   muntha?: { sign: string | null; house: number | null } | null;
   yearLord?: string | null;
+  yearLordRetro?: boolean | null;
+  yearLordMotionState?: string | null;
+  yearLordCombust?: boolean | null;
+  horaLord?: string | null;
+  horaLordRetro?: boolean | null;
+  lagnaLordRetro?: boolean | null;
   tajakaYogas?: Array<{ id: string; present: boolean }>;
   /**
    * The year's return moment and the next one, local 'YYYY-MM-DD HH:MM:SS' as the engine wrote them: TP rows read
@@ -174,6 +244,13 @@ export interface AnnualRow {
   startBasis?: 'tp_start' | 'valid_from';
 }
 
+export interface PendingKarmaSource {
+  house: number;
+  planet: string | null;
+  reason?: string;
+  source?: string;
+}
+
 export interface StarProfile {
   moonStar: string | null;
   moonStarLord: string | null;
@@ -182,6 +259,8 @@ export interface StarProfile {
   gandanta: string[];
   /** Pending karma houses (Saturn house, Saturn-aspected houses, Saturn-star houses, retrograde houses) from avasthas.lunar_astro.pending_karma */
   pendingKarmaHouses?: number[];
+  /** Per-house attribution (retrograde vs Saturn) when emitted by the engine */
+  pendingKarmaSources?: PendingKarmaSource[];
 }
 
 export interface DigestView {

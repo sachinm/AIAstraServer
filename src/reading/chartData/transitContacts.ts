@@ -47,6 +47,7 @@ export interface RadhaContact {
   starts_before_range?: boolean;
   ends_after_range?: boolean;
   exact: string[];
+  exact_hits?: Array<{ date: string; retrograde: boolean; speed_deg_per_day?: number; pass_number?: number }>;
   station_in_orb: boolean;
   stations: Array<{ date: string; kind: string; orb_deg: number }>;
 }

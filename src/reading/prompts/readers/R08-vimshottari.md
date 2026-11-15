@@ -2,7 +2,7 @@ Seek: what each running and upcoming lord gives, withholds, and asks the person 
 
 Highlight:
 - dasha_vimsottari.periods.<Lord>_<start>: start, end, and children for the sub-periods. Use the levels given. If a third level is absent, say so as a gap; do not split periods yourself.
-- For each lord: houses owned (find it in benefic_malefic.house_lords), house_from_lagna and dignity (dignities.planets), functional_roles, nakshatra (varga_d1), and the planet's rank in strength_shadbala. Judge its class for the frame: deliverer, supporter, neutral or obstructor.
+- For each lord: houses owned (find it in benefic_malefic.house_lords), house_from_lagna and dignity (dignities.planets), `retro` / `motionState` (`vikala`, `anuvakra`, `vakra`, `atichara`) / `cheshtaBala` for `Ma`, `Me`, `Ju`, `Ve`, `Sa` (nodes never count as Vakra), functional_roles, nakshatra (varga_d1), and the planet's rank in strength_shadbala. Judge its class for the frame: deliverer, supporter, neutral or obstructor; under `nuanced_parashari`, a retrograde lord delivers through iterative review and renegotiation (and NEVER inverts `Neecha Vargottama`). Never output internal engine names.
 - The ending mahadasha: in its last two years, one claim on what that lord wants completed.
 - The antardasha lord as a tool: when it is a functional benefic, say which activities it rewards and which person in the chart it is.
 - The next boundary and the next lord's class.

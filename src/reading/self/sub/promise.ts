@@ -5,6 +5,7 @@
  * people come from the stored houses through `SELF.matters` / `SELF.people`. The engine stores no strength grade for a
  * yoga, so every entry is 2 and a gap says so.
  */
+import { evaluateVakraDignityRegime, getPlanetVakraPlaybook, isTrueVakraCapable } from '../../dasha/retrogradeRules.js';
 import { mattersOf, peopleOf, promiseKindOf, SELF_MATTERS } from '../v2words.js';
 import type { PromiseEntry, PromiseLedger, Strength } from '../v2types.js';
 import { planetKey, yogaKey, type SubEnv } from './common.js';
@@ -80,6 +81,80 @@ export function subPromise(env: SubEnv): PromiseLedger {
         who: peopleOf([card.house, ...card.owns]),
         strength: UNGRADED,
         evidence: [planetKey('D1', p)],
+      });
+    }
+  }
+  for (const p of PLANETS) {
+    if (!isTrueVakraCapable(p)) continue;
+    const card = env.view.planet('D1', p);
+    const d9 = env.view.planet('D9', p);
+    if (!card || card.house == null) continue;
+    const matter = SELF_MATTERS[card.house];
+    if (!matter) continue;
+    const isD1Debil = /debil|neecha|fall/i.test(card.dignity ?? '');
+    const isD9Debil = /debil|neecha|fall/i.test(d9?.dignity ?? '');
+    const isVargottama = Boolean(card.sign && d9?.sign && card.sign === d9.sign);
+    const isNeechaVargottama = isVargottama && isD1Debil && isD9Debil;
+    const vakra = evaluateVakraDignityRegime({
+      planet: p,
+      d1Card: card,
+      d9Card: d9,
+      isMature: true,
+      isNeechaVargottama,
+    });
+    const playbook = getPlanetVakraPlaybook(p);
+    if ((!vakra.isRetrograde && !vakra.isStationary) || !playbook) continue;
+    const pkD1 = planetKey('D1', p);
+    const ev = [pkD1, ...(d9 ? [planetKey('D9', p)] : [])];
+    const who = peopleOf([card.house, ...card.owns]);
+    if (isNeechaVargottama) {
+      // STRICT INVARIANT: never invert or cancel Neecha Vargottama
+      entries.push({
+        id: `promise:${p}.neecha_vargottama_vakra`,
+        matter,
+        kind: 'knot',
+        source: { planet: p, house: card.house },
+        who,
+        strength: 3,
+        evidence: ev,
+      });
+    } else if (vakra.regime === 'neecha_vakra') {
+      const targetKnot = entries.find((e) => e.kind === 'knot' && e.evidence.includes(pkD1));
+      entries.push({
+        id: `promise:${p}.neecha_vakra`,
+        matter,
+        kind: 'grace',
+        source: { planet: p, house: card.house },
+        who,
+        strength: UNGRADED,
+        ...(targetKnot ? { cancels: targetKnot.id } : {}),
+        evidence: ev,
+      });
+    } else if (
+      vakra.regime === 'vikala_stationary' ||
+      (vakra.regime === 'uccha_vakra' && (card.functional ?? '').toLowerCase() === 'malefic')
+    ) {
+      entries.push({
+        id: `promise:${p}.${vakra.regime}`,
+        matter,
+        kind: 'knot',
+        source: { planet: p, house: card.house },
+        who,
+        strength: vakra.isStationary ? 3 : UNGRADED,
+        evidence: ev,
+      });
+    } else if (
+      vakra.regime === 'swakshetra_vakra' ||
+      (vakra.isRetrograde && (card.functional ?? '').toLowerCase() !== 'malefic')
+    ) {
+      entries.push({
+        id: `promise:${p}.${vakra.regime}`,
+        matter,
+        kind: 'gift',
+        source: { planet: p, house: card.house },
+        who,
+        strength: UNGRADED,
+        evidence: ev,
       });
     }
   }

@@ -13,8 +13,10 @@
  * Nothing here derives astrology: it compares engine labels and numbers with the stated rules.
  */
 import type { PrismaClient } from '@prisma/client';
+import { getRetrogradeScoreWeights } from '../../config/env.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
-import type { EvidencePack } from '../packs/selector.js';
+import { evaluateVakraDignityRegime, isTrueVakraCapable } from '../dasha/retrogradeRules.js';
+import { resolveEvidence, type EvidencePack } from '../packs/selector.js';
 import type { DigestPackSection } from '../packs/digestSource.js';
 import type { Finding } from '../nodes/specialists.js';
 import type { ReaderOutput } from '../oracle/runReader.js';
@@ -101,6 +103,8 @@ const dignityRule = (label: string | null | undefined): CodeReaderRuleId | null 
 };
 
 const sectionOf = (pack: EvidencePack): DigestPackSection | null => (pack.sections as { digest?: DigestPackSection }).digest ?? null;
+const existingEvidence = (pack: EvidencePack, ids: readonly string[]): string[] =>
+  ids.filter((id) => Boolean(id) && resolveEvidence(pack, id) !== undefined);
 
 // ---------------------------------------------------------------- varga dynamics
 
@@ -115,15 +119,99 @@ export function vargaDynamics(pack: EvidencePack): CodeFinding {
       const lord = d1.lord;
       const inD1 = d.planet.D1?.[lord];
       const inV = d.planet[v]?.[lord];
+      const d9Card = v === 'D9' ? inV : d.planet.D9?.[lord];
+      const vakra = evaluateVakraDignityRegime(lord, inD1, d9Card);
       const k1 = dignityClass(inD1?.dignity ?? d1.lordDignity);
       const kv = dignityClass(inV?.dignity);
       const ev1 = inD1 ? `digest.planet.D1.${lord}.dignity` : `digest.house.D1.h${h}.lordDignity`;
       const evv = `digest.planet.${v}.${lord}.dignity`;
-      if (inV && k1 !== 'other' && k1 === kv) {
+      const sameSignD9 = Boolean(v === 'D9' && inD1?.sign && inV?.sign && inD1.sign === inV.sign);
+      const isNeechaVargottama = Boolean(inV && (vakra.isNeechaVargottama || (sameSignD9 && k1 === 'weak' && kv === 'weak')));
+
+      // CRITICAL: check Neecha Vargottama BEFORE any Vargottama boost — never invert Neecha Vargottama into strength.
+      if (inV && isNeechaVargottama) {
+        const nvEv = existingEvidence(pack, [
+          ev1,
+          evv,
+          `digest.planet.D1.${lord}.sign`,
+          `digest.planet.${v}.${lord}.sign`,
+          ...(inD1?.retro === true ? [`digest.planet.D1.${lord}.retro`] : []),
+        ]);
+        if (nvEv.length > 0) {
+          out.push(
+            claim(
+              'varga_agree_weak',
+              `House ${h} lord ${lord} is debilitated in the same sign across D1 and D9 (Neecha Vargottama)${inD1?.retro ? ' while retrograde' : ''}: fixed Drudha Karma boundary, never inverted into strength.`,
+              nvEv,
+              { topic: `house ${h}` },
+            ),
+          );
+        }
+      } else if (inV && sameSignD9 && k1 !== 'weak' && kv !== 'weak') {
+        if (k1 === 'strong' && kv === 'strong') {
+          out.push(
+            claim(
+              'varga_agree_strong',
+              `House ${h} lord ${lord} is ${inD1?.dignity ?? d1.lordDignity} in D1 and ${inV.dignity} in ${v}: the ${v} confirms the D1 promise.`,
+              [ev1, evv],
+              { topic: `house ${h}` },
+            ),
+          );
+        } else {
+          const vgEv = existingEvidence(pack, [
+            `digest.planet.D1.${lord}.sign`,
+            `digest.planet.${v}.${lord}.sign`,
+            ev1,
+            evv,
+          ]);
+          if (vgEv.length > 0) {
+            out.push(
+              claim(
+                'varga_agree_strong',
+                `House ${h} lord ${lord} holds Vargottama sign ${inD1?.sign} across D1 and D9 without debility: inner and outer promise align.`,
+                vgEv,
+                { topic: `house ${h}` },
+              ),
+            );
+          }
+        }
+      } else if (inV && k1 !== 'other' && k1 === kv) {
         out.push(claim(k1 === 'strong' ? 'varga_agree_strong' : 'varga_agree_weak', `House ${h} lord ${lord} is ${inD1?.dignity ?? d1.lordDignity} in D1 and ${inV.dignity} in ${v}: the ${v} ${k1 === 'strong' ? 'confirms' : 'repeats the weakness of'} the D1 promise.`, [ev1, evv], { topic: `house ${h}` }));
       } else if (inV && k1 !== 'other' && kv !== 'other' && k1 !== kv) {
         out.push(claim('varga_disagree', `House ${h} lord ${lord} is ${inD1?.dignity ?? d1.lordDignity} in D1 but ${inV.dignity} in ${v}: promise and form disagree.`, [ev1, evv], { topic: `house ${h}`, kind: 'form' }));
       }
+
+      if (
+        inV &&
+        !isNeechaVargottama &&
+        (inV.vargaReckoning === 'inverse_vakra' ||
+          inV.vargaSandhi === true ||
+          (inD1?.retro === true && isTrueVakraCapable(lord)) ||
+          (inV.retro === true && isTrueVakraCapable(lord)))
+      ) {
+        const motionEv = existingEvidence(pack, [
+          ...(inD1?.retro !== undefined ? [`digest.planet.D1.${lord}.retro`] : []),
+          ...(inV.retro !== undefined ? [`digest.planet.${v}.${lord}.retro`] : []),
+          ...(inV.vargaReckoning !== undefined ? [`digest.planet.${v}.${lord}.vargaReckoning`] : []),
+          ...(inV.vargaSandhi !== undefined ? [`digest.planet.${v}.${lord}.vargaSandhi`] : []),
+        ]);
+        if (motionEv.length > 0) {
+          const detailParts = [
+            inV.vargaReckoning ? `reckoning=${inV.vargaReckoning}` : null,
+            inV.vargaSandhi ? 'vargaSandhi' : null,
+            vakra.effectiveRegime !== 'direct' ? vakra.effectiveRegime : 'retrograde',
+          ].filter(Boolean);
+          out.push(
+            claim(
+              'varga_disagree',
+              `House ${h} lord ${lord} carries divisional retrograde motion across D1/${v} (${detailParts.join(', ')}): delivery unfolds iteratively.`,
+              motionEv,
+              { topic: `house ${h}`, kind: 'form' },
+            ),
+          );
+        }
+      }
+
       const vh = d.house[v]?.[`h${h}`];
       const d1occ = new Set((d1.occupants ?? []).map((o) => o.planet));
       for (const o of vh?.occupants ?? []) {
@@ -140,6 +228,7 @@ export function strengthYoga(pack: EvidencePack): CodeFinding {
   const d = sectionOf(pack);
   const out: CodeClaim[] = [];
   if (!d) return finish('strength_yoga', pack.subject, out, ['no digest']);
+  const weights = getRetrogradeScoreWeights();
   for (const [key, y] of Object.entries(d.yoga.D1 ?? {})) {
     const dosha = /dosha/i.test(y.class);
     const joins = [...y.planets, ...y.houses.map((h) => `house ${h}`)].join(', ');
@@ -157,6 +246,96 @@ export function strengthYoga(pack: EvidencePack): CodeFinding {
     const rank = typeof p.shadbalaRank === 'number' ? `, rank ${p.shadbalaRank}` : '';
     const ev = [`digest.planet.D1.${lord}.shadbalaRatio`, ...(rank ? [`digest.planet.D1.${lord}.shadbalaRank`] : [])];
     out.push(claim(p.shadbalaRatio >= 1 ? 'shadbala_enough' : 'shadbala_short', `${lord}, a frame lord, has shadbala ratio ${p.shadbalaRatio}${rank}: ${p.shadbalaRatio >= 1 ? 'enough' : 'short of the'} required strength.`, ev, { topic: lord }));
+  }
+  const frameBodies = [...new Set([...pack.keyFrame.lords, ...(pack.keyFrame.karakas ?? [])])];
+  for (const body of frameBodies) {
+    const p = d.planet.D1?.[body];
+    if (!p) continue;
+    const vakra = evaluateVakraDignityRegime(body, p, d.planet.D9?.[body]);
+    const hasStrongCheshta = isTrueVakraCapable(body) && typeof p.cheshtaBala === 'number' && p.cheshtaBala >= weights.cheshtaStrongVirupas;
+    if (p.isStationary === true) {
+      const ev = existingEvidence(pack, [
+        `digest.planet.D1.${body}.isStationary`,
+        ...(p.motionState !== undefined ? [`digest.planet.D1.${body}.motionState`] : []),
+        ...(p.retro !== undefined ? [`digest.planet.D1.${body}.retro`] : []),
+      ]);
+      if (ev.length > 0) {
+        out.push(
+          claim(
+            'shadbala_short',
+            `${body} is stationary (vikala) in D1: sharp turning-point intensity calling for deliberate verification.`,
+            ev,
+            { topic: body, kind: 'window' },
+          ),
+        );
+      }
+    } else if (p.retro === true && isTrueVakraCapable(body)) {
+      const ev = existingEvidence(pack, [
+        `digest.planet.D1.${body}.retro`,
+        ...(typeof p.cheshtaBala === 'number' ? [`digest.planet.D1.${body}.cheshtaBala`] : []),
+        ...(p.motionState !== undefined ? [`digest.planet.D1.${body}.motionState`] : []),
+      ]);
+      if (ev.length > 0) {
+        if (vakra.isNeechaVargottama) {
+          out.push(
+            claim(
+              'dignity_weak',
+              `${body} is retrograde in Neecha Vargottama: fixed Drudha Karma boundary, never inverted into strength.`,
+              ev,
+              { topic: body },
+            ),
+          );
+        } else if (hasStrongCheshta) {
+          out.push(
+            claim(
+              'shadbala_enough',
+              `${body} is retrograde (${p.motionState ?? 'vakra'}) with high cheshtaBala ${p.cheshtaBala}: sustained second-pass effort (${vakra.effectiveRegime}).`,
+              ev,
+              { topic: body },
+            ),
+          );
+        } else {
+          out.push(
+            claim(
+              'varga_disagree',
+              `${body} is retrograde (${p.motionState ?? 'vakra'}) in D1 (${vakra.effectiveRegime}): outcomes mature through iterative revision.`,
+              ev,
+              { topic: body, kind: 'form' },
+            ),
+          );
+        }
+      }
+    } else if (hasStrongCheshta) {
+      const ev = existingEvidence(pack, [`digest.planet.D1.${body}.cheshtaBala`]);
+      if (ev.length > 0) {
+        out.push(
+          claim(
+            'shadbala_enough',
+            `${body} carries elevated cheshtaBala (${p.cheshtaBala}): high motional effort on frame significations.`,
+            ev,
+            { topic: body },
+          ),
+        );
+      }
+    }
+  }
+  for (const [ak, row] of Object.entries(d.annual ?? {})) {
+    if (row.kind === 'TP' && row.varga === 'D1' && row.yearLordRetro === true) {
+      const ev = existingEvidence(pack, [
+        `digest.annual.${ak}.yearLordRetro`,
+        ...(row.yearLord !== undefined ? [`digest.annual.${ak}.yearLord`] : []),
+      ]);
+      if (ev.length > 0) {
+        out.push(
+          claim(
+            'varga_disagree',
+            `Tithi Pravesha ${row.year} year lord ${row.yearLord ?? ''} is retrograde: annual progress favors iterative review and renegotiation.`,
+            ev,
+            { topic: `TP ${row.year}`, kind: 'window' },
+          ),
+        );
+      }
+    }
   }
   return finish('strength_yoga', pack.subject, out);
 }
@@ -209,6 +388,24 @@ export function personReader(pack: EvidencePack): CodeFinding {
       const rule = dignityRule(label);
       const ev = own ? `digest.planet.${v}.${card.lord}.dignity` : `digest.house.${v}.h${h}.lordDignity`;
       if (rule) out.push(claim(rule, `The ${who}'s house ${h} in ${v}: its lord ${card.lord} is ${label}.`, [ev], { about, topic: `${who} house ${h}` }));
+      const lordCard = d.planet[v]?.[card.lord];
+      if (lordCard && (lordCard.retro === true || lordCard.isStationary === true) && isTrueVakraCapable(card.lord)) {
+        const motionEv = existingEvidence(pack, [
+          ...(lordCard.retro !== undefined ? [`digest.planet.${v}.${card.lord}.retro`] : []),
+          ...(lordCard.isStationary !== undefined ? [`digest.planet.${v}.${card.lord}.isStationary`] : []),
+          ...(typeof lordCard.cheshtaBala === 'number' ? [`digest.planet.${v}.${card.lord}.cheshtaBala`] : []),
+        ]);
+        if (motionEv.length > 0) {
+          out.push(
+            claim(
+              'varga_disagree',
+              `The ${who}'s house ${h} lord ${card.lord} is ${lordCard.isStationary ? 'stationary' : 'retrograde'} in ${v}: bonds and expectations mature through repeated dialogue.`,
+              motionEv,
+              { about, topic: `${who} house ${h}`, kind: 'bond' },
+            ),
+          );
+        }
+      }
       for (const o of card.occupants ?? []) {
         const r = dignityRule(o.dignity);
         if (r) out.push(claim(r, `${o.planet} in the ${who}'s house ${h} of ${v} is ${o.dignity}.`, [`digest.house.${v}.h${h}.occupants`], { about, topic: o.planet }));
@@ -221,6 +418,23 @@ export function personReader(pack: EvidencePack): CodeFinding {
     const p = d.planet[v]?.[karaka];
     const rule = dignityRule(p?.dignity);
     if (p && rule) out.push(claim(rule, `${karaka}, the natural significator of the ${who}, is ${p.dignity} in ${v}${p.house ? ` (house ${p.house})` : ''}.`, [`digest.planet.${v}.${karaka}.dignity`], { about, topic: karaka }));
+    if (p && (p.retro === true || p.isStationary === true) && isTrueVakraCapable(karaka)) {
+      const karakaEv = existingEvidence(pack, [
+        ...(p.retro !== undefined ? [`digest.planet.${v}.${karaka}.retro`] : []),
+        ...(p.isStationary !== undefined ? [`digest.planet.${v}.${karaka}.isStationary`] : []),
+        ...(typeof p.cheshtaBala === 'number' ? [`digest.planet.${v}.${karaka}.cheshtaBala`] : []),
+      ]);
+      if (karakaEv.length > 0) {
+        out.push(
+          claim(
+            'varga_disagree',
+            `${karaka}, significator of the ${who}, is ${p.isStationary ? 'stationary' : 'retrograde'} in ${v}: care and communication deepen on a second pass.`,
+            karakaEv,
+            { about, topic: karaka, kind: 'bond' },
+          ),
+        );
+      }
+    }
   }
   return finish('person', pack.subject, out);
 }

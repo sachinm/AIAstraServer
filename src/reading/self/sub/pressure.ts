@@ -55,6 +55,13 @@ export interface EnginePressureRow {
   house_from_moon?: number;
   /** dasha and annual rows: the engine's flags behind the polarity (functional_malefic, in_dusthana, …) */
   reasons?: string[];
+  /** optional retrograde / station / Cheshta / TP annual posture fields from engine calc_version >= 2 */
+  is_retrograde?: boolean;
+  is_stationary?: boolean;
+  motion_state?: string | null;
+  cheshta_bala?: number | null;
+  year_lord_retro?: boolean;
+  operating_posture?: string | null;
   [extra: string]: unknown;
 }
 
@@ -77,7 +84,16 @@ export interface EnginePressurePayload {
  * a mapped row with the transit extra S7 joins on (the Moon's house as the engine stated it) and the engine's stored
  * `reasons` flags (null when the payload carried none); the tone stopgap (`rowTone.ts`) counts them
  */
-export type PressureRowDetail = PressureRow & { houseFromMoon: number | null; reasons?: string[] | null };
+export type PressureRowDetail = PressureRow & {
+  houseFromMoon: number | null;
+  reasons?: string[] | null;
+  isRetrograde?: boolean;
+  isStationary?: boolean;
+  motionState?: string | null;
+  cheshtaBala?: number | null;
+  yearLordRetro?: boolean;
+  operatingPosture?: string | null;
+};
 export type PressureInventoryDetail = Omit<PressureInventory, 'rows'> & { asOf: string; rows: PressureRowDetail[] };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -124,6 +140,16 @@ export function toPressureInventory(payload: EnginePressurePayload, kundliId: st
       continue;
     }
     const level = r.level === 1 || r.level === 2 || r.level === 3 ? r.level : undefined;
+    const rawReasons = Array.isArray(r.reasons) ? r.reasons.filter((x): x is string => typeof x === 'string') : null;
+    const motionReasons: string[] = [];
+    if (r.is_stationary === true && !(rawReasons ?? []).includes('lord_stationary')) motionReasons.push('lord_stationary');
+    if (r.is_retrograde === true && !(rawReasons ?? []).includes('lord_retrograde')) motionReasons.push('lord_retrograde');
+    if (r.year_lord_retro === true && !(rawReasons ?? []).includes('year_lord_retro')) motionReasons.push('year_lord_retro');
+    if (r.operating_posture === 'iterative_review' && !(rawReasons ?? []).includes('iterative_review')) motionReasons.push('iterative_review');
+    const mergedReasons =
+      rawReasons !== null || motionReasons.length > 0
+        ? [...(rawReasons ?? []), ...motionReasons]
+        : null;
     rows.push({
       id: r.id,
       kind,
@@ -138,7 +164,13 @@ export function toPressureInventory(payload: EnginePressurePayload, kundliId: st
       to: r.to,
       evidence: Array.isArray(r.evidence) ? r.evidence.filter((e) => typeof e === 'string') : [r.id],
       houseFromMoon: Number.isInteger(r.house_from_moon) ? (r.house_from_moon as number) : null,
-      reasons: Array.isArray(r.reasons) ? r.reasons.filter((x): x is string => typeof x === 'string') : null,
+      reasons: mergedReasons,
+      ...(typeof r.is_retrograde === 'boolean' ? { isRetrograde: r.is_retrograde } : {}),
+      ...(typeof r.is_stationary === 'boolean' ? { isStationary: r.is_stationary } : {}),
+      ...(r.motion_state !== undefined ? { motionState: typeof r.motion_state === 'string' ? r.motion_state : null } : {}),
+      ...(typeof r.cheshta_bala === 'number' ? { cheshtaBala: r.cheshta_bala } : {}),
+      ...(typeof r.year_lord_retro === 'boolean' ? { yearLordRetro: r.year_lord_retro } : {}),
+      ...(r.operating_posture !== undefined ? { operatingPosture: typeof r.operating_posture === 'string' ? r.operating_posture : null } : {}),
     });
   }
   const boundaries: PressureBoundary[] = payload.boundaries

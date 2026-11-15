@@ -47,6 +47,7 @@ export interface RangeIngress {
   starts_before_range?: boolean;
   ends_after_range?: boolean;
   retro_on_entry: boolean | null;
+  motion_state_on_entry?: string | null;
   house_from_lagna: number;
   house_from_moon: number;
 }
@@ -55,6 +56,7 @@ export interface RangeStation {
   kind: 'retrograde' | 'direct';
   date: string;
   longitude: number;
+  speed_deg_per_day?: number;
   sign: string;
   sign_index: number;
   house_from_lagna: number;

@@ -195,6 +195,8 @@ function overlayBody(o: Record<string, unknown>, p: PlanetCard): Record<string, 
   if (p.star && p.pada !== null && p.pada !== undefined) out.nak = `${p.star}-${p.pada}`;
   if (p.dignity) out.dig = p.dignity;
   if (p.retro === true) out.retro = true;
+  if (p.motionState) out.motion_state = p.motionState;
+  if (p.isStationary === true) out.stationary = true;
   if (p.combust === true) out.combust = true;
   if (p.owns?.length && 'owns' in o) out.owns = p.owns;
   if ('nature' in o && p.natural && p.functional) out.nature = `${p.natural}/${p.functional}`;
@@ -202,7 +204,7 @@ function overlayBody(o: Record<string, unknown>, p: PlanetCard): Record<string, 
   if (isObj(o.aspected_by) && p.aspectedBy) out.aspected_by = { ...(o.aspected_by as Record<string, unknown>), graha: p.aspectedBy };
   if (typeof o.star_lord === 'string' && p.starLord) out.star_lord = (o.star_lord as string).replace(/^\S+/, p.starLord);
   if ('sign_lord' in o && p.dispositor && p.dispositorHouse !== null && p.dispositorHouse !== undefined) out.sign_lord = `${p.dispositor} (house ${p.dispositorHouse})`;
-  if (isObj(o.shadbala)) out.shadbala = { ...(o.shadbala as Record<string, unknown>), ...(p.shadbalaRupa != null ? { rupas: p.shadbalaRupa } : {}), ratio: or(p.shadbalaRatio, (o.shadbala as Record<string, unknown>).ratio), rank: or(p.shadbalaRank, (o.shadbala as Record<string, unknown>).rank) };
+  if (isObj(o.shadbala)) out.shadbala = { ...(o.shadbala as Record<string, unknown>), ...(p.shadbalaRupa != null ? { rupas: p.shadbalaRupa } : {}), ...(p.cheshtaBala != null ? { cheshta: p.cheshtaBala } : {}), ratio: or(p.shadbalaRatio, (o.shadbala as Record<string, unknown>).ratio), rank: or(p.shadbalaRank, (o.shadbala as Record<string, unknown>).rank) };
   // `deg` stays the dossier's: the digest card's degree is not stated as degrees within the sign (doc 54 §2)
   return out;
 }
@@ -217,7 +219,15 @@ function overlayVarga(o: Record<string, unknown>, view: DigestView, key: string)
     const planets: Record<string, unknown> = {};
     for (const [code, vp] of Object.entries(o.planets)) {
       const c = view.planet(key, code);
-      planets[code] = c && isObj(vp) ? { ...vp, h: or(c.house, vp.h), dig: or(c.dignity, vp.dig) } : vp;
+      planets[code] = c && isObj(vp)
+        ? {
+            ...vp,
+            h: or(c.house, vp.h),
+            dig: or(c.dignity, vp.dig),
+            ...(c.retro === true ? { retro: true } : {}),
+            ...(c.vargaReckoning ? { varga_reckoning: c.vargaReckoning } : {}),
+          }
+        : vp;
     }
     out.planets = planets;
   }
@@ -273,7 +283,7 @@ function annualFromDigest(view: DigestView, extra: OverlayDigestExtra): Record<s
   const occupants: Record<string, string[]> = {};
   for (const h of primary.houses) {
     for (const occ of h.occupants ?? []) {
-      bodies[occ.planet] = { ...(h.sign ? { sign: h.sign } : {}), h: h.house, ...(occ.dignity ? { dig: occ.dignity } : {}) };
+      bodies[occ.planet] = { ...(h.sign ? { sign: h.sign } : {}), h: h.house, ...(occ.dignity ? { dig: occ.dignity } : {}), ...(occ.retro === true ? { retro: true } : {}) };
       (occupants[String(h.house)] ??= []).push(occ.planet);
     }
   }
@@ -302,6 +312,9 @@ function annualFromDigest(view: DigestView, extra: OverlayDigestExtra): Record<s
       sahams: r.sahams.filter((s) => !frameHouses.length || s.house == null || frameHouses.includes(s.house)),
       ...(r.muntha ? { muntha: r.muntha } : {}),
       ...(r.yearLord ? { yearLord: r.yearLord } : {}),
+      ...(r.yearLordRetro != null ? { yearLordRetro: r.yearLordRetro } : {}),
+      ...(r.horaLord ? { horaLord: r.horaLord } : {}),
+      ...(r.planets ? { planets: r.planets } : {}),
       ...(r.tajakaYogas?.length ? { tajakaYogas: r.tajakaYogas } : {}),
     };
   }

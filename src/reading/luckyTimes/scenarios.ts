@@ -1,16 +1,14 @@
 /**
- * The v1 scenarios of Lucky times (docs/reading-engine/49 §3): only those whose every rule reads a field the engine's
- * `muhurta` day row already holds. This is rule configuration with its source, not a computation: each set below lists
- * engine-returned numbers and names (tithi number 1–30, star number 1–27, weekday name, hora lord) that a classical
- * muhurta text favours or avoids for the act. Doc 47 §3.4a has the full table; clauses that need choghadiya, Mercury's
- * motion or disha shool wait for the engine pass and are not used here.
+ * The scenarios of Lucky times (docs/reading-engine/49 §3, docs/reading-engine/77 §4.4): every rule reads fields the
+ * stored `muhurta` day row holds (tithi number 1–30, star number 1–27, weekday name, hora lord, yoga/karana spans, and
+ * planetary motion / station / combustion states when `planet_motion` is present on the day row). Doc 47 §3.4a has the
+ * full table; clauses that need choghadiya or disha shool wait for the next pass and are not used here.
  *
  * Sources: Muhurta Chintamani (tithi groups Nanda/Bhadra/Jaya/Rikta/Purna; star groups fixed, moving, quick, soft,
- * fierce, sharp, mixed; the yogas and karanas avoided and favoured); B.V. Raman, Muhurta (weekdays, yogas, karanas);
- * Drik Panchang hora tutorial (hora lords and their acts). The yoga and karana of a day are the engine's own names from
- * the stored day row (`panchanga_at_noon.yoga` / `.karana`, with their end times); Node only matches the name against
- * the lists below (doc 53 §4.6, doc 54 §6) and never derives a yoga or karana.
- * TODO(engine pass): the tithi and star group of a day should come from the engine; filed in docs/TODOS.md.
+ * fierce, sharp, mixed; the yogas and karanas avoided and favoured; Vakri/Vikala karaka cautions); B.V. Raman, Muhurta
+ * (weekdays, yogas, karanas, planetary motion); Drik Panchang hora tutorial (hora lords and their acts). The yoga,
+ * karana, and planetary motion of a day come directly from the stored day row; Node only matches names/flags against
+ * the configured lists below (doc 53 §4.6, doc 54 §6, doc 77 §4.4) and never derives astrological geometry.
  */
 
 import {
@@ -179,7 +177,7 @@ export const SCENARIOS: ScenarioRule[] = [
     horaFavour: ['Jupiter', 'Mercury'], horaAvoid: ['Saturn', 'Mars'],
     ...LIMBS,
     hours: ['sunrise', 19], floor: 3, source: CLASSIC,
-    v1Note: "Mercury's motion is not yet checked; avoid signing while it moves backward.",
+    v1Note: "Checks Mercury's retrograde, stationary, and combustion status when planetary motion is stored on the day row.",
   },
   {
     id: 'work.send_resume', area: 'work', label: 'Send a resume or application', ask: 'job',
@@ -261,7 +259,7 @@ export const SCENARIOS: ScenarioRule[] = [
     horaFavour: ['Jupiter', 'Mercury'], horaAvoid: ['Saturn'],
     ...LIMBS,
     hours: ['sunrise', 19], floor: 3, source: CLASSIC,
-    v1Note: "Mercury's motion is not yet checked.",
+    v1Note: "Checks Jupiter, Venus, and Mercury retrograde, stationary, and combustion states when planetary motion is stored on the day row.",
   },
   {
     id: 'travel.set_out', area: 'travel', label: 'Set out on a journey',

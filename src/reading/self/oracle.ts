@@ -159,7 +159,7 @@ export function buildSelfFamilyPacks(
       ? `primary=[${hc.argala.primary.join(',')}] secondary=[${hc.argala.secondary.join(',')}] obstructed=[${hc.argala.obstructed.join(',')}]`
       : 'none';
     rasiLines.push(
-      `{${key}} H${h} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}${hc.coLord ? `/${hc.coLord}` : ''}(in H${hc.lordHouse ?? '?'},${hc.lordDignity ?? '?'}) occ=[${occ}] aspGraha=[${hc.aspectedGraha.join(',')}] aspRasi=[${hc.aspectedRasi.join(',')}] argala={${arg}} sav=${hc.sav ?? 'n/a'} arudha=${hc.arudha ?? '-'} class=[${hc.class.join(',')}]`,
+      `{${key}} H${h} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}${hc.coLord ? `/${hc.coLord}` : ''}(in H${hc.lordHouse ?? '?'},${hc.lordDignity ?? '?'}${hc.lordRetro ? ',rx' : ''}) occ=[${occ}] aspGraha=[${hc.aspectedGraha.join(',')}] aspRasi=[${hc.aspectedRasi.join(',')}] argala={${arg}} sav=${hc.sav ?? 'n/a'} arudha=${hc.arudha ?? '-'} class=[${hc.class.join(',')}]`,
     );
   }
   for (const p of ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']) {
@@ -175,8 +175,10 @@ export function buildSelfFamilyPacks(
       : pc.combust
         ? 'combust'
         : 'free';
+    const motionTag = pc.motionState ? ` motion=${pc.motionState}${pc.isStationary ? '(STATION)' : ''}` : pc.isStationary ? ' motion=stationary' : '';
+    const cheshtaTag = pc.cheshtaBala != null ? ` cheshta=${pc.cheshtaBala}` : '';
     rasiLines.push(
-      `{${key}} ${p} in H${pc.house ?? '?'} ${pc.sign ?? '-'} deg=${pc.degree != null ? pc.degree.toFixed(2) : '?'} dig=${pc.dignity ?? '-'} rx=${pc.retro ?? false} owns=[${pc.owns.join(',')}] star=${pc.star ?? '-'}(lord=${pc.starLord ?? '-'},pada=${pc.pada ?? '?'}) disp=${pc.dispositor ?? '-'}(H${pc.dispositorHouse ?? '?'}) chain=[${pc.chain.join('->')}] starChain=[${(pc.starChain ?? []).join('->')}] shadbala=${pc.shadbalaRatio ?? 'n/a'}(#${pc.shadbalaRank ?? '?'}) sun=${sunProx} avastha={${av}} conj=[${pc.conjunctions.join(',')}] aspBy=[${pc.aspectedBy.join(',')}] aspTo=[${pc.aspectsTo.join(',')}]`,
+      `{${key}} ${p} in H${pc.house ?? '?'} ${pc.sign ?? '-'} deg=${pc.degree != null ? pc.degree.toFixed(2) : '?'} dig=${pc.dignity ?? '-'} rx=${pc.retro ?? false}${motionTag}${cheshtaTag} owns=[${pc.owns.join(',')}] star=${pc.star ?? '-'}(lord=${pc.starLord ?? '-'},pada=${pc.pada ?? '?'}) disp=${pc.dispositor ?? '-'}(H${pc.dispositorHouse ?? '?'}) chain=[${pc.chain.join('->')}] starChain=[${(pc.starChain ?? []).join('->')}] shadbala=${pc.shadbalaRatio ?? 'n/a'}(#${pc.shadbalaRank ?? '?'}) sun=${sunProx} avastha={${av}} conj=[${pc.conjunctions.join(',')}] aspBy=[${pc.aspectedBy.join(',')}] aspTo=[${pc.aspectsTo.join(',')}]`,
     );
   }
   for (const pt of view.points('D1')) {
@@ -217,7 +219,10 @@ export function buildSelfFamilyPacks(
       if (!pc) continue;
       const pk = `planet:${vg}.${p}`;
       vargaKeys.push(pk);
-      vargaLines.push(`{${pk}} ${vg}.${p}: H${pc.house ?? '?'} ${pc.sign ?? '-'} dig=${pc.dignity ?? '-'} owns=[${pc.owns.join(',')}] conj=[${pc.conjunctions.join(',')}]`);
+      const rxTag = pc.retro != null ? ` rx=${pc.retro}` : '';
+      const reckTag = pc.vargaReckoning ? ` reck=${pc.vargaReckoning}` : '';
+      const sandhiTag = pc.vargaSandhi ? ' [VARGA_SANDHI]' : '';
+      vargaLines.push(`{${pk}} ${vg}.${p}: H${pc.house ?? '?'} ${pc.sign ?? '-'} dig=${pc.dignity ?? '-'}${rxTag}${reckTag}${sandhiTag} owns=[${pc.owns.join(',')}] conj=[${pc.conjunctions.join(',')}]`);
     }
   }
   for (const pt of view.points('D9')) {
@@ -266,7 +271,7 @@ export function buildSelfFamilyPacks(
       if (!dashaKeys.includes(pk)) dashaKeys.push(pk);
       const ch = mdCard.dashaCharter;
       dashaLines.push(
-        `{${pk}} MD_CHARTER(${mdLord}): H${mdCard.house ?? '?'} ${mdCard.sign ?? '-'} dig=${mdCard.dignity ?? '-'} disp=${mdCard.dispositor ?? '-'}(H${ch.dispositorHouse ?? '?'}) star=${mdCard.starLord ?? '-'}(H${ch.starLordHouse ?? '?'}) owns=[${ch.housesOwned.join(',')}] yogi=${ch.isYogi} avayogi=${ch.isAvayogi}`,
+        `{${pk}} MD_CHARTER(${mdLord}): H${mdCard.house ?? '?'} ${mdCard.sign ?? '-'} dig=${mdCard.dignity ?? '-'} rx=${mdCard.retro ?? false}${mdCard.motionState ? ` motion=${mdCard.motionState}` : ''}${mdCard.cheshtaBala != null ? ` cheshta=${mdCard.cheshtaBala}` : ''} disp=${mdCard.dispositor ?? '-'}(H${ch.dispositorHouse ?? '?'}) star=${mdCard.starLord ?? '-'}(H${ch.starLordHouse ?? '?'}) owns=[${ch.housesOwned.join(',')}] yogi=${ch.isYogi} avayogi=${ch.isAvayogi}`,
       );
       for (const adLord of activeAdPlanets) {
         const adCell = ch.fruition?.[adLord];
@@ -298,7 +303,7 @@ export function buildSelfFamilyPacks(
   if (tpRow && tpRun.year != null) {
     const ak = `annual:TP${tpRun.year}.D1`;
     yearLines.push(
-      `{${ak}} RUNNING YEAR = TP${tpRun.year} (Tithi Pravesha, return moment passed) ${tpRun.start ?? tpRun.from ?? '?'} -> ${tpRun.end ?? tpRun.to ?? '?'} lagna=${tpRow.lagna ?? '-'} yearLord=${tpRow.yearLord ?? '-'}`,
+      `{${ak}} RUNNING YEAR = TP${tpRun.year} (Tithi Pravesha, return moment passed) ${tpRun.start ?? tpRun.from ?? '?'} -> ${tpRun.end ?? tpRun.to ?? '?'} lagna=${tpRow.lagna ?? '-'} yearLord=${tpRow.yearLord ?? '-'}${tpRow.yearLordRetro != null ? `(rx=${tpRow.yearLordRetro})` : ''}${tpRow.horaLord ? ` horaLord=${tpRow.horaLord}(rx=${tpRow.horaLordRetro ?? false})` : ''}`,
       tpRun.shortClock
         ? `{${ak}} RUNNING YEAR short clock (TP year dasha ${tpRun.shortClock.system}): ${tpRun.shortClock.lord}(${tpRun.shortClock.from}..${tpRun.shortClock.to})`
         : `{${ak}} RUNNING YEAR short clock: none (the stored TP year dasha is not bounded to the year; do not read a lifetime period as this year's clock)`,
@@ -312,7 +317,7 @@ export function buildSelfFamilyPacks(
     if (!yearKeys.includes(ak)) yearKeys.push(ak);
     const role = a.kind === 'TP' ? (tpRun.year == null ? 'TP' : a.year === tpRun.year ? 'TP running year' : a.year < tpRun.year ? 'TP past year' : 'TP coming year') : 'VP confirming';
     yearLines.push(
-      `{${ak}} ${a.kind}${a.year}.${a.varga} [${role}]${a.start ? ` from=${a.start} to=${a.end ?? '?'}` : ''} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
+      `{${ak}} ${a.kind}${a.year}.${a.varga} [${role}]${a.start ? ` from=${a.start} to=${a.end ?? '?'}` : ''} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'}${a.yearLordRetro != null ? `(rx=${a.yearLordRetro})` : ''} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
     );
     for (const hc of a.houses) {
       if (hc.occupants.length > 0 || hc.house === 1 || hc.house === 6 || hc.house === 8 || hc.house === 10) {
@@ -372,7 +377,11 @@ export function buildSelfFamilyPacks(
     const activeIngs = sky.ingresses.filter((r) => r.from <= asOf && asOf <= r.to);
     for (const ing of activeIngs) {
       const hLagna = ing.house_from_lagna || signToHouse.get(ing.sign) || '?';
-      skyLines.push(`{house:D1.h1} Transit ${ing.planet} in ${ing.sign} (${ing.from}..${ing.to}) H${hLagna} from Lagna${mo?.sign === ing.sign ? ' [OVER NATAL MOON]' : ''}`);
+      skyLines.push(`{house:D1.h1} Transit ${ing.planet} in ${ing.sign} (${ing.from}..${ing.to}) H${hLagna} from Lagna${ing.retro_on_entry ? ' [RETRO_ENTRY]' : ''}${mo?.sign === ing.sign ? ' [OVER NATAL MOON]' : ''}`);
+    }
+    for (const stn of (sky.stations ?? []).filter((s) => s.date >= asOf).slice(0, 8)) {
+      const hLagna = stn.house_from_lagna || signToHouse.get(stn.sign) || '?';
+      skyLines.push(`{house:D1.h1} Station ${stn.planet} turns ${stn.kind} on ${stn.date} in ${stn.sign} H${hLagna} from Lagna`);
     }
     const slowEnds = activeIngs
       .filter((r) => ['Sa', 'Ju', 'Ra', 'Ke', 'Ma'].includes(r.planet) && r.to > asOf)
@@ -841,165 +850,165 @@ export async function runSelfOracle(
         const budgetBlocked = spentUsd >= maxSpendUsd;
         const familyOuts = await Promise.all(
           activeFamilyIds.map(async (familyId): Promise<FamilyOut> => {
-          const pack = packs[familyId];
-          const cacheKey = `self:${kundliId}:${familyId}:${pack.packHash}:${PROMPT_VERSION}`;
-          const cached = !ctx.force ? await loadDbReaderCache(prisma, cacheKey, owner) : undefined;
-          const cachedText = (cached?.finding as unknown as { rawText?: string } | undefined)?.rawText;
-          if (cachedText) {
-            const parsed = parseLinemanClaims(cachedText, new Set(pack.keys));
-            return {
+            const pack = packs[familyId];
+            const cacheKey = `self:${kundliId}:${familyId}:${pack.packHash}:${PROMPT_VERSION}`;
+            const cached = !ctx.force ? await loadDbReaderCache(prisma, cacheKey, owner) : undefined;
+            const cachedText = (cached?.finding as unknown as { rawText?: string } | undefined)?.rawText;
+            if (cachedText) {
+              const parsed = parseLinemanClaims(cachedText, new Set(pack.keys));
+              return {
+                familyId,
+                finding: cachedText,
+                called: false,
+                lineman: {
+                  agent: familyId,
+                  promptName: familyId,
+                  promptVersion: PROMPT_VERSION,
+                  sliceKeys: pack.keys.slice(0, 60),
+                  claims: parsed.claims,
+                  dropped: parsed.dropped,
+                  tokens: { prompt: 0, cached: 0, output: 0, thought: 0 },
+                  ms: 0,
+                  cache: 'hit',
+                  cached: true,
+                },
+                stage: {
+                  agentId: familyId,
+                  status: 'cached',
+                  cached: true,
+                  ms: 0,
+                  inputTokens: 0,
+                  promptTokens: 0,
+                  outputTokens: 0,
+                  cachedTokens: 0,
+                  thoughtTokens: 0,
+                  costUsd: 0,
+                  summary: cachedText.slice(0, 240),
+                },
+              };
+            }
+
+            if (budgetBlocked) {
+              return {
+                familyId,
+                called: false,
+                stage: {
+                  agentId: familyId,
+                  status: 'skipped',
+                  cached: false,
+                  ms: 0,
+                  inputTokens: 0,
+                  promptTokens: 0,
+                  outputTokens: 0,
+                  cachedTokens: 0,
+                  thoughtTokens: 0,
+                  costUsd: 0,
+                },
+              };
+            }
+
+            // the pack goes to the Gemini cache first, and the call waits for it (Sachin, 2026-11-08): the reader then runs on
+            // the cached prefix; with READING_EXPLICIT_CACHE off this returns at once and the call goes uncached
+            await ensurePromptCache(readerModel, FAMILY_SYSTEM_PROMPTS[familyId], pack.prefix, owner).catch(() => null);
+            const tStart = performance.now();
+            const res = await withAgentRun(
+              prisma,
               familyId,
-              finding: cachedText,
-              called: false,
-              lineman: {
+              {
+                userId,
+                kundliId,
+                technique: oracleTechniqueId,
+                task: `${familyId} ${reading.asOf}`,
+                input: { family: familyId, keys: pack.keys.length, natal: pack.natal ? 1 : 0 },
+              },
+              async () => {
+                const g = await callGemini({
+                  model: readerModel,
+                  node: familyId,
+                  system: FAMILY_SYSTEM_PROMPTS[familyId],
+                  parts: [pack.prefix, pack.dynamic],
+                  thinking: 'medium',
+                  // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
+                  maxOutputTokens: getSelfFamilyMaxOutputTokens(),
+                  cachePrefix: true,
+                  cacheOwner: owner,
+                });
+                const pTok = g.usage?.promptTokens ?? 0;
+                const cTok = g.usage?.cachedTokens ?? 0;
+                const oTok = g.usage?.outputTokens ?? 0;
+                const tTok = g.usage?.thoughtTokens ?? 0;
+                const callCost = usageCostUsd({
+                  model: readerModel,
+                  promptTokens: pTok,
+                  cachedTokens: cTok,
+                  outputTokens: oTok,
+                  thoughtTokens: tTok,
+                });
+                return {
+                  value: g,
+                  // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
+                  usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
+                  tokensIn: pTok,
+                  tokensOut: oTok,
+                  costUsd: callCost,
+                  charts: pack.charts,
+                  output: { chars: g.text.length, cachedTokens: cTok },
+                };
+              },
+            );
+            const ms = Math.round((performance.now() - tStart) * 100) / 100;
+            const st = summarizeCall(familyId, readerModel, res, ms);
+            // a finding cut at the cap keeps only its complete sentences (doc 66 replay run 2, failure 7)
+            const cut = res.finishReason === 'MAX_TOKENS';
+            const kept = cut ? completeSentencesOf(res.text) : res.text;
+            const cleanFinding = redactEngineTerms(cut && kept ? [kept, CUT_FINDING_NOTE].join('\n') : kept);
+
+            const parsed = parseLinemanClaims(cleanFinding, new Set(pack.keys));
+            const lineman: SelfOracleLinemanRecord = {
               agent: familyId,
               promptName: familyId,
               promptVersion: PROMPT_VERSION,
               sliceKeys: pack.keys.slice(0, 60),
               claims: parsed.claims,
               dropped: parsed.dropped,
-              tokens: { prompt: 0, cached: 0, output: 0, thought: 0 },
-              ms: 0,
-              cache: 'hit',
-              cached: true,
+              tokens: {
+                prompt: st.promptTokens ?? 0,
+                cached: st.cachedTokens,
+                output: st.outputTokens,
+                thought: st.thoughtTokens ?? 0,
               },
-              stage: {
-              agentId: familyId,
-              status: 'cached',
-              cached: true,
-              ms: 0,
-              inputTokens: 0,
-              promptTokens: 0,
-              outputTokens: 0,
-              cachedTokens: 0,
-              thoughtTokens: 0,
-              costUsd: 0,
-              summary: cachedText.slice(0, 240),
-              },
-            };
-          }
-
-          if (budgetBlocked) {
-            return {
-              familyId,
-              called: false,
-              stage: {
-              agentId: familyId,
-              status: 'skipped',
-              cached: false,
-              ms: 0,
-              inputTokens: 0,
-              promptTokens: 0,
-              outputTokens: 0,
-              cachedTokens: 0,
-              thoughtTokens: 0,
-              costUsd: 0,
-              },
-            };
-          }
-
-          // the pack goes to the Gemini cache first, and the call waits for it (Sachin, 2026-11-08): the reader then runs on
-          // the cached prefix; with READING_EXPLICIT_CACHE off this returns at once and the call goes uncached
-          await ensurePromptCache(readerModel, FAMILY_SYSTEM_PROMPTS[familyId], pack.prefix, owner).catch(() => null);
-          const tStart = performance.now();
-          const res = await withAgentRun(
-            prisma,
-            familyId,
-            {
-              userId,
-              kundliId,
-              technique: oracleTechniqueId,
-              task: `${familyId} ${reading.asOf}`,
-              input: { family: familyId, keys: pack.keys.length, natal: pack.natal ? 1 : 0 },
-            },
-            async () => {
-              const g = await callGemini({
-                model: readerModel,
-                node: familyId,
-                system: FAMILY_SYSTEM_PROMPTS[familyId],
-                parts: [pack.prefix, pack.dynamic],
-                thinking: 'medium',
-                // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
-                maxOutputTokens: getSelfFamilyMaxOutputTokens(),
-                cachePrefix: true,
-                cacheOwner: owner,
-              });
-              const pTok = g.usage?.promptTokens ?? 0;
-              const cTok = g.usage?.cachedTokens ?? 0;
-              const oTok = g.usage?.outputTokens ?? 0;
-              const tTok = g.usage?.thoughtTokens ?? 0;
-              const callCost = usageCostUsd({
-                model: readerModel,
-                promptTokens: pTok,
-                cachedTokens: cTok,
-                outputTokens: oTok,
-                thoughtTokens: tTok,
-              });
-              return {
-                value: g,
-                // agent_runs read `usage`; tokensIn/tokensOut were never read, so every run logged 0 tokens (thought included)
-                usage: { promptTokens: pTok, cachedTokens: cTok, outputTokens: oTok, thoughtTokens: tTok },
-                tokensIn: pTok,
-                tokensOut: oTok,
-                costUsd: callCost,
-                charts: pack.charts,
-                output: { chars: g.text.length, cachedTokens: cTok },
-              };
-            },
-          );
-          const ms = Math.round((performance.now() - tStart) * 100) / 100;
-          const st = summarizeCall(familyId, readerModel, res, ms);
-          // a finding cut at the cap keeps only its complete sentences (doc 66 replay run 2, failure 7)
-          const cut = res.finishReason === 'MAX_TOKENS';
-          const kept = cut ? completeSentencesOf(res.text) : res.text;
-          const cleanFinding = redactEngineTerms(cut && kept ? [kept, CUT_FINDING_NOTE].join('\n') : kept);
-
-          const parsed = parseLinemanClaims(cleanFinding, new Set(pack.keys));
-          const lineman: SelfOracleLinemanRecord = {
-            agent: familyId,
-            promptName: familyId,
-            promptVersion: PROMPT_VERSION,
-            sliceKeys: pack.keys.slice(0, 60),
-            claims: parsed.claims,
-            dropped: parsed.dropped,
-            tokens: {
-              prompt: st.promptTokens ?? 0,
-              cached: st.cachedTokens,
-              output: st.outputTokens,
-              thought: st.thoughtTokens ?? 0,
-            },
-            ms,
-            cache: 'run',
-            cached: false,
-          };
-
-          const held: HeldReader = {
-            finding: { reader: familyId, rawText: cleanFinding } as unknown as HeldReader['finding'],
-            usage: {
-              node: familyId,
-              model: readerModel,
-              promptTokens: st.promptTokens ?? 0,
-              cachedTokens: st.cachedTokens,
-              outputTokens: st.outputTokens,
-              thoughtTokens: st.thoughtTokens ?? 0,
               ms,
-            },
-          };
-          // a cut finding is never cached: the next build asks again under the higher cap
-          if (!cut) await saveDbReaderCache(prisma, {
-            cacheKey,
-            kundliId,
-            userId,
-            readerId: familyId,
-            packHash: pack.packHash,
-            horizonKey: pack.horizonKey,
-            promptVersion: PROMPT_VERSION,
-            natal: pack.natal,
-            ...(pack.expiresAt ? { expiresAt: pack.expiresAt } : {}),
-            held,
-            used: true,
-          });
-          return { familyId, finding: cleanFinding, lineman, stage: st, called: true };
+              cache: 'run',
+              cached: false,
+            };
+
+            const held: HeldReader = {
+              finding: { reader: familyId, rawText: cleanFinding } as unknown as HeldReader['finding'],
+              usage: {
+                node: familyId,
+                model: readerModel,
+                promptTokens: st.promptTokens ?? 0,
+                cachedTokens: st.cachedTokens,
+                outputTokens: st.outputTokens,
+                thoughtTokens: st.thoughtTokens ?? 0,
+                ms,
+              },
+            };
+            // a cut finding is never cached: the next build asks again under the higher cap
+            if (!cut) await saveDbReaderCache(prisma, {
+              cacheKey,
+              kundliId,
+              userId,
+              readerId: familyId,
+              packHash: pack.packHash,
+              horizonKey: pack.horizonKey,
+              promptVersion: PROMPT_VERSION,
+              natal: pack.natal,
+              ...(pack.expiresAt ? { expiresAt: pack.expiresAt } : {}),
+              held,
+              used: true,
+            });
+            return { familyId, finding: cleanFinding, lineman, stage: st, called: true };
           }),
         );
         for (const out of familyOuts) {
@@ -1424,9 +1433,9 @@ export async function runSelfOracle(
         const refinedPeriod: DateSpan | null =
           aiValidTo && aiValidTo !== 'always' && /^\d{4}-\d{2}-\d{2}$/.test(aiValidTo) && aiValidTo > reading.asOf
             ? {
-                from: ctx.runningSpan?.from ?? new Date(`${reading.asOf}T00:00:00Z`),
-                to: new Date(`${aiValidTo}T00:00:00Z`),
-              }
+              from: ctx.runningSpan?.from ?? new Date(`${reading.asOf}T00:00:00Z`),
+              to: new Date(`${aiValidTo}T00:00:00Z`),
+            }
             : null;
         return {
           value: result,
