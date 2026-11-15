@@ -256,10 +256,11 @@ describe('Tier 3: Pair 5 - GraphQL Armor + Error Telemetry + CSP + Error Boundar
 
 describe('Tier 3: Pair 6 - PgBouncer + Query Profiler + Boot Decoupling + Slowness Catalog (F8 + F9 + F10 + F12)', () => {
   it('should boot decoupled Lambda, route via PgBouncer :6432, measure query timings, and catalog slow operations', () => {
-    // 1. Lambda request boots with decoupled registry seeding capped by BOOT_SEED_WAIT_MS
+    // 1. Lambda request boots with decoupled registry seeding
     const serverSrc = readWorkspaceArtifact('AIAstra_Server', 'server.ts');
-    expect(serverSrc).toContain('BOOT_SEED_WAIT_MS');
-    expect(serverSrc).toContain('Promise.race');
+    expect(serverSrc).toContain('seedRegistriesInBackground');
+    expect(serverSrc).not.toContain('BOOT_SEED_WAIT_MS = 4_000');
+    expect(serverSrc).not.toContain('Promise.race');
 
     // 2. Connect via PgBouncer port 6432 with connection_limit=2
     const pooledUrl = prismaPoolUrl('postgresql://user:pass@render:6432/db', {

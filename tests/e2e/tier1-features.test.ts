@@ -476,10 +476,11 @@ describe('Tier 1: Feature 9 - AsyncLocalStorage Query Profiler', () => {
 });
 
 describe('Tier 1: Feature 10 - Lambda Boot Decoupling', () => {
-  it('10.1 should inspect server.ts and verify boot seed wait is capped by BOOT_SEED_WAIT_MS', () => {
+  it('10.1 should inspect server.ts and verify non-blocking background registry seeding', () => {
     const serverSrc = readWorkspaceArtifact('AIAstra_Server', 'server.ts');
-    expect(serverSrc).toContain('BOOT_SEED_WAIT_MS');
-    expect(serverSrc).toContain('Promise.race');
+    expect(serverSrc).toContain('seedRegistriesInBackground');
+    expect(serverSrc).not.toContain('BOOT_SEED_WAIT_MS = 4_000');
+    expect(serverSrc).not.toContain('Promise.race');
   });
 
   it('10.2 should verify standalone script exists for database queue and registry maintenance', () => {

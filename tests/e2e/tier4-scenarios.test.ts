@@ -211,10 +211,11 @@ describe('Tier 4: Scenario 4 - High-Concurrency Lambda Cold Start & Database Sat
     // Step 1: Simulate 20 concurrent Lambda invocations
     const concurrentInvocations = 20;
 
-    // Step 2: Decoupled boot executes with registry seeding bounded by BOOT_SEED_WAIT_MS
+    // Step 2: Decoupled boot executes with registry seeding
     const serverSrc = readWorkspaceArtifact('AIAstra_Server', 'server.ts');
-    expect(serverSrc).toContain('BOOT_SEED_WAIT_MS');
-    expect(serverSrc).toContain('Promise.race');
+    expect(serverSrc).toContain('seedRegistriesInBackground');
+    expect(serverSrc).not.toContain('BOOT_SEED_WAIT_MS = 4_000');
+    expect(serverSrc).not.toContain('Promise.race');
 
     // Step 3: Every invocation configures PgBouncer connection limit connection_limit=2
     const urls = Array.from({ length: concurrentInvocations }, () =>

@@ -471,8 +471,9 @@ describe('Tier 2: Feature 9 - Boundaries: AsyncLocalStorage Query Profiler', () 
 describe('Tier 2: Feature 10 - Boundaries: Lambda Boot Decoupling', () => {
   it('10.1 should execute concurrent Lambda cold boots without database migration lock contention', () => {
     const serverSrc = readWorkspaceArtifact('AIAstra_Server', 'server.ts');
-    expect(serverSrc).toContain('BOOT_SEED_WAIT_MS = 4_000');
-    expect(serverSrc).toContain('Promise.race');
+    expect(serverSrc).toContain('seedRegistriesInBackground');
+    expect(serverSrc).not.toContain('BOOT_SEED_WAIT_MS = 4_000');
+    expect(serverSrc).not.toContain('Promise.race');
   });
 
   it('10.2 should return empty/fallback state rather than unhandled crash if registry query runs prior to seeding', () => {
