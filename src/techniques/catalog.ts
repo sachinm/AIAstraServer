@@ -310,6 +310,49 @@ const WORK_EXTRA_BUILT: TechniqueDef[] = [
     selectors: WORK_SELECTORS,
     contract: codeContract([inp('activation', 'running lords of the main, conditional and karaka clocks this month', 'activation_row'), inp('planet', 'D1, D10, D9, D60 cards of those lords', 'planet_card'), inp('house', 'D10 houses 10,6,1,2,11', 'house_card')], 'vote_check.v1', 'work.present_tone'),
   },
+  {
+    id: 'work.character_arc',
+    title: 'Career authority and ambition evolution across 3 decades (Last 10 Years -> Standing Today -> Next 10 Years)',
+    category: 'work',
+    board: 'work',
+    status: 'built',
+    charts: [
+      c('natal', 'facts'),
+      c('natal', 'dignities'),
+      c('divisional', 'D1'),
+      c('divisional', 'D10'),
+      c('divisional', 'D9'),
+      c('annual', 'tithi_pravesha'),
+      c('jaimini', 'charakaraka'),
+      c('dasha', 'vimshottari'),
+    ],
+    algorithm: [
+      'Compute three 10-year life windows relative to today (asOf) and native age',
+      'Anchor career authority from 10th Bhava (D1), Dasamsa (D10), Amatyakaraka (AmK), and Saturn (Shani)',
+      'For subjects over age 36, validate D1+D9 mutual confirmation of 10th lord, Saturn, AmK, and active dasha lords',
+      'Incorporate active Mahadasha across all 40+ dasha systems and annual Tithi Pravesha timing windows',
+    ],
+    source: 'BPHS Ch. 6-7, 46-51; Sanjay Rath Crux of Vedic Astrology (Dasamsa & D9 Maturation); docs/reading-engine/76',
+    code: 'src/reading/area/selfCharacterAndJoy.ts buildWorkCharacterArc; houseLayers.ts buildBoard',
+    agents: CAREER_AGENTS,
+    accuracy: 'area_checks:career',
+    selectors: {
+      boards: ['work'],
+      subjects: ['career_work'],
+      houses: [10, 6, 1, 2, 11],
+      vargas: ['D1', 'D9', 'D10'],
+    },
+    contract: codeContract(
+      [
+        inp('house', 'D1,D10 houses 10,6,1,2,11', 'house_card'),
+        inp('planet', 'D1,D9,D10 cards of 10th lord, Saturn, AmK and running MD/AD lords', 'planet_card'),
+        inp('point', 'AmK, AK, A10', 'point_row'),
+        inp('activation', 'vimshottari, conditional, and rasi periods from -10 to +10 years', 'activation_row'),
+        inp('annual', 'running Tithi Pravesha year and year lord', 'annual_row'),
+      ],
+      'work_character_arc.v1',
+    ),
+  },
 ];
 
 // ---------------------------------------------------------------- Lucky times (src/reading/luckyTimes)
@@ -641,17 +684,19 @@ const SELF_EXTRA_BUILT: TechniqueDef[] = [
       c('divisional', 'D1'),
       c('divisional', 'D9'),
       c('divisional', 'D10'),
+      c('annual', 'tithi_pravesha'),
       c('jaimini', 'charakaraka'),
       c('dasha', 'vimshottari'),
       c('dasha', 'narayana'),
     ],
     algorithm: [
-      'Compute three 10-year life windows relative to today (asOf) and the person age (Last 10 Years e.g. their 20s if 30, Who You Are Now, and Next 10 Years)',
+      'Compute three 10-year life windows relative to today (asOf) and native age (Last 10 Years, Who You Are Now, and Next 10 Years)',
       'Anchor the core temperament from D1 Lagna, Lagna lord (Paka Lagna), D9 Navamsa maturation of L1 and Moon, Sun, and Atmakaraka (AK)',
-      'Select the dominant Vimshottari Mahadasha/Antardasha and Narayana Rasi Dasha lords covering each 10-year window from kundli_activation',
+      'For subjects over age 36, validate D1+D9 mutual confirmation (detecting Vargottama, Neecha Bhanga via D9, False Promise, and Drudha Karma)',
+      'Select the dominant Mahadasha/Antardasha across 40+ dasha systems and active Tithi Pravesha year lord from runningTithiPravesha',
       'Translate the ruling planet nature, D1/D9 dignity, and activated house themes into plain-language traits, growth lessons, and practical shifts with zero chart jargon on the surface',
     ],
-    source: 'BPHS Ch. 46-51 (Vimshottari Dasha Phala); Sanjay Rath Crux of Vedic Astrology (Lagna, Paka Lagna & D9 Maturation)',
+    source: 'BPHS Ch. 46-51 (Vimshottari Dasha Phala); Sanjay Rath Crux of Vedic Astrology (Lagna, Paka Lagna & D9 Maturation); docs/reading-engine/76',
     code: 'src/reading/area/selfCharacterAndJoy.ts buildSelfCharacterArc; houseLayers.ts buildBoard',
     agents: ['area.self_board'],
     accuracy: 'area_checks:self',
@@ -667,6 +712,7 @@ const SELF_EXTRA_BUILT: TechniqueDef[] = [
         inp('planet', 'D1,D9,D10 cards of L1, Su, Mo, AK and running MD/AD lords', 'planet_card'),
         inp('point', 'AK, AmK, AL', 'point_row'),
         inp('activation', 'vimshottari and rasi periods from -10 years to +10 years', 'activation_row'),
+        inp('annual', 'current Tithi Pravesha year and year lord', 'annual_row'),
       ],
       'self_character_arc.v1',
     ),
@@ -735,6 +781,53 @@ const LOVE_SUBAREAS: TechniqueDef[] = (
   selectors: { boards: ['love' as const], subjects: ['marriage_relationship' as const], houses: [7, 5, 11], vargas: ['D9'], facts: { 'love.status': [...s.statuses] } },
   contract: codeContract([inp('findings', 'the eight Love layers of this kundli (love.promise … love.nakshatra)', 'findings_in')], 'board_subarea.v1'),
 }));
+
+const LOVE_EXTRA_BUILT: TechniqueDef[] = [
+  {
+    id: 'love.relationship_arc',
+    title: 'Relationship and emotional bond evolution across 3 decades (Last 10 Years -> Where Your Heart Stands Now -> Next 10 Years)',
+    category: 'love',
+    board: 'love',
+    status: 'built',
+    charts: [
+      c('natal', 'facts'),
+      c('natal', 'dignities'),
+      c('divisional', 'D1'),
+      c('divisional', 'D9'),
+      c('divisional', 'D7'),
+      c('annual', 'tithi_pravesha'),
+      c('jaimini', 'charakaraka'),
+      c('dasha', 'vimshottari'),
+    ],
+    algorithm: [
+      'Compute three 10-year life windows relative to today (asOf) and native age',
+      'Anchor relationship capacity from 7th Bhava (D1), Navamsha (D9), Saptamsha (D7), Venus (Shukra), and Dara Karaka (DK)',
+      'For subjects over age 36, validate D1+D9 mutual confirmation of 7th lord, Venus, DK, UL, and active dasha lords',
+      'Incorporate active Mahadasha across all 40+ dasha systems and annual Tithi Pravesha timing windows',
+    ],
+    source: 'BPHS Ch. 6-7, 46-51; Sanjay Rath Crux of Vedic Astrology (Navamsha & Saptamsha); docs/reading-engine/76',
+    code: 'src/reading/area/selfCharacterAndJoy.ts buildLoveRelationshipArc; houseLayers.ts buildBoard',
+    agents: ['area.love_board'],
+    accuracy: 'area_checks:love',
+    selectors: {
+      boards: ['love'],
+      subjects: ['marriage_relationship'],
+      houses: [7, 5, 4, 8, 2, 11],
+      vargas: ['D1', 'D9', 'D7'],
+    },
+    contract: codeContract(
+      [
+        inp('house', 'D1,D9,D7 houses 7,5,4,8,2,11', 'house_card'),
+        inp('planet', 'D1,D9,D7 cards of 7th lord, Venus, DK and running MD/AD lords', 'planet_card'),
+        inp('point', 'DK, UL', 'point_row'),
+        inp('activation', 'vimshottari, conditional, and rasi periods from -10 to +10 years', 'activation_row'),
+        inp('annual', 'running Tithi Pravesha year and year lord', 'annual_row'),
+      ],
+      'love_relationship_arc.v1',
+    ),
+  },
+];
+
 
 // ---------------------------------------------------------------- General Reading (chat): graph analysts and oracle readers
 
@@ -2337,7 +2430,7 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
 ];
 
 
-export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2, ...SELF_V2_AGENTS];
+export const TECHNIQUES: TechniqueDef[] = [...WORK_BUILT, ...WORK_EXTRA_BUILT, ...LUCKY_SCENARIO_ROWS, ...LUCKY_SHARED, ...LOVE_PLANNED, ...LOVE_SUBAREAS, ...LOVE_EXTRA_BUILT, ...SELF_PLANNED, ...SELF_EXTRA_BUILT, ...SELF_READING, ...BOARD_READING_BUILT, ...GENERAL, ...DIGEST, ...LIFE, ...RESEARCH, ...SELF_V2, ...SELF_V2_AGENTS];
 
 const BY_ID = new Map(TECHNIQUES.map((t) => [t.id, t]));
 

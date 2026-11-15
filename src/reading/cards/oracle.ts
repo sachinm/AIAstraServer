@@ -24,6 +24,7 @@ import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
 import { CARD_ORACLE_AGENT, CARD_ORACLE_PROMPT, CARD_READING_TECHNIQUE, cardBriefPrompt } from './types.js';
+import { isAgeMatureD9 } from '../dasha/dashaAssessment.js';
 
 export const CARD_ORACLE_TIMEOUT_MS = 45_000;
 /**
@@ -51,6 +52,85 @@ export function renderCardLedger(cells: readonly LedgerCell[]): { text: string; 
   }
   if (!cells.length) L.push('(no cells for this card\'s matters)');
   return { text: L.join('\n'), keys: [...keys].sort(cmp) };
+}
+
+export interface ActiveTimingBlockInput {
+  clock?: { primary?: string } | null;
+  frameClock?: string | null;
+  periods?: {
+    running?: { lord: string; from: string; to: string } | null;
+    runningSub?: { lord: string; from: string; to: string } | null;
+  } | null;
+  year?: {
+    from?: string | null;
+    to?: string | null;
+    yearLord?: string | null;
+    shortClock?: { lord: string; from: string; to: string } | null;
+  } | null;
+  ageYears?: number | null;
+  spans?: Array<{ tone?: string; id?: string }>;
+  card?: SelfCardId | null;
+}
+
+/**
+ * Shared deterministic helper for card-level timing and divisional chart routing.
+ * Called by both grouped-card path (buildCardPack) and single-card path (cardInstruction).
+ */
+export function renderActiveTimingAndVargaBlock(input: ActiveTimingBlockInput): string[] {
+  const isMature = isAgeMatureD9(input.ageYears);
+  const activeClock = input.clock?.primary ?? input.frameClock ?? 'vimshottari';
+  const runningMd = input.periods?.running;
+  const runningAd = input.periods?.runningSub;
+  const activeYear = input.year;
+  const spans = input.spans ?? [];
+
+  const lines: string[] = [
+    '# ACTIVE DASHA & TIMING WINDOWS',
+    `- Active Reading Clock: ${activeClock}`,
+    ...(runningMd ? [`- Current Mahadasha: ${runningMd.lord} (${runningMd.from} to ${runningMd.to})`] : []),
+    ...(runningAd ? [`- Current Antardasha: ${runningAd.lord} (${runningAd.from} to ${runningAd.to})`] : []),
+    ...(activeYear
+      ? [
+          `- Running Tithi Pravesha Year: ${activeYear.from?.slice(0, 4) ?? ''} (${activeYear.from ?? ''} to ${activeYear.to ?? ''})`,
+          `- Annual Year Lord: ${activeYear.yearLord ?? 'unresolved'}`,
+          ...(activeYear.shortClock
+            ? [`- Annual Short Clock: ${activeYear.shortClock.lord} (${activeYear.shortClock.from} to ${activeYear.shortClock.to})`]
+            : []),
+        ]
+      : []),
+    ...(isMature
+      ? [
+          '- Karmic Maturation Status (>36): Active. Mutual D1+D9 confirmation applies. Outer life indications in D1 must be validated by inner dharma in D9 (detecting Vargottama, D9 Neecha Bhanga redemption, or D9 false promise weakening).',
+        ]
+      : [
+          '- Karmic Maturation Status (<=36): Pre-maturation phase. Primary focus on physical foundation (D1) with D9 as future potential.',
+        ]),
+    `- Stance Over Running Windows: ${spans.some((s) => s.tone === 'heavy') ? 'Steady pacing (get_through)' : 'Constructive building (build)'}`,
+    '# DIVISIONAL CHART ROUTING (Active Dasha & Annual TP Context)',
+    '- D10 (Dashamsha): drive, diagnosis, chapter, chapters, year (career capability, vocational achievement, professional authority)',
+    '- D7 + D9 (Saptamsha & Navamsha): lagna, presence (relationships, marital harmony, enduring emotional truth)',
+    '- D24 (Siddhamsha): mind, sharpness, learning (mental clarity, higher learning, intellectual mastery)',
+    '- D20 (Vimshamsha): purpose, practice, aims (life orientation, devotion, spiritual grounding)',
+    '- D30 (Trimshamsha): body, fitness, sleep, blood, stuck, mood (physical resilience, vitality, pacing and recuperation)',
+  ];
+
+  if (input.card) {
+    let cardVarga = 'D1+D9';
+    if (['drive', 'diagnosis', 'chapter', 'chapters', 'year'].includes(input.card)) {
+      cardVarga = 'D10 (Dashamsha)';
+    } else if (['lagna', 'presence'].includes(input.card)) {
+      cardVarga = 'D7 (Saptamsha) & D9 (Navamsha)';
+    } else if (['mind', 'sharpness', 'learning'].includes(input.card)) {
+      cardVarga = 'D24 (Siddhamsha)';
+    } else if (['purpose', 'practice', 'aims'].includes(input.card)) {
+      cardVarga = 'D20 (Vimshamsha)';
+    } else if (['body', 'fitness', 'sleep', 'blood', 'stuck', 'mood'].includes(input.card)) {
+      cardVarga = 'D30 (Trimshamsha)';
+    }
+    lines.push(`- Target Card Routing (\`${input.card}\`): Focus on ${cardVarga} alongside natal D1 and D9 for active timing windows.`);
+  }
+
+  return lines;
 }
 
 export interface CardOracleInput {
@@ -113,10 +193,20 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
   const range = frameRange(i.frame);
   const rows = cardMatterRows(i.matterSlices, range, new Set(i.prefix.keys));
   const matter = i.matterSlices.length ? rows.text : '';
+  const timingBlock = renderActiveTimingAndVargaBlock({
+    clock: i.ctx.sub.clock,
+    frameClock: i.frame.clock,
+    periods: i.ctx.sub.periods,
+    year: i.ctx.sub.year,
+    ageYears: i.ctx.sub.profile?.ageYears,
+    spans: i.frame.spans,
+    card: i.card,
+  });
   const text = [
     promptText(CARD_ORACLE_PROMPT),
     `CARD BRIEF\n${promptText(cardBriefPrompt(i.card))}`,
     `THE BOARD (the cards this person chose; you write only \`${i.card}\` and leave the others' subjects to them): ${i.board.join('; ') || 'this card only'}`,
+    timingBlock.join('\n'),
     i.frameText,
     ledger.text,
     `MATTER ROWS (${i.matters.join(', ')}; the rows overlapping ${range.from}..${range.to}, each once)\n${matter || '(none stored)'}`,

@@ -23,7 +23,7 @@ import {
 
 /** the layout before the person has chosen: the default template, no cards (the page opens the picker) */
 export function emptyLayout(): SelfBoardLayoutView {
-  return { template: DEFAULT_TEMPLATE, cards: [], sections: {}, options: {}, boardOptions: {}, boardDefaults: defaultBoardOptions(), chosen: false, updatedAt: null };
+  return { template: DEFAULT_TEMPLATE, cards: [], sections: {}, options: {}, boardOptions: {}, boardDefaults: defaultBoardOptions(), chosen: false, updatedAt: null, version: '' };
 }
 
 /** "Reset to suggested" and "Add the suggested eight" both mean this set */
@@ -71,8 +71,10 @@ export function validateLayout(body: unknown): LayoutCheck {
       sections[def.id] = SELF_SECTIONS.filter((s) => on.includes(s));
     }
   }
+  const board = validateBoardOptions(b.boardOptions);
+  if (!board.ok) return { ok: false, error: board.error, ...(board.detail ? { detail: board.detail } : {}) };
   // doc 71 §4.4 item 3: a card whose options are sent takes the sections they mean, unless this request also set them
-  const opts = validateCardOptions(b.options, cards);
+  const opts = validateCardOptions(b.options, cards, board.options);
   if (!opts.ok) return { ok: false, error: opts.error, ...(opts.detail ? { detail: opts.detail } : {}) };
   if (b.options !== undefined && b.options !== null) {
     for (const id of Object.keys(b.options as Record<string, unknown>)) {
@@ -82,8 +84,6 @@ export function validateLayout(body: unknown): LayoutCheck {
       if (!explicit) sections[def.id] = sectionsFor(opts.options[id]);
     }
   }
-  const board = validateBoardOptions(b.boardOptions);
-  if (!board.ok) return { ok: false, error: board.error, ...(board.detail ? { detail: board.detail } : {}) };
   const out: SelfBoardLayout = { template: template as SelfTemplateId, cards, sections };
   if (b.options !== undefined && b.options !== null) out.options = opts.options;
   if (b.boardOptions !== undefined && b.boardOptions !== null) out.boardOptions = board.options;
@@ -110,15 +110,17 @@ export function layoutFromRow(row: { template: string; cards: unknown; sections:
       sections[def.id] = on;
     }
   }
+  const boardOptions = boardOptionsFromRow(row.board_options);
   return {
     template,
     cards,
     sections,
-    options: optionsFromRow(row.options, cards),
-    boardOptions: boardOptionsFromRow(row.board_options),
+    options: optionsFromRow(row.options, cards, boardOptions),
+    boardOptions,
     boardDefaults: defaultBoardOptions(),
     chosen: cards.length > 0,
     updatedAt: row.updated_at.toISOString(),
+    version: row.updated_at.toISOString(),
   };
 }
 
@@ -126,6 +128,110 @@ export function layoutFromRow(row: { template: string; cards: unknown; sections:
 export async function readLayout(prisma: PrismaClient, kundliId: string, board: BoardId = 'self'): Promise<SelfBoardLayoutView> {
   const row = await prisma.boardLayout.findUnique({ where: { kundli_id_board: { kundli_id: kundliId, board } }, select: LAYOUT_SELECT });
   return layoutFromRow(row);
+}
+
+type Json = Record<string, unknown>;
+const isObj = (v: unknown): v is Json => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** merges `{ key: value | null }` into `base`: a null key resets it */
+function mergeKeys(base: Json, patch: Json): Json {
+  const out: Json = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k];
+    else out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * doc 75 §4.1: a PUT patch applied to the stored layout, as a whole-layout body for `validateLayout`. `cards` and
+ * `template` replace; `sections[id]` replaces (null resets); `options[id]` keys merge (null resets the key, a null card
+ * resets the card); `boardOptions` keys merge. A card whose options changed takes the sections they mean unless the
+ * patch also set its sections. Options and sections of cards no longer on the board are dropped.
+ */
+export function mergeLayoutPatch(current: SelfBoardLayoutView, patch: unknown): { ok: true; body: Json } | { ok: false; error: LayoutError } {
+  if (!isObj(patch)) return { ok: false, error: 'bad_body' };
+  const cards = patch.cards !== undefined ? patch.cards : current.cards;
+  if (!Array.isArray(cards)) return { ok: false, error: 'bad_body' };
+  const onBoard = new Set(cards.filter((c): c is string => typeof c === 'string'));
+
+  const sections: Json = { ...current.sections };
+  if (patch.sections !== undefined) {
+    if (!isObj(patch.sections)) return { ok: false, error: 'bad_body' };
+    for (const [id, list] of Object.entries(patch.sections)) {
+      if (list === null) delete sections[id];
+      else sections[id] = list;
+    }
+  }
+  const options: Json = { ...current.options };
+  if (patch.options !== undefined) {
+    if (!isObj(patch.options)) return { ok: false, error: 'bad_body' };
+    for (const [id, o] of Object.entries(patch.options)) {
+      if (o === null) delete options[id];
+      else if (!isObj(o)) return { ok: false, error: 'bad_body' };
+      else {
+        const merged = mergeKeys(isObj(options[id]) ? (options[id] as Json) : {}, o);
+        if (Object.keys(merged).length) options[id] = merged;
+        else delete options[id];
+      }
+      if (!(isObj(patch.sections) && Object.prototype.hasOwnProperty.call(patch.sections, id))) delete sections[id];
+    }
+  }
+  let boardOptions: Json = { ...current.boardOptions };
+  if (patch.boardOptions !== undefined) {
+    if (!isObj(patch.boardOptions)) return { ok: false, error: 'bad_body' };
+    boardOptions = mergeKeys(boardOptions, patch.boardOptions);
+  }
+  for (const id of Object.keys(sections)) if (!onBoard.has(id)) delete sections[id];
+  for (const id of Object.keys(options)) if (!onBoard.has(id)) delete options[id];
+  return { ok: true, body: { template: patch.template ?? current.template, cards, sections, options, boardOptions } };
+}
+
+export type VersionedWrite = { ok: true; layout: SelfBoardLayoutView } | { ok: false; conflict: true; layout: SelfBoardLayoutView };
+
+const isUniqueClash = (e: unknown): boolean => (e as { code?: string } | null)?.code === 'P2002';
+
+/**
+ * doc 75 §4.1: writes only if the row is still the one read (`expected` = its `updated_at`, ISO; '' = no row yet).
+ * The match spans the whole millisecond so a row written with microseconds by SQL still matches its own version.
+ * Another write in between: `{ conflict: true }` with the layout now stored.
+ */
+export async function writeLayoutVersioned(
+  prisma: PrismaClient,
+  userId: string,
+  kundliId: string,
+  layout: SelfBoardLayout,
+  expected: string,
+  board: BoardId = 'self',
+): Promise<VersionedWrite> {
+  const data = layoutData(layout);
+  if (!expected) {
+    try {
+      const row = await prisma.boardLayout.create({ data: { user_id: userId, kundli_id: kundliId, board, ...data }, select: LAYOUT_SELECT });
+      return { ok: true, layout: layoutFromRow(row) };
+    } catch (e) {
+      if (!isUniqueClash(e)) throw e;
+      return { ok: false, conflict: true, layout: await readLayout(prisma, kundliId, board) };
+    }
+  }
+  const t = Date.parse(expected);
+  if (!Number.isFinite(t)) return { ok: false, conflict: true, layout: await readLayout(prisma, kundliId, board) };
+  const r = await prisma.boardLayout.updateMany({
+    where: { kundli_id: kundliId, board, updated_at: { gte: new Date(t), lt: new Date(t + 1) } },
+    data,
+  });
+  const now = await readLayout(prisma, kundliId, board);
+  return r.count === 0 ? { ok: false, conflict: true, layout: now } : { ok: true, layout: now };
+}
+
+function layoutData(layout: SelfBoardLayout) {
+  return {
+    template: layout.template,
+    cards: layout.cards,
+    sections: layout.sections,
+    ...(layout.options ? { options: layout.options } : {}),
+    ...(layout.boardOptions ? { board_options: { ...layout.boardOptions } as Prisma.InputJsonObject } : {}),
+  };
 }
 
 export async function writeLayout(prisma: PrismaClient, userId: string, kundliId: string, layout: SelfBoardLayout, board: BoardId = 'self'): Promise<SelfBoardLayoutView> {

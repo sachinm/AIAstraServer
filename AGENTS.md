@@ -175,6 +175,7 @@ Applies to every session and `/teamwork` swarm across `AIAstra_Server`, `AIAstra
 - Never print secrets.
 - **Never output internal engine/library names (`Radha`, `pyjhora`, `AIAstra_Radha`, `jhora`) in any reading, report, or user-facing response.** All agents and LLM system prompts must enforce this rule (see `SOUL.md`).
 - Read and follow `SOUL.md` for all astrological reading synthesis, anti-sycophancy claim verification, and 4-tier (`Sattvic / Rajasic / Mediocre / Baseline`) behavioral playbooks.
+- **Vedic D9 (>36), Higher Divisional Charts & Active Timing (`docs/reading-engine/76`):** Follow `.agents/rules/vedic-d9-divisional-active-timing.md` (joint `D1 + D9` mutual confirmation above `D9_MATURITY_AGE_YEARS`, domain vargas `D10`/`D7`/`D30`/`D24`/`D20`, active 40+ Mahadasha + current-year Tithi Pravesha focus over static natal text) and `.agents/skills/dashboard-card-toolbar-vetting/SKILL.md` for card UI tools.
 
 ## We are making a Vedic astrology personal assistant (Sachin, 2026-11-05)
 

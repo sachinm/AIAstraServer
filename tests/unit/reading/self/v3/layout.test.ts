@@ -84,7 +84,7 @@ describe('the period rail', () => {
     ];
     const rail = railFromDates(dates, today);
     expect(rail).toHaveLength(6);
-    expect(rail[0]).toMatchObject({ from: '2026-05-18', label: 'now → 5 Dec 2026', current: true, note: 'rest is thin', tone: null });
+    expect(rail[0]).toMatchObject({ from: '2026-05-18', label: '18 May 2026 → 5 Dec 2026', current: true, note: 'rest is thin', tone: null });
     expect(rail.some((r) => r.note === 'over' || r.note === 'duplicate')).toBe(false);
   });
   it('Phase B: one bar per span with its tone', () => {
@@ -100,7 +100,7 @@ describe('the period rail', () => {
       agreement: { agree: 3, of: 4 },
     };
     expect(railFromSpans(c, today).map((r) => [r.span, r.tone, r.current, r.label])).toEqual([
-      ['s1', 'heavy', true, 'now → 5 Dec 2026'],
+      ['s1', 'heavy', true, '1 Oct 2026 → 5 Dec 2026'],
       ['s2', 'light', false, '5 Dec 2026 → 3 Jun 2027'],
     ]);
   });

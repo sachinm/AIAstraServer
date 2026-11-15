@@ -1001,3 +1001,49 @@ flowchart LR
     GATE -->|"MISS"| S1
     S3 --> OUT
 ```
+
+---
+
+## Page 25 of 25 — `love.relationship_arc`: Relationship and Emotional Bond Evolution Across Three Decades (Last 10 Years · Where Your Heart Stands Now · Next 10 Years)
+
+| Field | Value |
+|---|---|
+| **Technique ID / Title** | `love.relationship_arc` — Relationship and emotional bond evolution across three decades (Last 10 Years · Where Your Heart Stands Now · Next 10 Years) |
+| **Category / Board / Status** | `love` · `love` · `built` |
+| **Charts Declared** | `natal:{facts,dignities,aspects,avasthas}`, `divisional:{D1,D9,D7}`, `jaimini:{charakaraka,arudhas}`, `annual:tithi_pravesha`, `dasha:{vimshottari,conditional,rasi}` |
+| **Selectors** | `boards: ['love']`, `subjects: ['marriage_relationship']`, `houses: [7, 5, 4, 8, 2, 11]`, `vargas: ['D1', 'D9', 'D7']` |
+| **Reader Pieces** | `reader:house/house_card` (`D1,D9,D7_h7,5,4,8,2,11`) · `reader:planet/planet_card` · `reader:point/point_row` (`DK, UL`) · `reader:activation/activation_row` · `reader:annual/annual_row` |
+| **Agent Piece** | `agent:area.love_board` (`buildLoveRelationshipArc`, `kind: 'code'`, `system: 'none'`) |
+| **Output Piece** | `output:love_relationship_arc.v1` |
+| **Date-Range Window Cache** | `freshness: 'dasha'` (`[runningPeriod.from, runningPeriod.to)` from `kundli_activation`) · `scope: 'kundli'` |
+| **Code & Source** | `src/reading/area/selfCharacterAndJoy.ts buildLoveRelationshipArc; houseLayers.ts buildBoard` (`BPHS Ch. 6-7, 46-51; Sanjay Rath Crux of Vedic Astrology (Navamsha & Saptamsha); docs/reading-engine/76`) |
+
+```mermaid
+flowchart LR
+    subgraph Inputs["Digest + Activation Slicers (Freshness: dasha, Scope: kundli)"]
+        P_HC["reader:house/house_card<br/>(D1,D9,D7_h7,5,4,8,2,11)"]
+        P_PC["reader:planet/planet_card<br/>(7th lord, Venus, DK, UL & decade MD/AD lords)"]
+        P_ACT["reader:activation/activation_row<br/>(40+ dasha systems from -10y to +10y)"]
+        P_ANN["reader:annual/annual_row<br/>(Tithi Pravesha year and year lord)"]
+    end
+
+    subgraph CacheGate["Date-Range Window Cache Gate"]
+        GATE{"piece.cache.date_range_window<br/>validityWindow: dasha [runningPeriod.from, runningPeriod.to)<br/>scope: kundli"}
+    end
+
+    subgraph ArcBuilder["3-Decade Relationship Evolution Builder (buildLoveRelationshipArc)"]
+        A1["1. Past 10 Years (asOf - 10y .. asOf): dominant MD/AD period<br/>+ 7th lord & Venus D1/D9/D7 placement, dignity, and avastha"]
+        A2["2. Where Your Heart Stands Now (asOf): 7th house, Dara Karaka (DK), Upapada Lagna (UL),<br/>active dasha across 40+ systems, D1+D9 confirmation (>36), and annual TP year lord"]
+        A3["3. Next 10 Years (asOf .. asOf + 10y): upcoming/continuing periods<br/>+ enduring relationship patterns and D9/D7 maturation"]
+        A1 --> A2 --> A3
+    end
+
+    subgraph Output["Love Board 3-Decade Relationship Arc"]
+        OUT["output:love_relationship_arc.v1<br/>Past 10y · Now · Next 10y plain-English relationship cards with digest evidence"]
+    end
+
+    P_HC & P_PC & P_ACT & P_ANN --> GATE
+    GATE -->|"HIT"| OUT
+    GATE -->|"MISS"| A1
+    A3 --> OUT
+```

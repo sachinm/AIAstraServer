@@ -96,6 +96,31 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **Render PostgreSQL PgBouncer Connection Bloat & Cross-Cloud Waterfall Latency (P1)**
+  - **Measured / Observed Latencies**: 180ms – 450ms per database round trip when Lambda in AWS us-east-1 connects to Render PostgreSQL (Frankfurt / Oregon) with uncapped connections or without transaction pooling. Sequential query waterfalls across chat/board loading taking 1,200ms – 2,800ms.
+  - **Root Cause**: Uncapped connection limits (`connection_limit=6` on Lambda instances with multiple fetchers causing connection exhaustion on PgBouncer) and missing `pgbouncer=true` causing prepared statement errors/leaks; sequential DB round trips over cross-cloud WAN.
+  - **Remediation**: Enforce `connection_limit=2` for Lambda in `src/lib/prismaUrl.ts` (`PRISMA_POOLER_CONNECTION_LIMIT`), recognize port 6432, enforce `pgbouncer=true`, and utilize batched queries / caching.
+
+- **Lambda Request Boot Seeding Barrier (P1)**
+  - **Measured / Observed Latencies**: 4,000ms delay during cold starts.
+  - **Root Cause**: Blocking `await Promise.race([Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)]), new Promise((resolve) => setTimeout(resolve, BOOT_SEED_WAIT_MS))])` in `server.ts` before `app.listen()`. If database connection was slow or PgBouncer was queuing, Lambda cold starts hung for the full 4,000ms.
+  - **Remediation**: Decoupled registry seeding from the synchronous request boot path in `server.ts`; invoked `seedAgentRegistry` and `seedTechniqueRegistry` asynchronously in background (`seedRegistriesInBackground()`) without blocking `app.listen()`.
+
+- **Consumer Web Monolithic Bundle & Un-chunked Vendor Dependencies (P2)**
+  - **Measured / Observed Latencies**: Initial JS bundle download and parse > 1.4 MB on consumer first-load; main-thread parse/compile time 400ms – 900ms on mobile devices; LCP degradation > 2.5s.
+  - **Root Cause**: All 12+ page routes (`LandingPage`, `SignIn`, `SignUp`, `BirthDetails`, `Dashboard`, `ChatSection`, `YouPage`, `LovePage`, `WorkPage`, `LuckyTimesPage`, `ProfileSection`, etc.) statically imported into `routes.tsx`; monolithic Rollup output combining React, Lucide icons, and Turnstile.
+  - **Remediation**: Dynamic route code-splitting for the 13 authenticated routes (`BirthDetails`, `Dashboard`, `ChatSection`, `YouPage`, `LovePage`, `WorkPage`, `LuckyTimesPage`, `WelcomeWizard`, `Profile*`) via `React.lazy()` with accessible `<Suspense>` fallback (`RouteLoadingFallback`), while keeping the 7 SSR-prerendered public/auth routes (`LandingPage`, `SignIn`, `SignUp`, `PricingPage`, `LegalPages`) eagerly imported so `scripts/prerender.ts` `renderToString` emits complete static HTML, alongside Rollup `manualChunks` in `vite.config.ts` separating `vendor-react` (`react`, `react-dom`, `react-router-dom`), `vendor-ui` (`lucide-react`), and `vendor-turnstile` (`@marsidev/react-turnstile`).
+
+- **Prisma Query Profiler Null `db_ms` Telemetry Gap (P2)**
+  - **Measured / Observed Latencies**: Unknown/untracked DB latency in `page_execution_logs` (`db_ms = null`, `queryCount = 0`).
+  - **Root Cause**: `recordPageExecution` in `pageTiming.ts` hardcoded `db_ms: null` and lacked active ALS query instrumentation in `prisma.ts`, blinding operations to slow queries.
+  - **Remediation**: Implemented `AsyncLocalStorage` profiler (`pageTimingStorage`, `runWithPageContext`, `recordDbQuery`) in `src/telemetry/pageTiming.ts` and `src/lib/prisma.ts` measuring Prisma query execution duration and query count in active request context; recorded integer `db_ms` and `queryCount` into `page_execution_logs`.
+
+- **Dashboard Progressive NDJSON Streaming vs. Monolithic GraphQL Waterfall (P2)**
+  - **Measured / Observed Latencies**: 1,800ms – 3,500ms when loading full dashboard (charts, biodata, content, timeline) via single monolithic query.
+  - **Root Cause**: Client waiting for heaviest section (e.g. AI-derived content or deep timeline) before rendering fast sections (profile, biodata).
+  - **Remediation**: Instrumented `GET /api/dashboard/sections-stream` with progressive NDJSON line streaming to render `profile` and `biodata` in `< 100ms` while heavier sections stream concurrently, tracking per-section execution logs.
+
 - **Annual (±10 yr) and `kundli_transit_overlays` parity gap on Sachin (`c584c0a3`) and Archisha (`6514751c`) vs. Sumit (`75b0d618`), plus duplicate/misnamed DB accounts.** Audited 2026-11-06 across PostgreSQL:
   1. **Sumit (`75b0d618-90b7-4db6-bff8-cc7bb0ed561f`)** has 402 ready `kundli_data` rows (including 250 `annual.*` rows across `2016–2035` with `divisional_chart_factor=2,7,9,10`), 893 `kundli_digest` rows (`200` `annual`), 10,260 `kundli_activation` rows, and 11 `kundli_transit_overlays` rows (`1975–2035`).
   2. **Sachin (`c584c0a3-841b-451b-a2ed-f5709c5fb31d`)** and **Archisha (`6514751c-9b30-45e6-bad6-0a56415e067b`)** have all 152 natal/varga/dasha/strength/avastha rows (702 and 694 `kundli_digest` rows; 12,586 and 8,298 `kundli_activation` rows), but only **12 `annual.*` rows** (`@current` and one single year in D1 only → only `2` `annual` digest rows) and **0 `kundli_transit_overlays` rows** in DB (even though `evals/fixtures/G1/catalog/transit_contacts.*.json` exists on disk for Sachin).
@@ -2705,3 +2730,33 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   Personalize, avatar) leaves the `UsageBar` text a few pixels, so the count truncates. Seen in
   `docs/screenshots/mobile-frame/10-board-phone.png`. Owner: web. Done: the quota reads in full on a 360 px phone, for
   example by moving Personalize into the menu drawer. Status: open.
+
+## Filed 2026-11-13 by the Self foundation card build (server `feat/self-foundation-server`, doc 75)
+
+- **P1 · A unit test calls the live Gemini API.** Running `tests/unit/reading/self/routes.test.ts` ("GET
+  /api/self/reading with the model layer on") logged `reading prompt cache create failed ... Your prepayment credits are
+  depleted` several times: the test reaches the real provider for a prompt cache create (it did not cost anything only
+  because the credits are depleted). Unit tests must never make a paid call. Seen 2026-11-13 in a local vitest run.
+  [server] Done when that file mocks the cache create (or the provider module) and a run with a dummy key makes no
+  network call.
+- **P1 · Gemini prepay credits are depleted** (the error above, 2026-11-13). Every live build and chat call fails until
+  topped up. [Sachin] Done when AI Studio billing shows credit and one Lab replay call succeeds.
+- **P2 · Apply migration `20261113100000_user_feature_overrides_m52`.** Additive (`user_feature_overrides`). Until
+  applied, GET /api/self/v3 reads no per-person overrides (fails soft, logged once per process) and env plus defaults
+  decide. [deploy session, Sachin's OK] Done when `prisma migrate status` is up to date on `aiastradb`.
+- **P2 · Why the live Self board opened on Research.** The code default is `read` (`CARD_FACE`); either the live Lambda
+  sets `CARD_FACE=research` or the person's `board_layout.board_options.face` was saved as Research by the save race.
+  Doc 75 now shows a stored Research or Breakdown face as Read while `feature.research_face` / `feature.breakdown_face`
+  are off. [deploy session] Done when the Lambda's `CARD_FACE` is read and noted here (no secrets).
+- **P2 · Feature switches have no admin page yet.** `src/boards/features.ts` is the catalogue; the admin mirror
+  (`aiadastra_admin/api/src/features.ts`), the Features page and the audited override write are not built. [admin]
+  Done when staff can set an override with its `admin_actions` row in one transaction.
+- **P3 · Stale guard only flags.** A card whose text names a passed day sends `stale: true` + `staleDates`; the rewrite
+  from stored spans on the next build (plan "The foundation card") is not built. [server] Done when the next build
+  rewrites those sentences and the flag clears.
+- **P3 · Period fill rate is unmeasured.** Phase A periods get text only from body paragraphs that name a window's
+  dates, so many cards will send one period or none. The release gate needs ≥ 95 % fill in a Lab cohort. [reading-dev]
+  Done when the Lab reports periods-with-text per card over the replay cohort.
+- **P3 · `CHART_TERMS` grew** (Sarvashtakavarga, SAV/BAV, Ganda Moola, Dwisaptati, Parashari, Jaimini, amsa). The
+  same list gates the v2 Personalizer, so a few more card sentences will be dropped there. [reading-dev] Done when a
+  replay shows no card left empty by the new terms.

@@ -41,6 +41,7 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'scripts/cache-pack-measure.ts': 'doc 71 Phase 0 measure: reads one test kundli user id through Prisma and swallows raw writes (storage dry); runs no raw SQL',
   'scripts/oracle-slice-sizes.ts': 'counts byte sizes of chart rows; reads no value (reviewed for B1; B4.2 reviews scripts again)',
   'scripts/pull-sachin-annual.ts': 'one-off annual backfill disk guard: pg_database_size and pg_total_relation_size(kundli_data)/count(*) only; reads no row value',
+  'src/telemetry/pageTiming.ts': 'page timing telemetry logging: writes timings/spans to page_execution_logs, reads no sealed value',
 };
 
 const RAW = /\$(queryRaw|executeRaw)(Unsafe)?\b/;

@@ -1,11 +1,14 @@
 import { prisma } from '../lib/prisma.js';
 import type { PrismaClient } from '@prisma/client';
+import type express from 'express';
 import { authenticateRequest, type RequestAuthDeps } from '../auth/requestAuth.js';
 
 export { getJwtSecret } from '../auth/jwtSecret.js';
 
 export interface GraphQLContextParams {
   request: Request;
+  req?: express.Request;
+  res?: express.Response;
 }
 
 export interface GraphQLContext {
@@ -22,6 +25,9 @@ export interface GraphQLContext {
   requestId?: string | null;
   prisma: PrismaClient;
   request: Request;
+  req?: express.Request;
+  res?: express.Response;
+  cookiesToSet?: string[];
 }
 
 /**
@@ -29,9 +35,10 @@ export interface GraphQLContext {
  * X-Astra-Authorization (CloudFront OAC owns Authorization toward the Lambda Function URL), else Authorization,
  * checked against the auth row (role, lock, token version). Yoga accepts a context factory that returns a Promise.
  */
-export async function buildContext({ request }: GraphQLContextParams, deps: RequestAuthDeps = {}): Promise<GraphQLContext> {
-  const auth = await authenticateRequest(request.headers, deps);
-  const requestId = request.headers.get('x-request-id') ?? null;
+export async function buildContext(params: GraphQLContextParams, deps: RequestAuthDeps = {}): Promise<GraphQLContext> {
+  const { request, req, res } = params;
+  const auth = await authenticateRequest(req?.headers ?? request.headers, deps);
+  const requestId = (req?.headers['x-request-id'] as string | undefined) ?? request.headers.get('x-request-id') ?? null;
   return {
     userId: auth.userId,
     role: auth.role,
@@ -40,5 +47,8 @@ export async function buildContext({ request }: GraphQLContextParams, deps: Requ
     requestId,
     prisma,
     request,
+    req,
+    res,
+    cookiesToSet: [],
   };
 }

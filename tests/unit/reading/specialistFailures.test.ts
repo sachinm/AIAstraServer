@@ -181,7 +181,7 @@ describe('stage events and logs for failed specialists', () => {
       expect(logs.filter((l) => l.final && l.capped)).toHaveLength(3);
       const all = warn.mock.calls.map((c) => String(c[0])).join('\n');
       expect(all).not.toMatch(/QUESTION|When will I get married|ANALYST:/); // no prompt content
-      expect(out.errors.every((e) => e.reason === 'timeout')).toBe(true);
+      expect(out.errors.every((e: any) => e.reason === 'timeout')).toBe(true);
     } finally {
       await fake.close();
     }

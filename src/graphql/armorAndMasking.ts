@@ -275,6 +275,22 @@ function recordBlockedQuery(
   }
 }
 
+/**
+ * Strips field existence hints, "Did you mean ...?" suggestions, and schema-probing details
+ * from validation errors when error masking is enabled so probing leaks zero schema details.
+ */
+export function sanitizeValidationErrorMessage(message: string, maskingEnabled: boolean): string {
+  if (!maskingEnabled) return message;
+  let clean = message.replace(/\s*Did you mean [^?]+\?/gi, '').trim();
+  if (/Cannot query field/i.test(clean) || /Field "[^"]+" of type/i.test(clean)) {
+    return 'Invalid field selection.';
+  }
+  if (/Unknown argument/i.test(clean)) {
+    return 'Invalid query argument.';
+  }
+  return clean;
+}
+
 export function graphqlArmorAndObservabilityPlugin(deps: { prisma?: PrismaClient } = {}): Plugin {
   return {
     onParams({ request, params }) {
@@ -348,9 +364,7 @@ export function graphqlArmorAndObservabilityPlugin(deps: { prisma?: PrismaClient
         }
         if (!err.originalError) {
           changed = true;
-          const sanitizedMsg = maskingEnabled
-            ? err.message.replace(/\s*Did you mean [^?]+\?/g, '').trim()
-            : err.message;
+          const sanitizedMsg = sanitizeValidationErrorMessage(err.message, maskingEnabled);
           void recordAppError(deps.prisma, {
             source: 'graphql',
             severity: 'warn',
@@ -482,9 +496,7 @@ export function createGraphqlMaskError(deps: { prisma?: PrismaClient } = {}) {
     // 2. Pure GraphQL syntax/validation error without an underlying resolver exception
     const maskingEnabled = isDev === false || isGraphqlErrorMaskingEnabled();
     if (gqlErr && !gqlErr.originalError) {
-      const sanitizedMsg = maskingEnabled
-        ? gqlErr.message.replace(/\s*Did you mean [^?]+\?/g, '').trim()
-        : gqlErr.message;
+      const sanitizedMsg = sanitizeValidationErrorMessage(gqlErr.message, maskingEnabled);
       void recordAppError(deps.prisma, {
         source: 'graphql',
         severity: 'warn',

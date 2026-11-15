@@ -16,6 +16,13 @@ import { checkTerms, currentTermsInfo, recordTermsAcceptance } from '../auth/ter
 import { forgetUser } from '../auth/requestAuth.js';
 import { popLastOtpFailure } from '../auth/emailCode.js';
 import { assertTurnstileIfConfigured } from '../services/turnstileService.js';
+import {
+  setSessionCookie,
+  setCsrfCookie,
+  clearSessionCookie,
+  clearCsrfCookie,
+} from '../auth/cookies.js';
+import { generateCsrfToken } from '../auth/csrf.js';
 
 function popLastTurnstileFailure(clientIp?: string | null) {
   const fn = (
@@ -1270,6 +1277,20 @@ const resolvers = {
         request: reqFacts,
       });
       if (res.success) {
+        if ('token' in res && typeof res.token === 'string') {
+          const host = context.req?.headers.host || (context.request?.headers?.get?.('host') ?? undefined);
+          const origin = (context.req?.headers.origin as string) || (context.request?.headers?.get?.('origin') ?? undefined);
+          const hostOrOrigin = origin || host;
+          if (context.res) {
+            setSessionCookie(context.res, res.token, hostOrOrigin);
+            const csrf = generateCsrfToken();
+            setCsrfCookie(context.res, csrf, hostOrOrigin);
+          } else if (context.cookiesToSet) {
+            context.cookiesToSet.push(setSessionCookie({}, res.token, hostOrOrigin));
+            const csrf = generateCsrfToken();
+            context.cookiesToSet.push(setCsrfCookie({}, csrf, hostOrOrigin));
+          }
+        }
         if (terms.version) void recordTermsAcceptance(context?.prisma, res.user, terms.version, 'sign_up', reqFacts);
         // the completed sign-up (code verified), not sign_up_started
         alertOwnerOfAuth(context?.prisma, 'sign_up', res.user, email, reqFacts);
@@ -1415,12 +1436,36 @@ const resolvers = {
         request: reqFacts,
       });
       if (login.success) {
+        if ('token' in login && typeof login.token === 'string') {
+          const host = context.req?.headers.host || (context.request?.headers?.get?.('host') ?? undefined);
+          const origin = (context.req?.headers.origin as string) || (context.request?.headers?.get?.('origin') ?? undefined);
+          const hostOrOrigin = origin || host;
+          if (context.res) {
+            setSessionCookie(context.res, login.token, hostOrOrigin);
+            const csrf = generateCsrfToken();
+            setCsrfCookie(context.res, csrf, hostOrOrigin);
+          } else if (context.cookiesToSet) {
+            context.cookiesToSet.push(setSessionCookie({}, login.token, hostOrOrigin));
+            const csrf = generateCsrfToken();
+            context.cookiesToSet.push(setCsrfCookie({}, csrf, hostOrOrigin));
+          }
+        }
         if (terms.version) void recordTermsAcceptance(context.prisma, login.user, terms.version, 'sign_in', reqFacts);
         alertOwnerOfAuth(context.prisma, 'sign_in', login.user, email, reqFacts);
       }
       return login;
     },
     async logout(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      const host = context.req?.headers.host || (context.request?.headers?.get?.('host') ?? undefined);
+      const origin = (context.req?.headers.origin as string) || (context.request?.headers?.get?.('origin') ?? undefined);
+      const hostOrOrigin = origin || host;
+      if (context.res) {
+        clearSessionCookie(context.res, hostOrOrigin);
+        clearCsrfCookie(context.res, hostOrOrigin);
+      } else if (context.cookiesToSet) {
+        context.cookiesToSet.push(clearSessionCookie({}, hostOrOrigin));
+        context.cookiesToSet.push(clearCsrfCookie({}, hostOrOrigin));
+      }
       if (context.userId) {
         const cur = await context.prisma?.auth
           ?.findUnique?.({ where: { id: context.userId }, select: { token_version: true } })
