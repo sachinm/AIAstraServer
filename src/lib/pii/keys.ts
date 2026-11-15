@@ -12,7 +12,7 @@
  */
 import { createHash, createHmac, createCipheriv, createDecipheriv, hkdfSync, randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from '@aws-sdk/client-kms';
+import { KMSClient, GenerateDataKeyCommand, DecryptCommand, GenerateMacCommand } from '@aws-sdk/client-kms';
 
 export const PII_UNAVAILABLE = 'PII_UNAVAILABLE';
 
@@ -149,7 +149,18 @@ export interface KmsProviderConfig {
   region?: string;
   wrapKeyArn?: string;
   bidxKeyArn?: string;
+  wrappedBidxKey?: string | Buffer;
   keysTable?: string;
+  client?: KMSClient;
+}
+
+function toCiphertextBlob(raw: string | Buffer): Buffer {
+  if (Buffer.isBuffer(raw)) return raw;
+  const s = raw.trim();
+  if (/^[0-9a-fA-F]+$/.test(s) && s.length % 2 === 0) {
+    return Buffer.from(s, 'hex');
+  }
+  return Buffer.from(s, 'base64');
 }
 
 export const DEFAULT_KMS_KEY_ID = 'alias/aiastra-pii';
@@ -160,6 +171,9 @@ export class KmsKeyProvider implements PiiKeyProvider {
   readonly kind = 'kms' as const;
   private readonly client: KMSClient;
   readonly keyId: string;
+  readonly bidxKeyArn?: string;
+  readonly wrappedBidxKey?: string | Buffer;
+  private readonly injectedClient: boolean;
   private readonly dekCache: DekCache;
   private activeDek: { plaintext: Buffer; wrapped: Buffer; keyId: string; expiresAt: number } | null = null;
   private bidxKey: Buffer | null = null;
@@ -167,8 +181,16 @@ export class KmsKeyProvider implements PiiKeyProvider {
 
   constructor(readonly config: KmsProviderConfig = {}) {
     this.keyId = config.keyId || config.wrapKeyArn || process.env.PII_KMS_KEY_ARN || process.env.PII_KMS_WRAP_KEY_ARN || DEFAULT_KMS_KEY_ID;
+    this.bidxKeyArn = config.bidxKeyArn || process.env.PII_KMS_BIDX_KEY_ARN?.trim() || undefined;
+    this.wrappedBidxKey = config.wrappedBidxKey || process.env.PII_KMS_WRAPPED_BIDX_KEY?.trim() || undefined;
     const region = config.region || process.env.PII_KMS_REGION || process.env.AWS_REGION || DEFAULT_KMS_REGION;
-    this.client = new KMSClient({ region });
+    if (config.client) {
+      this.client = config.client;
+      this.injectedClient = true;
+    } else {
+      this.client = new KMSClient({ region });
+      this.injectedClient = false;
+    }
     this.dekCache = new DekCache(500, 5 * 60_000);
   }
 
@@ -180,6 +202,10 @@ export class KmsKeyProvider implements PiiKeyProvider {
         wrapped: this.activeDek.wrapped,
         keyId: this.activeDek.keyId,
       };
+    }
+
+    if (!this.injectedClient && !hasAwsKmsCredentials()) {
+      throw new PiiUnavailableError('AWS KMS credentials unavailable');
     }
 
     try {
@@ -201,6 +227,7 @@ export class KmsKeyProvider implements PiiKeyProvider {
 
       return { plaintext, wrapped, keyId: this.keyId };
     } catch (err: any) {
+      if (err instanceof PiiUnavailableError) throw err;
       throw new PiiUnavailableError(`KMS GenerateDataKey failed: ${err.message}`);
     }
   }
@@ -209,6 +236,10 @@ export class KmsKeyProvider implements PiiKeyProvider {
     const hash = createHash('sha256').update(wrappedDek).digest('hex');
     const cached = this.dekCache.get(hash);
     if (cached) return cached;
+
+    if (!this.injectedClient && !hasAwsKmsCredentials()) {
+      throw new PiiUnavailableError('AWS KMS credentials unavailable');
+    }
 
     try {
       const cmd = new DecryptCommand({
@@ -223,6 +254,7 @@ export class KmsKeyProvider implements PiiKeyProvider {
       this.dekCache.set(hash, dek);
       return dek;
     } catch (err: any) {
+      if (err instanceof PiiUnavailableError) throw err;
       throw new PiiUnavailableError(`KMS Decrypt failed: ${err.message}`);
     }
   }
@@ -234,18 +266,58 @@ export class KmsKeyProvider implements PiiKeyProvider {
   }
 
   async createKey(): Promise<string> {
-    if (this.keyId === 'arn:a' || !hasAwsKmsCredentials()) {
-      throw new PiiUnavailableError('the KMS key provider is not built yet (docs/privacy/02 B3)');
+    if (!this.injectedClient && !hasAwsKmsCredentials()) {
+      throw new PiiUnavailableError('AWS KMS credentials unavailable');
     }
     return randomUUID();
   }
 
   async mac(value: string): Promise<Buffer> {
-    if (!this.bidxKey) {
-      const { plaintext } = await this.generateDataKey();
-      this.bidxKey = hkdf(plaintext, 'bidx-v1');
+    if (!this.wrappedBidxKey && !this.bidxKeyArn) {
+      throw new PiiUnavailableError('KMS blind index key not configured');
     }
-    return createHmac('sha256', this.bidxKey).update(value, 'utf8').digest();
+
+    if (!this.injectedClient && !hasAwsKmsCredentials()) {
+      throw new PiiUnavailableError('AWS KMS credentials unavailable');
+    }
+
+    if (this.wrappedBidxKey) {
+      if (!this.bidxKey) {
+        try {
+          const blob = toCiphertextBlob(this.wrappedBidxKey);
+          const cmd = new DecryptCommand({
+            CiphertextBlob: blob,
+            KeyId: this.keyId,
+          });
+          const res = await this.client.send(cmd);
+          if (!res.Plaintext) {
+            throw new PiiUnavailableError('KMS Decrypt returned empty plaintext for blind index key');
+          }
+          this.bidxKey = hkdf(Buffer.from(res.Plaintext), 'bidx-v1');
+        } catch (err: any) {
+          if (err instanceof PiiUnavailableError) throw err;
+          throw new PiiUnavailableError(`KMS blind index decryption failed: ${err.message}`);
+        }
+      }
+      return createHmac('sha256', this.bidxKey).update(value, 'utf8').digest();
+    }
+
+    // Secondary path: bidxKeyArn is set
+    try {
+      const cmd = new GenerateMacCommand({
+        KeyId: this.bidxKeyArn!,
+        Message: Buffer.from(value, 'utf8'),
+        MacAlgorithm: 'HMAC_SHA_256',
+      });
+      const res = await this.client.send(cmd);
+      if (!res.Mac) {
+        throw new PiiUnavailableError('KMS GenerateMac returned empty MAC');
+      }
+      return Buffer.from(res.Mac);
+    } catch (err: any) {
+      if (err instanceof PiiUnavailableError) throw err;
+      throw new PiiUnavailableError(`KMS GenerateMac failed: ${err.message}`);
+    }
   }
 
   async destroyKey(keyRef: string): Promise<void> {
@@ -388,16 +460,26 @@ export function readPiiConfig(env: NodeJS.ProcessEnv = process.env): PiiConfig {
   }
   if (providerRaw === 'local' && lambda) throw new PiiUnavailableError('PII_KEY_PROVIDER=local is refused on a Lambda');
   if (providerRaw === 'local' && !localKeyFile) throw new PiiUnavailableError('PII_KEY_PROVIDER=local needs PII_LOCAL_KEY_FILE');
-  const kmsParts = {
-    wrapKeyArn: env.PII_KMS_WRAP_KEY_ARN?.trim() || env.PII_KMS_KEY_ARN?.trim() || '',
-    bidxKeyArn: env.PII_KMS_BIDX_KEY_ARN?.trim() || '',
-    keyId: env.PII_KMS_KEY_ARN?.trim() || env.PII_KMS_WRAP_KEY_ARN?.trim() || DEFAULT_KMS_KEY_ID,
+  const wrapKeyArn = env.PII_KMS_WRAP_KEY_ARN?.trim() || '';
+  const keyArn = env.PII_KMS_KEY_ARN?.trim() || '';
+  const bidxKeyArn = env.PII_KMS_BIDX_KEY_ARN?.trim() || '';
+  const wrappedBidxKey = env.PII_KMS_WRAPPED_BIDX_KEY?.trim() || '';
+
+  const hasWrapOrKey = Boolean(wrapKeyArn || keyArn);
+  const hasBidxOrWrapped = Boolean(bidxKeyArn || wrappedBidxKey);
+
+  if (providerRaw === 'kms' && (!hasWrapOrKey || !hasBidxOrWrapped)) {
+    throw new PiiUnavailableError('PII_KEY_PROVIDER=kms needs PII_KMS_WRAP_KEY_ARN (or PII_KMS_KEY_ARN) and PII_KMS_WRAPPED_BIDX_KEY (or PII_KMS_BIDX_KEY_ARN)');
+  }
+
+  const kmsParts: KmsProviderConfig = {
+    wrapKeyArn: wrapKeyArn || keyArn,
+    keyId: keyArn || wrapKeyArn || DEFAULT_KMS_KEY_ID,
+    bidxKeyArn: bidxKeyArn || undefined,
+    wrappedBidxKey: wrappedBidxKey || undefined,
     region: env.PII_KMS_REGION?.trim() || env.AWS_REGION?.trim() || DEFAULT_KMS_REGION,
     keysTable: env.PII_KEYS_TABLE?.trim() || undefined,
   };
-  if (providerRaw === 'kms' && (!kmsParts.wrapKeyArn || !kmsParts.bidxKeyArn)) {
-    throw new PiiUnavailableError('PII_KEY_PROVIDER=kms needs PII_KMS_WRAP_KEY_ARN and PII_KMS_BIDX_KEY_ARN');
-  }
   if (writeMode === 'sealed') {
     if (providerRaw === 'none') throw new PiiUnavailableError('PII_WRITE_MODE=sealed needs a key provider');
     if (lambda && providerRaw !== 'kms' && providerRaw !== 'mock') throw new PiiUnavailableError('PII_WRITE_MODE=sealed on a Lambda needs the KMS provider');
