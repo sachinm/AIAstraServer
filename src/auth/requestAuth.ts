@@ -19,6 +19,7 @@ import { prisma } from '../lib/prisma.js';
 import { canonicalRole, type RoleId } from './roles.js';
 import { getJwtSecret } from './jwtSecret.js';
 import { recordAppError } from '../telemetry/appErrors.js';
+import { JWT_COOKIE_NAME, parseCookies } from './cookies.js';
 
 export const ACCOUNT_LOCKED_CODE = 'ACCOUNT_LOCKED';
 export const ACCOUNT_LOCKED_MESSAGE = 'This account is locked.';
@@ -100,6 +101,17 @@ export function bearerToken(headers: HeaderSource): string | null {
   return value?.startsWith('Bearer ') ? value.slice(7) : null;
 }
 
+export function cookieToken(headers: HeaderSource): string | null {
+  const cookieHeader = header(headers, 'cookie');
+  if (!cookieHeader) return null;
+  const cookies = parseCookies(cookieHeader);
+  return cookies[JWT_COOKIE_NAME] || null;
+}
+
+export function extractAuthToken(headers: HeaderSource): string | null {
+  return bearerToken(headers) || cookieToken(headers);
+}
+
 /** user id -> the row as last read. Map order is insertion order, so the first key is the oldest. */
 const cache = new Map<string, { row: AuthRow | null; at: number }>();
 
@@ -123,7 +135,7 @@ function remember(userId: string, row: AuthRow | null, at: number): void {
 }
 
 export async function authenticateRequest(headers: HeaderSource, deps: RequestAuthDeps = {}): Promise<RequestAuth> {
-  const token = bearerToken(headers);
+  const token = extractAuthToken(headers);
   if (!token) return NOBODY;
   let claims: { sub?: string; userId?: string; role?: string; tv?: number };
   try {

@@ -89,6 +89,20 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
   Chat: { table: 'chats', owner: { via: 'user_id' }, fields: { name: text } },
   Message: { table: 'messages', owner: { via: 'chat_id' }, fields: { question: text, ai_answer: text } },
   ChatLog: { table: 'chat_logs', owner: { via: 'chat_id' }, fields: { request_payload: json, response_payload: json } },
+  ChatTurn: {
+    table: 'chat_turns',
+    owner: { via: 'user_id' },
+    fields: {
+      question: text,
+      events: json,
+      error: text,
+    },
+  },
+  BoardLayout: {
+    table: 'board_layout',
+    owner: { via: 'kundli_id' },
+    fields: { cards: json, sections: json, options: json, board_options: json },
+  },
   ReadingRun: {
     table: 'reading_runs',
     owner: { via: 'user_id' },

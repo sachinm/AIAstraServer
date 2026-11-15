@@ -60,11 +60,11 @@ describe('the graph runs only the selected analysts', () => {
 
   it('the deterministic readers join reconcile beside the analysts, with no model call', async () => {
     const { out, calls } = await graphRun('How will my career go next year?', { digest: true });
-    const layers = out.reconciled!.findings.map((f) => f.analyst);
+    const layers = out.reconciled!.findings.map((f: any) => f.analyst);
     expect(layers).toEqual(expect.arrayContaining(['promise', 'dasha', 'transit', 'varga_dynamics', 'strength_yoga', 'jaimini']));
     expect(calls.map((c) => c.analyst)).not.toEqual(expect.arrayContaining([...CODE_ANALYSTS]));
-    const code = out.reconciled!.findings.filter((f) => (CODE_ANALYSTS as readonly string[]).includes(f.analyst));
-    expect(code.reduce((n, f) => n + f.claims.length, 0)).toBeGreaterThan(0);
+    const code = out.reconciled!.findings.filter((f: any) => (CODE_ANALYSTS as readonly string[]).includes(f.analyst));
+    expect(code.reduce((n: number, f: any) => n + f.claims.length, 0)).toBeGreaterThan(0);
     expect(out.reconciled!.brief).toContain('varga_dynamics');
   });
 });

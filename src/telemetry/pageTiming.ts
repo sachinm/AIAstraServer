@@ -13,8 +13,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type express from 'express';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { getPageSlowThresholdMs, getPageTimingRetentionDays, isPageTimingEnabled } from '../config/env.js';
 import { graphqlLogFields } from '../lib/logRedact.js';
 import { getChartStatus } from '../services/chartStatusService.js';
@@ -23,6 +24,76 @@ import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { listLedger, resolveKundli } from '../reading/timeline/ledgerStore.js';
 import { ownProfileFields } from '../services/profileService.js';
 import { canonicalRole } from '../auth/roles.js';
+
+export interface PageTimingContext {
+  requestId: string;
+  queryCount: number;
+  dbMs: number;
+  aiMs?: number;
+  computeMs?: number;
+  cacheHits?: number;
+  spans?: Array<{ name: string; durationMs: number }>;
+}
+
+export const pageTimingStorage = new AsyncLocalStorage<PageTimingContext>();
+
+export function getPageTimingContext(): PageTimingContext | undefined {
+  return pageTimingStorage.getStore();
+}
+
+export function runWithPageContext<T>(context: PageTimingContext, fn: () => T): T {
+  return pageTimingStorage.run(context, fn);
+}
+
+export function recordDbQuery(durationMs: number): void {
+  const store = pageTimingStorage.getStore();
+  if (store) {
+    store.queryCount += 1;
+    store.dbMs += Math.max(0, durationMs);
+  }
+}
+
+/**
+ * Prisma client extension to profile queries and aggregate execution duration (db_ms)
+ * and query count in the active request context.
+ */
+export const queryProfilerExtension = Prisma.defineExtension({
+  name: 'queryProfiler',
+  query: {
+    $allModels: {
+      async $allOperations({ model, args, query }) {
+        if (model === 'PageExecutionLog') {
+          return query(args);
+        }
+        const start = process.hrtime.bigint();
+        try {
+          return await query(args);
+        } finally {
+          const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+          recordDbQuery(durationMs);
+        }
+      },
+    },
+    async $queryRaw({ args, query }) {
+      const start = process.hrtime.bigint();
+      try {
+        return await query(args);
+      } finally {
+        const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+        recordDbQuery(durationMs);
+      }
+    },
+    async $executeRaw({ args, query }) {
+      const start = process.hrtime.bigint();
+      try {
+        return await query(args);
+      } finally {
+        const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+        recordDbQuery(durationMs);
+      }
+    },
+  },
+});
 
 export type PageTimingSource =
   | 'server_request'
@@ -214,6 +285,7 @@ export interface PageTimingLogInput {
   durationMs: number;
   ttfbMs?: number | null;
   serverMs?: number | null;
+  dbMs?: number | null;
   renderMs?: number | null;
   drawMs?: number | null;
   queryCount?: number;
@@ -236,6 +308,20 @@ export async function recordPageExecution(
       : durationMs >= slowThreshold
         ? 1
         : 0;
+
+  const activeStore = pageTimingStorage.getStore();
+  const dbMs = entry.dbMs != null
+    ? Math.max(0, Math.round(entry.dbMs))
+    : activeStore?.dbMs != null
+      ? Math.max(0, Math.round(activeStore.dbMs))
+      : 0;
+
+  const queryCount = entry.queryCount != null
+    ? Math.max(0, Math.round(entry.queryCount))
+    : activeStore?.queryCount != null
+      ? Math.max(0, Math.round(activeStore.queryCount))
+      : 0;
+
   try {
     await prisma.pageExecutionLog.create({
       data: {
@@ -250,7 +336,7 @@ export async function recordPageExecution(
         duration_ms: durationMs,
         ttfb_ms: entry.ttfbMs != null ? Math.max(0, Math.round(entry.ttfbMs)) : null,
         server_ms: entry.serverMs != null ? Math.max(0, Math.round(entry.serverMs)) : null,
-        db_ms: null,
+        db_ms: dbMs,
         render_ms: entry.renderMs != null ? Math.max(0, Math.round(entry.renderMs)) : null,
         draw_ms: entry.drawMs != null ? Math.max(0, Math.round(entry.drawMs)) : null,
         cache_status: entry.cacheHit ? 'hit' : null,
@@ -260,7 +346,7 @@ export async function recordPageExecution(
           routePattern: entry.routePattern.slice(0, 120),
           ...(entry.sectionKey ? { sectionKey: entry.sectionKey.slice(0, 64) } : {}),
           slowCount,
-          queryCount: Math.max(0, Math.round(entry.queryCount ?? 0)),
+          queryCount,
         },
       },
     });
@@ -295,6 +381,12 @@ export function pageTimingMiddleware(
 
     const rawPageHeader = req.headers['x-astra-page'];
     const rawPage = typeof rawPageHeader === 'string' && rawPageHeader.trim() ? rawPageHeader.trim() : null;
+
+    const timingContext: PageTimingContext = {
+      requestId,
+      queryCount: 0,
+      dbMs: 0,
+    };
 
     let ttfbMs: number | null = null;
     let bodyBytes = 0;
@@ -384,13 +476,17 @@ export function pageTimingMiddleware(
           durationMs,
           ttfbMs: ttfbMs ?? durationMs,
           serverMs: durationMs,
+          dbMs: Math.round(timingContext.dbMs),
+          queryCount: timingContext.queryCount,
           bodyBytes,
           errorCode,
         });
       })();
     });
 
-    next();
+    pageTimingStorage.run(timingContext, () => {
+      next();
+    });
   };
 }
 
@@ -405,6 +501,8 @@ export interface ClientTimingBeaconItem {
   durationMs?: unknown;
   ttfbMs?: unknown;
   serverMs?: unknown;
+  dbMs?: unknown;
+  db_ms?: unknown;
   renderMs?: unknown;
   drawMs?: unknown;
   bodyBytes?: unknown;
@@ -412,6 +510,7 @@ export interface ClientTimingBeaconItem {
   cacheHit?: unknown;
   cacheStatus?: unknown;
   slowCount?: unknown;
+  queryCount?: unknown;
   errorCode?: unknown;
 }
 
@@ -635,6 +734,18 @@ export function registerPageTimingRoutes(
             ? 'hit'
             : null;
 
+      const clientDbMs =
+        item.dbMs != null && Number.isFinite(Number(item.dbMs))
+          ? Math.max(0, Math.min(600_000, Math.round(Number(item.dbMs))))
+          : item.db_ms != null && Number.isFinite(Number(item.db_ms))
+            ? Math.max(0, Math.min(600_000, Math.round(Number(item.db_ms))))
+            : 0;
+
+      const clientQueryCount =
+        item.queryCount != null && Number.isFinite(Number(item.queryCount))
+          ? Math.max(0, Math.round(Number(item.queryCount)))
+          : 0;
+
       const slowCount = durationMs >= slowThreshold ? 1 : 0;
       rows.push({
         request_id: randomUUID(),
@@ -648,7 +759,7 @@ export function registerPageTimingRoutes(
         duration_ms: durationMs,
         ttfb_ms: ttfbMs,
         server_ms: serverMs,
-        db_ms: null,
+        db_ms: clientDbMs,
         render_ms: renderMs,
         draw_ms: drawMs,
         cache_status: cacheStatus,
@@ -658,7 +769,7 @@ export function registerPageTimingRoutes(
           routePattern,
           ...(sectionKey ? { sectionKey } : {}),
           slowCount,
-          queryCount: 0,
+          queryCount: clientQueryCount,
         },
       });
     }
@@ -716,11 +827,18 @@ export function registerPageTimingRoutes(
     await Promise.all(
       sections.map(async (section) => {
         const secStart = process.hrtime.bigint();
+        const secContext: PageTimingContext = {
+          requestId: randomUUID(),
+          queryCount: 0,
+          dbMs: 0,
+        };
         let ok = true;
         let data: unknown = null;
         let errorCode: string | null = null;
         try {
-          data = await resolveDashboardSection(prisma, userId, section);
+          data = await runWithPageContext(secContext, () =>
+            resolveDashboardSection(prisma, userId, section)
+          );
         } catch {
           ok = false;
           errorCode = 'SECTION_ERROR';
@@ -736,7 +854,7 @@ export function registerPageTimingRoutes(
           /* client closed stream */
         }
         await recordPageExecution(prisma, {
-          requestId: randomUUID(),
+          requestId: secContext.requestId,
           sessionId,
           userId,
           pagePath,
@@ -749,6 +867,8 @@ export function registerPageTimingRoutes(
           durationMs,
           ttfbMs: durationMs,
           serverMs: durationMs,
+          dbMs: Math.round(secContext.dbMs),
+          queryCount: secContext.queryCount,
           bodyBytes: lineBytes,
           errorCode,
         });

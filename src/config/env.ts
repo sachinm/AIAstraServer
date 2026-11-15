@@ -1518,9 +1518,9 @@ export function getGraphqlMaxSelections(): number {
   return parseClampedIntEnv('GRAPHQL_MAX_SELECTIONS', 250, 10, 2000);
 }
 
-/** Allow `__schema` / `__type` GraphQL introspection queries. Env `GRAPHQL_INTROSPECTION` (default false in production). */
+/** Allow `__schema` / `__type` GraphQL introspection queries. Env `GRAPHQL_INTROSPECTION` (default true only in dev/local). */
 export function isGraphqlIntrospectionEnabled(): boolean {
-  return boolEnv('GRAPHQL_INTROSPECTION', getNodeEnv() !== 'production');
+  return boolEnv('GRAPHQL_INTROSPECTION', isDevOrLocal());
 }
 
 /** Mask unexpected internal/Prisma errors on GraphQL responses. Env `GRAPHQL_MASK_ERRORS` (default true outside local/dev). */

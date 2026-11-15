@@ -25,13 +25,15 @@ describe('Cache-Control', () => {
     expect(SSE_CACHE_CONTROL).toMatch(/^no-store\b/);
     const server = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf8');
     const clarify = fs.readFileSync(path.resolve(process.cwd(), 'src/routes/clarifyRoutes.ts'), 'utf8');
-    for (const src of [server, clarify]) {
+    const chat = fs.readFileSync(path.resolve(process.cwd(), 'src/chat/chatRoutes.ts'), 'utf8');
+    expect(server).not.toMatch(/no-cache/);
+    for (const src of [chat, clarify]) {
       expect(src).not.toMatch(/no-cache/);
       expect(src).toMatch(/setHeader\('Cache-Control', SSE_CACHE_CONTROL\)/);
     }
     const mw = server.indexOf('app.use(noStoreMiddleware)');
     expect(mw).toBeGreaterThan(0);
-    for (const route of ["app.post('/events'", 'app.use(yoga.graphqlEndpoint', "app.post('/api/chat/ask-stream'", 'registerClarifyRoutes(app']) {
+    for (const route of ["app.post('/events'", 'app.use(yoga.graphqlEndpoint', 'registerChatRoutes(app', 'registerClarifyRoutes(app']) {
       expect(server.indexOf(route), route).toBeGreaterThan(mw);
     }
   });
