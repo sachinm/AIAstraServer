@@ -16,6 +16,7 @@ import { schema } from './src/graphql/schema.js';
 import { buildContext, getJwtSecret, type GraphQLContext } from './src/graphql/context.js';
 import { ensureAdmins } from './src/ensureAdmins.js';
 import { optionalUser, requireUser } from './src/auth/requestAuth.js';
+import { checkRateLimit } from './src/lib/redis/rateLimiter.js';
 import { csrfProtectionMiddleware } from './src/auth/csrf.js';
 import { registerChatRoutes } from './src/chat/chatRoutes.js';
 import { lockGuardPlugin } from './src/graphql/lockGuard.js';
@@ -246,6 +247,22 @@ const graphqlRateLimit = rateLimit({
 });
 
 app.use(yoga.graphqlEndpoint, graphqlRateLimit, async (req, res, next) => {
+  if (req.method !== 'OPTIONS') {
+    const rlUserId = await optionalUser(req).catch(() => null);
+    const rlKey = rlUserId ? `user:${rlUserId}` : `ip:${req.ip || 'anon'}`;
+    const rl = await checkRateLimit('graphql', rlKey, { prisma });
+    if (!rl.allowed) {
+      res.setHeader('Retry-After', String(rl.retryAfterSec));
+      return res.status(429).json({
+        errors: [
+          {
+            message: 'Too many requests. Please try again later.',
+            extensions: { code: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+          },
+        ],
+      });
+    }
+  }
   const startedAt = Date.now();
   // the operation's name only: bodies carry emails, sign-in codes, birth details and questions
   console.log('[GraphQL] incoming', {

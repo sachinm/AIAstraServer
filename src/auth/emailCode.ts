@@ -17,6 +17,12 @@ import { getOtpLockoutMinutes, getOtpMaxFailedAttempts } from '../config/env.js'
 import { recordAccountEvent } from '../audit/accountEvents.js';
 import { recordAppError } from '../telemetry/appErrors.js';
 import { getCognitoAuth } from './cognitoClient.js';
+import { checkRateLimit } from '../lib/redis/rateLimiter.js';
+import {
+  clearOtpLockInRedis,
+  isOtpLockedInRedis,
+  setOtpLockInRedis,
+} from '../lib/redis/sessionStore.js';
 
 export type AuthProvider = 'local' | 'cognito';
 /** `locked`: the code was right but the account is locked (auth.locked_at); the caller refuses to issue a token. */
@@ -101,6 +107,9 @@ async function recordOtpFailureAttempt(
   }
 
   if (lockedNow) {
+    if (lockUntil) {
+      await setOtpLockInRedis(user.id, lockUntil).catch(() => undefined);
+    }
     void recordAppError(prisma, {
       source: 'server_auth',
       severity: 'warn',
@@ -127,6 +136,7 @@ async function recordOtpFailureAttempt(
 }
 
 async function clearOtpFailureAttempts(userId: string): Promise<void> {
+  await clearOtpLockInRedis(userId).catch(() => undefined);
   try {
     await prisma.auth.update({
       where: { id: userId },
@@ -150,7 +160,7 @@ async function legacySendLoginCode(emailRaw: string): Promise<void> {
     select: { id: true, email: true, locked_at: true, otp_locked_until: true },
   });
   // a locked account gets no code; the caller answers exactly as for an unknown address
-  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until)) return;
+  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until) || (await isOtpLockedInRedis(user.id))) return;
 
   const plain = generateMagicLinkCode();
   const hash = await hashPassword(plain);
@@ -195,7 +205,7 @@ async function legacyVerifyLoginCode(
       otp_locked_until: true,
     },
   });
-  if (user && isOtpLocked(user.otp_locked_until)) {
+  if (user && (isOtpLocked(user.otp_locked_until) || (await isOtpLockedInRedis(user.id)))) {
     noteOtpFailure(emailRaw, 'otp_locked');
     return null;
   }
@@ -224,6 +234,7 @@ async function legacyVerifyLoginCode(
       otp_locked_until: null,
     },
   });
+  await clearOtpLockInRedis(user.id).catch(() => undefined);
   // checked only after the code matched, so a locked address cannot be told apart by guessing
   return { id: user.id, role: user.role, locked: Boolean(user.locked_at) };
 }
@@ -280,7 +291,7 @@ async function cognitoSendLoginCode(emailRaw: string): Promise<void> {
   // Only accounts we hold are sent to Cognito: unknown emails are a silent no-op, like the local provider.
   const user = await findAccountByEmail(email);
   // a locked account gets no code; the caller answers exactly as for an unknown address
-  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until)) return;
+  if (!user || user.locked_at || isOtpLocked(user.otp_locked_until) || (await isOtpLockedInRedis(user.id))) return;
 
   try {
     const cognito = getCognitoAuth();
@@ -346,7 +357,7 @@ async function cognitoVerifyLoginCode(
     noteOtpFailure(emailRaw, 'unknown_or_unset');
     return null; // creates nothing: an account row must already exist
   }
-  if (isOtpLocked(user.otp_locked_until)) {
+  if (isOtpLocked(user.otp_locked_until) || (await isOtpLockedInRedis(user.id))) {
     noteOtpFailure(emailRaw, 'otp_locked');
     return null;
   }
@@ -399,12 +410,20 @@ async function cognitoVerifyLoginCode(
 
 /**
  * Email a fresh login code to the account with this email (if any). Never reveals whether the email exists;
- * send failures are logged, not thrown.
+ * send failures are logged, not thrown. Enforces distributed `otp_send` rate limiting (fail-open if Redis is down).
  */
 export async function sendLoginCode(emailRaw: string): Promise<void> {
-  return getAuthProvider() === 'cognito'
+  const normalized = emailRaw.trim().toLowerCase();
+  if (isWellFormedEmail(normalized)) {
+    const rl = await checkRateLimit('otp_send', normalized, { prisma });
+    if (!rl.allowed) {
+      noteOtpFailure(emailRaw, 'rate_limited');
+      return;
+    }
+  }
+  await (getAuthProvider() === 'cognito'
     ? cognitoSendLoginCode(emailRaw)
-    : legacySendLoginCode(emailRaw);
+    : legacySendLoginCode(emailRaw));
 }
 
 /**

@@ -186,19 +186,33 @@ export function registerChatRoutes(app: express.Express, deps: { prisma: PrismaC
     const userId = await requireUser(req, res);
     if (!userId) return;
 
-    const turnId = String(req.query.turnId || '');
-    if (!turnId) {
-      return res.status(400).json({ error: 'turnId is required' });
+    const turnId = String(req.query.turnId || '').trim();
+    const sessionId = String(req.query.sessionId || '').trim();
+    if (!turnId && !sessionId) {
+      return res.status(400).json({ error: 'turnId or sessionId is required' });
     }
 
     const lastSeqHeader = req.headers['last-event-id'];
-    const lastSeqRaw = req.query.lastSeq ?? (Array.isArray(lastSeqHeader) ? lastSeqHeader[0] : lastSeqHeader);
-    const lastSeq = lastSeqRaw !== undefined ? Number(lastSeqRaw) : -1;
+    const lastSeqRaw =
+      req.query.afterSeq ??
+      req.query.lastSeq ??
+      (Array.isArray(lastSeqHeader) ? lastSeqHeader[0] : lastSeqHeader);
+    const parsedSeq = lastSeqRaw !== undefined && String(lastSeqRaw).trim() !== '' ? Number(lastSeqRaw) : -1;
+    const lastSeq = Number.isFinite(parsedSeq) ? parsedSeq : -1;
 
-    const turn = await chatTurnService.getTurn(prisma, turnId, userId);
-    if (!turn) {
+    const lookup = await chatTurnService.lookupTurnForResume(prisma, {
+      turnId: turnId || undefined,
+      sessionId: sessionId || undefined,
+      userId,
+    });
+    if (lookup.status === 'forbidden') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (lookup.status === 'not_found') {
       return res.status(404).json({ error: 'Turn not found' });
     }
+    const turn = lookup.turn;
+    const resolvedTurnId = turn.turnId;
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', SSE_CACHE_CONTROL);
@@ -230,7 +244,7 @@ export function registerChatRoutes(app: express.Express, deps: { prisma: PrismaC
     }
 
     // 3. If turn is streaming/pending, attach to active turn emitter
-    const active = chatTurnService.getActiveTurn(turnId);
+    const active = chatTurnService.getActiveTurn(resolvedTurnId);
     if (!active || active.status === 'completed' || active.status === 'failed') {
       res.end();
       return;
