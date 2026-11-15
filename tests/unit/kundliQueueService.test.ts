@@ -19,6 +19,11 @@ describe('kundliQueueService', () => {
       expect(isJsonFieldFilled({})).toBe(false);
     });
 
+    it('returns false for object with error key', () => {
+      expect(isJsonFieldFilled({ error: 'Division by zero' })).toBe(false);
+      expect(isJsonFieldFilled({ error: 'Radha timeout' })).toBe(false);
+    });
+
     it('returns true for non-empty object', () => {
       expect(isJsonFieldFilled({ a: 1 })).toBe(true);
     });
