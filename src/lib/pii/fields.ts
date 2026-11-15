@@ -162,6 +162,7 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
   // would break the upsert. Plain until a keyed form is chosen (docs/TODOS.md).
   TimelineCalibration: { table: 'timeline_calibration', owner: { via: 'kundli_id' }, fields: {} },
   UserCurrentLocation: { table: 'user_current_location', owner: { via: 'user_id' }, fields: { place: text, tz: text, coords: pendingText } },
+  UserNotification: { table: 'user_notifications', owner: { via: 'user_id' }, fields: { title: text, body: text, metadata: json } },
   BillingAccount: { table: 'billing_accounts', owner: { via: 'user_id' }, fields: { payment_ref: text, billing_country: text } },
   // shared sky rows: lat/lon/tz move under the system key and place_key becomes an HMAC (place_bidx) in M26/M28
   TransitInstant: { table: 'transit_instants', owner: { via: 'system' }, fields: {} },
