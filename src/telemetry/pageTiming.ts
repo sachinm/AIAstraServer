@@ -17,6 +17,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type express from 'express';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { getPageSlowThresholdMs, getPageTimingRetentionDays, isPageTimingEnabled } from '../config/env.js';
+import { getRedisTelemetrySnapshot } from '../lib/redis/telemetry.js';
 import { graphqlLogFields } from '../lib/logRedact.js';
 import { getChartStatus } from '../services/chartStatusService.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
@@ -32,6 +33,9 @@ export interface PageTimingContext {
   aiMs?: number;
   computeMs?: number;
   cacheHits?: number;
+  cacheMisses?: number;
+  cacheMs?: number;
+  redisOps?: number;
   spans?: Array<{ name: string; durationMs: number }>;
 }
 
@@ -50,6 +54,25 @@ export function recordDbQuery(durationMs: number): void {
   if (store) {
     store.queryCount += 1;
     store.dbMs += Math.max(0, durationMs);
+  }
+}
+
+export function recordPageCacheOp(params: {
+  outcome: 'hit' | 'miss' | 'write' | 'error';
+  durationMs?: number;
+  fromRedis?: boolean;
+}): void {
+  const store = pageTimingStorage.getStore();
+  if (!store) return;
+  if (params.outcome === 'hit') {
+    store.cacheHits = (store.cacheHits ?? 0) + 1;
+  } else if (params.outcome === 'miss') {
+    store.cacheMisses = (store.cacheMisses ?? 0) + 1;
+  }
+  const dur = params.durationMs != null && Number.isFinite(params.durationMs) ? Math.max(0, params.durationMs) : 0;
+  store.cacheMs = (store.cacheMs ?? 0) + dur;
+  if (params.fromRedis) {
+    store.redisOps = (store.redisOps ?? 0) + 1;
   }
 }
 
@@ -291,6 +314,10 @@ export interface PageTimingLogInput {
   queryCount?: number;
   slowCount?: number;
   cacheHit?: boolean;
+  cacheHits?: number;
+  cacheMisses?: number;
+  cacheMs?: number;
+  redisOps?: number;
   bodyBytes?: number | null;
   errorCode?: string | null;
 }
@@ -322,6 +349,37 @@ export async function recordPageExecution(
       ? Math.max(0, Math.round(activeStore.queryCount))
       : 0;
 
+  const cacheHits = entry.cacheHits != null
+    ? Math.max(0, Math.round(entry.cacheHits))
+    : activeStore?.cacheHits != null
+      ? Math.max(0, Math.round(activeStore.cacheHits))
+      : 0;
+  const cacheMisses = entry.cacheMisses != null
+    ? Math.max(0, Math.round(entry.cacheMisses))
+    : activeStore?.cacheMisses != null
+      ? Math.max(0, Math.round(activeStore.cacheMisses))
+      : 0;
+  const cacheMs = entry.cacheMs != null
+    ? Math.max(0, Math.round(entry.cacheMs))
+    : activeStore?.cacheMs != null
+      ? Math.max(0, Math.round(activeStore.cacheMs))
+      : 0;
+  const redisOps = entry.redisOps != null
+    ? Math.max(0, Math.round(entry.redisOps))
+    : activeStore?.redisOps != null
+      ? Math.max(0, Math.round(activeStore.redisOps))
+      : 0;
+  const cacheStatus =
+    cacheHits > 0 && cacheMisses === 0
+      ? 'hit'
+      : cacheHits > 0 && cacheMisses > 0
+        ? 'partial'
+        : cacheHits === 0 && cacheMisses > 0
+          ? 'miss'
+          : entry.cacheHit
+            ? 'hit'
+            : null;
+
   try {
     await prisma.pageExecutionLog.create({
       data: {
@@ -339,7 +397,7 @@ export async function recordPageExecution(
         db_ms: dbMs,
         render_ms: entry.renderMs != null ? Math.max(0, Math.round(entry.renderMs)) : null,
         draw_ms: entry.drawMs != null ? Math.max(0, Math.round(entry.drawMs)) : null,
-        cache_status: entry.cacheHit ? 'hit' : null,
+        cache_status: cacheStatus,
         body_bytes: entry.bodyBytes != null ? Math.max(0, Math.round(entry.bodyBytes)) : null,
         error_code: entry.errorCode ? entry.errorCode.slice(0, 80) : null,
         meta: {
@@ -347,6 +405,15 @@ export async function recordPageExecution(
           ...(entry.sectionKey ? { sectionKey: entry.sectionKey.slice(0, 64) } : {}),
           slowCount,
           queryCount,
+          ...(redisOps > 0 || cacheHits > 0 || cacheMisses > 0
+            ? {
+                redis_latency_ms: cacheMs,
+                cacheHits,
+                cacheMisses,
+                redisOps,
+                redisCircuitState: getRedisTelemetrySnapshot().circuitState,
+              }
+            : {}),
         },
       },
     });
@@ -478,6 +545,10 @@ export function pageTimingMiddleware(
           serverMs: durationMs,
           dbMs: Math.round(timingContext.dbMs),
           queryCount: timingContext.queryCount,
+          cacheHits: timingContext.cacheHits,
+          cacheMisses: timingContext.cacheMisses,
+          cacheMs: timingContext.cacheMs,
+          redisOps: timingContext.redisOps,
           bodyBytes,
           errorCode,
         });

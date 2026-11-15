@@ -1,3 +1,4 @@
+import { GraphQLError } from 'graphql';
 import { createSchema } from 'graphql-yoga';
 import { chatCategory } from '../chat/categories.js';
 import type { Prisma } from '@prisma/client';
@@ -13,7 +14,9 @@ import { getClientIp } from '../lib/requestMeta.js';
 import { factsFromFetch, recordAccountEvent, subjectTag } from '../audit/accountEvents.js';
 import { alertOwnerOfAuth } from '../notify/ownerAlerts.js';
 import { checkTerms, currentTermsInfo, recordTermsAcceptance } from '../auth/terms.js';
-import { forgetUser } from '../auth/requestAuth.js';
+import { extractAuthToken, forgetUser } from '../auth/requestAuth.js';
+import { checkRateLimit } from '../lib/redis/rateLimiter.js';
+import { revokeUserSessionInRedis } from '../lib/redis/sessionStore.js';
 import { popLastOtpFailure } from '../auth/emailCode.js';
 import { assertTurnstileIfConfigured } from '../services/turnstileService.js';
 import {
@@ -1317,6 +1320,12 @@ const resolvers = {
         return null;
       }
       if (!context.userId) return null;
+      const rl = await checkRateLimit('chart_calc', context.userId, { prisma: context.prisma });
+      if (!rl.allowed) {
+        throw new GraphQLError('Too many chart recalculations. Please wait before retrying.', {
+          extensions: { code: 'RATE_LIMITED', retryAfterSec: rl.retryAfterSec },
+        });
+      }
       await resumeChartBuild(context.prisma, context.userId, { force: true });
       return getChartStatus(context.prisma, context.userId);
     },
@@ -1470,7 +1479,8 @@ const resolvers = {
         const cur = await context.prisma?.auth
           ?.findUnique?.({ where: { id: context.userId }, select: { token_version: true } })
           .catch(() => null);
-        const nextTv = typeof cur?.token_version === 'number' ? cur.token_version + 1 : { increment: 1 };
+        const nextTvNum = typeof cur?.token_version === 'number' ? cur.token_version + 1 : null;
+        const nextTv = nextTvNum !== null ? nextTvNum : { increment: 1 };
         await context.prisma?.auth
           ?.update?.({
             where: { id: context.userId },
@@ -1478,6 +1488,12 @@ const resolvers = {
           })
           .catch(() => undefined);
         forgetUser(context.userId);
+        const rawToken = extractAuthToken(context.req?.headers ?? context.request.headers);
+        await revokeUserSessionInRedis({
+          userId: context.userId,
+          rawToken,
+          minTokenVersion: nextTvNum,
+        }).catch(() => undefined);
         // fire-and-forget: the response never waits for Gemini; the 45-minute sweeper catches anything left
         void deleteUserCaches(context.userId).catch(() => undefined);
         void recordAccountEvent(context.prisma, {

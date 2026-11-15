@@ -1,6 +1,11 @@
 import { EventEmitter } from 'node:events';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { QuestionTicket } from '../billing/questionGate.js';
+import {
+  appendTurnEventToRedis,
+  readTurnFromRedis,
+  writeTurnMetaToRedis,
+} from '../lib/redis/sseBuffer.js';
 
 export type TurnStatus = 'pending' | 'streaming' | 'completed' | 'failed';
 
@@ -14,6 +19,7 @@ export interface TurnEvent {
 export interface ActiveTurn {
   turnId: string;
   userId: string;
+  sessionId: string | null;
   status: TurnStatus;
   seq: number;
   events: TurnEvent[];
@@ -21,7 +27,16 @@ export interface ActiveTurn {
   ticket: QuestionTicket | null;
   lastPersistedSeq: number;
   lastPersistedAt: number;
+  createdAtMs: number;
 }
+
+export type ResumeTurnLookupResult =
+  | {
+      status: 'ok';
+      turn: { turnId: string; status: TurnStatus; seq: number; events: TurnEvent[] };
+    }
+  | { status: 'forbidden' }
+  | { status: 'not_found' };
 
 export class ChatTurnService {
   private activeTurns = new Map<string, ActiveTurn>();
@@ -48,19 +63,32 @@ export class ChatTurnService {
       },
     });
 
+    const createdAtMs = Date.now();
+    const sessionId = params.sessionId ?? null;
     const active: ActiveTurn = {
       turnId: turn.id,
       userId: params.userId,
+      sessionId,
       status: 'pending',
       seq: 0,
       events: [],
       emitter: new EventEmitter(),
       ticket: params.ticket,
       lastPersistedSeq: 0,
-      lastPersistedAt: Date.now(),
+      lastPersistedAt: createdAtMs,
+      createdAtMs,
     };
     active.emitter.setMaxListeners(50);
     this.activeTurns.set(turn.id, active);
+
+    void writeTurnMetaToRedis({
+      id: turn.id,
+      userId: params.userId,
+      sessionId,
+      status: 'pending',
+      createdAtMs,
+    }).catch(() => undefined);
+
     return active;
   }
 
@@ -97,6 +125,17 @@ export class ChatTurnService {
     };
     active.events.push(event);
     active.emitter.emit('event', event);
+
+    void appendTurnEventToRedis({
+      meta: {
+        id: turnId,
+        userId: active.userId,
+        sessionId: active.sessionId,
+        status: active.status,
+        createdAtMs: active.createdAtMs,
+      },
+      event,
+    }).catch(() => undefined);
 
     // Throttle DB persist: write if > 1000ms elapsed or milestone event
     const now = Date.now();
@@ -140,6 +179,17 @@ export class ChatTurnService {
     active.emitter.emit('event', doneEvent);
     active.emitter.emit('done');
 
+    void appendTurnEventToRedis({
+      meta: {
+        id: turnId,
+        userId: active.userId,
+        sessionId: active.sessionId,
+        status: 'completed',
+        createdAtMs: active.createdAtMs,
+      },
+      event: doneEvent,
+    }).catch(() => undefined);
+
     await db.chatTurn.update({
       where: { id: turnId },
       data: {
@@ -177,6 +227,18 @@ export class ChatTurnService {
     active.emitter.emit('event', errEvent);
     active.emitter.emit('error', error);
 
+    void appendTurnEventToRedis({
+      meta: {
+        id: turnId,
+        userId: active.userId,
+        sessionId: active.sessionId,
+        status: 'failed',
+        errorMessage: error,
+        createdAtMs: active.createdAtMs,
+      },
+      event: errEvent,
+    }).catch(() => undefined);
+
     await db.chatTurn
       .update({
         where: { id: turnId },
@@ -194,23 +256,107 @@ export class ChatTurnService {
     }, 5 * 60_000);
   }
 
+  /**
+   * Resolves a chat turn for SSE replay across memory -> Redis SSE buffer -> PostgreSQL `chat_turns`.
+   * Explicitly returns `'forbidden'` when the turn belongs to a different user so callers return HTTP 403.
+   */
+  async lookupTurnForResume(
+    db: PrismaClient,
+    params: { turnId?: string; sessionId?: string; userId: string }
+  ): Promise<ResumeTurnLookupResult> {
+    const turnId = params.turnId?.trim() || '';
+    const sessionId = params.sessionId?.trim() || '';
+    if (!turnId && !sessionId) {
+      return { status: 'not_found' };
+    }
+
+    if (turnId) {
+      const active = this.activeTurns.get(turnId);
+      if (active) {
+        if (active.userId !== params.userId) return { status: 'forbidden' };
+        return {
+          status: 'ok',
+          turn: { turnId: active.turnId, status: active.status, seq: active.seq, events: active.events },
+        };
+      }
+    } else if (sessionId) {
+      let matchedLatest: ActiveTurn | null = null;
+      for (const active of this.activeTurns.values()) {
+        if (active.sessionId === sessionId) {
+          if (!matchedLatest || active.createdAtMs >= matchedLatest.createdAtMs) {
+            matchedLatest = active;
+          }
+        }
+      }
+      if (matchedLatest) {
+        if (matchedLatest.userId !== params.userId) return { status: 'forbidden' };
+        return {
+          status: 'ok',
+          turn: {
+            turnId: matchedLatest.turnId,
+            status: matchedLatest.status,
+            seq: matchedLatest.seq,
+            events: matchedLatest.events,
+          },
+        };
+      }
+    }
+
+    const redisRes = await readTurnFromRedis({
+      turnId: turnId || undefined,
+      sessionId: sessionId || undefined,
+      userId: params.userId,
+    });
+    if (redisRes.status === 'forbidden') {
+      return { status: 'forbidden' };
+    }
+    if (redisRes.status === 'ok') {
+      const lastSeq = redisRes.events.length
+        ? redisRes.events[redisRes.events.length - 1].seq
+        : 0;
+      return {
+        status: 'ok',
+        turn: {
+          turnId: redisRes.meta.id,
+          status: redisRes.meta.status,
+          seq: lastSeq,
+          events: redisRes.events,
+        },
+      };
+    }
+
+    const row = turnId
+      ? await db.chatTurn.findUnique({ where: { id: turnId } })
+      : await db.chatTurn.findFirst({
+          where: { sessionId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+    if (!row) return { status: 'not_found' };
+    if (row.userId !== params.userId) return { status: 'forbidden' };
+
+    return {
+      status: 'ok',
+      turn: {
+        turnId: row.id,
+        status: row.status as TurnStatus,
+        seq: row.seq,
+        events: (row.events as unknown as TurnEvent[]) ?? [],
+      },
+    };
+  }
+
   async getTurn(
     db: PrismaClient,
     turnId: string,
     userId: string
   ): Promise<{ status: TurnStatus; seq: number; events: TurnEvent[] } | null> {
-    const active = this.activeTurns.get(turnId);
-    if (active && active.userId === userId) {
-      return { status: active.status, seq: active.seq, events: active.events };
-    }
-    const row = await db.chatTurn.findUnique({
-      where: { id: turnId },
-    });
-    if (!row || row.userId !== userId) return null;
+    const res = await this.lookupTurnForResume(db, { turnId, userId });
+    if (res.status !== 'ok') return null;
     return {
-      status: row.status as TurnStatus,
-      seq: row.seq,
-      events: (row.events as unknown as TurnEvent[]) ?? [],
+      status: res.turn.status,
+      seq: res.turn.seq,
+      events: res.turn.events,
     };
   }
 }

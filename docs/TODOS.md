@@ -253,6 +253,8 @@ re-applied by it.
 
 ## P2: real, can wait
 
+- **Pre-existing pytest catalog-version and transit-field assertion drift on `AIAstra_Radha` `develop`.** GitHub Actions `Tests` run `43697261855` (`2026-11-15`, `Merge branch 'feat/m3-calculate-full-kundli' into develop`) reported `19 failed, 2445 passed` due to `test_doc34_annual`, `test_pressure_inventory`, and `test_r5_annual` asserting older catalog version strings (`'2'` vs `'3'` / `'1'` vs `'2'`) plus `test_transit_range` asserting keys without `'gochara_good'` (introduced in prior transit commit `4349000`, unrelated to `calculate-full-kundli`). Owner: calculation service (`AIAstra_Radha`). Done: catalog version assertions and `test_transit_range` expected key sets match the live endpoints and `pytest` passes green on `develop`.
+
 - **No per-email or per-IP limit on sending sign-up and sign-in codes.** `startSignup` and `requestMagicLink`
   (`src/services/authService.ts`) have only Turnstile and the web's 30 s resend countdown in front of them. Turnstile is now
   unseen and never blocks the form (web 57bff1f, plan `docs/product/fast-auth-security-check.md`), so these limits are the
