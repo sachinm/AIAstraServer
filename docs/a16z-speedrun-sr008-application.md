@@ -13,13 +13,10 @@ starts with your email. Which sections hide behind a toggle is partly inferred, 
 
 Submit tonight. speedrun takes idea, prototype and early-product companies, and says traction is not required.
 
-| Live database, 2026-11-01 | Accounts | Threads | Messages | Came back after day 1 |
-|---|---|---|---|---|
-| Not matching a founder or test email pattern | 25 | 33 | 87 | 8 |
-| Founder or test emails | 7 | 62 | 137 | 2 |
-
-The split is by email pattern only, so the 25 can still include friends and family. Do not quote 32 accounts or 95
-threads as traction: most of the threads are ours.
+**There is no user traction to quote.** Sachin confirmed on 2026-11-14 that every account in the database is test data.
+An earlier version of this doc split the 2026-11-01 database by email pattern and reported 25 "non-team" accounts, 33
+threads, 87 messages and 8 returning. Those were test accounts. Do not quote them, or the 32 accounts and 95 threads,
+anywhere. If any of those figures went into a submitted application, correct it by email to sr-team@a16z.com.
 
 Do not claim any of these:
 
@@ -140,8 +137,9 @@ phrase was shortened. Other fits:
 
 **Q21. Traction commentary**
 
-> Early beta with no revenue. 25 non-team accounts, 33 threads, 87 messages; 8 people returned after their first day.
-> Shipping: 327 commits across three repos since 1 September.
+> Pre-launch, in testing, with no outside users and no revenue yet. Shipping: 460+ commits across three repos since
+> March 2026. A benchmark on 8 November ran 30 dashboard readings across 10 test charts, and every claim shown traced
+> back to a calculated chart fact.
 
 **Facts only you can give:** full-time or part-time (the resume lists two current jobs, and part-time means entering 0
 full-time founders), citizenship, founding date, launch date, incorporation, funding, whether you are raising, any
@@ -215,7 +213,7 @@ to staging. Do the dry run below first. If the panel does not appear, cut that l
 
 **2:05-2:30, on camera. Progress and why it gets big.**
 
-> It's an early beta with no revenue. 25 accounts outside my own and test emails, and 8 of them came back after day one.
+> We're pre-launch and in testing, with no outside users and no revenue yet.
 > In the next 90 days: payment, three life-domain dashboards, and a blind accuracy test with two practising astrologers.
 > People already pay for this by the session. And everyone here gives us birth date, time and place, which opens up
 > compatibility and matching later. Thanks for watching.
