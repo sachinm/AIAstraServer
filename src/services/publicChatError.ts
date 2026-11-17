@@ -40,6 +40,15 @@ export function logChatProviderError(scope: string, err: unknown): void {
   console.error(`[chat-provider] ${scope}`, { name: e.name, message: redactForLog(e.message, 160), at: stackFrames(e) });
 }
 
+/**
+ * `ai_unavailable` when the provider refused for credit, rate or key reasons: the web then shows its full-screen notice
+ * and disables the ask and refresh buttons. Timeouts and other failures carry no code (a retry is reasonable).
+ */
+export function publicCodeFromChatProviderError(err: unknown): 'ai_unavailable' | undefined {
+  const msg = rawMessage(err);
+  return QUOTA_OR_RATE.test(msg) || AUTH_OR_KEY.test(msg) ? 'ai_unavailable' : undefined;
+}
+
 export function publicMessageFromChatProviderError(err: unknown): string {
   const msg = rawMessage(err);
   if (QUOTA_OR_RATE.test(msg)) return PUBLIC_CHAT_QUOTA_MESSAGE;

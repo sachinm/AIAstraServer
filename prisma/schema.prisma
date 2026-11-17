@@ -87,6 +87,7 @@ model Auth {
 
   profilePhoto       ProfilePhoto?
   photoAttempts      ProfilePhotoAttempt[]
+  notifications      UserNotification[]
 
   @@map("auth")
 }
@@ -927,8 +928,9 @@ model AdminAccount {
   last_login_ip   String?       @map("last_login_ip")
   created_at      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updated_at      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  actions         AdminAction[]
+  actions          AdminAction[]
   techniqueReviews TechniqueReview[]
+  sentNotifications UserNotification[]
 
   @@map("admin_accounts")
 }
@@ -1618,4 +1620,33 @@ model KundliSlice {
 
   @@unique([kundli_id, slice_id], name: "kundli_slice_key", map: "kundli_slices_kundli_slice_key")
   @@map("kundli_slices")
+}
+
+/// M53: Admin-sent and system notifications delivered to a user's header inbox.
+/// `title`, `body`, and `metadata` are sealed at rest (`SEALED_MODELS`).
+model UserNotification {
+  id              String        @id @default(dbgenerated("(uuid_generate_v4())::text"))
+  user_id         String        @map("user_id")
+  sender_admin_id String?       @map("sender_admin_id")
+  sender_label    String?       @map("sender_label")
+  /// admin_message | system | reading | billing
+  category        String        @default("admin_message")
+  /// normal | important
+  priority        String        @default("normal")
+  title           String
+  body            String
+  action_url      String?       @map("action_url")
+  action_label    String?       @map("action_label")
+  read_at         DateTime?     @map("read_at") @db.Timestamptz(6)
+  dismissed_at    DateTime?     @map("dismissed_at") @db.Timestamptz(6)
+  expires_at      DateTime?     @map("expires_at") @db.Timestamptz(6)
+  metadata        Json?
+  created_at      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user            Auth          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "user_notifications_user_fkey")
+  sender_admin    AdminAccount? @relation(fields: [sender_admin_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "user_notifications_sender_admin_fkey")
+
+  @@index([user_id, dismissed_at, created_at(sort: Desc)], map: "idx_user_notifications_inbox")
+  @@index([user_id, read_at], map: "idx_user_notifications_unread")
+  @@map("user_notifications")
 }

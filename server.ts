@@ -37,6 +37,8 @@ import { registerSelfV3Routes } from './src/routes/selfV3Routes.js';
 import { registerNowRoutes } from './src/routes/nowRoutes.js';
 import { registerBoardCardsRoutes } from './src/routes/boardCardsRoutes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
+import { registerAdminNotificationRoutes } from './src/routes/adminNotificationRoutes.js';
+import { registerNotificationRoutes } from './src/routes/notificationRoutes.js';
 import { registerProfileRoutes } from './src/routes/profileRoutes.js';
 import { registerAssetRoutes } from './src/routes/assetRoutes.js';
 import { registerResearchRoutes } from './src/routes/researchRoutes.js';
@@ -373,6 +375,9 @@ registerNowRoutes(app, { prisma, requireUser: focusUser });
 // Love and Work card picker and card options (docs/reading-engine/71): no model call, always on
 registerBoardCardsRoutes(app, { prisma, requireUser: focusUser });
 registerAdminLabRoutes(app, { prisma });
+// admin-to-user messaging (M53)
+registerAdminNotificationRoutes(app, { prisma });
+registerNotificationRoutes(app, { prisma, requireUser });
 // life reading dashboard, doc 34 Part 1 (docs/reading-engine/54 §4): mounted when LIFE_READING_ENABLED=1
 registerLifeReadingRoutes(app, { prisma, requireUser: focusUser });
 // personalization wizard and selfie (docs/reading-engine/52)

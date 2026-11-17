@@ -17,12 +17,36 @@ function setParam(url: string, name: string, value: string): string {
  * pool wait stays under the shortest chart-build deadline, and the Render pooler port gets Prisma's pgbouncer mode.
  */
 export function prismaPoolUrl(rawUrl: string, env: Record<string, string | undefined> = process.env): string {
+  const authority = rawUrl.split('?')[0]!;
+  const isPooler = authority.includes(POOLER_PORT);
+  const poolerLimitEnv = env.PRISMA_POOLER_CONNECTION_LIMIT ? Number(env.PRISMA_POOLER_CONNECTION_LIMIT) : null;
+  const isLambda = Boolean(env.AWS_LAMBDA_FUNCTION_NAME);
+
+  // Detect existing connection_limit in URL
+  const currentMatch = /[?&]connection_limit=(\d+)/.exec(rawUrl);
+  const current = currentMatch ? Number(currentMatch[1]) : null;
+
   const fetchers = Math.max(DEFAULT_FETCHERS, Number(env.CHART_DATA_FETCH_CONCURRENCY) || 0, Number(env.KUNDLI_QUEUE_MAX_FETCHES_PER_USER) || 0);
   const wanted = fetchers + POOL_MARGIN;
-  const current = Number(/[?&]connection_limit=(\d+)/.exec(rawUrl)?.[1] ?? 0);
-  let url = current >= wanted ? rawUrl : setParam(rawUrl, 'connection_limit', String(wanted));
+
+  let targetLimit: number;
+  if (poolerLimitEnv && Number.isFinite(poolerLimitEnv) && poolerLimitEnv > 0) {
+    targetLimit = poolerLimitEnv;
+  } else if (isPooler && current !== null) {
+    // Render :6432 PgBouncer URLs respect explicit connection_limit
+    targetLimit = current;
+  } else if (isLambda) {
+    // Per-Lambda pool capped at 2 (or explicit limit)
+    targetLimit = current ?? 2;
+  } else if (current !== null) {
+    // Non-pooler direct connections keep or raise to wanted
+    targetLimit = current >= wanted ? current : wanted;
+  } else {
+    targetLimit = wanted;
+  }
+
+  let url = setParam(rawUrl, 'connection_limit', String(targetLimit));
   if (!/[?&]pool_timeout=\d+/.test(url)) url = setParam(url, 'pool_timeout', String(POOL_TIMEOUT_SECONDS));
-  const authority = url.split('?')[0]!;
-  if (authority.includes(POOLER_PORT) && !/[?&]pgbouncer=/.test(url)) url = setParam(url, 'pgbouncer', 'true');
+  if (isPooler && !/[?&]pgbouncer=/.test(url)) url = setParam(url, 'pgbouncer', 'true');
   return url;
 }
