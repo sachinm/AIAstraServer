@@ -22,7 +22,7 @@ import { prewarmNatalLayers, prewarmWithCap } from '../reading/clarify/prewarm.j
 import { chatWithConfiguredProvider } from '../services/chatLlmService.js';
 import { persistAskTurn, validateAskForUser } from '../services/askChatTurn.js';
 import { partsFromEvent, questionGate, quotaBody, wasDeclined, type QuestionTicket } from '../billing/questionGate.js';
-import { logChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
+import { logChatProviderError, publicCodeFromChatProviderError, publicMessageFromChatProviderError } from '../services/publicChatError.js';
 import { normalizeTimeZone, type UserLocationStore } from '../services/userLocation.js';
 import { parseClientPlace } from '../reading/chartData/place.js';
 import { randomUUID } from 'node:crypto';
@@ -198,7 +198,8 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
       logChatProviderError('confirm-stream', e);
       if (ticket) await gate.release(ticket);
       const usage = await gate.getStatus(userId);
-      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e), ...(usage ? { usage } : {}) });
+      const code = publicCodeFromChatProviderError(e);
+      sse.write({ type: 'error', message: publicMessageFromChatProviderError(e), ...(code ? { code } : {}), ...(usage ? { usage } : {}) });
     } finally {
       sse.end();
     }

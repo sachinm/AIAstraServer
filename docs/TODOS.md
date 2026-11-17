@@ -96,6 +96,19 @@ re-applied by it.
 
 ## P1: blocks or risks a release
 
+- **[RELEASE PLAN REVIEW & EXECUTION] Self Foundation Card Release, Dashboard Stability (Self, Love, Work) & Production Merge Spec (`docs/reading-engine/79-self-foundation-and-dashboard-release-plan.md`).** Filed 2026-11-17.
+  - **Overview & Context:** Comprehensive Priority 1 plan documenting the show-stopper bug audit findings across Server (`feat/self-foundation-server`) and Web (`feat/self-foundation-card`), dashboard status for Self (`/you`), Love (`/love`), and Work (`/work`), pre-merge verification gates, and worktree git merge/deployment procedures.
+  - **Review Instructions:** Every agent picking up dashboard or reading release work must review `docs/reading-engine/79-self-foundation-and-dashboard-release-plan.md` in full, paying specific attention to:
+    1. §1.3 and §3: The 3 Web null-safety fixes (`SelfBoardV3.tsx:289`, `cardModel.ts:69,102,162`, `notReady.tsx:30`) and why `hasCardContent` prevents false-positive card withholding.
+    2. §1.4: Decoupling of Love and Work boards from Self v3 card refactoring (see also `docs/reading-engine/78-love-work-dashboard-separation-and-cards.md`).
+    3. §1.5 & §7: Critical worktree traps (`wt/server-retrograde`, `wt/server-self-reading`, `wt/web-dashboard-card-width`) and mandatory preservation of `AIAstra_WEB/.github/workflows/deploy-staging-amplify.yml`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Self Foundation Card Extensions:** If adding new cards to the Self v3 catalogue (`src/reading/self/v3/types.ts`), ensure new card entries implement both `ShortFace` (first sentence + primary action) and `ReadFace` (structured prose + what to do), maintaining zero astrological jargon on the main face.
+    2. **Love & Work Modernization:** When implementing full v3 card architectures for Love and Work boards (following `docs/reading-engine/78`), build dedicated subarea card sets that honor divisional chart routing (D9 for marriage, D7 for romance, D10 for career) rather than generic templates.
+    3. **Worktree Hygiene:** Always verify active worktrees via `git worktree list` before executing branch merges. Never run direct checkouts of locked branches in main checkout roots.
+    4. **Deployment Verification:** Post-deployment, always smoke check CloudFront `/health` and verify HTTP 200 on `/you`, `/love`, and `/work` with CORS headers intact.
+  - **Status:** Approved and deployed to staging (API Lambda `aiastra-server-api` & Amplify `release-candidate-staging`). Done: Doc 79 authored, indexed, code fixes verified green via `tsc --noEmit`, branches merged via worktrees, and deployed.
+
 - **Render PostgreSQL PgBouncer Connection Bloat & Cross-Cloud Waterfall Latency (P1)**
   - **Measured / Observed Latencies**: 180ms – 450ms per database round trip when Lambda in AWS us-east-1 connects to Render PostgreSQL (Frankfurt / Oregon) with uncapped connections or without transaction pooling. Sequential query waterfalls across chat/board loading taking 1,200ms – 2,800ms.
   - **Root Cause**: Uncapped connection limits (`connection_limit=6` on Lambda instances with multiple fetchers causing connection exhaustion on PgBouncer) and missing `pgbouncer=true` causing prepared statement errors/leaks; sequential DB round trips over cross-cloud WAN.
@@ -502,6 +515,12 @@ Reported by that session; the items are its own open findings. Owners are named 
 - **Pricing has no tax line.** F-16's saving is shown; whether prices include tax is undecided. Owner: Sachin.
 - **vedic-astrology.app serves the staging build.** Same files and ETag as release-candidate-staging on 2026-11-02 UTC, so it inherits Disallow: / in robots.txt, and the Amplify production branch is a September build still branded Cosmo Vedic. Status: open. Done: a decision on which branch backs the public domain, and the old production site updated or removed.
 - **Web tests time out under load.** On 2026-11-02 a different few of SignUp.test, ChatSection.location.test and LedgerSection.test failed on each full or partial run at the 5 second limit; SignUp and ChatSection.location all passed with --testTimeout=30000. Status: open. Done: the suite is stable on this machine.
+- **Privacy page and the November plan disagree on advertising.** `AIAstra_WEB/src/pages/legal/LegalPages.tsx` says "We do not show advertising". `docs/fundraising/subscription-features-and-partner-pricing.md` proposes sponsored placements on free public pages. Found 2026-11-14. Status: open (Sachin decides). Done: the policy and the plan say the same thing.
+- **June plan claims encryption of personal data that a November plan treats as work to do.** June business plan p. 24 against `docs/privacy/02` and `docs/admin/02`. Found 2026-11-14 while preparing `docs/fundraising/june-plan-extract-for-november-summary.md`. Status: open. Done: the November revision states the real state.
+- **Three different technique counts are on record.** `src/techniques/catalog.ts` shows 52 `id:` entries on 2026-11-14, `docs/admin/09` says 66, and `docs/admin/05-techniques-catalogue.md` says 136 registered on 2026-11-06. Investor documents quote 136. Found 2026-11-14 while preparing `docs/fundraising/nov-revision-plan.md`. Status: open. Done: one count, with the command that produces it, in the evidence log.
+- **No head-to-head test backs the claim that frontier models cannot read a chart from a prompt alone.** `docs/fundraising/plan-key-points-rd-edition.md` claim C marks it "not measured". Test: the same charts and questions through a frontier model prompted alone (birth details only) and through the pipeline; score placements against the engine and count unsupported claims. Needs paid model calls, so state the key, call count and cost and get a yes first. Sachin said "not now" on 2026-11-14. Status: tabled. Done: a dated result in docs/research and claim C retagged "Measured".
+- **Landing page understates the chart data.** `AIAstra_WEB/src/LandingPage.tsx` says "About 9,500 records for your chart", a two-level estimate from 2026-11-02. The 2026-11-09 backfill measured about 45,000 period rows per chart at three levels. Status: open. Done: the page uses a measured figure Sachin has approved.
+- **Earlier a16z answers quoted test accounts as traction.** Drafts of `docs/a16z-speedrun-sr008-application.md` gave 25 non-team accounts and 8 returning (2026-11-01, split by email pattern). Sachin confirmed on 2026-11-14 that every account is test data. The doc and `docs/fundraising/plan-key-points-rd-edition.md` are corrected. Status: open (Sachin). Done: Sachin has checked what the submitted SR008 form said and, if it carried those figures, sent a correction to sr-team@a16z.com.
 - **Hindi site by locale: tabled by Sachin on 2026-11-01 as too large for now.** He asked to replace the India option with a
   Hindi locale so the site appears in Hindi script. `src/i18n` has English only and most page text is hardcoded. Status:
   tabled. Done: strings moved to the catalog, a Hindi catalog reviewed, and a language switch on public pages.
@@ -2762,3 +2781,27 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · `CHART_TERMS` grew** (Sarvashtakavarga, SAV/BAV, Ganda Moola, Dwisaptati, Parashari, Jaimini, amsa). The
   same list gates the v2 Personalizer, so a few more card sentences will be dropped there. [reading-dev] Done when a
   replay shows no card left empty by the new terms.
+- **P3 · Theme screenshots show a failed reading.** `AIAstra_WEB/docs/screenshots/theme/desktop/05-you-light.png` and
+  `25-you-dark.png` (stubbed run, 12 Nov) show "Your reading did not load" with a Retry button under the "Your reading"
+  tab, and technique debug chips on the cards. Found 2026-11-14 while choosing investor screenshots. [web-dev] Done
+  when the stub serves the reading tab and the theme set is recaptured.
+- **P3 · Saved screenshots are not usable in investor documents.** The `theme`, `walkthrough`, `p4-01` and `p5-01`
+  sets are stubbed runs with sample content. `docs/screenshots/live-audit-2026-11-07/` is a capture of the founder's
+  own account and shows his email address, photo and birth details. Found 2026-11-14. [fundraising] Done when a fresh
+  set from the live app is saved under `docs/screenshots/` with a manifest, and the live-audit set is reviewed for
+  whether it should stay in the repo.
+- **P3 · Investor documents disagree on the commit count.** `docs/a16z-speedrun-sr008-application.md` (Q21) says
+  "460+ commits across three repos since March 2026"; the November business plan uses 1,377 across four codebases
+  (counted 14 Nov, all branches). Found 2026-11-15. [fundraising] Done when the application text is updated or the
+  difference is explained.
+- **P3 · Stale and conflicting docs found while writing the business plan** (2026-11-15, from a read of `/docs`):
+  `docs/README.md` and `docs/improvement-plan.md` describe an older stack; `product/IMPROVEMENTS.md` carries old prices
+  ($4.99 / ₹299); reading-engine doc 69 says doc 68 Phases A and B are not approved while doc 68's header says they
+  were approved 9 Nov; `security/assessment.md` rates no finding Critical but its prose calls some critical.
+  [docs] Done when each is corrected or marked superseded.
+- **P2 · "AI agents produce every reading" was not true of the dashboards.** Headlines and many cards are chosen by
+  written rules; per-card AI writing is switched off. The business plan now says "written techniques and AI agents
+  produce the readings". The landing page and the a16z answers should be checked for the old claim. Found 2026-11-15.
+  [fundraising][web-dev] Done when public and investor text match what the product does.
+
+- **Rahu and Ketu `retro`/`is_retrograde` are always false in stored charts (found 2026-11-15, deploy session).** Rahu and Ketu are in every divisional chart (D1–D144) and Tithi Pravesha row, and carry `motion_state: "pratiloma"` (backward mean motion), but `retro` and `is_retrograde` read `false`, because the engine's retrograde flag covers Mars..Saturn only (`natal_export.py` `planets_in_retrograde` filter). A reader that trusts `retro` will call the nodes direct. Done: decide in the engine whether the nodes get `retro: true` or a documented `always_retrograde_mean_node` flag, and make readers use `motion_state`. Also open: 2035 Tithi Pravesha fails for Archisha (`pyjhora found no tithi pravesha for year 2036`, `annual_export.py:186`); cause not yet found.

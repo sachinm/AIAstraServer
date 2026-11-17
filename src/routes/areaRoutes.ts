@@ -26,6 +26,7 @@ import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area
 import { questionGate, quotaBody, type BoardCharge, type QuestionGate } from '../billing/questionGate.js';
 import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
 import { selfBoardDates } from '../reading/self/synthesisValidity.js';
+import { logChatProviderError, publicCodeFromChatProviderError } from '../services/publicChatError.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -141,7 +142,8 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       return res.status(202).json({ status: 'building', ...(usage ? { usage } : {}) });
     } catch (e) {
       if (held) await gate.settleBoardRefresh(userId, board, day, false);
-      console.error(`[boards:refresh:${board}]`, (e as Error).message);
+      logChatProviderError(`boards:refresh:${board}`, e);
+      if (publicCodeFromChatProviderError(e)) return res.status(503).json({ error: 'ai_unavailable', code: 'ai_unavailable' });
       return res.status(500).json({ error: 'refresh_failed' });
     }
   });
