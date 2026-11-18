@@ -4,14 +4,14 @@
  * board's clock. Never throws on read.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { SelfCardId, SelfV3CardContent } from '../self/v3/types.js';
+import type { CardId, SelfV3CardContent } from '../self/v3/types.js';
 import { CARD_READING_TECHNIQUE, type StoredCardReading } from './types.js';
 
 export const CARD_KEY_PREFIX = 'self.card|';
 
 /** the store key: everything that can change the card's text */
 export function cardStoreKey(p: {
-  card: SelfCardId;
+  card: CardId;
   clock: string;
   frameHash: string;
   ledgerHash: string;
@@ -43,17 +43,35 @@ type StorePrisma = {
   };
 };
 
-/** The newest stored reading of every card on the clock (cards with none are absent). */
-export async function readCardReadings(prisma: PrismaClient, kundliId: string, clock: string): Promise<Partial<Record<SelfCardId, SelfV3CardContent>>> {
-  const out: Partial<Record<SelfCardId, SelfV3CardContent>> = {};
+/**
+ * The newest stored reading of every card on the clock (cards with none are absent). With `ids` (docs/dashboards/10
+ * §7 S3) only those cards' rows are read, at most four per card, so another board's rows never crowd them out of the
+ * window; without, the 300 newest rows (the Self board, unchanged).
+ */
+export async function readCardReadings(prisma: PrismaClient, kundliId: string, clock: string, ids?: readonly string[]): Promise<Partial<Record<CardId, SelfV3CardContent>>> {
+  const out: Partial<Record<CardId, SelfV3CardContent>> = {};
+  if (ids && !ids.length) return out;
   try {
     const p = prisma as unknown as StorePrisma;
     if (!p.techniqueOutput?.findMany) return out;
-    const rows = await p.techniqueOutput.findMany({
-      where: { kundli_id: kundliId, technique_id: CARD_READING_TECHNIQUE, digest_version: { startsWith: CARD_KEY_PREFIX, contains: `|clock=${clock}|` } },
-      orderBy: { created_at: 'desc' },
-      take: 300,
-    });
+    const rows = await p.techniqueOutput.findMany(
+      ids
+        ? {
+            where: {
+              kundli_id: kundliId,
+              technique_id: CARD_READING_TECHNIQUE,
+              digest_version: { contains: `|clock=${clock}|` },
+              OR: ids.map((id) => ({ digest_version: { startsWith: `${CARD_KEY_PREFIX}card=${id}|` } })),
+            },
+            orderBy: { created_at: 'desc' },
+            take: ids.length * 4,
+          }
+        : {
+            where: { kundli_id: kundliId, technique_id: CARD_READING_TECHNIQUE, digest_version: { startsWith: CARD_KEY_PREFIX, contains: `|clock=${clock}|` } },
+            orderBy: { created_at: 'desc' },
+            take: 300,
+          },
+    );
     for (const r of rows) {
       const s = r.output as StoredCardReading | undefined;
       if (!s?.card || !s.content || out[s.card]) continue;

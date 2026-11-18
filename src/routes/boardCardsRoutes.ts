@@ -12,12 +12,22 @@ import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { catalogue, isAreaBoard, readAreaLayout, validateAreaLayout, writeAreaLayout } from '../reading/boards/catalogue.js';
+import { getBoardsV3, getSelfV3RouteBudgetMs } from '../config/env.js';
+import { putBoardV3Layout, type BoardQueueDeps } from '../reading/boards/v3Service.js';
+import { BOARD_V3_OFF } from './boardV3Routes.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
+import { BudgetExceeded, withinBudget } from './selfV3Routes.js';
 
 export interface BoardCardsRouteDeps {
   prisma: PrismaClient;
   requireUser: RequireUser;
+  /** docs/dashboards/10 §4.3: the v3 layout save's seams (the build queue, the flags) and BOARDS_V3 override */
+  v3?: BoardQueueDeps & { boards?: readonly string[]; budgetMs?: number };
 }
+
+/** docs/dashboards/10 §4.3: a PUT carrying `version` or `patch` is a v3 layout save; `{cards, options}` is the legacy picker */
+export const isV3LayoutBody = (body: unknown): boolean =>
+  Boolean(body && typeof body === 'object' && !Array.isArray(body) && ((body as { version?: unknown }).version !== undefined || (body as { patch?: unknown }).patch !== undefined));
 
 export function registerBoardCardsRoutes(app: express.Express, deps: BoardCardsRouteDeps): void {
   const kundliOf = (userId: string) => deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
@@ -62,6 +72,22 @@ export function registerBoardCardsRoutes(app: express.Express, deps: BoardCardsR
     if (!userId) return;
     const b = board(req, res);
     if (!b) return;
+    if (isV3LayoutBody(req.body)) {
+      if (!(deps.v3?.boards ?? getBoardsV3()).includes(b)) return res.status(404).json({ error: BOARD_V3_OFF });
+      try {
+        const r = await withinBudget(putBoardV3Layout(deps.prisma, userId, b, req.body, deps.v3 ?? {}), deps.v3?.budgetMs ?? getSelfV3RouteBudgetMs());
+        if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
+        if (!r.ok) return res.status(r.status).json({ error: r.error, ...('detail' in r && r.detail ? { detail: r.detail } : {}) });
+        return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
+      } catch (e) {
+        if (e instanceof BudgetExceeded) {
+          res.setHeader('Retry-After', '1');
+          return res.status(503).json({ error: 'timeout' });
+        }
+        console.error('[board:v3:layout]', (e as Error).message);
+        return res.status(500).json({ error: 'board_layout_failed' });
+      }
+    }
     const check = validateAreaLayout(b, req.body);
     if (!check.ok) return res.status(400).json({ error: check.error, ...(check.detail ? { detail: check.detail } : {}) });
     try {

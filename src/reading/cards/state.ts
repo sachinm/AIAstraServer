@@ -6,7 +6,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { clockLabel } from '../self/words.js';
-import type { BoardReadingView, CardReadState, SelfCardId, SelfV3CardContent } from '../self/v3/types.js';
+import type { BoardReadingView, CardId, CardReadState, SelfV3CardContent } from '../self/v3/types.js';
 import { CARD_STUCK_MS, CARDS_STATE_AREA, emptyCardsState, type CardsStateDoc } from './types.js';
 
 type StatePrisma = {
@@ -30,6 +30,8 @@ function asDoc(raw: unknown): CardsStateDoc {
     clocks: Array.isArray(r.clocks) ? r.clocks : [],
     capReached: Boolean(r.capReached),
     preparing: Boolean(r.preparing),
+    // docs/dashboards/10 §7 S3: kept, or every write would forget the boards opened today and re-queue them
+    ...(r.opened && typeof r.opened === 'object' ? { opened: { ...(r.opened.love ? { love: true as const } : {}), ...(r.opened.work ? { work: true as const } : {}) } } : {}),
   };
 }
 
@@ -74,7 +76,7 @@ export async function updateCardsState(prisma: PrismaClient, userId: string, kun
  * One card's state for the page: a live `queued`/`reading` entry (not stuck) wins; else a stored reading is `ready`;
  * else a `failed` entry (or a stuck one) is `failed`; else `not_read`.
  */
-export function cardStateOf(doc: CardsStateDoc, id: SelfCardId, hasReading: boolean, now: Date): CardReadState {
+export function cardStateOf(doc: CardsStateDoc, id: CardId, hasReading: boolean, now: Date): CardReadState {
   const e = doc.cards[id];
   const age = e ? now.getTime() - Date.parse(e.at) : Infinity;
   if (e && (e.state === 'queued' || e.state === 'reading')) {
@@ -89,8 +91,8 @@ export function cardStateOf(doc: CardsStateDoc, id: SelfCardId, hasReading: bool
 /** The board's reading line (doc 70 §4.2 `reading`). */
 export function boardReadingView(
   doc: CardsStateDoc,
-  board: readonly SelfCardId[],
-  readings: Partial<Record<SelfCardId, SelfV3CardContent>>,
+  board: readonly CardId[],
+  readings: Partial<Record<CardId, SelfV3CardContent>>,
   now: Date,
   enabled: boolean,
 ): BoardReadingView {

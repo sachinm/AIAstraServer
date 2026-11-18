@@ -18,14 +18,14 @@ import { markAgentUsed } from '../v2/cache.js';
 import { timingOf } from '../v2/oracle.js';
 import { normaliseEvidenceKey, promptHash } from '../v2/slices.js';
 import type { PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import type { OracleCardV3, OracleSpanV3, OracleV3Output, SelfCardId, SpanMode, SpanTone, YearFrameV3 } from './types.js';
+import type { OracleCardV3, OracleSpanV3, OracleV3Output, CardId, SpanMode, SpanTone, YearFrameV3 } from './types.js';
 
 export const SELF_V3_ORACLE_PROMPT = 'oracle/self-cards-v3';
 export const ORACLE_V3_TIMEOUT_MS = 120_000;
-export const PATTERN_CARDS: readonly SelfCardId[] = ['mind', 'stuck'];
+export const PATTERN_CARDS: readonly CardId[] = ['mind', 'stuck'];
 
 /** three calls over one prefix; the person's own cards go in whichever call holds them (all three run at once) */
-export const ORACLE_V3_CALLS: ReadonlyArray<{ call: 'v3.oracle.a' | 'v3.oracle.b' | 'v3.oracle.c'; cards: readonly SelfCardId[] }> = [
+export const ORACLE_V3_CALLS: ReadonlyArray<{ call: 'v3.oracle.a' | 'v3.oracle.b' | 'v3.oracle.c'; cards: readonly CardId[] }> = [
   { call: 'v3.oracle.a', cards: ['body', 'mind', 'stuck', 'diagnosis'] },
   { call: 'v3.oracle.b', cards: ['lagna', 'drive', 'presence', 'yogas'] },
   { call: 'v3.oracle.c', cards: ['chapter', 'chapters', 'year'] },
@@ -34,7 +34,7 @@ export const ORACLE_V3_CALLS: ReadonlyArray<{ call: 'v3.oracle.a' | 'v3.oracle.b
 const TONES: readonly SpanTone[] = ['heavy', 'mixed', 'light'];
 const MODES: readonly SpanMode[] = ['get_through', 'build'];
 
-export function oracleV3Schema(cards: readonly SelfCardId[], spanIds: readonly string[]): Record<string, unknown> {
+export function oracleV3Schema(cards: readonly CardId[], spanIds: readonly string[]): Record<string, unknown> {
   const str = (description: string) => ({ type: 'STRING', description });
   const keys = { type: 'ARRAY', items: { type: 'STRING' }, description: 'evidence keys from the input, without braces' };
   return {
@@ -87,7 +87,7 @@ export function oracleV3Schema(cards: readonly SelfCardId[], spanIds: readonly s
   };
 }
 
-export function callInstructionV3(cards: readonly SelfCardId[], answers: string): string {
+export function callInstructionV3(cards: readonly CardId[], answers: string): string {
   return [`PERSON'S ANSWERS: ${answers || 'none'}`, `THIS CALL: write only these cards: ${cards.join(', ')}. Return the JSON document only.`].join('\n');
 }
 
@@ -107,7 +107,7 @@ export interface OracleV3CheckContext {
   allowedKeys: ReadonlySet<string>;
   /** every date a card may name (frame dates plus the stored windows the prefix carries) */
   dates: ReadonlySet<string>;
-  expected: readonly SelfCardId[];
+  expected: readonly CardId[];
 }
 
 const S = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -117,7 +117,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Validates one raw card. Returns the card, or the reasons it fails; soft drops (confirm, pattern) go in `notes`. */
 export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: OracleCardV3 | null; problems: string[]; notes: string[] } {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const id = S(o.card) as SelfCardId;
+  const id = S(o.card) as CardId;
   const problems: string[] = [];
   const notes: string[] = [];
   const alias = (ks: string[]) => ks.map((k) => c.aliases?.[k] ?? c.aliases?.[normaliseEvidenceKey(k)] ?? k);
@@ -187,12 +187,12 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
   return { card: { card: id, headline, spans, confirm, gift, knot, pattern, certainty, evidence }, problems, notes };
 }
 
-export function validateOracleV3(rawCards: readonly unknown[], c: OracleV3CheckContext): { output: OracleV3Output; failed: Partial<Record<SelfCardId, string[]>>; notes: string[] } {
+export function validateOracleV3(rawCards: readonly unknown[], c: OracleV3CheckContext): { output: OracleV3Output; failed: Partial<Record<CardId, string[]>>; notes: string[] } {
   const out: OracleV3Output = { cards: {} };
-  const failed: Partial<Record<SelfCardId, string[]>> = {};
+  const failed: Partial<Record<CardId, string[]>> = {};
   const notes: string[] = [];
   for (const raw of rawCards) {
-    const id = S((raw as { card?: unknown } | null)?.card) as SelfCardId;
+    const id = S((raw as { card?: unknown } | null)?.card) as CardId;
     if (!c.expected.includes(id)) {
       notes.push(`card ${id || '?'} not asked for: ignored`);
       continue;
@@ -223,7 +223,7 @@ export interface OracleV3Deps {
 export interface OracleV3Result {
   status: 'ok' | 'partial' | 'failed' | 'budget_exceeded';
   output: OracleV3Output | null;
-  cardStatus: Partial<Record<SelfCardId, 'ok' | 'repaired' | 'failed'>>;
+  cardStatus: Partial<Record<CardId, 'ok' | 'repaired' | 'failed'>>;
   issues: ValidationIssue[];
   calls: SelfV2AgentTiming[];
   model: string;
@@ -242,7 +242,7 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
   const spanIds = frame.spans.map((s) => s.id);
   const calls: SelfV2AgentTiming[] = [];
   const issues: ValidationIssue[] = [];
-  const ask = async (call: string, cards: readonly SelfCardId[], extra = ''): Promise<unknown[] | null> => {
+  const ask = async (call: string, cards: readonly CardId[], extra = ''): Promise<unknown[] | null> => {
     const t0 = performance.now();
     try {
       const res = await withAgentRun(
@@ -300,14 +300,14 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
   }
   const check = { frame, allowedKeys: allowed, dates, expected, aliases: frame.aliases ?? {} };
   const first = validateOracleV3(lists.flatMap((l) => l ?? []), check);
-  const pushFailures = (failed: Partial<Record<SelfCardId, string[]>>, callId: string | null) => {
+  const pushFailures = (failed: Partial<Record<CardId, string[]>>, callId: string | null) => {
     for (const [id, reasons] of Object.entries(failed)) for (const r of reasons ?? []) issues.push({ stage: 'oracle', area: id, check: r.includes('evidence') ? 'unknown_evidence_key' : r.includes('date') ? 'date_not_stored' : r === 'not returned' ? 'missing_area' : 'other', message: `${id}: ${r}`.slice(0, 300), callId });
   };
   pushFailures(first.failed, null);
   for (const n of first.notes) issues.push({ stage: 'oracle', area: n.split(':')[0] ?? null, check: 'other', message: n.slice(0, 300), callId: null });
 
   const output = first.output;
-  const failedIds = Object.keys(first.failed) as SelfCardId[];
+  const failedIds = Object.keys(first.failed) as CardId[];
   const cardStatus: OracleV3Result['cardStatus'] = {};
   for (const id of expected) cardStatus[id] = output.cards[id] ? 'ok' : 'failed';
   let repairRan = false;
@@ -324,7 +324,7 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
       }
     }
   }
-  for (const i of issues) if (i.area && cardStatus[i.area as SelfCardId]) i.areaStatus = cardStatus[i.area as SelfCardId];
+  for (const i of issues) if (i.area && cardStatus[i.area as CardId]) i.areaStatus = cardStatus[i.area as CardId];
   const n = Object.keys(output.cards).length;
   const status: OracleV3Result['status'] = spent() > deps.maxSpendUsd ? 'budget_exceeded' : !n ? 'failed' : expected.some((id) => cardStatus[id] === 'failed') ? 'partial' : 'ok';
   return { ...base, status, output: n ? output : null, cardStatus, issues, spentUsd: spent(), repairRan };
