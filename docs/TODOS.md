@@ -1644,7 +1644,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 
 - **P1 · Internal technique ids are shown to every user.** `self.activation · Present Tone Consensus` on the tone card
   (`AreaBoardView.tsx:480-482`), `self.focus · Companion Fact Selector` (`:457-459`), badges on Now/Holds/Presses/Ahead/
-  Questions and on the wizard (`WelcomeWizard.tsx:17-25`). Fact. Owner: web. Done: no technique id or agent label on a
+  Questions (the wizard's and the selfie step's badges were removed 2026-11-18, web `feat/portal-dashboards`). Fact. Owner: web. Done: no technique id or agent label on a
   consumer screen; a test greps the rendered You page for `self.` and `·  Consensus`.
 - **P1 · Chart terms and vote counts on the first screen.** "Timing Clocks 3 supporting · 2 testing of 7 clocks", "Core
   Strength", "Key Horizon", "Primary pressure" (`AreaBoardView.tsx:487-507`); "Read on your Vimshottari clock"
