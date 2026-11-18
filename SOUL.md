@@ -9,6 +9,12 @@ Every coding agent and every runtime astrological reading/synthesis agent must r
   the same holds: lineman readers, the purview check, the Vedic Astrological Oracle, the validator and the auditor run
   in parallel wherever their inputs allow, never one blocking the next without need (`AGENTS.md`, "Work in parallel by
   default").
+- **A new worktree links `node_modules`; it never installs** (Sachin, 2026-11-18, after 200+ worktrees). Create the
+  worktree, make a junction from its `node_modules` to the main checkout's installed packages
+  (`New-Item -ItemType Junction -Path <wt>/node_modules -Target <main>/node_modules`, literal paths), and copy `.env`
+  for the server. Run `npm ci` only when the worktree's lockfile adds a package. Remove the junction without `-Recurse`
+  before `git worktree remove`. Setup is seconds, not minutes; full recipe in `AGENTS.md` ("Installs and worktree
+  creation").
 
 ## 1. Strict Prohibition on Internal Calculation / Library Names in Readings & Responses
 
