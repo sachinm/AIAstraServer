@@ -147,9 +147,30 @@ export interface ClarifyState {
   decisionLog?: ClarifyDecisionEntry[];
   /** whether the active ask was driven by AI or the deterministic machine fallback */
   driver?: 'ai' | 'machine_fallback' | 'rules';
+  /**
+   * docs/reading-engine/85: the first question on a card. The card names the subject and the period on screen, so the
+   * life area, the period, the sub-area and whose chart are never asked; only a missing fact is (sibling, child's age,
+   * where the person lives). The answer is the card's (confirm-stream hands it to the card chat), billed under the
+   * send's own `cardchat:<board>:<id>:<turnId>` key.
+   */
+  cardChat?: ClarifyCardRef | null;
   createdAt: number;
   updatedAt: number;
 }
+
+/** the card a clarify run belongs to (docs/reading-engine/85): its board, id, period on screen and the send's ids */
+export interface ClarifyCardRef {
+  board: string;
+  id: string;
+  from: string | null;
+  to: string | null;
+  /** the client's send id: the answer is reserved under `cardchat:<board>:<id>:<turnId>` */
+  turnId: string;
+  newThread: boolean;
+}
+
+/** what the card already settles: never asked on a card's first question (docs/reading-engine/85 §4 step 2) */
+export const CARD_KNOWN_CRITERIA: ReadonlySet<Criterion> = new Set<Criterion>(['bucket', 'horizon', 'sub_bucket', 'subject_person', 'other_person']);
 
 export function clarifyMode(): ClarifyMode {
   const v = process.env.READING_CLARIFY_MODE?.trim().toLowerCase();
@@ -161,6 +182,15 @@ const pname = (c?: string): string => (c ? PLANET_NAMES[c] ?? c : '');
 
 /** Criteria the state still lacks, in the order they are asked. */
 export function openCriteria(
+  s: Pick<ClarifyState, 'bucket' | 'slots' | 'alsoBuckets'> & Partial<Pick<ClarifyState, 'siblingNoun' | 'sibling' | 'needsLocation' | 'location' | 'turns' | 'cardChat'>>,
+  confidence: number,
+  threshold: number,
+): Criterion[] {
+  const out = openCriteriaOf(s, confidence, threshold);
+  return s.cardChat ? out.filter((c) => !CARD_KNOWN_CRITERIA.has(c)) : out;
+}
+
+function openCriteriaOf(
   s: Pick<ClarifyState, 'bucket' | 'slots' | 'alsoBuckets'> & Partial<Pick<ClarifyState, 'siblingNoun' | 'sibling' | 'needsLocation' | 'location' | 'turns'>>,
   confidence: number,
   threshold: number,
@@ -375,6 +405,8 @@ export interface StartOptions {
   birthPlace?: string | null;
   /** confirmed companion facts (person_facts, docs/reading-engine/48) so known facts are never re-asked */
   facts?: Record<string, string>;
+  /** docs/reading-engine/85: a card's first question (the card settles area, period and sub-area; never proposes) */
+  cardChat?: ClarifyCardRef | null;
 }
 
 /** person_facts `work.status` (src/profile/facts.ts FACT_CATALOG) -> the classifier's `background` slot; `retired` has none. */
@@ -428,6 +460,7 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
     needsLocation: !!opts.needsLocation && !opts.location,
     birthPlace: opts.birthPlace ?? null,
     ...(facts ? { facts } : {}),
+    ...(opts.cardChat ? { cardChat: opts.cardChat } : {}),
     decisionLog,
     driver: 'rules',
     createdAt: now,
@@ -441,7 +474,8 @@ export function startClarify(question: string, asOf: string, c: ClassifierResult
   }
   if (opts.mode === 'never' || (c.unanswerable && c.unanswerable !== 'no_subject')) return finalizeReady(s);
   const open = openCriteria(s, c.confidence, opts.threshold);
-  if (open.length === 0) return opts.mode === 'always' ? propose(s, now) : finalizeReady(s);
+  // a card question with nothing missing goes straight to the answer, whatever the mode
+  if (open.length === 0) return opts.mode === 'always' && !opts.cardChat ? propose(s, now) : finalizeReady(s);
   return askNext(s, open, now);
 }
 
@@ -457,7 +491,7 @@ function askNext(s: ClarifyState, open: Criterion[], now: number): ClarifyState 
     if (capped.length) base = applyDefaults(s, capped);
     next = uncapped[0];
   }
-  if (!next) return propose(applyDefaults(base, open), now);
+  if (!next) return proposeOrReady(applyDefaults(base, open), now);
   const ask = askFor(next, base);
   const turnNum = base.turns.length + 1;
   const log = [...(base.decisionLog ?? []), makeDecisionEntry(next, 'asked', base.driver ?? 'rules', 'required_slot_missing', turnNum)];
@@ -513,7 +547,7 @@ export function absorbAnswer(s: ClarifyState, value: string, opts: { viaChip: bo
     const confirmed: ClarifyState = { ...s, turns, pending: null, childAge: 'adult' };
     const cls = { confidence: 0.99 };
     const open = openCriteria(confirmed, cls.confidence, opts.threshold);
-    if (open.length === 0) return propose(confirmed, now);
+    if (open.length === 0) return proposeOrReady(confirmed, now);
     return askNext(confirmed, open, now);
   }
   const next: ClarifyState = { ...s, slots: { ...s.slots }, alsoBuckets: [...s.alsoBuckets] };
@@ -647,6 +681,11 @@ export function exactQueryFor(s: ClarifyState): string {
 export function propose(s: ClarifyState, now: number): ClarifyState {
   const withQuery = { ...s, pending: null };
   return { ...withQuery, status: 'PROPOSED', exactQuery: exactQueryFor(withQuery), updatedAt: now };
+}
+
+/** the last answer is in: a card's question goes straight to its answer (no "I will read" proposal), any other is proposed */
+function proposeOrReady(s: ClarifyState, now: number): ClarifyState {
+  return s.cardChat ? { ...finalizeReady(s), pending: null, updatedAt: now } : propose(s, now);
 }
 
 function finalizeReady(s: ClarifyState): ClarifyState {

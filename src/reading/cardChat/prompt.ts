@@ -104,8 +104,11 @@ function personBlock(ctx: CardChatContext): string {
   ].join('\n');
 }
 
-/** The call's parts. `question` is the person's text, as sent; `history` the thread's earlier exchanges. */
-export function cardChatParts(ctx: CardChatContext, question: string, history: readonly CardChatHistoryTurn[]): CardChatParts {
+/**
+ * The call's parts. `question` is the person's text, as sent; `history` the thread's earlier exchanges; `clarified` what
+ * the person told the clarifier before this first question (cardChat/clarify.ts `clarifiedLines`), in the uncached part.
+ */
+export function cardChatParts(ctx: CardChatContext, question: string, history: readonly CardChatHistoryTurn[], clarified: readonly string[] = []): CardChatParts {
   const c = ctx.card;
   const others = c.boardCards.map((x) => `${x.title} (\`${x.id}\`)`).join('; ');
   const turns = capHistory(history);
@@ -119,6 +122,7 @@ export function cardChatParts(ctx: CardChatContext, question: string, history: r
     howItWasRead(ctx),
     personBlock(ctx),
     turns.length ? `THIS CONVERSATION SO FAR (oldest first)\n${turns.map((t) => `Q: ${t.question}\nA: ${t.answer}`).join('\n\n')}` : 'THIS CONVERSATION SO FAR: this is the first question',
+    ...(clarified.length ? [`WHAT THE PERSON SETTLED BEFORE THIS QUESTION (their own answers; take them as given)\n${clarified.map((l) => `- ${l}`).join('\n')}`] : []),
     `QUESTION: ${question}`,
     'THIS CALL: answer the question about this card in plain prose, as the role says. No JSON.',
   ].join('\n\n');

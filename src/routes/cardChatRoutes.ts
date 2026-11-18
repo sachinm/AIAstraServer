@@ -13,6 +13,16 @@
  *        409 turn_in_flight, 429 rate_limited
  *        SSE: turn_init → card → start → usage → token… → turn_done{type:'done', chatId, answer, usage, card}
  *             | error{code:'quota_exhausted'|'spend_cap'|…}
+ *        With `clarify: true` on a thread's first question (no answered turn yet) the question goes through Clarify,
+ *        pre-filled from the card (its area, the period on screen, the card as the sub-area): only a missing fact is
+ *        asked. Then: turn_init → card → clarify{type:'start'} → clarify{type:'clarify', runId, criterion, question,
+ *        chips, allowFreeText, turn, understanding} → turn_done{type:'done', status:'clarifying', runId, ms, card}.
+ *        Nothing is reserved. Nothing to ask: the answer streams at once, as above. Follow-ups skip Clarify.
+ *
+ *   POST /api/chat/answer         { runId, value, viaChip, tz? } → clarify (the next missing fact) | {type:'ready'}
+ *                                 (a card run never proposes: its last answer is `ready`) | declined
+ *   POST /api/chat/confirm-stream { runId, chatId? } for a card run → the same SSE as a card send (card first), the
+ *        answer reserved under the first send's `cardchat:<board>:<cardId>:<turnId>`; `done` carries `clarifyRunId`.
  *
  * Billing: each sent question takes one question under `cardchat:<board>:<cardId>:<turnId>`; a retry of the same turnId
  * is free and makes no model call (the saved answer is replayed); a declined topic or a failed answer gives it back.
@@ -26,7 +36,13 @@ import { getSelfV3RouteBudgetMs } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
 import { checkRateLimit } from '../lib/redis/rateLimiter.js';
 import { SSE_CACHE_CONTROL } from '../lib/noStore.js';
+import { randomUUID } from 'node:crypto';
 import { answerCardQuestion, CardChatSpendCapError, type CardChatAnswerDeps } from '../reading/cardChat/answer.js';
+import { cardClarifySeed, clarifiedLines } from '../reading/cardChat/clarify.js';
+import { beginClarify, confirmCardClarify, type ClarifyStepResult } from '../reading/clarify/service.js';
+import { PrismaClarifyStore, type ClarifyStore } from '../reading/clarify/store.js';
+import { withRunTrace } from '../reading/metrics/trace.js';
+import type { UserLocationStore } from '../services/userLocation.js';
 import { resolveCard, resolveCardContext, type CardChatResolveDeps } from '../reading/cardChat/resolve.js';
 import { cardRefOf, historyOf, loadCardThread, storedCardQuestion } from '../reading/cardChat/thread.js';
 import {
@@ -34,6 +50,7 @@ import {
   CARD_CHAT_ERROR_STATUS,
   isCardChatBoard,
   type CardChatBoard,
+  type CardChatContext,
   type CardChatOpenResponse,
   type CardRef,
 } from '../reading/cardChat/types.js';
@@ -61,6 +78,18 @@ export interface CardChatRouteDeps {
   rateLimit?: (prisma: PrismaClient, userId: string) => Promise<{ allowed: boolean; retryAfterSec?: number }>;
   declined?: typeof declinedFor;
   budgetMs?: number;
+  /** the clarifier on a card's first question (docs/reading-engine/85 §4 step 2) */
+  clarify?: CardClarifyDeps;
+}
+
+export interface CardClarifyDeps {
+  /** where clarify runs live between requests (default `reading_runs`); ask-stream and confirm-stream must share it */
+  store?: ClarifyStore;
+  locationStore?: UserLocationStore;
+  /** default on; READING_CLARIFY_MODE=never still sends every question straight to its answer */
+  enabled?: () => boolean;
+  /** the day the run is read for (tests) */
+  asOf?: () => string;
 }
 
 export interface UsageRowView {
@@ -174,8 +203,9 @@ export function parseCardAsk(body: Record<string, unknown>): { ok: true; ref: Ca
 
 /**
  * POST /api/chat/ask-stream with `card` (doc 85 §4 Backend steps 2–5): the card is re-read on the server, the question
- * is checked and reserved under its per-turn key, the answer streams from one call on the card's context, and the turn is
- * saved to the card's thread. Called by the ask-stream route after it validated `question`.
+ * is checked, and (its first question with `clarify: true`) goes through Clarify pre-filled from the card; then it is
+ * reserved under its per-turn key, the answer streams from one call on the card's context, and the turn is saved to the
+ * card's thread. Called by the ask-stream route after it validated `question`.
  */
 export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Request, res: express.Response, userId: string): Promise<void> {
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -185,7 +215,91 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
     res.status(400).json({ error: parsed.error });
     return;
   }
-  const { ref, turnId, newThread } = parsed;
+  await streamCardTurn(deps, req, res, userId, {
+    ref: parsed.ref,
+    turnId: parsed.turnId,
+    newThread: parsed.newThread,
+    chatId: typeof body.chatId === 'string' ? body.chatId : null,
+    question: q,
+    clarify: body.clarify === true,
+    clarified: [],
+    childAgeConfirmed: false,
+  });
+}
+
+/**
+ * POST /api/chat/confirm-stream for a card's clarify run (doc 85 §4 step 2): the clarifier's answers are in, so the
+ * card's answer streams exactly as a card send does, under the send's own `cardchat:<board>:<id>:<turnId>` key (kept on
+ * the clarify state). The card comes from the clarify state, never from the body. The clarifier itself was free.
+ */
+export async function handleCardConfirm(deps: CardChatRouteDeps, req: express.Request, res: express.Response, userId: string, runId: string): Promise<void> {
+  const store = deps.clarify?.store ?? new PrismaClarifyStore(deps.prisma);
+  const c = await confirmCardClarify(store, userId, runId);
+  if ('error' in c) {
+    res.status(c.error === 'not_found' ? 404 : 409).json({ error: c.error });
+    return;
+  }
+  const s = c.state;
+  const cc = s.cardChat;
+  if (!isCardChatBoard(cc.board)) {
+    res.status(400).json({ error: 'unknown_board' });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  await streamCardTurn(deps, req, res, userId, {
+    ref: { board: cc.board, id: cc.id, from: cc.from, to: cc.to },
+    turnId: cc.turnId,
+    newThread: cc.newThread,
+    chatId: typeof body.chatId === 'string' ? body.chatId : null,
+    question: s.question,
+    clarify: false,
+    clarified: clarifiedLines(s),
+    childAgeConfirmed: s.childAge === 'adult',
+    clarifyRunId: runId,
+  });
+}
+
+interface CardTurnInput {
+  ref: CardRef;
+  turnId: string;
+  newThread: boolean;
+  chatId: string | null;
+  question: string;
+  /** the client can show the clarifier: a thread's first question goes through it, pre-filled from the card */
+  clarify: boolean;
+  /** what the person told the clarifier (confirm-stream) */
+  clarified: string[];
+  childAgeConfirmed: boolean;
+  clarifyRunId?: string;
+}
+
+/** Runs Clarify on a card's first question. The run with its event to show, or null to answer straight away. Never throws. */
+async function clarifyCardQuestion(deps: CardChatRouteDeps, userId: string, ctx: CardChatContext, input: CardTurnInput): Promise<ClarifyStepResult | null> {
+  const store = deps.clarify?.store ?? new PrismaClarifyStore(deps.prisma);
+  try {
+    const seed = cardClarifySeed(ctx.card, { turnId: input.turnId, newThread: input.newThread });
+    const r = await withRunTrace(
+      deps.prisma,
+      { runId: randomUUID(), userId, kind: 'clarify', flow: 'clarify' },
+      () =>
+        beginClarify(deps.prisma, store, userId, input.question, {
+          seed,
+          ...(deps.clarify?.asOf ? { asOf: deps.clarify.asOf() } : {}),
+          ...(deps.clarify?.locationStore ? { locationStore: deps.clarify.locationStore } : {}),
+        }),
+      (out) => ({ status: 'done', clarifyRunId: out.runId ?? null }),
+    );
+    return r.declined || !r.event ? null : r;
+  } catch (e) {
+    // the clarifier is a help, never a gate: a failure answers the question as it stands
+    console.warn(JSON.stringify({ msg: '[cardchat] clarify failed; answering directly', board: ctx.card.board, card: ctx.card.id, error: String((e as Error)?.message ?? e).slice(0, 160) }));
+    return null;
+  }
+}
+
+async function streamCardTurn(deps: CardChatRouteDeps, req: express.Request, res: express.Response, userId: string, input: CardTurnInput): Promise<void> {
+  const { ref, turnId, newThread } = input;
+  const q = input.question;
   const key = cardChatUsageKey(ref.board, ref.id, turnId);
   const prisma = deps.prisma;
   const gate = deps.gate ?? questionGate(prisma);
@@ -226,6 +340,8 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
     }
   }
   const thread = newThread ? { chatId: null, messages: [] } : await loadCardThread(prisma, userId, cardRef, card.title);
+  // the first question of a thread goes through Clarify; follow-ups (an answered turn in the thread) skip it
+  const clarifyFirst = input.clarify && !replay && thread.messages.length === 0 && (deps.clarify?.enabled ?? (() => true))();
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', SSE_CACHE_CONTROL);
@@ -261,18 +377,21 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
 
   let ticket: QuestionTicket | null = null;
   const cardOut = { board: card.board, id: card.id };
+  const runOut = input.clarifyRunId ? { clarifyRunId: input.clarifyRunId } : {};
   try {
     await writeEvent('card', { type: 'card', board: card.board, id: card.id, title: card.title, periodLabel: card.period?.label ?? null, turnId });
     if (replay) {
       await writeEvent('token', { type: 'token', delta: replay.answer });
-      await finish({ type: 'done', chatId: replay.chatId, answer: replay.answer, card: cardOut, replay: true });
+      await finish({ type: 'done', chatId: replay.chatId, answer: replay.answer, card: cardOut, replay: true, ...runOut });
       return;
     }
     const persistOpts = { card: { cardRef, category: CARD_CHAT_CATEGORY[card.board], title: card.title, newThread } };
     const stored = storedCardQuestion(card.title, card.period?.label ?? null, q);
 
-    // topics the app does not discuss are stopped before any model sees the text, and cost nothing
-    const declined = await (deps.declined ?? declinedFor)(prisma, userId, q);
+    // topics the app does not discuss are stopped before any model sees the text, and cost nothing. A question about the
+    // person's own child with no age is not stopped when the clarifier can ask the age (the main chat's rule).
+    const declinedRaw = await (deps.declined ?? declinedFor)(prisma, userId, q, { childAgeConfirmed: input.childAgeConfirmed });
+    const declined = declinedRaw && !(clarifyFirst && declinedRaw.id === 'child_age_unconfirmed') ? declinedRaw : null;
     if (declined) {
       await writeEvent('info', { type: 'info', reason: 'declined', category: declined.category, topic: declined.id });
       await writeEvent('token', { type: 'token', delta: declined.reply });
@@ -282,9 +401,21 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
         responsePayload: { engine: 'policy', declined: declined.id },
         storedQuestion: storedCardQuestion(card.title, card.period?.label ?? null, storedQuestion(q, declined)),
       };
-      const saved = await persistAskTurn(prisma, userId, (body.chatId as string | null | undefined) ?? null, stored, result, true, persistOpts);
-      await finish({ type: 'done', chatId: saved.chatId, answer: declined.reply, card: cardOut });
+      const saved = await persistAskTurn(prisma, userId, input.chatId, stored, result, true, persistOpts);
+      await finish({ type: 'done', chatId: saved.chatId, answer: declined.reply, card: cardOut, ...runOut });
       return;
+    }
+
+    // Clarify (free: nothing is reserved): the clarify events the main chat sends, then the turn ends "clarifying"; the
+    // answer follows on POST /api/chat/confirm-stream {runId}, after the person's answers (POST /api/chat/answer)
+    if (clarifyFirst) {
+      const c = await clarifyCardQuestion(deps, userId, ctx, input);
+      if (c?.event) {
+        await writeEvent('clarify', { type: 'start' });
+        await writeEvent('clarify', c.event as unknown as Record<string, unknown>);
+        await finish({ type: 'done', status: 'clarifying', runId: c.runId, ms: c.ms, card: cardOut });
+        return;
+      }
     }
 
     const held = await gate.reserve(userId, { key });
@@ -298,9 +429,17 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
     const usageNow = await gate.getStatus(userId).catch(() => null);
     if (usageNow) await writeEvent('usage', { type: 'usage', usage: usageNow as unknown as Record<string, unknown> });
 
-    const answer = await answerCardQuestion({ prisma, ...(deps.answer ?? {}) }, userId, ctx, q, historyOf(thread), (delta) => {
-      if (delta) void writeEvent('token', { type: 'token', delta });
-    });
+    const answer = await answerCardQuestion(
+      { prisma, ...(deps.answer ?? {}) },
+      userId,
+      ctx,
+      q,
+      historyOf(thread),
+      (delta) => {
+        if (delta) void writeEvent('token', { type: 'token', delta });
+      },
+      input.clarified,
+    );
     const result: ChatTurnResult = {
       answerText: answer.text,
       // ids, counts and tokens only (the question text is the message's, never the payload's)
@@ -315,15 +454,17 @@ export async function handleCardAsk(deps: CardChatRouteDeps, req: express.Reques
         ledgerMatchesCard: ctx.ledgerMatchesCard,
         cells: ctx.cells.length,
         history: historyOf(thread).length,
+        clarified: input.clarified.length,
+        ...runOut,
         maxOutputTokens: answer.maxOutputTokens,
       },
       responsePayload: { engine: 'cardchat', usage: answer.usage, costUsd: answer.costUsd, finishReason: answer.finishReason },
     };
-    const saved = await persistAskTurn(prisma, userId, (body.chatId as string | null | undefined) ?? null, stored, result, true, persistOpts);
+    const saved = await persistAskTurn(prisma, userId, input.chatId, stored, result, true, persistOpts);
     await gate.commit(ticket, { chatId: saved.chatId, messageId: saved.messageId });
     ticket = null;
     const usage = await gate.getStatus(userId).catch(() => null);
-    await finish({ type: 'done', chatId: saved.chatId, answer: answer.text, card: cardOut, ...(usage ? { usage } : {}) });
+    await finish({ type: 'done', chatId: saved.chatId, answer: answer.text, card: cardOut, ...runOut, ...(usage ? { usage } : {}) });
   } catch (e) {
     if (ticket) await gate.release(ticket);
     const spend = e instanceof CardChatSpendCapError;

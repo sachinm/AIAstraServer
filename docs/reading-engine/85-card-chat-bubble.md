@@ -11,6 +11,14 @@ operation under the per-operation cap `READING_SPEND_CAP_USD` ($0.45).
 send and clarifier answers are free); on Love and Work one bubble per panel, named after the catalogue card that owns
 its sub-area. Build Phase 1 (You) first.
 
+**Sachin, 2026-11-18 (Clarify on cards):** the first question on a card goes through Clarify first, as the main chat
+does, pre-filled from the card: its life area, the period on screen and the card itself are known, so Clarify asks only
+for a missing fact (which sibling, a child's age, where the person lives; person_facts are never re-asked). Nothing to
+ask goes straight to the answer. The clarify events are the main chat's; the last answer is `ready` (no "I will read"
+proposal on a card), and `confirm-stream {runId}` streams the card's answer under the first send's
+`cardchat:<board>:<cardId>:<turnId>` key, so the clarifier is free. Follow-ups in the same thread skip it. Built on
+`feat/card-chat-clarifier` (server `src/reading/cardChat/clarify.ts`, `src/routes/cardChatRoutes.ts`).
+
 Plan only, 2026-11-18. Owner decisions (2026-11-18): every card on every board gets its own chat bubble. Tapping it
 turns **that card, in place** into a conversation about the card and the period on screen. It is not a modal and not
 the chat page, and the other cards stay as they are. The card's own text is the preamble. The input has a mic for

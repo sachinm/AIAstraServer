@@ -2899,10 +2899,25 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · `BoardTabBar` is not mounted anywhere.** `AIAstra_WEB/src/components/BoardTabBar.tsx` is imported only for
   `boardsEnabled()`; no page renders the bar, so its new portal filter (doc 11) is not seen. Found by grep while
   building doc 11. Done: the bar is mounted on phone boards or deleted with its test. Owner: web. Status: open.
-- **P3 · People who never answer the dashboards step lose the header Happy Hour(s) link.** Doc 11's default list is
-  Self, Love and Career (Sachin, 2026-11-18), so Lucky times leaves the header and drawer until the person ticks it in
-  the wizard; `/dashboard/lucky` still opens by URL. Done: Sachin confirms the default, or the default gains `lucky`
-  (`DEFAULT_PORTAL_DASHBOARDS` in `AIAstra_WEB/src/lib/portalDashboards.ts`). Status: open (decision).
+- **P3 · People who never answer the dashboards step lose the header Happy Hour(s) link.** Doc 11's default list was
+  Self, Love and Career, so Lucky times left the header and drawer until the person ticked it in the wizard. Decided by
+  Sachin 2026-11-18: Lucky times is ticked by default and the default list is `self, love, work, lucky`
+  (`DEFAULT_PORTAL_DASHBOARDS` in `AIAstra_WEB/src/lib/portalDashboards.ts`, the wizard's default ticks, tests), so
+  people who never answered see the Happy Hour(s) link again. Web branch `feat/card-chat-clarifier`. Status: done in
+  code; closes when that branch reaches staging.
+
+## Filed 2026-11-18 by the card-chat clarifier build (docs/reading-engine/85 §4 step 2, branch `feat/card-chat-clarifier`)
+
+- **P3** A card run never shows the "I will read …" proposal: after the last answer `/api/chat/answer` returns
+  `{type:'ready'}` and the web streams the answer at once (the proposal names charts and houses, which the card's answer
+  does not read). Confirm-before-predict on a card rests on the card's own "Is this right?" line and the `cards/chat`
+  prompt. Sachin to say if he wants the proposal back. Where: `clarify/machine.ts proposeOrReady`.
+- **P3** The card's clarifier phrases its question through the clarify model when `READING_MODEL_CLARIFY` is set (as the
+  main chat does): a small model call that is not charged to the person's questions. No spend cap applies to it.
+  Where: `clarify/planner.ts phraseAsk`.
+- **P3** A card question that the clarifier ends (`minors` after "Under 18") shows the decline in the card but is not
+  saved to the card's thread (the main chat does not save it either). Where: web `cardChatStore.answer`.
+
 ## Filed 2026-11-18 by the card-chat server build (docs/reading-engine/85, branch `feat/card-chat-v2`)
 
 - **P1** Migration `prisma/migrations/20261118200000_chats_card_ref` (nullable `chats.card_ref`, index
@@ -2911,11 +2926,13 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   regenerated client selects `card_ref` on every `chats` read. Until then the card-chat code reaches the column through a
   narrow cast: thread reads return an empty thread and a thread is created without `card_ref` (logged). Done: applied on
   staging, client regenerated, `GET /api/cards/self/<id>/chat` lists a saved thread.
-- **P2** The card chat does not run the clarifier (doc 85 §4 step 2: a seeded clarifier on the first question and the
-  card's `confirm` claim as its one question). The owner override (doc 85 top) made the card's stored context the
-  conversation; the new prompt `cards/chat` carries confirm-before-predict instead (it asks the card's "Is this right?"
-  question when unanswered). Sachin to decide whether the first card question should still go through Clarify. Where:
-  `src/routes/cardChatRoutes.ts handleCardAsk`.
+- **P2** The card chat does not run the clarifier. Decided by Sachin 2026-11-18: the first question on a card goes
+  through Clarify, pre-filled from the card (its area, the period on screen, the card as the sub-area), asking only a
+  missing fact (which sibling, a child's age, where the person lives); follow-ups skip it. Built on branch
+  `feat/card-chat-clarifier` (server `cardChat/clarify.ts`, `cardChatRoutes.ts streamCardTurn/handleCardConfirm`,
+  `clarify/machine.ts cardChat`, `clarifyRoutes.ts` confirm-stream branch; web `cardChatStore.ts`). Status: done in
+  code. Still open: the card's unanswered `confirm` claim is not the clarifier's question (the `cards/chat` prompt still
+  carries confirm-before-predict).
 - **P2** Lucky times card chat (doc 85 Phase 3: `now` and `today-<scenario>`) is not built; `board` accepts
   `self | love | work` only (400 `unknown_board` for `lucky`).
 - **P2** doc 85 findings, still open for ordinary chats: `persistAskTurn` creates a chat with no category and deactivates
