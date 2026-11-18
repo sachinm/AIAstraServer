@@ -1644,7 +1644,7 @@ Web facts are from `AIAstra_WEB` `develop` (70ae27f, worktree `AIAstra_WEB-known
 
 - **P1 · Internal technique ids are shown to every user.** `self.activation · Present Tone Consensus` on the tone card
   (`AreaBoardView.tsx:480-482`), `self.focus · Companion Fact Selector` (`:457-459`), badges on Now/Holds/Presses/Ahead/
-  Questions and on the wizard (`WelcomeWizard.tsx:17-25`). Fact. Owner: web. Done: no technique id or agent label on a
+  Questions (the wizard's and the selfie step's badges were removed 2026-11-18, web `feat/portal-dashboards`). Fact. Owner: web. Done: no technique id or agent label on a
   consumer screen; a test greps the rendered You page for `self.` and `·  Consensus`.
 - **P1 · Chart terms and vote counts on the first screen.** "Timing Clocks 3 supporting · 2 testing of 7 clocks", "Core
   Strength", "Key Horizon", "Primary pressure" (`AreaBoardView.tsx:487-507`); "Read on your Vimshottari clock"
@@ -2876,3 +2876,13 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · `tests/unit/reading/oracle/flow.test.ts` "a hung required reader fails without a retry" is timing-flaky** under
   a parallel multi-file vitest run (failed once with 9 files, passed alone 30/30, 2026-11-18). Not touched by this
   branch. Done: the test uses fake timers. Status: open.
+
+## Filed 2026-11-18 by the portal dashboards build (docs/dashboards/11, branch `feat/portal-dashboards`)
+
+- **P3 · `BoardTabBar` is not mounted anywhere.** `AIAstra_WEB/src/components/BoardTabBar.tsx` is imported only for
+  `boardsEnabled()`; no page renders the bar, so its new portal filter (doc 11) is not seen. Found by grep while
+  building doc 11. Done: the bar is mounted on phone boards or deleted with its test. Owner: web. Status: open.
+- **P3 · People who never answer the dashboards step lose the header Happy Hour(s) link.** Doc 11's default list is
+  Self, Love and Career (Sachin, 2026-11-18), so Lucky times leaves the header and drawer until the person ticks it in
+  the wizard; `/dashboard/lucky` still opens by URL. Done: Sachin confirms the default, or the default gains `lucky`
+  (`DEFAULT_PORTAL_DASHBOARDS` in `AIAstra_WEB/src/lib/portalDashboards.ts`). Status: open (decision).

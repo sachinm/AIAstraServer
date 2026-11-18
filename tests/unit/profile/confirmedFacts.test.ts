@@ -20,4 +20,15 @@ describe('confirmedFacts (doc 66 §4.2): the mood tap is not a reading fact', ()
     expect(out).toEqual({ 'work.status': 'employed' });
     expect(out).not.toHaveProperty('self.mood');
   });
+  it('drops portal.dashboards: a menu choice, not a fact about the person (docs/dashboards/11)', async () => {
+    expect(FACT_CATALOG['portal.dashboards']).toBeTruthy();
+    const out = await confirmedFacts(
+      prisma([
+        { key: 'portal.dashboards', value: 'self,love,work', confirmed_at: at },
+        { key: 'love.status', value: 'married', confirmed_at: at },
+      ]),
+      'u1',
+    );
+    expect(out).toEqual({ 'love.status': 'married' });
+  });
 });
