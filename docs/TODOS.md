@@ -2859,3 +2859,20 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · open · `queueLogError` cuts error text at 300 characters** (`src/lib/queueLogger.ts redactForLog`), and a
   Prisma error spends most of that on its preamble, so the constraint or column name never reaches CloudWatch.
   [ops] Done when Prisma errors log their code and `meta` (constraint, column) ahead of the text.
+
+## Filed 2026-11-18 by the Love/Work v3 server build (docs/dashboards/10, branch `feat/boards-v3`)
+
+- **P2 · A ready Love/Work card shows "queued" on the first open of the day.** Build on open (doc 10 §4.1 step 2) marks
+  every card of the active lens deck `queued` so the build re-checks its store key; `cardStateOf` shows `queued` over
+  a stored reading until the build serves it (seconds when the key is unchanged). Where: `src/reading/boards/v3Service.ts`
+  `getBoardV3`. Done: the web keeps the card's text on screen while `queued` with a reading (or the server reports a
+  `renewing` state). Owner: web W2 / next server pass. Status: open.
+- **P3 · Queued Love/Work cards linger for the day after BOARDS_V3 is unset.** They are not readable and no longer open
+  the build gate (`build.ts` checks `isReadable`), but stay `queued` in that day's `self.cards` state doc until midnight
+  UTC. Harmless (the board is not served); done when the runner drops unreadable queued entries. Status: open.
+- **P3 · `PUT /api/board/:board/v3/layout` has no `assertOwnAccount` check** (the legacy picker route never had one; the
+  new GET/POST routes do). Where: `src/routes/boardCardsRoutes.ts`. Done: the PUT refuses a body or query naming another
+  account with 403 like `/api/self/v3/layout`. Status: open.
+- **P3 · `tests/unit/reading/oracle/flow.test.ts` "a hung required reader fails without a retry" is timing-flaky** under
+  a parallel multi-file vitest run (failed once with 9 files, passed alone 30/30, 2026-11-18). Not touched by this
+  branch. Done: the test uses fake timers. Status: open.

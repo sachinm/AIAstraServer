@@ -26,10 +26,10 @@ import { personalizerCheckOf } from '../self/v2/failures.js';
 import { type TextCheckContext } from '../self/v2/personalizerValidate.js';
 import { claimKey, normaliseEvidenceKey, profileLines, promptText, shortHash } from '../self/v2/slices.js';
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
-import { cardDef } from '../self/v3/cards.js';
+import { anyCardDef } from './registry.js';
 import { checkOracleCard, oracleV3Schema, parseJson } from '../self/v3/oracle.js';
 import { checkPersonalCard, personalizerV3Schema, personalizerVoicePrefix, SELF_V3_PERSONALIZER_PROMPT, v3DateFrame } from '../self/v3/personalizer.js';
-import type { OracleCardV3, PersonalCardV3, SelfCardId, SelfSectionId, YearFrameV3 } from '../self/v3/types.js';
+import type { OracleCardV3, PersonalCardV3, CardId, SelfSectionId, YearFrameV3 } from '../self/v3/types.js';
 import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
@@ -46,7 +46,7 @@ const DEFAULT_SECTIONS: readonly SelfSectionId[] = ['line', 'year', 'stretch', '
 export interface CardPackInput {
   ctx: SelfBuildContext;
   /** every card the pack serves (the board and the rest), in reading order */
-  cards: readonly SelfCardId[];
+  cards: readonly CardId[];
   frame: YearFrameV3;
   frameText: string;
   frameKeys: readonly string[];
@@ -62,8 +62,8 @@ export interface CardPack {
   text: string;
   hash: string;
   /** per card: the ledger cells it reads and the keys it may cite (as on the one-card path) */
-  cells: Partial<Record<SelfCardId, LedgerCell[]>>;
-  allowed: Partial<Record<SelfCardId, Set<string>>>;
+  cells: Partial<Record<CardId, LedgerCell[]>>;
+  allowed: Partial<Record<CardId, Set<string>>>;
 }
 
 /** The role library: one system instruction for every call on the pack (a cache holds one). */
@@ -80,7 +80,7 @@ export function cardPackSystem(): string {
 /** Pure. Same input, same bytes: the cache key is the hash of system and text. */
 export function buildCardPack(i: CardPackInput): CardPack {
   const range = frameRange(i.frame);
-  const ids = [...new Set(i.cards)].filter((id) => cardDef(id));
+  const ids = [...new Set(i.cards)].filter((id) => anyCardDef(id));
   const p = i.ctx.sub.profile!;
   const L: string[] = [i.prefix.text, i.frameText];
   L.push(
@@ -112,12 +112,12 @@ export function buildCardPack(i: CardPackInput): CardPack {
   const allowed: CardPack['allowed'] = {};
   L.push('# CARD CELLS (each card\'s agreed ledger cells; the status is counted in code and final)');
   for (const id of ids) {
-    const c = cardCells(i.ledger, cardDef(id)!.matters);
+    const c = cardCells(i.ledger, anyCardDef(id)!.matters);
     cells[id] = c;
     L.push(`## CARD CELLS ${id}\n${renderCardLedger(c).text}`);
   }
   // matter rows: each matter once, each row once (a row written under an earlier matter is named by key only)
-  const matters = [...new Set(ids.flatMap((id) => cardDef(id)!.matters as readonly string[]))].sort(cmp);
+  const matters = [...new Set(ids.flatMap((id) => anyCardDef(id)!.matters as readonly string[]))].sort(cmp);
   const written = new Set<string>(i.prefix.keys);
   const keysOfMatter = new Map<string, string[]>();
   L.push(`# MATTER ROWS (the rows overlapping ${range.from}..${range.to}; each row once)`);
@@ -137,7 +137,7 @@ export function buildCardPack(i: CardPackInput): CardPack {
   L.push(`# PERSON'S ANSWERS: ${i.answers || 'none'}`);
   for (const id of ids) {
     const led = renderCardLedger(cells[id] ?? []);
-    const ks = [...i.prefix.keys, ...i.frameKeys, ...led.keys, ...cardDef(id)!.matters.flatMap((m) => keysOfMatter.get(m) ?? [])];
+    const ks = [...i.prefix.keys, ...i.frameKeys, ...led.keys, ...anyCardDef(id)!.matters.flatMap((m) => keysOfMatter.get(m) ?? [])];
     allowed[id] = new Set(ks.map(normaliseEvidenceKey));
   }
   const system = cardPackSystem();
@@ -146,14 +146,14 @@ export function buildCardPack(i: CardPackInput): CardPack {
 }
 
 /** The uncached request: the cards of this call, their matters and sections, the board's titles. */
-export function groupRequest(asOf: string, cards: readonly SelfCardId[], boardTitles: readonly string[], sections: Partial<Record<SelfCardId, readonly string[]>>, repair = ''): string {
+export function groupRequest(asOf: string, cards: readonly CardId[], boardTitles: readonly string[], sections: Partial<Record<CardId, readonly string[]>>, repair = ''): string {
   return [
     ...(repair ? [repair] : []),
     'ROLE: CARD GROUP.',
     `TODAY: ${asOf}`,
     `THE BOARD (the cards this person chose; each card leaves the others' subjects to them): ${boardTitles.join('; ') || 'none chosen'}`,
     'WRITE THESE CARDS, in this order:',
-    ...cards.map((id) => `- ${id}: matters ${cardDef(id)!.matters.join(', ')}; sections ${(sections[id] ?? DEFAULT_SECTIONS).join(', ')}`),
+    ...cards.map((id) => `- ${id}: matters ${anyCardDef(id)!.matters.join(', ')}; sections ${(sections[id] ?? DEFAULT_SECTIONS).join(', ')}`),
     'Return the JSON document only.',
   ].join('\n');
 }
@@ -164,7 +164,7 @@ const withoutCard = (item: Record<string, unknown>): Record<string, unknown> => 
   return { ...item, properties: props, required: ((item.required as string[]) ?? []).filter((r) => r !== 'card') };
 };
 
-export function groupSchema(cards: readonly SelfCardId[], spanIds: readonly string[]): Record<string, unknown> {
+export function groupSchema(cards: readonly CardId[], spanIds: readonly string[]): Record<string, unknown> {
   const o = (oracleV3Schema(cards, spanIds) as { properties: { cards: { items: Record<string, unknown> } } }).properties.cards.items;
   const f = (personalizerV3Schema(cards) as { properties: { cards: { items: Record<string, unknown> } } }).properties.cards.items;
   return {
@@ -201,9 +201,9 @@ export interface CardGroupInput {
   pack: CardPack;
   /** the cache the pack went up as (logged on the run), or null when the call goes uncached */
   cacheName: string | null;
-  cards: readonly SelfCardId[];
+  cards: readonly CardId[];
   boardTitles: readonly string[];
-  sections: Partial<Record<SelfCardId, readonly string[]>>;
+  sections: Partial<Record<CardId, readonly string[]>>;
   frame: YearFrameV3;
   dates: ReadonlySet<string>;
   model: string;
@@ -211,7 +211,7 @@ export interface CardGroupInput {
 }
 
 export interface CardGroupResult {
-  cards: Partial<Record<SelfCardId, GroupCardResult>>;
+  cards: Partial<Record<CardId, GroupCardResult>>;
   timings: SelfV2AgentTiming[];
   issues: ValidationIssue[];
 }
@@ -224,7 +224,7 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
   const textCheck: TextCheckContext = { gender: p.gender, dates: v3DateFrame(i.dates) };
   const owner = { userId: i.ctx.userId, kundliId: i.ctx.kundliId };
 
-  const ask = async (call: string, cards: readonly SelfCardId[], repair: string): Promise<unknown[] | null> => {
+  const ask = async (call: string, cards: readonly CardId[], repair: string): Promise<unknown[] | null> => {
     const t0 = performance.now();
     const request = groupRequest(i.ctx.asOf, cards, i.boardTitles, i.sections, repair);
     try {
@@ -269,7 +269,7 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
     }
   };
 
-  const check = (id: SelfCardId, entry: Record<string, unknown> | undefined, call: string): GroupCardResult => {
+  const check = (id: CardId, entry: Record<string, unknown> | undefined, call: string): GroupCardResult => {
     if (!entry) return { oracle: null, personal: null, problems: ['not returned'] };
     const cells = i.pack.cells[id] ?? [];
     const allowed = i.pack.allowed[id] ?? new Set<string>();
@@ -287,7 +287,7 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
     return { oracle: r.card, personal: f.card, problems: [] };
   };
 
-  const take = (list: unknown[] | null, cards: readonly SelfCardId[], call: string) => {
+  const take = (list: unknown[] | null, cards: readonly CardId[], call: string) => {
     for (const id of cards) {
       const entry = (list ?? []).find((x) => (x as { card?: unknown } | null)?.card === id) as Record<string, unknown> | undefined;
       const r = check(id, entry, call);

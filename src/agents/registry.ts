@@ -293,7 +293,7 @@ export const AGENTS: AgentDef[] = [
     subModule: 'cards',
     role: 'oracle',
     description:
-      'Writes one Self board card per call, as if it were the whole reading on its subject, over the shared cached prefix with the card brief, the titles of the cards the person chose, the year frame, the agreed ledger cells and dated rows of the card matters: every span answered, a dated claim only on a confirmed cell, build only on a confirmed or leaning light or mixed cell; one repair alone (docs/reading-engine/70 §4.1 Layer 4)',
+      'Writes one Self, Love or Work board card per call, as if it were the whole reading on its subject, over the shared cached prefix with the card brief, the titles of the cards the person chose, the year frame, the agreed ledger cells and dated rows of the card matters: every span answered, a dated claim only on a confirmed cell, build only on a confirmed or leaning light or mixed cell; one repair alone (docs/reading-engine/70 §4.1 Layer 4)',
   },
   {
     id: 'self.card.personalizer',
@@ -303,7 +303,7 @@ export const AGENTS: AgentDef[] = [
     subModule: 'cards',
     role: 'fast',
     description:
-      'Turns one card Oracle answer into the person card (line, per-span asks, obstacle and step, confirm question), chained to its Oracle call, with the v3 text checks and one repair (docs/reading-engine/70 §4.1 Layer 5)',
+      'Turns one Self, Love or Work board card Oracle answer into the person card (line, per-span asks, obstacle and step, confirm question), chained to its Oracle call, with the v3 text checks and one repair (docs/reading-engine/70 §4.1 Layer 5)',
   },
   {
     id: 'reading.clock',

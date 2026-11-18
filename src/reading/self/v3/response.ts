@@ -171,19 +171,26 @@ export function cardViews(i: CardViewsInput): SelfV3CardView[] {
  * locked card is a shell with no content; an off or locked in-card feature empties its field; a face whose feature is
  * not usable reads as `read`.
  */
-export function applySelfFeatures(body: SelfV3Response, grants: ReadonlyMap<string, FeatureGrant>): SelfV3Response {
+/** docs/dashboards/10 §7 S5: any board's card view (Self's, or a Love/Work card with its own id and lens as group) */
+export type AnyCardView = Omit<SelfV3CardView, 'id' | 'group' | 'foldedInto'> & { id: string; group: string; foldedInto: string | null };
+
+export function applySelfFeatures<C extends AnyCardView = SelfV3CardView, B extends { cards: C[]; layout: { cards: string[] }; features: Record<string, FeatureGrant> } = SelfV3Response & { cards: C[] }>(
+  body: B,
+  grants: ReadonlyMap<string, FeatureGrant>,
+  board: string = 'self',
+): B {
   const perCard = cardFeatureGrants(grants);
   const faceOk = (face: string): boolean =>
     face === 'research' ? usable(grants, 'feature.research_face') : face === 'breakdown' ? usable(grants, 'feature.breakdown_face') : face === 'light' ? usable(grants, 'feature.face.short') : true;
-  const cards: SelfV3CardView[] = [];
+  const cards: C[] = [];
   for (const c of body.cards) {
-    const g = grants.get(cardFeatureKey('self', c.id));
+    const g = grants.get(cardFeatureKey(board, c.id));
     if (!g) continue;
     if (g.locked) {
       cards.push({ ...c, locked: { minPlan: g.minPlan }, features: {}, firstLine: null, rail: [], standing: [], periods: [], keyDates: [], stale: false, staleDates: [], v3: null, v2: null });
       continue;
     }
-    const out: SelfV3CardView = { ...c, features: perCard };
+    const out: C = { ...c, features: perCard };
     if (!usable(grants, 'feature.periods')) out.periods = [];
     if (!usable(grants, 'feature.key_dates')) out.keyDates = [];
     if (!usable(grants, 'feature.why_panel') && out.v2) out.v2 = { ...out.v2, details: { evidence: [] } };
@@ -191,7 +198,7 @@ export function applySelfFeatures(body: SelfV3Response, grants: ReadonlyMap<stri
     if (out.options && !faceOk(out.options.face)) out.options = { ...out.options, face: 'read' };
     cards.push(out);
   }
-  const offCard = (id: string) => !grants.has(cardFeatureKey('self', id));
+  const offCard = (id: string) => !grants.has(cardFeatureKey(board, id));
   return { ...body, cards, layout: { ...body.layout, cards: body.layout.cards.filter((id) => !offCard(id)) }, features: boardFeatureGrants(grants) };
 }
 

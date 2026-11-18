@@ -18,6 +18,7 @@
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
+import { getBoardsV3 } from '../config/env.js';
 import { CHECK_AREAS, checksFor, getCareer, recordCheck, setWorkStatus, type CareerDeps, type CheckArea } from '../reading/area/careerService.js';
 import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js';
 import { getSelfBoard } from '../reading/area/selfService.js';
@@ -106,6 +107,8 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
     if (!userId) return;
     const board = req.params.board as BoardCharge;
     if (!BOARDS.includes(board)) return res.status(400).json({ error: 'unknown_board' });
+    // docs/dashboards/10 §4.3: a Love/Work board on v3 renews itself once a day on open; the paid refresh comes later
+    if (board !== 'self' && (getBoardsV3() as readonly string[]).includes(board)) return res.status(409).json({ error: 'not_due', code: 'not_due' });
     const day = today();
     const build = (force: boolean) =>
       board === 'work' ? getCareer(svc, userId, { force }) : board === 'love' ? getLoveBoard(boardDeps, userId, { force }) : getSelfBoard(boardDeps, userId, { force });

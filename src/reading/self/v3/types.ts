@@ -26,6 +26,7 @@ import type {
 import type { SelfV2BuildView } from '../v2/progress.js';
 import type { FeatureGrant } from '../../../boards/features.js';
 import type { PlanCode } from '../../../billing/plans.js';
+import type { BoardV3CardId } from '../../boards/v3Cards.js';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The card registry (doc 68 §4.3)
@@ -51,6 +52,8 @@ export type SelfCardIdLater =
   | 'saturn'
   | 'helps';
 export type SelfCardId = SelfCardIdV2 | SelfCardIdLater;
+/** docs/dashboards/10 §7 S2: any card the per-card reading reads (Self, Love or Work; ids unique across boards) */
+export type CardId = SelfCardId | BoardV3CardId;
 
 export type SelfCardGroup = 'body' | 'mind' | 'character' | 'indian' | 'time';
 
@@ -133,22 +136,29 @@ export const SUGGESTED_COUNT = 8;
 
 export type BoardId = 'self' | 'love' | 'work';
 
-export interface SelfBoardLayout {
+/**
+ * The board-wide settings the person changed. docs/dashboards/10 §4.3: Love and Work also keep `lens`, the lens the board
+ * shows (Self refuses it as an unknown option).
+ */
+export type LayoutBoardOptions = Partial<BoardOptions> & { lens?: string };
+
+/** `Id`: the board's card ids (Self by default; Love and Work use their v3 ids, docs/dashboards/10 §7 S5) */
+export interface SelfBoardLayout<Id extends string = SelfCardId> {
   template: SelfTemplateId;
   /** the person's cards, in their order */
-  cards: SelfCardId[];
+  cards: Id[];
   /** per card, the sections switched on, when the person changed them; absent: the card's defaults */
-  sections: Partial<Record<SelfCardId, SelfSectionId[]>>;
+  sections: Partial<Record<Id, SelfSectionId[]>>;
   /** per card, how it reads (doc 71 §4.3), only the keys the person changed; absent: every card on its defaults */
   options?: BoardCardOptions;
   /** the board-wide settings, only the keys the person changed; absent: unchanged by this write */
-  boardOptions?: Partial<BoardOptions>;
+  boardOptions?: LayoutBoardOptions;
 }
 
-export interface SelfBoardLayoutView extends SelfBoardLayout {
+export interface SelfBoardLayoutView<Id extends string = SelfCardId> extends SelfBoardLayout<Id> {
   options: BoardCardOptions;
   /** the board-wide settings the person changed (always an object; `{}` = every default) */
-  boardOptions: Partial<BoardOptions>;
+  boardOptions: LayoutBoardOptions;
   /** the defaults in force (env-driven), so the page never hardcodes them */
   boardDefaults: BoardOptions;
   /** false until the person has pressed Done once: the page opens the picker */
@@ -249,7 +259,7 @@ export interface OracleSpanV3 {
 }
 
 export interface OracleCardV3 {
-  card: SelfCardId;
+  card: CardId;
   headline: string;
   spans: OracleSpanV3[];
   /** one dated statement about a past span the person can answer No to */
@@ -262,12 +272,12 @@ export interface OracleCardV3 {
 }
 
 export interface OracleV3Output {
-  cards: Partial<Record<SelfCardId, OracleCardV3>>;
+  cards: Partial<Record<CardId, OracleCardV3>>;
 }
 
 /** what the v3 Personalizer returns per card (it never sees the chart; spans, tones and modes are the Oracle's) */
 export interface PersonalCardV3 {
-  card: SelfCardId;
+  card: CardId;
   /** ≤ 20 words, one sentence with a date copied from a span */
   line: string;
   spans: Array<{ span: string; asks: string; obstacle: string; step: string }>;
@@ -279,7 +289,7 @@ export interface PersonalCardV3 {
 }
 
 export interface PersonalizerV3Output {
-  cards: Partial<Record<SelfCardId, PersonalCardV3>>;
+  cards: Partial<Record<CardId, PersonalCardV3>>;
 }
 
 /** what the person reads for one span (doc 68 §4.8 Personalizer table) */
