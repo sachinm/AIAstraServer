@@ -207,3 +207,20 @@ Ship Phase 1 with `PLANS_ENABLED` off, apply the migration, then turn it on in s
 - One question is one thing the person asked: multi-part counts once, clarify rounds and failures do not count.
 - Annual Plus gets 100 a month, not 1,200 at once.
 - Hindi is stored and shown as coming soon; no Hindi text ships in Phase 1.
+
+## 10. Spend cap per operation (Sachin, 2026-11-18)
+
+There is no daily model-spend cap. Each operation has one budget of **USD 0.45**, set by `READING_SPEND_CAP_USD`
+(default 0.45, clamped to 0.05–5, read by `getReadingSpendCapUsd()` in `src/config/env.ts`). Spend is counted per
+call as each one returns, from the price table (`usageCostUsd`). Once the operation's spend reaches the cap, no further
+call starts. A call that has started is never cut, and its paid output is used rather than thrown away. One log line is
+written when the cap stops a call: `{msg:'reading spend cap', op, spentUsd, capUsd}`.
+
+| Operation | What its one budget covers |
+|---|---|
+| Dashboard reading refresh | One build run (`src/reading/self/buildEvent.ts` → `runSelfV2Build`): the family readers, Oracle, Personalizer, clock layer and every card that run reads, on every board in the pack. The stored day's `spentUsd` is a record only and is never checked. |
+| One card read the page asks for | `POST …/cards/:id/read` queues the card and starts a build, and that build run is its own operation. When a build is already running, the cards queued meanwhile are read in a later round with a fresh budget. The day-based `429 spend_cap` is gone. |
+| General reading response | One `ask-stream` answer, intake included (`src/reading/run.ts`). Single and graph flows use `OperationBudget` (`src/reading/llm/spendCap.ts`). The oracle flow's `CostGuard` has the same cap as its question cap, and `READING_COST_CAP_QUERY_USD` can only lower it. When the answer call itself cannot start, the turn fails the usual way and the question is given back. |
+| Card-chat answer | One answer under the same cap (docs/reading-engine/85 §9). |
+
+`CARDS_SPEND_CAP_USD` (per person per day) and `SELF_READING_MAX_SPEND_USD` (per Self build) are no longer read.

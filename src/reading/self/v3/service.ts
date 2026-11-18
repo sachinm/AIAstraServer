@@ -8,7 +8,7 @@
  * the board's unread cards `queued` and queues the build (which reads them); POST /cards/:id/read queues one card.
  */
 import type { PrismaClient } from '@prisma/client';
-import { getCardsReadMin, getCardsSpendCapUsd, isCardsReadEnabled } from '../../../config/env.js';
+import { getCardsReadMin, isCardsReadEnabled } from '../../../config/env.js';
 import { boardReadingView, cardStateOf, readCardsState, updateCardsState } from '../../cards/state.js';
 import { readCardReadings } from '../../cards/store.js';
 import { CARD_STUCK_MS } from '../../cards/types.js';
@@ -208,7 +208,7 @@ async function queueAfterLayout(prisma: PrismaClient, userId: string, kundliId: 
   }
 }
 
-export type ReadCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 429 | 503; error: CardReadError };
+export type ReadCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError };
 
 /** POST /api/self/v3/cards/:id/read: queue or retry one card (doc 70 §4.2). */
 export async function readSelfV3Card(prisma: PrismaClient, userId: string, cardId: string, deps: CardsQueueDeps = {}): Promise<ReadCardResult> {
@@ -222,7 +222,7 @@ export async function readSelfV3Card(prisma: PrismaClient, userId: string, cardI
   const doc = await readCardsState(prisma, kundliId, now);
   const e = doc.cards[def.id];
   if (e && e.state === 'reading' && now.getTime() - Date.parse(e.at) <= CARD_STUCK_MS) return { ok: false, status: 409, error: 'already_reading' };
-  if (doc.spentUsd >= getCardsSpendCapUsd()) return { ok: false, status: 429, error: 'spend_cap' };
+  // no day cap (docs/billing/README.md "Spend cap per operation"): the build this queues is its own operation, its own budget
   await updateCardsState(prisma, userId, kundliId, now, (d) => {
     d.cards[def.id] = { state: 'queued', at: now.toISOString() };
   });

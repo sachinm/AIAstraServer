@@ -14,7 +14,7 @@ import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 import { PRESENT, latestFixture } from '../self/v2api/fixtures.js';
 
 const NOW = new Date('2026-11-10T12:00:00Z');
-const ENV = ['SELF_V3_BUILD', 'READING_CLOCK_LAYER', 'BOARDS_V3', 'CARDS_SPEND_CAP_USD'];
+const ENV = ['SELF_V3_BUILD', 'READING_CLOCK_LAYER', 'BOARDS_V3', 'READING_SPEND_CAP_USD'];
 const saved: Record<string, string | undefined> = {};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -118,7 +118,7 @@ beforeEach(() => {
   queuedBuilds.length = 0;
   readings = {};
   process.env.BOARDS_V3 = 'love,work';
-  delete process.env.CARDS_SPEND_CAP_USD;
+  delete process.env.READING_SPEND_CAP_USD;
 });
 
 const call = (method: string, path: string, user?: string, body?: unknown) =>
@@ -249,14 +249,15 @@ describe('layout PUT (dispatched on body shape) and build on open', () => {
 });
 
 describe('POST read and confirm', () => {
-  it('202 for a card of this board; 400 for another board card or one not offered; 429 at the cap', async () => {
+  it('202 for a card of this board; 400 for another board card or one not offered; no day cap', async () => {
     const r = await call('POST', '/api/board/work/v3/cards/job_pulse/read', 'u1');
     expect(r.status).toBe(202);
     expect(await (await call('POST', '/api/board/work/v3/cards/dating_pulse/read', 'u1')).json()).toEqual({ error: 'unknown_card' });
     expect(await (await call('POST', '/api/board/work/v3/cards/start_degree_to_career/read', 'u1')).json()).toEqual({ error: 'card_not_offered' });
-    process.env.CARDS_SPEND_CAP_USD = '0.01';
-    [...f.builds.values()][0].result.spentUsd = 0.02;
-    expect((await call('POST', '/api/board/work/v3/cards/job_pulse/read', 'u1')).status).toBe(429);
+    // a high stored day spend no longer refuses a read: each read is its own operation with its own budget
+    process.env.READING_SPEND_CAP_USD = '0.05';
+    [...f.builds.values()][0].result.spentUsd = 9;
+    expect((await call('POST', '/api/board/work/v3/cards/job_pulse/read', 'u1')).status).toBe(202);
   });
   it('confirm writes the same fact as You; a bad claim is 400', async () => {
     expect((await call('POST', '/api/board/love/v3/confirm', 'u1', { claimId: 'dating_pulse.quiet_stretch', answer: 'yes' })).status).toBe(204);

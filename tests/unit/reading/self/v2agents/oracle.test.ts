@@ -103,8 +103,15 @@ describe('Self v2 Oracle: three calls over one prefix (doc 66 §4.1)', () => {
     const failed = await runOracleV2({ ...deps, callGemini: async () => geminiResult('not json') }, ctx, slice);
     expect(failed.status).toBe('failed');
     expect(failed.output).toBeNull();
-    const over = await runOracleV2({ ...deps, maxSpendUsd: 0.000001, callGemini: makeGemini([]) }, ctx, slice);
+    // the run already spent its cap: the Oracle is not called (a paid call is never thrown away after the fact)
+    let overCalls = 0;
+    const over = await runOracleV2({ ...deps, spentUsd: 0.5, maxSpendUsd: 0.45, callGemini: async (o) => (overCalls++, makeGemini([])(o)) }, ctx, slice);
     expect(over.status).toBe('budget_exceeded');
     expect(over.output).toBeNull();
+    expect(overCalls).toBe(0);
+    // under the cap the calls run, and their documents are used even when they take the run past it
+    const past = await runOracleV2({ ...deps, spentUsd: 0, maxSpendUsd: 0.000001, callGemini: makeGemini([]) }, ctx, slice);
+    expect(past.status).not.toBe('budget_exceeded');
+    expect(past.output).not.toBeNull();
   });
 });

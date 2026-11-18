@@ -234,6 +234,31 @@ describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
     expect(r.cards.body).toBeTruthy();
     expect(r.status).toBe('ok');
   });
+  it('one build run, one budget: the cards get what the run has left and count the clock layer, not the day', async () => {
+    const callGemini = async (o: GeminiCallOptions) => {
+      if (o.node.startsWith('reading.clock.')) return ok(reader(o.parts));
+      if (o.node === 'reading.concordance') return ok(boastful(o.parts[1]!));
+      return ok(JSON.stringify({ cards: [] }));
+    };
+    const seen: Array<{ capUsd: number | undefined; spentBeforeUsd: number }> = [];
+    const r = await runSelfV3Cards(
+      base({
+        callGemini: callGemini as never,
+        // the v2 build passes its remainder of READING_SPEND_CAP_USD as maxSpendUsd
+        maxSpendUsd: 0.3,
+        loadBoard: async () => ({ cards: ['body', 'mind', 'stuck', 'sleep', 'year'], sections: {} }),
+        readCards: async (d: { capUsd?: number }, i: { spentBeforeUsd: number }) => {
+          seen.push({ capUsd: d.capUsd, spentBeforeUsd: i.spentBeforeUsd });
+          return { results: [], cards: {}, timings: [], issues: [], spentUsd: 0, capReached: false, order: [] };
+        },
+      }) as never,
+      { ctx, pressure: primary, oracleSlice: slice, portrait: null, buildId: 'b7' },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.capUsd).toBe(0.3);
+    expect(seen[0]!.spentBeforeUsd).toBeGreaterThan(0);
+    expect(seen[0]!.spentBeforeUsd).toBeLessThanOrEqual(r.clockLayer!.spentUsd);
+  });
   it('the cards start on the counted ledger while the concordance is still writing; its words are folded in after', async () => {
     let release: () => void = () => undefined;
     const held = new Promise<void>((r) => (release = r));

@@ -293,11 +293,13 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
   const expected = ORACLE_V3_CALLS.flatMap((x) => x.cards);
   const base = { model, promptHash: pHash, calls };
 
-  const lists = await Promise.all(ORACLE_V3_CALLS.map(({ call, cards }) => ask(call, cards)));
-  if (spent() > deps.maxSpendUsd) {
-    issues.push({ stage: 'oracle', area: null, check: 'budget', message: `spent ${spent()} over the cap ${deps.maxSpendUsd}`, callId: null });
+  // one operation, one budget (docs/billing/README.md "Spend cap per operation"): no call starts once the run's spend
+  // reached its cap; calls already paid for are used, never thrown away
+  if (spent() >= deps.maxSpendUsd) {
+    issues.push({ stage: 'oracle', area: null, check: 'budget', message: `spent ${spent()} of the cap ${deps.maxSpendUsd}; the Oracle was not called`, callId: null });
     return { ...base, status: 'budget_exceeded', output: null, cardStatus: {}, issues, spentUsd: spent(), repairRan: false };
   }
+  const lists = await Promise.all(ORACLE_V3_CALLS.map(({ call, cards }) => ask(call, cards)));
   const check = { frame, allowedKeys: allowed, dates, expected, aliases: frame.aliases ?? {} };
   const first = validateOracleV3(lists.flatMap((l) => l ?? []), check);
   const pushFailures = (failed: Partial<Record<CardId, string[]>>, callId: string | null) => {
@@ -311,7 +313,9 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
   const cardStatus: OracleV3Result['cardStatus'] = {};
   for (const id of expected) cardStatus[id] = output.cards[id] ? 'ok' : 'failed';
   let repairRan = false;
-  if (failedIds.length) {
+  if (failedIds.length && spent() >= deps.maxSpendUsd) {
+    issues.push({ stage: 'oracle', area: null, check: 'budget', message: `repair not run: spent ${spent()} of the cap ${deps.maxSpendUsd}`, callId: null });
+  } else if (failedIds.length) {
     repairRan = true;
     const reasons = failedIds.map((id) => `- ${id}: ${(first.failed[id] ?? []).slice(0, 4).join('; ')}`).join('\n');
     const list = await ask('v3.oracle.repair', failedIds, `REPAIR: these cards failed the validator. Write them again and fix exactly this:\n${reasons}`);
@@ -326,6 +330,6 @@ export async function runOracleV3(deps: OracleV3Deps, ctx: SelfBuildContext, sli
   }
   for (const i of issues) if (i.area && cardStatus[i.area as CardId]) i.areaStatus = cardStatus[i.area as CardId];
   const n = Object.keys(output.cards).length;
-  const status: OracleV3Result['status'] = spent() > deps.maxSpendUsd ? 'budget_exceeded' : !n ? 'failed' : expected.some((id) => cardStatus[id] === 'failed') ? 'partial' : 'ok';
+  const status: OracleV3Result['status'] = !n ? 'failed' : expected.some((id) => cardStatus[id] === 'failed') ? 'partial' : 'ok';
   return { ...base, status, output: n ? output : null, cardStatus, issues, spentUsd: spent(), repairRan };
 }

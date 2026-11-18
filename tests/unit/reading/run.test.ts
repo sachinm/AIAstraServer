@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearReadingCaches } from '../../../src/reading/data/store.js';
 import { findingsCache } from '../../../src/reading/nodes/findingsCache.js';
 import { ReadingUnavailableError, runReading } from '../../../src/reading/run.js';
@@ -184,6 +184,30 @@ describe('runReading: graph flow', () => {
       process.env.GEMINI_API_URL = fake.url;
       await broken.close();
     }
+  });
+
+  it('one response, one budget: past READING_SPEND_CAP_USD no call starts; an answer call that cannot start fails the turn', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      // the specialists start under the cap (nothing spent yet); their bills take the response past it, so the answer
+      // call does not start and the turn fails the usual way (the route gives the question back)
+      await expect(runReading(prisma, 'u1', 'Should I change jobs this year?', { asOf: G1_AS_OF, flow: 'graph', spendCapUsd: 0.0000001 })).rejects.toMatchObject({ name: 'CostRefusedError', reason: 'budget' });
+      expect(fake.requests.filter((q) => !q.stream).length).toBeGreaterThanOrEqual(3);
+      expect(fake.requests.filter((q) => q.stream)).toHaveLength(0);
+      const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"reading spend cap"'));
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0]!)).toMatchObject({ msg: 'reading spend cap', op: 'reading.ask', node: 'synthesize', capUsd: 0.0000001 });
+      expect(JSON.parse(lines[0]!).spentUsd).toBeGreaterThan(0.0000001);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('under the cap the response is unchanged: specialists, then one streamed answer', async () => {
+    const r = await runReading(prisma, 'u1', 'Should I change jobs this year?', { asOf: G1_AS_OF, flow: 'graph', spendCapUsd: 0.45 });
+    expect(r.answerText).toContain('Direct answer');
+    expect(fake.requests.filter((q) => q.stream)).toHaveLength(1);
+    expect(r.record.costUsd).toBeLessThan(0.45);
   });
 
   it('uses the fast lane (no specialists) for a short yes/no question', async () => {

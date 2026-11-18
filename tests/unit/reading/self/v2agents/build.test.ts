@@ -10,7 +10,7 @@ const ENV = {
   READING_MODEL_READER: 'gemini-3.1-flash-lite',
   READING_MODEL_ORACLE: 'gemini-3.8-flash',
   SELF_PERSONALIZER_MODEL: 'gemini-3.1-flash-lite',
-  SELF_READING_MAX_SPEND_USD: '1',
+  READING_SPEND_CAP_USD: '1',
 } as const;
 const NOW = () => new Date('2026-11-09T12:00:00Z');
 const agentRows = (db: ReturnType<typeof makePrisma>) => [...db.outputs.values()].filter((x) => x.technique_id === 'self.v2.oracle' || x.technique_id === 'self.v2.personalizer').length;
@@ -141,9 +141,8 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
   });
 
   it('budget_exceeded is not stored', async () => {
-    process.env.SELF_READING_MAX_SPEND_USD = '0.000001';
     const log: string[] = [];
-    const { db, deps: d } = deps(log);
+    const { db, deps: d } = deps(log, { maxSpendUsd: 0.000001 });
     const r = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
     expect(r.status).toBe('budget_exceeded');
     expect(r.stored).toEqual({ oracle: false, cards: false });

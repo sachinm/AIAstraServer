@@ -21,7 +21,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getSelfFamilyMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
 import { runSelfV3Cards, type SelfV3StepResult } from '../v3/build.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
 import { canonicalJson } from '../../../techniques/pieces.js';
@@ -89,6 +89,8 @@ export interface SelfV2BuildDeps {
   sub?: Omit<SelfV2Deps, 'prisma'>;
   /** test seam: each step's name, in order */
   onStep?: (step: string) => void;
+  /** test seam: this build run's spend cap (default READING_SPEND_CAP_USD, which cannot go below 0.05) */
+  maxSpendUsd?: number;
 }
 
 export interface SelfV2BuildArgs {
@@ -382,7 +384,9 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
   };
   const call = deps.callGemini ?? realCallGemini;
   const d = { ...deps, callGemini: call };
-  const maxSpendUsd = getSelfReadingMaxSpendUsd();
+  // one build run is one operation with one budget (docs/billing/README.md "Spend cap per operation"): the family
+  // readers, the Oracle, the Personalizer and the v3 step (clock layer and cards) share READING_SPEND_CAP_USD
+  const maxSpendUsd = deps.maxSpendUsd ?? getReadingSpendCapUsd();
   try {
     // 0–1: sub-techniques
     step('subs');
@@ -464,7 +468,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
         const familySpend = round6(fr.timings.reduce((n, x) => n + x.costUsd, 0));
         const built = buildOracleSlice(ctx, fam.packs, briefs, familyFindings);
         oracleSlice = built.slice;
-        if (familySpend > maxSpendUsd) {
+        if (familySpend >= maxSpendUsd) {
           const result: SelfV2OracleResult = {
             status: 'budget_exceeded',
             output: null,
