@@ -388,21 +388,25 @@ async function streamCardTurn(deps: CardChatRouteDeps, req: express.Request, res
     const persistOpts = { card: { cardRef, category: CARD_CHAT_CATEGORY[card.board], title: card.title, newThread } };
     const stored = storedCardQuestion(card.title, card.period?.label ?? null, q);
 
-    // topics the app does not discuss are stopped before any model sees the text, and cost nothing. A question about the
-    // person's own child with no age is not stopped when the clarifier can ask the age (the main chat's rule).
-    const declinedRaw = await (deps.declined ?? declinedFor)(prisma, userId, q, { childAgeConfirmed: input.childAgeConfirmed });
-    const declined = declinedRaw && !(clarifyFirst && declinedRaw.id === 'child_age_unconfirmed') ? declinedRaw : null;
-    if (declined) {
-      await writeEvent('info', { type: 'info', reason: 'declined', category: declined.category, topic: declined.id });
-      await writeEvent('token', { type: 'token', delta: declined.reply });
+    // topics the app does not discuss are stopped before any model sees the text, and cost nothing
+    const answerDeclined = async (topic: NonNullable<Awaited<ReturnType<typeof declinedFor>>>) => {
+      await writeEvent('info', { type: 'info', reason: 'declined', category: topic.category, topic: topic.id });
+      await writeEvent('token', { type: 'token', delta: topic.reply });
       const result: ChatTurnResult = {
-        answerText: declined.reply,
-        requestPayload: { engine: 'policy', declined: declined.id, category: declined.category },
-        responsePayload: { engine: 'policy', declined: declined.id },
-        storedQuestion: storedCardQuestion(card.title, card.period?.label ?? null, storedQuestion(q, declined)),
+        answerText: topic.reply,
+        requestPayload: { engine: 'policy', declined: topic.id, category: topic.category },
+        responsePayload: { engine: 'policy', declined: topic.id },
+        storedQuestion: storedCardQuestion(card.title, card.period?.label ?? null, storedQuestion(q, topic)),
       };
       const saved = await persistAskTurn(prisma, userId, input.chatId, stored, result, true, persistOpts);
-      await finish({ type: 'done', chatId: saved.chatId, answer: declined.reply, card: cardOut, ...runOut });
+      await finish({ type: 'done', chatId: saved.chatId, answer: topic.reply, card: cardOut, ...runOut });
+    };
+    const declined = await (deps.declined ?? declinedFor)(prisma, userId, q, { childAgeConfirmed: input.childAgeConfirmed });
+    // a question about the person's own child with no age waits for the clarifier to ask the age (the main chat's rule);
+    // when no clarify question goes out (clarifying off, a failed run), it is declined as before
+    const waitsForAge = clarifyFirst && declined?.id === 'child_age_unconfirmed';
+    if (declined && !waitsForAge) {
+      await answerDeclined(declined);
       return;
     }
 
@@ -416,6 +420,10 @@ async function streamCardTurn(deps: CardChatRouteDeps, req: express.Request, res
         await finish({ type: 'done', status: 'clarifying', runId: c.runId, ms: c.ms, card: cardOut });
         return;
       }
+    }
+    if (declined) {
+      await answerDeclined(declined);
+      return;
     }
 
     const held = await gate.reserve(userId, { key });

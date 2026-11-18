@@ -306,6 +306,26 @@ describe('POST /api/chat/ask-stream with card and clarify', () => {
     expect(plans.usage.map((u) => u.key)).toEqual([`cardchat:work:job_pulse:${b.turnId}`]);
   });
 
+  it("the child's age is never skipped: with no clarify question going out (clarifying off, a failed run) it is declined, free", async () => {
+    const q = { question: 'Will my daughter find a good job?', card: { board: 'work', id: 'job_pulse' }, clarify: true };
+    process.env.READING_CLARIFY_MODE = 'never';
+    try {
+      const off = await ask({ ...q, turnId: randomUUID() });
+      expect(off.events.map((e) => e.type)).not.toContain('clarify');
+      expect(off.events.at(-1)).toMatchObject({ type: 'done', answer: expect.stringMatching(/18 or older/) });
+    } finally {
+      process.env.READING_CLARIFY_MODE = 'when_missing';
+    }
+    clarifyStore.create = async () => {
+      throw new Error('store down');
+    };
+    const broken = await ask({ ...q, turnId: randomUUID(), newThread: true });
+    expect(broken.events.map((e) => e.type)).not.toContain('clarify');
+    expect(broken.events.at(-1)).toMatchObject({ type: 'done', answer: expect.stringMatching(/18 or older/) });
+    expect(streamed).toHaveLength(0);
+    expect(plans.usage).toHaveLength(0);
+  });
+
   it('confirm-stream on a card run still asking is refused before any frame', async () => {
     await ask({ question: 'Will my brother stand by me through this?', card: selfCard, turnId: randomUUID(), clarify: true });
     expect(await post('/api/chat/confirm-stream', { runId: 'clarify-1' })).toMatchObject({ status: 409, json: { error: 'not_ready' } });

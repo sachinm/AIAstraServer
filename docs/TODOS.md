@@ -2912,9 +2912,16 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   `{type:'ready'}` and the web streams the answer at once (the proposal names charts and houses, which the card's answer
   does not read). Confirm-before-predict on a card rests on the card's own "Is this right?" line and the `cards/chat`
   prompt. Sachin to say if he wants the proposal back. Where: `clarify/machine.ts proposeOrReady`.
-- **P3** The card's clarifier phrases its question through the clarify model when `READING_MODEL_CLARIFY` is set (as the
-  main chat does): a small model call that is not charged to the person's questions. No spend cap applies to it.
-  Where: `clarify/planner.ts phraseAsk`.
+- **P3** A typed (not tapped) answer to the card's clarifier that the rules cannot read goes to the clarify model when
+  `READING_MODEL_CLARIFY` is set (`resolveFreeText`, sibling and child's age only; as the main chat does): a small call not
+  charged to the person's questions and under no spend cap. The question itself is never phrased by the model on a card
+  (`phraseAsk` keeps the fixed wording for sibling, child's age and location, the only criteria a card can ask).
+  Where: `clarify/planner.ts resolveFreeText`.
+- **P3** A card turn that fails after its clarify question arrived (the stream drops before `done`) keeps the run id, so
+  Try again calls confirm-stream on a run still asking and gets 409 `not_ready` (shown as "did not go through"); a new
+  send works. Where: web `cardChatStore.retry`. Done: retry re-sends the question when the run is still asking.
+- **P3** The server's "follow-ups skip Clarify" reads the card's thread by `chats.card_ref`; until that migration is
+  applied the thread reads empty and only the web's own first-question rule keeps follow-ups out of Clarify.
 - **P3** A card question that the clarifier ends (`minors` after "Under 18") shows the decline in the card but is not
   saved to the card's thread (the main chat does not save it either). Where: web `cardChatStore.answer`.
 
