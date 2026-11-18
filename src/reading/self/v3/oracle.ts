@@ -3,17 +3,17 @@
  * v2, each writing span-led cards for the cards it names. The suffix is the year frame (spans, tones, agreement, rows),
  * the Saturn passage, the clocks not read and the person's answers. One repair call re-asks failed cards once.
  *
- * The validator keeps a card only when every frame span is answered once with the frame's own tone copied, the mode
- * fits the tone (a heavy span is never `build`, a light one never `get_through`), every evidence key is in the input,
- * every date is a frame date, and the card names a knot as well as a gift. A bad `confirm` or `pattern` is dropped, not
- * the card.
+ * The validator keeps a card when every frame span is answered with a mode, every evidence key is in the input, and the
+ * card names a knot as well as a gift. The frame's tone is used for each span. No checks on the words
+ * (docs/reading-engine/82); engine names and internal keys are redacted in place. A `confirm` or `pattern` whose
+ * structured dates or evidence are not the frame's is dropped, not the card.
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
 import { getSelfOracleMaxOutputTokens } from '../../../config/env.js';
 import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
 import { AREA_CERTAINTIES, type AreaCertainty } from '../areaDoc.js';
-import { daysIn } from '../v2/personalizerValidate.js';
+import { redactEngineText } from '../v2/personalizerValidate.js';
 import { markAgentUsed } from '../v2/cache.js';
 import { timingOf } from '../v2/oracle.js';
 import { normaliseEvidenceKey, promptHash } from '../v2/slices.js';
@@ -122,10 +122,10 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
   const notes: string[] = [];
   const alias = (ks: string[]) => ks.map((k) => c.aliases?.[k] ?? c.aliases?.[normaliseEvidenceKey(k)] ?? k);
   const badKeys = (ks: string[]) => ks.filter((k) => !c.allowedKeys.has(k));
-  const badDays = (text: string) => daysIn(text).filter((d) => !c.dates.has(d));
-  const headline = S(o.headline);
+  // docs/reading-engine/82: no checks on the words (prose dates, tone words); a card is refused only for empty or
+  // ungrounded content (missing span, unknown evidence key). The frame's tone is used for each span.
+  const headline = redactEngineText(S(o.headline));
   if (!headline) problems.push('no headline');
-  for (const d of badDays(headline)) problems.push(`headline date ${d} not in the frame`);
 
   const want = c.frame.spans;
   const got = Array.isArray(o.spans) ? (o.spans as Array<Record<string, unknown>>) : [];
@@ -137,25 +137,20 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
       continue;
     }
     const g = hits[0]!;
-    const tone = S(g.tone) as SpanTone;
     const mode = S(g.mode) as SpanMode;
-    if (tone !== fs.tone) problems.push(`span ${fs.id}: tone ${tone || 'none'} is not the frame's ${fs.tone}`);
     if (!MODES.includes(mode)) problems.push(`span ${fs.id}: no mode`);
-    if (fs.tone === 'heavy' && mode === 'build') problems.push(`span ${fs.id}: a heavy span is never build`);
-    if (fs.tone === 'light' && mode === 'get_through') problems.push(`span ${fs.id}: a light span is never get_through`);
-    const asks = S(g.asks);
-    const obstacle = S(g.obstacle);
+    const asks = redactEngineText(S(g.asks));
+    const obstacle = redactEngineText(S(g.obstacle));
     if (!asks || !obstacle) problems.push(`span ${fs.id}: asks or obstacle empty`);
     const evidence = alias(keysOf(g.evidence));
     if (!evidence.length) problems.push(`span ${fs.id}: no evidence`);
     for (const k of badKeys(evidence)) problems.push(`span ${fs.id}: unknown evidence key ${k}`);
-    for (const d of [...badDays(asks), ...badDays(obstacle)]) problems.push(`span ${fs.id}: date ${d} not in the frame`);
     spans.push({ span: fs.id, tone: fs.tone, mode, asks, obstacle, evidence, agreement: S(g.agreement) });
   }
-  if (got.length > want.length) problems.push(`${got.length - want.length} spans not in the frame`);
+  if (got.length > want.length) notes.push(`${got.length - want.length} spans not in the frame; ignored`);
 
-  const gift = S(o.gift);
-  const knot = S(o.knot);
+  const gift = redactEngineText(S(o.gift));
+  const knot = redactEngineText(S(o.knot));
   if (!knot) problems.push('no knot (a card that only flatters is rejected)');
   if (!gift) problems.push('no gift');
 
@@ -173,8 +168,7 @@ export function checkOracleCard(raw: unknown, c: OracleV3CheckContext): { card: 
     if (!new RegExp(`^${id}\\.[a-z0-9_]{1,40}$`).test(claimId)) notes.push(`confirm dropped: claim id ${claimId || 'none'} is not ${id}.<tag>`);
     else if (!DATE.test(from) || !DATE.test(to) || !c.dates.has(from) || !c.dates.has(to)) notes.push(`confirm dropped: ${from}..${to} not frame dates`);
     else if (from > c.frame.asOf) notes.push('confirm dropped: it is about the future');
-    else if (badDays(S(cf.text)).length) notes.push('confirm dropped: a date in its text is not in the frame');
-    else confirm = { claimId, text: S(cf.text), from, to: to > c.frame.asOf ? c.frame.asOf : to };
+    else confirm = { claimId, text: redactEngineText(S(cf.text)), from, to: to > c.frame.asOf ? c.frame.asOf : to };
   }
 
   let pattern: OracleCardV3['pattern'] = null;

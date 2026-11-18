@@ -19,7 +19,7 @@ import { clearReaderMemo } from '../../../../../src/reading/oracle/prewarm.js';
 import { runSelfReadingBuild } from '../../../../../src/reading/self/buildEvent.js';
 import type { SelfReadingResult } from '../../../../../src/reading/self/service.js';
 import { runSelfV2Build, type SelfV2BuildResult } from '../../../../../src/reading/self/v2/build.js';
-import { CHART_TERMS, ENGINE_NAMES, INTERNAL_ID } from '../../../../../src/reading/self/v2/personalizerValidate.js';
+import { ENGINE_NAMES, INTERNAL_ID } from '../../../../../src/reading/self/v2/personalizerValidate.js';
 import { readSelfV2Latest } from '../../../../../src/reading/self/v2/store.js';
 import { toPressureInventory, type EnginePressurePayload } from '../../../../../src/reading/self/sub/pressure.js';
 import { SELF_V2_AREAS, type SelfV2Response } from '../../../../../src/reading/self/v2types.js';
@@ -260,7 +260,7 @@ describe('Self v2 end to end on fixtures (SELF_V2_BUILD=1, every model call mock
     expect(body.areas.find((a) => a.id === 'chapter')!.rangeLabel).toBe('True until 1 Jan 2027');
   });
 
-  it('no chart term, engine name, internal key or technique id on the hero or any card face', () => {
+  it('no engine name, internal key or technique id on the hero or any card face (chart terms are left to the prompt, doc 82)', () => {
     const texts: string[] = [];
     const h = body.hero!;
     texts.push(h.sentence, h.sub, h.question?.text ?? '');
@@ -273,7 +273,6 @@ describe('Self v2 end to end on fixtures (SELF_V2_BUILD=1, every model call mock
     }
     const TECHNIQUE_ID = /\b(self|family|oracle|work|love)\.[a-z_]+\.[a-z_]+|\bself\.(sub|v2)\b/i;
     for (const t of texts.filter(Boolean)) {
-      for (const re of CHART_TERMS) expect(re.test(t), `${t} ~ ${re}`).toBe(false);
       expect(ENGINE_NAMES.test(t), t).toBe(false);
       expect(INTERNAL_ID.test(t), t).toBe(false);
       expect(TECHNIQUE_ID.test(t), t).toBe(false);

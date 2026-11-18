@@ -288,16 +288,22 @@ describe('the build: store failures, fall back to the last good area, charge onl
   it('the Personalizer validator drops are stored per card and check (no repair for them)', async () => {
     const db = makePrisma();
     const log: string[] = [];
+    // a card date that is not an Oracle window is a grounding drop; a chart term in the body is kept (doc 82)
     const chart = (areas: string[]) => {
       const doc = JSON.parse(personalJson(areas)) as { cards: Array<Record<string, unknown>> };
       doc.cards[0]!.body = ['Saturn presses your work now. It eases after 20 Feb 2027.', 'Finish one thing a week.'];
+      doc.cards[0]!.dates = [{ from: '2026-01-01', to: '2026-06-01', label: 'A made-up span' }];
       return JSON.stringify(doc);
     };
     const r = await runSelfV2Build(buildDeps(db, log, { personal: chart }), args());
     expect(r.status).toBe('ok');
     expect(log.filter((x) => x === 'call:self.personalizer')).toHaveLength(1);
     const rows = db.failures.filter((f) => f.stage === 'personalizer');
-    expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({ area: 'diagnosis', check: 'chart_term', call_id: 'self.personalizer', model: 'gemini-3.1-flash-lite', area_status: null })]));
-    expect(r.cards!.issues!.some((i) => i.check === 'chart_term')).toBe(true);
+    const area = rows.find((f) => f.check === 'date')?.area as string;
+    expect(area).toBeTruthy();
+    expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({ area, check: 'date', call_id: 'self.personalizer', model: 'gemini-3.1-flash-lite', area_status: null })]));
+    expect(r.cards!.issues!.some((i) => i.check === 'date')).toBe(true);
+    expect(r.cards!.issues!.some((i) => i.check === 'chart_term')).toBe(false);
+    expect(r.cards!.doc!.cards[area as keyof NonNullable<typeof r.cards>['cardStatus']]!.body.join(' ')).toMatch(/Saturn presses your work/);
   });
 });

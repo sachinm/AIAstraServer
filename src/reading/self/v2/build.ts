@@ -585,8 +585,10 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
-    // doc 68 Phase B: the span-led cards over the same context and prefix; a failure here never fails the build
-    if (served && isSelfV3BuildEnabled()) {
+    // the v3 cards (doc 68 Phase B / doc 70 per-card) over the same context and prefix. They run whenever the Oracle
+    // served, whatever the v2 Personalizer did (doc 83 step 1, 2026-11-18: the you board shows v3 cards; one v2 failure
+    // must not leave it blank). A v3 failure never fails the build.
+    if (isSelfV3BuildEnabled()) {
       step('v3');
       const spent = round6(agents.reduce((n, x) => n + x.costUsd, 0));
       const v3 = await runSelfV3Cards(
@@ -597,6 +599,11 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
       gaps.push(...v3.gaps);
       ms.v3 = v3.ms.total ?? 0;
       out.v3 = { status: v3.status, cached: v3.cached, stored: v3.stored, key: v3.key, ms: v3.ms, cards: Object.keys(v3.cards).length, spans: v3.frame?.spans.length ?? 0, issues: v3.issues.length };
+      // the board is served by its v3 cards: a build that read them is made, even when the v2 cards did not serve
+      if (!served && Object.keys(v3.cards).length && (v3.status === 'ok' || v3.status === 'partial')) {
+        out.status = 'ok';
+        gaps.push(`v2 cards did not serve (${cards.status}); the board is served by ${Object.keys(v3.cards).length} v3 cards`);
+      }
     }
     await stageWrites;
     await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : out.status === 'partial' ? 'build does not serve the page' : `personalizer ${cards.status}`);

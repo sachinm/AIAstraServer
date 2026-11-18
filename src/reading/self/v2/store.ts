@@ -128,7 +128,8 @@ export async function readSelfV2Latest(prisma: PrismaClient, kundliId: string, c
     const storedCards = cardsRow?.output as StoredSelfV2Cards | undefined;
     const cards = normaliseStoredCards(storedCards?.result?.doc ?? null);
     const storedOracle = oracleRow?.output as StoredSelfV2Oracle | undefined;
-    const status: SelfV2Latest['status'] = cards ? 'ok' : marker?.status === 'failed' ? 'failed' : 'pending';
+    // a build that finished `ready` without v2 cards was served by its v3 cards (doc 83 step 1): `ok`, not `pending`
+    const status: SelfV2Latest['status'] = cards || marker?.status === 'ready' ? 'ok' : marker?.status === 'failed' ? 'failed' : 'pending';
     return {
       cards,
       oracle: normaliseStoredOracle(storedOracle?.result?.output ?? null),

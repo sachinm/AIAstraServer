@@ -32,6 +32,8 @@ export type SlotRole = 'dispatch' | 'run';
  * kundli already has a live pull; fresh: (dispatch only) the stored window still serves as_of, nothing to do */
 export type SlotOutcome = 'granted' | 'queued' | 'busy' | 'fresh';
 export type SlotStatus = 'dispatched' | 'fetching' | 'queued';
+/** every status the slot marker writes; each must be allowed by `kundli_data_status_check` (migration M54) */
+export const SLOT_STATUSES: readonly SlotStatus[] = ['dispatched', 'fetching', 'queued'];
 
 /** The marker as the slot logic sees it (StoredRow, with the two extra statuses this module writes). */
 export type SlotRow = Omit<StoredRow, 'status'> & { status: StoredRow['status'] | SlotStatus };

@@ -13,10 +13,10 @@ import { withAgentRun } from '../../../agents/registry.js';
 import { getPersonalizerVoiceVersion, isPersonalizerVoiceByGenderEnabled } from '../../../config/env.js';
 import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
 import { markAgentUsed } from '../v2/cache.js';
+import { personalizerCheckOf } from '../v2/failures.js';
 import { timingOf } from '../v2/oracle.js';
 import { portraitLines } from '../v2/portrait.js';
-import { bodyAdviceWords, dropStereotypeSentences, roleWordsFor, textProblem, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
-import { seniorStageWordsFor } from '../v2/profileFit.js';
+import { redactEngineText, type DateFrame, type TextCheckContext } from '../v2/personalizerValidate.js';
 import { claimKey, profileLines, promptHash, promptText } from '../v2/slices.js';
 import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, StatedGender, ValidationIssue } from '../v2types.js';
 import { parseJson } from './oracle.js';
@@ -176,21 +176,15 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
   const o = (raw ?? {}) as Record<string, unknown>;
   const problems: string[] = [];
   const notes: string[] = [];
-  const ctx: TextCheckContext = oracle.card === 'body' ? { ...c, cardWords: bodyAdviceWords() } : c;
-  const text = (label: string, t: string, max: number) => {
-    if (!t) return problems.push(`${label}: empty`);
-    if (words(t) > max) problems.push(`${label}: ${words(t)} words, at most ${max}`);
-    const why = textProblem(t, ctx);
-    if (why) problems.push(`${label}: ${why}`);
+  // docs/reading-engine/82: no word lists, word caps or sentence-form checks; the prompt owns the words. A card is refused
+  // only when a required field is empty or a span is missing. Engine names and internal keys are redacted in place.
+  void c;
+  const text = (label: string, t: string) => {
+    if (!t) problems.push(`${label}: empty`);
   };
-  // a sentence with a stereotype phrase is dropped on its own; the card stands unless its field is left empty
-  const T = (label: string, v: unknown): string => {
-    const r = dropStereotypeSentences(S(v));
-    if (r.dropped.length) notes.push(`${label}: ${r.dropped.length} sentence(s) dropped (stereotype phrase)`);
-    return r.text;
-  };
+  const T = (_label: string, v: unknown): string => redactEngineText(S(v));
   const line = T('line', o.line);
-  text('line', line, LINE_MAX_WORDS);
+  text('line', line);
   const got = Array.isArray(o.spans) ? (o.spans as Array<Record<string, unknown>>) : [];
   const spans: PersonalCardV3['spans'] = [];
   for (const os of oracle.spans) {
@@ -202,10 +196,9 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     const asks = T(`span ${os.span} asks`, g.asks);
     const obstacle = T(`span ${os.span} obstacle`, g.obstacle);
     const step = T(`span ${os.span} step`, g.step);
-    text(`span ${os.span} asks`, asks, ASKS_MAX_WORDS);
-    text(`span ${os.span} obstacle`, obstacle, OBSTACLE_MAX_WORDS);
-    text(`span ${os.span} step`, step, STEP_MAX_WORDS);
-    if (step && !/^if\b.+\bthen\b/i.test(step)) problems.push(`span ${os.span} step: not an if-then sentence`);
+    text(`span ${os.span} asks`, asks);
+    text(`span ${os.span} obstacle`, obstacle);
+    text(`span ${os.span} step`, step);
     spans.push({ span: os.span, asks, obstacle, step });
   }
 
@@ -213,28 +206,15 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
   if (confirm && !oracle.confirm) {
     notes.push('confirm dropped: the Oracle gave none');
     confirm = null;
-  } else if (confirm) {
-    const why = textProblem(confirm, ctx);
-    if (why || !confirm.endsWith('?')) {
-      notes.push(`confirm dropped: ${why ?? 'not a question'}`);
-      confirm = null;
-    }
   }
   let pattern: string | null = T('pattern', o.pattern) || null;
   if (pattern && (!sections.includes('pattern') || !oracle.pattern)) pattern = null;
-  else if (pattern) {
-    const why = textProblem(pattern, ctx);
-    if (why) {
-      notes.push(`pattern dropped: ${why}`);
-      pattern = null;
-    }
-  }
   let ladder: LadderSteps | null = null;
   const ld = (o.ladder ?? {}) as Record<string, unknown>;
   if (sections.includes('ladder')) {
     const steps = { best: T('ladder best', ld.best), practical: T('ladder practical', ld.practical), drift: T('ladder drift', ld.drift), floor: T('ladder floor', ld.floor) };
-    const bad = Object.entries(steps).find(([, v]) => !v || textProblem(v, ctx));
-    if (bad) notes.push(`ladder dropped: ${bad[0]} ${bad[1] ? textProblem(bad[1], ctx) : 'empty'}`);
+    const empty = Object.entries(steps).find(([, v]) => !v);
+    if (empty) notes.push(`ladder dropped: ${empty[0]} empty`);
     else ladder = steps;
   }
   if (problems.length) return { card: null, problems, notes };
@@ -328,7 +308,7 @@ export async function runPersonalizerV3(
   const issues: ValidationIssue[] = [];
   const out: PersonalizerV3Result['cards'] = {};
   const withheld: SelfCardId[] = [];
-  const check: TextCheckContext = { gender: input.profile.gender, dates: v3DateFrame(dates), roleWords: roleWordsFor(input.profile.facts), stageWords: seniorStageWordsFor(input.profile) };
+  const check: TextCheckContext = { gender: input.profile.gender, dates: v3DateFrame(dates) };
   const dropped: Partial<Record<SelfCardId, string[]>> = {};
   const runOne = async (c: PersonalizerV3Call) => {
       const t0 = performance.now();
@@ -371,7 +351,7 @@ export async function runPersonalizerV3(
           continue;
         }
         const r = checkPersonalCard(raw, oc, check, input.sections[oc.card] ?? ['line', 'year', 'stretch', 'confirm']);
-        for (const n of r.notes) issues.push({ stage: 'personalizer', area: oc.card, check: 'other', message: `${oc.card}: ${n}`.slice(0, 300), callId: c.call });
+        for (const n of r.notes) issues.push({ stage: 'personalizer', area: oc.card, check: personalizerCheckOf(n), message: `${oc.card}: ${n}`.slice(0, 300), callId: c.call });
         if (r.card) out[oc.card] = r.card;
         else {
           withheld.push(oc.card);

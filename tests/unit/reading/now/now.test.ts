@@ -102,10 +102,14 @@ describe('the Now faces', () => {
     evidence: ['dasha:vimsottari/5/Ke@2026-11-10', 'now:d1.Saturn'],
   };
 
-  it('a good face passes; a chart word, a made-up end date or an unknown key fails', () => {
+  it('a good face passes; a chart word is kept (doc 82); a made-up end date, an unknown key or an empty field fails', () => {
     const { c } = ctx();
     expect(checkNowFace(good, c).problems).toEqual([]);
-    expect(checkNowFace({ ...good, line: 'Saturn weighs on you today.' }, c).problems.join(' ')).toMatch(/chart term/);
+    const chart = checkNowFace({ ...good, line: 'Saturn weighs on you today.', step: 'Write it down for tomorrow.' }, c);
+    expect(chart.problems).toEqual([]);
+    expect(chart.face).toMatchObject({ line: 'Saturn weighs on you today.', step: 'Write it down for tomorrow.' });
+    expect(checkNowFace({ ...good, line: 'Radha weighs on you {claim:x}.' }, c).face?.line).toBe('traditional calculations weighs on you.');
+    expect(checkNowFace({ ...good, asks: '' }, c).problems).toContain('asks: empty');
     expect(checkNowFace({ ...good, turns: { date: '2026-11-30', key: good.turns.key } }, c).problems.join(' ')).toMatch(/turns/);
     expect(checkNowFace({ ...good, evidence: ['now:d1.Saturn', 'made:up'] }, c).problems.join(' ')).toMatch(/not in NOW/);
   });

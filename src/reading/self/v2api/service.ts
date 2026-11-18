@@ -155,7 +155,8 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     // failed in the last 30 min, so a page reload never stacks builds. A build that ran today and still left no cards
     // is not re-run here (it would only fail again): it shows as ready/failed and is filed in docs/TODOS.md.
     const q = markers?.queue.state;
-    const retry = q === 'stuck' || q === 'failed' || (!latest.cards && (q === 'none' || q === undefined));
+    // a board served by its v3 cards (latest `ok` with no v2 cards, doc 83 step 1) is not re-built on every new day
+    const retry = q === 'stuck' || q === 'failed' || (!latest.cards && latest.status !== 'ok' && (q === 'none' || q === undefined));
     if (retry && (!kundli.digest_status || kundli.digest_status === 'ready')) {
       queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary).catch((e) => {
         console.warn('[self:v2] re-queue failed:', (e as Error).message);

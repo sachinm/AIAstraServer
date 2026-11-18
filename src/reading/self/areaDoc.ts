@@ -162,8 +162,7 @@ export function parseAreaDoc(text: string): { areas: unknown[]; validUntil: stri
 }
 
 /**
- * Makes a returned document safe to show. Per area: unknown ids dropped; headline cleaned and capped at 22 words (a
- * longer one is cut at its first sentence, else withheld); each paragraph's inline citations must be allowed keys or
+ * Makes a returned document safe to show. Per area: unknown ids dropped; headline cleaned (no word cap, doc 82); each paragraph's inline citations must be allowed keys or
  * the paragraph is dropped; a paragraph already used by another area is dropped; dates and actions must have real
  * days inside a stored window or they are dropped; evidence keys not allowed are dropped; validUntil must be a day
  * after asOf or 'always'. An area with no headline or no paragraph left is withheld and recorded as a gap.
@@ -188,17 +187,8 @@ export function validateAreaDoc(parsed: { areas: unknown[]; validUntil: string }
       continue;
     }
 
-    let headline = cleanAreaText(str(a.headline));
-    if (wordCount(headline) > HEADLINE_MAX_WORDS) {
-      const first = headline.split(/(?<=[.!?])\s+/)[0] ?? '';
-      if (first && wordCount(first) <= HEADLINE_MAX_WORDS) {
-        gaps.push(`${id}: headline cut to its first sentence`);
-        headline = first;
-      } else {
-        gaps.push(`${id}: headline over ${HEADLINE_MAX_WORDS} words, withheld`);
-        headline = '';
-      }
-    }
+    // no word cap on the headline (docs/reading-engine/82): its length is the prompt's job
+    const headline = cleanAreaText(str(a.headline));
 
     const paragraphs: string[] = [];
     for (const rawP of arr(a.paragraphs)) {
@@ -211,7 +201,6 @@ export function validateAreaDoc(parsed: { areas: unknown[]; validUntil: string }
       }
       const clean = cleanAreaText(p);
       if (!clean) continue;
-      if (wordCount(clean) > PARAGRAPH_MAX_WORDS) gaps.push(`${id}: a paragraph runs over ${PARAGRAPH_MAX_WORDS} words`);
       const norm = normalisedSentence(clean);
       if (seenParagraphs.has(norm)) {
         gaps.push(`${id}: a paragraph repeated another area's, dropped`);

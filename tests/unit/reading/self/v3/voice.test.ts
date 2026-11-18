@@ -1,19 +1,15 @@
 /**
  * The Self v3 Personalizer's voice by stated gender (prompts/personalizer/voice.md): which block is picked, that it sits
- * in the stable prefix, that the cache key carries it, and that the stereotype phrase list drops a sentence like a chart term.
+ * in the stable prefix, and that the cache key carries it. No stereotype phrase list drops text any more (docs/reading-engine/82):
+ * the voice file and the prompt own the words.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { PROMPTS } from '../../../../../src/reading/prompts/generated.js';
-import {
-  CHART_TERMS,
-  ENGINE_NAMES,
-  redactChartTerms,
-  STEREOTYPE_PHRASES,
-  textProblem,
-} from '../../../../../src/reading/self/v2/personalizerValidate.js';
+import { ENGINE_NAMES, redactChartTerms } from '../../../../../src/reading/self/v2/personalizerValidate.js';
 import type { PersonalizerInput, SelfBuildContext } from '../../../../../src/reading/self/v2types.js';
 import {
   parseVoiceBlocks,
+  checkPersonalCard,
   personalizerV3Call,
   personalizerVoiceBlock,
   personalizerVoiceOf,
@@ -75,10 +71,9 @@ describe('the voice file', () => {
     expect(guard).toMatch(/the facts win/);
   });
 
-  it('names no engine, no chart term and no internal id', () => {
+  it('names no engine', () => {
     const text = PROMPTS[PERSONALIZER_VOICE_PROMPT] ?? '';
     expect(text).not.toMatch(ENGINE_NAMES);
-    for (const re of CHART_TERMS) expect(re.test(text), String(re)).toBe(false);
   });
 });
 
@@ -159,32 +154,41 @@ describe('the voice in the stable prefix', () => {
   });
 });
 
-describe('STEREOTYPE_PHRASES', () => {
+describe('no stereotype phrase filter (doc 82): the voice owns the words', () => {
   const c = { gender: 'woman' as const, dates: v3DateFrame(['2026-12-01', '2027-02-01']) };
-
-  it('is a short lowercase list', () => {
-    expect(STEREOTYPE_PHRASES.length).toBeGreaterThan(5);
-    expect(STEREOTYPE_PHRASES.length).toBeLessThan(25);
-    for (const p of STEREOTYPE_PHRASES) expect(p).toBe(p.toLowerCase());
-    expect(STEREOTYPE_PHRASES).toEqual(expect.arrayContaining(['as a woman', 'as a man', 'sweetie', 'honey']));
+  const oracle = { ...card('s1'), confirm: null } as OracleCardV3;
+  const personal = (over: Record<string, unknown> = {}) => ({
+    card: 'body',
+    line: 'Your evenings need guarding.',
+    spans: [{ span: 's1', asks: 'Guard your evenings.', obstacle: 'Working late to catch up.', step: 'Write tomorrow’s first task and stop.' }],
+    confirm: null,
+    pattern: '',
+    ladder: { best: '', practical: '', drift: '', floor: '' },
+    ...over,
   });
 
-  it('textProblem flags a stereotype phrase even when a gender is stated, and keeps a normal sentence', () => {
-    expect(textProblem('As a woman, you should rest until 1 Dec 2026.', c)).toMatch(/gendered stereotype phrase \(As a woman\)/);
-    expect(textProblem('Take it easy, sweetie, until 1 Dec 2026.', { ...c, gender: 'man' })).toMatch(/stereotype/);
-    expect(textProblem('Work asks a lot of you until 1 Dec 2026.', c)).toBeNull();
-    expect(textProblem('Girlfriends and girlhood friends stay close.', { ...c, gender: 'man' })).toBeNull();
+  it('redactChartTerms keeps a sentence with a stereotype phrase or a chart term', () => {
+    const text = 'Work is heavy until 1 Dec. As a man, you should push on. Rest on the weekend.';
+    expect(redactChartTerms(text)).toBe(text);
+    expect(redactChartTerms('Saturn tests you. Honey, rest tonight. Keep the evenings quiet.')).toBe('Saturn tests you. Honey, rest tonight. Keep the evenings quiet.');
   });
 
-  it('redactChartTerms drops the sentence that carries one, like a chart term', () => {
-    const out = redactChartTerms('Work is heavy until 1 Dec. As a man, you should push on. Rest on the weekend.');
-    expect(out).toBe('Work is heavy until 1 Dec. Rest on the weekend.');
-    expect(redactChartTerms('Saturn tests you. Honey, rest tonight. Keep the evenings quiet.')).toBe('Keep the evenings quiet.');
+  it('the v3 Personalizer check keeps every sentence of a field and the card', () => {
+    const p = personal({ line: 'Your evenings need guarding. Honey, rest tonight.' });
+    (p.spans[0] as Record<string, string>).asks = 'Guard your evenings. As a woman, you should rest more.';
+    const r = checkPersonalCard(p, oracle, c, ['line', 'year']);
+    expect(r.problems).toEqual([]);
+    expect(r.card?.line).toBe('Your evenings need guarding. Honey, rest tonight.');
+    expect(r.card?.spans[0]?.asks).toBe('Guard your evenings. As a woman, you should rest more.');
+    const d = checkPersonalCard(personal({ line: 'Your daughter, a girl of seven, needs your evenings.' }), oracle, c, ['line', 'year']);
+    expect(d.card?.line).toBe('Your daughter, a girl of seven, needs your evenings.');
   });
 
-  it('PERSONALIZER_STEREOTYPE_PHRASES replaces the default list', () => {
-    process.env.PERSONALIZER_STEREOTYPE_PHRASES = 'Buddy, Champ';
-    expect(textProblem('Keep going, champ, until 1 Dec 2026.', c)).toMatch(/stereotype/);
-    expect(textProblem('As a woman, you should rest until 1 Dec 2026.', c)).toBeNull();
+  it('a ladder step keeps its words; an empty field still withholds the card', () => {
+    const ladder = { best: 'Keep two quiet evenings. Sweetie, sleep in.', practical: 'Agree a stop time.', drift: 'You catch up but tire.', floor: 'Sleep seven hours.' };
+    expect(checkPersonalCard(personal({ ladder }), oracle, c, ['line', 'year', 'ladder']).card?.ladder).toEqual(ladder);
+    const r = checkPersonalCard(personal({ line: '' }), oracle, c, ['line', 'year']);
+    expect(r.card).toBeNull();
+    expect(r.problems).toContain('line: empty');
   });
 });
