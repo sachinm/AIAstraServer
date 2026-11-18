@@ -36,7 +36,7 @@ const ENV = {
   READING_MODEL_READER: 'gemini-3.1-flash-lite',
   READING_MODEL_ORACLE: 'gemini-3.8-flash',
   SELF_PERSONALIZER_MODEL: 'gemini-3.1-flash-lite',
-  SELF_READING_MAX_SPEND_USD: '1',
+  READING_SPEND_CAP_USD: '1',
   SELF_V3_BUILD: '1',
 } as const;
 const saved: Record<string, string | undefined> = {};

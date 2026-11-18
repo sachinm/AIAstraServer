@@ -59,11 +59,15 @@ export class CostGuard {
   private lines: CostLine[] = [];
   private seq = 0;
   private refused = 0;
+  private logged = false;
+  /** the operation this guard is the budget of, for the one cap log line */
+  readonly op: string;
 
-  constructor(opts: { on?: string; caps?: { fanout: number; oracle: number; query: number }; oracleHoldUsd?: number } = {}) {
+  constructor(opts: { on?: string; caps?: { fanout: number; oracle: number; query: number }; oracleHoldUsd?: number; op?: string } = {}) {
     this.caps = opts.caps ?? readingCostCaps();
     this.on = opts.on ?? new Date().toISOString().slice(0, 10);
     this.oracleHold = Math.min(opts.oracleHoldUsd ?? 0.03, this.caps.oracle, this.caps.query);
+    this.op = opts.op ?? 'reading.oracle';
   }
 
   /** Money billed so far, in total or for one stage. */
@@ -106,6 +110,13 @@ export class CostGuard {
     const maxOutputTokens = Math.min(a.maxOutputTokens, affordable);
     if (maxOutputTokens < min) {
       this.refused += 1;
+      // one line per question when a cap stops a call (docs/billing/README.md "Spend cap per operation"); `cap` names
+      // the limit that bound: the question's (READING_SPEND_CAP_USD) or a stage's
+      if (!this.logged) {
+        this.logged = true;
+        const queryRoom = this.caps.query - this.spent() - this.openUsd() - (a.stage === 'oracle' ? 0 : this.oracleHold);
+        console.log(JSON.stringify({ msg: 'reading spend cap', op: this.op, node: a.node, cap: queryRoom <= room ? 'query' : a.stage, spentUsd: this.spent(), capUsd: this.caps.query }));
+      }
       throw new CostRefusedError(`${a.node}: $${room.toFixed(4)} left cannot pay for ${a.promptTokens} tokens in and ${min} out`, 'budget');
     }
     const r: Reservation = { id: ++this.seq, stage: a.stage, node: a.node, model: a.model, maxOutputTokens, usd: inputUsd + (maxOutputTokens * p.out) / 1_000_000 };

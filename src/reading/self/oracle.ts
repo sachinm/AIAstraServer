@@ -11,12 +11,12 @@
  *      annual TP/VP confirmation, and transit/SAV triggers).
  *   3. The Self Oracle Synthesizer (`self.reading_oracle`, prompt `oracle/self`) writes the final second-person narrative,
  *      validated by `validateSelfText` against the allowed evidence keys and stored in `technique_outputs`.
- *   4. Enforces the cumulative $1.00 spend cap (`getSelfReadingMaxSpendUsd()`).
+ *   4. Enforces the build's spend cap (`getReadingSpendCapUsd()`, READING_SPEND_CAP_USD: one operation, one budget).
  */
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun, type ChartUsed } from '../../agents/registry.js';
-import { getSelfFamilyMaxOutputTokens, getSelfOracleMaxOutputTokens, getSelfReadingMaxSpendUsd, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
+import { getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, getSelfOracleMaxOutputTokens, isSelfOracleAreasEnabled, isSelfReadingModelEnabled } from '../../config/env.js';
 import { latestStoredOutput, withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { DateSpan } from '../../techniques/pieces.js';
 import type { TransitRangePayload } from '../chartData/transitRange.js';
@@ -703,7 +703,7 @@ export async function runSelfOracle(
   ctx?: SelfOracleContext,
 ): Promise<SelfOracleResult> {
   if (!isSelfReadingModelEnabled()) return { status: 'off' };
-  const maxSpendUsd = getSelfReadingMaxSpendUsd();
+  const maxSpendUsd = getReadingSpendCapUsd();
   const brief = selfBrief(reading, answers);
 
   // Fallback path when invoked without full DB/digest context (e.g. standalone unit tests)

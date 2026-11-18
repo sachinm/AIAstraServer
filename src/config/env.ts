@@ -931,10 +931,6 @@ export function isSelfReadingModelEnabled(): boolean {
 }
 
 /**
- * Maximum cumulative USD spend permitted for Self reading AI sub-agent/Lineman/Oracle runs before halting for user confirmation.
- * Env: `SELF_READING_MAX_SPEND_USD` (default 1.00 USD).
- */
-/**
  * The Oracle returns the dashboard's area document (docs/reading-engine/65) instead of the essay + PANEL_SYNTHESIS text:
  * On by default since Phase B renders it; `SELF_ORACLE_AREAS=0` returns to the essay path.
  */
@@ -943,10 +939,14 @@ export function isSelfOracleAreasEnabled(): boolean {
   return !(raw === '0' || raw === 'false' || raw === 'no');
 }
 
-export function getSelfReadingMaxSpendUsd(): number {
-  const raw = Number(process.env.SELF_READING_MAX_SPEND_USD);
-  if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);
-  return 1.0;
+/**
+ * The model spend cap of ONE operation, USD (Sachin, 2026-11-18; docs/billing/README.md "Spend cap per operation"). An
+ * operation is one dashboard reading refresh (one build run: v2 build, clock layer and every card it reads), one
+ * single card read the page asks for, one general reading response (ask-stream) or one card-chat answer. Nothing is
+ * counted per day. Env `READING_SPEND_CAP_USD` (default 0.45, clamped 0.05..5).
+ */
+export function getReadingSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_SPEND_CAP_USD', 0.45, 0.05, 5);
 }
 
 /**
@@ -997,11 +997,6 @@ export function isCardsReadEnabled(env: NodeJS.ProcessEnv = process.env): boolea
 /** Read the offered cards not on the board in the background after the board (doc 70 §9). Off unless CARDS_READ_REST=1. */
 export function isCardsReadRestEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.CARDS_READ_REST?.trim() === '1';
-}
-
-/** Spend cap per person per day for the card readings, USD. Env `CARDS_SPEND_CAP_USD` (default 0.75, 0.01..10). */
-export function getCardsSpendCapUsd(): number {
-  return parseClampedFloatEnv('CARDS_SPEND_CAP_USD', 0.75, 0.01, 10);
 }
 
 /** The reading starts once the board holds this many cards. Env `CARDS_READ_MIN` (default 5, 1..8). */

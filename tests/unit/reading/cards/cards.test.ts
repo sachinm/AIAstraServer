@@ -3,11 +3,11 @@
  * ledger checks, the queue (one call per card, in parallel, one cached prefix, the board titles, the spend cap, a
  * failed card alone) and the per-card state. Fake model and an in-memory store; no paid call, no database.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgreedLedger, LedgerCell } from '../../../../src/reading/clocks/types.js';
 import { sharedPrefix } from '../../../../src/reading/clocks/reader.js';
 import { pickClockLayerSlices } from '../../../../src/reading/clocks/run.js';
-import { boardReadingView, cardStateOf, readCardsState } from '../../../../src/reading/cards/state.js';
+import { boardReadingView, cardStateOf, readCardsState, updateCardsState } from '../../../../src/reading/cards/state.js';
 import { CARD_ORACLE_MAX_OUTPUT_TOKENS, checkAgainstLedger, precheckCard, readCardOracle, renderCardLedger } from '../../../../src/reading/cards/oracle.js';
 import { cardOrder, readCards, type CardsRunInput } from '../../../../src/reading/cards/run.js';
 import { emptyCardsState } from '../../../../src/reading/cards/types.js';
@@ -241,6 +241,64 @@ describe('readCards with a fake model', () => {
     const doc = await readCardsState(prisma, 'k1', new Date(`${ASOF}T12:00:00Z`));
     expect(doc.capReached).toBe(true);
     expect(cardStateOf(doc, 'fitness', false, new Date(`${ASOF}T12:00:00Z`))).toBe('not_read');
+  });
+});
+
+describe('one operation, one budget (docs/billing/README.md "Spend cap per operation")', () => {
+  const NOW = new Date(`${ASOF}T12:00:00Z`);
+  const fake = (count: { n: number }, onCall?: (o: GeminiCallOptions) => Promise<void>) => async (o: GeminiCallOptions) => {
+    count.n++;
+    await onCall?.(o);
+    const text = o.parts.join('\n');
+    if (o.node.startsWith('self.card.oracle')) return ok(JSON.stringify({ cards: [goodOracle(/THIS CALL: write only the card `(\w+)`/.exec(text)![1]!)] }));
+    return ok(JSON.stringify({ cards: [personal(/## WRITE[^\n]*\n- (\w+):/.exec(text)![1]!)] }));
+  };
+
+  it("the day's stored spend is not counted: a high spentUsd in today's doc does not stop the run", async () => {
+    const prisma = memPrisma();
+    await updateCardsState(prisma, 'u1', 'k1', NOW, (d) => {
+      d.spentUsd = 9;
+    });
+    const count = { n: 0 };
+    const r = await readCards({ prisma, callGemini: fake(count) as never, now: NOW, capUsd: 0.45, readRest: false, groupPack: false }, input(BOARD));
+    expect(r.capReached).toBe(false);
+    expect(Object.keys(r.cards).sort()).toEqual([...BOARD].sort());
+    expect(count.n).toBe(10);
+  });
+
+  it("the build run's spend before the cards counts: at the run's cap no card call is made, and one line is logged", async () => {
+    const prisma = memPrisma();
+    const count = { n: 0 };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const r = await readCards({ prisma, callGemini: fake(count) as never, now: NOW, capUsd: 0.45, readRest: false, groupPack: false }, { ...input(BOARD), spentBeforeUsd: 0.45 });
+      expect(count.n).toBe(0);
+      expect(r.capReached).toBe(true);
+      expect(r.results.every((x) => x.status === 'skipped_cap')).toBe(true);
+      const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('reading spend cap'));
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0]!)).toMatchObject({ msg: 'reading spend cap', op: 'cards', spentUsd: 0.45, capUsd: 0.45 });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('a card asked for while the run went is a new request: it gets a fresh budget after the run hit its cap', async () => {
+    const prisma = memPrisma();
+    const count = { n: 0 };
+    let queued = false;
+    const callGemini = fake(count, async () => {
+      if (queued) return;
+      queued = true;
+      await updateCardsState(prisma, 'u1', 'k1', NOW, (d) => {
+        d.cards.diagnosis = { state: 'queued', at: NOW.toISOString() };
+      });
+    });
+    const r = await readCards({ prisma, callGemini: callGemini as never, now: NOW, capUsd: 0.000001, laterCapUsd: 0.45, readRest: false, boardParallel: 1, groupPack: false }, input(['body', 'stuck']));
+    // the run: one card read, then its cap; the later request: its own budget, read in full
+    expect(r.results.filter((x) => x.status === 'skipped_cap').map((x) => x.card)).toEqual(['stuck']);
+    expect(r.cards.diagnosis).toBeTruthy();
+    expect(count.n).toBe(4);
   });
 });
 

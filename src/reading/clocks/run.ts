@@ -231,11 +231,9 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       const ms = Math.round(performance.now() - tc);
       const cost = c.timing?.costUsd ?? 0;
       const issues = [...c.issues];
-      let status: ClockLayerStatus = sheetsClean && !c.issues.length ? 'ok' : 'partial';
-      if (spent() + cost > deps.maxSpendUsd) {
-        issues.push({ stage: 'concordance', system: null, cell: null, check: 'budget', message: `spent ${round6(spent() + cost)} over the cap ${deps.maxSpendUsd}` });
-        status = 'budget_exceeded';
-      }
+      // the call starts only under the cap (`overBudget` above); once paid for, its words are used and stored
+      // (docs/billing/README.md "Spend cap per operation")
+      const status: ClockLayerStatus = c.issues.some((x) => x.check === 'budget') ? 'budget_exceeded' : sheetsClean && !c.issues.length ? 'ok' : 'partial';
       // stored only when the ledger has its words (the concordance wrote, came from its store, or had nothing to write)
       if (status !== 'budget_exceeded' && (!c.timing || c.timing.status === 'ok' || c.timing.status === 'cached')) {
         await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, status, sheets: result.sheets, ledger: c.ledger }, deps.now);

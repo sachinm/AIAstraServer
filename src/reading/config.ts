@@ -1,4 +1,5 @@
 /** Environment switches for the reading engine. All optional. The reading engine is the chat path by default. */
+import { getReadingSpendCapUsd } from '../config/env.js';
 
 export type ReadingFlow = 'single' | 'graph' | 'oracle';
 
@@ -27,12 +28,17 @@ const positiveUsd = (name: string, fallback: number): number => {
   return process.env[name]?.trim() && Number.isFinite(n) && n > 0 ? n : fallback;
 };
 
-/** Money limits of one question in the oracle flow (docs/reading-engine/39 §6). */
+/**
+ * Money limits of one question in the oracle flow (docs/reading-engine/39 §6). The whole question (`query`) is one
+ * operation under READING_SPEND_CAP_USD (docs/billing/README.md "Spend cap per operation"); READING_COST_CAP_QUERY_USD
+ * can only lower it. The stage caps (readers, Oracle) stay inside it.
+ */
 export function readingCostCaps(): { fanout: number; oracle: number; query: number } {
+  const cap = getReadingSpendCapUsd();
   return {
     fanout: positiveUsd('READING_COST_CAP_FANOUT_USD', 0.05),
     oracle: positiveUsd('READING_COST_CAP_ORACLE_USD', 0.25),
-    query: positiveUsd('READING_COST_CAP_QUERY_USD', 0.3),
+    query: Math.min(cap, positiveUsd('READING_COST_CAP_QUERY_USD', cap)),
   };
 }
 

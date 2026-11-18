@@ -401,6 +401,12 @@ export async function runOracleV2(
   const callIssues = (r: CallOutcome): ValidationIssue[] =>
     r.error ? r.areas.map((a) => ({ stage: 'oracle' as const, area: a, check: r.check ?? 'call_failed', message: `${a}: ${r.call}: ${r.error}`.slice(0, 300), callId: r.call })) : [];
 
+  // one operation, one budget (docs/billing/README.md "Spend cap per operation"): no call starts once the run's spend
+  // reached its cap; a call already paid for is used, never thrown away
+  if ((deps.spentUsd ?? 0) >= deps.maxSpendUsd) {
+    const msg = `spent ${round6(deps.spentUsd ?? 0)} of the cap ${deps.maxSpendUsd}; the Oracle was not called`;
+    return { promptName: SELF_V2_ORACLE_PROMPT, promptHash: pHash, model, calls: [], spentUsd: round6(deps.spentUsd ?? 0), status: 'budget_exceeded', output: null, gaps: [msg], withheld: [], issues: [{ stage: 'oracle', area: null, check: 'budget', message: msg, callId: null }], repairRan: false };
+  }
   const results = await Promise.all(ORACLE_V2_CALLS.map(({ call, areas }) => ask(call, areas, callInstruction(areas))));
   const calls = results.map((r) => r.timing);
   const gaps = results.filter((r) => r.error).map((r) => `${r.call} (${r.areas.join(', ')}): ${r.error}`);
@@ -408,13 +414,6 @@ export async function runOracleV2(
   const spent = () => round6((deps.spentUsd ?? 0) + calls.reduce((n, c) => n + c.costUsd, 0));
   const base = () => ({ promptName: SELF_V2_ORACLE_PROMPT, promptHash: pHash, model, calls, spentUsd: spent() }) as const;
   let repairRan = false;
-  const overBudget = (): Omit<SelfV2OracleResult, 'familyFindings' | 'cached'> => {
-    const b = base();
-    const msg = `spent ${b.spentUsd} over the cap ${deps.maxSpendUsd}`;
-    issues.push({ stage: 'oracle', area: null, check: 'budget', message: msg, callId: null });
-    return { ...b, status: 'budget_exceeded', output: null, gaps: [...gaps, msg], withheld: [], issues, repairRan };
-  };
-  if (spent() > deps.maxSpendUsd) return overBudget();
 
   const frame = storedWindowsOf(ctx, briefs);
   const validate = (merged: ParsedCall) => ({
@@ -445,7 +444,12 @@ export async function runOracleV2(
   }
 
   let final = first;
-  if (failed.length) {
+  // the repair is one more call: it starts only while the run is under its cap
+  if (failed.length && spent() >= deps.maxSpendUsd) {
+    const msg = `repair not run: spent ${spent()} of the cap ${deps.maxSpendUsd}`;
+    gaps.push(msg);
+    issues.push({ stage: 'oracle', area: null, check: 'budget', message: msg, callId: null });
+  } else if (failed.length) {
     repairRan = true;
     const failedSet = new Set<string>(failed);
     const reasons: Partial<Record<SelfV2AreaId, string[]>> = {};
@@ -454,7 +458,6 @@ export async function runOracleV2(
     calls.push(rep.timing);
     if (rep.error) gaps.push(`oracle.repair (${failed.join(', ')}): ${rep.error}`);
     issues.push(...callIssues(rep));
-    if (spent() > deps.maxSpendUsd) return overBudget();
     if (rep.parsed) {
       // the first pass's good areas stand as they were; the repair's areas take the failed areas' place
       const keep = results.flatMap((r) => (r.parsed ? [{ ...r.parsed, areas: r.parsed.areas.filter((x) => !failedSet.has(idOf(x))) }] : []));

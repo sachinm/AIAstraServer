@@ -319,8 +319,24 @@ re-applied by it.
 - **Answer text arrives in one burst.** First token came within 5 ms of the end on both stored runs (`reading_runs`), and doc 24
   saw the same. So streaming gives no early text at these sizes, and "first token" budgets (doc 12) measure nothing. Status: open.
   Done: confirmed live whether Gemini or our path holds it, and doc 12's budgets restated as complete time.
-- **Only the oracle flow has a cost cap.** Single and graph flows have none: a 3-subject graph question could reach about $0.43
-  (doc 40 §3). `READING_DAILY_BUDGET_USD` in doc 05 §6 was never built. Status: open. Done: the guard also wraps those flows, or they are retired.
+- **Per-operation spend cap leftovers (feat/per-reading-cap, 2026-11-18).** The day and per-build caps are replaced by
+  one `READING_SPEND_CAP_USD` (USD 0.45) per operation (docs/billing/README.md §10). The single and graph flows now have a
+  guard too (`src/reading/llm/spendCap.ts`). Still open:
+  1. **Lambda env** (deploy session): remove `CARDS_SPEND_CAP_USD` and `SELF_READING_MAX_SPEND_USD` from
+     `aiastra-server-api` (no longer read); set `READING_SPEND_CAP_USD` only to change the 0.45 default.
+     `READING_COST_CAP_QUERY_USD` can now only lower the cap.
+  2. **Web** (web session): `POST …/cards/:id/read` no longer answers `429 spend_cap`. Remove any copy for it, and check
+     what the board shows for `capReached` (the run's budget, not the day's).
+  3. **A cold You build may not fit USD 0.45.** Doc 10 §6 estimates about USD 0.30 for You, 0.10 for the clocks and 0.08
+     per Love/Work deck. One run shares one budget, so cards past the cap stay "not read yet" (`skipped_cap`) until the
+     next build or a card read. Owner: Sachin (raise the env value) or the reading-dev session (measure on Lab replays).
+     Done: replay costs measured and the cap or the estimates set to fit.
+  4. **Small overshoots by design.** The check runs before a call starts. Cards started together in one grouped phase,
+     a graph flow's parallel specialists, and the clock layer's background concordance (its bill lands after the cards
+     start) can each take a run a little past the cap. Done: accepted, or a reservation ledger like `CostGuard` added.
+  5. **Stale plan docs** still describe the old caps: docs/dashboards/10 (§4.2 `429 spend_cap`, §6 table), and
+     docs/reading-engine/39 §6 (query cap 0.30), 70 §6 and 73 (`CARDS_SPEND_CAP_USD` per day). Done: edited to point at
+     docs/billing/README.md §10.
 - **Only the oracle flow scrubs engine names from output.** The rule is prompts only in the single and graph flows, despite a23a734's
   message ("enforce engine-name redaction"); `grep` finds no output filter there. Status: open. Done: one filter on every flow.
 - **Clarifier model spend is not counted against a question's cap.** Bedrock `gpt-oss-120b` has no row in `llm/models.ts` `PRICES`, and its
