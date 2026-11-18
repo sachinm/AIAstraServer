@@ -23,7 +23,7 @@ const ENV = {
   READING_MODEL_READER: 'gemini-3.1-flash-lite',
   READING_MODEL_ORACLE: 'gemini-3.8-flash',
   SELF_PERSONALIZER_MODEL: 'gemini-3.1-flash-lite',
-  SELF_READING_MAX_SPEND_USD: '1',
+  READING_SPEND_CAP_USD: '1',
 } as const;
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
@@ -146,7 +146,7 @@ describe('Oracle: one repair pass, per-area status, structured findings', () => 
 
   it('a spend over the cap is budget_exceeded with a budget finding', async () => {
     const { ctx, slice } = setup();
-    const r = await runOracleV2({ ...deps(makeGemini([])), maxSpendUsd: 0.000001 }, ctx, slice);
+    const r = await runOracleV2({ ...deps(makeGemini([])), spentUsd: 0.45, maxSpendUsd: 0.45 }, ctx, slice);
     expect(r.status).toBe('budget_exceeded');
     expect(r.issues!.at(-1)).toMatchObject({ check: 'budget', area: null });
   });

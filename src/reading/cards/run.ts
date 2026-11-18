@@ -11,11 +11,15 @@
  *
  * Per card: state `reading`, one Oracle call (repaired once alone), one Personalizer call chained to it (repaired once),
  * stored in `technique_outputs`, state `done`; a failure marks that card `failed` and nothing else. Before each card
- * the day's spend (state doc + this run) is checked against CARDS_SPEND_CAP_USD; at the cap the queue stops and the
- * rest stay "not read yet". A stored reading with the same key is served without a call. Never throws.
+ * this operation's spend (what the build spent before the cards, plus this run) is checked against its cap (the build
+ * run's remainder of READING_SPEND_CAP_USD; docs/billing/README.md "Spend cap per operation"); at the cap the queue
+ * stops and the rest stay "not read yet". Nothing is counted per day: the state doc's `spentUsd` is a record only.
+ * Cards queued while this ran (a card the page asked for alone, or a board saved) are a new request: each later round
+ * starts a fresh budget of READING_SPEND_CAP_USD. A stored reading with the same key is served without a call. Never
+ * throws.
  */
 import type { PrismaClient } from '@prisma/client';
-import { getCardsBoardParallel, getCardsGroupSizeBoard, getCardsGroupSizeRest, getCardsRestParallel, getCardsSpendCapUsd, isCardsGroupPackEnabled, isCardsReadRestEnabled } from '../../config/env.js';
+import { getCardsBoardParallel, getCardsGroupSizeBoard, getCardsGroupSizeRest, getCardsRestParallel, getReadingSpendCapUsd, isCardsGroupPackEnabled, isCardsReadRestEnabled } from '../../config/env.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
 import { buildCardPack, CARD_GROUP_PROMPT, readCardGroup, splitGroups, type CardPack, type GroupCardResult } from './group.js';
 import { canonicalJson } from '../../techniques/pieces.js';
@@ -45,8 +49,12 @@ export interface CardsRunDeps {
   informUsed?: Parameters<typeof markAgentUsed>[1];
   now: Date;
   force?: boolean;
-  /** overrides: the spend cap (USD per day), the rest flag, the parallel limits */
+  /**
+   * the spend cap of this operation, USD (default READING_SPEND_CAP_USD; a build passes its remainder), the cap of each
+   * later round (cards queued while this ran; default READING_SPEND_CAP_USD), the rest flag, the parallel limits
+   */
   capUsd?: number;
+  laterCapUsd?: number;
   readRest?: boolean;
   boardParallel?: number;
   restParallel?: number;
@@ -78,7 +86,7 @@ export interface CardsRunInput {
   dates: ReadonlySet<string>;
   answers: string;
   model: string;
-  /** USD spent by this build before the cards (the clock layer); counted against the day's cap */
+  /** USD spent by this operation before the cards (the clock layer of this build); counted against `capUsd` */
   spentBeforeUsd: number;
 }
 
@@ -183,17 +191,20 @@ function groupBatcher(run: (cards: CardId[], call: string) => Promise<{ cards: P
 export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<CardsRunResult> {
   const { ctx } = i;
   const out: CardsRunResult = { results: [], cards: {}, timings: [], issues: [], spentUsd: 0, capReached: false, order: [] };
-  const cap = deps.capUsd ?? getCardsSpendCapUsd();
+  // one operation, one budget (docs/billing/README.md "Spend cap per operation"): the stored day's spend is not read
+  let cap = deps.capUsd ?? getReadingSpendCapUsd();
+  let spentBefore = i.spentBeforeUsd;
+  let roundSpent = 0;
+  let capLogged = false;
   const now = deps.now;
   const state0 = await readCardsState(deps.prisma, ctx.kundliId, now);
-  const spentToday = state0.spentUsd + i.spentBeforeUsd;
   const asked = (Object.entries(state0.cards) as Array<[CardId, { state: string }]>).filter(([, e]) => e.state === 'queued').map(([id]) => id);
   const order = cardOrder(i.board, asked, deps.readRest ?? isCardsReadRestEnabled());
   out.order = [...order.first, ...order.rest];
   // docs/dashboards/10 §4.1 step 4: the pack serves the read cards and the other boards' active decks (one cached pack)
   const packCards = [...new Set([...out.order, ...(i.packCards ?? []).filter((id) => isReadable(id))])];
   const done = new Set<CardId>();
-  const spent = () => round6(spentToday + out.spentUsd);
+  const spent = () => round6(spentBefore + roundSpent);
 
   const frameRender = renderYearFrame(i.frame, clockLabel(i.frame.clock));
   // the grounding only (status, tone, count, evidence): a card read on the counted ledger before the concordance wrote
@@ -231,6 +242,10 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     const def = anyCardDef(id)!;
     if (spent() >= cap) {
       out.capReached = true;
+      if (!capLogged) {
+        capLogged = true;
+        console.log(JSON.stringify({ msg: 'reading spend cap', op: 'cards', kundliId: ctx.kundliId, spentUsd: spent(), capUsd: cap }));
+      }
       out.results.push({ card: id, status: 'skipped_cap', content: null, timings: [], issues: [], costUsd: 0 });
       await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
         if (d.cards[id]?.state === 'queued') delete d.cards[id];
@@ -312,6 +327,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     }
     const costUsd = round6(timings.reduce((n, x) => n + x.costUsd, 0));
     out.spentUsd = round6(out.spentUsd + costUsd);
+    roundSpent = round6(roundSpent + costUsd);
     out.timings.push(...timings);
     out.issues.push(...issues);
     if (content) out.cards[id] = content;
@@ -344,6 +360,11 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       const later = await readCardsState(deps.prisma, ctx.kundliId, now);
       const more = (Object.entries(later.cards) as Array<[CardId, { state: string }]>).filter(([id, e]) => e.state === 'queued' && !done.has(id) && isReadable(id)).map(([id]) => id);
       if (!more.length) break;
+      // a new request: its own budget (the run's cards do not use it up)
+      cap = deps.laterCapUsd ?? getReadingSpendCapUsd();
+      spentBefore = 0;
+      roundSpent = 0;
+      capLogged = false;
       // a card added after the pack was built is not in it: those go the one-card way
       const b = grouped && more.every((id) => pack!.allowed[id]) ? groupBatcher(runGroup, [...out.order, ...more], more, deps.groupSizeBoard ?? getCardsGroupSizeBoard(), 'later') : null;
       batch = b;

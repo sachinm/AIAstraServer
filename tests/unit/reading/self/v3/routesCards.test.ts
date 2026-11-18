@@ -13,7 +13,7 @@ import { fakeRequireUser } from '../../../../helpers/fakeAuth.js';
 import { PRESENT, latestFixture } from '../v2api/fixtures.js';
 
 const NOW = new Date('2026-11-10T12:00:00Z');
-const ENV = ['SELF_V3_BUILD', 'READING_CLOCK_LAYER', 'CARDS_SPEND_CAP_USD'];
+const ENV = ['SELF_V3_BUILD', 'READING_CLOCK_LAYER', 'READING_SPEND_CAP_USD'];
 const saved: Record<string, string | undefined> = {};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -103,7 +103,7 @@ beforeEach(() => {
   queuedBuilds.length = 0;
   readings = {};
   stored.k1 = latestFixture();
-  delete process.env.CARDS_SPEND_CAP_USD;
+  delete process.env.READING_SPEND_CAP_USD;
 });
 
 const call = (method: string, path: string, user?: string, body?: unknown) =>
@@ -147,13 +147,13 @@ describe('POST /api/self/v3/cards/:id/read', () => {
     expect(await (await call('POST', '/api/self/v3/cards/nope/read', 'u1')).json()).toEqual({ error: 'unknown_card' });
     expect(await (await call('POST', '/api/self/v3/cards/constitution/read', 'u1')).json()).toEqual({ error: 'card_not_offered' });
   });
-  it('429 at the day spend cap', async () => {
-    process.env.CARDS_SPEND_CAP_USD = '0.01';
+  it('no day cap: a high stored day spend does not refuse a card read (each read is its own operation)', async () => {
+    process.env.READING_SPEND_CAP_USD = '0.05';
     await call('POST', '/api/self/v3/cards/mind/read', 'u1');
-    [...f.builds.values()][0].result.spentUsd = 0.02;
+    [...f.builds.values()][0].result.spentUsd = 9;
     const r = await call('POST', '/api/self/v3/cards/body/read', 'u1');
-    expect(r.status).toBe(429);
-    expect(await r.json()).toEqual({ error: 'spend_cap' });
+    expect(r.status).toBe(202);
+    expect(await r.json()).toEqual({ state: 'queued' });
   });
   it('503 with the reading off; 404 without a chart; 403 for another account', async () => {
     process.env.READING_CLOCK_LAYER = '0';

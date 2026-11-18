@@ -21,13 +21,15 @@ import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { currentLocationLine, PrismaUserLocationStore } from '../services/userLocation.js';
 import { buildCalendar, calendarBlock } from './calendar/calendar.js';
-import { readingCalendar, readingFindingsV2, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
+import { readingCalendar, readingCostCaps, readingFindingsV2, readingFlow, readingIncludeThoughts, readingSynthMaxTokens, readingSynthThinking, readingUseDbPersona } from './config.js';
 import { startPrefetch, type ReadingData } from './data/store.js';
 import { buildReadingGraph, type NodeError } from './graph.js';
 import { streamGemini } from './llm/gemini.js';
-import { modelFor, PRICE_TABLE_VERSION, totalCostUsd } from './llm/models.js';
+import { modelFor, PRICE_TABLE_VERSION, totalCostUsd, usageCostUsd } from './llm/models.js';
+import { OperationBudget } from './llm/spendCap.js';
+import { CostGuard } from './oracle/costGuard.js';
 import { runIntake, SELF_HARM_RESPONSE } from './nodes/intake.js';
-import { isFastLane } from './nodes/specialists.js';
+import { isFastLane, runSpecialist } from './nodes/specialists.js';
 import type { ReconcileResult } from './nodes/reconcile.js';
 import { FRAMES, horizonRange } from './packs/frames.js';
 import { buildEvidencePack, hashPack, hashText, mergeSubjectPacks, renderBase, renderSubject, type EvidencePack } from './packs/selector.js';
@@ -89,6 +91,8 @@ export interface RunReadingOptions {
   digest?: DigestView | null;
   /** Test seam: activation calendar rows for the reading's horizon; default activationFor through Prisma when digest is ready */
   activation?: readonly ActivationRow[] | null;
+  /** Test seam: this response's spend cap, USD (default READING_SPEND_CAP_USD, which cannot go below 0.05) */
+  spendCapUsd?: number;
 }
 
 /** The dated layers wait at most this long: past it the reading goes on without them. */
@@ -335,6 +339,10 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
   if (opts.questionPlace && !intent.questionPlace) intent.questionPlace = opts.questionPlace;
   timings.intake = intake.ms;
   if (intake.usage) usages.push(intake.usage);
+  // one response is one operation with one budget (docs/billing/README.md "Spend cap per operation"): each call's bill
+  // is counted as it returns, and no further call starts once the spend reached the cap; a started answer is never cut
+  const budget = new OperationBudget('reading.ask', opts.spendCapUsd, asOf);
+  budget.add(intake.usage);
   emit({ type: 'stage', name: 'intake', status: 'done', ms: intake.ms });
   // technique labels for the metrics (docs/admin/01 §4.1.6); `subjects` is narrowed below to what actually fans out, and
   // `techniques` is written once the flow and the digest are known
@@ -491,12 +499,15 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     timings.synthStart = tSynth - tStart;
     emit({ type: 'stage', name: 'synthesize', status: 'start' });
     const fullCache = full ? { system: full.system, prefix: full.prefix, suffix: [singleSuffix({ packs: subjects.map((s) => packs[s.id]!), full, calendar, tail: shapeTail })] } : undefined;
+    // the answer call cannot start past the cap: the turn fails the usual way (the question is given back)
+    budget.require('synthesize');
     const r = await streamGemini(
       { model: synthModel, node: 'synthesize', system, parts: [baseText, renderSubject(merged, 'single'), ...(calendar ? [calendar] : []), tail], cachePrefix: !full, ...(fullCache ? { fullCache } : {}), cacheOwner, thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
       opts.onDelta,
       onThought
     );
     usages.push(r.usage);
+    budget.add(r.usage);
     answer = r.text;
     finishReason = r.finishReason;
     ttftMs = r.ttftMs;
@@ -518,8 +529,12 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
     const first = subjects[0]!.id;
     const prewarmed = await loadPrewarmed(prisma, userId, intent.clarified?.runId);
     const flowStart = Date.now() - tStart;
+    // the oracle flow's reservation ledger is this response's budget: READING_SPEND_CAP_USD for the question, intake included
+    const guard = new CostGuard({ on: asOf, op: 'reading.ask', ...(opts.spendCapUsd !== undefined ? { caps: { ...readingCostCaps(), query: opts.spendCapUsd } } : {}) });
+    if (intake.usage) guard.record({ node: 'intake', stage: 'support', model: intake.usage.model, usd: usageCostUsd(intake.usage, asOf) });
     try {
       const out = await runOracleFlow({
+        guard,
         rows: opts.chartRows ?? prismaChartRows(prisma),
         kundliId: data.kundliId,
         userId,
@@ -581,18 +596,32 @@ async function answerQuestion(prisma: PrismaClient, userId: string, question: st
       ...(uses ? { analystsBySubject: Object.fromEntries(subjects.map((s) => [s.id, uses!.bySubject[s.id]?.analysts ?? []])) } : {}),
       ...(codeFindings.length ? { codeFindings: codeFindings.map(toFinding) } : {}),
       layers: opts.layers ?? (opts.dataLoader ? undefined : prismaLayerLoaders(prisma, { userId, kundliId: data.kundliId })),
+      // each analyst's call is counted against the response's budget; none starts once the budget is spent
+      specialistImpl: async (args) => {
+        budget.require(`specialist:${args.analyst}:${args.subject}`);
+        try {
+          const out = await runSpecialist(args);
+          budget.add(out.usage);
+          return out;
+        } catch (err) {
+          budget.add((err as { usage?: Usage } | null)?.usage);
+          throw err;
+        }
+      },
       synthesize: async (brief: string, rec: ReconcileResult, errs: NodeError[]) => {
         const missing = errs.length ? `\n\nMISSING LAYERS (say so in one line): ${errs.map((e) => e.node).join(', ')}` : '';
         timings.synthStart = Date.now() - tStart;
         const findingsText = `SPECIALIST FINDINGS (already tied to chart facts):\n${brief}${missing}`;
         // full layout: the writer prompt and templates are in the cache; the call sends findings, calendar and tail only
         const fullCache = full ? { system: full.system, prefix: full.prefix, suffix: [writerSuffix({ findings: findingsText, calendar, tail: shapeTail })] } : undefined;
+        budget.require('synthesize');
         const r = await streamGemini(
           { model: synthModel, node: 'synthesize', system, parts: [`${findingsText}${calendar ? `\n\n${calendar}` : ''}`, `${PROMPTS[v2 ? 'v2/synth' : 'synth']}\n\n${tail}`], cachePrefix: !full, cacheOwner, ...(fullCache ? { fullCache } : {}), thinking, includeThoughts: showThoughts, maxOutputTokens, temperature: 0.4, timeoutMs: 120_000 },
           opts.onDelta,
           onThought
         );
         void rec;
+        budget.add(r.usage);
         return { text: r.text, usage: r.usage, ttftMs: r.ttftMs, finishReason: r.finishReason, stoppedForLoop: r.stoppedForLoop };
       },
     });

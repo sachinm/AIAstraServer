@@ -319,8 +319,27 @@ re-applied by it.
 - **Answer text arrives in one burst.** First token came within 5 ms of the end on both stored runs (`reading_runs`), and doc 24
   saw the same. So streaming gives no early text at these sizes, and "first token" budgets (doc 12) measure nothing. Status: open.
   Done: confirmed live whether Gemini or our path holds it, and doc 12's budgets restated as complete time.
-- **Only the oracle flow has a cost cap.** Single and graph flows have none: a 3-subject graph question could reach about $0.43
-  (doc 40 §3). `READING_DAILY_BUDGET_USD` in doc 05 §6 was never built. Status: open. Done: the guard also wraps those flows, or they are retired.
+- **Per-operation spend cap leftovers (feat/per-reading-cap, 2026-11-18).** The day and per-build caps are replaced by
+  one `READING_SPEND_CAP_USD` (USD 0.45) per operation (docs/billing/README.md §10). The single and graph flows now have a
+  guard too (`src/reading/llm/spendCap.ts`). Still open:
+  1. **Lambda env** (deploy session): remove `CARDS_SPEND_CAP_USD` and `SELF_READING_MAX_SPEND_USD` from
+     `aiastra-server-api` (no longer read); set `READING_SPEND_CAP_USD` only to change the 0.45 default.
+     `READING_COST_CAP_QUERY_USD` can now only lower the cap.
+  2. **Web** (web session): `POST …/cards/:id/read` no longer answers `429 spend_cap` (`AIAstra_WEB`
+     `src/lib/selfV3Api.ts:12,451,854` still list it). `capReached` now means "this build run hit its budget", and the
+     next run clears it. Today the web shows a capped card as "Not read yet" with no Try again
+     (`SelfBoardV3.reading.test.tsx:92`). Done: a capped card offers the one-card read (its own budget), and the
+     `spend_cap` error is removed.
+  3. **A cold You build may not fit USD 0.45.** Doc 10 §6 estimates about USD 0.30 for You, 0.10 for the clocks and 0.08
+     per Love/Work deck. One run shares one budget, so cards past the cap stay "not read yet" (`skipped_cap`) until the
+     next build or a card read. Owner: Sachin (raise the env value) or the reading-dev session (measure on Lab replays).
+     Done: replay costs measured and the cap or the estimates set to fit.
+  4. **Small overshoots by design.** The check runs before a call starts. Cards started together in one grouped phase,
+     a graph flow's parallel specialists, and the clock layer's background concordance (its bill lands after the cards
+     start) can each take a run a little past the cap. Done: accepted, or a reservation ledger like `CostGuard` added.
+  5. **Stale plan docs** still describe the old caps: docs/dashboards/10 (§4.2 `429 spend_cap`, §6 table), and
+     docs/reading-engine/39 §6 (query cap 0.30), 70 §6 and 73 (`CARDS_SPEND_CAP_USD` per day). Done: edited to point at
+     docs/billing/README.md §10.
 - **Only the oracle flow scrubs engine names from output.** The rule is prompts only in the single and graph flows, despite a23a734's
   message ("enforce engine-name redaction"); `grep` finds no output filter there. Status: open. Done: one filter on every flow.
 - **Clarifier model spend is not counted against a question's cap.** Bedrock `gpt-oss-120b` has no row in `llm/models.ts` `PRICES`, and its
@@ -1619,8 +1638,6 @@ Server facts from `develop` 2026-11-09; each item fact (seen in code) or inferen
   after a failed build waits up to 30 min (`buildEvent.ts:172-177`, inference). Fact/inference as marked. Owner: server +
   web. Done: doc 66 §4.4 (consent, `board:self:<day>:clock:<system>` charge, `clock_viewed` event, applicability list,
   confirm answers re-run the Personalizer only).
-- **P2 · `budget_exceeded` Oracle results are stored and served until the running period ends** (`oracle.ts:980-995`).
-  Fact/inference. Done: not stored; the area falls back and the dossier records the gap.
 - **P2 · The catalogue has drifted from the code.** `self.reading.oracle` cites prompt `oracle/self.md` and the functions
   `runFamilySubAgents` and `runSelfLineman`, which do not exist (default prompt is `oracle/self-areas`); `SELF_PLANNED`
   lists D4, D7, D60 which `area/self.ts:15` does not read; the section comment says "planned" while every row is `built`

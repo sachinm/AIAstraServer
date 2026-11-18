@@ -9,7 +9,7 @@
  *   POST  one card read (queue or Try again); confirm (the same `self.confirm.<claimId>` fact as You)
  */
 import type { PrismaClient } from '@prisma/client';
-import { getBoardsV3, getCardsReadMinArea, getCardsSpendCapUsd, isCardsReadEnabled } from '../../config/env.js';
+import { getBoardsV3, getCardsReadMinArea, isCardsReadEnabled } from '../../config/env.js';
 import { featureContext, readFeatureOverrides, resolveFeatures, type FeatureGrant, type FeatureState } from '../../boards/features.js';
 import { effectivePlan, type PlanCode } from '../../billing/plans.js';
 import { PrismaPlanStore } from '../../billing/store.js';
@@ -324,7 +324,7 @@ async function queueLensDeck(prisma: PrismaClient, userId: string, kundliId: str
   }
 }
 
-export type ReadBoardCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 429 | 503; error: CardReadError };
+export type ReadBoardCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError };
 
 /** POST /api/board/:board/v3/cards/:id/read: queue or retry one card of this board. */
 export async function readBoardV3Card(prisma: PrismaClient, userId: string, board: AreaV3Board, cardId: string, deps: BoardQueueDeps = {}): Promise<ReadBoardCardResult> {
@@ -338,7 +338,7 @@ export async function readBoardV3Card(prisma: PrismaClient, userId: string, boar
   const doc = await readCardsState(prisma, kundliId, now);
   const e = doc.cards[def.id];
   if (e && e.state === 'reading' && now.getTime() - Date.parse(e.at) <= CARD_STUCK_MS) return { ok: false, status: 409, error: 'already_reading' };
-  if (doc.spentUsd >= getCardsSpendCapUsd()) return { ok: false, status: 429, error: 'spend_cap' };
+  // no day cap (docs/billing/README.md "Spend cap per operation"): the build this queues is its own operation, its own budget
   await updateCardsState(prisma, userId, kundliId, now, (d) => {
     d.cards[def.id] = { state: 'queued', at: now.toISOString() };
   });

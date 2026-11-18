@@ -75,7 +75,7 @@ export interface SelfV3StepDeps {
    * layouts, the lens stored or the person's default). They join the one card pack; they are read only when queued.
    */
   loadAreaDecks?: (prisma: PrismaClient, kundliId: string) => Promise<{ cards: CardId[]; sections: Partial<Record<CardId, SelfSectionId[]>> }>;
-  /** overrides for the card runner (spend cap, the rest flag) */
+  /** overrides for the card runner (its spend cap, default this step's `maxSpendUsd`; the rest flag) */
   cardsCapUsd?: number;
   cardsReadRest?: boolean;
 }
@@ -308,7 +308,9 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       const area = await (deps.loadAreaDecks ?? ((p: PrismaClient, k: string) => loadAreaDecks(p, k, profile)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [] as CardId[], sections: {} }));
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
-        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, now: deps.now, force: deps.force, capUsd: deps.cardsCapUsd, readRest: deps.cardsReadRest },
+        // one build run is one operation (docs/billing/README.md "Spend cap per operation"): the cards get what the run
+        // has left after the v2 build (`maxSpendUsd`) less the clock layer's spend; the day's stored spend is not counted
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, now: deps.now, force: deps.force, capUsd: deps.cardsCapUsd ?? deps.maxSpendUsd, readRest: deps.cardsReadRest },
         {
           ctx,
           frame,
@@ -322,7 +324,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
           dates,
           answers,
           model: layerModel ?? i.oracleSlice.model,
-          spentBeforeUsd: 0,
+          spentBeforeUsd: layerSpent,
         },
       );
       ms.cards = since(tcards);

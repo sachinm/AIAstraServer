@@ -484,7 +484,7 @@ export interface BoardReadingView {
 }
 
 /** POST /api/self/v3/cards/:id/read */
-export type CardReadError = 'unknown_card' | 'card_not_offered' | 'already_reading' | 'spend_cap' | 'off' | 'no_kundli';
+export type CardReadError = 'unknown_card' | 'card_not_offered' | 'already_reading' | 'off' | 'no_kundli';
 
 /** GET /api/self/v3/catalogue: the picker without card bodies */
 export interface SelfV3CatalogueEntry {

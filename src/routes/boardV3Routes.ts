@@ -6,7 +6,7 @@
  *   GET  /api/board/:board/v3                 → 200 BoardV3Response + ETag | 304 | 404 { status: 'no_kundli', … }
  *                                               | 404 { error: 'board_v3_off' } | 400 unknown_board | 503 off | timeout
  *   POST /api/board/:board/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404
- *                                               | 409 already_reading | 429 spend_cap | 503 off
+ *                                               | 409 already_reading | 503 off
  *   POST /api/board/:board/v3/confirm         { claimId, answer } → 204 | 400 bad_claim | bad_answer
  *
  * PUT /api/board/:board/v3/layout stays in boardCardsRoutes.ts and is dispatched there on the body's shape.

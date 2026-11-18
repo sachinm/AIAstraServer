@@ -126,6 +126,11 @@ export async function runPersonalizer(
   const model = slice.model;
   const areaIds = Object.keys(input.oracle.doc.areas);
   const t0 = performance.now();
+  // one operation, one budget (docs/billing/README.md "Spend cap per operation"): the call does not start once the run's
+  // spend reached its cap; once made, its document is used
+  if ((deps.spentUsd ?? 0) >= deps.maxSpendUsd) {
+    return { promptHash: pHash, model, call: null, status: 'budget_exceeded', doc: null, cardStatus: {}, gaps: [`personalizer: not called, spent ${deps.spentUsd} of the cap ${deps.maxSpendUsd}`] };
+  }
   try {
     const res = await withAgentRun(
       deps.prisma,
@@ -167,7 +172,6 @@ export async function runPersonalizer(
     const parsed = isTruncated(res.finishReason) ? null : parsePersonalDoc(res.text);
     const call = timingOf('self.personalizer', 'self.personalizer', model, res, performance.now() - t0, parsed ? 'ok' : 'failed');
     const base = { promptHash: pHash, model, call };
-    if ((deps.spentUsd ?? 0) + call.costUsd > deps.maxSpendUsd) return { ...base, status: 'budget_exceeded', doc: null, cardStatus: {}, gaps: ['personalizer: spend over the cap'] };
     if (!parsed) return { ...base, status: 'failed', doc: null, cardStatus: {}, gaps: [`personalizer: no card document (finish ${res.finishReason ?? 'unknown'}, ${res.text.length} chars)`] };
     const v = validatePersonalDoc(parsed, input, strip);
     return { ...base, status: 'ok', doc: v.doc, cardStatus: v.cardStatus, gaps: v.gaps, metrics: v.metrics };

@@ -214,6 +214,11 @@ with `card_ref`.
 is free. Follow-ups are **not** free, because each one is a full reading with paid model calls. The cost line shows
 before every send.
 
+**Spend cap (Sachin, 2026-11-18):** each card-chat answer is one operation under `READING_SPEND_CAP_USD` (USD 0.45,
+docs/billing/README.md §10). Because the card chat reuses the ask-stream reading, it uses the same per-response budget:
+no further model call starts once the answer's spend reaches the cap, and a started answer is never cut. When the answer
+call itself cannot start, the turn fails the usual way and the question is given back. Nothing is counted per day.
+
 | Alternative | Verdict |
 |---|---|
 | The client sends the card text | Rejected: it can be edited or stale, and the web's renames and voices would make the shown text differ from what is sent |

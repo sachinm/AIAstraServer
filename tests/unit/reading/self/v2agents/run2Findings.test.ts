@@ -298,7 +298,7 @@ describe('run 2 · 5 · a family finding cut at MAX_TOKENS never reaches the Ora
   });
 
   describe('in a build', () => {
-    const ENV = { READING_EXPLICIT_CACHE: '1', READING_MODEL_READER: 'gemini-3.1-flash-lite', READING_MODEL_ORACLE: 'gemini-3.8-flash', SELF_PERSONALIZER_MODEL: 'gemini-3.1-flash-lite', SELF_READING_MAX_SPEND_USD: '1' } as const;
+    const ENV = { READING_EXPLICIT_CACHE: '1', READING_MODEL_READER: 'gemini-3.1-flash-lite', READING_MODEL_ORACLE: 'gemini-3.8-flash', SELF_PERSONALIZER_MODEL: 'gemini-3.1-flash-lite', READING_SPEND_CAP_USD: '1' } as const;
     const saved: Record<string, string | undefined> = {};
     beforeEach(() => {
       for (const [k, v] of Object.entries(ENV)) {

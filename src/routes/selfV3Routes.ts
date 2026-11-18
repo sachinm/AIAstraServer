@@ -10,7 +10,7 @@
  *                                  | 404 | 409 { error: 'stale_layout', layout } | 503 { error: 'timeout' }
  *   POST /api/self/v3/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
  *   POST /api/self/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404 no_kundli
- *                                       | 409 already_reading | 429 spend_cap | 503 off (doc 70 §4.2)
+ *                                       | 409 already_reading | 503 off (doc 70 §4.2)
  *
  * The clock switch stays PUT /api/self/v2/clock. GET /api/self/v2 keeps working until v3 is the default.
  */
