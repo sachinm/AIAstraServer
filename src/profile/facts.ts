@@ -23,9 +23,20 @@ export const FACT_CATALOG: Record<string, readonly string[] | '*'> = {
    */
   'self.mood.history': '*',
   'wizard.selfie': ['done', 'skipped'],
+  /**
+   * the dashboards the person's portal shows, comma-joined ids from PORTAL_DASHBOARDS (docs/dashboards/11): a menu
+   * choice, not a fact about their life, so never a reading fact. Unanswered = the web's default (self, love, work).
+   */
+  'portal.dashboards': '*',
   'wizard.done': '*',
   'wizard.skipped': '*',
 };
+
+/**
+ * The portal's dashboards, in menu order (docs/dashboards/11): the three boards, Lucky times, and the eight focused
+ * dashboards (the Love and Work board lenses, docs/dashboards/10).
+ */
+export const PORTAL_DASHBOARDS = ['self', 'love', 'work', 'lucky', 'dating', 'marriage', 'friends', 'allies', 'career_start', 'primary_job', 'hobby', 'business'] as const;
 
 const FOCUS = new Set(['career', 'money', 'love', 'family', 'home', 'learning', 'travel', 'health', 'creativity', 'spirituality']);
 
@@ -68,7 +79,8 @@ export function checkFact(key: string, value: unknown): FactCheck {
   const allowed = FACT_CATALOG[key];
   if (!allowed) return { ok: false, error: `unknown_key:${key}` };
   if (key === 'self.mood.history') return { ok: false, error: 'server_owned:self.mood.history' };
-  if (value === null) return { ok: true, value: DECLINED };
+  // a menu choice has no "rather not say": at least one dashboard stays ticked
+  if (value === null) return key === 'portal.dashboards' ? { ok: false, error: 'bad_value:portal.dashboards' } : { ok: true, value: DECLINED };
   if (typeof value !== 'string' || !value.trim() || value.length > 120) return { ok: false, error: `bad_value:${key}` };
   const v = value.trim();
   if (key === 'self.mood') return SELF_MOOD_RE.test(v) ? { ok: true, value: v } : { ok: false, error: 'bad_value:self.mood' };
@@ -76,6 +88,13 @@ export function checkFact(key: string, value: unknown): FactCheck {
     const parts = v.split(',').map((p) => p.trim()).filter(Boolean);
     if (parts.length === 0 || parts.length > 3 || parts.some((p) => !FOCUS.has(p))) return { ok: false, error: 'bad_value:self.focus' };
     return { ok: true, value: parts.join(',') };
+  }
+  if (key === 'portal.dashboards') {
+    const parts = v.split(',').map((p) => p.trim()).filter(Boolean);
+    const known: readonly string[] = PORTAL_DASHBOARDS;
+    if (parts.length === 0 || parts.some((p) => !known.includes(p))) return { ok: false, error: 'bad_value:portal.dashboards' };
+    // one of each, in menu order, whatever order they were ticked in
+    return { ok: true, value: PORTAL_DASHBOARDS.filter((id) => parts.includes(id)).join(',') };
   }
   if (allowed === '*') return { ok: true, value: v };
   return allowed.includes(v) ? { ok: true, value: v } : { ok: false, error: `bad_value:${key}` };
@@ -91,9 +110,9 @@ export async function readFacts(prisma: PrismaClient, userId: string) {
 /**
  * Fact keys the person can store that are not facts about their life: `self.mood` is a tap for one day
  * (`<mood>:<YYYY-MM-DD>`, read only through the profile pack's `moodFor`), so it never reaches the FACTS line or the
- * technique matcher (doc 66 §4.2).
+ * technique matcher (doc 66 §4.2); `portal.dashboards` is a menu choice (docs/dashboards/11).
  */
-export const NOT_A_READING_FACT: ReadonlySet<string> = new Set(['self.mood', 'self.mood.history']);
+export const NOT_A_READING_FACT: ReadonlySet<string> = new Set(['self.mood', 'self.mood.history', 'portal.dashboards']);
 
 /**
  * The facts the person has confirmed (a confirmation time, a catalogue key), key → value, for the technique matcher
