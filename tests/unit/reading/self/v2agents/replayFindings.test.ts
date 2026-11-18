@@ -16,7 +16,7 @@ import type { ActivationRow } from '../../../../../src/reading/digest/activation
 import { runSelfSubTechniques } from '../../../../../src/reading/self/sub/index.js';
 import { normaliseCallKeys, validatePatterns, ORACLE_V2_AREAS } from '../../../../../src/reading/self/v2/oracle.js';
 import { runPersonalizer, PERSONALIZER_THINKING } from '../../../../../src/reading/self/v2/personalizer.js';
-import { alignSources, CHART_TERMS, sentencesOf, validatePersonalDoc } from '../../../../../src/reading/self/v2/personalizerValidate.js';
+import { alignSources, sentencesOf, validatePersonalDoc } from '../../../../../src/reading/self/v2/personalizerValidate.js';
 import {
   buildOracleSlice,
   buildPersonalizerSlice,
@@ -77,10 +77,10 @@ describe('replay 66 · Personalizer validator on profile c (retired, 60+, focus 
     expect(u.cardStatus.stuck).toBe('withheld');
   });
 
-  it('2 · a date whose label carries a chart term keeps the date; the label becomes the area title', () => {
+  it('2 · a date whose label carries a chart term keeps the date and its own label (doc 82: no word filter)', () => {
     expect(v.gaps.filter((g) => /date .* dropped \(chart term/.test(g))).toEqual([]);
-    expect(v.doc.cards.chapter!.dates).toEqual([{ from: '2026-05-05', to: '2026-12-12', label: 'This chapter' }]);
-    expect(v.doc.cards.mind!.dates).toEqual([{ from: '2026-11-05', to: '2026-12-12', label: 'How you think' }]);
+    expect(v.doc.cards.chapter!.dates).toEqual([{ from: '2026-05-05', to: '2026-12-12', label: 'Mars sub-period' }]);
+    expect(v.doc.cards.mind!.dates).toEqual([{ from: '2026-11-05', to: '2026-12-12', label: 'Ketu detachment window' }]);
     // dates stay a subset of the Oracle's windows
     const pairs = new Set(Object.values(oracleOut.doc.areas).flatMap((a) => (a ? a.dates.map((d) => `${d.from}|${d.to}`) : [])));
     for (const c of Object.values(v.doc.cards)) for (const d of c?.dates ?? []) expect(pairs.has(`${d.from}|${d.to}`)).toBe(true);
@@ -96,11 +96,11 @@ describe('replay 66 · Personalizer validator on profile c (retired, 60+, focus 
     expect(v.gaps).toEqual(expect.arrayContaining(['lagna: date 2026-11-09..2034-10-22 is not a window of the Oracle document; dropped']));
   });
 
-  it('4 · role words against "retired" are dropped; the hero not naming the focus is flagged', () => {
+  it('4 · role words against "retired" are kept (doc 82: the prompt owns the words); nothing is dropped for them', () => {
     const text = faceText(v.doc).join(' ');
-    for (const w of [/executive/i, /\bpitch(es)?\b/i, /workplace/i, /professional reputation/i, /professional leadership/i, /professional timelines/i]) expect(text).not.toMatch(w);
-    expect(v.gaps.some((g) => /role word against the stated work status/.test(g))).toBe(true);
-    expect(v.gaps).toEqual(expect.arrayContaining(['hero: names none of the stated focus (health, spirituality)']));
+    for (const w of [/executive/i, /\bpitch(es)?\b/i, /workplace/i, /professional reputation/i]) expect(text).toMatch(w);
+    expect(v.gaps.some((g) => /role word/.test(g))).toBe(false);
+    expect(v.doc.hero.sentence).toBe('Work and creative projects ask for patience until 12 Dec 2026.');
     // a past role may still be named
     const raw = structuredClone(profileC.raw!);
     raw.cards[3]!.body = ['In your former work you carried executive responsibility. That steadiness stays with you.'];
@@ -109,22 +109,16 @@ describe('replay 66 · Personalizer validator on profile c (retired, 60+, focus 
     expect(past.doc.cards.chapters!.body.join(' ')).toMatch(/former work/);
   });
 
-  it('5 · the new chart terms and the body card\'s diet and medicine words never reach a card face', () => {
-    const text = faceText(v.doc);
-    for (const t of text) expect(CHART_TERMS.find((re) => re.test(t)), t).toBeUndefined();
-    const all = text.join(' ');
-    for (const w of [/nodal/i, /karmic/i, /combinations/i, /sub-period/i, /annual (cycle|framework)/i, /spicy/i, /inflammatory/i, /digestive/i]) expect(all).not.toMatch(w);
-    for (const t of ['A rigorous sub-period concludes.', 'A challenging nodal axis.', 'Karmic friction.', 'Potent wealth combinations.', 'Your sub period ends.', 'The annual cycle asks for patience.'])
-      expect(CHART_TERMS.some((re) => re.test(t)), t).toBe(true);
-    // the diet words are dropped on the body card only
-    expect(v.gaps.some((g) => /^body: .*diet or medicine advice/.test(g))).toBe(true);
+  it('5 · chart terms and the body card\'s diet words are kept (doc 82); no gap is filed for them', () => {
+    const all = faceText(v.doc).join(' ');
+    for (const w of [/nodal/i, /karmic/i, /combinations/i, /sub-period/i, /annual (cycle|framework)/i, /spicy/i, /digestive/i]) expect(all).toMatch(w);
+    expect(v.gaps.some((g) => /chart term|diet or medicine advice/.test(g))).toBe(false);
   });
 
-  it('the validated document has no gendered word; only cards whose headline breaks a rule are withheld', () => {
-    // diagnosis: 16-word headline; stuck "Karmic friction", yogas "combinations … nodal axis", year "annual cycle"
-    const withheld = Object.entries(v.cardStatus).filter(([, s]) => s === 'withheld').map(([id]) => id).sort();
-    // since run 2 a failing headline falls back to a body sentence: only yogas, whose body did not survive, is withheld
-    expect(withheld).toEqual(['yogas']);
+  it('every card of the replay is served: no word, cap or headline rule withholds one (doc 82)', () => {
+    // run 1 withheld diagnosis (16-word headline), stuck ("Karmic friction"), yogas and year (chart terms); now all stand
+    expect(Object.keys(v.cardStatus)).toHaveLength(11);
+    expect(Object.values(v.cardStatus).every((s) => s === 'ok')).toBe(true);
     expect(faceText(v.doc).join(' ')).not.toMatch(/\b(he|she|his|her|him)\b/i);
   });
 });

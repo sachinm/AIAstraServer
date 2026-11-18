@@ -564,11 +564,12 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
           const none = quality.failed.filter((id) => !stale[id]);
           if (none.length) result.gaps = [...result.gaps, `oracle failed areas with no earlier reading (withheld): ${none.join(', ')}`];
         }
-        const served = r.status === 'ok' && servesPage(quality, Boolean(r.doc?.hero.sentence));
+        const served = r.status === 'ok' && servesPage(quality);
         if (r.status === 'ok' && !served) {
           const n = quality.okAreas.length + quality.repaired.length;
-          result.gaps = [...result.gaps, `build does not serve the page (hero ${r.doc?.hero.sentence ? 'stands' : 'missing'}, ${n} of 11 areas ok or repaired, ${SERVE_MIN_AREAS} needed): not stored, the question is given back`];
+          result.gaps = [...result.gaps, `build does not serve the page (${n} of 11 areas ok or repaired, ${SERVE_MIN_AREAS} needed): not stored, the question is given back`];
         }
+        if (served && !r.doc?.hero.sentence) result.gaps = [...result.gaps, 'hero withheld (no sentence stood): the cards are served without it'];
         const frame: SelfV2Frame = { asOf: ctx.asOf, stamps: ctx.stamps, periods: ctx.sub.periods ?? null, year: ctx.sub.year ?? null };
         return {
           value: { key: cardsKey, oracleKey, result, frame },
@@ -580,12 +581,14 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     ms.personalizerStep = since(t);
     const cards: SelfV2CardsResult = storedCards.cached ? { ...storedCards.value.result, cached: true } : storedCards.value.result;
     out.cards = cards;
-    const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality, Boolean(cards.doc?.hero.sentence));
+    const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality ?? { okAreas: [], repaired: [], failed: [] });
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
-    // doc 68 Phase B: the span-led cards over the same context and prefix; a failure here never fails the build
-    if (served && isSelfV3BuildEnabled()) {
+    // the v3 cards (doc 68 Phase B / doc 70 per-card) over the same context and prefix. They run whenever the Oracle
+    // served, whatever the v2 Personalizer did (doc 83 step 1, 2026-11-18: the you board shows v3 cards; one v2 failure
+    // must not leave it blank). A v3 failure never fails the build.
+    if (isSelfV3BuildEnabled()) {
       step('v3');
       const spent = round6(agents.reduce((n, x) => n + x.costUsd, 0));
       const v3 = await runSelfV3Cards(
@@ -596,6 +599,11 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
       gaps.push(...v3.gaps);
       ms.v3 = v3.ms.total ?? 0;
       out.v3 = { status: v3.status, cached: v3.cached, stored: v3.stored, key: v3.key, ms: v3.ms, cards: Object.keys(v3.cards).length, spans: v3.frame?.spans.length ?? 0, issues: v3.issues.length };
+      // the board is served by its v3 cards: a build that read them is made, even when the v2 cards did not serve
+      if (!served && Object.keys(v3.cards).length && (v3.status === 'ok' || v3.status === 'partial')) {
+        out.status = 'ok';
+        gaps.push(`v2 cards did not serve (${cards.status}); the board is served by ${Object.keys(v3.cards).length} v3 cards`);
+      }
     }
     await stageWrites;
     await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, out.status === 'ok' ? 'ready' : 'failed', out.status === 'ok' ? undefined : out.status === 'partial' ? 'build does not serve the page' : `personalizer ${cards.status}`);

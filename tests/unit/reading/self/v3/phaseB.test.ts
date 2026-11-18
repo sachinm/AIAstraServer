@@ -111,7 +111,7 @@ describe('Oracle v3 validator', () => {
     expect(r.problems).toEqual([]);
     expect(r.card?.confirm).toMatchObject({ claimId: 'body.rest', from: '2026-10-01', to: '2026-11-09' });
   });
-  it('rejects a heavy span written as build, a copied tone that differs, a missing span, an unknown key, no knot', () => {
+  it('rejects a missing span, an unknown key, no knot; tone and mode are not checked against the frame (doc 82)', () => {
     const bad = goodOracle('body');
     const spans = bad.spans as Array<Record<string, unknown>>;
     spans[0]!.mode = 'build';
@@ -121,11 +121,19 @@ describe('Oracle v3 validator', () => {
     bad.knot = '';
     const r = checkOracleCard(bad, ctxCheck);
     expect(r.card).toBeNull();
-    expect(r.problems.join(' | ')).toMatch(/never build/);
-    expect(r.problems.join(' | ')).toMatch(/not the frame's/);
+    expect(r.problems.join(' | ')).not.toMatch(/never build|not the frame's/);
     expect(r.problems.join(' | ')).toMatch(/missing/);
     expect(r.problems.join(' | ')).toMatch(/unknown evidence key planet:D1.Zz/);
     expect(r.problems.join(' | ')).toMatch(/no knot/);
+    // a heavy span written as build, with a copied tone that differs, is kept; the frame's tone is used
+    const loose = goodOracle('body');
+    const ls = loose.spans as Array<Record<string, unknown>>;
+    ls[0]!.mode = 'build';
+    ls[1]!.tone = 'heavy';
+    const k = checkOracleCard(loose, ctxCheck);
+    expect(k.problems).toEqual([]);
+    expect(k.card!.spans[0]!.mode).toBe('build');
+    expect(k.card!.spans.map((x) => x.tone)).toEqual(frame.spans.map((x) => x.tone));
   });
   it('drops a future confirm and a pattern on a card that carries none, keeping the card', () => {
     const c = goodOracle('body');
@@ -136,10 +144,12 @@ describe('Oracle v3 validator', () => {
     expect(r.card?.pattern).toBeNull();
     expect(r.notes.join(' ')).toMatch(/future/);
   });
-  it('a date in the text that is not a frame date fails the card', () => {
+  it('a date in the text that is not a frame date is kept (doc 82: no prose date check)', () => {
     const c = goodOracle('body');
     c.headline = 'Rest is thin until 3 Mar 2027.';
-    expect(checkOracleCard(c, ctxCheck).problems.join(' ')).toMatch(/2027-03-03/);
+    const r = checkOracleCard(c, ctxCheck);
+    expect(r.problems).toEqual([]);
+    expect(r.card!.headline).toBe('Rest is thin until 3 Mar 2027.');
   });
   it('accepts the engine spelling of a frame row key and maps it to the frame key', () => {
     expect(frame.aliases?.['activation:dwisaptati/3/pd1']).toBeUndefined();
@@ -174,17 +184,27 @@ describe('Personalizer v3 validator', () => {
     expect(r.problems).toEqual([]);
     expect(r.card).toMatchObject({ confirm: 'Since 1 Oct 2026, have you been sleeping less?', pattern: null, ladder: null });
   });
-  it('withholds the card on a chart term, an engine name, a step that is not if-then, or a long line', () => {
-    const p = personal({ line: 'Saturn presses your evenings until 1 Jan 2027 and so on and on and on and on and on and on and on.' });
+  it('keeps a chart term, a step that is not if-then and a long line (doc 82); an engine name is redacted in place', () => {
+    const line = 'Saturn presses your evenings until 1 Jan 2027 and so on and on and on and on and on and on and on.';
+    const p = personal({ line });
     (p.spans as Array<Record<string, string>>)[0]!.step = 'Stop working late.';
+    (p.spans as Array<Record<string, string>>)[1]!.asks = 'Radha says guard your evenings {claim:x}.';
     const r = checkPersonalCard(p, oracle, c, ['line', 'year']);
-    expect(r.card).toBeNull();
-    expect(r.problems.join(' | ')).toMatch(/line: \d+ words/);
-    expect(r.problems.join(' | ')).toMatch(/not an if-then/);
+    expect(r.problems).toEqual([]);
+    expect(r.card!.line).toBe(line);
+    expect(r.card!.spans[0]!.step).toBe('Stop working late.');
+    expect(r.card!.spans[1]!.asks).toBe('traditional calculations says guard your evenings.');
   });
-  it('a gendered word with no stated gender withholds the card', () => {
+  it('a gendered word with no stated gender is kept; an empty field or a missing span withholds the card', () => {
     const r = checkPersonalCard(personal({ line: 'She guards her evenings until 1 Jan 2027.' }), oracle, c, ['line', 'year']);
-    expect(r.problems.join(' ')).toMatch(/gendered/);
+    expect(r.problems).toEqual([]);
+    expect(r.card!.line).toBe('She guards her evenings until 1 Jan 2027.');
+    const empty = personal();
+    (empty.spans as Array<Record<string, string>>)[0]!.obstacle = '';
+    expect(checkPersonalCard(empty, oracle, c, ['line', 'year']).problems).toContain('span s1 obstacle: empty');
+    const missing = personal();
+    (missing.spans as unknown[]).pop();
+    expect(checkPersonalCard(missing, oracle, c, ['line', 'year']).problems.join(' ')).toMatch(/: missing/);
   });
   it('writes the ladder only when the section is on', () => {
     const lad = { best: 'Keep two quiet evenings a week.', practical: 'Agree a stop time with yourself.', drift: 'You catch up but tire.', floor: 'Sleep seven hours on work nights.' };
@@ -279,7 +299,7 @@ describe('the v3 step with a fake model', () => {
           ? goodOracle(id as SelfCardId)
           : {
               card: id,
-              line: id === 'lagna' && !repairing ? 'Your professional calm holds until 1 Jan 2027.' : 'Your evenings need guarding until 1 Jan 2027.',
+              line: id === 'lagna' && !repairing ? '' : id === 'mind' ? 'Your professional calm holds until 1 Jan 2027.' : 'Your evenings need guarding until 1 Jan 2027.',
               spans: frame.spans.map((s) => ({ span: s.id, asks: 'Guard your evenings.', obstacle: 'Working late.', step: 'If it is past ten, then stop and rest.' })),
               confirm: '',
               pattern: '',
@@ -295,8 +315,11 @@ describe('the v3 step with a fake model', () => {
     );
     expect(pcalls).toBe(4);
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatch(/- lagna: line: role word/);
+    expect(notes[0]).toMatch(/- lagna: line: empty/);
     expect(r.cards.lagna?.line).toBe('Your evenings need guarding until 1 Jan 2027.');
+    // a role word against "retired" is no reason to re-ask (doc 82): the mind card keeps it on the first call
+    expect(notes[0]).not.toMatch(/- mind:/);
+    expect(r.cards.mind?.line).toBe('Your professional calm holds until 1 Jan 2027.');
     expect(r.status).toBe('ok');
   });
 

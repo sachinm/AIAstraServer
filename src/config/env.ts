@@ -1138,93 +1138,6 @@ export function getSelfPersonalizerRetryMaxOutputTokens(): number {
   return parseClampedIntEnv('SELF_PERSONALIZER_RETRY_MAX_OUTPUT_TOKENS', 16000, 1000, 24000);
 }
 
-/**
- * Role words a Self v2 card may not use for a person whose stated work status contradicts them (doc 66 replay
- * 2026-11-09 failure 5: "executive responsibility", "public pitches", "workplace friction" for a retired person). A
- * reviewed words table, not astrology: the Personalizer validator drops a sentence that carries one. Env
- * `SELF_V2_ROLE_WORDS_NOT_WORKING` (comma list of words or phrases; matched whole-word, case-insensitive) applies when
- * `work.status` is one of `SELF_V2_NOT_WORKING_STATUSES` (default retired, between_jobs, studying: the `work.status` values in src/profile/facts.ts).
- */
-export function getSelfV2RoleWordsNotWorking(): string[] {
-  return listEnv('SELF_V2_ROLE_WORDS_NOT_WORKING', [
-    'executive',
-    'executives',
-    'pitch',
-    'pitches',
-    'workplace',
-    'office politics',
-    'boss',
-    'manager',
-    'managerial',
-    'promotion',
-    'colleagues',
-    'coworkers',
-    'co-workers',
-    'professional timelines',
-    'professional reputation',
-    'professional leadership',
-    'career ladder',
-    'your career',
-    'your job',
-    'your team',
-    'clients',
-    'payroll',
-    'quarterly',
-    // doc 66 replay run 2 (2026-11-09): job words that reached the retired profile outside the list
-    'meetings',
-    'meeting',
-    'labor',
-    'labour',
-    'professional',
-    'professionals',
-    'workday',
-    'office',
-  ]);
-}
-
-/** Work statuses under which `getSelfV2RoleWordsNotWorking` applies. Env `SELF_V2_NOT_WORKING_STATUSES`. */
-export function getSelfV2NotWorkingStatuses(): string[] {
-  return listEnv('SELF_V2_NOT_WORKING_STATUSES', ['retired', 'between_jobs', 'studying']);
-}
-
-/**
- * Words the Self v2 body card may not carry (doc 61 §3: energy and wear, never a diagnosis or diet and medicine advice).
- * Env `SELF_V2_BODY_ADVICE_WORDS` (comma list; whole-word, case-insensitive). The general medical list
- * (`MEDICAL_WORDS` in personalizerValidate.ts) applies to every card.
- */
-export function getSelfV2BodyAdviceWords(): string[] {
-  return listEnv('SELF_V2_BODY_ADVICE_WORDS', [
-    'diet',
-    'dietary',
-    'food',
-    'foods',
-    'spicy',
-    'meal',
-    'meals',
-    'eat',
-    'eating',
-    'fasting',
-    'inflammatory',
-    'inflammation',
-    'digestive',
-    'digestion',
-    'intestinal',
-    'nervous system',
-    'medication',
-    'medicine',
-    'supplement',
-    'supplements',
-    'symptom',
-    'symptoms',
-    'diagnosis',
-    'dose',
-    'hydration',
-    // doc 66 replay run 2 (2026-11-09): "nervous depletion" and "nervous exhaustion" passed on the body card
-    'nervous depletion',
-    'nervous exhaustion',
-  ]);
-}
-
 // ── Self v2 run 2 fixes (docs/reading-engine/66-replay-2026-11-09-self-v2-run2.md) ─
 
 /**
@@ -1481,31 +1394,6 @@ export const PERSONALIZER_VOICE_VERSION = 'v1';
 /** The voice version in force: env `PERSONALIZER_VOICE_VERSION` when set, else the constant above (`v1`). */
 export function getPersonalizerVoiceVersion(): string {
   return process.env.PERSONALIZER_VOICE_VERSION?.trim() || PERSONALIZER_VOICE_VERSION;
-}
-
-/**
- * Phrases the Personalizer may not write on a card (a reviewed words table, not astrology): a sentence that carries one
- * is dropped like a chart term. Lowercase, matched whole-word and case-insensitive. Env `PERSONALIZER_STEREOTYPE_PHRASES`
- * (comma list) replaces this default.
- */
-export const DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES: readonly string[] = [
-  'as a woman',
-  'as a man',
-  'like a man',
-  'like a woman',
-  'ladies',
-  'sweetie',
-  'honey',
-  'sweetheart',
-  'ladylike',
-  'manly',
-  'womanly',
-  'emotional woman',
-  'man up',
-];
-
-export function getPersonalizerStereotypePhrases(): string[] {
-  return listEnv('PERSONALIZER_STEREOTYPE_PHRASES', DEFAULT_PERSONALIZER_STEREOTYPE_PHRASES).map((p) => p.toLowerCase());
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -22,8 +22,8 @@ import type { GeminiCallOptions, GeminiResult } from '../llm/gemini.js';
 import { markAgentUsed } from '../self/v2/cache.js';
 import { timingOf } from '../self/v2/oracle.js';
 import { portraitLines } from '../self/v2/portrait.js';
-import { roleWordsFor, type TextCheckContext } from '../self/v2/personalizerValidate.js';
-import { seniorStageWordsFor } from '../self/v2/profileFit.js';
+import { personalizerCheckOf } from '../self/v2/failures.js';
+import { type TextCheckContext } from '../self/v2/personalizerValidate.js';
 import { claimKey, normaliseEvidenceKey, profileLines, promptText, shortHash } from '../self/v2/slices.js';
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
 import { cardDef } from '../self/v3/cards.js';
@@ -221,7 +221,7 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
   const out: CardGroupResult = { cards: {}, timings: [], issues: [] };
   const spanIds = i.frame.spans.map((s) => s.id);
   const p = i.ctx.sub.profile!;
-  const textCheck: TextCheckContext = { gender: p.gender, dates: v3DateFrame(i.dates), roleWords: roleWordsFor(p.facts), stageWords: seniorStageWordsFor(p) };
+  const textCheck: TextCheckContext = { gender: p.gender, dates: v3DateFrame(i.dates) };
   const owner = { userId: i.ctx.userId, kundliId: i.ctx.kundliId };
 
   const ask = async (call: string, cards: readonly SelfCardId[], repair: string): Promise<unknown[] | null> => {
@@ -276,11 +276,13 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
     const pre = precheckCard({ ...((entry.oracle as object) ?? {}), card: id }, { allowed, aliases: i.frame.aliases ?? {}, cells });
     for (const n of pre.notes) out.issues.push({ stage: 'oracle', area: id, check: 'other', message: `${id}: precheck: ${n}`.slice(0, 300), callId: call });
     const r = checkOracleCard(pre.raw, { frame: i.frame, allowedKeys: allowed, dates: i.dates, expected: [id], aliases: i.frame.aliases ?? {} });
+    // review findings and soft drops are recorded, never a reason to refuse the card (2026-11-18)
+    for (const n of r.notes) out.issues.push({ stage: 'oracle', area: id, check: 'other', message: `${id}: ${n}`.slice(0, 300), callId: call });
     if (!r.card) return { oracle: null, personal: null, problems: r.problems.map((x) => `oracle: ${x}`) };
     const lp = checkAgainstLedger(r.card, i.frame, cells);
     if (lp.length) return { oracle: null, personal: null, problems: lp.map((x) => `oracle: ${x}`) };
     const f = checkPersonalCard({ ...((entry.face as object) ?? {}), card: id }, r.card, textCheck, (i.sections[id] ?? DEFAULT_SECTIONS) as readonly SelfSectionId[]);
-    for (const n of f.notes) out.issues.push({ stage: 'personalizer', area: id, check: 'other', message: `${id}: ${n}`.slice(0, 300), callId: call });
+    for (const n of f.notes) out.issues.push({ stage: 'personalizer', area: id, check: personalizerCheckOf(n), message: `${id}: ${n}`.slice(0, 300), callId: call });
     if (!f.card) return { oracle: r.card, personal: null, problems: f.problems.map((x) => `face: ${x}`) };
     return { oracle: r.card, personal: f.card, problems: [] };
   };

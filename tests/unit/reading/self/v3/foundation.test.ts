@@ -15,7 +15,6 @@ import {
 } from '../../../../../src/reading/self/v3/foundation.js';
 import { cardViews, railFromDates } from '../../../../../src/reading/self/v3/response.js';
 import { cardDef, defaultSuggested } from '../../../../../src/reading/self/v3/cards.js';
-import { CHART_TERMS } from '../../../../../src/reading/self/v2/personalizerValidate.js';
 
 const today = '2026-11-13';
 const w = (from: string, to: string, extra: Partial<CardWindow> = {}): CardWindow => ({ from, to, label: null, tone: null, headline: null, text: [], span: null, ...extra });
@@ -30,10 +29,11 @@ describe('text cleaning', () => {
   it('one date format', () => {
     expect(isoDatesToWords('Until 2026-11-11, then 2027-01-01.')).toBe('Until 11 Nov 2026, then 1 Jan 2027.');
   });
-  it('Read prose keeps no chart term: the sentence carrying one is dropped whole', () => {
-    const out = plainProse('Your evenings need guarding until 2026-12-05. The Rahu Mahadasha () presses. You have 32 SAV points.');
-    expect(out).toBe('Your evenings need guarding until 5 Dec 2026.');
-    expect(CHART_TERMS.some((re) => re.test(out))).toBe(false);
+  it('Read prose keeps chart terms (doc 82: no word filter); empty references go, engine names are redacted', () => {
+    expect(plainProse('Your evenings need guarding until 2026-12-05. The Rahu Mahadasha () presses. You have 32 SAV points.')).toBe(
+      'Your evenings need guarding until 5 Dec 2026. The Rahu Mahadasha presses. You have 32 SAV points.',
+    );
+    expect(plainProse('Radha shows a long strain {claim:x}.')).toBe('traditional calculations shows a long strain.');
   });
 });
 
@@ -148,9 +148,9 @@ describe('card views (doc 75 fields)', () => {
   const views = cardViews({ v2, today });
   const byId = (id: string) => views.find((v) => v.id === id)!;
 
-  it('Read text is plain and the headline falls back past a dropped sentence; Chart details lose empty references', () => {
+  it('Read text is plain and keeps a chart term in the headline; Chart details lose empty references', () => {
     const s = byId('stuck');
-    expect(s.v2!.card!.headline).toBe('Mental relief arrives on 11 November.');
+    expect(s.v2!.card!.headline).toBe('The Mahadasha presses. Mental relief arrives on 11 November.');
     expect(s.v2!.card!.body).toEqual(['The pressure eases on 5 Dec 2026 and you can breathe.']);
     expect(s.v2!.details).toMatchObject({ headline: 'Rahu Mahadasha', paragraphs: ['1st house strong.'] });
   });

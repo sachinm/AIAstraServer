@@ -14,15 +14,12 @@ import { runSelfV2Build } from '../../../../../src/reading/self/v2/build.js';
 import { reportedThoughtTokens, timingOf } from '../../../../../src/reading/self/v2/oracle.js';
 import { oracleEcho, pairwiseJaccard, seniorStageWordsFor, tokenJaccard } from '../../../../../src/reading/self/v2/profileFit.js';
 import {
-  CHART_TERMS,
   headlineFromBody,
   questionMatterProblem,
   redactChartTerms,
   standInHeadline,
-  textProblem,
   validatePersonalDoc,
   WITHHELD_LINE,
-  type TextCheckContext,
 } from '../../../../../src/reading/self/v2/personalizerValidate.js';
 import { buildPersonalizerInput, buildPersonalizerSlice, heroClaimFrame, personalizerSuffix } from '../../../../../src/reading/self/v2/slices.js';
 import { areaRange } from '../../../../../src/reading/self/v2api/response.js';
@@ -76,60 +73,57 @@ const inputFor = (p: ProfileRun['pack']): PersonalizerInput => {
   const { hash: _h, ...profile } = p;
   return { ...buildPersonalizerInput(run2Ctx(profile), oracleOut), windows: { asOf: '2026-11-09', heaviestNow: null, easesAt: '2026-12-12', nextSupportFrom: '2026-12-13' } };
 };
-const ctxOf = (inp: PersonalizerInput, areaId: string): TextCheckContext => ({
-  gender: inp.profile.gender,
-  dates: { days: new Set(), months: new Set(), years: new Set(), pairs: new Set() },
-  roleWords: null,
-  stageWords: seniorStageWordsFor(inp.profile),
-  cardWords: null,
-  ...(areaId ? {} : {}),
-});
+/** every word a validated card shows on its face */
+const faceOf = (v: ReturnType<typeof validatePersonalDoc>): string =>
+  Object.values(v.doc.cards)
+    .flatMap((c) => [c!.headline, ...c!.body, ...(c!.ladder ? Object.values(c!.ladder) : []), ...c!.patterns.map((p) => p.text)])
+    .join(' ');
 
-describe('run 2 · 1 · a withheld card never shows an unchecked Oracle headline, never "…"', () => {
-  it('the stand-in passes the same checks; the lagna headline for the retired profile c falls to the plain line', () => {
+describe('run 2 · 1 · a withheld card shows the Oracle headline whole (doc 82: no word filter), never "…"', () => {
+  it('the stand-in is the Oracle headline as written; the plain line only when the headline is empty', () => {
     const inp = inputFor(runs.c.pack);
     const raw = structuredClone(runs.c.raw);
     for (const c of raw.cards) if (['lagna', 'year', 'yogas'].includes(c.areaId)) c.body = [];
     const v = validatePersonalDoc(raw, inp);
-    for (const id of ['lagna', 'year', 'yogas'] as const) expect(v.cardStatus[id]).toBe('withheld');
-    // "the world recognizes you for executive leadership and professional gravitas" to a retired person: never
-    expect(v.doc.cards.lagna!.headline).toBe(WITHHELD_LINE);
-    // "A disciplined annual cycle …" and "Fortunate cancellations and wealth yogas …": a chart term, never redacted to "…"
-    expect(v.doc.cards.year!.headline).toBe(WITHHELD_LINE);
-    expect(v.doc.cards.yogas!.headline).toBe(WITHHELD_LINE);
+    for (const id of ['lagna', 'year', 'yogas'] as const) {
+      expect(v.cardStatus[id]).toBe('withheld');
+      expect(v.doc.cards[id]!.headline).toBe(standInHeadline(oracleOut.doc.areas[id]!.headline));
+      expect(v.doc.cards[id]!.headline).not.toBe(WITHHELD_LINE);
+    }
+    // "the world recognizes you for executive leadership and professional gravitas": kept; the prompt owns the words
+    expect(v.doc.cards.lagna!.headline).toMatch(/executive leadership/);
     for (const c of Object.values(v.doc.cards)) expect(c!.headline).not.toContain('…');
+    expect(standInHeadline('')).toBe(WITHHELD_LINE);
+    expect(standInHeadline('…')).toBe(WITHHELD_LINE);
   });
 
-  it('a clean Oracle headline still stands in; redaction drops the sentence instead of cutting it', () => {
-    const ctx: TextCheckContext = { gender: null, dates: { days: new Set(), months: new Set(), years: new Set(), pairs: new Set() } };
-    expect(standInHeadline('A temporary wave of mental withdrawal and social coolness demands quiet patience until mid-December.', ctx)).toMatch(/^A temporary wave/);
-    expect(redactChartTerms('A disciplined annual cycle calls for structural adjustments.')).toBe('');
-    expect(redactChartTerms('Your work steadies. Saturn presses it.')).toBe('Your work steadies.');
+  it('redaction keeps chart terms and every sentence; only engine names change', () => {
+    expect(standInHeadline('A temporary wave of mental withdrawal and social coolness demands quiet patience until mid-December.')).toMatch(/^A temporary wave/);
+    expect(redactChartTerms('A disciplined annual cycle calls for structural adjustments.')).toBe('A disciplined annual cycle calls for structural adjustments.');
+    expect(redactChartTerms('Your work steadies. Saturn presses it.')).toBe('Your work steadies. Saturn presses it.');
     expect(redactChartTerms('Fortunate cancellations and wealth yogas resolve earlier knots.')).not.toContain('…');
+    expect(standInHeadline('Radha shows a long strain.')).toBe('traditional calculations shows a long strain.');
   });
 
-  it('the stand-in carries no body word on the body card and no career-stage word for a 25–35 founder', () => {
-    const a = inputFor(runs.a.pack);
-    expect(standInHeadline('You project the aura of a seasoned professional.', ctxOf(a, 'lagna'))).toBe(WITHHELD_LINE);
-    const bodyCtx: TextCheckContext = { ...ctxOf(a, 'body'), cardWords: /\b(meals|digestive)\b/i };
-    expect(standInHeadline('Physical stamina rests on disciplined habits, though digestive rhythms require pacing.', bodyCtx)).toBe(WITHHELD_LINE);
+  it('the stand-in keeps body and career-stage words', () => {
+    expect(standInHeadline('You project the aura of a seasoned professional.')).toBe('You project the aura of a seasoned professional.');
+    const t = 'Physical stamina rests on disciplined habits, though digestive rhythms require pacing.';
+    expect(standInHeadline(t)).toBe(t);
   });
 });
 
-describe('run 2 · 3 · a headline that cannot stand is shortened from the body, never the whole card', () => {
-  it('profile a: stuck and chapter (over 14 words), yogas and year (chart terms) now deliver; c lagna (18 words) too', () => {
+describe('run 2 · 3 · a headline is kept whole (doc 82: no word cap, no chart-term check); never the whole card', () => {
+  it('profile a: stuck and chapter (over 14 words), yogas and year (chart terms) deliver with their own headlines; c lagna (18 words) too', () => {
     const a = validatePersonalDoc(runs.a.raw, inputFor(runs.a.pack));
     for (const id of ['stuck', 'chapter', 'yogas', 'year'] as const) {
       expect(a.cardStatus[id], id).toBe('ok');
-      const c = a.doc.cards[id]!;
-      expect(c.headline.split(/\s+/).length).toBeLessThanOrEqual(14);
-      expect(CHART_TERMS.some((re) => re.test(c.headline))).toBe(false);
+      expect(a.doc.cards[id]!.headline, id).toBe(runs.a.raw.cards.find((c) => c.areaId === id)!.headline.trim());
     }
-    expect(a.gaps.filter((g) => /headline replaced/.test(g)).length).toBeGreaterThanOrEqual(4);
+    expect(a.gaps.filter((g) => /headline replaced|headline dropped/.test(g))).toEqual([]);
     expect(Object.values(a.cardStatus).filter((s) => s === 'withheld')).toEqual([]);
     const c = validatePersonalDoc(runs.c.raw, inputFor(runs.c.pack));
     expect(c.cardStatus.lagna).toBe('ok');
-    expect(c.doc.cards.lagna!.headline).not.toMatch(/executive/i);
+    expect(c.doc.cards.lagna!.headline).toBe(runs.c.raw.cards.find((x) => x.areaId === 'lagna')!.headline.trim());
   });
 
   it('the moved sentence leaves the body when other sentences remain; no body sentence under 15 words gives the area title', () => {
@@ -138,31 +132,32 @@ describe('run 2 · 3 · a headline that cannot stand is shortened from the body,
   });
 });
 
-describe('run 2 · 6 · the body ladder keeps its passing steps', () => {
-  it('a: "meals" (best) and "nervous system" (floor) drop two steps; practical and drift stand', () => {
+describe('run 2 · 6 · the body ladder keeps every written step (doc 82: no diet or medicine word list)', () => {
+  it('a: "meals" (best) and "nervous system" (floor) stand with practical and drift', () => {
     const v = validatePersonalDoc(runs.a.raw, inputFor(runs.a.pack));
     const l = v.doc.cards.body!.ladder;
-    expect(l).not.toBeNull();
-    expect(l!.best).toBe('');
-    expect(l!.floor).toBe('');
-    expect(l!.practical).not.toBe('');
-    expect(v.gaps).toEqual(expect.arrayContaining([expect.stringMatching(/^body: ladder step best dropped \(diet or medicine advice \(meals\)\)/)]));
+    const rawL = runs.a.raw.cards.find((c) => c.areaId === 'body')!.ladder;
+    expect(l).toEqual({ best: rawL.best!.trim(), practical: rawL.practical!.trim(), drift: rawL.drift!.trim(), floor: rawL.floor!.trim() });
+    expect(l!.best).toMatch(/meals/);
+    expect(v.gaps.some((g) => /^body: ladder/.test(g))).toBe(false);
     for (const r of [runs.b, runs.c]) expect(validatePersonalDoc(r.raw, inputFor(r.pack)).doc.cards.body!.ladder, r.id).not.toBeNull();
   });
 
-  it('"nervous depletion" and "nervous exhaustion" no longer pass the body card', () => {
+  it('"nervous depletion" and "nervous exhaustion" stay on the body card', () => {
     const v = validatePersonalDoc(runs.a.raw, inputFor(runs.a.pack));
     const face = [...v.doc.cards.body!.body, ...v.doc.cards.body!.patterns.map((p) => p.text)].join(' ');
-    expect(face).not.toMatch(/nervous (depletion|exhaustion)/i);
+    expect(face).toMatch(/nervous (depletion|exhaustion)/i);
   });
 });
 
 describe('run 2 · 4 · the hero question tests its own claim', () => {
-  it('the three run 2 questions ("your business", "career and family life", "health and spiritual practice") are dropped', () => {
+  it('the three run 2 questions ("your business", "career and family life", "health and spiritual practice") are kept: the claim is in the Oracle document and the words are the prompt\'s job (doc 82)', () => {
     for (const r of Object.values(runs)) {
       const v = validatePersonalDoc(r.raw, inputFor(r.pack));
-      expect(v.doc.hero.question, r.id).toBeNull();
-      expect(v.gaps.some((g) => /hero: question dropped \(the question (names none of its claim's matters|also asks about another life matter)/.test(g)), r.id).toBe(true);
+      const q = (r.raw.hero.question ?? {}) as Record<string, unknown>;
+      const text = String(q.text ?? r.raw.hero.questionText ?? '').trim();
+      expect(v.doc.hero.question?.text, r.id).toBe(text);
+      expect(v.gaps.some((g) => /hero: question dropped/.test(g)), r.id).toBe(false);
     }
   });
 
@@ -261,22 +256,16 @@ describe('run 2 · 2 · the profile shapes the card: golden documents and the di
     expect(flagged.gaps).toEqual(expect.arrayContaining([expect.stringMatching(/^drive: flag: the card repeats \d+ % of the Oracle's word sequences \(not dropped\)$/)]));
   });
 
-  it('career-stage words: dropped for the 25–35 founder, allowed for the 46–60 senior leader', () => {
-    const a = inputFor(runs.a.pack);
-    const b = inputFor(runs.b.pack);
-    const ctx = (inp: PersonalizerInput): TextCheckContext => ({ gender: inp.profile.gender, dates: { days: new Set(), months: new Set(), years: new Set(), pairs: new Set() }, stageWords: seniorStageWordsFor(inp.profile) });
-    for (const t of ['You project the aura of an experienced guide or seasoned professional.', 'Anchor your primary ambitions around mentorship and advisory leadership.'])
-      expect(textProblem(t, ctx(a)), t).toMatch(/career-stage word/);
-    expect(textProblem('It is a fair time to plan succession and mentor the people who will take over.', ctx(b))).toBeNull();
-    const v = validatePersonalDoc(runs.a.raw, a);
-    const face = Object.values(v.doc.cards).flatMap((c) => [c!.headline, ...c!.body, ...(c!.ladder ? Object.values(c!.ladder) : []), ...c!.patterns.map((p) => p.text)]).join(' ');
-    expect(face).not.toMatch(/seasoned|experienced guide|mentorship|advisory/i);
+  it('career-stage words are kept for the 25–35 founder (doc 82: the prompt states the stage rule; no drop)', () => {
+    const v = validatePersonalDoc(runs.a.raw, inputFor(runs.a.pack));
+    expect(v.gaps.some((g) => /career-stage word/.test(g))).toBe(false);
+    expect(Object.values(v.cardStatus).every((s) => s === 'ok')).toBe(true);
   });
 
-  it('the retired profile: "meetings", "labor" and "professional" are role words now', () => {
+  it('the retired profile: "meetings", "labor" and "professional" are kept on the card face (doc 82)', () => {
     const c = validatePersonalDoc(runs.c.raw, inputFor(runs.c.pack));
-    const face = Object.values(c.doc.cards).flatMap((x) => [x!.headline, ...x!.body, ...(x!.ladder ? Object.values(x!.ladder) : [])]).join(' ');
-    expect(face).not.toMatch(/\b(meetings|labor|professional)\b/i);
+    expect(faceOf(c)).toMatch(/\b(meetings|labor|professional)\b/i);
+    expect(c.gaps.some((g) => /role word/.test(g))).toBe(false);
   });
 
   it('the prompt states the band register, the work examples, the stage rule and the Now-group focus lens', () => {

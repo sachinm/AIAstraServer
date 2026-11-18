@@ -357,7 +357,7 @@ describe('cards in groups on one cached pack (doc 71)', () => {
       if ((SELF_CARDS.find((c) => c.id === id)?.matters as readonly string[] | undefined)?.includes('work_load_and_health')) return o;
       return { ...o, spans: (o.spans as Array<Record<string, unknown>>).map((x) => ({ ...x, evidence: ['planet:D1.Mo'] })) };
     };
-    return ok(JSON.stringify({ cards: ids.map((id) => ({ card: id, oracle: own(id), face: bad.has(id) && !req.startsWith('REPAIR') ? { ...personal(id), line: 'Saturn presses on you.' } : personal(id) })) }));
+    return ok(JSON.stringify({ cards: ids.map((id) => ({ card: id, oracle: own(id), face: bad.has(id) && !req.startsWith('REPAIR') ? { ...personal(id), line: '' } : personal(id) })) }));
   };
 
   it('the pack holds every card brief, each matter row once, and the same bytes on every call', async () => {
