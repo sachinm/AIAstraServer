@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import express from 'express';
 import { registerProfileRoutes } from '../../../src/routes/profileRoutes.js';
 import { averageHash, checkFaceBox, PHOTO_LIMIT_HOUR } from '../../../src/profile/photo.js';
-import { checkFact } from '../../../src/profile/facts.js';
+import { checkFact, PORTAL_DASHBOARDS } from '../../../src/profile/facts.js';
 import { fakeRequireUser } from '../../helpers/fakeAuth.js';
 
 const facts = new Map<string, any>();
@@ -86,6 +86,24 @@ describe('wizard facts', () => {
   it('checks values without the database', () => {
     expect(checkFact('work.level', 'manager')).toEqual({ ok: true, value: 'manager' });
     expect(checkFact('place.current', 'x'.repeat(200)).ok).toBe(false);
+  });
+});
+
+describe('portal dashboards (docs/dashboards/11)', () => {
+  it('stores the chosen dashboards once each, in menu order, and returns them with the profile facts', async () => {
+    expect((await put('u8', { 'portal.dashboards': 'dating, self,love,dating,lucky' })).status).toBe(204);
+    const r = (await (await fetch(`${base}/api/profile/facts`, { headers: { 'x-user': 'u8' } })).json()) as any;
+    expect(r.facts['portal.dashboards'].value).toBe('self,love,lucky,dating');
+  });
+  it('refuses none, an unknown id and "rather not say"', async () => {
+    expect((await put('u8', { 'portal.dashboards': '' })).status).toBe(400);
+    expect((await put('u8', { 'portal.dashboards': ' , ' })).status).toBe(400);
+    expect((await put('u8', { 'portal.dashboards': 'self,horoscope' })).status).toBe(400);
+    expect((await put('u8', { 'portal.dashboards': null })).status).toBe(400);
+  });
+  it('accepts every dashboard at once', () => {
+    expect(checkFact('portal.dashboards', [...PORTAL_DASHBOARDS].reverse().join(','))).toEqual({ ok: true, value: PORTAL_DASHBOARDS.join(',') });
+    expect(checkFact('portal.dashboards', 'work')).toEqual({ ok: true, value: 'work' });
   });
 });
 
