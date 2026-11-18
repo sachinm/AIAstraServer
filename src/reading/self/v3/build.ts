@@ -26,7 +26,8 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnabled, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { withCacheLease } from '../../llm/cacheLease.js';
 import { boardFactsOf, boardV3CardDef, defaultLens, isBoardLens, type AreaV3Board } from '../../boards/v3Cards.js';
 import { isReadable } from '../../cards/registry.js';
 import { readCards, type CardsRunResult } from '../../cards/run.js';
@@ -172,7 +173,15 @@ export function v3StoreKey(ctx: SelfBuildContext, frame: YearFrameV3, oraclePref
   ].join('|') + '|';
 }
 
+/**
+ * The v3 step under a recording cache lease (doc 86): the caches its calls use for this kundli (the clock prefix, the
+ * card pack) are deleted when it ends, unless another operation on the kundli still holds a lease.
+ */
 export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): Promise<SelfV3StepResult> {
+  return withCacheLease({ userId: i.ctx.userId, kundliId: i.ctx.kundliId }, 'build.v3', () => runSelfV3CardsUnleased(deps, i));
+}
+
+async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput): Promise<SelfV3StepResult> {
   const t0 = performance.now();
   const ms: Record<string, number> = {};
   const out: SelfV3StepResult = { status: 'failed', cards: {}, frame: null, agents: [], issues: [], gaps: [], cached: false, stored: false, key: null, ms };
@@ -256,7 +265,7 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       // with the per-card reading on, the cards start on the counted ledger and the concordance writes its words
       // meanwhile (doc 70 Phase 3 replay fixes); they are folded in after the cards (`foldWords`)
       const layer = await (deps.runClockLayer ?? runClockLayer)(
-        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true, words: cardsOn ? 'background' : 'await' },
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true, words: cardsOn ? 'background' : 'await', warmOnHit: !(cardsOn && isCardsGroupPackEnabled()) },
         { ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf }, frame, slices: prepared.slices },
       );
       ms.clockLayer = since(tc);

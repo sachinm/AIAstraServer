@@ -15,6 +15,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { getReadingCacheRecycleMs } from '../../config/env.js';
+import { isCacheLeased } from './cacheLease.js';
 import { recycleIndividualTechniqueOutputs, setTechniqueOutputUsedHook, sweepTechniqueOutputs } from '../../techniques/outputStore.js';
 import { evictClarifyCacheForIndividual } from '../clarify/planner.js';
 import { evictCodeReaderMemoForIndividual } from '../codeReaders/readers.js';
@@ -170,6 +171,11 @@ export function informIndividualCacheUsed(
   const nowMs = Date.now();
   const timer = setTimeout(() => {
     pendingRecycles.delete(key);
+    // doc 86: an operation still holds this kundli's caches; try again after another full delay
+    if (isCacheLeased(normalizedOwner.kundliId)) {
+      informIndividualCacheUsed(normalizedOwner, opts);
+      return;
+    }
     void recycleIndividualCaches(normalizedOwner, {
       ...(opts.prisma !== undefined ? { prisma: opts.prisma } : {}),
       onlyUsed: true,

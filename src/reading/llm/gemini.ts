@@ -45,6 +45,11 @@ export interface GeminiCallOptions {
   /** Who the cached prefix belongs to (logout deletes that user's caches) */
   cacheOwner?: CacheOwner;
   /**
+   * false: use a live cache for the prefix but never start creating one (card chat, doc 86: one answer uncached costs
+   * less than a create plus storage, and the build that made the cache deletes it when it ends). Default true.
+   */
+  cacheCreate?: boolean;
+  /**
    * Full cache layout (packs/fullPrefix.ts): when a cache for (model, system, prefix) is live, the call sends `cachedContent`
    * and only `suffix`; otherwise it goes out as `system` + `parts`, exactly as without this option. Takes precedence over
    * `cachePrefix`.
@@ -256,10 +261,10 @@ async function post(url: string, body: unknown, o: GeminiCallOptions): Promise<{
 
 function cacheFor(o: GeminiCallOptions): ChosenCache | null {
   if (o.fullCache) {
-    const name = cacheNameFor(o.model, o.fullCache.system, o.fullCache.prefix, apiKey(), o.cacheOwner);
+    const name = cacheNameFor(o.model, o.fullCache.system, o.fullCache.prefix, apiKey(), o.cacheOwner, { create: o.cacheCreate !== false });
     return name ? { name, kind: 'full' } : null;
   }
-  const name = o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner) : null;
+  const name = o.cachePrefix && o.parts.length > 1 ? cacheNameFor(o.model, o.system, o.parts[0]!, apiKey(), o.cacheOwner, { create: o.cacheCreate !== false }) : null;
   return name ? { name, kind: 'base' } : null;
 }
 

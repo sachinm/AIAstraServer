@@ -45,14 +45,56 @@ export async function readCardsState(prisma: PrismaClient, kundliId: string, now
   }
 }
 
-const chains = new Map<string, Promise<unknown>>();
+interface PendingChange {
+  prisma: PrismaClient;
+  userId: string;
+  now: Date;
+  change: (d: CardsStateDoc) => void;
+  resolve: (d: CardsStateDoc) => void;
+  reject: (e: unknown) => void;
+}
+const queues = new Map<string, PendingChange[]>();
 
-/** Read, change and write today's doc, one change at a time per kundli in this process. Returns the doc written. */
-export async function updateCardsState(prisma: PrismaClient, userId: string, kundliId: string, now: Date, change: (d: CardsStateDoc) => void): Promise<CardsStateDoc> {
-  const prev = chains.get(kundliId) ?? Promise.resolve();
-  const run = prev.then(async () => {
+/**
+ * Read, change and write today's doc, one write at a time per kundli in this process. Changes that arrive while a write
+ * is in flight are applied together, in arrival order, in the next single read and write (doc 86: eleven cards finishing
+ * together were 22 serialized round trips, and the page shows a card `reading` until its `done` lands). Resolves with the
+ * doc written; rejects only when that caller's own change throws (the others are still written).
+ */
+export function updateCardsState(prisma: PrismaClient, userId: string, kundliId: string, now: Date, change: (d: CardsStateDoc) => void): Promise<CardsStateDoc> {
+  return new Promise((resolve, reject) => {
+    const item = { prisma, userId, now, change, resolve, reject };
+    const q = queues.get(kundliId);
+    if (q) {
+      q.push(item);
+      return;
+    }
+    queues.set(kundliId, [item]);
+    void drain(kundliId);
+  });
+}
+
+async function drain(kundliId: string): Promise<void> {
+  for (;;) {
+    const q = queues.get(kundliId) ?? [];
+    if (!q.length) {
+      queues.delete(kundliId);
+      return;
+    }
+    // one day per write: the changes for the first change's day, in order; another day's wait for the next round
+    const day = dayOf(q[0]!.now).getTime();
+    const batch = q.filter((x) => dayOf(x.now).getTime() === day);
+    queues.set(kundliId, q.filter((x) => dayOf(x.now).getTime() !== day));
+    const { prisma, userId, now } = batch[0]!;
     const doc = await readCardsState(prisma, kundliId, now);
-    change(doc);
+    const failed = new Map<PendingChange, unknown>();
+    for (const x of batch) {
+      try {
+        x.change(doc);
+      } catch (e) {
+        failed.set(x, e);
+      }
+    }
     try {
       await (prisma as unknown as StatePrisma).areaBuild?.upsert?.({
         where: where(kundliId, now),
@@ -62,14 +104,11 @@ export async function updateCardsState(prisma: PrismaClient, userId: string, kun
     } catch (e) {
       console.warn(JSON.stringify({ msg: 'cards state write failed', kundli_id: kundliId, error: (e as Error).message?.slice(0, 200) }));
     }
-    return doc;
-  });
-  const settled = run.catch(() => undefined);
-  chains.set(kundliId, settled);
-  void settled.then(() => {
-    if (chains.get(kundliId) === settled) chains.delete(kundliId);
-  });
-  return run;
+    for (const x of batch) {
+      if (failed.has(x)) x.reject(failed.get(x));
+      else x.resolve(doc);
+    }
+  }
 }
 
 /**

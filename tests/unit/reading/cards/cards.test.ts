@@ -434,7 +434,7 @@ describe('cards in groups on one cached pack (doc 71)', () => {
     expect(a.text).not.toMatch(/radha|pyjhora/i);
   });
 
-  it('the board goes first in groups of three, the rest after in groups of six; one pack, cached once', async () => {
+  it('the board goes first in groups of three (budget room for three), the rest after in groups of six; one pack, cached once', async () => {
     const prisma = memPrisma();
     const calls: GeminiCallOptions[] = [];
     const ensured: string[] = [];
@@ -446,7 +446,7 @@ describe('cards in groups on one cached pack (doc 71)', () => {
       return groupReply(o);
     };
     const r = await readCards(
-      { prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: true, groupPack: true, groupSizeBoard: 3, groupSizeRest: 6, ensureCache: (async (_m: string, _s: string, base: string) => (ensured.push(base), 'cachedContents/x')) as never },
+      { prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: true, groupPack: true, groupSizeBoard: 3, groupOutputBudget: 10_000, groupSizeRest: 6, ensureCache: (async (_m: string, _s: string, base: string) => (ensured.push(base), 'cachedContents/x')) as never },
       input(BOARD),
     );
     expect(r.issues.filter((x) => x.check !== 'other')).toEqual([]);
@@ -486,5 +486,76 @@ describe('cards in groups on one cached pack (doc 71)', () => {
     expect(Object.keys(r.cards).length).toBe(r.order.length);
     expect(calls.filter((c) => c.node.startsWith('self.card.group.board'))).toHaveLength(BOARD.length);
     expect(calls.filter((c) => c.node.startsWith('self.card.group.rest'))).toHaveLength(Math.ceil((r.order.length - BOARD.length) / 6));
+  });
+});
+
+describe('grouped card reads: slim pack, budgeted groups (doc 86)', () => {
+  it('the pack writes each ledger cell once, cards name their cells by key, and the bytes ignore the card order', async () => {
+    const { buildCardPack } = await import('../../../../src/reading/cards/group.js');
+    const cards = [...BOARD, 'mind', 'sleep'] as SelfCardId[];
+    const base = { ctx, cards, frame, frameText: 'FRAME', frameKeys: [], prefix: { text: prefix.text, keys: prefix.keys }, ledger, slices, portrait: null, answers: '' };
+    const a = buildCardPack(base);
+    const cellLines = a.text.split('\n').filter((l) => /^\{ledger:[^}]+\} status=/.test(l));
+    expect(cellLines).toHaveLength(ledger.cells.length);
+    expect(new Set(cellLines).size).toBe(cellLines.length);
+    // every card on work_load_and_health names the same cells by key only
+    const body = a.text.split('## CARD CELLS body\n')[1]!.split('\n')[0]!;
+    expect(body).toBe(ledger.cells.map((c) => `{${c.id}}`).join(' '));
+    expect(a.text).toContain('# AGREED LEDGER (every cell');
+    // the same cards in another order: the same bytes, the same cache key; and the same as before on a second build
+    const b = buildCardPack({ ...base, cards: [...cards].reverse() });
+    expect(b.text).toBe(a.text);
+    expect(b.hash).toBe(a.hash);
+    expect(buildCardPack(base).hash).toBe(a.hash);
+    // the per-card layout (before doc 86) wrote the cells under every card: the new pack is smaller
+    const old = buildCardPack(base, { cells: 'per-card' });
+    expect(old.text.split('\n').filter((l) => /^\{ledger:[^}]+\} status=/.test(l)).length).toBeGreaterThan(cellLines.length);
+    expect(a.text.length).toBeLessThan(old.text.length);
+    // what each card may cite is unchanged
+    for (const id of cards) expect([...a.allowed[id]!].sort()).toEqual([...old.allowed[id]!].sort());
+  });
+
+  it('a keyed row written twice in the shared data is kept once; headings, unkeyed and key-only lines stay', async () => {
+    const { dedupeKeyedRows } = await import('../../../../src/reading/cards/group.js');
+    const t = ['# A', '{yoga:D1.x} [named] X Yoga: planets=[]', '- date 2026-12-05 eases', '# B', '{yoga:D1.x} [named] X Yoga: planets=[]', '- date 2026-12-05 eases', '{a} {b}', '{a} {b}', '- {k:1} row one'].join('\n');
+    expect(dedupeKeyedRows(t).split('\n')).toEqual(['# A', '{yoga:D1.x} [named] X Yoga: planets=[]', '- date 2026-12-05 eases', '# B', '- date 2026-12-05 eases', '{a} {b}', '{a} {b}', '- {k:1} row one']);
+  });
+
+  it('groups are planned by estimated output: within the budget, at most the max size, a long card alone', async () => {
+    const { planGroups, groupMaxOutputTokens } = await import('../../../../src/reading/cards/group.js');
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    expect(planGroups(ids, { budget: 2000, perCard: () => 1000, maxSize: 3 })).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+    expect(planGroups(ids, { budget: 2000, perCard: () => 600, maxSize: 3 })).toEqual([['a', 'b', 'c'], ['d', 'e']]);
+    expect(planGroups(ids, { budget: 2000, perCard: () => 2500, maxSize: 3 })).toEqual([['a'], ['b'], ['c'], ['d'], ['e']]);
+    expect(planGroups(ids, { budget: 2000, perCard: (x) => (x === 'b' ? 1500 : 400), maxSize: 3 })).toEqual([['a', 'b'], ['c', 'd', 'e']]);
+    expect(groupMaxOutputTokens(2, 1000)).toBe(3200);
+    expect(groupMaxOutputTokens(1, 1000)).toBe(2048);
+    expect(groupMaxOutputTokens(6, 4000)).toBe(16_000);
+  });
+
+  it('with the defaults (2,000 tokens a call, 1,000 a card, at most 3) a board of five goes out as 2+2+1, all at once, each call capped with headroom', async () => {
+    const prisma = memPrisma();
+    const calls: Array<{ node: string; ids: string[]; max: number | undefined; at: number }> = [];
+    const t0 = Date.now();
+    const callGemini = async (o: GeminiCallOptions) => {
+      const ids = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+      calls.push({ node: o.node, ids, max: o.maxOutputTokens, at: Date.now() - t0 });
+      await new Promise((r) => setTimeout(r, 20));
+      const goodFor = (id: string) => {
+        const g = goodOracle(id);
+        if ((SELF_CARDS.find((c) => c.id === id)?.matters as readonly string[] | undefined)?.includes('work_load_and_health')) return g;
+        return { ...g, spans: (g.spans as Array<Record<string, unknown>>).map((x) => ({ ...x, evidence: ['planet:D1.Mo'] })) };
+      };
+      return ok(JSON.stringify({ cards: ids.map((id) => ({ card: id, oracle: goodFor(id), face: personal(id) })) }));
+    };
+    delete process.env.CARDS_GROUP_SIZE_BOARD;
+    delete process.env.CARDS_GROUP_OUTPUT_BUDGET;
+    delete process.env.CARDS_CARD_OUTPUT_TOKENS;
+    const r = await readCards({ prisma, callGemini: callGemini as never, now: new Date(`${ASOF}T12:00:00Z`), capUsd: 5, readRest: false, groupPack: true, ensureCache: (async () => 'cachedContents/x') as never }, input(BOARD));
+    expect(Object.keys(r.cards).sort()).toEqual([...BOARD].sort());
+    expect(calls.map((c) => c.ids.length)).toEqual([2, 2, 1]);
+    expect(calls.map((c) => c.max)).toEqual([3200, 3200, 2048]);
+    // one wave: every group starts before the first one answers
+    expect(Math.max(...calls.map((c) => c.at))).toBeLessThan(20);
   });
 });
