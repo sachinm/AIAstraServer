@@ -3,6 +3,9 @@
 Written 2026-11-18 at Sachin's request: "Add a screen in the personalization wizard where the user selects which
 dashboards they want to see on their portal, and respect their choice. Self, Love and Career are selected by default."
 
+**Sachin, 2026-11-18 (later, overrides where it differs):** Lucky times is ticked by default too. The default list is
+`self, love, work, lucky`, so a person who never answered keeps the header Happy Hour(s) link.
+
 ## 1. Start (checked)
 
 - Boards today: You (`/dashboard/you`), Love (`/dashboard/love`), Work (`/dashboard/work`), Lucky times
@@ -16,9 +19,9 @@ dashboards they want to see on their portal, and respect their choice. Self, Lov
 
 A wizard screen "Which dashboards do you want to see?" lists: **Self, Love, Career** (ticked by default), the eight
 focused dashboards (Dating & romance, Marriage & partnership, Friendships, Professional allies, Starting out, Your
-job, Craft & hobby, Business) and Lucky times (unticked by default). At least one must stay ticked. The portal shows
+job, Craft & hobby, Business) and Lucky times (ticked by default). At least one must stay ticked. The portal shows
 only the chosen dashboards: side menu, board tab bar and header link. A chosen focused dashboard has its own menu entry
-that opens its board on that lens (`/dashboard/love?lens=dating`). A person who never answered sees the default three
+that opens its board on that lens (`/dashboard/love?lens=dating`). A person who never answered sees the default four
 (plus everything they already use is unaffected until they answer). The choice can be changed any time in the wizard.
 
 ## 3. Deliverable
@@ -26,7 +29,7 @@ that opens its board on that lens (`/dashboard/love?lens=dating`). A person who 
 - Server: `FACT_CATALOG` key `portal.dashboards` (multi-value list of ids: `self, love, work, lucky, dating, marriage,
   friends, allies, career_start, primary_job, hobby, business`), validated like other list facts; returned with the
   profile facts. No migration (person_facts is key/value).
-- Web: a wizard step (first-run and re-open), `lib/portalDashboards.ts` (read the fact, default `self, love, work`),
+- Web: a wizard step (first-run and re-open), `lib/portalDashboards.ts` (read the fact, default `self, love, work, lucky`),
   `SideNav`, `BoardTabBar` and the header Lucky link filtered by it; focused entries deep-link to the lens; the board
   page honours `?lens=` on open (saves it as the board's lens).
 - Tests on both sides.

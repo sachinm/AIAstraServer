@@ -5,6 +5,7 @@
  *   POST /api/chat/answer         { runId, value, viaChip, tz? }        → JSON clarify | propose | declined
  *                                 (tz: browser IANA timezone, used with the "Where are you living now?" answer)
  *   POST /api/chat/confirm-stream { runId, chatId?, edits?, lat?, lon?, tz? } → SSE reading with the confirmed intent
+ *                                 (a card's clarify run: the card's answer instead, see cardChatRoutes.ts)
  *                                 (lat/lon/tz: optional browser location where the question is asked, for the prashna;
  *                                 tz in hours or IANA; rounded to two decimals; absent -> the birth place)
  *
@@ -29,6 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { withRunTrace } from '../reading/metrics/trace.js';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { SSE_CACHE_CONTROL } from '../lib/noStore.js';
+import { handleCardConfirm, type CardChatRouteDeps } from './cardChatRoutes.js';
 
 /** The longest `POST /api/chat/prewarm` holds its request. */
 const ORACLE_PREWARM_CAP_MS = 6_000;
@@ -40,6 +42,8 @@ export interface ClarifyRouteDeps {
   store?: ClarifyStore;
   /** where the current location is kept (defaults to the `user_current_location` table) */
   locationStore?: UserLocationStore;
+  /** docs/reading-engine/85: test seams of a card's clarify run answered on confirm-stream (the card chat's own) */
+  card?: Omit<CardChatRouteDeps, 'prisma' | 'requireUser'>;
 }
 
 /** Opens an SSE response with the same headers and keep-alive pings as ask-stream. */
@@ -148,6 +152,18 @@ export function registerClarifyRoutes(app: express.Express, deps: ClarifyRouteDe
     if (!userId) return;
     const { runId, chatId, edits } = req.body as { runId?: string; chatId?: string | null; edits?: { horizon?: string; bucket?: string } };
     if (!runId) return res.status(400).json({ error: 'runId is required' });
+    // a card's first question (docs/reading-engine/85): the card's answer, under the send's own cardchat key
+    const pending = await store().get(userId, runId).catch(() => null);
+    if (pending?.cardChat) {
+      const card = deps.card ?? {};
+      return handleCardConfirm(
+        { prisma: deps.prisma, requireUser: deps.requireUser, ...card, clarify: { store: store(), ...(deps.locationStore ? { locationStore: deps.locationStore } : {}), ...(card.clarify ?? {}) } },
+        req,
+        res,
+        userId,
+        runId,
+      );
+    }
     const pre = await validateAskForUser(deps.prisma, userId);
     if (!pre.ok) return res.status(pre.chart ? 409 : 400).json({ error: pre.error, ...(pre.chart ? { code: 'chart_not_ready', chart: pre.chart } : {}) });
     const gate = questionGate(deps.prisma);

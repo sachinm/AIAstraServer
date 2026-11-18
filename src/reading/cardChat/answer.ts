@@ -113,9 +113,10 @@ export async function answerCardQuestion(
   question: string,
   history: readonly CardChatHistoryTurn[],
   onDelta?: (d: string) => void,
+  clarified: readonly string[] = [],
 ): Promise<CardChatAnswer> {
   const model = deps.model ?? modelFor('oracle');
-  const parts = cardChatParts(ctx, question, history);
+  const parts = cardChatParts(ctx, question, history, clarified);
   const cap = deps.capUsd ?? getReadingSpendCapUsd();
   const inputChars = parts.system.length + (parts.prefix?.length ?? 0) + parts.suffix.length;
   const budget = outputBudget(model, inputChars, cap);
@@ -152,6 +153,7 @@ export async function answerCardQuestion(
         prefix: Boolean(ctx.prefix),
         prefixMatchesCard: Boolean(ctx.prefix?.matchesCard),
         history: history.length,
+        clarified: clarified.length,
         estTokens: estProviderTokens(parts.suffix),
       },
       charts: [{ type: 'pressure_inventory', variant: `system=${ctx.card.clock || 'unknown'}` }],
