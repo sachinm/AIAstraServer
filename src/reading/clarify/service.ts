@@ -6,14 +6,14 @@
  * from that load with a short budget, so a slow database never delays the first question.
  */
 import type { PrismaClient } from '@prisma/client';
-import { classifyRules, classifierThreshold } from '../buckets/classifier.js';
-import { BUCKETS } from '../buckets/taxonomy.js';
+import { classifyRules, classifierThreshold, type ClassifierResult, type Slots } from '../buckets/classifier.js';
+import { BUCKETS, type BucketId } from '../buckets/taxonomy.js';
 import { startPrefetch } from '../data/store.js';
 import { runIntake, clarifyTextFor, siblingFocusPoint } from '../nodes/intake.js';
 import { birthPlaceFor, PrismaUserLocationStore, type LocationLookup, type UserLocationStore } from '../../services/userLocation.js';
 import type { Intent, Usage } from '../types.js';
 import type { SubjectId } from '../packs/frames.js';
-import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
+import { absorbAnswer, assumptionText, clarifyMode, confirmClarify, startClarify, type Ask, type ClarifyCardRef, type ClarifyMode, type ClarifyState, type HeadlineCard } from './machine.js';
 import { judgePrashna, phraseAsk, planAiClarifyTurn, resolveFreeText } from './planner.js';
 import type { ClarifyStore } from './store.js';
 import { guidanceFor } from '../coach/content.js';
@@ -125,8 +125,46 @@ export interface ClarifyLocationOptions {
   locationStore?: UserLocationStore;
 }
 
+/**
+ * What a card already says about a question asked on it (docs/reading-engine/85 §4 step 2): its life area (one of the
+ * board's buckets; the question's own bucket when it is one of them), the period on screen, and the card as the
+ * sub-area. Pre-filled, so the clarifier asks only for a fact the card cannot know.
+ */
+export interface ClarifySeed {
+  /** the board's buckets, the default first */
+  buckets: readonly BucketId[];
+  horizon: NonNullable<Slots['horizon']>;
+  /** the card itself as the sub-area, when the question names none */
+  subBucket: NonNullable<Slots['sub_bucket']>;
+  cardChat: ClarifyCardRef;
+}
+
+/** The rules' classification with the card's subject and period filled in: nothing about them is left missing. */
+export function seedClassification(c: ClassifierResult, seed: ClarifySeed): ClassifierResult {
+  const bucket = seed.buckets.includes(c.bucket) ? c.bucket : (seed.buckets[0] ?? c.bucket);
+  const sameBucket = bucket === c.bucket;
+  const slots: Slots = { ...c.slots, horizon: seed.horizon, sub_bucket: (sameBucket ? c.slots.sub_bucket : undefined) ?? seed.subBucket };
+  return {
+    ...c,
+    bucket,
+    subBucket: sameBucket ? c.subBucket : null,
+    alsoBuckets: [],
+    confidence: 1,
+    slots,
+    missing: [],
+    // a question with no life area of its own ("what does this mean?") has the card's
+    unanswerable: c.unanswerable === 'no_subject' ? null : c.unanswerable,
+  };
+}
+
 /** Question arrives: classify (rules), prewarm data, decide whether to ask. */
-export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, userId: string, question: string, opts: { asOf?: string; mode?: ClarifyMode } & ClarifyLocationOptions = {}): Promise<ClarifyStepResult> {
+export async function beginClarify(
+  prisma: PrismaClient,
+  store: ClarifyStore,
+  userId: string,
+  question: string,
+  opts: { asOf?: string; mode?: ClarifyMode; seed?: ClarifySeed } & ClarifyLocationOptions = {},
+): Promise<ClarifyStepResult> {
   const t0 = Date.now();
   const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
   const mode = opts.mode ?? clarifyMode();
@@ -135,14 +173,18 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
   // a question about the person's own child with no stated age: confirm 18+ first (file 18), unless clarifying is off
   const needsChildAge = declined?.id === 'child_age_unconfirmed' && mode !== 'never';
   if (declined && !needsChildAge) return { runId: '', state: startClarify('', asOf, classifyRules('', asOf), { mode: 'never', threshold: 1 }), event: null, usage: [], ms: Date.now() - t0, declined };
-  const cls = classifyRules(question, asOf);
-  const needsCard = mode !== 'never' && cls.missing.includes('horizon');
+  const seed = opts.seed ?? null;
+  const cls = seed ? seedClassification(classifyRules(question, asOf), seed) : classifyRules(question, asOf);
+  const needsCard = !seed && mode !== 'never' && cls.missing.includes('horizon');
   // the stored current location is read alongside the card (own short budget; a missing table reads as unavailable)
   const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
   const [cardRes, loc, facts] = await Promise.all([
     needsCard
       ? headlineCard(prisma, userId, asOf)
-      : (startPrefetch(prisma, userId, { asOf }), Promise.resolve({ card: null, kundliId: null })),
+      : // a card's answer reads the stored card, not the reading data: nothing to prefetch for it
+        seed
+        ? Promise.resolve({ card: null, kundliId: null })
+        : (startPrefetch(prisma, userId, { asOf }), Promise.resolve({ card: null, kundliId: null })),
     mode !== 'never' ? lookupLocation(locStore, userId) : Promise.resolve<LocationLookup>({ status: 'unavailable' }),
     mode !== 'never' ? confirmedFacts(prisma, userId).catch(() => ({})) : Promise.resolve<Record<string, string>>({}),
   ]);
@@ -161,6 +203,7 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
     needsLocation,
     birthPlace,
     facts,
+    ...(seed ? { cardChat: seed.cardChat } : {}),
   });
   const runId = await store.create(userId, initialState);
   const usage: Usage[] = [];
@@ -173,7 +216,7 @@ export async function beginClarify(prisma: PrismaClient, store: ClarifyStore, us
       ...(kundliId ? { kundliId } : {}),
       technique: 'general.clarify',
       task: 'clarify-begin',
-      input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length },
+      input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length, ...(seed ? { card: `${seed.cardChat.board}.${seed.cardChat.id}` } : {}) },
     },
     async () => {
       const res = await eventFor(runId, initialState, usage, prisma, store, userId, kundliId);
@@ -305,6 +348,22 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
     return { state: updatedState, intent: null, event };
   }
   return { state: next, intent: await intentFromState(next, runId), event: null };
+}
+
+/**
+ * A card's clarify run, ready to answer (docs/reading-engine/85): the state marked CONFIRMED and saved, nothing else.
+ * No intent and no prashna: the card chat answers on the card's stored context, not through the reading.
+ */
+export async function confirmCardClarify(store: ClarifyStore, userId: string, runId: string): Promise<{ state: ClarifyState & { cardChat: ClarifyCardRef } } | { error: 'not_found' | 'abandoned' | 'not_ready' | 'not_card' }> {
+  const s = await store.get(userId, runId);
+  if (!s) return { error: 'not_found' };
+  if (!s.cardChat) return { error: 'not_card' };
+  if (s.status === 'ABANDONED') return { error: 'abandoned' };
+  if (s.status !== 'PROPOSED' && s.status !== 'READY' && s.status !== 'CONFIRMED') return { error: 'not_ready' };
+  const now = Date.now();
+  const next: ClarifyState = s.status === 'CONFIRMED' ? s : { ...s, status: 'CONFIRMED', pending: null, confirmedAt: now, updatedAt: now };
+  if (next !== s) await store.save(userId, runId, next);
+  return { state: next as ClarifyState & { cardChat: ClarifyCardRef } };
 }
 
 /**

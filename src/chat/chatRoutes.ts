@@ -53,6 +53,7 @@ export function registerChatRoutes(app: express.Express, deps: ChatRoutesDeps): 
 
     // docs/reading-engine/85: a question about one card is answered on that card's stored context
     if ((req.body as { card?: unknown }).card !== undefined) {
+      // its first question goes through Clarify (pre-filled from the card) when the client can show it (`clarify: true`)
       return handleCardAsk({ prisma, requireUser, ...(deps.card ?? {}) }, req, res, userId);
     }
 
