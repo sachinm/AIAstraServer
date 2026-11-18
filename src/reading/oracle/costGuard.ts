@@ -110,12 +110,12 @@ export class CostGuard {
     const maxOutputTokens = Math.min(a.maxOutputTokens, affordable);
     if (maxOutputTokens < min) {
       this.refused += 1;
-      // one line per question when a cap stops a call (docs/billing/README.md "Spend cap per operation"); `cap` names
-      // the limit that bound: the question's (READING_SPEND_CAP_USD) or a stage's
-      if (!this.logged) {
+      // one line per question when the question's cap (READING_SPEND_CAP_USD) stops a call (docs/billing/README.md
+      // "Spend cap per operation"); a refusal by a stage cap (readers, Oracle) is not this line
+      const queryRoom = this.caps.query - this.spent() - this.openUsd() - (a.stage === 'oracle' ? 0 : this.oracleHold);
+      if (!this.logged && queryRoom <= room) {
         this.logged = true;
-        const queryRoom = this.caps.query - this.spent() - this.openUsd() - (a.stage === 'oracle' ? 0 : this.oracleHold);
-        console.log(JSON.stringify({ msg: 'reading spend cap', op: this.op, node: a.node, cap: queryRoom <= room ? 'query' : a.stage, spentUsd: this.spent(), capUsd: this.caps.query }));
+        console.log(JSON.stringify({ msg: 'reading spend cap', op: this.op, node: a.node, spentUsd: this.spent(), capUsd: this.caps.query }));
       }
       throw new CostRefusedError(`${a.node}: $${room.toFixed(4)} left cannot pay for ${a.promptTokens} tokens in and ${min} out`, 'budget');
     }

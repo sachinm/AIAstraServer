@@ -1036,7 +1036,8 @@ export async function runSelfOracle(
             spentTodayUsd: spentUsd,
             stages,
           };
-          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
+          // a budget stop is never stored: the next build reads again under its own budget (one operation, one budget)
+          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd }, skipStore: true };
         }
 
         // Stage 2: Board Lineman (`lineman.self` / `lineman.love` / `lineman.work`)
@@ -1201,7 +1202,8 @@ export async function runSelfOracle(
             spentTodayUsd: spentUsd,
             stages,
           };
-          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd } };
+          // a budget stop is never stored: the next build reads again under its own budget (one operation, one budget)
+          return { value: budgetOut, summary: { status: 'budget_exceeded', calls, spentUsd }, skipStore: true };
         }
 
         // Stage 3: Board Oracle Synthesizer (`self.reading_oracle` / `love.reading_oracle` / `work.reading_oracle`)

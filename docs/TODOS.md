@@ -325,8 +325,11 @@ re-applied by it.
   1. **Lambda env** (deploy session): remove `CARDS_SPEND_CAP_USD` and `SELF_READING_MAX_SPEND_USD` from
      `aiastra-server-api` (no longer read); set `READING_SPEND_CAP_USD` only to change the 0.45 default.
      `READING_COST_CAP_QUERY_USD` can now only lower the cap.
-  2. **Web** (web session): `POST …/cards/:id/read` no longer answers `429 spend_cap`. Remove any copy for it, and check
-     what the board shows for `capReached` (the run's budget, not the day's).
+  2. **Web** (web session): `POST …/cards/:id/read` no longer answers `429 spend_cap` (`AIAstra_WEB`
+     `src/lib/selfV3Api.ts:12,451,854` still list it). `capReached` now means "this build run hit its budget", and the
+     next run clears it. Today the web shows a capped card as "Not read yet" with no Try again
+     (`SelfBoardV3.reading.test.tsx:92`). Done: a capped card offers the one-card read (its own budget), and the
+     `spend_cap` error is removed.
   3. **A cold You build may not fit USD 0.45.** Doc 10 §6 estimates about USD 0.30 for You, 0.10 for the clocks and 0.08
      per Love/Work deck. One run shares one budget, so cards past the cap stay "not read yet" (`skipped_cap`) until the
      next build or a card read. Owner: Sachin (raise the env value) or the reading-dev session (measure on Lab replays).
@@ -1635,8 +1638,6 @@ Server facts from `develop` 2026-11-09; each item fact (seen in code) or inferen
   after a failed build waits up to 30 min (`buildEvent.ts:172-177`, inference). Fact/inference as marked. Owner: server +
   web. Done: doc 66 §4.4 (consent, `board:self:<day>:clock:<system>` charge, `clock_viewed` event, applicability list,
   confirm answers re-run the Personalizer only).
-- **P2 · `budget_exceeded` Oracle results are stored and served until the running period ends** (`oracle.ts:980-995`).
-  Fact/inference. Done: not stored; the area falls back and the dossier records the gap.
 - **P2 · The catalogue has drifted from the code.** `self.reading.oracle` cites prompt `oracle/self.md` and the functions
   `runFamilySubAgents` and `runSelfLineman`, which do not exist (default prompt is `oracle/self-areas`); `SELF_PLANNED`
   lists D4, D7, D60 which `area/self.ts:15` does not read; the section comment says "planned" while every row is `built`
