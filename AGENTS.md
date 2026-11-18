@@ -71,6 +71,28 @@ worktrees are done only by a sub-agent on the Haiku model at medium effort, neve
 the literal folder to work in, because a command run without one lands in the main checkout: on 2026-11-01 an `npm ci` meant
 for a worktree rebuilt the main checkout's `node_modules`. The rules under "Worktrees and deletes" apply to it too.
 
+### A new worktree links `node_modules`; it never installs (Sachin, 2026-11-18)
+
+Over 200 worktrees have been made in these repos; an `npm ci` per worktree costs 5–15 minutes and has failed half-way.
+So a new worktree **links its `node_modules` to the main checkout's installed packages** and copies `.env`; it runs
+`npm ci` only when its `package-lock.json` adds a package the main checkout lacks. The recipe, with literal paths only
+(Windows junction; no admin rights needed; `<repo>` and `<wt>` below are placeholders you write out in full):
+
+```powershell
+git -C C:/Users/Owner/Documents/work/<repo> worktree add -b <branch> C:/Users/Owner/Documents/work/wt/<wt> origin/develop
+New-Item -ItemType Junction -Path C:/Users/Owner/Documents/work/wt/<wt>/node_modules -Target C:/Users/Owner/Documents/work/<repo>/node_modules
+Copy-Item C:/Users/Owner/Documents/work/<repo>/.env C:/Users/Owner/Documents/work/wt/<wt>/.env   # server only; never print it
+```
+
+- **Check first:** `git -C <wt> diff --quiet origin/develop -- package.json package-lock.json` against the main
+  checkout's lockfile. Identical: link. A package is added or bumped: install in the main checkout first (it is the
+  shared copy), then link; or, if the main checkout must not change, run `npm ci` in the worktree.
+- **Server:** the Prisma client lives in `node_modules/.prisma`, so it is shared. Run `npx prisma generate` in the
+  worktree only when its `prisma/schema.prisma` differs, and know it regenerates the main checkout's client too
+  (generate again from the main checkout when the worktree is done).
+- **Removing a worktree:** delete the junction first with `Remove-Item <literal wt path>/node_modules` (no `-Recurse`:
+  that would follow the link and empty the main checkout's packages), then `git worktree remove <literal path>`.
+
 ## Worktrees and deletes
 
 On 2026-10-31 a `git worktree add` run with an empty path made git's cleanup delete the contents of the main checkout

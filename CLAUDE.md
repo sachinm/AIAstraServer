@@ -12,6 +12,10 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
 - **Never say or output `Radha` or `pyjhora` anywhere in readings, reports, or user-facing responses.** Read and follow `SOUL.md` alongside `AGENTS.md`; this prohibition is also hardcoded in the system prompt sent to every agent.
 - **Installs and worktree creation go to Haiku at medium effort.** Dependency installs (server, web, local, worktree) and
   creating worktrees are done only by a Haiku sub-agent at medium effort, given the literal folder. See `AGENTS.md`.
+- **A new worktree links `node_modules`; it never installs.** Make a junction from the worktree's `node_modules` to the
+  main checkout's installed packages and copy `.env`; run `npm ci` only when the worktree's lockfile adds a package.
+  Recipe and the safe removal order (junction first, never `-Recurse` on it) are in `AGENTS.md` under "Installs and
+  worktree creation".
 - **We are making a Vedic astrology personal assistant.** Specific to the person or not shown; the chart leads the
   question and the assistant confirms before it predicts; questions follow known facts; no general prediction. See
   "We are making a Vedic astrology personal assistant" in `AGENTS.md`.
