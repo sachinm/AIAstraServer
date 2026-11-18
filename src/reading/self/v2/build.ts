@@ -564,11 +564,12 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
           const none = quality.failed.filter((id) => !stale[id]);
           if (none.length) result.gaps = [...result.gaps, `oracle failed areas with no earlier reading (withheld): ${none.join(', ')}`];
         }
-        const served = r.status === 'ok' && servesPage(quality, Boolean(r.doc?.hero.sentence));
+        const served = r.status === 'ok' && servesPage(quality);
         if (r.status === 'ok' && !served) {
           const n = quality.okAreas.length + quality.repaired.length;
-          result.gaps = [...result.gaps, `build does not serve the page (hero ${r.doc?.hero.sentence ? 'stands' : 'missing'}, ${n} of 11 areas ok or repaired, ${SERVE_MIN_AREAS} needed): not stored, the question is given back`];
+          result.gaps = [...result.gaps, `build does not serve the page (${n} of 11 areas ok or repaired, ${SERVE_MIN_AREAS} needed): not stored, the question is given back`];
         }
+        if (served && !r.doc?.hero.sentence) result.gaps = [...result.gaps, 'hero withheld (no sentence stood): the cards are served without it'];
         const frame: SelfV2Frame = { asOf: ctx.asOf, stamps: ctx.stamps, periods: ctx.sub.periods ?? null, year: ctx.sub.year ?? null };
         return {
           value: { key: cardsKey, oracleKey, result, frame },
@@ -580,7 +581,7 @@ export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArg
     ms.personalizerStep = since(t);
     const cards: SelfV2CardsResult = storedCards.cached ? { ...storedCards.value.result, cached: true } : storedCards.value.result;
     out.cards = cards;
-    const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality, Boolean(cards.doc?.hero.sentence));
+    const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality ?? { okAreas: [], repaired: [], failed: [] });
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';

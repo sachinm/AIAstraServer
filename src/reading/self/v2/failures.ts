@@ -86,12 +86,14 @@ export function qualityOf(areaStatus: Partial<Record<SelfV2AreaId, OracleAreaSta
 }
 
 /**
- * The charge rule (docs/billing/03, unchanged; defined 2026-11-09): a build serves the page when the hero stands and at
- * least SERVE_MIN_AREAS of the eleven Oracle areas are ok or repaired. Only a build that serves the page is `ok`, is
- * stored as the newest reading and commits a held question; otherwise the question is given back.
+ * The charge rule (docs/billing/03; defined 2026-11-09): a build serves the page when at least SERVE_MIN_AREAS of the
+ * eleven Oracle areas are ok or repaired. Only a build that serves the page is `ok`, is stored as the newest reading and
+ * commits a held question; otherwise the question is given back. The hero is not part of the rule (2026-11-18): a hero
+ * sentence the validator drops leaves the hero withheld, as a split hero already is, and the cards still serve. Before,
+ * one dropped hero sentence ("your career" for a person between jobs) threw away eleven good cards and every refresh failed.
  */
-export function servesPage(q: SelfV2Quality, heroStands: boolean): boolean {
-  return heroStands && q.okAreas.length + q.repaired.length >= SERVE_MIN_AREAS;
+export function servesPage(q: SelfV2Quality): boolean {
+  return q.okAreas.length + q.repaired.length >= SERVE_MIN_AREAS;
 }
 
 export interface RecordMeta {

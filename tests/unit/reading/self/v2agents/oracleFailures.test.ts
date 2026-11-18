@@ -180,13 +180,12 @@ describe('findings in words → checks, rows and the serve rule', () => {
     ]);
   });
 
-  it('serves the page only with the hero and at least 8 of 11 areas ok or repaired', () => {
+  it('serves the page with at least 8 of 11 areas ok or repaired; a dropped hero no longer sinks it (2026-11-18)', () => {
     const q = qualityOf({ diagnosis: 'ok', stuck: 'ok', chapter: 'ok', chapters: 'ok', lagna: 'ok', mind: 'repaired', drive: 'repaired', presence: 'ok', body: 'failed', yogas: 'failed', year: 'failed' });
     expect(q.okAreas).toHaveLength(6);
     expect(q.repaired).toEqual(['mind', 'drive']);
-    expect(servesPage(q, true)).toBe(true);
-    expect(servesPage(q, false)).toBe(false);
-    expect(servesPage({ ...q, repaired: ['mind'] }, true)).toBe(false);
+    expect(servesPage(q)).toBe(true);
+    expect(servesPage({ ...q, repaired: ['mind'] })).toBe(false);
   });
 
   it('writes one row per finding and never throws (a client without the table writes nothing)', async () => {
@@ -275,13 +274,15 @@ describe('the build: store failures, fall back to the last good area, charge onl
     expect((await view(db)).quality!.repaired).toHaveLength(4);
   });
 
-  it('no hero: the build does not serve the page (partial, not stored, question given back)', async () => {
+  it('no hero: the cards still serve (ok, stored, charged) with the hero withheld (2026-11-18 refresh failure)', async () => {
     const db = makePrisma();
     const noHero = (areas: string[]) => personalJson(areas, { hero: { tone: 'mixed', sentence: '', sub: '', questionClaimId: '', questionText: '', withheld: true } });
     const r = await runSelfV2Build(buildDeps(db, [], { personal: noHero }), args());
-    expect(r.status).toBe('partial');
-    expect(r.stored.cards).toBe(false);
-    expect([...db.builds.values()][0]).toMatchObject({ status: 'failed', error: 'build does not serve the page' });
+    expect(r.status).toBe('ok');
+    expect(r.stored.cards).toBe(true);
+    expect(r.cards!.doc!.hero).toMatchObject({ sentence: '', withheld: true });
+    expect(r.gaps.join('\n')).toMatch(/hero withheld \(no sentence stood\)/);
+    expect([...db.builds.values()][0]).toMatchObject({ status: 'ready' });
   });
 
   it('the Personalizer validator drops are stored per card and check (no repair for them)', async () => {
