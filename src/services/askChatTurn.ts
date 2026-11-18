@@ -7,6 +7,7 @@ import { deriveChatTitleFromQuestion } from '../lib/chatTitle.js';
 import type { ReadingRunRecord } from '../reading/run.js';
 import { prismaJournalWriter } from '../reading/oracle/journal.js';
 import type { ChartStatus } from './chartStatusService.js';
+import { cardThreadFor } from '../reading/cardChat/thread.js';
 
 /** Observability row for one reading. A failure here must never fail the chat turn. */
 async function persistReadingRun(db: PrismaClient, userId: string, chatId: string, messageId: string, r: ReadingRunRecord): Promise<void> {
@@ -81,12 +82,19 @@ export async function persistAskTurn(
   chatId: string | null | undefined,
   question: string,
   chatResult: ChatTurnResult,
-  clientDeliverySse: boolean
+  clientDeliverySse: boolean,
+  /**
+   * docs/reading-engine/85 §4 step 5: a card-chat turn goes to the card's thread (`chats.card_ref`), created under the
+   * board's category with the card's title, without deactivating the person's other chats.
+   */
+  opts: { card?: { cardRef: string; category: string; title: string; newThread?: boolean } } = {}
 ): Promise<{ chatId: string; messageId: string }> {
   // deny topics never keep the text (src/reading/policy/declined.ts)
   question = chatResult.storedQuestion ?? question;
   let chat: { id: string } | null = null;
-  if (chatId?.trim()) {
+  if (opts.card) {
+    chat = { id: await cardThreadFor(db, userId, { chatId, ...opts.card }) };
+  } else if (chatId?.trim()) {
     chat = await db.chat.findFirst({
       where: { id: chatId.trim(), user_id: userId },
       select: { id: true },
@@ -112,7 +120,7 @@ export async function persistAskTurn(
       ai_answer: chatResult.answerText,
     },
   });
-  if (priorMessageCount === 0) {
+  if (priorMessageCount === 0 && !opts.card) {
     const title = deriveChatTitleFromQuestion(question);
     if (title) {
       await db.chat.update({

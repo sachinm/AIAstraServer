@@ -2903,3 +2903,39 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   Self, Love and Career (Sachin, 2026-11-18), so Lucky times leaves the header and drawer until the person ticks it in
   the wizard; `/dashboard/lucky` still opens by URL. Done: Sachin confirms the default, or the default gains `lucky`
   (`DEFAULT_PORTAL_DASHBOARDS` in `AIAstra_WEB/src/lib/portalDashboards.ts`). Status: open (decision).
+## Filed 2026-11-18 by the card-chat server build (docs/reading-engine/85, branch `feat/card-chat-v2`)
+
+- **P1** Migration `prisma/migrations/20261118200000_chats_card_ref` (nullable `chats.card_ref`, index
+  `idx_chats_user_card_ref`) is written, not applied, and `npx prisma generate` was not run (it would regenerate the shared
+  client). Order on staging: apply the migration first, then ship code built with a regenerated client, because a
+  regenerated client selects `card_ref` on every `chats` read. Until then the card-chat code reaches the column through a
+  narrow cast: thread reads return an empty thread and a thread is created without `card_ref` (logged). Done: applied on
+  staging, client regenerated, `GET /api/cards/self/<id>/chat` lists a saved thread.
+- **P2** The card chat does not run the clarifier (doc 85 §4 step 2: a seeded clarifier on the first question and the
+  card's `confirm` claim as its one question). The owner override (doc 85 top) made the card's stored context the
+  conversation; the new prompt `cards/chat` carries confirm-before-predict instead (it asks the card's "Is this right?"
+  question when unanswered). Sachin to decide whether the first card question should still go through Clarify. Where:
+  `src/routes/cardChatRoutes.ts handleCardAsk`.
+- **P2** Lucky times card chat (doc 85 Phase 3: `now` and `today-<scenario>`) is not built; `board` accepts
+  `self | love | work` only (400 `unknown_board` for `lucky`).
+- **P2** doc 85 findings, still open for ordinary chats: `persistAskTurn` creates a chat with no category and deactivates
+  every other chat when `chatId` is missing (`src/services/askChatTurn.ts`; card threads no longer do), and general chat
+  follow-ups are independent readings (`chatWithConfiguredProvider` never passes `history`; card chat carries the last
+  two exchanges). Done: category passed through and history carried, with tests.
+- **P3** The card-chat spend bound is a pre-call worst case on a chars/2.2 token estimate (input all uncached plus the
+  output cap), not a provider token count (`src/reading/cardChat/answer.ts outputBudget`); the actual cost is logged and
+  a cost over the cap is warned. Done when Gemini countTokens is wired (see the countTokens item above) and used here.
+- **P3** With `CARDS_GROUP_PACK=1` a card is read on the pack cache `(pack.system, pack.text)`; the card chat reads the
+  clock layer's shared prefix cache (reader system prompt + natal.core, sky.window, year.tp, frame), which the clock
+  readers and the one-card path use. So under pack mode the chat shares the clock readers' cache, not the card's own.
+- **P3** Adding the `cards/chat` prompt changed `PROMPT_VERSION` (src/reading/prompts/generated.ts), which keys the
+  general reading findings cache (`src/reading/nodes/findingsCache.ts`): those cached findings miss once after deploy.
+- **P1** The board feature payload differs between server and web (found 2026-11-18 wiring the card-chat bubble). The
+  server sends `features` as a map `{ "<key>": {locked:false} | {locked:true, minPlan} }` on the body and on each card
+  (`src/boards/features.ts boardFeatureGrants/cardFeatureGrants`, `applySelfFeatures`; GET /api/self/v3 and GET
+  /api/board/{love,work}/v3). The web reads the body as `{allowed: string[], locked: [{key,minPlan}]}` and each card as
+  `{usable, locked, minPlan}` (web `src/lib/selfV3Api.ts BoardFeatures, CardFeatureGrant`; `src/pages/you/v3/features.ts
+  featureState`). With no `allowed` array the web falls back to its foundation set, so `feature.card_chat` (and every
+  non-foundation switch: voice, Compact, premium locks) never shows. Both GETs do carry `feature.card_chat` as a map key.
+  Done: the web maps the server's map (allowed = keys with `locked:false`, locked = the rest; card `usable = !locked`), or
+  the server adds the list form beside the map, with a test on each side.
