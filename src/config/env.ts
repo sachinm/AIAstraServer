@@ -943,6 +943,16 @@ export function isSelfOracleAreasEnabled(): boolean {
   return !(raw === '0' || raw === 'false' || raw === 'no');
 }
 
+/**
+ * The model spend cap of ONE operation, USD (Sachin, 2026-11-18; docs/billing/README.md "Spend cap per operation"). An
+ * operation is one dashboard reading refresh (one build run: v2 build, clock layer and every card it reads), one
+ * single card read the page asks for, one general reading response (ask-stream) or one card-chat answer. Nothing is
+ * counted per day. Env `READING_SPEND_CAP_USD` (default 0.45, clamped 0.05..5).
+ */
+export function getReadingSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_SPEND_CAP_USD', 0.45, 0.05, 5);
+}
+
 export function getSelfReadingMaxSpendUsd(): number {
   const raw = Number(process.env.SELF_READING_MAX_SPEND_USD);
   if (Number.isFinite(raw) && raw > 0) return Math.min(raw, 10);

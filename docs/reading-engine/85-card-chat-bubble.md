@@ -1,5 +1,12 @@
 # 85 — A chat on every card: the card becomes the conversation
 
+**Sachin, 2026-11-18 (later, overrides where it differs):** chat is another **view of the card** (beside Read and
+Short), opened by the card's chat bubble. The input (typing, or speaking into it by speech-to-text) is **anchored to
+the bottom of that card**. The backend keeps the card's context: its stored text **and the data used to prepare it**
+(the card's ledger cells and evidence keys, its spans and dates, the Oracle object) and uses it for the conversation.
+Answers stay **focused on the card's purpose / area of focus**. Every board: You, Love and Work. Each answer is one
+operation under the per-operation cap `READING_SPEND_CAP_USD` ($0.45).
+
 **Approved 2026-11-18 by Sachin:** every sent card-chat question costs one question (key per turn; a retry of the same
 send and clarifier answers are free); on Love and Work one bubble per panel, named after the catalogue card that owns
 its sub-area. Build Phase 1 (You) first.

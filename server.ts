@@ -41,6 +41,7 @@ import { registerSelfV3Routes } from './src/routes/selfV3Routes.js';
 import { registerNowRoutes } from './src/routes/nowRoutes.js';
 import { registerBoardCardsRoutes } from './src/routes/boardCardsRoutes.js';
 import { registerBoardV3Routes } from './src/routes/boardV3Routes.js';
+import { registerCardChatRoutes } from './src/routes/cardChatRoutes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
 import { registerAdminNotificationRoutes } from './src/routes/adminNotificationRoutes.js';
 import { registerNotificationRoutes } from './src/routes/notificationRoutes.js';
@@ -322,6 +323,8 @@ registerNowRoutes(app, { prisma, requireUser: focusUser });
 registerBoardCardsRoutes(app, { prisma, requireUser: focusUser });
 // Love and Work on the You v3 card machine (docs/dashboards/10): always registered; 404 board_v3_off unless in BOARDS_V3
 registerBoardV3Routes(app, { prisma, requireUser: focusUser });
+// a chat on every card (docs/reading-engine/85): GET opens it; the answer is ask-stream with `card` (registerChatRoutes)
+registerCardChatRoutes(app, { prisma, requireUser: focusUser });
 registerAdminLabRoutes(app, { prisma });
 // admin-to-user messaging (M53)
 registerAdminNotificationRoutes(app, { prisma });

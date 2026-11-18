@@ -66,6 +66,11 @@ export interface BoardV3Deps extends SelfV2Deps {
   featureOverrides?: (prisma: PrismaClient, userId: string) => Promise<Map<string, FeatureState>>;
   /** the build that reads the cards (default: the one per-kundli Self build) */
   queueCardsBuild?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<QueueOutcome>;
+  /**
+   * docs/reading-engine/85 §4 step 1: a read with no side effect (the card chat re-reads a stored card). Skips "build on
+   * open" entirely: no `opened` mark, no card queued, no build. Pass no-op `queueBuild`/`queueDigest` with it.
+   */
+  readOnly?: boolean;
 }
 
 export const boardV3Enabled = (board: AreaV3Board, boards: readonly string[] = getBoardsV3()): boolean => boards.includes(board);
@@ -188,7 +193,7 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
   let doc: CardsStateDoc = doc0;
   let queued: BoardV3CardId[] = [];
   const deck = lensDeck(board, layout.cards, lens);
-  if (!doc0.opened?.[board] && deck.length >= getCardsReadMinArea()) {
+  if (!deps.readOnly && !doc0.opened?.[board] && deck.length >= getCardsReadMinArea()) {
     queued = deck.filter((id) => !['queued', 'reading'].includes(cardStateOf(doc0, id, false, now)));
     doc = await updateCardsState(deps.prisma, userId, kundliId, now, (d) => {
       d.opened = { ...(d.opened ?? {}), [board]: true };
