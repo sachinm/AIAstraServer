@@ -1009,6 +1009,24 @@ export function getCardsReadMin(): number {
   return parseClampedIntEnv('CARDS_READ_MIN', 5, 1, 8);
 }
 
+/**
+ * docs/dashboards/10 §4.3: the Love and Work boards served on the You v3 card machine. Env `BOARDS_V3`, a comma list of
+ * `love`, `work` (unset or empty: none; unknown names ignored). A board not listed answers 404 `board_v3_off`, is never
+ * read and never queued.
+ */
+export function getBoardsV3(env: NodeJS.ProcessEnv = process.env): Array<'love' | 'work'> {
+  const raw = env.BOARDS_V3?.trim();
+  if (!raw) return [];
+  const out: Array<'love' | 'work'> = [];
+  for (const x of raw.split(',').map((s) => s.trim().toLowerCase())) if ((x === 'love' || x === 'work') && !out.includes(x)) out.push(x);
+  return out;
+}
+
+/** A Love or Work lens deck of at least this many cards queues its reading. Env `CARDS_READ_MIN_AREA` (default 1, 1..8). */
+export function getCardsReadMinArea(): number {
+  return parseClampedIntEnv('CARDS_READ_MIN_AREA', 1, 1, 8);
+}
+
 /** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 8, 1..12). */
 export function getCardsBoardParallel(): number {
   return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 8, 1, 12);

@@ -40,6 +40,7 @@ import { registerSelfV2Routes } from './src/routes/selfV2Routes.js';
 import { registerSelfV3Routes } from './src/routes/selfV3Routes.js';
 import { registerNowRoutes } from './src/routes/nowRoutes.js';
 import { registerBoardCardsRoutes } from './src/routes/boardCardsRoutes.js';
+import { registerBoardV3Routes } from './src/routes/boardV3Routes.js';
 import { registerAdminLabRoutes } from './src/routes/adminLabRoutes.js';
 import { registerAdminNotificationRoutes } from './src/routes/adminNotificationRoutes.js';
 import { registerNotificationRoutes } from './src/routes/notificationRoutes.js';
@@ -319,6 +320,8 @@ registerSelfV3Routes(app, { prisma, requireUser: focusUser });
 registerNowRoutes(app, { prisma, requireUser: focusUser });
 // Love and Work card picker and card options (docs/reading-engine/71): no model call, always on
 registerBoardCardsRoutes(app, { prisma, requireUser: focusUser });
+// Love and Work on the You v3 card machine (docs/dashboards/10): always registered; 404 board_v3_off unless in BOARDS_V3
+registerBoardV3Routes(app, { prisma, requireUser: focusUser });
 registerAdminLabRoutes(app, { prisma });
 // admin-to-user messaging (M53)
 registerAdminNotificationRoutes(app, { prisma });

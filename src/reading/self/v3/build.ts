@@ -26,7 +26,9 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getCardsReadMin, getReadingClocksMin, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { boardFactsOf, boardV3CardDef, defaultLens, isBoardLens, type AreaV3Board } from '../../boards/v3Cards.js';
+import { isReadable } from '../../cards/registry.js';
 import { readCards, type CardsRunResult } from '../../cards/run.js';
 import { readCardsState, updateCardsState } from '../../cards/state.js';
 import { sharedPrefix } from '../../clocks/reader.js';
@@ -37,11 +39,11 @@ import { renderSliceSet, type SliceInventory } from '../../slices/render.js';
 import type { RenderedSlice } from '../../slices/types.js';
 import type { ReadingClockSet } from '../clock.js';
 import { loadPressureInventory, loadReadingClockSet, type PressureInventoryDetail } from '../sub/pressure.js';
-import { readLayout } from './layout.js';
+import { readBoardLayout, readLayout } from './layout.js';
 import { ORACLE_V3_CALLS, runOracleV3, SELF_V3_ORACLE_PROMPT } from './oracle.js';
 import { personalizerV3Call, personalizerV3Calls, personalizerVoiceToken, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT } from './personalizer.js';
 import { cardContent, SELF_V3_TECHNIQUE, type StoredSelfV3 } from './store.js';
-import type { SelfCardId, SelfSectionId, SelfV3CardContent, YearFrameV3 } from './types.js';
+import type { CardId, SelfCardId, SelfSectionId, SelfV3CardContent, YearFrameV3 } from './types.js';
 import { buildYearFrameV3, frameDates, FRAME_MAX_OTHER_CLOCKS, loadStoredInventory, otherClocks, renderYearFrame } from './yearFrame.js';
 
 export interface SelfV3StepDeps {
@@ -68,6 +70,11 @@ export interface SelfV3StepDeps {
   /** test seams: the board (default `readLayout`) and the card runner */
   loadBoard?: (prisma: PrismaClient, kundliId: string) => Promise<{ cards: SelfCardId[]; sections: Partial<Record<SelfCardId, SelfSectionId[]>> }>;
   readCards?: typeof readCards;
+  /**
+   * docs/dashboards/10 §4.1 step 4: the Love and Work active lens decks of the enabled boards (default: their v3
+   * layouts, the lens stored or the person's default). They join the one card pack; they are read only when queued.
+   */
+  loadAreaDecks?: (prisma: PrismaClient, kundliId: string) => Promise<{ cards: CardId[]; sections: Partial<Record<CardId, SelfSectionId[]>> }>;
   /** overrides for the card runner (spend cap, the rest flag) */
   cardsCapUsd?: number;
   cardsReadRest?: boolean;
@@ -85,7 +92,7 @@ export interface SelfV3StepInput {
 
 export interface SelfV3StepResult {
   status: 'ok' | 'partial' | 'failed' | 'skipped' | 'budget_exceeded';
-  cards: Partial<Record<SelfCardId, SelfV3CardContent>>;
+  cards: Partial<Record<CardId, SelfV3CardContent>>;
   frame: YearFrameV3 | null;
   agents: SelfV2AgentTiming[];
   issues: ValidationIssue[];
@@ -101,7 +108,7 @@ export interface SelfV3StepResult {
   /** the slices the clock layer read (the cards read the same prefix and their matter slices) */
   sliceSet?: RenderedSlice[];
   /** doc 70 Phase 3: the per-card run, when it ran */
-  cardsRun?: Pick<CardsRunResult, 'order' | 'spentUsd' | 'capReached'> & { results: Array<{ card: SelfCardId; status: string }> };
+  cardsRun?: Pick<CardsRunResult, 'order' | 'spentUsd' | 'capReached'> & { results: Array<{ card: CardId; status: string }> };
 }
 
 /**
@@ -121,6 +128,34 @@ export async function loadClockInventory(
 }
 
 const since = (t0: number) => Math.round((performance.now() - t0) * 100) / 100;
+
+/**
+ * docs/dashboards/10 §4.1 step 4: the active lens deck of each enabled Love/Work board, and their sections. The lens is
+ * the one stored on the layout, else the person's default (facts and age only). Nothing when BOARDS_V3 is unset.
+ */
+export async function loadAreaDecks(
+  prisma: PrismaClient,
+  kundliId: string,
+  profile: { facts: { work?: { status?: string; level?: string }; love?: string; focus?: string[] }; declined?: string[]; ageYears?: number | null } | null,
+  boards: readonly AreaV3Board[] = getBoardsV3(),
+): Promise<{ cards: CardId[]; sections: Partial<Record<CardId, SelfSectionId[]>> }> {
+  const out: { cards: CardId[]; sections: Partial<Record<CardId, SelfSectionId[]>> } = { cards: [], sections: {} };
+  if (!boards.length) return out;
+  const facts = boardFactsOf(profile);
+  const age = profile?.ageYears ?? null;
+  const layouts = await Promise.all(boards.map(async (b) => ({ b, layout: await readBoardLayout(prisma, kundliId, b).catch(() => null) })));
+  for (const { b, layout } of layouts) {
+    if (!layout) continue;
+    const lens = isBoardLens(b, layout.boardOptions.lens) ? layout.boardOptions.lens : defaultLens(b, facts, age);
+    for (const id of layout.cards) {
+      if (boardV3CardDef(id)?.lens !== lens) continue;
+      out.cards.push(id);
+      const s = layout.sections[id];
+      if (s) out.sections[id] = s;
+    }
+  }
+  return out;
+}
 
 export function v3StoreKey(ctx: SelfBuildContext, frame: YearFrameV3, oraclePrefixHash: string, portraitHash: string, sections: unknown): string {
   return [
@@ -174,7 +209,8 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
     if (cardsOn) {
       board = await (deps.loadBoard ?? (async (p: PrismaClient, k: string) => readLayout(p, k)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [], sections: {} }));
       const doc = await readCardsState(deps.prisma, ctx.kundliId, deps.now);
-      const asked = Object.values(doc.cards).some((e) => e?.state === 'queued');
+      // a queued card opens the gate only while it is readable (a Love/Work card whose board left BOARDS_V3 does not)
+      const asked = Object.entries(doc.cards).some(([id, e]) => e?.state === 'queued' && isReadable(id));
       if (board.cards.length < getCardsReadMin() && !asked) {
         out.status = 'skipped';
         out.gaps.push(`cards: the board holds ${board.cards.length} cards (${getCardsReadMin()} start the reading) and none was asked for; nothing read`);
@@ -269,10 +305,25 @@ export async function runSelfV3Cards(deps: SelfV3StepDeps, i: SelfV3StepInput): 
       const years = (frame.years ?? []).flatMap((y) => [y.from, y.to]);
       const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
       const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
+      const area = await (deps.loadAreaDecks ?? ((p: PrismaClient, k: string) => loadAreaDecks(p, k, profile)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [] as CardId[], sections: {} }));
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
         { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, now: deps.now, force: deps.force, capUsd: deps.cardsCapUsd, readRest: deps.cardsReadRest },
-        { ctx, frame, ledger: out.ledger, prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash }, slices: out.sliceSet!, board: board.cards, portrait: i.portrait, sections: board.sections, dates, answers, model: layerModel ?? i.oracleSlice.model, spentBeforeUsd: 0 },
+        {
+          ctx,
+          frame,
+          ledger: out.ledger,
+          prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash },
+          slices: out.sliceSet!,
+          board: board.cards,
+          ...(area.cards.length ? { packCards: area.cards } : {}),
+          portrait: i.portrait,
+          sections: { ...area.sections, ...board.sections },
+          dates,
+          answers,
+          model: layerModel ?? i.oracleSlice.model,
+          spentBeforeUsd: 0,
+        },
       );
       ms.cards = since(tcards);
       await foldWords();

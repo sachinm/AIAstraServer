@@ -20,7 +20,7 @@ import { redactEngineText, type DateFrame, type TextCheckContext } from '../v2/p
 import { claimKey, profileLines, promptHash, promptText } from '../v2/slices.js';
 import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, StatedGender, ValidationIssue } from '../v2types.js';
 import { parseJson } from './oracle.js';
-import type { OracleCardV3, OracleV3Output, PersonalCardV3, SelfCardId, SelfSectionId } from './types.js';
+import type { OracleCardV3, OracleV3Output, PersonalCardV3, CardId, SelfSectionId } from './types.js';
 
 export const SELF_V3_PERSONALIZER_PROMPT = 'personalizer/self-v3';
 export const PERSONALIZER_V3_TIMEOUT_MS = 60_000;
@@ -104,7 +104,7 @@ function spanDates(cards: readonly OracleCardV3[], dates: ReadonlyMap<string, { 
 export interface PersonalizerV3Input {
   profile: PersonalizerInput['profile'];
   portrait: PersonPortrait | null;
-  sections: Partial<Record<SelfCardId, readonly SelfSectionId[]>>;
+  sections: Partial<Record<CardId, readonly SelfSectionId[]>>;
 }
 
 export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[], spans: ReadonlyMap<string, { from: string; to: string }>, input: PersonalizerV3Input): string {
@@ -124,7 +124,7 @@ export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[
   ].join('\n');
 }
 
-export function personalizerV3Schema(cards: readonly SelfCardId[]): Record<string, unknown> {
+export function personalizerV3Schema(cards: readonly CardId[]): Record<string, unknown> {
   const str = (description: string) => ({ type: 'STRING', description });
   return {
     type: 'OBJECT',
@@ -231,8 +231,8 @@ export interface PersonalizerV3Deps {
 }
 
 export interface PersonalizerV3Result {
-  cards: Partial<Record<SelfCardId, PersonalCardV3>>;
-  withheld: SelfCardId[];
+  cards: Partial<Record<CardId, PersonalCardV3>>;
+  withheld: CardId[];
   issues: ValidationIssue[];
   calls: SelfV2AgentTiming[];
   model: string;
@@ -268,7 +268,7 @@ export function personalizerV3Call(
 
 export function personalizerV3Calls(
   ctx: SelfBuildContext,
-  groups: ReadonlyArray<{ call: string; cards: readonly SelfCardId[] }>,
+  groups: ReadonlyArray<{ call: string; cards: readonly CardId[] }>,
   oracle: OracleV3Output,
   spans: ReadonlyMap<string, { from: string; to: string }>,
   input: PersonalizerV3Input,
@@ -283,7 +283,7 @@ export function personalizerV3Calls(
 }
 
 /** the repair note: the cards the validator dropped and exactly why (at most four reasons each) */
-export function personalizerRepairNote(reasons: Readonly<Partial<Record<SelfCardId, readonly string[]>>>): string {
+export function personalizerRepairNote(reasons: Readonly<Partial<Record<CardId, readonly string[]>>>): string {
   return [
     'REPAIR: these cards failed the checks. Write them again and fix exactly this; keep everything else the same:',
     ...Object.entries(reasons).map(([id, r]) => `- ${id}: ${(r ?? []).slice(0, 4).join('; ')}`),
@@ -307,9 +307,9 @@ export async function runPersonalizerV3(
   const timings: SelfV2AgentTiming[] = [];
   const issues: ValidationIssue[] = [];
   const out: PersonalizerV3Result['cards'] = {};
-  const withheld: SelfCardId[] = [];
+  const withheld: CardId[] = [];
   const check: TextCheckContext = { gender: input.profile.gender, dates: v3DateFrame(dates) };
-  const dropped: Partial<Record<SelfCardId, string[]>> = {};
+  const dropped: Partial<Record<CardId, string[]>> = {};
   const runOne = async (c: PersonalizerV3Call) => {
       const t0 = performance.now();
       const ids = c.cards.map((x) => x.card);
@@ -364,9 +364,9 @@ export async function runPersonalizerV3(
   const failed = calls.flatMap((c) => c.cards).filter((oc) => dropped[oc.card]);
   if (repair && failed.length) {
     for (const oc of failed) withheld.splice(withheld.indexOf(oc.card), 1);
-    const reasons: Partial<Record<SelfCardId, string[]>> = {};
+    const reasons: Partial<Record<CardId, string[]>> = {};
     for (const oc of failed) reasons[oc.card] = dropped[oc.card]!;
-    for (const k of Object.keys(dropped)) delete dropped[k as SelfCardId];
+    for (const k of Object.keys(dropped)) delete dropped[k as CardId];
     await runOne(repair(failed, personalizerRepairNote(reasons)));
   }
   return { cards: out, withheld, issues, calls: timings, model, promptHash: pHash };

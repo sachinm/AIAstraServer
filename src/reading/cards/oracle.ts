@@ -19,7 +19,7 @@ import { timingOf } from '../self/v2/oracle.js';
 import { normaliseEvidenceKey, promptText } from '../self/v2/slices.js';
 import type { SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
 import { checkOracleCard, oracleV3Schema, parseJson } from '../self/v3/oracle.js';
-import type { CardMatter, OracleCardV3, SelfCardId, YearFrameV3 } from '../self/v3/types.js';
+import type { CardMatter, OracleCardV3, CardId, YearFrameV3 } from '../self/v3/types.js';
 import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
@@ -82,7 +82,7 @@ export interface ActiveTimingBlockInput {
   } | null;
   ageYears?: number | null;
   spans?: Array<{ tone?: string; id?: string }>;
-  card?: SelfCardId | null;
+  card?: CardId | null;
   motion?: ActiveTimingMotionSignals | null;
 }
 
@@ -164,7 +164,7 @@ export function renderActiveTimingAndVargaBlock(input: ActiveTimingBlockInput): 
 
 export interface CardOracleInput {
   ctx: SelfBuildContext;
-  card: SelfCardId;
+  card: CardId;
   matters: readonly CardMatter[];
   /** titles of the cards on the person's board, in their order */
   board: readonly string[];

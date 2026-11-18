@@ -8,6 +8,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { PlanCode } from '../billing/plans.js';
 import { getBoardFeaturesOff, getBoardFeaturesPremium } from '../config/env.js';
 import { BOARD_CARDS } from '../reading/boards/catalogue.js';
+import { BOARD_V3_CARDS } from '../reading/boards/v3Cards.js';
 import { SELF_CARDS } from '../reading/self/v3/cards.js';
 
 export type FeatureState = 'off' | 'on' | 'premium';
@@ -55,6 +56,8 @@ export const FEATURE_FLAGS: readonly FeatureDef[] = [
 export const CARD_FLAGS: readonly FeatureDef[] = [
   ...SELF_CARDS.map((c) => ({ key: cardFeatureKey('self', c.id), kind: 'card' as const, scope: 'board' as const, label: c.title, default: 'on' as const, minPlan: 'free' as const })),
   ...BOARD_CARDS.map((c) => ({ key: cardFeatureKey(c.board, c.id), kind: 'card' as const, scope: 'board' as const, label: c.title, default: 'on' as const, minPlan: 'free' as const })),
+  // docs/dashboards/10 §7 S5: the Love and Work v3 cards (the legacy keys above stay for the old pages)
+  ...BOARD_V3_CARDS.map((c) => ({ key: cardFeatureKey(c.board, c.id), kind: 'card' as const, scope: 'board' as const, label: c.title, default: 'on' as const, minPlan: 'free' as const })),
 ];
 
 export const FEATURES: readonly FeatureDef[] = [...CARD_FLAGS, ...FEATURE_FLAGS];

@@ -26,10 +26,11 @@ import { clockLabel } from '../self/words.js';
 import type { markAgentUsed } from '../self/v2/cache.js';
 import { promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
-import { cardDef, isCardOffered, READABLE_CARDS } from '../self/v3/cards.js';
+import { READABLE_CARDS } from '../self/v3/cards.js';
+import { anyCardDef, isReadable } from './registry.js';
 import { personalizerV3Call, personalizerVoiceToken, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT, type PersonalizerV3Input } from '../self/v3/personalizer.js';
 import { cardContent } from '../self/v3/store.js';
-import type { SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
+import type { CardId, SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
 import { renderYearFrame } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
 import { readCardOracle } from './oracle.js';
@@ -66,8 +67,14 @@ export interface CardsRunInput {
   slices: readonly RenderedSlice[];
   /** the person's board, in their order */
   board: readonly SelfCardId[];
+  /**
+   * docs/dashboards/10 §4.1 step 4: the other decks the one pack serves (the active Love and Work lens decks of enabled
+   * boards). They join the pack so all boards share one cached pack; they are read only when queued. Empty: unchanged.
+   */
+  packCards?: readonly CardId[];
   portrait: PersonPortrait | null;
-  sections: Partial<Record<SelfCardId, readonly string[]>>;
+  /** sections per card (the Self board's and, for the pack decks, their boards'; ids are unique across boards) */
+  sections: Partial<Record<CardId, readonly string[]>>;
   dates: ReadonlySet<string>;
   answers: string;
   model: string;
@@ -77,19 +84,22 @@ export interface CardsRunInput {
 
 export interface CardsRunResult {
   results: CardRunResult[];
-  cards: Partial<Record<SelfCardId, SelfV3CardContent>>;
+  cards: Partial<Record<CardId, SelfV3CardContent>>;
   timings: SelfV2AgentTiming[];
   issues: ValidationIssue[];
   spentUsd: number;
   capReached: boolean;
-  order: SelfCardId[];
+  order: CardId[];
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
-/** The order cards are read in: asked-for first, then the board, then (with the rest on) the other readable offered cards. */
-export function cardOrder(board: readonly SelfCardId[], asked: readonly SelfCardId[], rest: boolean): { first: SelfCardId[]; rest: SelfCardId[] } {
-  const ok = (id: SelfCardId) => READABLE_CARDS.includes(id) && Boolean(cardDef(id) && isCardOffered(cardDef(id)!, true));
+/**
+ * The order cards are read in: asked-for first (any board: a Love or Work card is read only when queued), then the
+ * Self board, then (with the rest on) the other readable offered Self cards.
+ */
+export function cardOrder(board: readonly CardId[], asked: readonly CardId[], rest: boolean): { first: CardId[]; rest: CardId[] } {
+  const ok = (id: CardId) => isReadable(id);
   const first = [...new Set([...asked, ...board])].filter(ok);
   const others = rest ? READABLE_CARDS.filter((id) => ok(id) && !first.includes(id)) : [];
   return { first, rest: others };
@@ -122,11 +132,11 @@ export const GROUP_GATHER_MS = 3_000;
  * is shared evenly by its cards. (The 2026-11-11 replay: a 25 ms timer sent every card alone, since each store lookup
  * is a database round trip.)
  */
-function groupBatcher(run: (cards: SelfCardId[], call: string) => Promise<{ cards: Partial<Record<SelfCardId, GroupCardResult>>; timings: SelfV2AgentTiming[]; issues: ValidationIssue[] }>, order: readonly SelfCardId[], phase: readonly SelfCardId[], size: number, label: string) {
+function groupBatcher(run: (cards: CardId[], call: string) => Promise<{ cards: Partial<Record<CardId, GroupCardResult>>; timings: SelfV2AgentTiming[]; issues: ValidationIssue[] }>, order: readonly CardId[], phase: readonly CardId[], size: number, label: string) {
   const expected = new Set(phase);
-  const waiting = new Map<SelfCardId, (s: GroupShare) => void>();
-  const asked = new Set<SelfCardId>();
-  const settled = new Set<SelfCardId>();
+  const waiting = new Map<CardId, (s: GroupShare) => void>();
+  const asked = new Set<CardId>();
+  const settled = new Set<CardId>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let n = 0;
   const flush = () => {
@@ -155,14 +165,14 @@ function groupBatcher(run: (cards: SelfCardId[], call: string) => Promise<{ card
     else if (!timer) timer = setTimeout(flush, GROUP_GATHER_MS);
   };
   return {
-    read(id: SelfCardId): Promise<GroupShare> {
+    read(id: CardId): Promise<GroupShare> {
       return new Promise((resolve) => {
         asked.add(id);
         waiting.set(id, resolve);
         maybeFlush();
       });
     },
-    settle(id: SelfCardId): void {
+    settle(id: CardId): void {
       if (asked.has(id)) return;
       settled.add(id);
       maybeFlush();
@@ -177,10 +187,12 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const now = deps.now;
   const state0 = await readCardsState(deps.prisma, ctx.kundliId, now);
   const spentToday = state0.spentUsd + i.spentBeforeUsd;
-  const asked = (Object.entries(state0.cards) as Array<[SelfCardId, { state: string }]>).filter(([, e]) => e.state === 'queued').map(([id]) => id);
+  const asked = (Object.entries(state0.cards) as Array<[CardId, { state: string }]>).filter(([, e]) => e.state === 'queued').map(([id]) => id);
   const order = cardOrder(i.board, asked, deps.readRest ?? isCardsReadRestEnabled());
   out.order = [...order.first, ...order.rest];
-  const done = new Set<SelfCardId>();
+  // docs/dashboards/10 §4.1 step 4: the pack serves the read cards and the other boards' active decks (one cached pack)
+  const packCards = [...new Set([...out.order, ...(i.packCards ?? []).filter((id) => isReadable(id))])];
+  const done = new Set<CardId>();
   const spent = () => round6(spentToday + out.spentUsd);
 
   const frameRender = renderYearFrame(i.frame, clockLabel(i.frame.clock));
@@ -192,7 +204,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const nowSpan = i.frame.spans.find((s) => s.place === 'now') ?? i.frame.spans[0]!;
   const spanDates = new Map(i.frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
   const pHash = [...[READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash), personalizerVoiceToken(ctx.sub.profile?.gender)].join('.');
-  const titles = i.board.map((id) => cardDef(id)?.title ?? id);
+  const titles = [...new Set<CardId>([...i.board, ...(i.packCards ?? [])])].map((id) => anyCardDef(id)?.title ?? id);
   const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
 
   // doc 71: one pack for every card this run may read, cached once; the board's cards in small groups, the rest after
@@ -200,12 +212,12 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   let pack: CardPack | null = null;
   let packCache: Promise<string | null> = Promise.resolve(null);
   let batch: ReturnType<typeof groupBatcher> | null = null;
-  const sectionsAll = i.sections as Partial<Record<SelfCardId, readonly string[]>>;
+  const sectionsAll = i.sections as Partial<Record<CardId, readonly string[]>>;
   if (grouped) {
-    pack = buildCardPack({ ctx, cards: out.order, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, slices: i.slices, portrait: i.portrait, answers: i.answers });
+    pack = buildCardPack({ ctx, cards: packCards, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, slices: i.slices, portrait: i.portrait, answers: i.answers });
     packCache = (deps.ensureCache ?? ensurePromptCache)(i.model, pack.system, pack.text, owner).catch(() => null);
   }
-  const runGroup = async (cards: SelfCardId[], call: string) => {
+  const runGroup = async (cards: CardId[], call: string) => {
     const cacheName = await packCache;
     return readCardGroup(
       { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed },
@@ -213,10 +225,10 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     );
   };
 
-  const one = async (id: SelfCardId): Promise<void> => {
+  const one = async (id: CardId): Promise<void> => {
     if (done.has(id)) return;
     done.add(id);
-    const def = cardDef(id)!;
+    const def = anyCardDef(id)!;
     if (spent() >= cap) {
       out.capReached = true;
       out.results.push({ card: id, status: 'skipped_cap', content: null, timings: [], issues: [], costUsd: 0 });
@@ -229,7 +241,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
       d.cards[id] = { state: 'reading', at: new Date().toISOString() };
     });
-    const sections = (i.sections[id] ?? ['line', 'year', 'stretch', 'confirm']) as PersonalizerV3Input['sections'][SelfCardId];
+    const sections = (i.sections[id] ?? ['line', 'year', 'stretch', 'confirm']) as PersonalizerV3Input['sections'][CardId];
     const key = cardStoreKey({
       card: id,
       clock: i.frame.clock,
@@ -313,7 +325,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   try {
     if (grouped) {
       // the board first, all at once in small groups; then the rest in larger groups (doc 71 §12)
-      const phase = async (ids: SelfCardId[], size: number, label: string) => {
+      const phase = async (ids: CardId[], size: number, label: string) => {
         const b = groupBatcher(runGroup, out.order, ids, size, label);
         batch = b;
         await pool(ids, ids.length, async (id) => {
@@ -330,7 +342,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     // cards queued while this ran (added to the board, or Try again) go next
     for (let round = 0; round < 3; round++) {
       const later = await readCardsState(deps.prisma, ctx.kundliId, now);
-      const more = (Object.entries(later.cards) as Array<[SelfCardId, { state: string }]>).filter(([id, e]) => e.state === 'queued' && !done.has(id)).map(([id]) => id);
+      const more = (Object.entries(later.cards) as Array<[CardId, { state: string }]>).filter(([id, e]) => e.state === 'queued' && !done.has(id) && isReadable(id)).map(([id]) => id);
       if (!more.length) break;
       // a card added after the pack was built is not in it: those go the one-card way
       const b = grouped && more.every((id) => pack!.allowed[id]) ? groupBatcher(runGroup, [...out.order, ...more], more, deps.groupSizeBoard ?? getCardsGroupSizeBoard(), 'later') : null;

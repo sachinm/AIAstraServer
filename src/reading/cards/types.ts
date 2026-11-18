@@ -3,13 +3,14 @@
  * the stored reading, and what one card run returns. Self first; Love and Work reuse these in Phase 4.
  */
 import type { SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
-import type { BoardReadingStage, CardReadState, OracleCardV3, PersonalCardV3, SelfCardId, SelfV3CardContent } from '../self/v3/types.js';
+import type { BoardReadingStage, CardId, CardReadState, OracleCardV3, PersonalCardV3, SelfV3CardContent } from '../self/v3/types.js';
 
 export const CARD_READING_TECHNIQUE = 'self.card.reading';
 export const CARD_ORACLE_AGENT = 'self.card.oracle';
 export const CARD_PERSONALIZER_AGENT = 'self.card.personalizer';
 export const CARD_ORACLE_PROMPT = 'cards/oracle';
-export const cardBriefPrompt = (id: SelfCardId): string => `cards/self/${id}`;
+/** docs/dashboards/10 §7 S2: `cards/<board>/<id>` (Self unchanged: `cards/self/<id>`) */
+export { cardBriefPrompt } from './registry.js';
 /** the marker row (`area_builds`, area below, as_of today) holding every card's state and the day's spend */
 export const CARDS_STATE_AREA = 'self.cards';
 /** a card `queued` or `reading` longer than this is taken as dead (its build died): shown failed, Try again works */
@@ -25,7 +26,7 @@ export interface CardStateEntry {
 
 /** the day's state of a kundli's card readings (one `area_builds` row per day) */
 export interface CardsStateDoc {
-  cards: Partial<Record<SelfCardId, CardStateEntry>>;
+  cards: Partial<Record<CardId, CardStateEntry>>;
   /** USD spent on card readings and the clock layer today */
   spentUsd: number;
   stage: BoardReadingStage;
@@ -33,6 +34,8 @@ export interface CardsStateDoc {
   clocks: Array<{ system: string; label: string; state: 'read' | 'missing' | 'failed' }>;
   capReached: boolean;
   preparing: boolean;
+  /** docs/dashboards/10 §4.1 step 2: the Love/Work boards opened today (their lens deck was queued once on open) */
+  opened?: Partial<Record<'love' | 'work', true>>;
 }
 
 export const emptyCardsState = (): CardsStateDoc => ({ cards: {}, spentUsd: 0, stage: 'idle', clocks: [], capReached: false, preparing: false });
@@ -40,7 +43,7 @@ export const emptyCardsState = (): CardsStateDoc => ({ cards: {}, spentUsd: 0, s
 /** one stored card reading (`technique_outputs`, technique `self.card.reading`) */
 export interface StoredCardReading {
   key: string;
-  card: SelfCardId;
+  card: CardId;
   content: SelfV3CardContent;
   oracle: OracleCardV3;
   personal: PersonalCardV3;
@@ -50,7 +53,7 @@ export interface StoredCardReading {
 }
 
 export interface CardRunResult {
-  card: SelfCardId;
+  card: CardId;
   status: 'ok' | 'cached' | 'failed' | 'skipped_cap';
   content: SelfV3CardContent | null;
   /** the validated Oracle card the content stands on (for the replay's checks; null when none) */
