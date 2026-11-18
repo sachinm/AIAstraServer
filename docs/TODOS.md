@@ -2805,3 +2805,57 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   [fundraising][web-dev] Done when public and investor text match what the product does.
 
 - **Rahu and Ketu `retro`/`is_retrograde` are always false in stored charts (found 2026-11-15, deploy session).** Rahu and Ketu are in every divisional chart (D1–D144) and Tithi Pravesha row, and carry `motion_state: "pratiloma"` (backward mean motion), but `retro` and `is_retrograde` read `false`, because the engine's retrograde flag covers Mars..Saturn only (`natal_export.py` `planets_in_retrograde` filter). A reader that trusts `retro` will call the nodes direct. Done: decide in the engine whether the nodes get `retro: true` or a documented `always_retrograde_mean_node` flag, and make readers use `motion_state`. Also open: 2035 Tithi Pravesha fails for Archisha (`pyjhora found no tithi pravesha for year 2036`, `annual_export.py:186`); cause not yet found.
+
+## Filed 2026-11-18 by the Self refresh-failure session (board shows "did not finish" on every card)
+
+- **P1 · fixed in code, not deployed · A dropped hero sentence threw away the whole Self v2 build.** `servesPage`
+  required the hero; the validator dropped Sachin's hero for "your career" (role word, `work.status = between_jobs`),
+  so the 18 Nov build (all model calls ok, about $0.10) was not stored and every card showed "did not finish".
+  Fix on `feat/self-foundation-server`: `src/reading/self/v2/failures.ts` serves on 8 of 11 areas alone; the hero is
+  withheld as a split hero already is. Done when deployed and one fresh reading on c584c0a3 stores cards (a paid call:
+  needs Sachin's yes).
+- **P1 · fixed in code, not deployed · Word filters dropped text and failed builds** (role words for `between_jobs`,
+  "Chronic", "annual cycle", caps, if-then form, prose dates). Sachin 2026-11-18: no filter in the software; the
+  Personalizer owns the words. All word filters removed from v2, v3, cards, now and areaDoc
+  (docs/reading-engine/82); engine names and internal keys are redacted in place. Done when deployed.
+- **P2 · open · `scripts/self-v2-replay.ts` imports the removed word lists** (`CHART_TERMS`, `MEDICAL_WORDS`,
+  `GENDERED_WORDS`, `roleWordsFor`, `bodyAdviceWords`) for its scan report. It is not type-checked and will fail at
+  run time. [scripts] Done when its word scan is removed or the script retired.
+- **P2 · open · Dead Lambda env vars:** `SELF_V2_ROLE_WORDS_NOT_WORKING`, `SELF_V2_NOT_WORKING_STATUSES`,
+  `SELF_V2_BODY_ADVICE_WORDS`, `PERSONALIZER_STEREOTYPE_PHRASES` are read by nothing now. [ops] Done when removed from
+  the `aiastra-server-api` config at the next env change.
+- **P2 · open · The v3 cards are built only when the v2 build serves** (`src/reading/self/v2/build.ts`,
+  `if (served && isSelfV3BuildEnabled())`), so a v2 failure leaves the live v3 page with no cards. Decoupling moves the
+  charge rule (docs/billing/03). [self] Done when Sachin decides.
+- **P2 · open · Sachin's facts read `work.status = between_jobs` with `work.level = owner_alone`** (tapped
+  2026-11-09). Both stand together oddly; the role-word filter keys only on the status. [profile] Done when the
+  facts are confirmed with Sachin; not edited here.
+- **P2 · open · The 16 Nov Self v2 build failed: every Gemini call returned "Your prepayment credits are depleted"**
+  (`reading_validation_failures`, check `call_failed`, all 11 areas and the repair). A billing outage, not a filter.
+  [billing][ops] Done when the Gemini project has credits and an alarm fires on `call_failed` with that text.
+- **P2 · open · No Self v2 card set has ever been stored for c584c0a3**, on any clock, so a failed refresh leaves no
+  earlier reading to fall back to: the page shows "did not finish" on all 11 cards. [self] Done when the first build
+  stores cards (the fix above), and the page shows something better than eleven failed cards when nothing is stored.
+- **P2 · open · The board header shows "That did not work. Try again" beside the disabled "Fresh reading from 6 Dec"**
+  (screenshot 2026-11-18, phone). The fresh reading is not due, yet the error and Try again stand next to it. [web]
+  Done when the header shows one state.
+- **P3 · done · CloudWatch logs for the 18 Nov failure read** (via `amplifyv2` → `OrganizationAccountAccessRole`,
+  read-only, Sachin's yes): Oracle 11 of 11 ok; Personalizer 16 findings (role_word 12, medical 2, chart_term 1,
+  headline_replaced 1); `self_v2_build_done status partial`. Live flags: `SELF_V3_BUILD` and `READING_CLOCK_LAYER`
+  unset, so no v3 card is built live; image `api-e5a6f7e9b7a1`.
+- **P2 · done 2026-11-18 · v3 flags on the live API Lambda:** `SELF_V3_BUILD=1` and `READING_CLOCK_LAYER=1` added to
+  `aiastra-server-api` (Sachin's instruction; 58 → 60 vars, others unchanged; `/health` 200). Until doc 83 ships, the
+  v3 cards still run only after a v2 build serves, and a build pays for v2 and v3.
+- **P1 · fixed 2026-11-18 (M54 applied to the live DB; code on feat/self-foundation-server) · The deep dasha sweep
+  failed on every write: `kundli_data_status_check` (Postgres 23514).** Migration
+  `20261118100000_kundli_data_slot_statuses_m54` widens the check to add `dispatched`, `queued`, `deferred_disk`;
+  `tests/unit/workers/kundliDataStatusCheck.test.ts` fails if the code writes a status the newest check does not
+  allow. Still to confirm: the next sweep logs `pulled` (CloudWatch). Was: The check
+  allows `ready | fetching | failed | unsupported`; `src/workers/dashaDeepSlots.ts` (2026-11-09, 53d3bae) writes the
+  slot marker as `dispatched` or `queued`, and `dashaDeep.ts` writes `deferred_disk`. CloudWatch shows 400+
+  `dasha_deep_sweep_invoke_failed` and `dasha_deep_focus_failed` since 17 Nov (kundlis c584c0a3, e1df0fcf, de5a2275
+  and others); only 3 `focus` rows are stored. The log line cuts the error at 300 characters, which hides the
+  constraint name. [dasha][db]
+- **P3 · open · `queueLogError` cuts error text at 300 characters** (`src/lib/queueLogger.ts redactForLog`), and a
+  Prisma error spends most of that on its preamble, so the constraint or column name never reaches CloudWatch.
+  [ops] Done when Prisma errors log their code and `meta` (constraint, column) ahead of the text.

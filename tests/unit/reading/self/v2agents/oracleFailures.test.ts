@@ -180,13 +180,12 @@ describe('findings in words → checks, rows and the serve rule', () => {
     ]);
   });
 
-  it('serves the page only with the hero and at least 8 of 11 areas ok or repaired', () => {
+  it('serves the page with at least 8 of 11 areas ok or repaired; a dropped hero no longer sinks it (2026-11-18)', () => {
     const q = qualityOf({ diagnosis: 'ok', stuck: 'ok', chapter: 'ok', chapters: 'ok', lagna: 'ok', mind: 'repaired', drive: 'repaired', presence: 'ok', body: 'failed', yogas: 'failed', year: 'failed' });
     expect(q.okAreas).toHaveLength(6);
     expect(q.repaired).toEqual(['mind', 'drive']);
-    expect(servesPage(q, true)).toBe(true);
-    expect(servesPage(q, false)).toBe(false);
-    expect(servesPage({ ...q, repaired: ['mind'] }, true)).toBe(false);
+    expect(servesPage(q)).toBe(true);
+    expect(servesPage({ ...q, repaired: ['mind'] })).toBe(false);
   });
 
   it('writes one row per finding and never throws (a client without the table writes nothing)', async () => {
@@ -275,28 +274,36 @@ describe('the build: store failures, fall back to the last good area, charge onl
     expect((await view(db)).quality!.repaired).toHaveLength(4);
   });
 
-  it('no hero: the build does not serve the page (partial, not stored, question given back)', async () => {
+  it('no hero: the cards still serve (ok, stored, charged) with the hero withheld (2026-11-18 refresh failure)', async () => {
     const db = makePrisma();
     const noHero = (areas: string[]) => personalJson(areas, { hero: { tone: 'mixed', sentence: '', sub: '', questionClaimId: '', questionText: '', withheld: true } });
     const r = await runSelfV2Build(buildDeps(db, [], { personal: noHero }), args());
-    expect(r.status).toBe('partial');
-    expect(r.stored.cards).toBe(false);
-    expect([...db.builds.values()][0]).toMatchObject({ status: 'failed', error: 'build does not serve the page' });
+    expect(r.status).toBe('ok');
+    expect(r.stored.cards).toBe(true);
+    expect(r.cards!.doc!.hero).toMatchObject({ sentence: '', withheld: true });
+    expect(r.gaps.join('\n')).toMatch(/hero withheld \(no sentence stood\)/);
+    expect([...db.builds.values()][0]).toMatchObject({ status: 'ready' });
   });
 
   it('the Personalizer validator drops are stored per card and check (no repair for them)', async () => {
     const db = makePrisma();
     const log: string[] = [];
+    // a card date that is not an Oracle window is a grounding drop; a chart term in the body is kept (doc 82)
     const chart = (areas: string[]) => {
       const doc = JSON.parse(personalJson(areas)) as { cards: Array<Record<string, unknown>> };
       doc.cards[0]!.body = ['Saturn presses your work now. It eases after 20 Feb 2027.', 'Finish one thing a week.'];
+      doc.cards[0]!.dates = [{ from: '2026-01-01', to: '2026-06-01', label: 'A made-up span' }];
       return JSON.stringify(doc);
     };
     const r = await runSelfV2Build(buildDeps(db, log, { personal: chart }), args());
     expect(r.status).toBe('ok');
     expect(log.filter((x) => x === 'call:self.personalizer')).toHaveLength(1);
     const rows = db.failures.filter((f) => f.stage === 'personalizer');
-    expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({ area: 'diagnosis', check: 'chart_term', call_id: 'self.personalizer', model: 'gemini-3.1-flash-lite', area_status: null })]));
-    expect(r.cards!.issues!.some((i) => i.check === 'chart_term')).toBe(true);
+    const area = rows.find((f) => f.check === 'date')?.area as string;
+    expect(area).toBeTruthy();
+    expect(rows).toEqual(expect.arrayContaining([expect.objectContaining({ area, check: 'date', call_id: 'self.personalizer', model: 'gemini-3.1-flash-lite', area_status: null })]));
+    expect(r.cards!.issues!.some((i) => i.check === 'date')).toBe(true);
+    expect(r.cards!.issues!.some((i) => i.check === 'chart_term')).toBe(false);
+    expect(r.cards!.doc!.cards[area as keyof NonNullable<typeof r.cards>['cardStatus']]!.body.join(' ')).toMatch(/Saturn presses your work/);
   });
 });

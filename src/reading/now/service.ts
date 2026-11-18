@@ -12,8 +12,7 @@ import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import { READER_SYSTEM_PROMPT } from '../clocks/types.js';
 import type { GeminiCallOptions, GeminiResult } from '../llm/gemini.js';
 import { loadProfilePack } from '../person/profile.js';
-import { roleWordsFor, textProblem, type TextCheckContext } from '../self/v2/personalizerValidate.js';
-import { seniorStageWordsFor } from '../self/v2/profileFit.js';
+import { redactEngineText, type TextCheckContext } from '../self/v2/personalizerValidate.js';
 import { claimKey, normaliseEvidenceKey, profileLines, promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { ProfilePack } from '../self/v2types.js';
 import { parseJson } from '../self/v3/oracle.js';
@@ -88,22 +87,21 @@ export function nowSchema(): Record<string, unknown> {
 }
 
 /** Checks one face against the day's slice and the person. Pure. */
-export function checkNowFace(raw: unknown, c: { keys: ReadonlySet<string>; periodEnds: ReadonlyMap<string, string>; text: TextCheckContext; clocksRead: number }): { face: NowFace | null; problems: string[] } {
+export function checkNowFace(raw: unknown, c: { keys: ReadonlySet<string>; periodEnds: ReadonlyMap<string, string>; text: TextCheckContext; clocksRead: number }): { face: NowFace | null; problems: string[]; notes: string[] } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const problems: string[] = [];
-  const text = (label: string, t: string, max: number) => {
-    if (!t) return problems.push(`${label}: empty`);
-    if (words(t) > max) problems.push(`${label}: ${words(t)} words, at most ${max}`);
-    const why = textProblem(t, c.text);
-    if (why) problems.push(`${label}: ${why}`);
+  // docs/reading-engine/82: no word lists, word caps or sentence-form checks; the prompt owns the words. A face is
+  // refused only for an empty field or ungrounded evidence. Engine names and internal keys are redacted in place.
+  const notes: string[] = [];
+  const text = (label: string, t: string) => {
+    if (!t) problems.push(`${label}: empty`);
   };
-  const line = S(o.line);
-  const asks = S(o.asks);
-  const step = S(o.step);
-  text('line', line, LINE_MAX);
-  text('asks', asks, ASKS_MAX);
-  text('step', step, STEP_MAX);
-  if (step && !/^if\b.+\bthen\b/i.test(step)) problems.push('step: not an if-then sentence');
+  const line = redactEngineText(S(o.line));
+  const asks = redactEngineText(S(o.asks));
+  const step = redactEngineText(S(o.step));
+  text('line', line);
+  text('asks', asks);
+  text('step', step);
   const ev = (Array.isArray(o.evidence) ? o.evidence : []).map((k) => normaliseEvidenceKey(S(k).replace(/^\{|\}$/g, ''))).filter(Boolean);
   const unknown = ev.filter((k) => !c.keys.has(k));
   if (ev.length < 2) problems.push('evidence: fewer than two keys');
@@ -117,7 +115,7 @@ export function checkNowFace(raw: unknown, c: { keys: ReadonlySet<string>; perio
   }
   const a = (o.agree ?? {}) as Record<string, unknown>;
   const agree = Number.isInteger(a.agree) && Number.isInteger(a.of) && (a.of as number) === c.clocksRead && (a.agree as number) >= 0 && (a.agree as number) <= (a.of as number) ? { agree: a.agree as number, of: a.of as number } : null;
-  return problems.length ? { face: null, problems } : { face: { line, asks, step, turns, agree }, problems };
+  return problems.length ? { face: null, problems, notes } : { face: { line, asks, step, turns, agree }, problems, notes };
 }
 
 function personBlock(p: ProfilePack): string {
@@ -202,7 +200,7 @@ async function makeNow(deps: NowDeps, userId: string, kundliId: string, asOf: st
     }
     const facts = sliceFacts(slice);
     const profile = await (deps.profile ?? loadProfilePack)(deps.prisma, userId, asOf);
-    const textCheck: TextCheckContext = { gender: profile.gender, dates: v3DateFrame([asOf, ...facts.periodEnds.values()]), roleWords: roleWordsFor(profile.facts), stageWords: seniorStageWordsFor(profile) };
+    const textCheck: TextCheckContext = { gender: profile.gender, dates: v3DateFrame([asOf, ...facts.periodEnds.values()]) };
     const keys = new Set(slice.keys.map(normaliseEvidenceKey));
     const storeKey = shortHash([slice.hash, profile.hash, promptHash(NOW_PROMPT), promptHash(READER_SYSTEM_PROMPT)].join('|'));
     const tomorrow = new Date(`${asOf}T00:00:00Z`);

@@ -66,14 +66,13 @@ describe('area document', () => {
       ctx,
     );
     expect(v.doc.areas.mind).toBeUndefined();
-    expect(v.withheld).toEqual(['mind', 'body']);
+    expect(v.withheld).toEqual(['mind']);
     expect(v.gaps).toContain('mind: a paragraph cited an unknown key (planet:D1.Ve)');
     expect(v.gaps).toContain('mind: date 2030-01-01..2030-06-01 (far) is outside every stored window');
     expect(v.gaps).toContain('money: not a panel of this board');
-    // the first sentence is itself over 22 words, so the headline is withheld and the area with it
-    expect(v.doc.areas.body).toBeUndefined();
-    expect(v.withheld).toContain('body');
-    expect(v.gaps).toContain('body: headline over 22 words, withheld');
+    // no headline word cap (doc 82): a long headline is kept whole, and the area with it
+    expect(v.doc.areas.body?.headline).toBe('A headline that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on far too long. Second sentence.');
+    expect(v.gaps.some((g) => /^body: headline/.test(g))).toBe(false);
     expect(v.doc.validUntil).toBe('always');
   });
 

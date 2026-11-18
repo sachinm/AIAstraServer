@@ -65,10 +65,16 @@ describe('storyteller: the illustration on a card', () => {
     dropped({ ...GOOD, illustrates: 'mind.p1' }, /not an Oracle paragraph id/);
   });
 
-  it('drops chart terms, engine names, medical words', () => {
-    dropped({ ...GOOD, text: 'Like Saturn sitting on your desk all day.' }, /chart term/);
-    dropped({ ...GOOD, text: 'As the calculation in Radha shows, it is like a low battery.' }, /engine name/);
-    dropped({ ...GOOD, text: 'Like a chronic illness that flares in the evening.' }, /medical word/);
+  const kept = (ill: Record<string, unknown>, text = ill.text, inp = input(), cardIndex = 0, id: 'diagnosis' | 'body' = 'diagnosis') => {
+    const v = run(ill, inp, undefined, cardIndex);
+    expect(v.doc.cards[id]!.illustration?.text).toBe(text);
+    expect(v.gaps.filter((g) => g.includes('illustration'))).toEqual([]);
+  };
+
+  it('keeps chart terms and medical words; redacts engine names in place (doc 82: no word filter)', () => {
+    kept({ ...GOOD, text: 'Like Saturn sitting on your desk all day.' });
+    kept({ ...GOOD, text: 'As the calculation in Radha shows, it is like a low battery.' }, 'As the calculation in traditional calculations shows, it is like a low battery.');
+    kept({ ...GOOD, text: 'Like a chronic illness that flares in the evening.' });
   });
 
   it('drops dates, years and month names, even ones the Oracle carries', () => {
@@ -79,10 +85,10 @@ describe('storyteller: the illustration on a card', () => {
     expect(run({ ...GOOD, text: 'Like a long commute: you may arrive tired even on easy days.' }).doc.cards.diagnosis!.illustration).toBeDefined();
   });
 
-  it('drops a gendered word when no gender is stated, and keeps it when one is', () => {
+  it('keeps a gendered word whether or not a gender is stated (doc 82)', () => {
     const ill = { ...GOOD, text: 'Like a coach who keeps her best player on the bench until the final.' };
-    dropped(ill, /gendered word/);
-    expect(run(ill, input('woman')).doc.cards.diagnosis!.illustration).toBeDefined();
+    kept(ill);
+    kept(ill, ill.text, input('woman'));
   });
 
   it('drops one over 40 words, and one with an unknown kind', () => {
@@ -90,15 +96,15 @@ describe('storyteller: the illustration on a card', () => {
     dropped({ ...GOOD, kind: 'joke' }, /unknown kind joke/);
   });
 
-  it('drops a profile-fit violation (a career-stage word a 25 to 35 band does not allow)', () => {
+  it('keeps a career-stage word for a 25 to 35 band (doc 82: the prompt owns the stage rule)', () => {
     const young = buildPersonalizerInput(makeCtx({ profile: makeProfile({ ageBand: '25_35', ageYears: 29 }) }), oracle);
-    dropped({ ...GOOD, text: 'Like a seasoned pilot who has flown this route a hundred times.' }, /career-stage word .*\(seasoned\)/, young);
+    const ill = { ...GOOD, text: 'Like a seasoned pilot who has flown this route a hundred times.' };
+    kept(ill, ill.text, young);
   });
 
-  it('the body card keeps its own words table (no diet advice in an illustration either)', () => {
-    const v = run({ text: 'Like skipping meals on a long drive: you keep going, but you pay for it later.', kind: 'analogy', illustrates: 'body.p1' }, input(), undefined, 3);
-    expect(v.doc.cards.body!.illustration).toBeUndefined();
-    expect(v.gaps.find((g) => g.startsWith('body: illustration dropped'))).toMatch(/diet or medicine advice|medical/);
+  it('the body card keeps a diet word in an illustration (doc 82)', () => {
+    const ill = { text: 'Like skipping meals on a long drive: you keep going, but you pay for it later.', kind: 'analogy', illustrates: 'body.p1' };
+    kept(ill, ill.text, input(), 3, 'body');
   });
 
   it('no illustration (or an empty one) is no illustration and no finding', () => {
