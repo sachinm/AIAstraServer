@@ -19,13 +19,16 @@ import {
   publicMessageFromChatProviderError,
 } from '../services/publicChatError.js';
 import { chatTurnService, type TurnEvent } from './chatTurnService.js';
+import { handleCardAsk, type CardChatRouteDeps } from '../routes/cardChatRoutes.js';
 
 export interface ChatRoutesDeps {
   prisma: PrismaClient;
   requireUser: (req: express.Request, res: express.Response) => Promise<string | null>;
+  /** docs/reading-engine/85: test seams of the card branch of ask-stream (`card` in the body) */
+  card?: Omit<CardChatRouteDeps, 'prisma' | 'requireUser'>;
 }
 
-export function registerChatRoutes(app: express.Express, deps: { prisma: PrismaClient; requireUser: (req: express.Request, res: express.Response) => Promise<string | null> }): void {
+export function registerChatRoutes(app: express.Express, deps: ChatRoutesDeps): void {
   const { prisma, requireUser } = deps;
 
   /**
@@ -46,6 +49,11 @@ export function registerChatRoutes(app: express.Express, deps: { prisma: PrismaC
 
     if (!question || typeof question !== 'string' || !question.trim()) {
       return res.status(400).json({ error: 'question is required' });
+    }
+
+    // docs/reading-engine/85: a question about one card is answered on that card's stored context
+    if ((req.body as { card?: unknown }).card !== undefined) {
+      return handleCardAsk({ prisma, requireUser, ...(deps.card ?? {}) }, req, res, userId);
     }
 
     const isSubject = (v: unknown): v is SubjectId =>

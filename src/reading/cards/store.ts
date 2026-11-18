@@ -82,3 +82,32 @@ export async function readCardReadings(prisma: PrismaClient, kundliId: string, c
   }
   return out;
 }
+
+/**
+ * docs/reading-engine/85 §4: the newest stored reading of ONE card on the clock, whole (content, the Oracle card, the
+ * Personalizer card, the ledger and frame hashes) with its store key, so the card chat reads the data the card was
+ * written from. The same row `readCardReadings` serves for that card (same filter, newest first). Null when none or
+ * unreadable. Never throws.
+ */
+export async function readStoredCardReading(prisma: PrismaClient, kundliId: string, clock: string, id: string): Promise<StoredCardReading | null> {
+  try {
+    const p = prisma as unknown as StorePrisma;
+    if (!p.techniqueOutput?.findMany) return null;
+    const rows = await p.techniqueOutput.findMany({
+      where: {
+        kundli_id: kundliId,
+        technique_id: CARD_READING_TECHNIQUE,
+        digest_version: { startsWith: `${CARD_KEY_PREFIX}card=${id}|`, contains: `|clock=${clock}|` },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 1,
+    });
+    const r = rows[0];
+    const s = r?.output as StoredCardReading | undefined;
+    if (!s?.card || !s.content) return null;
+    return { ...s, key: s.key || r?.digest_version || '' };
+  } catch (e) {
+    console.warn(JSON.stringify({ msg: 'card reading read failed', error: (e as Error).message?.slice(0, 200) }));
+    return null;
+  }
+}

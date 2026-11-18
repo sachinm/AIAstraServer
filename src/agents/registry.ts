@@ -306,6 +306,16 @@ export const AGENTS: AgentDef[] = [
       'Turns one Self, Love or Work board card Oracle answer into the person card (line, per-span asks, obstacle and step, confirm question), chained to its Oracle call, with the v3 text checks and one repair (docs/reading-engine/70 §4.1 Layer 5)',
   },
   {
+    id: 'card.chat',
+    title: 'Card chat',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'cards',
+    role: 'oracle',
+    description:
+      'Answers one question about one You, Love or Work card in plain prose, streamed, over the same cached prefix the card was read on (the common reader system prompt, natal.core, sky.window, year.tp, frame) with, uncached, the card-chat role, the card brief, the card as shown for the period on screen, its stored Oracle card, ledger cells and cited rows, the person facts and the last two exchanges; off-card questions get a pointer to the right card; one operation under READING_SPEND_CAP_USD (docs/reading-engine/85)',
+  },
+  {
     id: 'reading.clock',
     title: 'Clock reader',
     kind: 'llm',

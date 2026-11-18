@@ -2380,6 +2380,32 @@ const SELF_V2_AGENTS: TechniqueDef[] = [
     },
   },
   {
+    id: 'self.card.chat',
+    title: 'Card chat: a question about one board card, answered on that card',
+    category: 'self',
+    board: 'chat',
+    status: 'built',
+    charts: [c('natal', 'D1'), c('divisional', 'D9'), c('dasha', 'each clock of the reading set'), c('annual', 'year chart'), c('transit', 'sky window')],
+    algorithm: [
+      'The web sends only the board, the card id and the period on screen; the server re-reads the stored card through its board read path with every queue seam off (no build, digest or card queued) and refuses a card that is off, locked, not on the board or not read yet',
+      'Reads the data the card was written from, stored rows only: the stored card row (its Oracle card and person card), the shared prefix rebuilt from the stored slices (natal.core, sky.window, year.tp, frame; checked against the card store key), the agreed ledger cells of the card matters and the rows the card cites',
+      'One streamed call as agent card.chat on the reader model, the common reader system prompt and the shared prefix as the cached first part (the same cache key as the card own call), with, uncached, the card-chat role, the card brief, the card as shown for the period, how it was read, the person facts and the last two exchanges of the card thread',
+      'The answer keeps to the card purpose; a question outside it gets a pointer to the card or board that covers it. Each sent question takes one question under cardchat:<board>:<card>:<turn>; a retry of the same turn replays the saved answer; one operation under READING_SPEND_CAP_USD',
+    ],
+    source: 'docs/reading-engine/85',
+    code: 'src/reading/cardChat/resolve.ts resolveCardContext; src/reading/cardChat/answer.ts answerCardQuestion; src/routes/cardChatRoutes.ts',
+    agents: ['card.chat'],
+    accuracy: 'none',
+    // chosen by the card the person opened, never by the clarify context: the `card` slot is set only by a card chat
+    selectors: { slots: ['card'] },
+    contract: {
+      inputs: [inp('activation', 'the stored card, its Oracle card, ledger cells and cited rows, for the period on screen', 'activation_row')],
+      system: 'src/reading/prompts/common/reader-system.md',
+      user: ['TODAY', 'FACTS', 'QUESTION'],
+      output: 'answer.markdown',
+    },
+  },
+  {
     id: 'reading.clock.sheet',
     title: 'Clock sheet: one period clock read alone, span by span',
     category: 'self',

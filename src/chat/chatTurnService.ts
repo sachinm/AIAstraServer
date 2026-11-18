@@ -225,7 +225,9 @@ export class ChatTurnService {
     };
     active.events.push(errEvent);
     active.emitter.emit('event', errEvent);
-    active.emitter.emit('error', error);
+    // an EventEmitter throws on an 'error' with no listener: only a resuming client (resume-stream) listens, so without
+    // one this threw inside the ask-stream catch and the client never got its error frame (docs/reading-engine/85 tests)
+    if (active.emitter.listenerCount('error') > 0) active.emitter.emit('error', error);
 
     void appendTurnEventToRedis({
       meta: {
