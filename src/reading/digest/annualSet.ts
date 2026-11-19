@@ -63,7 +63,7 @@ export interface AnnualSetResult {
   failed: number;
   /** still missing after this run (the next run continues) */
   remaining: number;
-  /** failed rows left alone this run because they tried within ANNUAL_FAILED_BACKOFF_MS */
+  /** failed rows left alone this run: tried within ANNUAL_FAILED_BACKOFF_MS, or given up on (store.ts failedGivenUp) */
   backedOff: number;
   /** years whose every key is ready now and was not before this run: the only change the digest needs a rebuild for */
   yearsCompleted: number[];
@@ -89,7 +89,10 @@ export async function ensureAnnualSet(
   const now = opts.now?.() ?? Date.now();
   const coolingDown = (k: string) => {
     const it = stored[k];
-    if (!it || (it.status !== 'failed' && it.status !== 'unsupported') || !it.triedAt) return false;
+    if (!it || (it.status !== 'failed' && it.status !== 'unsupported')) return false;
+    // given up after repeated identical failures: not asked again until the engine or digest version changes
+    if (it.gaveUp) return true;
+    if (!it.triedAt) return false;
     return now - Date.parse(it.triedAt) < ANNUAL_FAILED_BACKOFF_MS;
   };
   const due = missing.filter((k) => !coolingDown(k));

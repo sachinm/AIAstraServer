@@ -16,6 +16,8 @@ import { authToAstroKundliParams, fetchEngineExport, type AstroKundliRequestPara
 import { ANNUAL_DIVISIONAL_OPTION, BUILTIN_CHART_TYPES, VARGA_FACTORS, mergeChartTypes, yearVariant, type ChartDataType, type ChartTypeRow } from './catalog.js';
 import { sealParam } from '../../lib/pii/rawSql.js';
 import { piiHash } from '../../lib/pii/hash.js';
+import { getChartDataFailedMaxTries } from '../../config/env.js';
+import { DIGEST_VERSION } from '../digest/types.js';
 
 export type ItemStatus = 'ready' | 'missing' | 'failed' | 'unsupported';
 export type ItemSource = 'db' | 'legacy' | 'radha' | null;
@@ -30,6 +32,8 @@ export interface ChartItem {
   error?: string;
   /** when a failed or unsupported row last tried (ISO), so callers can back off */
   triedAt?: string;
+  /** a failed row given up on (failedGivenUp): not fetched again until the engine or digest version changes */
+  gaveUp?: boolean;
 }
 
 export interface RowKey {
@@ -96,6 +100,46 @@ export interface EnsureDeps {
 
 /** A throttle is retried inside the Radha client and never lands here, so a failed row is a real failure. */
 const FAILED_RETRY_MS = 60_000;
+
+/**
+ * Failed rows that keep failing the same way (TODOS 2026-11-19: 25 `annual.tithi_pravesha(_dasha)` rows failed every
+ * 6 hours for days, 96 engine 500s in 72 h, all "found no tithi pravesha for year 2036"). Each failure's `error` starts
+ * with a mark of how many times in a row it failed with that message on that engine calc version and digest version:
+ * `[failures=<n> engine=<calc_version|-> digest=<digest version>] <message>`. At CHART_DATA_FAILED_MAX_TRIES (3) the row
+ * is given up: it stays `failed` (an existing status; no migration) with `valid_to` set to FAILED_GIVE_UP_UNTIL, which
+ * the sweep SQL reads (the `error` column is sealed). A new engine calc version for the type, or a new digest version,
+ * makes it due again, and the count starts over.
+ */
+export const FAILED_GIVE_UP_UNTIL = new Date('9999-12-31T00:00:00Z');
+const FAIL_MARK = /^\[failures=(\d+) engine=(\S+) digest=(\S+)\] ([\s\S]*)$/;
+
+export interface FailureMark {
+  failures: number;
+  engine: string;
+  digest: string;
+  message: string;
+}
+
+export function parseFailureMark(error: string | null | undefined): FailureMark | null {
+  const m = FAIL_MARK.exec(error ?? '');
+  return m ? { failures: Number(m[1]), engine: m[2]!, digest: m[3]!, message: m[4]! } : null;
+}
+
+/** The `error` and `valid_to` of a new failure, counted on from the row's previous one when it failed the same way. */
+export function markFailure(prev: Pick<StoredRow, 'status' | 'error'> | undefined, message: string, calcVersion: string | null, digest: string = DIGEST_VERSION, max: number = getChartDataFailedMaxTries()): { error: string; validTo: Date | null; failures: number } {
+  const engine = calcVersion ?? '-';
+  const before = prev?.status === 'failed' ? parseFailureMark(prev.error) : null;
+  const failures = before && before.engine === engine && before.digest === digest && before.message === message ? before.failures + 1 : 1;
+  return { error: `[failures=${failures} engine=${engine} digest=${digest}] ${message}`.slice(0, 600), validTo: failures >= max ? FAILED_GIVE_UP_UNTIL : null, failures };
+}
+
+/** A failed row given up on: it failed `max` times the same way, on the type's current calc version and this digest version. */
+export function failedGivenUp(row: Pick<StoredRow, 'status' | 'error' | 'calcVersion' | 'validTo'> | undefined, type: Pick<ChartDataType, 'calcVersion'>, now: number, digest: string = DIGEST_VERSION, max: number = getChartDataFailedMaxTries()): boolean {
+  if (!row || row.status !== 'failed' || !row.validTo || row.validTo.getTime() <= now) return false;
+  if (type.calcVersion != null && row.calcVersion !== type.calcVersion) return false;
+  const m = parseFailureMark(row.error);
+  return Boolean(m && m.failures >= max && m.digest === digest);
+}
 const UNSUPPORTED_RETRY_MS = 24 * 3_600_000;
 
 function concurrencyDefault(): number {
@@ -175,6 +219,7 @@ export function needsFetch(row: StoredRow | undefined, type: ChartDataType, now:
     case 'fetching':
       return !row.fetchStartedAt || now - row.fetchStartedAt.getTime() > leaseMs;
     case 'failed':
+      if (failedGivenUp(row, type, now)) return false;
       return !row.fetchedAt || now - row.fetchedAt.getTime() > FAILED_RETRY_MS;
     case 'unsupported':
       return type.served && (!row.fetchedAt || now - row.fetchedAt.getTime() > UNSUPPORTED_RETRY_MS);
@@ -288,7 +333,7 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     if (!stale || !w.type.served || opts.noFetch) {
       out[w.key] = !w.type.served && !row
         ? { key: w.key, id: w.id, variant: w.variant, status: 'unsupported', source: null, payload: null, error: 'Radha does not serve this type yet' }
-        : toItem(w.key, w.id, w.variant, row);
+        : { ...toItem(w.key, w.id, w.variant, row), ...(failedGivenUp(row, w.type, now()) ? { gaveUp: true } : {}) };
       // a stale-but-ready row is still returned when we may not fetch
       continue;
     }
@@ -324,7 +369,14 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
       const payload = await fetcher(req!, w.type.radhaType, radhaRequestFields(w.type, w.params));
       result = { status: 'ready', payload, calcVersion: w.type.calcVersion };
     } catch (err) {
-      result = { status: isUnsupportedError(err) ? 'unsupported' : 'failed', error: (err as Error).message?.slice(0, 500), calcVersion: w.type.calcVersion };
+      const message = (err as Error).message?.slice(0, 500) ?? 'failed';
+      if (isUnsupportedError(err)) result = { status: 'unsupported', error: message, calcVersion: w.type.calcVersion };
+      else {
+        // counted on from the row read before the claim (the claim clears `error`)
+        const mark = markFailure(rowOf(w), message, w.type.calcVersion);
+        result = { status: 'failed', error: mark.error, calcVersion: w.type.calcVersion, validTo: mark.validTo };
+        if (mark.validTo) console.warn(JSON.stringify({ msg: 'chart row given up after repeated identical failures', type: w.id, variant: w.variant, failures: mark.failures }));
+      }
     }
     if (!degraded) await repo.complete(kundliId, key, ayanamsa, result);
     out[w.key] =
@@ -511,7 +563,10 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
     } catch (err) {
       const status = isUnsupportedError(err) ? 'unsupported' : 'failed';
       const error = (err as Error).message?.slice(0, 500);
-      if (!degraded) await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status, error, calcVersion });
+      // a failed pointer counts its repeats like any row (markFailure), from the pointer read before the claim
+      const mark = status === 'failed' ? markFailure(pointers.find((r) => r.dataType === w.id), error ?? 'failed', calcVersion) : null;
+      if (mark?.validTo) console.warn(JSON.stringify({ msg: 'chart row given up after repeated identical failures', type: w.id, variant: CURRENT_VARIANT, failures: mark.failures }));
+      if (!degraded) await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status, error: mark?.error ?? error, calcVersion, ...(mark ? { validTo: mark.validTo } : {}) });
       out[w.id] = fail(w.id, error ?? status, status);
     }
   });
