@@ -3,10 +3,9 @@
  * Oracle cards of that call (the cached prefix) and the person (the suffix). It writes the face of each card: the line,
  * and per span asks, obstacle and one if-then step. Spans, tones and modes stay the Oracle's.
  *
- * The validator reuses v2's text checks (engine names, internal ids, chart terms, medical words, the body card's diet and
- * medicine words, role and stage words, gendered words with no stated gender, dates not in the Oracle cards). A card
- * whose line or any span fails is withheld (the v2 card stays on the board); a bad `confirm`, `pattern` or `ladder` is
- * dropped alone.
+ * No word lists, word caps or sentence-form checks (docs/reading-engine/82): the prompt owns the words. Engine names and
+ * internal keys are redacted in place (`redactEngineText`). A card is withheld only when its line or a span's field is
+ * empty or a span is missing (the v2 card stays on the board); an empty `ladder` step drops the ladder alone.
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
@@ -360,7 +359,7 @@ export async function runPersonalizerV3(
         else {
           withheld.push(oc.card);
           dropped[oc.card] = r.problems;
-          for (const p of r.problems) issues.push({ stage: 'personalizer', area: oc.card, check: /chart term/.test(p) ? 'chart_term' : /medical/.test(p) ? 'medical' : /role word/.test(p) ? 'role_word' : /date|month|year/.test(p) ? 'date' : /gendered/.test(p) ? 'gendered' : /engine/.test(p) ? 'engine_name' : /words, at most/.test(p) ? 'cap' : 'other', message: `${oc.card}: ${p}`.slice(0, 300), callId: c.call });
+          for (const p of r.problems) issues.push({ stage: 'personalizer', area: oc.card, check: 'withheld', message: `${oc.card}: ${p}`.slice(0, 300), callId: c.call });
         }
       }
   };
