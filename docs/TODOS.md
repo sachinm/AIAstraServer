@@ -2994,7 +2994,7 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 
 ## Filed 2026-11-18 by Server S1 of doc 13 (card `chart` reading; branch `feat/card-chart-why`)
 
-- **P2 · open · `chart` is served to every plan; the v2 Chart details are gated by `feature.why_panel`.** S1 serves
+- **P2 · done 2026-11-18 · `chart` is now gated by `feature.why_panel` (`applySelfFeatures`, test in `tests/unit/boards/features.test.ts`).** Was: `chart` is served to every plan; the v2 Chart details are gated by `feature.why_panel`. S1 serves
   `cards[].v3.chart` (gift, knot, certainty, per-span `shows`, from the stored Oracle card) on GET /api/self/v3 and GET
   /api/board/:board/v3 for every card that is not locked. `applySelfFeatures` (`src/reading/self/v3/response.ts`) blanks
   `v2.details` when `feature.why_panel` is not usable, but nothing gates `v3.chart`; doc 13 §4.2 calls the field additive
@@ -3014,3 +3014,44 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   (default candidate list includes `ready`), and the `self.sub.periods`/`self.sub.clock` order item above.
   `specialistFailures.test.ts` and `coachAndRoutes.test.ts` fail only on timeouts in a full run and pass alone. The full
   `tests/unit` run did not finish in 590 s on this machine. Owner: next session in those areas. Done: all pass.
+
+## Filed 2026-11-18 by the doc 13 build (tablet and desktop Outlook cards; web branch `feat/board-outlook`)
+
+- **P2 · open · Plain-language "Why we think so" is not written yet (doc 13 phase 5, gated).** Outlook shows a counted line
+  ("5 of 7 timing systems read this stretch as mixed") and a link to Astrology Reading. A one-sentence `why` from the
+  Personalizer (`SelfV3CardContent.why`, type already added) needs a prompt change, which changes the card key's prompt
+  hash: every board re-reads once on a paid key (about $0.07 per board, cap $0.45). Ship it in the same release as the
+  Love/Work technique prompts (`feat/love-work-techniques`) so boards re-read once. [Sachin: yes to the paid re-read]
+  Done: `why` written on every card; Outlook shows it first.
+- **P2 · open · Every card in a build carries the same windows and key dates** (`self/v3/oracle.ts:130-148`: the frame's
+  spans, not the card's). The calendar therefore looks the same on every card. Owner: Oracle card prompt and
+  `foundation.ts`. Done: a card may carry its own dated windows (a Love card's dating window differs from a Body card's).
+- **P2 · open · `PeriodStrip.tsx:28` calls `scrollIntoView` on mount, which also scrolls the carousel track.** At one
+  card across (tablet portrait, phone) a card with two or more periods that starts off screen moved the board to the
+  second card. The carousel now ignores scrolls that are not a swipe (`Carousel.tsx`), so the symptom is fixed; the call
+  still fires. `Chips.tsx` has the same pattern. Done: scroll the strip's own row, as `TitleStrip.tsx` does.
+- **P2 · open · Phone has no way back to "Choose dashboards".** The wizard copy says "from Choose dashboards in the side
+  menu", but below 768 px `ProfileMenuSheet` has no such entry. Done: add the entry (opens `DashboardChooserSheet`).
+- **P2 · open · Phone card still shows Read · Analysis · Calendar** and keeps "Is this right?" inside the scroll. Doc 13
+  scoped this pass to tablet and desktop. Done: pass `shape="board"` on the phone too, once approved.
+- **P3 · open · Header chips row overlaps the "1 of 8" counter at 1920 px** (the last chip is cut: "Yo…") and the
+  768 px header line truncates to "built 9 Nov 20…". Where: `CardChips.tsx`, `BoardV3.tsx` head row. Done: chips stop
+  before the counter; the clock line wraps or shortens.
+- **P3 · open · The cards chooser (Edit → Cards) uses about a third of the width at 1920 px;** tray chips have uneven
+  widths (`BoardCardPicker.tsx`). Done: tiles fill the width; equal chips.
+- **P3 · open · The rail flashes nothing now, but `Esc` closes both the phone drawer and the Choose dashboards sheet**
+  (both listen on `window`). Done: the top-most layer takes the key.
+- **P3 · open · Light-theme file drifts.** `src/theme-light.css` is generated (`node scripts/gen-light-theme.mjs`) and
+  was stale on `develop` (`src/lib/theme.test.ts` failed). Regenerated in the doc 13 commit. Done: regenerate in the
+  build, or fail CI when stale.
+- **P3 · open · Amplify build runs `vite build` only** (no `tsc`, no tests). Done: add `npm run typecheck` and the unit
+  run to the workflow.
+- **P3 · open · `GET /api/board/:board/v3/layout` and the catalogue route have no `assertOwnAccount` check** (the TODO
+  above covers PUT only). Done: all three refuse another account with 403.
+- **P3 · open · Dead code and stale notes:** `ShortFace` branch in `FaceBody.tsx`, `LensTitleButton`, `BoardTabBar` (only
+  `boardsEnabled` is used), `vetCardTools` (tests only); the TODO about Love/Work having no layout route is stale; the
+  comment at `src/profile/facts.ts:28` still says "(self, love, work)"; `VITE_BOARDS_ENABLED` is missing from
+  `.env.production` and `.env.development` (the rail depends on it).
+- **P3 · open · Running `playwright test <file> <file>` from Git Bash runs the whole suite** and rewrites tracked
+  screenshots under `docs/screenshots/`. Use PowerShell with one explicit spec and `--project`. Done: a note in the web
+  `AGENTS.md`.
