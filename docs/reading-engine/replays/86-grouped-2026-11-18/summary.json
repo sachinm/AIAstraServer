@@ -1,0 +1,363 @@
+{
+  "kundli": "c584c0a3-841b-451b-a2ed-f5709c5fb31d",
+  "asOf": "2026-11-18",
+  "model": "gemini-3.8-flash",
+  "mode": "live",
+  "capUsd": 0.45,
+  "agentRegistrySeeded": 60,
+  "build": {
+    "status": "ok",
+    "gaps": [
+      "v3: clock layer partial"
+    ],
+    "clockLayer": {
+      "status": "partial",
+      "prefixHash": "3ac881d96559e076a608da78",
+      "spentUsd": 0,
+      "sheets": [
+        {
+          "system": "dwisatpathi",
+          "status": "ok",
+          "cells": 12
+        },
+        {
+          "system": "narayana",
+          "status": "ok",
+          "cells": 12
+        },
+        {
+          "system": "vimsottari",
+          "status": "partial",
+          "cells": 10
+        },
+        {
+          "system": "yogini",
+          "status": "ok",
+          "cells": 12
+        },
+        {
+          "system": "tithi_pravesha",
+          "status": "partial",
+          "cells": 11
+        }
+      ],
+      "byStatus": {
+        "confirmed": 10,
+        "leaning": 1,
+        "single": 1,
+        "contested": 0
+      }
+    },
+    "layerFallback": false,
+    "ms": {
+      "frame": 1770.16,
+      "slices": 902.51,
+      "clockLayer": 430.79,
+      "cards": 28636.59,
+      "total": 35466.86
+    },
+    "buildMs": 37302
+  },
+  "pack": {
+    "cards": 11,
+    "board": [
+      "body",
+      "mind",
+      "stuck",
+      "drive",
+      "yogas",
+      "presence",
+      "lagna",
+      "diagnosis",
+      "chapter",
+      "chapters",
+      "year"
+    ],
+    "ledgerCells": 12,
+    "before": {
+      "chars": 162790,
+      "estTokens": 73996,
+      "duplicateLines": 177
+    },
+    "after": {
+      "chars": 143448,
+      "estTokens": 65204,
+      "duplicateLines": 26,
+      "hash": "b2c0d022a13e96daac616e0e"
+    },
+    "byteStable": true,
+    "reorderStable": true,
+    "prefixChars": 90291,
+    "plan": [
+      [
+        "body",
+        "mind"
+      ],
+      [
+        "stuck",
+        "drive"
+      ],
+      [
+        "yogas",
+        "presence"
+      ],
+      [
+        "lagna",
+        "diagnosis"
+      ],
+      [
+        "chapter",
+        "chapters"
+      ],
+      [
+        "year"
+      ]
+    ]
+  },
+  "cards": [
+    {
+      "card": "year",
+      "status": "ok",
+      "costUsd": 0.008351,
+      "issues": 0
+    },
+    {
+      "card": "drive",
+      "status": "ok",
+      "costUsd": 0.005411,
+      "issues": 0
+    },
+    {
+      "card": "stuck",
+      "status": "ok",
+      "costUsd": 0.005411,
+      "issues": 0
+    },
+    {
+      "card": "yogas",
+      "status": "ok",
+      "costUsd": 0.005886,
+      "issues": 0
+    },
+    {
+      "card": "presence",
+      "status": "ok",
+      "costUsd": 0.005886,
+      "issues": 0
+    },
+    {
+      "card": "lagna",
+      "status": "ok",
+      "costUsd": 0.005986,
+      "issues": 1
+    },
+    {
+      "card": "diagnosis",
+      "status": "ok",
+      "costUsd": 0.005986,
+      "issues": 1
+    },
+    {
+      "card": "chapter",
+      "status": "ok",
+      "costUsd": 0.005841,
+      "issues": 2
+    },
+    {
+      "card": "chapters",
+      "status": "ok",
+      "costUsd": 0.005841,
+      "issues": 2
+    },
+    {
+      "card": "body",
+      "status": "ok",
+      "costUsd": 0.006403,
+      "issues": 0
+    },
+    {
+      "card": "mind",
+      "status": "ok",
+      "costUsd": 0.006403,
+      "issues": 0
+    }
+  ],
+  "cardsRun": {
+    "spentUsd": 0.067405,
+    "capReached": false,
+    "read": 11,
+    "wanted": 11
+  },
+  "cacheCheckAtMs": 51431,
+  "buildEndMs": 50728,
+  "caches": [
+    {
+      "name": "…i3cnxnetrhrxq",
+      "httpStatus": 403,
+      "registryDeletedAt": "2026-11-18T23:57:42.568Z",
+      "deleteError": null
+    }
+  ],
+  "cachesDeleted": true,
+  "creates": [
+    {
+      "name": "cachedContents/i3cnxnetrhr…",
+      "key": "b8327b4a5caecf3b8dc24a16",
+      "ms": 1733,
+      "tokens": 61866,
+      "at": 22327
+    }
+  ],
+  "ensures": [
+    {
+      "base": 124936,
+      "ms": 3027,
+      "name": "cachedContents/i3cnxnetrhr…"
+    }
+  ],
+  "calls": [
+    {
+      "node": "self.card.group.board.5",
+      "cards": [
+        "year"
+      ],
+      "startMs": 22781,
+      "endMs": 32964,
+      "ms": 10183,
+      "ttftMs": 10182,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62009,
+      "cachedTokens": 61866,
+      "outputTokens": 961,
+      "thoughtTokens": 0,
+      "costUsd": 0.008350950000000001,
+      "finish": "STOP",
+      "maxOutputTokens": 2048,
+      "cachedContent": true
+    },
+    {
+      "node": "self.card.group.board.1",
+      "cards": [
+        "stuck",
+        "drive"
+      ],
+      "startMs": 22772,
+      "endMs": 39275,
+      "ms": 16503,
+      "ttftMs": 16501,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62057,
+      "cachedTokens": 61866,
+      "outputTokens": 1610,
+      "thoughtTokens": 0,
+      "costUsd": 0.0108207,
+      "finish": "STOP",
+      "maxOutputTokens": 3200,
+      "cachedContent": true
+    },
+    {
+      "node": "self.card.group.board.2",
+      "cards": [
+        "yogas",
+        "presence"
+      ],
+      "startMs": 22775,
+      "endMs": 39405,
+      "ms": 16630,
+      "ttftMs": 16630,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62049,
+      "cachedTokens": 61866,
+      "outputTokens": 1865,
+      "thoughtTokens": 0,
+      "costUsd": 0.01177095,
+      "finish": "STOP",
+      "maxOutputTokens": 3200,
+      "cachedContent": true
+    },
+    {
+      "node": "self.card.group.board.3",
+      "cards": [
+        "lagna",
+        "diagnosis"
+      ],
+      "startMs": 22777,
+      "endMs": 39667,
+      "ms": 16890,
+      "ttftMs": 16890,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62051,
+      "cachedTokens": 61866,
+      "outputTokens": 1918,
+      "thoughtTokens": 0,
+      "costUsd": 0.011971200000000001,
+      "finish": "STOP",
+      "maxOutputTokens": 3200,
+      "cachedContent": true
+    },
+    {
+      "node": "self.card.group.board.4",
+      "cards": [
+        "chapter",
+        "chapters"
+      ],
+      "startMs": 22779,
+      "endMs": 39710,
+      "ms": 16931,
+      "ttftMs": 16931,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62040,
+      "cachedTokens": 61866,
+      "outputTokens": 1843,
+      "thoughtTokens": 0,
+      "costUsd": 0.011681700000000001,
+      "finish": "STOP",
+      "maxOutputTokens": 3200,
+      "cachedContent": true
+    },
+    {
+      "node": "self.card.group.board.0",
+      "cards": [
+        "body",
+        "mind"
+      ],
+      "startMs": 22762,
+      "endMs": 39958,
+      "ms": 17196,
+      "ttftMs": 17194,
+      "model": "gemini-3.8-flash",
+      "promptTokens": 62054,
+      "cachedTokens": 61866,
+      "outputTokens": 2140,
+      "thoughtTokens": 0,
+      "costUsd": 0.01280595,
+      "finish": "STOP",
+      "maxOutputTokens": 3200,
+      "cachedContent": true
+    }
+  ],
+  "refused": [],
+  "callsUsd": 0.067401,
+  "readCardsMs": 28637,
+  "readCardsStartMs": 19297,
+  "callsSpanMs": 17196,
+  "createWorstUsd": 0.0464,
+  "price": {
+    "in": 0.75,
+    "out": 3.75,
+    "cached": 0.075,
+    "storagePerHour": 0.5
+  },
+  "packTokens": [
+    61866
+  ],
+  "swallowedWrites": 1,
+  "swallowedByTable": {
+    "kundliSlice.upsert": 1
+  },
+  "allowedWrites": {
+    "agentRun.create": 16,
+    "areaBuild.upsert": 7,
+    "techniqueOutput.upsert": 11
+  }
+}

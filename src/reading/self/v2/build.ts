@@ -47,6 +47,7 @@ import type {
   WarmedRegion,
 } from '../v2types.js';
 import { issuesFromGaps, logValidation, qualityOf, recordValidationIssues, SERVE_MIN_AREAS, servesPage, type RecordMeta } from './failures.js';
+import { withCacheLease } from '../../llm/cacheLease.js';
 import { markAgentUsed, warmPrefixes } from './cache.js';
 import { runOracleV2, timingOf } from './oracle.js';
 import { runPersonalizer } from './personalizer.js';
@@ -349,7 +350,17 @@ async function runFamilyReaders(
 }
 
 /** Runs one Self v2 build to the end (doc 66 §4.8). Never throws. */
+/**
+ * The dashboard build under a recording cache lease (doc 86, Sachin 2026-11-18): every explicit cache its own calls use
+ * for this kundli (the five family prefixes, the Oracle and Personalizer prefixes, the clock prefix, the card pack; all
+ * built from this person's data) is deleted when the build ends, unless another operation on the kundli still holds a
+ * lease (a card chat, a second build). Failed deletes go to the sweeper.
+ */
 export async function runSelfV2Build(deps: SelfV2BuildDeps, args: SelfV2BuildArgs): Promise<SelfV2BuildResult> {
+  return withCacheLease({ userId: args.userId, kundliId: args.kundliId }, 'build.v2', () => runSelfV2BuildUnleased(deps, args));
+}
+
+async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildArgs): Promise<SelfV2BuildResult> {
   const tAll = performance.now();
   const now = (deps.now ?? (() => new Date()))();
   // each stage a person sees is written to today's marker in order (docs/loading-overlay/05); a failed write never stops

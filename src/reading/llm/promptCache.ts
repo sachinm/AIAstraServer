@@ -76,6 +76,26 @@ function geminiKey(): string | null {
 export const cacheStats = { created: 0, adopted: 0, hits: 0, misses: 0, extended: 0, errors: 0 };
 
 let cacheOwnerUsedHook: ((owner: CacheOwner) => void) | null = null;
+let cacheKeyUsedHook: ((owner: CacheOwner, key: string) => void) | null = null;
+let cacheCreatedHook: ((c: CacheCreated) => void) | null = null;
+
+/** One cache created by this instance: its name, prefix key, the create call's time and Gemini's token count. */
+export interface CacheCreated {
+  name: string;
+  key: string;
+  ms: number;
+  tokens: number | null;
+}
+
+/** Registers a callback invoked with the prefix key every time a cache entry is looked up or warmed for an owner (doc 86 leases). */
+export function setCacheKeyUsedHook(fn: ((owner: CacheOwner, key: string) => void) | null): void {
+  cacheKeyUsedHook = fn;
+}
+
+/** Registers a callback invoked after each cache this instance creates (measurement; doc 86). */
+export function setCacheCreatedHook(fn: ((c: CacheCreated) => void) | null): void {
+  cacheCreatedHook = fn;
+}
 let userCachesDeletedHook: ((userId: string) => void) | null = null;
 
 /** Registers a callback invoked whenever a prompt cache is accessed or created for an individual (`userId`/`kundliId`). */
@@ -222,15 +242,23 @@ async function adoptOrCreate(key: string, e: Entry, model: string, system: strin
       contents: [{ role: 'user', parts: [{ text: base }] }],
       ttl: `${ttlSeconds()}s`,
     };
+    const t0 = Date.now();
     const res = await fetch(`${cachedContentsUrl()}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
-    const json = (await res.json()) as { name?: string; expireTime?: string; error?: { message?: string } };
+    const json = (await res.json()) as { name?: string; expireTime?: string; usageMetadata?: { totalTokenCount?: number }; error?: { message?: string } };
     if (!res.ok || !json.name) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
     const created = Date.now();
+    if (cacheCreatedHook) {
+      try {
+        cacheCreatedHook({ name: json.name, key, ms: created - t0, tokens: json.usageMetadata?.totalTokenCount ?? null });
+      } catch {
+        // measurement only
+      }
+    }
     e.name = json.name;
     e.expiresAt = json.expireTime ? Date.parse(json.expireTime) : created + ttlSeconds() * 1000;
     e.touchedAt = created;
@@ -286,6 +314,13 @@ function entryFor(key: string, owner: CacheOwner): Entry {
   }
   if (owner.userId) e.owner.userId = owner.userId;
   if (owner.kundliId) e.owner.kundliId = owner.kundliId;
+  if (cacheKeyUsedHook && (e.owner.userId || e.owner.kundliId)) {
+    try {
+      cacheKeyUsedHook(e.owner, key);
+    } catch {
+      // never break a cache lookup
+    }
+  }
   return e;
 }
 
@@ -324,7 +359,7 @@ export async function ensurePromptCache(model: string, system: string | undefine
   return isLive(e) ? e.name! : null;
 }
 
-export function cacheNameFor(model: string, system: string | undefined, base: string, apiKey: string, owner: CacheOwner = {}): string | null {
+export function cacheNameFor(model: string, system: string | undefined, base: string, apiKey: string, owner: CacheOwner = {}, opts: { create?: boolean } = {}): string | null {
   if (!explicitCacheEnabled() || !base) return null;
   const key = prefixKey(model, system, base);
   const e = entryFor(key, owner);
@@ -347,7 +382,7 @@ export function cacheNameFor(model: string, system: string | undefined, base: st
   e.uses += 1;
   if (e.name) e.name = undefined; // expired
   if (!e.creating && (!e.disabledUntil || e.disabledUntil < now)) {
-    const allowCreate = e.uses >= minUses();
+    const allowCreate = opts.create !== false && e.uses >= minUses();
     // first sighting on this instance: ask the registry whether another instance already cached this prefix
     if (allowCreate || !e.looked) {
       e.looked = true;
@@ -402,6 +437,41 @@ async function deleteOne(name: string, apiKey: string, expiresAt?: Date | null):
     console.warn(JSON.stringify({ msg: 'llm cache delete failed; the sweeper retries', name, error: msg }));
     return false;
   }
+}
+
+/**
+ * Deletes the caches of these prefix keys now (doc 86: a build's caches when its last lease is released). A create in
+ * flight is awaited first, so no cache appears after its delete. The name is this instance's, else the registry's live
+ * row. A failed delete keeps the row live with its error and moves `last_used_at` to the epoch, so the next
+ * `llm-cache-sweep` deletes it. Never throws.
+ */
+export async function deleteCachesByKey(keys: Iterable<string>, now: Date = new Date()): Promise<{ deleted: number; failed: number; names: string[] }> {
+  const out = { deleted: 0, failed: 0, names: [] as string[] };
+  const apiKey = geminiKey();
+  for (const key of new Set(keys)) {
+    const e = entries.get(key);
+    try {
+      if (e?.creating) await e.creating;
+    } catch {
+      // a failed create leaves nothing to delete
+    }
+    const live = await reg('findLive', null as CacheRow | null, (r) => r.findLive(key, now));
+    const names = new Set([...(e?.name ? [e.name] : []), ...(live ? [live.name] : [])]);
+    if (e) {
+      e.name = undefined;
+      e.expiresAt = undefined;
+    }
+    if (!apiKey) continue;
+    for (const name of names) {
+      out.names.push(name);
+      if (await deleteOne(name, apiKey, live?.name === name ? live.expiresAt : null)) out.deleted += 1;
+      else {
+        out.failed += 1;
+        await reg('queueForSweep', undefined, (r) => r.touch(name, new Date(0)));
+      }
+    }
+  }
+  return out;
 }
 
 /** Evicts in-memory prompt cache entries belonging to an individual (`userId` and/or `kundliId`). */

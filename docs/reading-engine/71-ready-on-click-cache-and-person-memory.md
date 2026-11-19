@@ -176,6 +176,30 @@ The cost row assumes about $0.50 per million input tokens, a tenth of that for c
 tokens per hour, keeping a pack of that size up for 45 minutes costs about $0.11, which is close to the reading
 itself. In that case the cache should live 10 to 15 minutes and be extended by the heartbeat.
 
+### Measured 2026-11-18 (doc 86, one grouped read of a board, kundli `c584c0a3`, `gemini-3.8-flash`)
+
+Run: `scripts/measure-grouped-cards.ts --yes-spend`, cap $0.45. Output:
+`docs/reading-engine/replays/86-grouped-2026-11-18/summary.json`. The board's 11 cards, stored clock layer, no reader or
+concordance call. Compared with the per-card path of the live build on the same kundli that morning (`agent_runs`).
+
+| | Per-card path (18 Nov 08:41, Lambda) | Grouped, doc 86 (18 Nov 23:57) |
+|---|---|---|
+| Calls | 22 (11 Oracle + 11 Personalizer) | 6 (5 × 2 cards + 1), all in parallel, no repair |
+| Pack | none (each card read the 43k reader prefix cached) | **61,866 tokens** (Gemini's count at create); about 70,200 with the layout before doc 86 |
+| Cache creation | (prefix made by the clock layer) | **1.73 s** for the create call; 3.0 s with the registry lookup and row |
+| Model time, first card call to last answer | **35.7 s** | **17.2 s** (calls 10.2 to 17.2 s; 961 to 2,140 output tokens each, about 124 tokens a second) |
+| First card call to the last reading stored | about 36 s | 19.6 s |
+| Card phase end to end (`readCards`, run from a laptop to the Render database) | – | 28.6 s (3.5 s before the first call, 8 s of state and store writes after the last) |
+| Cost of the calls | **$0.172** ($0.123 Oracle, $0.049 Personalizer) | **$0.067** ($0.028 cached reads, $0.039 output, $0.001 uncached request) |
+| Cached-read price | – | $0.075 per 1M tokens: $0.0046 per call on this pack |
+| Cache storage | – | $0.50 per 1M tokens per hour: the pack lived **28 s** (created 23:57:14.6, deleted 23:57:42.6) = $0.0002; a 45-minute life would be $0.023 |
+| Creation charge | – | not stated by Google; at worst the input rate: $0.046 |
+| Total for the board's cards | $0.172 | **$0.067 to $0.114** (with the creation at worst) |
+
+The cache was deleted at the build's lease release, 2.4 s after the last card was stored: Gemini answers 403 on it and
+its `llm_cache_entries` row has `deleted_at`. All 11 cards passed the checks on the first call. From 2027-01-01 every
+price above doubles.
+
 ## 9. Quality bar
 
 The new path must match the stored run on the same kundli and seed: 21 of 21 cards, every span grounded, no chart

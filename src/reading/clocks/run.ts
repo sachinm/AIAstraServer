@@ -55,6 +55,12 @@ export interface ClockLayerDeps extends ClockCallDeps {
    * the counted ledger meanwhile (doc 70 Phase 3 replay fixes: the 44 s concordance no longer stands before the first card).
    */
   words?: 'await' | 'background';
+  /**
+   * false: warm the shared prefix cache only when the stored layer misses (the readers then read it). With the card
+   * group pack nothing else reads that prefix on a hit, so warming it would be a create and a delete for nothing (doc 86).
+   * Default true: warmed in parallel with the cache read, as the per-card path reads it.
+   */
+  warmOnHit?: boolean;
 }
 
 /** what the concordance added after a `background` layer returned: the worded ledger, its call, its issues */
@@ -182,10 +188,15 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
     });
     result.cacheKey = key;
     const tw = performance.now();
-    const [warmed, hit] = await Promise.all([
-      warmPrefixes([warmSlice], { ensureCache: deps.ensureCache }),
-      deps.force ? Promise.resolve(null) : (deps.readCache ?? readLayerCache)(deps.prisma, input.ctx.kundliId, key),
-    ]);
+    const readHit = () => (deps.force ? Promise.resolve(null) : (deps.readCache ?? readLayerCache)(deps.prisma, input.ctx.kundliId, key));
+    let warmed: Awaited<ReturnType<typeof warmPrefixes>> = [];
+    let hit: Awaited<ReturnType<typeof readLayerCache>>;
+    if (deps.warmOnHit === false) {
+      hit = await readHit();
+      if (!hit) warmed = await warmPrefixes([warmSlice], { ensureCache: deps.ensureCache });
+    } else {
+      [warmed, hit] = await Promise.all([warmPrefixes([warmSlice], { ensureCache: deps.ensureCache }), readHit()]);
+    }
     result.warmed = warmed;
     result.ms.warm = Math.round(performance.now() - tw);
 

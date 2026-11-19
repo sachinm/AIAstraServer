@@ -10,12 +10,19 @@
  * reasons. Never throws.
  *
  *   system  the reader system prompt, then the role library (CARD ORACLE, PERSONALIZER, CARD GROUP)
- *   pack    the shared prefix (natal core, sky, year, frame), the year frame, the person, every card brief, each card's
- *           ledger cells, the matter rows (each row once, under the first matter that has it), the person's answers
+ *   pack    the shared prefix (natal core, sky, year, frame), the year frame, the person, every card brief, the agreed
+ *           ledger (each cell once), each card's cells named by key, the matter rows (each row once, under the first
+ *           matter that has it), the person's answers. Card ids are sorted: the same cards in any board order give the
+ *           same bytes, so the cache key is reused (doc 86).
+ *
+ * Groups (doc 86): the board's cards are planned by estimated output tokens (`planGroups`): a group stays within
+ * CARDS_GROUP_OUTPUT_BUDGET (about 2,000 tokens, about 16 s at 125 tokens a second), at most CARDS_GROUP_SIZE_BOARD cards.
+ * Each call's output cap has headroom over its estimate (`groupMaxOutputTokens`): a cut answer fails the whole group.
  *   request TODAY, the board's titles, the cards of this call with their matters and sections (uncached)
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../agents/registry.js';
+import { getCardsCardOutputTokens } from '../../config/env.js';
 import type { AgreedLedger, LedgerCell } from '../clocks/types.js';
 import { READER_SYSTEM_PROMPT } from '../clocks/types.js';
 import type { GeminiCallOptions, GeminiResult } from '../llm/gemini.js';
@@ -39,8 +46,14 @@ import { isAgeMatureD9 } from '../dasha/dashaAssessment.js';
 
 export const CARD_GROUP_PROMPT = 'cards/group';
 export const CARD_GROUP_TIMEOUT_MS = 90_000;
-/** a card writes about 1,000 to 1,500 tokens (Phase 0: 4,700 to 5,400 for five or six); room for six and a repair */
+/** the most a group call may write: six cards at the longest measured length, with room */
 export const CARD_GROUP_MAX_OUTPUT_TOKENS = 16_000;
+/** a group call's output cap: 1.6 times its estimate, at least 2,048 (a card runs long now and then), at most the max */
+export const GROUP_OUTPUT_HEADROOM = 1.6;
+export const GROUP_MIN_OUTPUT_TOKENS = 2_048;
+export function groupMaxOutputTokens(cards: number, perCard: number): number {
+  return Math.min(CARD_GROUP_MAX_OUTPUT_TOKENS, Math.max(GROUP_MIN_OUTPUT_TOKENS, Math.ceil(cards * perCard * GROUP_OUTPUT_HEADROOM)));
+}
 const DEFAULT_SECTIONS: readonly SelfSectionId[] = ['line', 'year', 'stretch', 'confirm'];
 
 export interface CardPackInput {
@@ -77,12 +90,20 @@ export function cardPackSystem(): string {
   ].join('\n\n');
 }
 
-/** Pure. Same input, same bytes: the cache key is the hash of system and text. */
-export function buildCardPack(i: CardPackInput): CardPack {
+/**
+ * Pure. Same input, same bytes: the cache key is the hash of system and text; the card order does not matter.
+ * `cells: 'per-card'` is the layout before doc 86 (each card's cell lines written under the card, cards in the order
+ * given); kept for the measure script's before/after only.
+ */
+export function buildCardPack(i: CardPackInput, opts: { cells?: 'by-key' | 'per-card' } = {}): CardPack {
   const range = frameRange(i.frame);
+  const perCard = opts.cells === 'per-card';
   const ids = [...new Set(i.cards)].filter((id) => anyCardDef(id));
+  if (!perCard) ids.sort(cmp);
   const p = i.ctx.sub.profile!;
-  const L: string[] = [i.prefix.text, i.frameText];
+  // doc 86: a keyed row the shared data writes again verbatim (the natal core lists the same yoga rows under several
+  // headings) is kept at its first place only; the key names it everywhere else
+  const L: string[] = perCard ? [i.prefix.text, i.frameText] : [dedupeKeyedRows(`${i.prefix.text}\n\n${i.frameText}`)];
   L.push(
     '# THE PERSON',
     ...profileLines(p),
@@ -110,11 +131,20 @@ export function buildCardPack(i: CardPackInput): CardPack {
   for (const id of ids) L.push(`## CARD BRIEF ${id}\n${promptText(cardBriefPrompt(id))}`);
   const cells: CardPack['cells'] = {};
   const allowed: CardPack['allowed'] = {};
-  L.push('# CARD CELLS (each card\'s agreed ledger cells; the status is counted in code and final)');
-  for (const id of ids) {
-    const c = cardCells(i.ledger, anyCardDef(id)!.matters);
-    cells[id] = c;
-    L.push(`## CARD CELLS ${id}\n${renderCardLedger(c).text}`);
+  for (const id of ids) cells[id] = cardCells(i.ledger, anyCardDef(id)!.matters);
+  if (perCard) {
+    L.push('# CARD CELLS (each card\'s agreed ledger cells; the status is counted in code and final)');
+    for (const id of ids) L.push(`## CARD CELLS ${id}\n${renderCardLedger(cells[id] ?? []).text}`);
+  } else {
+    // doc 86: every cell any card reads, written once in ledger order; each card then names its cells by key
+    const used = new Set(ids.flatMap((id) => (cells[id] ?? []).map((c) => c.id)));
+    const ledger = renderCardLedger((i.ledger?.cells ?? []).filter((c) => used.has(c.id))).text.split('\n').slice(1);
+    L.push(`# AGREED LEDGER (every cell the pack's cards read, each once; the status is counted in code and final)\n${used.size ? ledger.join('\n') : '(no cells)'}`);
+    L.push('# CARD CELLS (each card\'s agreed ledger cells, named by key; their lines are under AGREED LEDGER above)');
+    for (const id of ids) {
+      const c = cells[id] ?? [];
+      L.push(`## CARD CELLS ${id}\n${c.length ? c.map((x) => `{${x.id}}`).join(' ') : "(no cells for this card's matters)"}`);
+    }
   }
   // matter rows: each matter once, each row once (a row written under an earlier matter is named by key only)
   const matters = [...new Set(ids.flatMap((id) => anyCardDef(id)!.matters as readonly string[]))].sort(cmp);
@@ -143,6 +173,25 @@ export function buildCardPack(i: CardPackInput): CardPack {
   const system = cardPackSystem();
   const text = L.join('\n\n');
   return { system, text, hash: shortHash(`${system}\n${text}`), cells, allowed };
+}
+
+const KEYED_ROW = /^(?:- )?\{[^}\s]+\}\s+[^{\s]/;
+
+/**
+ * Pure. Drops every repeat of a keyed row (a line that starts with `{key}` or `- {key}` followed by text) after its
+ * first appearance; every other line (headings, dated lines whose meaning is their heading, key-only lists) stays.
+ */
+export function dedupeKeyedRows(text: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    if (KEYED_ROW.test(line)) {
+      if (seen.has(line)) continue;
+      seen.add(line);
+    }
+    out.push(line);
+  }
+  return out.join('\n');
 }
 
 /** The uncached request: the cards of this call, their matters and sections, the board's titles. */
@@ -194,6 +243,8 @@ export interface CardGroupDeps {
   callGemini: (o: GeminiCallOptions) => Promise<GeminiResult>;
   informUsed?: Parameters<typeof markAgentUsed>[1];
   timeoutMs?: number;
+  /** estimated output tokens per card (default CARDS_CARD_OUTPUT_TOKENS): each call's output cap is set from it */
+  perCardTokens?: number;
 }
 
 export interface CardGroupInput {
@@ -248,7 +299,7 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
             fullCache: { system: i.pack.system, prefix: i.pack.text, suffix: [request] },
             cacheOwner: owner,
             thinking: 'low',
-            maxOutputTokens: CARD_GROUP_MAX_OUTPUT_TOKENS,
+            maxOutputTokens: groupMaxOutputTokens(cards.length, deps.perCardTokens ?? getCardsCardOutputTokens()),
             timeoutMs: deps.timeoutMs ?? CARD_GROUP_TIMEOUT_MS,
             responseSchema: groupSchema(cards, spanIds),
           });
@@ -303,6 +354,29 @@ export async function readCardGroup(deps: CardGroupDeps, i: CardGroupInput): Pro
     const call = `${i.call}.repair`;
     take(await ask(call, failed, note), failed, call);
   }
+  return out;
+}
+
+/**
+ * Plans the groups by estimated output (doc 86): in order, a group takes the next card while its estimate stays within
+ * `budget` and it holds fewer than `maxSize` cards; a card whose own estimate is over the budget goes alone.
+ */
+export function planGroups<T>(xs: readonly T[], o: { budget: number; perCard: (x: T) => number; maxSize: number }): T[][] {
+  const max = Math.max(1, Math.floor(o.maxSize));
+  const out: T[][] = [];
+  let cur: T[] = [];
+  let sum = 0;
+  for (const x of xs) {
+    const e = Math.max(0, o.perCard(x));
+    if (cur.length && (cur.length >= max || sum + e > o.budget)) {
+      out.push(cur);
+      cur = [];
+      sum = 0;
+    }
+    cur.push(x);
+    sum += e;
+  }
+  if (cur.length) out.push(cur);
   return out;
 }
 
