@@ -3055,3 +3055,43 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · open · Running `playwright test <file> <file>` from Git Bash runs the whole suite** and rewrites tracked
   screenshots under `docs/screenshots/`. Use PowerShell with one explicit spec and `--project`. Done: a note in the web
   `AGENTS.md`.
+
+## Filed 2026-11-19 by the research-integration plan (docs/techniques/07)
+
+- **P1 · open · The research is not on `develop`.** `reports/`, `research_notes/`, `docs/deep-research/` (168 files), the 45
+  technique specs and `docs/dashboards/00-08` are only in commit `75bc0a0` on `feat/self-foundation-server`. Doc 07 cites
+  them. Done: cherry-picked to `develop` (doc 07 step 1).
+- **P2 · open · Two documents are numbered 86** (`86-grouped-card-reads` on develop, `86-confirmation-loop` on
+  `feat/self-foundation-server`). Done: the confirmation-loop doc is renumbered 88.
+- **P1 · open · `docs/techniques/README.md` marks all 45 specs "built"; none is loaded by code.** The live rules are
+  `prompts/cards/oracle.md`, the 90 card briefs, `cards/techniques.ts`, `area/*.ts`, `clocks/*`. Done: each spec is
+  marked live, planned or dropped (doc 07 step 13).
+- **P1 · open · Card briefs name charts the pack does not hold:** the Tithi Pravesha year in D10/D2/D4/D7 (no year
+  houses reach a card), houses beyond the 1st in D2/D4/D7/D16/D24, and D11 (never in `natal.core`,
+  `self/oracle.ts:203-232`). Done: doc 07 step 5 and its brief-coverage test.
+- **P1 · open · The chart-routing block lists Self cards only.** On the one-card path every Love and Work card falls to
+  "D1+D9" (`cards/oracle.ts:95-165, 274-283`); `practice` and `aims` are routed but have no brief; `layers`, `play`,
+  `restores`, `yogas` are unrouted. Done: one routing table for all 90 cards (doc 07 steps 3-4).
+- **P1 · open · Agreement is counted four ways** (`yearFrame.ts:115`, `clocks/concordance.ts:59`, `houseLayers.ts:161`,
+  `dashaAssessment.ts:449`) and across clocks the research suspects are wrong at sub-period level (Narayana, Chara,
+  Yogini). Done: engine harness, then one gate (doc 07 steps 2, 9).
+- **P2 · open · Romance is read from D7 and Friends from a "D11 proxy".** The texts give D7 to children; no source makes
+  D11 a friendship chart. Where: `area/love.ts:11-21`, the Dating and Friends briefs, `docs/dashboards/01, 03`. Done:
+  dating on the 5th, Venus and D9; friends on the 11th in D1 and D9 and A5 from AL.
+- **P2 · open · The age-36 D1/D9 rule has no source** (research: `sanjay-rath/06-vargas.md` §6;
+  `current-specs-review/06-gap-matrix.md` C09) and `work.character_arc` cites *Crux* for it. It is computed in Node
+  (`dashaAssessment.ts`). [Sachin: decision 1 in doc 07] Done: tagged as the owner's rule or removed; the verdict moves
+  to an engine field.
+- **P2 · open · The Oracle gets no age number,** only "(>36)" or "(<=36)" (`cards/oracle.ts`, `v2types.ts:344-359`).
+  Done: whole years in the pack (doc 07 step 5).
+- **P2 · open · `life_events` has 0 rows.** The confirmed events for the two family kundlis exist only in notes, so no
+  reading can be checked against the past. Done: entered through the confirmation loop (doc 07 step 11).
+- **P2 · open · A new kundli gets the Tithi Pravesha in D1, D9 and D10 only** (`digest/annualSet.ts:12`); five of six
+  test kundlis have 20 more charts from a one-off script, so test results overstate normal coverage.
+- **P3 · open · Stale entries in this file:** line 19 (TP year dasha rows now `bounded_to_year`), line 156 and its
+  duplicate at 280 (the read path now parses `divisional_chart_factor`), line 750 (D10 is pulled), line 777
+  (`annual.tajaka` is served for the current year). Stale comment: `chartData/catalog.ts:116-121` says the engine's
+  default depth is 6; it is 4. Stale comment: `clocks/run.ts:6` says "not wired".
+- **P3 · open · Engine Lambda timeout is 60 s in the engine docs and 30 s in doc 81;** the real value was not read
+  (the AWS connector did not connect on 2026-11-19).
+
