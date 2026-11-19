@@ -38,6 +38,7 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
     ladder: personal.ladder,
     agreement: { agree: now.agree, of: now.of },
     chart: chartReadingOf(oracle),
+    ...(personal.why ? { why: personal.why } : {}),
   };
 }
 

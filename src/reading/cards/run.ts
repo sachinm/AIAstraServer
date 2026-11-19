@@ -21,7 +21,8 @@
 import type { PrismaClient } from '@prisma/client';
 import { getCardsBoardParallel, getCardsCardOutputTokens, getCardsGroupOutputBudget, getCardsGroupSizeBoard, getCardsGroupSizeRest, getCardsRestParallel, getReadingSpendCapUsd, isCardsGroupPackEnabled, isCardsReadRestEnabled } from '../../config/env.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
-import { buildCardPack, CARD_GROUP_PROMPT, planGroups, readCardGroup, splitGroups, type CardPack, type GroupCardResult } from './group.js';
+import { techniqueStamp } from './techniques.js';
+import { buildCardPack, CARD_GROUP_PROMPT, planGroups, readCardGroup, splitGroups, type CardPack, type CardPackInput, type GroupCardResult } from './group.js';
 import { canonicalJson } from '../../techniques/pieces.js';
 import { withTechniqueOutput } from '../../techniques/outputStore.js';
 import type { AgreedLedger } from '../clocks/types.js';
@@ -90,6 +91,8 @@ export interface CardsRunInput {
   dates: ReadonlySet<string>;
   answers: string;
   model: string;
+  /** docs/dashboards/14: the Love and Work boards' technique sections (absent: the pack is as before) */
+  techniques?: CardPackInput['techniques'];
   /** USD spent by this operation before the cards (the clock layer of this build); counted against `capUsd` */
   spentBeforeUsd: number;
 }
@@ -232,7 +235,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   let batch: ReturnType<typeof groupBatcher> | null = null;
   const sectionsAll = i.sections as Partial<Record<CardId, readonly string[]>>;
   if (grouped) {
-    pack = buildCardPack({ ctx, cards: packCards, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, slices: i.slices, portrait: i.portrait, answers: i.answers });
+    pack = buildCardPack({ ctx, cards: packCards, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, slices: i.slices, portrait: i.portrait, answers: i.answers, techniques: i.techniques });
     packCache = (deps.ensureCache ?? ensurePromptCache)(i.model, pack.system, pack.text, owner).catch(() => null);
   }
   // doc 86: the board's groups (and cards queued later) stay within an output budget, at most groupSizeBoard cards each
@@ -280,7 +283,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       portraitHash,
       sectionsHash: shortHash(canonicalJson(sections ?? null)),
       confirmHash: ctx.stamps.confirmHash ?? '-',
-      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}${grouped ? `.g${promptHash(CARD_GROUP_PROMPT)}` : ''}`,
+      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}${grouped ? `.g${promptHash(CARD_GROUP_PROMPT)}` : ''}${techniqueStamp(id, i.techniques)}`,
     });
     const timings: SelfV2AgentTiming[] = [];
     const issues: ValidationIssue[] = [];
@@ -312,7 +315,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
           const matterSlices = i.slices.filter((s) => def.matters.some((m) => s.id === `matter.${m}`));
           const oracle = await readCardOracle(
             { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed },
-            { ctx, card: id, matters: def.matters, board: titles, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, matterSlices, dates: i.dates, answers: i.answers, model: i.model, cacheOwner: owner },
+            { ctx, card: id, matters: def.matters, board: titles, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, matterSlices, dates: i.dates, answers: i.answers, model: i.model, cacheOwner: owner, techniques: i.techniques },
           );
           timings.push(...oracle.calls);
           issues.push(...oracle.issues);
