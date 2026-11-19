@@ -181,6 +181,52 @@ export async function putSelfLayout(prisma: PrismaClient, userId: string, body: 
   return queueAfterLayout(prisma, userId, kundliId, layout, deps);
 }
 
+export type LayoutPatchKind = 'card' | 'board' | 'deck';
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+/** `next` replaces `prev` as a key-merge patch: keys `prev` has and `next` dropped go as null (deleted) */
+function replacingPatch(prev: unknown, next: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...next };
+  if (isPlainObject(prev)) for (const k of Object.keys(prev)) if (!(k in next)) out[k] = null;
+  return out;
+}
+
+/**
+ * doc 75: one small PATCH per change, as the web sends it (`AIAstra_WEB/src/lib/selfV3Api.ts` `patchRoute`). Each is
+ * turned into the versioned PUT body (`{ version, patch }`) and goes through `putSelfLayout`, so validation, the
+ * version check (409 `stale_layout`), the write and the card queue are the same as a PUT.
+ *
+ *   PATCH /api/self/v3/layout/cards/:id { version?, options }        the card's whole options map (replace)
+ *   PATCH /api/self/v3/layout/board     { version?, boardOptions }   the whole board-wide map (replace)
+ *   PATCH /api/self/v3/layout/deck      { version?, template, cards, sections }  the deck (replace); options kept
+ */
+export async function patchSelfLayout(prisma: PrismaClient, userId: string, kind: LayoutPatchKind, body: unknown, cardId?: string, deps: CardsQueueDeps = {}): Promise<PutLayoutResult> {
+  if (!isPlainObject(body)) return { ok: false, status: 400, error: 'bad_body' };
+  const version = body.version;
+  if (version !== undefined && typeof version !== 'string') return { ok: false, status: 400, error: 'bad_body' };
+  let patch: Record<string, unknown>;
+  if (kind === 'deck') {
+    if (body.template === undefined || !Array.isArray(body.cards) || (body.sections !== undefined && !isPlainObject(body.sections))) return { ok: false, status: 400, error: 'bad_body' };
+    patch = { template: body.template, cards: body.cards, ...(body.sections !== undefined ? { sections: body.sections } : {}) };
+  } else {
+    const kundliId = await latestKundliId(prisma, userId);
+    if (!kundliId) return { ok: false, status: 404, error: 'no_kundli' };
+    const current = await readLayout(prisma, kundliId);
+    if (kind === 'card') {
+      const id = String(cardId ?? '');
+      if (!cardDef(id)) return { ok: false, status: 400, error: 'unknown_card' };
+      if (!current.cards.includes(id as SelfCardId)) return { ok: false, status: 400, error: 'unknown_card', detail: `${id} is not on the board` };
+      if (!isPlainObject(body.options)) return { ok: false, status: 400, error: 'bad_body' };
+      patch = { options: { [id]: replacingPatch(current.options?.[id as SelfCardId], body.options) } };
+    } else {
+      if (!isPlainObject(body.boardOptions)) return { ok: false, status: 400, error: 'bad_body' };
+      patch = { boardOptions: replacingPatch(current.boardOptions, body.boardOptions) };
+    }
+  }
+  return putSelfLayout(prisma, userId, { ...(version !== undefined ? { version } : {}), patch }, deps);
+}
+
 async function queueAfterLayout(prisma: PrismaClient, userId: string, kundliId: string, layout: SelfBoardLayoutView, deps: CardsQueueDeps): Promise<PutLayoutResult> {
   if (!(deps.cardsRead ?? isCardsReadEnabled()) || layout.cards.length < getCardsReadMin()) return { ok: true, layout };
   try {
