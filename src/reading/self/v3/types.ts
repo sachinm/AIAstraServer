@@ -333,6 +333,20 @@ export interface SelfV3CardContent {
   ladder: LadderSteps | null;
   /** "Checked on 3 of 4 clocks" */
   agreement: { agree: number; of: number } | null;
+  /** docs/dashboards/13 §4.1: the chart-language reading from the stored Oracle card (derived on read; null when none) */
+  chart?: CardChartReading | null;
+  /** docs/dashboards/13 §4.1 phase 5 (gated, not written yet): one plain sentence on why the reading holds */
+  why?: string | null;
+}
+
+/** the chart-language reading of a card, from the stored Oracle card (docs/dashboards/13 §4.1); text only */
+export interface CardChartReading {
+  gift: string | null;
+  knot: string | null;
+  /** the stored certainty enum, e.g. "likely"; the web maps it to a word */
+  certainty: string | null;
+  /** per frame span: what the chart shows (the Oracle's `asks`) */
+  spans: Array<{ span: string; shows: string }>;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -5,6 +5,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { CardId, SelfV3CardContent } from '../self/v3/types.js';
+import { chartReadingOf } from './chart.js';
 import { CARD_READING_TECHNIQUE, type StoredCardReading } from './types.js';
 
 export const CARD_KEY_PREFIX = 'self.card|';
@@ -75,7 +76,8 @@ export async function readCardReadings(prisma: PrismaClient, kundliId: string, c
     for (const r of rows) {
       const s = r.output as StoredCardReading | undefined;
       if (!s?.card || !s.content || out[s.card]) continue;
-      out[s.card] = s.content;
+      // docs/dashboards/13 §4.1: the chart reading from the row's own Oracle card, so every stored row serves it
+      out[s.card] = { ...s.content, chart: chartReadingOf(s.oracle) };
     }
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'card readings read failed', error: (e as Error).message?.slice(0, 200) }));

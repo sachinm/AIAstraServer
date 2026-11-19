@@ -81,7 +81,7 @@ describe('applySelfFeatures', () => {
       features: {},
       locked: null,
       options: { face: 'research' },
-      v3: { confirm: { claimId: 'c', text: 'Did it?' } },
+      v3: { confirm: { claimId: 'c', text: 'Did it?' }, chart: { gift: 'g', knot: 'k', certainty: 'likely', spans: [] } },
       v2: { card: null, rangeLabel: '', details: { headline: 'h', paragraphs: ['p'], evidence: ['planet:D1.Sa'] } },
     }) as unknown as SelfV3CardView;
   const body = (): SelfV3Response => ({ cards: [card('body'), card('mind'), card('stuck')], layout: { cards: ['body', 'mind', 'stuck'] }, features: {} }) as unknown as SelfV3Response;
@@ -90,6 +90,7 @@ describe('applySelfFeatures', () => {
     const out = applySelfFeatures(body(), resolveFeatures(featureContext('free')));
     expect(out.cards).toHaveLength(3);
     expect(out.cards[0]!.options!.face).toBe('read');
+    expect(out.cards[0]!.v3!.chart).toMatchObject({ gift: 'g', knot: 'k' });
     expect(out.cards[0]!.features['feature.periods']).toEqual({ locked: false });
     expect(out.features['feature.voice']).toEqual({ locked: false });
     expect(out.features['feature.calendar']).toBeUndefined();
@@ -111,6 +112,7 @@ describe('applySelfFeatures', () => {
     expect(c.keyDates).toEqual([]);
     expect(c.v3!.confirm).toBeNull();
     expect(c.v2!.details).toEqual({ evidence: [] });
+    expect(c.v3!.chart).toBeNull();
     expect(c.features['feature.why_panel']).toEqual({ locked: true, minPlan: 'plus' });
     expect(c.features['feature.periods']).toBeUndefined();
   });
