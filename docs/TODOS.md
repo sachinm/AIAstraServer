@@ -47,6 +47,9 @@ re-applied by it.
   The placeholder says DD/MM/YYYY; `docs/product/auth-registration-review.md` called for locale order. Found reading the code on
   2026-11-01; which users it hit is not checked. The field now names the month and offers the swapped reading (merged to local web
   `develop` 2026-11-02, not deployed). Status: open. Done: deployed, and kundlis with day and month both 12 or under are listed for review.
+  **2026-11-18: deployed** (the live `BirthFields` chunk on vedic-astrology.app carries the "Did you mean …?" swap prompt).
+  Still open: listing stored kundlis with day and month both 12 or under; the birth fields are sealed columns, so the list
+  needs the app's PII read path, not raw SQL. All rows are QA test data for now (2026-11-08).
 - **Stored dossiers may not be Radha's.** `kundli_facts` (24 rows) and `transit_snapshots` (24 rows, built 2026-10-25) look
   like the local build (`scripts/backfill-local-facts.ts` plus `docs/reading-engine/drafts/radha/`), not the deployed
   Lambda. `src/reading/data/store.ts` and `src/reading/packs/transitTable.ts` read them, so the chat path depends on them.
@@ -133,6 +136,128 @@ re-applied by it.
   - **Measured / Observed Latencies**: 1,800ms – 3,500ms when loading full dashboard (charts, biodata, content, timeline) via single monolithic query.
   - **Root Cause**: Client waiting for heaviest section (e.g. AI-derived content or deep timeline) before rendering fast sections (profile, biodata).
   - **Remediation**: Instrumented `GET /api/dashboard/sections-stream` with progressive NDJSON line streaming to render `profile` and `biodata` in `< 100ms` while heavier sections stream concurrently, tracking per-section execution logs.
+- **[PRIORITY 2 ARCHITECTURE & CATALOGUE UPGRADE] Radha Engine & Server Catalogue Gap Analysis (`docs/reading-engine/80-radha-and-catalogue-gap-analysis.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Reading Engine & Radha Bridge (`AIAstra_Radha` exports + `AIAstra_Server` `reading/chartData`, `reading/digest`, `reading/dasha`, `techniques`).
+  - **Overview & Context:** Comprehensive code audit comparing `AIAstra_Radha` (`pyjhora` exports) with `AIAstra_Server` (`src/reading/chartData/catalog.ts`, `src/techniques/catalog.ts`, `src/reading/digest/build.ts`, `src/reading/dasha/dashaAssessment.ts`). Catalogues Priority 2 gaps across the 23 divisional vargas (D1..D60 + D81..D144), Tithi Pravesha (TP) annual engine fail-closed defects, unserved `daily_grade` / `muhurta` / `transit_ashtakavarga`, 2027–2036 transit contact truncation (tracked at `docs/TODOS.md:235–243`, formerly `:150`), unexported headless systems (Ashtakoota/Dasakoota compatibility, 3-wheel Sudarshana Chakra, Pancha Pakshi, Sarvatobhadra/Kota Chakras), and unserved strength models (`strength.bhava`, `strength.vimsopaka`, `strength.harsha`).
+  - **Review Instructions:** Review `docs/reading-engine/80-radha-and-catalogue-gap-analysis.md` alongside the remediated architectural specification in `docs/reading-engine/81-priority-2-radha-capabilities-architecture.md`. Cross-check every item in the Prioritized Action Matrix (`R1–R6`, `H1–H8`, `O1–O3`) against `src/reading/chartData/catalog.ts`, `registration.ts`, `store.ts`, `src/reading/digest/build.ts`, `src/reading/dasha/dashaAssessment.ts`, and `AIAstra_Radha/src/jhora/annual_export.py` / `pressure_inventory_export.py` / `natal_export.py` / `daily_export.py`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Radha TP Fix + Leap-Day & Polar Sunrise Guards (R1):** In `AIAstra_Radha/src/jhora/annual_export.py:736–746` (`run_annual`), invoke `_year_lord(ret_jd, ctx["place"])` (defined in `AIAstra_Radha/src/jhora/pressure_inventory_export.py:572–582`) to export `year_lord` (*Vaaresha*), `vaara`, `hora`, `tithi`, `nakshatra`, `yoga`, and `karana` on `annual.tithi_pravesha`. Also clamp Feb 29 to Feb 28 (or March 1) when building non-leap `current_date_start` windows (`annual_export.py:719–720` / `vratha.py:604` / `utils.py:752`) and guard `drik.sunrise`/`sunset` polar sentinels (`|lat| >= 66.5°` in `_is_night_birth` at `annual_export.py:294` and `_year_lord` at `pressure_inventory_export.py:580`). In Server `src/reading/digest/build.ts:1177–1196`, parse `yearLord` and return panchanga when `kind === 'TP'` (not only `VP`) to unblock false fail-closed `stance = 'get_through'` collapses in `src/reading/dasha/dashaAssessment.ts:411–420`.
+    2. **Unlock 23 Vargas Safely Without Signup Storm or Prisma Crash (R2):** In Server `src/reading/chartData/catalog.ts:133, 169`, separate `LEGACY_VARGAS = new Set([1, 2, 4, 7, 9, 10])` so `legacyColumn` stays strictly scoped to `{1, 2, 4, 7, 9, 10}` (preventing Prisma querying non-existent `d11`/`d30` columns on `Kundli`), replace `SERVED_VARGAS` with env-gated `SERVED_VARGAS_LIST` (honored by `mergeChartTypes` and `src/services/chartCatalogSync.ts`), and update `registrationSet()` (`src/reading/chartData/registration.ts:31–33`) to exclude `tier === 'on_demand'` so signup remains `< 15 s`.
+    3. **23-Varga Dignities & Strength Ingestion (R3, R5):** Leverage `AIAstra_Radha/src/jhora/natal_export.py`'s already-working `dignities.dN` (100% pass across all 23 vargas, emitting full `houses[]` and `planets[]`) rather than rewriting legacy string-scraping `export.py:_build_placements_json`; expand `ARUDHA_ARGALA_VARGAS` / `dignities.d*` in `src/reading/chartData/catalog.ts:60, 214–233`; and add `strength.bhava`, `strength.vimsopaka`, `strength.harsha`, and `bhava` to `DIGEST_NATAL_TYPES` in `src/reading/digest/build.ts:1337–1347`.
+  - **Status & Definition of Done:** Gap analysis authored and cross-verified (`open` for implementation). Done when `R1–R6` and `H1–H8` items are implemented across Radha and Server, `annual.tithi_pravesha` resolves non-null `yearLord` (including Feb 29 and polar charts), all 23 vargas ingest full `HouseCard`/`PlanetCard` rows via `dignities.dN`, and `npx.cmd tsc --noEmit` + `npx.cmd vitest run` pass offline.
+
+- **[PRIORITY 2 ARCHITECTURE ROADMAP] Priority #2 Radha Capabilities Architecture Plan (`docs/reading-engine/81-priority-2-radha-capabilities-architecture.md`).** Filed 2026-11-17 (remediated).
+  - **Priority & Owning Area:** **P1** — Architectural Roadmap (`AIAstra_Radha` + `AIAstra_Server` Catalog, Digest, Dasha, Transits, Synastry, Security & Cache Lifecycle).
+  - **Overview & Context:** Comprehensive 9-point architectural specification adhering to `AGENTS.md` ("How a plan is written") governing the end-to-end integration of Priority #2 Radha capabilities into `AIAstra_Server`: 23 divisional vargas via `natal_export.py` `dignities.dN`, TP annual repairs (including Feb 29 leap-day & polar sunrise sentinel fixes) and divisional TP pulls, `daily_grade`/`muhurta`/`transit_ashtakavarga`, Gochara Vedha & Murti Nirnaya, 2027–2036 exact transit contacts, headless `love.synastry_koota` Ashtakoota/Dasakoota compatibility & 3-wheel Sudarshana Chakra, and `strength.{bhava,vimsopaka,harsha}`.
+  - **Review Instructions:** Review `docs/reading-engine/81-priority-2-radha-capabilities-architecture.md` against all 9 sections of `AGENTS.md`, paying specific attention to:
+    1. **§4 (How It Works When Done):** Backend concurrency (`RADHA_MAX_CONCURRENT=4`, `CHART_DATA_FETCH_CONCURRENCY=2`, `ASTROKUNDLI_REQUEST_SPACING_MS=2000` / floor `1100`, `astroKundliClient.ts` `DEFAULT_TIMEOUT_MS=120_000`), 90s `ensureChartData` row leases, `registrationSet()` excluding `on_demand` (`< 15 s` signup), `POST /api/telemetry/page-timings`, `GET /api/dashboard/sections-stream` (`VALID_SECTIONS = ['profile', 'chart_status', 'biodata', 'content', 'timeline']`), and zero-jargon UI copy with `evidence[]` encapsulation.
+    2. **§5 (Architecture & Boundary Guarantees):** Strict separation where Radha computes 100% of astrology and Node computes none; `ensureChartData` rejecting `moving` types (routing `daily_grade`/`muhurta`/`transit_ashtakavarga` via `reading/luckyTimes/service.ts` & `reading/transits/*` to `day_tables`/`kundli_day_overlays`, and synastry via pair-keyed `CompatibilityReport`); self-only RBAC (`assertOwnAccount`); at-rest AES-256-GCM encryption under `SEALED_MODELS` (explicitly adding **`KundliDayOverlay`** and **`CompatibilityReport`** in `src/lib/pii/fields.ts`); `Cache-Control: private, no-store, no-cache, must-revalidate`; and 45-minute used-cache recycling (`READING_CACHE_RECYCLE_MINUTES=45`) via `src/reading/llm/cacheSweep.ts` + EventBridge `llm-cache-sweep`.
+    3. **§7 & §8 (Action Steps & Phases across M1..M4):** Parallel wave execution (`1A/1B` Radha, `2A/2B` Server env/catalog/registration/digest, `3A/3B` transits/synastry/chakras/sealing, `4` technique/contract/slice/cache-plan registration, `5` additive `prisma migrate deploy` + `npm run chart-catalog:sync` + cohort evals, `6` optional O1–O3) and 3 shippable verification checkpoints across the 5-person canonical cohort (Sachin 46, Sumit 51, Archisha 28, Swati 29, Mohit 24).
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Strict Node Astrological Prohibition:** Never compute degrees, sign/house offsets (`% 12`), lordships, aspects, dignities, Vedha pairs, or koota points in Node. Every astrological value must originate from Radha exports and pass `tests/unit/reading/digest/noAstrologyInNode.test.ts` (expanded in Wave 3B to scan `src/reading/transits/` and `src/reading/compatibility/`).
+    2. **Environment Variable Externalization:** Externalize all new Priority 2 rule lists and thresholds in `src/config/env.ts` (`SERVED_VARGAS_LIST`, `TP_ENABLE_DIVISIONAL_PULLS`, `TRANSIT_CONTACTS_HORIZON_YEARS`) alongside `D9_MATURITY_AGE_YEARS=36` and `READING_CACHE_RECYCLE_MINUTES=45` (`GEMINI.md` Rule #1), ensuring `SERVED_VARGAS_LIST` is respected in `mergeChartTypes` and `chartCatalogSync.ts`.
+    3. **Offline Test Gates, Security & Type Safety:** Guard all unit and technique contract tests with `guardNoModelCalls()` under `tests/unit/techniques/` (`contracts.test.ts`, `summaries.test.ts`, `subagentCachePlan.test.ts`, `dashaNavamshaConfirmation.test.ts`), verify RBAC & AES-256-GCM sealing via `tests/unit/rbac.test.ts` and `tests/unit/pii/seal.test.ts`, and require green `npx.cmd tsc --noEmit` + `research.technical_verifier` (`>= 95%` 8-gate pass) before `--no-ff` merge to `develop`.
+  - **Status & Definition of Done:** Architecture plan authored and remediated (`open` for phased implementation). Done when Phases 1–3 in §8 pass offline unit gates, Feb 29 & polar Radha regression tests, `KundliDayOverlay`/`CompatibilityReport` sealing & 45-min `cacheSweep.ts` tests, and canonical cohort Lab replay with zero `'get_through'` TP fallbacks or null varga houses.
+
+- **[PER-TECHNIQUE DOCUMENTATION SUITE] Modular Per-Technique Enhancement Documentation under `docs/techniques/` (`work/`, `love/`, `self/`, `lucky/`, `general/`) & Master Index (`docs/techniques/README.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Technique Specifications, Oracle Slicing & Board Pipelines (`docs/techniques/README.md`, `docs/techniques/{work,love,self,lucky,general}/`, `src/techniques/catalog.ts`, `src/techniques/contracts.ts`, `src/techniques/layouts.ts`, `src/reading/oracle/digestSlices.ts`, `src/techniques/subagentCachePlan.ts`, `src/reading/llm/cacheSweep.ts`).
+  - **Overview & Context:** 45 modular per-technique enhancement specifications organized into five functional board/role directories (`docs/techniques/work/` 10, `docs/techniques/love/` 11, `docs/techniques/self/` 10, `docs/techniques/lucky/` 5, `docs/techniques/general/` 9) and indexed in `docs/techniques/README.md`, detailing how untapped Priority #2 Radha resources (`D1..D60`, TP `yearLord`/divisional TP, `strength.{bhava,vimsopaka,harsha}`, `daily_grade`, `muhurta`, `transit_ashtakavarga` Kakshya, Gochara Vedha, Murti Nirnaya, 2027–2036 contacts, Ashtakoota/Dasakoota synastry, Sudarshana Chakra, Jaimini Karakamsha) feed the Oracle and board synthesizers across exact reading steps, trace/run instrumentation, and execution boundaries.
+  - **Review Instructions:** Inspect every technique specification across `docs/techniques/work/`, `docs/techniques/love/`, `docs/techniques/self/`, `docs/techniques/lucky/`, and `docs/techniques/general/` alongside the master index in `docs/techniques/README.md`. Verify that each document contains all 6 mandatory sections: (1) Executive Summary & Purpose, (2) Untapped Radha Resources Mapped, (3) Contract Inputs, Outputs & Synthesis Payload Structure, (4) Execution Step, Trace Span & Execution Boundary, (5) User Experience & Zero-Jargon Compliance, and (6) Caching, RBAC (`assertOwnAccount`) & PII Sealing (`SEALED_MODELS`). Confirm every directory is complete before starting implementation in that domain.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Catalog, Contract & Instrumentation Alignment:** Ensure every technique ID, `charts` declaration, `ContractSection`, and layout matches `src/techniques/catalog.ts`, `src/techniques/contracts.ts`, `src/techniques/layouts.ts`, and `src/agents/registry.ts` (enforced by `tests/unit/techniques/contracts.test.ts` and `summaries.test.ts`). Specifically align canonical synastry naming on `love.synastry_koota`, layout `compatibility_card`, agent `reading.analyst.compatibility`, and `ContractSection` `'compatibility'`, and note that board/lucky runs tag `agent_id`/`technique` via `withAgentRun` (`src/agents/registry.ts`) whereas `general.*` chat flows use `RunTrace` (`src/reading/metrics/trace.ts`).
+    2. **Digest Slicing & 45-Min Cache Eviction (`cacheSweep.ts`):** When wiring Priority 2 inputs into a sub-agent or code reader, register the required digest sections and vargas (including `D11..D144` in `family.varga.vargas`) in `src/reading/oracle/digestSlices.ts` (`SUBAGENT_DIGEST_SPECS`), register technique-to-subagent metadata in `src/techniques/subagentCachePlan.ts`, keep the immutable chart prefix (`>= 1,024` tokens) in `parts[0]` with `cachePrefix: true` and `cacheOwner: { userId, kundliId }`, and wire cache consumption/eviction hooks (`informIndividualCacheUsed` -> `recycleIndividualCaches` at 45 min) in **`src/reading/llm/cacheSweep.ts`** (enforced in production by EventBridge `llm-cache-sweep`).
+    3. **Zero-Jargon & Confidentiality Rule:** Keep all consumer-facing card surfaces and Oracle prose free of Sanskrit chart jargon and internal engine identifiers (`Radha`, `pyjhora`, `AIAstra_Radha`, `jhora`), isolating verifiable machine keys strictly inside structured `evidence[]` for the vetted one-tap `"Chart Details"` drawer.
+  - **Status & Definition of Done:** Modular suite authored across all 5 functional directories and indexed in `docs/techniques/README.md` (`open` for code implementation). Done when all 45 specs pass 6-section completeness & contract alignment review and corresponding `src/techniques/catalog.ts` + `contracts.ts` + `layouts.ts` + `digestSlices.ts` + `subagentCachePlan.ts` + `cacheSweep.ts` updates pass `tests/unit/techniques/`.
+
+- **[DASHBOARD SUITE MASTER PLAN] 8 Domain-Separated Vedic Dashboards & 72-Card Master Plan (`docs/dashboards/00-plan.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Relationships & Career/Work Boards Architecture (`src/reading/boards/catalogue.ts`, `src/boards/features.ts`, `src/techniques/catalog.ts`, `src/reading/cards/group.ts`, `src/routes/boardCardsRoutes.ts`, `AIAstra_WEB` `/love` & `/work`).
+  - **Overview & Context (Purpose & Scope):** Master 9-point architectural plan adhering strictly to `AGENTS.md` ("How a plan is written") defining the separation of monolithic `/love` and `/work` boards into 8 specialized contextual sub-lenses across 72 cards (`01`–`04` Relationships: 37 cards; `05`–`08` Career & Work: 35 cards), alongside classical attribution and target performance/cache budgets (`< 1 s` deterministic ledgers, `< 30 s` cold board build, `> 70%` warm prefix cache reuse, 45-minute recycling).
+  - **Review Instructions:** Review `docs/dashboards/00-plan.md` end-to-end against `AGENTS.md` sections 1–9 (`Start`, `End Goal`, `Deliverable`, `How It Works When Done`, `Architecture`, `Ingredients`, `Action Steps in Sequence`, `Development Phases`, `One Recommendation`) plus `§10` attribution catalog. Verify §1.1 system state against `prisma/schema.prisma`, `src/reading/boards/catalogue.ts`, `src/reading/chartData/catalog.ts`, and `src/config/env.ts`, and confirm all 5 phases in §8 and the 72-card index in §7.3 align with `docs/reading-engine/75`, `76`, `78`, `79`, and `80`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phased Rollout & Shared Foundation (Phases 2–5):** Execute in the exact sequence of §7.2: expand `src/reading/boards/catalogue.ts` + `src/boards/features.ts` (and mirror in `aiadastra_admin/api/src/features.ts`) with `showWhen` predicates over `person_facts`, generalize `src/reading/self/v3/service.ts` + `layout.ts` into `src/reading/boards/` + `src/routes/boardCardsRoutes.ts` (including HTTP `409 stale_layout` concurrency guard), and ship `/love` and `/work` 4-lens switchers in `AIAstra_WEB` gated behind `RELATIONSHIPS_V3_ENABLED` and `WORK_V3_ENABLED`.
+    2. **Zero Node Astrology & Engine Boundaries:** Consume all chart coordinates, vargas, dashas, and bounded `[tp_start, tp_end]` Tithi Pravesha rows solely from `DigestView` / `ActivationRow[]` (`AIAstra_Radha` -> `kundli_digest` / `kundli_activation`). Enforce `isAgeMatureD9` / `evaluateD1D9MutualConfirmation` (`D9_MATURITY_AGE_YEARS=36` in `src/config/env.ts`), `runningTithiPravesha` (no Gregorian year fallback), `assertOwnAccount` RBAC, `SEALED_MODELS` encryption, and `informIndividualCacheUsed` (`READING_CACHE_RECYCLE_MINUTES=45`).
+    3. **Required Tests & Gates:** Before merging any phase to `develop`, run `npx.cmd tsc --noEmit`, `npx.cmd vitest run tests/unit/techniques/contracts.test.ts`, `summaries.test.ts`, `subagentCachePlan.test.ts`, `dashaNavamshaConfirmation.test.ts`, `tests/unit/reading/digest/noAstrologyInNode.test.ts`, and `research.technical_verifier` (`>= 95%` pass threshold).
+  - **Status & Definition of Done:** Master plan authored (`open` for Phase 2+ code implementation). Done when Phases 2–5 ship cleanly with all 72 cards live, zero Node astrology, zero engine/jargon leakage on card faces, and green `tsc` + unit + verifier gates.
+
+- **[RELATIONSHIPS DASHBOARD 01] Dating & Romance Specification (`docs/dashboards/01-dating-and-romance.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Relationships Hub (`relationships.dating`, `/love` lens 1, Cards `#1`–`#10`; Phase 2).
+  - **Overview & Context (Purpose & Scope):** Specifies all 10 Dating & Romance cards (`dating.pulse`, `dating.meeting_timing`, `dating.delays_blocks`, `dating.attraction_pattern`, `dating.mixed_signals`, `dating.exes_closure`, `dating.karmic_compatibility`, `dating.intimacy_safety`, `dating.breaking_patterns`, `dating.transition_commitment`) across `5th`/`11th`/`12th`/`7th` houses, `A5`/`DK`/`UL`, `Venus`/`Mars`/`Moon`, and `D1 + D9 + D7` (+ `D30`/`D12` diagnostics), synthesizing search trends (mixed signals, no-contact/exes, karmic vs. real attraction) with full 6-layer mechanics and attributions.
+  - **Review Instructions:** Inspect `docs/dashboards/01-dating-and-romance.md` §§1–4. Verify `person_facts` routing (`love.status` in `single | dating | casual | complicated | divorced_seeking`), pinned vs. picker split (`5` pinned + `5` picker), `SOUL.md` Rule 0 multi-entity disambiguation, 4-tier behavioral playbooks on structural blocks, and strict redaction of engine names and Sanskrit terms from all 10 Oracle Questions and calibration prompts.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 2 Files & Sub-Technique:** Register Cards `#1`–`#10` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `love.sub.dating` + area selectors in `src/techniques/catalog.ts`, `src/reading/oracle/digestSlices.ts`, and `src/techniques/subagentCachePlan.ts`; implement planned deterministic ledger module `src/reading/area/dating.ts` (reusing `src/reading/self/v3/foundation.ts` and `src/reading/area/love.ts` helpers) feeding `src/reading/cards/group.ts`.
+    2. **Engine Boundaries & Gates:** Gate post-36 attraction/commitment cards (`#1`, `#2`, `#4`, `#7`, `#10`) with `evaluateD1D9MutualConfirmation` (`D9_MATURITY_AGE_YEARS=36`); anchor 12-month pulse spans strictly in `runningTithiPravesha` (`[tp_start, tp_end] <= 400d`); fail closed to `stance = 'get_through'` when `yearLord` is unresolved (`doc 80` R1) or `D30` is pending (`doc 80` R2).
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit`, `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/dashaNavamshaConfirmation.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`, and add `showWhen` / redaction tests verifying zero jargon on `ReadFace`/`ShortFace` and 5-Gate toolbar compliance in `AIAstra_WEB`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 2 implementation). Done when Cards `#1`–`#10` render under `/love` `Dating` lens via `/api/board/love/v3` with `< 30 s` cold build and `> 70%` cache hit rate.
+
+- **[RELATIONSHIPS DASHBOARD 02] Marriage & Committed Partnership Specification (`docs/dashboards/02-marriage-and-partnership.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Relationships Hub (`relationships.marriage`, `/love` lens 2, Cards `#11`–`#22`; Phase 2).
+  - **Overview & Context (Purpose & Scope):** Specifies all 12 Marriage & Committed Partnership cards (`marriage.pulse`, `marriage.timing_readiness`, `marriage.daily_harmony`, `marriage.conflict_cycles`, `marriage.communication`, `marriage.trust_transparency`, `marriage.reconciliation`, `marriage.inlaws_family`, `marriage.finances_chores`, `marriage.children_family`, `marriage.longterm_longevity`, `marriage.personal_growth`) spanning `7th`/`2nd`/`4th`/`8th`/`12th`/`5th` houses, `UL` & `2nd from UL`, `DK`/`AK`/`PK`, and `D1 + D9 (age 36+ gate) + D7 + D30 + D2 + D4`.
+  - **Review Instructions:** Inspect `docs/dashboards/02-marriage-and-partnership.md` §§1–4. Verify dynamic starter swaps (`married` vs. `engaged` promoting `#12` vs. `separated` promoting `#17`), strict non-fatalism in Card `#14`/`#16`/`#17` (never issuing divorce verdicts), `D9 H2` vs. `D9 H7` forensic check in `#14`, Bhavat-Bhavam in-laws mapping (`8th` = `2nd from 7th`) in `#18`, and §2.2 mandatory `evaluateD1D9MutualConfirmation` age-36 gate rules.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 2 Files & Sub-Technique:** Register Cards `#11`–`#22` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `love.sub.marriage` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned deterministic ledger `src/reading/area/marriage.ts` integrating `src/reading/dasha/dashaAssessment.ts` (`evaluateD1D9MutualConfirmation`, `resolveActiveMahadasha`) and `src/reading/annual/tithiPravesha.ts` (`tpRowIn` across `D9`/`D7`/`D30`).
+    2. **Engine Boundaries & Gates:** Enforce `D9_MATURITY_AGE_YEARS=36` joint `D1 + D9` scoring (including `-1.5` *Neecha Vargottama* and `+1.2` *Neecha Bhanga via D9*); keep `D30` diagnostic pulls resilient until `SERVED_VARGAS` unlocks `30` (`doc 80` R2); reserve partner-comparison hooks for future `Ashtakoota/Dasakoota` (`doc 80` H3) without computing kootas in Node.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/summaries.test.ts tests/unit/techniques/dashaNavamshaConfirmation.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`, plus cohort checks across both `< 36` and `> 36` profiles.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 2 implementation). Done when Cards `#11`–`#22` pass age-36 gate tests, zero-fatalism copy review, and `/love` `Marriage` lens Lab replay.
+
+- **[RELATIONSHIPS DASHBOARD 03] Friendships & Social Circle Specification (`docs/dashboards/03-friendships-and-social-circle.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Relationships Hub (`relationships.friendships`, `/love` lens 3, Cards `#23`–`#29`; Phase 4 + Phase 5 `D11` upgrade).
+  - **Overview & Context (Purpose & Scope):** Specifies all 7 Friendships & Social Circle cards (`friends.social_energy`, `friends.core_allies`, `friends.outgrowing_circles`, `friends.finding_tribe`, `friends.boundaries_drains`, `friends.mentors_guides`, `friends.reputation_belonging`) built around `11th`/`3rd`/`9th`/`12th` houses, `A11`/`AL`/`BK`, `D1 + D9 (+ D24/D10)`, and the documented `D11` (*Ekadashamsha*) interim engine proxy (`D1 11th + A11 + D9 11th + D10 11th`).
+  - **Review Instructions:** Inspect `docs/dashboards/03-friendships-and-social-circle.md` §§1–4. Verify §2.1 `D11` proxy contract against `src/reading/chartData/catalog.ts` (`SERVED_VARGAS`), confirm Rule 0 disambiguation separating `3rd`-house peers, `11th`-house confidants, and `9th`-house mentors (`#24`, `#28`), and verify age-36 `D9` confirmation + 6-layer Vedic differentiation across Cards `#23`–`#29`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 4 Implementation & `D11` Proxy:** Register Cards `#23`–`#29` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `love.sub.friends` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/friendships.ts` reading `D1.h11`, `D1.pt.A11`, `D9.h11`, and `D10.h11` cleanly through `DigestView`.
+    2. **Phase 5 Native `D11` Upgrade & Engine Boundary:** Once `AIAstra_Radha` exports `varga.d11` (`doc 80` R2/R3) and `PAST_READING_NATAL_TYPES` in `src/reading/chartData/catalog.ts` adds `D11`, swap the proxy selector in `friendships.ts` to read `D11` natively while keeping zero Node `% 12` math and strict `45`-minute cache sweep registration.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/subagentCachePlan.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 4 implementation and Phase 5 `D11` upgrade). Done when Cards `#23`–`#29` pass proxy-mode unit tests and `/love` `Friendships` lens streaming checks.
+
+- **[RELATIONSHIPS DASHBOARD 04] Professional Relationships & Allies Specification (`docs/dashboards/04-professional-relationships-and-allies.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Relationships & Work Bridge (`relationships.professional`, `/love` lens 4 & `/work` contextual cross-link, Cards `#30`–`#37`; Phase 4).
+  - **Overview & Context (Purpose & Scope):** Specifies all 8 Professional Relationships & Allies cards (`workrel.pulse`, `workrel.bosses_authority`, `workrel.team_politics`, `workrel.cofounder_fit`, `workrel.clients_deals`, `workrel.managing_people`, `workrel.networking_allies`, `workrel.contracts_disputes`) anchored in `D10` (`6th`/`7th`/`10th`/`11th`/`5th`), `A10`/`A7`/`A11`, `AmK`/`DK`/`GK`, `D30` dispute diagnostics, and `SOUL.md` Rule 0 multi-entity disambiguation.
+  - **Review Instructions:** Inspect `docs/dashboards/04-professional-relationships-and-allies.md` §§1–4. Verify §2.2 Rule 0 separation of distinct workplace counterparties (`6th` coworkers/employees vs. `7th` co-founders/clients vs. `8th` retainer pools vs. `9th`/`10th` sponsors/bosses vs. `11th` elder allies), dynamic pinning of `#33`/`#35` for `founder | manager`, and legal disclaimer boundaries in Card `#37`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 4 Files & Sub-Technique:** Register Cards `#30`–`#37` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `workrel.sub.allies` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/professional.ts` routing `D10` houses + `A7`/`A10`/`A11` + `D9` post-36 gate.
+    2. **Engine Boundaries (`D30`, `D11`, `TP D10`):** Use `D1` `6th`/`8th` + `D10` `6th`/`7th` fallback safely until `SERVED_VARGAS` unlocks `D30` and `D11` (`doc 80` R2); ensure `tpRowIn(view, tp, 'D10')` fails closed when `TP` `yearLord` is missing; never prescribe legal/medical advice in Card `#37` copy.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/summaries.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 4 implementation). Done when Cards `#30`–`#37` pass Rule 0 disambiguation checks, `D10` unit tests, and `/love` lens 4 rendering.
+
+- **[CAREER & WORK DASHBOARD 05] Career Start & First Break Specification (`docs/dashboards/05-career-start-and-first-break.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Work Hub (`work.career_start`, `/work` lens 1, Cards `#38`–`#44`; Phase 3).
+  - **Overview & Context (Purpose & Scope):** Specifies all 7 Career Start & First Break cards (`start.launch_window`, `start.degree_to_career`, `start.first_role_timing`, `start.offer_decision`, `start.imposter_syndrome`, `start.relocation_abroad`, `start.three_year_foundation`) bridging `D24` (*Siddhamsha* education) -> `D10` (*Dashamsha* vocation) + `D1` `4th`/`5th`/`9th`/`6th`/`10th` + `D4` (relocation) and Saturn Return / *Graha Pakvata* milestones.
+  - **Review Instructions:** Inspect `docs/dashboards/05-career-start-and-first-break.md` §§1–4. Verify `showWhen` routing (`student | recent_grad | early_career | career_reentry`), pre-36 (`D1 + D24 + D10`) vs. post-36 re-entry (`evaluateD1D9MutualConfirmation` mandatory) branching in §2, all 7 cards' 6-layer mechanics + 4-tier playbooks, and zero jargon/engine names in Oracle Questions.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 3 Files & Sub-Technique:** Register Cards `#38`–`#44` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `work.sub.career_start_ledger` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/careerStart.ts` reading `D24` + `D10` + `D4` + `D1` + `StarProfile` via `DigestView`.
+    2. **Engine Boundaries (`D24` & `TP`):** Verify `SERVED_VARGAS` includes `24` (`doc 80` R2) and `placementCards` maps `D24` explicit `house`/`dignity` fields (`doc 80` R3) before enabling `D24`-dependent assertions; enforce `TITHI_PRAVESHA_YEAR_RULE` (`runningTithiPravesha`, `<= 400d`) and 45-minute `informIndividualCacheUsed` recycling.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/dashaNavamshaConfirmation.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 3 implementation). Done when Cards `#38`–`#44` pass young-adult (`20s`) and late-reentry (`36+`) cohort tests under `research.technical_verifier >= 95%`.
+
+- **[CAREER & WORK DASHBOARD 06] Primary Job & Corporate Growth Specification (`docs/dashboards/06-primary-job-and-corporate-growth.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Work Hub (`work.primary_job`, `/work` lens 2, Cards `#45`–`#55`; Phase 3).
+  - **Overview & Context (Purpose & Scope):** Specifies all 11 Primary Job & Corporate Growth cards (`job.pulse`, `job.security_layoff`, `job.stay_or_leave`, `job.promotion_recognition`, `job.salary_bonuses`, `job.burnout_load`, `job.boss_politics`, `job.leading_teams`, `job.industry_switch`, `job.remote_abroad`, `job.skill_building`) across `D10` `6th`/`10th`/`11th`, `D2` (*Hora* cashflow), `D30` (burnout/restructuring), `D24` (upskilling), `D4` (remote/relocation), `AmK`/`A10`, and mandatory post-36 `D1 + D9 + D10` confirmation.
+  - **Review Instructions:** Inspect `docs/dashboards/06-primary-job-and-corporate-growth.md` §§1–4. Verify Card `#46` layoff-risk non-fatalism, Card `#47` stay-vs-leave double-transit + `6/8` dasha logic, Card `#50` burnout stamina indicators (`D30` + `Sade Sati`), Card `#51` Rule 0 boss/sponsor separation, and mandatory age-36 `D9` confirmation across Cards `#45`–`#55`.
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 3 Files & Sub-Technique:** Register Cards `#45`–`#55` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts` (mapping spec `work.status` predicates onto `FACT_CATALOG` `work.status` + `work.level` in `src/profile/facts.ts`, adding any new sub-fact keys explicitly before `checkFact` persistence); add `work.sub.primary_job_ledger` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/primaryJob.ts` (consuming `src/reading/area/career.ts` + `D10`/`D2`/`D30`/`D24`/`D4` digest slices) and wire `/api/board/work/v3` progressive NDJSON streaming.
+    2. **Engine Boundaries & Gates (`SERVED_VARGAS` & `ANNUAL_CHART_VARGAS`):** Unlock `24` and `30` in `SERVED_VARGAS` (`src/reading/chartData/catalog.ts:133`, `doc 80` R2/R3) and expand `ANNUAL_CHART_VARGAS` (`src/reading/digest/annualSet.ts:11`, currently `[1, 9, 10]`, `doc 80` R4) before requiring live `D24`/`D30` or `TP D2`/`D4`/`D24`/`D30` `tpRowIn` rows; enforce `evaluateD1D9MutualConfirmation` + `D10` alignment for users aged `> getD9MaturityAgeYears()` and fail-closed `stance = 'get_through'` if `kind === 'TP'` `yearLord` (`doc 80` R1) is absent; keep all `D10`/`D30`/`SAV` jargon inside `evidence[]` for **Chart details** only.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/summaries.test.ts tests/unit/techniques/dashaNavamshaConfirmation.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 3 implementation). Done when Cards `#45`–`#55` replace legacy `/api/area/career` placeholders behind `WORK_V3_ENABLED=1` with `< 30 s` cold build and green verifier checks.
+
+- **[CAREER & WORK DASHBOARD 07] Hobby, Craft & Creative Projects Specification (`docs/dashboards/07-hobby-craft-and-creative-projects.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Work Hub (`work.hobby_craft`, `/work` lens 3, Cards `#56`–`#61`; Phase 4).
+  - **Overview & Context (Purpose & Scope):** Specifies all 6 Hobby, Craft & Creative Projects cards (`craft.creative_flow`, `craft.energizing_medium`, `craft.creative_blocks`, `craft.monetize_hobby`, `craft.shipping_projects`, `craft.audience_community`) anchored in `D7` (*Saptamsha* creative progeny of the mind), `D16` (*Shodashamsa* sensory joy), `D24` (craft mastery), `D1` `3rd`/`5th`/`11th`, and the monetization bridge into `D10`/`D2` (`#59`).
+  - **Review Instructions:** Inspect `docs/dashboards/07-hobby-craft-and-creative-projects.md` §§1–4. Verify that creative projects are never prematurely forced into hustle-culture monetization (Card `#59` protects `D16`/`5th` joy unless `11th`/`D10`/`D2` supports it), confirm Nakshatra deity/medium mapping in Card `#57`, and confirm `D11` proxy usage in Card `#61` (`doc 78` §5.1).
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 4 Files & Sub-Technique:** Register Cards `#56`–`#61` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts`; add `work.sub.hobby_craft_ledger` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/hobby.ts` routing `D7`, `D16`, `D24`, `D1` `3rd`/`5th`/`11th`, and `A5`/`A11` via `DigestView`.
+    2. **Engine Boundaries (`D16`, `D24`, `D11`):** Ensure `SERVED_VARGAS` unlocks `16` and `24` (`doc 80` R2) with graceful `D1 + D7` fallback when absent; honor `ageYears > getD9MaturityAgeYears()` `d9_redeemed` late-blooming creativity checks; enforce `READING_CACHE_RECYCLE_MINUTES=45` and 5-Gate toolbar vetting.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/subagentCachePlan.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 4 implementation). Done when Cards `#56`–`#61` pass offline technique contract tests and `/work` `Hobby & Craft` lens QA.
+
+- **[CAREER & WORK DASHBOARD 08] Business, Venture & Field of Business Specification (`docs/dashboards/08-business-and-field-of-business.md`).** Filed 2026-11-17.
+  - **Priority & Owning Area:** **P1** — Work Hub (`work.business_venture`, `/work` lens 4, Cards `#62`–`#72`; Phase 4 + Phase 5 `D11` upgrade).
+  - **Overview & Context (Purpose & Scope):** Specifies all 11 Business & Field of Business cards (`biz.readiness`, `biz.ideal_industry`, `biz.launch_timing`, `biz.cashflow_margins`, `biz.clients_sales`, `biz.partnerships_fit`, `biz.hiring_team`, `biz.capital_assets`, `biz.scaling_risk`, `biz.legal_safeguards`, `biz.founder_burnout`) integrating `D10` (`1st`/`7th` enterprise vs. `6th` service), `D2` (*Hora* cashflow), `D4` (*Chaturthamsha* capital/real estate), `D11` proxy (`D1.11 + A11 + D9.11 + D10.11 + D2`), and `D30` (legal/tax/burnout safeguards).
+  - **Review Instructions:** Inspect `docs/dashboards/08-business-and-field-of-business.md` §§1–4. Verify `biz.readiness` (`#62`) unsycophantic `6th` vs. `3rd/7th/11th` comparison, `Dwisaptati Sama` & `D9` post-36 checks (`#62`, `#67`), Rule 0 counterparty disambiguation across co-founders/investors/clients/regulators, `D11` proxy documentation in §2.4, and explicit `D30` legal/compliance disclaimers (`#71`).
+  - **Concrete Recommendations for Next Agent / Implementer:**
+    1. **Phase 4 Files & Sub-Technique:** Register Cards `#62`–`#72` in `src/reading/boards/catalogue.ts` and `src/boards/features.ts` with dynamic starter pinning (`exploring_business` vs. active `founder | business_owner` mapped cleanly onto `FACT_CATALOG` `work.status === 'own_business'` + `work.level` in `src/profile/facts.ts`, adding any new runway/team keys to `FACT_CATALOG` before `checkFact` persistence); add `work.sub.business_venture_ledger` in `src/techniques/catalog.ts`, `digestSlices.ts`, and `subagentCachePlan.ts`; implement planned `src/reading/area/business.ts` consuming `D10`, `D2`, `D4`, `D30`, `D24`, and `D11` proxy fields.
+    2. **Phase 5 Native `D11`, `SERVED_VARGAS`, `ANNUAL_CHART_VARGAS` & Multi-Clock Rules:** Expand `SERVED_VARGAS` (`src/reading/chartData/catalog.ts:133` -> `SERVED_VARGAS_LIST`, `doc 80` R2/R3) for `D30`/`D24` and `ANNUAL_CHART_VARGAS` (`src/reading/digest/annualSet.ts:11`, `doc 80` R4) for `TP D2`/`D4`/`D24`/`D30`; once `AIAstra_Radha` exports `varga.d11` (`doc 80` R2/R3), replace the `D11` proxy in `business.ts` (`#65`, `#70`) with native `D11` reads; keep zero Node astrology, enforce `TITHI_PRAVESHA_YEAR_RULE` (`kind === 'TP'` `yearLord`, `doc 80` R1), and enforce `assertOwnAccount` + `SEALED_MODELS` across all financial/cashflow readings.
+    3. **Verification Commands:** Run `npx.cmd tsc --noEmit` and `npx.cmd vitest run tests/unit/techniques/contracts.test.ts tests/unit/techniques/summaries.test.ts tests/unit/techniques/dashaNavamshaConfirmation.test.ts tests/unit/reading/digest/noAstrologyInNode.test.ts`, plus `research.technical_verifier` (`>= 95%`) across founder & salaried cohorts.
+  - **Status & Definition of Done:** Specification authored (`open` for Phase 4 implementation and Phase 5 `D11` upgrade). Done when Cards `#62`–`#72` pass contract, redaction, and Lab replay gates.
 
 - **Annual (±10 yr) and `kundli_transit_overlays` parity gap on Sachin (`c584c0a3`) and Archisha (`6514751c`) vs. Sumit (`75b0d618`), plus duplicate/misnamed DB accounts.** Audited 2026-11-06 across PostgreSQL:
   1. **Sumit (`75b0d618-90b7-4db6-bff8-cc7bb0ed561f`)** has 402 ready `kundli_data` rows (including 250 `annual.*` rows across `2016–2035` with `divisional_chart_factor=2,7,9,10`), 893 `kundli_digest` rows (`200` `annual`), 10,260 `kundli_activation` rows, and 11 `kundli_transit_overlays` rows (`1975–2035`).
@@ -220,6 +345,9 @@ re-applied by it.
   2026-11-01. Status: open. Done: a migration holds the DDL; the code only reads.
 - **The `aiastra-ops` AWS key is invalid** (`InvalidClientTokenId`, 2026-11-01), so the live Lambda's `READING_FLOW` and models,
   and CloudWatch timings, could not be read for doc 40. Status: open (deploy session). Done: a working read-only profile.
+  2026-11-18 (AWS account review): read-only checks work through `amplifyv2` → `OrganizationAccountAccessRole`. In AWS,
+  user `aiastra-ops` still has one **active** key (created 2026-09-13, last used 2026-10-16) that is not the one on this
+  machine; see item 3 in `docs/security/aws-account-review.md`.
 - **Doc 39 needs a live bench before it is turned on.** Reader quality and every speed in doc 39 §5 rest on two stored data points
   per model. `npm run bench:oracle -- --live` costs under $1. Status: open (needs Sachin's OK). Done: §5 holds measured numbers.
 - **Migration M18 (`reading_m18_agent_responses`) must be applied before `READING_FLOW=oracle`.** Without it the journal logs a failed
@@ -506,6 +634,9 @@ Reported by that session; the items are its own open findings. Owners are named 
 - **Push deploys skip the rollback alias.** `.github/workflows/deploy-api-lambda.yml`, step "Publish rollback version" is gated on `inputs.update_function`, so a push deploy publishes no version and moves no `previous` alias. Owner: deploy session with Sachin. Done: push deploys publish a version and move `previous`, or the gate is recorded as intended here.
 - **No IAM-capable identity for account 442728149528.** The `ai@carbonlitesystems.com` key was deactivated on 2026-10-25, which removed the only admin path from this shell. The deployer user `aiastra-ops-deployer` lacks `iam:*`, `events:*`, `lambda:AddPermission`, `lambda:UpdateFunctionConfiguration`, and `amplify:CreateBranch`. Owner: Sachin. Done: a named profile holding those permissions, scoped to `aiastra-server-api` and the staging Amplify app.
 - **AWS keys pasted into chat on 2026-10-25.** The CarbonLite key and two deployer keys were pasted into chat. Owner: Sachin. Done: each rotated or deleted, and `aiastra-ops`, `aiastra-deployer`, and `ai-carbonlite` removed from `~/.aws/credentials`. The `aiastra-ops` key was rejected on 2026-10-31.
+  Live on 2026-11-18: `aiastra-ops` has 1 active key (2026-09-13); `aiastra-ops-deployer` has 1 active (2026-10-25,
+  last used 2026-11-15) and 1 inactive. Which of these was pasted is not known from AWS. See items 3–4 of
+  `docs/security/aws-account-review.md`.
 - **Bedrock clarifier quota.** Quotas for gpt-oss-120b (L-25B50707 RPM, L-9DC5F595 TPM, daily limit) are 0 in account 442728149528. No support case filed. The Lambda role lacks `bedrock:InvokeModel`. Owner: Sachin, with an admin for the role. Done: quotas raised, role updated, and the live C-02 clarify call passes. Suggested starting values: 60 RPM, 200,000 TPM, 5,000,000 tokens/day. (See also the P1 "Bedrock quota: not adjustable" item above: the bedrock-quota session found the defaults are 10,000 RPM / 100M TPM and not adjustable, so the 0 reading needs re-checking.)
 - **Staging web: smoke test not done.** Run 40220290440 (web `release-candidate-staging`, commit 5f38ba4) is green. The site is not loaded, the disclaimer is not checked, and the URL `https://release-candidate-staging.d20sdo476h9w6c.amplifyapp.com` is Amplify's default pattern, not confirmed. Owner: deploy session. Done: the URL confirmed in the Amplify console, the site responds, and the disclaimer shows.
 - **Migration approval record for M6–M8.** M6, M7, and M8 were applied to `aiastradb` on 2026-10-25. The approval in chat was "YES!" in answer to "M6 and M7 only, or M8 too", and a sibling session says Sachin did not approve. Owner: Sachin. Done: Sachin confirms in writing; if not, roll back per the notes in the 2026-10-25 session.
@@ -2827,6 +2958,73 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 
 - **Rahu and Ketu `retro`/`is_retrograde` are always false in stored charts (found 2026-11-15, deploy session).** Rahu and Ketu are in every divisional chart (D1–D144) and Tithi Pravesha row, and carry `motion_state: "pratiloma"` (backward mean motion), but `retro` and `is_retrograde` read `false`, because the engine's retrograde flag covers Mars..Saturn only (`natal_export.py` `planets_in_retrograde` filter). A reader that trusts `retro` will call the nodes direct. Done: decide in the engine whether the nodes get `retro: true` or a documented `always_retrograde_mean_node` flag, and make readers use `motion_state`. Also open: 2035 Tithi Pravesha fails for Archisha (`pyjhora found no tithi pravesha for year 2036`, `annual_export.py:186`); cause not yet found.
 
+## Filed 2026-11-17 by the re-pull status check (read-only query of Render Postgres)
+
+- **P1 · Tithi Pravesha re-pull fails for Archisha (kundli f3d117b0) at year 2036.** 23 `annual.tithi_pravesha` rows and
+  2 `annual.tithi_pravesha_dasha` rows are `failed` with `server_error: pyjhora found no tithi pravesha for year 2036`
+  (last attempt 2026-11-18 04:58 UTC). Sumit and Sachin hold 2036 rows, so this is a birth-date edge in the engine, not
+  a bad request. [engine][data] Done when the engine returns or explicitly rejects year 2036 for her birth data and the
+  rows are `ready` or `unsupported`, not `failed`.
+- **P2 · Three `annual.tithi_pravesha` rows sit in `fetching` since 2026-11-15 22:28–22:43 UTC** (Archisha, Mohit, Swati;
+  one each, variants with `divisional_chart_factor`). Past the fetch-lock reclaim time, so nothing is running them.
+  Mohit's and Swati's have `calc_version` null against catalog 4. [data] Done when each is re-fetched or reset.
+- **P2 · `pressure_inventory` rows cannot be refreshed.** Sachin has one `failed` row (`Invalid export type:
+  pressure_inventory`, 2026-11-10) and four rows at calc 2 against catalog 3 (kaala, vimsottari, yogini, narayana). The
+  re-pull script skips them because it cannot rebuild their fetch keys. [engine][data] Done when the type has a fetch
+  path or is removed from the catalog.
+- **P3 · Kundli e1df0fcf has 149 of 410 rows below the catalog calc version.** Deliberately left out of the five-person
+  re-pull; recorded so it is not mistaken for a failure. [data]
+
+## Filed 2026-11-17 by the Sanjay Rath method summary (`reports/Sanjay Rath method summary.md`)
+
+- **P1 · open · Earlier readings attribute child-timing windows and dasha overlays to Rath's principles that his public text as found does not support.** No Rath text found for Kaala, Yogini, Chaturaseeti Sama or Tithi Ashtottari; no Chara Dasha rule found; his child-timing method is Vimshottari and D7 specific, with a Narayana cross-check whose rules were not retrieved. This is a finding about the sources, not a verdict on the readings. Owner: Sachin to assign the reading owner. Done when each reading that cites Rath for a timing window names the system and page in his text, or drops the attribution.
+- **P2 · open · Check Crux sect. 8.5.1(e) (Jupiter in the fifth) against the printed book.** As recorded, its stated principle does not match the signs listed for denial (Cancer, Aquarius). Done when the printed passage is confirmed or corrected in the report.
+- **P2 · open · Settle bylines before citing srath.com pages as Rath's own.** `?p=3437` (sections credited to Andrew Foss); the India Tithi Pravesh 2008 page (no byline; the only dasha-in-annual-chart example); the Tithi Pravesha page (co-credited with P.V.R. Narasimha Rao). Done when each byline is recorded in the report.
+- **P2 · open · Read the rest of Crux before any Kalachakra or seventh-house claim.** A search summary says the book covers Kalachakra; the extract read stops near p.249, before the seventh-house chapter. Done when the remaining chapters are read or confirmed absent.
+- **P2 · open · Decide how Vimshottari Dasha #2 and the Crux pregnancy-loss and child-death indicators may be used.** Rath's text ties them to illness, accidents, death, pregnancy loss and child death. Do not present them as predictions until decided. Owner: Sachin.
+- **P3 · open · Check summarised srath.com pages against live text before quoting.** Atmakaraka, Karakamsha, Darapada, Complexity, Mula, Narayana, Dvisaptati Sama, Vimshottari Dasha #2 and Tithi Pravesha were read through a summarising fetch. Also: Narayana book dates conflict (1998, 2001, 2019); Upadesha Sutras date conflicts (1997 vs 2002); the Crux scan is a third-party copy of unconfirmed provenance, so any quotation should come from an owned copy.
+
+## Filed 2026-11-17 by the Sanjay Rath life area readings report (`reports/Sanjay Rath life area readings.md`)
+
+- **P2 · open · `research_notes/Sanjay Rath life area readings/career.md` cites three wrong *Crux* chapter numerals.** §8.1 is
+  Ch. VIII, §9.3 is Ch. IX and the fourth-house passage is Ch. VII. The report carries the corrected numerals; the notes
+  file does not. [docs] Done when the notes are corrected or marked superseded by the report.
+- **P2 · open · Most step orders in the life-area guides are assembled, not printed by Rath.** He prints only the
+  preparation list, the ten house factors, the D7 child count and two children rules. No reading may say "his order"
+  for anything else. Sensitive rules (family deaths, longevity, pregnancy loss, curses) wait on Sachin's decision,
+  already filed above. [reading] Done when reading prompts label assembled orders as such.
+- **P3 · open · Empty folder `research_notes/Sanjay Rath reading style/`** left by a stopped research run. Done when
+  removed.
+
+## Filed 2026-11-17 by the Sumit wealth reading (chat reading, kundli 75b0d618)
+
+- **P2 · open · Houses counted from the Arudha Lagna are not in the digest.** The wealth reading needed the 2nd, 11th
+  and 12th from AL (Leo); no stored row states them, so they were counted by hand in the reading and marked as such.
+  [engine][digest] Done when the engine exports houses-from-AL (and from HL, SL) and the digest carries them.
+- **P3 · open · The yearly Tithi Ashtottari table (`annual.tithi_pravesha_dasha`) was not laid into the ten-year wealth
+  overlay.** It is month-level; the reading used the six long tables plus Sudasa and said so. [reading]
+- **P2 · open · Sumit's stored transits and the shared sky end on 2035-12-31.** A 30-year wealth reading (to 2056) had
+  dasha rows for all seven clocks but no slow-planet rows after 2035, so its 2039-41, 2049-50 and 2055 windows rest on
+  dashas alone. [data][transits] Done when the shared sky and his overlay cover 2036-2056 (needs Sachin's yes: it
+  writes to the shared database).
+- **P3 · open · The clock tally in that reading was counted by a scratch script** (sub-periods whose stored `houses`
+  include 2 or 11, per month, seven systems), not returned by the engine. [reading] Done when the tally comes from a
+  repo module with a test, or from the engine.
+
+## Filed 2026-11-17 by the Sumit career calibration (chat reading, kundli 75b0d618)
+
+- **P2 · open · Sumit's 12 career events are not in `life_events`.** Sachin gave them in chat (first job 13 Dec 1999;
+  job changes Jan 2001, Nov 2002, Oct 2013; promotions 2004-05, 2006-07, 2009-10, Apr 2018, Apr 2021; group changes
+  2018, 2022; nothing since). The career module's past-record line cannot use them until they are stored.
+  [data][career] Done when they are saved to his ledger (needs Sachin's yes: a database write) with year-only dates
+  kept as ranges.
+- **P2 · open · The promotion and job-change patterns in that reading were fitted by scratch scripts** over
+  `kundli_activation` and the range overlay (Vimshottari sub-lord in Sa/Me/Ve with Jupiter in house 2, 10 or 11;
+  three-leg change pattern). Not engine output and not `src/reading/area/career.ts`. [career] Done when the ledger
+  scoring in doc 43 section 7 reproduces or rejects them with a test.
+- **P3 · open · The job-end gate (doc 43 section 6) and the Mudda, Patyayini and saham checks were not run** in that
+  reading; only the year charts' D1 and D10 planets were read. [career]
+
 ## Filed 2026-11-18 by the Self refresh-failure session (board shows "did not finish" on every card)
 
 - **P1 · fixed in code, not deployed · A dropped hero sentence threw away the whole Self v2 build.** `servesPage`
@@ -2877,6 +3075,59 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   `dasha_deep_sweep_invoke_failed` and `dasha_deep_focus_failed` since 17 Nov (kundlis c584c0a3, e1df0fcf, de5a2275
   and others); only 3 `focus` rows are stored. The log line cuts the error at 300 characters, which hides the
   constraint name. [dasha][db]
+- **P2 · open · A board question can land under General:** `persistAskTurn` creates a chat with no category, and both
+  it and `createChat` deactivate every other chat. [chat] Found by the doc 85 planning (docs/reading-engine/85).
+- **P2 · open · Chat follow-ups are independent readings:** `chatWithConfiguredProvider` never passes the conversation
+  history, so a follow-up does not know the earlier answer. [chat] Doc 85 adds the last two exchanges for card chat
+  only; the general chat still lacks it.
+- **P3 · open · Reading the You (`getSelfV3`) and Love (`getLoveBoard`) boards queues builds or digests as a side
+  effect**, so any new reader of a board (card chat, admin) must switch the queues off. [boards]
+- **P2 · open · The web sends PATCH to `/api/self/v3/layout/{cards/:id,board,deck}` but the server has no PATCH
+  routes:** every layout save takes a 404 and falls back to PUT (`AIAstra_WEB/src/lib/selfV3Api.ts:623-662`). [boards]
+  Found by the doc 10 (docs/dashboards) planning, 2026-11-18.
+- **P2 · open · `readCardReadings` reads only the 300 newest rows** (`src/reading/cards/store.ts:50`): with Love and Work
+  cards stored too, older card readings drop out. Doc 10 S-steps add an id filter. [cards]
+- **P3 · open · `prompts/cards/oracle.md` and `cards/group.md` say "Self board"**; reword at the next deliberate prompt
+  version bump (an edit re-keys every stored card: paid rebuild). [cards]
+- **P3 · open · `CardBanner` uses `selfGroupOf`, which returns null for non-Self ids**, so Love/Work cards get no art
+  (`AIAstra_WEB` `cardArtRegistry.ts:211`). [web]
+- **P3 · open · Docs 01–08 use status words not in `FACT_CATALOG`** (engaged, children, recent_breakup,
+  exploring_business, manages_people); doc 02 contradicts itself on card 12 as a starter; docs 07–08 use lens ids
+  (`hobby_craft`, `business_venture`) that differ from doc 00 (doc 10 uses `hobby`, `business`). [docs]
+- **P3 · open · The admin feature-key mirror (`aiadastra_admin/api/src/features.ts`) needs the 72 `card.love.*` and
+  `card.work.*` keys.** [admin]
+- **P2 · open · `CARDS_SPEND_CAP_USD` ($0.75 per chart per day) now covers You + Love + Work** and can stop Love/Work
+  cards; raising it to $1.00 is Sachin's call (doc 10 risk 2). [cost]
+- **P3 · open · Love card briefs (doc 10) findings, 2026-11-18:** docs 01–04 use dotted slugs (`dating.pulse`,
+  `workrel.pulse`) and status values not in `profile/facts.ts` (`casual`, `engaged`, `divorced_seeking`); `oracle.md`
+  allows `pattern` only for mind/stuck, so `dating_breaking_patterns` carries its loop in knot/asks; docs lean on D7 for
+  Dating but §4.5 omits it (briefs read D7 Venus only if present); "S6D" read as the Jupiter+Saturn double transit on
+  the 7th, to confirm; the Love briefs run 180–235 words vs 78–109 for Self, adding tokens to every Love pack. Watch
+  overlaps with Work: `allies_cofounder_fit`/`biz_partnerships_fit`, `allies_managing_people`/`job_leading_teams`,
+  `allies_clients_deals`/`biz_clients_sales`. [cards][docs]
+- **P3 · open · Work card briefs (doc 10) findings, 2026-11-18:** docs 05–08 route on fact keys that do not exist
+  (`work.runway_months`, `work.risk_tolerance`, `work.has_cofounder`, `work.creative_medium`) and status values
+  (`founder`, `recent_grad`); about half their confirm questions were either/or or trait questions (rewritten as one
+  past event); docs 50 and 72 ask for medical words (digestion, bloodwork) the Personalizer rejects; get-through advice
+  in docs 47, 48, 64 says "wait for the window", which the Oracle prompt forbids; doc 05 lists #39 (later, needs D24)
+  as a starter. Work briefs are 1.6–2.1 KB vs ~0.5 KB for Self. [cards][docs]
+- **P2 · open · `AIAstra_WEB/src/pages/welcome/WelcomeWizard.tsx:267` still shows internal id badges** (fact ids such as
+  `work.status`, `love.status`). No internal id may reach the screen. [web] Found by the doc 10 web build, 2026-11-18.
+- **DONE 2026-11-18 · `CARDS_GROUP_PACK=1` is now set on the live Lambda** (image `api-e9198a9609d4`, `READING_EXPLICIT_CACHE`
+  already 1), after the doc 86 measurement (11 cards: 17.2 s model time vs 35.7 s, $0.067 vs $0.172, cache deleted 2.4 s
+  after the last card). Still to do: measure the end-to-end time on the Lambda (laptop run was 28.6 s).
+- **P2 · was open · `CARDS_GROUP_PACK` was unset on the live Lambda (code default off)**, so You, Love and Work cards are
+  read one call per card, not in one cached group pack (doc 71 §4.3, doc 10 §4.2). Kept off on 2026-11-18 when
+  `BOARDS_V3=love,work` was switched on, because turning it on also changes how You is read, untested live. Done when
+  a grouped read is checked on one test chart (paid; Sachin's yes) and the flag is set to 1. [cards][cost]
+- **P3 · open · Phone layout v2 findings (doc 12), 2026-11-18:** `e2e/card-toolbar-vetting.spec.ts` still expects the tool
+  panels removed in doc 79 (stale); `e2e/card-picker.spec.ts` (dark/light picker) and `e2e/digest-boards.spec.ts`
+  (wave 1-3, cannot find `self-character-arc`) fail on the phone project on develop before this branch; e2e builds and
+  Playwright output go to `node_modules/.cache`, which in a worktree is the main checkout's packages through the junction
+  (point `outputDir` and the dist folder at the worktree in `e2e/playwright.config.ts`); `saves.changeCard` (per-card
+  PATCH) has no UI caller now that the face switch is gone (keep or delete); the doc 85 note from doc 12 §3 is unwritten.
+  Not verified on a device: keyboard lift of the anchored input, pull gesture vs native scrolling and iOS bounce,
+  whole-board re-render on each touch move during a pull, long card names (about 100 px of title; two lines then cut). [web]
 - **P3 · open · `queueLogError` cuts error text at 300 characters** (`src/lib/queueLogger.ts redactForLog`), and a
   Prisma error spends most of that on its preamble, so the constraint or column name never reaches CloudWatch.
   [ops] Done when Prisma errors log their code and `meta` (constraint, column) ahead of the text.
@@ -3095,3 +3346,449 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
 - **P3 · open · Engine Lambda timeout is 60 s in the engine docs and 30 s in doc 81;** the real value was not read
   (the AWS connector did not connect on 2026-11-19).
 
+## Filed 2026-11-18 by the five-repo security review (docs/security/fix-list.md)
+
+No finding scored 8/10 or higher on the false-positive check, so none is a confirmed exploit today. These are open until
+fixed. Details, file lines and "done" tests are in `docs/security/fix-list.md`.
+
+- **P1 · open · `/api/research/*` routes take any signed-in user.** `server.ts:390`, `src/routes/researchRoutes.ts:42-76`:
+  a free account can overwrite preset research rows via `POST /api/research/hydrate` (`mode:"custom"`). [security]
+  Done: non-admin tokens get 403.
+- **P1 · open · Auth fails open when the DB read fails (SEC-01).** `src/auth/requestAuth.ts:139-142`. [security]
+- **P1 · open · PII stored plaintext on Lambda (SEC-02).** KMS stub `src/lib/pii/keys.ts:108-111`; live `PII_MODE` unset. [privacy]
+- **P1 · open · Admin-role staff read full email and birth data unlogged** (aiadastra_admin `api/src/app.ts:529-541`,
+  QA exception of 2026-11-07; SEC-03). Reinstate superadmin/masking and audit rows before real users. [admin][privacy]
+- **P1 · open · Static `ADMIN_LAB_TOKEN` unlocks decrypted PII for 200 users (SEC-04).** `src/routes/adminLabRoutes.ts:60-125`;
+  live `ADMIN_LAB=1`. Rotate the token; move to short-lived staff-bound tokens and log reads. [security]
+- **P2 · open · Gemini key sent as `?key=` (SEC-10)**, `maskedErrors:false` and raw `err.message` (SEC-05), Radha allows
+  all calls when no key is set, deploy role trusts `repo:sachinm/AIAstraRadha:*`, cache-sweep event fails open with
+  `LLM_CACHE_SWEEP_TOKEN` unset on live, web token in localStorage with broad CSP `connect-src` (SEC-07), empty
+  `CORS_ORIGINS` reflects any origin (SEC-09). [security]
+- **P3 · open · Render Postgres connection security not reviewed** (sslmode, inbound allow-list, app user rights). [ops]
+
+## Filed 2026-11-18 by the AWS account review (docs/security/aws-account-review.md)
+
+Read-only review of account 442728149528 in us-east-1, through `amplifyv2` → `OrganizationAccountAccessRole`, plus the
+Terraform repo and the deploy workflows. Nothing in AWS was changed. The numbers below are the TODO numbers in that doc,
+which holds the evidence and what "done" means for each. Every change to the account needs Sachin's OK and goes through
+the deploy session. Owner for all: Sachin, with the deploy session.
+
+- **P1 · open · Deploy role reads every server secret from any Radha branch (TODO 1–2).** `aiastra-github-deploy` trusts
+  `repo:sachinm/AIAstraRadha:*` and may `GetFunctionConfiguration`/`UpdateFunctionCode` on `function:aiastra-*`, and
+  `aiastra-server-api` keeps `DATABASE_URL`, `JWT_SECRET`, provider keys, `ADMIN_LAB_TOKEN` and event tokens as plain
+  env vars. Extends the P2 "deploy role trusts `repo:sachinm/AIAstraRadha:*`" line above. Done: per-repo roles pinned to
+  the release branch, secrets read from Secrets Manager at start-up, exposed secrets rotated. [security][aws]
+- **P1 · open · `aiastra-ops` IAM user has a broad active key and no MFA (TODO 3–4).** `amplify:*`, `apprunner:*`, read of
+  every secret, create/delete `aiastra-*` Lambdas, `iam:PassRole` on `aiastra-*`. Done: user retired or read-only;
+  deployer key confirmed or replaced and moved to OIDC. [security][aws]
+- **P1 · open · Root user of 442728149528 has no MFA, and there is no password policy (TODO 5).** [security][aws]
+- **P1 · open · No CloudTrail trail, and GuardDuty, Inspector, Security Hub, Macie, Config and Access Analyzer are
+  all off in us-east-1 (TODO 6–7, 14, 21).** Only the 90-day event history exists. [security][aws]
+- **P1 · open · Live Cognito pool: MFA off, self sign-up open on a public client, `LEGACY` user-existence errors, no threat
+  protection (TODO 8).** Pool `aiastra-users-staging`, 18 users. [security][aws]
+- **P1 · open · Lambda Web Adapter pulled by mutable tag from a repo the shared deploy role can push to (TODO 9).**
+  `Dockerfile.lambda:18` here and `aiadastra_admin/api/Dockerfile.lambda:10`; all ECR repos have mutable tags. [security][aws]
+- **P2 · open · API WAF has only the Common rule set, no rate limit, and no WAF or CloudFront logs (TODO 10).** [security][aws]
+- **P2 · open · Admin CloudFront uses the default certificate (TLSv1) and has no response headers policy (TODO 11).** [aws]
+- **P2 · open · Three Lambda log groups never expire (admin API, Cognito email sender, dasha deep worker) (TODO 12).** [aws]
+- **P2 · open · No CloudWatch alarms and no budget in the account (TODO 13).** [aws]
+- **P2 · open · GitHub Actions pinned by tag, no protected environment, and Radha deploys without its tests (TODO 15).** [security]
+- **P2 · open · Dasha deep worker shares the API's execution role, so it gets the PII KMS key and Bedrock rights (TODO 16).** [aws]
+- **P2 · open · Production CSP `connect-src` allows `http://localhost:*` and `ws://localhost:*` (TODO 17).** `AIAstra_WEB/customHttp.yml`. [security]
+- **P3 · open · KMS rotation off on the Cognito email-sender key; no S3 account public access block; EBS default
+  encryption off; no ECR lifecycle policy (TODO 18–20).** [aws]
+- **P3 · open · Terraform and the inventory doc do not match the account (TODO 22–23).** Most modules are placeholders;
+  `aiastra-aws-terraform/docs/INVENTORY.md` gives a 300 s timeout (live: 900 s) and lists none of the admin stack;
+  `docs/lambda-deployment.md:39` says "manual only" but push deploys run. [aws][docs]
+- **P3 · open · `AIAstra_Radha/.gitignore` has no `.env` rule; `AIAstra_WEB` commits `.env.*` files with no check
+  against non-`VITE_` keys (TODO 24).** [security]
+- **P3 · open · Parts of the account not reviewed (TODO 25):** other regions, the management account's trail and SCPs,
+  KMS and secret resource policies, two inline role policies, root password state. [aws]
+
+## Sanjay Rath research findings (2026-11-18)
+
+Filed by the Sanjay Rath documentation set (`docs/deep-research/sanjay-rath/`, files 12-15). The inventory these come
+from is `research_notes/Sanjay Rath methods and precedence/existing_techniques_inventory.md` §4 (read-only, server
+`feat/self-foundation-server` 00dc904; engine `release-candidate-staging` b902bea). "Checked" means the line was re-read
+in code on 2026-11-18; "inventory" means it rests on that file only. Nothing below was fixed.
+
+- **P2 · open · Four more shade pulse fact keys cannot be stored.** `work.goal_shade`, `work.change_shade`,
+  `work.pressure_shade` and `love.strain_shade` (`src/reading/area/shadeResolver.ts` `SHADE_CATALOG`, from line 113) are
+  not in `FACT_CATALOG` (`src/profile/facts.ts:11-28`), so `checkFact` returns `unknown_key` and the tie-break bonus can
+  never fire from a real answer. Extends the P2 `self.mind_shade` line above (filed 2026-11-09). Checked. Done: the keys
+  are added to the catalogue with their values, or the shade questions are retired.
+- **P3 · open · Clarify header comment contradicts the code.** `src/reading/clarify/machine.ts:9` says a run is abandoned
+  after 10 minutes (and the header says at most two questions); the code has `MAX_QUESTIONS = 5` (line 77) and
+  `ABANDON_AFTER_MS = 30 min` (line 78); `planner.ts:10` says "1 to 5". Doc 48 and AGENTS.md rule 3 say one or two.
+  Checked. Done: Sachin picks the cap, and code and comments say the same number.
+- **P2 · open · Digest sets the year lord only on Varsha D1 rows, never on Tithi Pravesha rows.**
+  `src/reading/digest/build.ts:1175-1190` reads `annual.tajaka` and sets `yearLord` only when `kind === 'VP'` and
+  `varga === 'D1'`. TP rows get no `yearLord`, so `dashaAssessment.ts` (~L413-419) fails closed to `get_through` and the
+  three `*.character_arc` rows and `self.sub.year` fall back to the pressure-inventory annual row. The engine half (the TP
+  export does not name the weekday year lord, decided 2026-11-09) is the doc 80 R1 item at the top of this file; this
+  line is the server half only. Checked (build.ts); dashaAssessment lines from the inventory. Done: once the engine
+  exports the TP year lord, the digest sets it on TP rows and a test covers it.
+- **P3 · open · Stale "engine gap" note on the annual layers.** `src/techniques/catalog.ts:647` (`self.annual`,
+  `love.annual` special) says "Muntha, the year lord and Tajaka yogas are engine gaps"; `annual.tajaka` v2 exports them
+  and `build.ts:1177` parses them (VP D1). The P2 "Annual Tajaka layer not served" line (2026-11-05) is likewise out of
+  date. Checked. Done: the note says what is actually missing (TP year lord; Tajaka on non-D1 or TP rows).
+- **P3 · open · `work.present_tone` note says three families are not built.** `src/reading/area/career.ts:46`
+  `FAMILIES_NOT_BUILT = ['conditional clock', "this year's chart", 'karaka clock']` feeds the special note at
+  `catalog.ts:136`, while `work.conditional_family`, `work.annual_family` and `work.karaka_family` are `built` rows.
+  Checked. Done: either the constant is emptied and the vote thresholds re-checked, or the three rows are marked as not
+  yet voting in `work.present_tone`.
+- **P3 · open · Lucky "Mercury's motion is not yet checked" note may be stale.** `src/reading/luckyTimes/scenarios.ts:182`
+  and `:264`; `daily_grade` and `muhurta` v2 now carry `planet_motion` (inventory), but the server does not read it.
+  Checked (notes); engine field from the inventory. Done: the scenarios read the engine's Mercury motion, or the note
+  says the field is served but unused.
+- **P1 · open · Love and Work confirm taps are lost: the web posts to a route the server does not have.**
+  `AIAstra_WEB/src/lib/selfV3Api.ts:904` `sendSelfV3Confirm(..., board)` posts to `/api/board/<board>/v3/confirm`
+  (`boardBase`, line 109); `src/routes/boardCardsRoutes.ts` serves only `catalogue` and `layout` under that prefix, so
+  the tap gets a 404 and the answer is dropped. Checked by code read 2026-11-18 (web `develop` 8702b54, server 280ac27);
+  not checked in logs. Holder: plan `docs/reading-engine/86-confirmation-loop.md` step 5. Done: the route exists and a
+  Love/Work tap stores a row.
+- **P2 · open · Life dashboard and the Love/Work readings' chart-led question have no answer route; no answer writes
+  the ledger.** `src/reading/life/compose.ts:91` `confirmQuestion` writes question text only. Month check-ins do exist
+  (`POST /api/area/:area/checks` → `area_checks`, `src/routes/areaRoutes.ts:151`) but carry no technique and write no
+  event. Only Self answers are stored (`self.confirm.*`), and no confirm answer writes a `life_events` row (AGENTS.md
+  rule 4). Holder: doc 86. Done: one confirm service per doc 86 storing each answer once per chart and, where dated,
+  writing the ledger event.
+- **P2 · open · D60 reaches the readers on any birth time.** `src/techniques/catalog.ts:303` says D60 confirms only on
+  a birth time recorded to the minute, but `src/reading/oracle/digestSlices.ts` (lines 353, 403, 443, 546) puts D60 in
+  slices with no gate. Holder: doc 86 Phase 3. Done: slices drop D60 unless the chart's birth-time source is a record.
+- **P2 · open · Facts are per account while boards read the account's latest chart.** `person_facts` is keyed by
+  `user_id` only (`prisma/schema.prisma:1080`); Self, Love and Work resolve the latest kundli (`resolveKundli`,
+  `src/reading/timeline/ledgerStore.ts:36`). If an account holds a second person's chart, that chart becomes "latest" and
+  is read with the first person's facts and confirm answers. Checked by code read. Holder: doc 86 decision 2 for
+  chart-tied answers; the account-level facts need a product decision on whose chart the boards show. Done: boards read
+  an explicit "my chart" and chart-tied answers are stored per chart.
+- **P2 · open · No fact records how exact the birth time is, yet D60 is gated on it.** `work.d10_check` says D60
+  "confirms only when the birth time is recorded to the minute"; `FACT_CATALOG` has no birth-time source or precision key
+  and nothing records it. Rath's intake asks for the hospital record or the mother; his student calls client times
+  seldom accurate (docs/deep-research/sanjay-rath/12). Checked (`FACT_CATALOG`). Done: a catalogue key for the birth-time
+  source (record / family memory / estimate) asked once at registration, read by every D60 and fine-sub-period gate.
+- **P3 · open · `docs/techniques/README.md` count and ids.** Line 57 says "Complete Catalogue Index (69 Techniques)"; the
+  catalogue has 142 (inventory, generated from `src/techniques/catalog.ts`). It names three ids that are not catalogue
+  rows (`general.jaimini_karakamsha`, `general.sudarshana_chakra`, `love.synastry_koota` / `love.bonding_chemistry`),
+  and 73 catalogue ids have no illustration page. Checked (README line 57); the rest from the inventory. Done: the README
+  is generated from the catalogue, and planned ids are listed apart as planned.
+- **P3 · open · Age-36 D9 rule is credited to Rath's *Crux* without a found source.** The `work.character_arc` catalogue
+  row (`src/techniques/catalog.ts`, source field) cites "Sanjay Rath Crux of Vedic Astrology (Dasamsa & D9 Maturation)"
+  for the age-36 D1+D9 mutual-confirmation gate (`D9_MATURITY_AGE_YEARS`, doc 76). None of the Rath research notes
+  (`research_notes/Sanjay Rath */`) found an age-36 D9 rule in *Crux*; the nearest are a "years of fortune" table
+  (Saturn 35-36) and planet maturity ages from non-Rath sites. Found while writing
+  `reports/Sanjay Rath methods and precedence.md`. Done: the rule is checked in a print copy of *Crux* and either cited
+  by section or relabelled as a product rule in the catalogue source fields and docs/dashboards.
+- **P3 · open · Earlier Rath reports and notes carry statements now corrected.** Eleven corrections are listed in
+  `docs/deep-research/sanjay-rath/15-sensitive-rules-and-gaps.md` §3 (e.g. `reports/Sanjay Rath life area readings.md`
+  §1 step 9 "strongest of four" Vimshottari start; its gaps table "Sudasa when Moon sign stronger"; the method summary's
+  "absent" rows for the karaka count, Chara Dasha and Tithi Ashtottari; `procedure_and_precedence.md` Q1 saying Rath's
+  rectification method was not found). Not edited in place. Done: each earlier file is corrected or marked superseded
+  by the deep-research set.
+- **P3 · open · D2/D3 varga variant options in the calculation engine are unverified.** `docs/deep-research/sanjay-rath/06-vargas.md`
+  marks three engine statuses "unknown" (Rath's preferred D2 hora / D3 drekkana variants, e.g. Kashinatha hora,
+  Parivritti, Somanatha) because the engine inventory does not list which varga variant methods it exposes. Holder:
+  engine pass. Done: the engine's varga variant options are listed and 06 is updated to computed / not computed. [engine][docs]
+
+## Filed 2026-11-18 by the classical-techniques deep research (`docs/deep-research/`, `reports/Vedic dasha systems and prediction techniques.md`)
+
+From the eight researcher folders, their notes in `research_notes/Vedic dasha systems and prediction techniques/`, and
+`docs/deep-research/current-specs-review/05-findings.md`; the whole comparison is
+`docs/deep-research/current-specs-review/06-gap-matrix.md` (row ids in brackets) and the order of work is `07-recommendation.md`.
+Engine lines hold at `AIAstra_Radha` `origin/release-candidate-staging` @ `b902bea`: the dhasa, `const.py`, chart,
+transit and panchanga modules are unchanged between the researchers' local checkout (`0c11037`) and `b902bea`
+(`git diff --stat`); lines in the `*_export.py` modules, which did change, are taken from current-specs-review 03/05
+at `b902bea`. Server lines `feat/self-foundation-server` @ `280ac27`. **Run** = a researcher ran the engine; **code** =
+read from code only; "verify first" = a code reading to confirm against a reference chart before changing. Items already in this file are not
+repeated (TP 108-year dasha `:19`, R1 TP year lord `:120`, strength types in the digest `:122`, Gairi Kamboola /
+Khallasara stubs `:857`, no vedha `:859`, `transit_ashtakavarga` fetcher `:866`, choghadiya and day functions `:884`,
+Mudda offset `:1426` and `:2291`, deep-level split decision `:2285`, Kalachakra L1 `:2289`, yogas for empty houses `:87`,
+digest TP year lord `:3163`, `FAMILIES_NOT_BUILT` `:3174`, README count `:3193`, age-36 rule `:3198`, and the Node
+items 05 marks "Filed"). Nothing below was fixed.
+
+### Engine: wrong data served today (P0)
+
+- **P0 · open · Mudda starts from the wrong lord for 15 of 27 birth stars.** `src/jhora/horoscope/dhasa/annual/mudda.py:51-53`
+  computes `(planet_id + years) % 9` and indexes the Vimshottari lord list with it, so a planet id is used as a list
+  position. Wrong for Moon stars ruled by Rahu, Saturn, Mercury, Ketu, Venus (e.g. Ketu star, year 0: engine Venus,
+  expected Ketu). **Run** on 1972 births. Feeds `annual.mudda` and `annual.tithi_pravesha_dasha` (system mudda), read by
+  the annual digest rows and the You reading's year span. Source: `docs/deep-research/dashas-other-and-annual/00-overview.md`
+  §8.1 [C02]. [engine] Done: lord index = (natal star lord's Vimshottari index + completed years) mod 9, a test per star
+  lord, annual rows re-pulled.
+- **P0 · open (verify first) · Narayana antardasa takes the 8th sign as "the 7th".** `src/jhora/horoscope/dhasa/raasi/narayana.py`
+  `_narayana_antardhasa` uses `(dhasa_rasi+7)%12` (0-indexed, the 8th) and compares the two lords' signs, where Rath and
+  PVR compare the dasa sign with its 7th and start from the stronger one's lord. **Code.** Narayana is clock 2 of the
+  five and the Work rasi family. Source: `docs/deep-research/dashas-rasi-jaimini/narayana-dasha.md` §8 and notes [B01].
+  [engine] Done: a JHora reference chart reproduces every L2 sign, then `dasha.narayana` re-pulled.
+- **P0 · open (verify first) · Chara antardasas are the same list in every mahadasa.** `src/jhora/horoscope/dhasa/raasi/chara.py`
+  `_antardhasa(dhasa_progression)` returns one rotated list for all mahadasas, so sub-periods never start from the
+  running sign; `yogardha.py` reuses it. **Code.** Read by the chat (Narayana/Chara) and clock 6. Source:
+  `docs/deep-research/dashas-rasi-jaimini/chara-dasha.md` §8 [B03]. [engine] Done: each MD's antardasas start per the
+  chosen variant's rule, with a reference test.
+- **P0 · open (verify first) · Yogini first yogini disagrees with BPHS 46.199 for Ashwini to Ardra.** `yogini.py` builds the
+  star → yogini table from Punarvasu (seed 7); the text's rule (star number + 3) mod 8 from Ashwini gives Bhramari,
+  Bhadrika, Ulka, Siddha, Sankata, Mangala for stars 1-6 where the engine gives Siddha, Sankata, Mangala, Pingala,
+  Dhanya, Bhramari. **Code**, from a reimplementation of `_get_dhasa_dict(7)`, not a live run. Yogini is clock 5.
+  Source: `docs/deep-research/dashas-nakshatra/yogini.md` and notes item 1 [A11]. [engine] Done: a live run on a chart
+  with the Moon in each of stars 1-6 compared with 46.199 and JHora; fixed if wrong.
+- **P1 · open · The gochara table to settle (`:1876`) has a text answer: Phaladeepika 26.** `pressure_inventory_export.py:115`
+  (doc 66) reads Jupiter "mixed" from the Moon in 1, 3, 4, 10 and pressing only in 6, 8, 12; PD 26.2-5 makes it bad in
+  1, 3, 4, 6, 8, 10, 12. `reading_tables_export.py:54` has Jupiter per PD but Saturn bad only in 1, 2, 8, 12 (PD:
+  everywhere but 3, 6, 11, as `pressure_inventory` has it). Neither covers Sun, Mercury, Venus; neither has vedha.
+  `pressure_inventory` feeds the five-clock tones and the Now card. Extends `:1876` (decision) and `:859` (vedha).
+  Source: `docs/deep-research/transits/01-gochara-from-moon.md`, `current-specs-review/03-engine-exports.md` §12.8
+  [E01]. [engine] Done: one PD 26 table for all nine planets with vedha pairs, used by every type; pressure rows
+  re-pulled.
+- **P0 · open (verify first) · Three BAV cells differ from Phaladeepika 23.** `src/jhora/const.py:229`
+  `ashtaka_varga_dict`: Moon from Moon adds 9; Moon from Mars lacks 9; Venus from Mars has 4 for 5. Totals stay 49 and
+  52, so the 337 check passes. **Code.** SAV per sign feeds `house.sav`, transit AV and kakshya. Source:
+  `docs/deep-research/transits/07-bhinnashtakavarga.md`, notes "Engine output" [E07]. [engine] Done: checked against
+  the BPHS 66 table in a print edition; fixed or the source table named in the export.
+- **P0 · open · Annual sahams switch day/night on the birth, not the year.** `annual_export.py:808` calls
+  `_is_night_birth(birth_jd, …)` (defined `:353`); the Tajika texts reverse the formulas by the revolution's day or night (Samj. 3.5).
+  `annual.sahams` is in the annual pull set, read by love, work and general annual techniques. Source:
+  `docs/deep-research/tajika-prashna-muhurta/tajika-sahams.md`, 00-overview §4.3 [H06]. [engine] Done: `ret_jd` passed,
+  a test on a night birth with a day revolution, sahams re-pulled.
+
+### Engine: wrong vs text or missing, needed by a board (P1)
+
+- **P1 · open · Ashtottari applicability misses its second rule.** BPHS 46.23 (day birth in the dark fortnight or night
+  birth in the bright one) is not implemented; only 46.17 (Rahu) is. **Code.** `dasha.applicable` under-reports for
+  about half of charts. Source: `docs/deep-research/dashas-nakshatra/01-applicability-matrix.md` [A02]. [engine] Done: a
+  separate boolean per rule in `dasha.applicable`.
+- **P1 · open · Shodashottari and Shattrimsha-sama are never checked for applicability.** `applicability.py` TODO;
+  `dasha_export.py:668-669, 722-725` report "not checked", so neither can be the conditional clock. Source:
+  `dashas-nakshatra/01-applicability-matrix.md` [A03, A10]. [engine] Done: both conditions per BPHS 46.24 and 46.43,
+  with the margin to the hora/paksha boundary in the output.
+- **P1 · open · Tithi Pravesha silently uses the current year.** `vratha.tithi_pravesha` falls back to the current year
+  when the requested year is at or before the birth year; the row then looks valid. **Code.** Source:
+  `dashas-other-and-annual/00-overview.md` §8.7 [C01]. [engine] Done: the call errors (or returns the birth-year TP) and a
+  test covers it.
+- **P1 · open · Sudarshana Chakra is not natal-seeded and not exported.** `sudharsana_chakra.py` seeds from the chart at
+  birth + N years and shifts N − 1 houses (age 0 starts at the 12th), prints debug output. BPHS 74.22 counts from the
+  natal 1st house. Spec `general.sudarshana_chakra` (planned) and `self.annual` depend on it. Source:
+  `dashas-other-and-annual/sudarshana-chakra-dasha.md` [C04]. [engine] Done: `annual.sudarshana` type, three wheels,
+  year/month/2.5-day units, test against BPHS 74.
+- **P1 · open · Dasha options and varga never reach the library.** `dasha_export.py:600-602, 190`: no varga, no
+  `chara_method`, gender, seed star, starting planet, tribhagi or antardasha option, so no Narayana on D9/D10 for Love
+  and Work and no declared school variant. Source: `current-specs-review/05-findings.md` C1 [X01, B02]. [engine] Done:
+  `varga` and per-system `options` params validated against each function, echoed in `params_used`.
+- **P1 · open · Year-lord (Varshesha) rule differs from the Tajika texts.** `tajaka._get_the_lord_of_tajaka_chart`
+  (`horoscope/transit/tajaka.py:449-533`) prefers benefic-aspect candidates, then takes the strongest of **all**
+  candidates, and falls back to the Sun/Moon-sign lord; Muktavali 4.3-4 and Yadava 7.3-4 choose the strongest among
+  candidates that aspect the lagna. **Code.** Source: `tajika-prashna-muhurta/varshesha-panchadhikari.md` [H03].
+  [engine] Done: candidates, aspects and the rule path in the export; the winner per the text.
+- **P1 · open · Year and month lords use mean instants.** `lord_of_the_year` / `lord_of_the_month` use
+  `jd_at_dob + years × year_value` (`tajaka.py:519`), not the true return or the +30° Sun ingress the served chart uses.
+  Source: `tajika-prashna-muhurta/00-overview.md` §4.2 [H03, H09]. [engine] Done: both use the true instants.
+- **P1 · open · Harsha bala gives Venus the 12th as its joy house.** `const.py:247-249` `harsha_bala_houses`; the texts
+  (DA 7.1-2, HR 2.9) give the 5th. Love specs threshold harsha at 15. Also computed on the natal chart only, not the
+  year chart. Source: `tajika-prashna-muhurta/harsha-bala-pancha-vargiya-bala.md` [H08]. [engine] Done: table fixed,
+  harsha and pancha-vargiya bala on the year chart.
+- **P1 · open · `panchaka_rahitha` is the Kerala sum-mod-9 scheme, served under a name that suggests the Dhanishtha
+  Panchaka.** `panchanga/drik.py:2989`, in the muhurta day windows (03 §9). Source: `tajika-prashna-muhurta/muhurta-doshas.md`
+  [H16]. [engine][lucky] Done: renamed and tagged by scheme; Dhanishtha Panchaka served as its own field.
+- **P1 · open · Argala lacks the text's node reversal and third-house rule.** `natal_export._build_argala`: no Ketu
+  reversal (JS 1.1.10; BPHS 31.6 names both nodes), no malefic argala from the 3rd, no net verdict, nothing on special
+  points. Source: `jaimini-apparatus/argala-virodhargala.md` [G05]. [engine] Done: variants tagged, net verdict per house.
+- **P1 · open · No Karakamsha frame.** `facts` carries the karakamsa sign only; no houses from KL in D1 and D9.
+  `general.jaimini_karakamsha` (planned), `self.reading.atma` and `work.reading.vocation` read "karakamsa"; how those
+  panels locate it was not traced and may be a Node lookup. Related: the BG-08 devatas from karakamsa (`:1344`).
+  Source: `jaimini-apparatus/karakamsha-swamsha.md`,
+  `current-specs-review/01-technique-spec-inventory.md` V2 [G08]. [engine][self] Done: engine `karakamsha` frame with
+  occupants and aspects; panels read it.
+- **P1 · open · No houses counted from the Upapada.** UL is exported as A12 only; the 2nd, 7th and 8th from UL that the
+  Love board needs are not stated. Extends the AL line at `:2954`. Source: `jaimini-apparatus/upapada-lagna.md` [G07].
+  [engine][love] Done: houses from UL (and AL, HL, SL) in the digest.
+- **P1 · open · Missing bodies become Aries 0° with a computed star.** `export.py:810, 845, 867`; extra bodies match by
+  substring (`:838`, e.g. "yama", "kaala"). Source: `current-specs-review/03-engine-exports.md` §12.11 [G13]. [engine]
+  Done: null rows for missing bodies; exact keys or `drik.upagraha_longitude`.
+- **P1 · open · Errors return empty dasha data with success.** `export.py:1112-1114, 1196-1198` return `periods: []`;
+  `_build_chara_karaka_json` returns `[]` (`:975-977`). Source: 03 §12.12 [X04]. [engine] Done: the API answers 500.
+- **P1 · open · Ayanamsa is not enforced outside `facts`, `transits`, `pressure_inventory`.** `api.py:97` accepts any;
+  bhava bala, harsha and the legacy Vimshottari take none (`natal_export.py:274-276, 315-317`; `export.py:1097`).
+  Source: 03 §12.5 [X03]. [engine] Done: non-LAHIRI rejected or threaded through every call.
+- **P1 · open · No output says which school or variant it used.** Chara karakas (8 vs 7), Panchottari reading, Chara
+  method, Shadbala minimums, avastha tables, argala node rule, year-lord rule, node exaltation scheme. Every researcher
+  asks for a `variant` and `text` tag. Source: all eight `00-overview.md` design notes [X05]. [engine] Done: each
+  variant-bearing type carries `variant` and `text` fields.
+
+### Engine: variants and research-only dashas (P2/P3)
+
+- **P2 · open · Chara method labels are crossed and K.N. Rao's lagna-seeded table is unreachable.** `chara.py`
+  `get_dhasa_antardhasa` always seeds with the PVR-2014 rule; method 1 uses the "knrao" durations (±1, two cycles),
+  which K.N. Rao rejects; `_dhasa_progression_knrao_method` is never called. Source: `dashas-rasi-jaimini/chara-dasha.md`
+  [B03]. [engine] Done: labels match the schools; variant ids `chara.knrao`, `chara.pvr2014`, … exposed.
+- **P3 · open · Chara Raghava Bhatta / Rangacharya durations use planet ids as sign indexes** (Scorpio 2, Aquarius 6) in
+  `chara.py` (unused path). Source: chara-dasha.md [B03]. [engine]
+- **P2 · open · Naisargika dasha differs from the texts.** `naisargika.py` adds a 12-year Lagna period (132 years vs 120,
+  BPHS 43.16-17), splits antardashas equally and rounds them (~7 days drift). Source:
+  `dashas-other-and-annual/naisargika-dasha.md` [C06]. [engine] Done: no lagna period; weighted antardashas per Rath.
+- **P2 · open · `dasha.aayu` is served although `aayu.py` says "DO NOT USE".** krurodaya TODOs open; `const.aayu_types`
+  (0-32, 33-70, 71-100) differs from BPHS 44.11 (under 22, 22-64, 64+). Longevity is out of product scope. Source:
+  `dashas-other-and-annual/ayurdaya-dashas-pinda-amsa-nisarga.md` [C07, F23]. [engine] Done: removed from the catalogue
+  or marked internal; bands per 44.11.
+- **P2 · open · Annual year lengths differ by module.** Mudda tropical/360, Patyayini average Gregorian, Sudarshana,
+  Naisargika, Sandhya, Tara sidereal, Varsha Narayana year/360×3. Source: `dashas-other-and-annual/00-overview.md` §4
+  [C10]. [engine] Done: annual systems anchor on the true VP or TP instant and every export names its year length.
+- **P2 · open · Panchottari is checked on the PVR reading only** (D12 lagna Cancer); the AE/Santhanam reading also needs
+  rasi Cancer. Source: `dashas-nakshatra/panchottari.md` [A05]. [engine] Done: both readings as flags.
+- **P3 · open · Ashtottari antardasha start is set by a JHora-vs-PVR comment.** `const.ashtottari_bhukthi_starts_from_dhasa_lord = True`
+  ("PVR Book says this should be False"). Source: `dashas-nakshatra/ashtottari.md` [A02]. [engine] Done: a declared variant.
+- **P3 · open · Kalachakra gatis are not flagged and its antardasha has a "temporary fix".** `kalachakra.py`. Extends
+  `:2289`. Source: `dashas-nakshatra/kalachakra.md` [A12]. [engine]
+- **P3 · open · Engine "moola" is the Lagna Kendradi rasi dasha.** `raasi/moola.py` duplicates `kendradhi_rasi.py`; the
+  BJ/SJC graha Mula dasha does not exist. Source: `dashas-other-and-annual/moola-dasha.md` [A14]. [engine] Done: renamed
+  or removed from the catalogue.
+- **P3 · open · `tara.py` does not enforce its own all-kendras condition.** Source: `dashas-other-and-annual/tara-dasha.md`
+  [A13]. [engine]
+- **P3 · open · Rasi dasha modules that differ from BPHS / Jaimini (all research-only).** One line each, code-read:
+  `navamsa.py` seed and AD tables not JS 2.3.1-2; `trikona.py` direction by seed parity (BPHS 46.183: as Chara) and
+  Narayana years; `tara_lagna.py` AD from AK (no rule in JS 2.4.27); `sthira.py` always zodiacal (46.169: odd forward,
+  even backward); `drig.py` Narayana years (46.187: Sthira years; PVR choice); `mandooka.py` default method not 46.179-180;
+  `brahma.py` direction by seed parity (JS 2.3.26: lagna parity); `varnada.py`, `paryaaya.py`, `padhanadhamsa.py`
+  self-declared incomplete. Source: `docs/deep-research/dashas-rasi-jaimini/` files §8 [B07-B22]. [engine] Done: each has
+  a JHora reference test before any board uses it.
+- **P2 · open · Engine additions for judging a running period.** Per period lord: placement at the dasha start (BPHS
+  47.5-6, 48.8; Saravali 41.9-18), dreshkana third (47.2-4), arohini/avarohini (PD 20.56), AD lord's house from the MD
+  lord (PD 20.29), natural + temporal friendship, yoga participation, Sun-ingress dates into its signs (PD 20.38).
+  Source: `dasha-results/00-overview.md` §5, notes items 1, 2, 5 [D02, D03, D05, D08]. [engine] Done: fields on dasha
+  rows, read by the digest.
+- **P3 · open · Settle the 3/6/11 occupation conflict before encoding house polarity.** BPHS 47 makes the 11th good;
+  the e-text of 48.18 calls planets in 3/6/11 bad (Sanskrit cut off). Source: `dasha-results/dasha-lord-condition-principles.md`.
+  [docs][engine]
+- **P3 · open · Node exaltation scheme is not declared.** The engine overrides Rahu's dignity (`natal_export.py:74`);
+  BPHS e-text Taurus/Scorpio vs Gemini/Sagittarius. Source: `dasha-results` notes item 3 [D04]. [engine]
+- **P2 · open · Shadbala uses the Sun's minimum of 5 rupas.** `horoscope/chart/strength.py:806` (Raman's table);
+  BPHS-ET gives 390 virupas (6.5). Also no per-component minimum flags. Source: `natal-techniques/06-shadbala.md` [F06].
+  [engine] Done: table named in the export, or switched by a decision.
+- **P2 · open · Avasthas use non-text values.** `avasthas_export.py`: Baladi Vriddha 0.35 and Mrita 0.10 (text:
+  negligible, nil); the Deeptadi list is not BPHS-ET's nine. Source: `natal-techniques/10-avasthas.md` [F10]. [engine]
+- **P3 · open · Shayanadi falls back to 1.0 ghatis silently** when the sunrise lookup fails, and the name-syllable
+  sub-state is not computed. Source: `natal-techniques/10-avasthas.md` [F10]. [engine] Done: a fallback flag.
+- **P2 · open · Natal rule sets are partial.** Dhana and neecha bhanga (rules 1-3 of 5), Kemadruma variant and
+  cancellation, Budhaditya without a combustion check, Gajakesari strict vs popular. Source:
+  `natal-techniques/00-overview.md` §8 [F14, F19, F21]. [engine]
+- **P3 · open · Ishta/Kashta uses the root formula** (Raman), BPHS 28.6 gives a rasmi form; Sun and Moon null. Source:
+  `natal-techniques/08-ishta-kashta-phala.md` [F08]. [engine]
+- **P2 · open · Chara karakas: 8 only, ties silent.** `house.py:121-137`; no 7-karaka option (Rao's text has 7,
+  Abhyankar's 8). Source: `jaimini-apparatus/chara-karakas.md` [G01]. [engine]
+- **P2 · open · Jaimini raja yogas beyond AK-PK are not served** (`raja_yoga.py:471, 508`), nor natal sahams. Source:
+  `jaimini-apparatus/jaimini-raja-yogas.md`, `sahams-natal.md` [G10, G14]. [engine]
+- **P3 · open · Jaimini longevity helpers disagree with the text.** `house.rudra_based_on_planet_positions` compares a
+  table 8th lord with the 7th lord; `house.brahma` counts 6/8/12 from the stronger of lagna/7th, drops nodes and reads
+  `brahma` before assignment. Internal only; for the engine-rule-verifier. Source: `jaimini-apparatus/jaimini-longevity.md`
+  [G12]. [engine]
+- **P2 · open · Two tara name sets.** `facts_export.py:66` (Pratyari, Sadhaka, Vadha, Ati-mitra) vs `daily_export.py:61`
+  (Pratyak, Sadhana, Naidhana, Parama Mitra); `drik.chandrabalam` (unused) omits the 11th. Source:
+  `transits/04-tara-bala-and-chandra-bala.md`, `tajika-prashna-muhurta/tarabala-chandrabala.md` [E04]. [engine]
+  Done: one constant; the library function reconciled or removed.
+- **P2 · open · Virgo rasi multiplier is 6; BPHS 69:3 says 5.** `ashtakavarga.py` rasi multipliers. Source:
+  `transits/10-shodhya-pinda.md` [E10]. [engine]
+- **P2 · open · Latta is not exported and counts 28 stars.** `charts.py:2223-2225` includes Abhijit; PD 26.42-45 counts
+  27. Source: `transits/03-latta.md` [E03]. [engine]
+- **P2 · open · Murti nirnaya, Sarvatobhadra, pinda transit points and an eclipse contact list are missing.** Source:
+  `transits/00-overview.md` §8 [E06, E13, E15, E16]. [engine]
+- **P2 · open · Four Tajika yogas are not implemented** (Dutthottha-davira, Tambira, Kuttha, Duruhpha); the two stubs at
+  `:857` must be written, since the library functions return None (05 C4 says "call" them). Source:
+  `tajika-prashna-muhurta/tajika-yogas.md` [H05]. [engine]
+- **P2 · open · Verify `gauri_choghadiya`'s scheme** (North choghadiya vs Tamil Gowri); it is in the muhurta day windows
+  at `b902bea`. Source: `tajika-prashna-muhurta/choghadiya.md` [H15]. [engine][lucky]
+- **P3 · open · Tajika "semi_sextile" is in the aspect export;** the texts have no aspect at 2/12. Keep it out of yogas and
+  the year lord. Source: `tajika-aspects-deeptamsha.md` [H04]. [engine]
+- **P2 · open · Annual types missing:** Varsha Narayana, Tajika monthly chart, year-chart harsha / pancha-vargiya bala.
+  Source: 03 §12.17 [C05, H09]. [engine]
+- **P2 · open · Batch endpoint defaults to the 2-level legacy dashas and its `bhava` field always errors.**
+  `api.py:214-225, 659-660`. Source: 03 §12.3-4 [X02]. [engine]
+- **P2 · open · Bhava drishti bala is not served** (`strength.bhava_drishti_bala` unreferenced). Source: 03 §12.15 [F07].
+  [engine]
+- **P3 · open · Stale engine docstrings** (`reading_tables_export.py:39`, `natal_export.py:12-13`, calc_versions in
+  `facts`/`transits`/`transit_range`). Source: 03 §12.13. [engine][docs]
+
+### Server: Node computes astrology (rule: the engine is the only source)
+
+- **P1 · open · The Node-astrology guard test sees only the digest folder.** `tests/unit/reading/digest/noAstrologyInNode.test.ts:11`
+  scans `src/reading/digest/`; all 25 sites in 05 §A are outside it. Source: `current-specs-review/05-findings.md` A0
+  [X06]. [tests] Done: scans `src/reading/**` (minus word tables) with house-class literal and sign-ring patterns.
+- **P1 · open · Vargottama and neecha bhanga decided in Node.** `src/reading/dasha/dashaAssessment.ts:142-153` (`d1Sign === d9Sign`,
+  "neecha bhanga via D9", ±1.0/1.2/1.3/1.5). Source: 05 F2 [F11, F19]. [dasha] Done: engine `vargottama`,
+  `neecha_bhanga[]`, `d1_d9_confirmation`; constants to `env.ts`.
+- **P1 · open · House classes and dignity regexes grade vargas and the TP year lord in Node.** `dashaAssessment.ts:367-374, 456-485`.
+  Source: 05 F3 [F01]. [dasha] Done: read the engine house `class`.
+- **P1 · open · Conjunction = same sign in the digest.** `src/reading/digest/build.ts:573, 636, 847-850`; `:1119` notes a
+  second 8° rule. Source: 05 F4. [digest] Done: engine `conjunctions[]` with its orb rule.
+- **P1 · open · Past reading defaults lagna to Pisces and lord to Jupiter.** `src/reading/timeline/pastReadingFlow.ts:331-332, 646-654, 682-683`
+  (`?? 11`), with hard-coded aspect prose and Dwisaptati applicability by Node rule. `:646` covers privacy only.
+  Source: 05 F10 [A08]. [timeline] Done: defaults removed; `dasha.applicable` and `aspectsTo` read.
+- **P1 · open · Career drivers in Node.** `src/reading/area/career.ts:158, 182-197, 294, 419, 475` (`WORK_DUSTHANA`,
+  job-change / abroad drivers). Source: 05 F11. [career] Done: rule lists to `env.ts` or an engine table.
+- **P2 · open · Fixed thresholds and signifiers in the code readers.** `src/reading/codeReaders/rules.ts:53-54, 64-71`
+  (`SAV_HIGH = 28` has PD 23.20; `SAV_LOW = 22` has no source). Source: 05 F17, B17 [E08, G03]. [reading] Done:
+  thresholds in `env.ts` with a source each.
+- **P2 · open · Per-area houses, karakas and vargas in Node beyond `:66`.** `src/reading/timeline/markers.ts:45-55`,
+  `src/reading/life/areas.ts:34+`, `src/reading/area/love.ts:24-31`. Source: 05 F18 [F02]. [reading]
+- **P2 · open · Narayana activation in Node.** `src/reading/timeline/activate/narayana.ts:41-47` (house from AL, sign
+  compare). Source: 05 F19. [timeline] Done: Narayana rows carry `houses_activated` and `points_in_sign`.
+- **P2 · open · Dusthana scoring in the timeline.** `src/reading/timeline/signification.ts:38, 80-95`,
+  `activate/graha.ts:28-35`. Source: 05 F20. [timeline] Done: engine house `class`; `isShadAshtaka68`.
+- **P2 · open · Body panel house set contradicts its config.** `src/reading/self/panels/body.ts:220` `[1,2,3,4,6,8,12]` vs
+  `SELF_V2_BODY_HOUSES` [1,6,8] (`src/reading/self/sub/config.ts:27`). Source: 05 F21. [self]
+- **P2 · open · Research presets build synthetic digests with sign-ring arithmetic** and they gate the ≥ 95 % verifier.
+  `src/reading/research/presets.ts:33-60, 152, 943, 975-979, 1043, 1293-1323`. Source: 05 F22. [research] Done: presets
+  from real engine exports of synthetic births.
+- **P2 · open · Lucky scenario rules beyond the groups at `:913`.** Amrita Siddhi table and per-scenario weekdays and
+  horas in `src/reading/luckyTimes/scenarios.ts:34-52, 117-130, 173+`. Source: 05 F16 [H11, H17]. [lucky]
+- **P3 · open · Functional nature parsed by regex.** `src/reading/luckyTimes/wiring.ts:49-57`. Source: 05 F24 [D01]. [lucky]
+- **P3 · open · Dignity polarity by regex.** `src/reading/area/houseLayers.ts:533-540`, `src/reading/life/labels.ts:16-24`.
+  Source: 05 F25. [reading]
+
+### Server and specs: contradictions
+
+- **P1 · open · `annual.tajaka` is not in the annual pull set.** `src/reading/digest/annualSet.ts:11-14`; muntha, VP year
+  lord and Tajaka yogas then stay empty unless registration pulls the type (live flag not checked). Server half beside
+  `:3163`. Source: 05 B1 [H02]. [digest] Done: in `ANNUAL_YEAR_TYPES`, digest rows carry muntha.
+- **P2 · open · Specs give one name to two year lords.** `self.annual.md`, `general.annual.md`, `love.annual.md`,
+  `work.annual_family.md` call both the TP weekday lord (decided `:2283`) and the Tajika Varshesha "year lord /
+  Vaaresha". Source: 05 B2 [C01, H03]. [docs] Done: two fields, `tp.vara_lord` and `varsha.year_lord`, each with its rule.
+- **P1 · open · Doc 78 (and the doc 79 entry at `:110`) route romance to D7.** Classically D7 (saptamsa) is children
+  (BPHS; `natal-techniques/11-shodashavarga-divisional-charts.md`). Love card briefs lean on it. Source: 05 B16 [F11].
+  [docs][love] Done: romance read from the 5th house and D9 unless a source for D7 is found; doc 78 updated.
+- **P2 · open · Doc 46 polarity table mixes natural and functional malefics** ("Sa, Ma, Ra, Ke, and the lagna's
+  malefics"). Source: 05 B15 [D01]. [docs] Done: functional nature only from `benefic_malefic`.
+- **P2 · open · Specs say vedha and murti are ready.** `docs/techniques/general/general.transit.md` (and `self.transit`)
+  describe Gochara Vedha and Murti Nirnaya as built; neither exists in the engine. Source: `transits` notes [E02, E15].
+  [docs] Done: marked planned.
+- **P2 · open · The catalogue cannot say "not built" or "unverified".** All 142 rows `built`; `verification_status`
+  never seeded, so the shade gate treats every technique as verified (`src/techniques/catalog.ts:2433-2495`; M36
+  `migration.sql:3-5`; `shadeResolver.ts:566`). Source: 05 B6. [techniques] Done: seeded `calibrating` until a benchmark
+  passes; planned specs as `planned` rows.
+- **P2 · open · Doc 43 has Chara and Sudasa as rasi confirmers; code's S4 is Narayana only.** `src/reading/area/career.ts:40-45`.
+  Source: 05 B10 [B03, B04]. [career] Done: one of the two changed.
+- **P3 · open · Spec "Declared Charts" blocks claim to quote `catalog.ts` but add charts the code lacks**
+  (`self.character_arc`, `self.affliction`, `general.dasha`), and every built spec says "Priority #2 enhancement ready".
+  Source: 05 B5, 01 S1-S2. [docs] Done: quoted exactly, additions in a marked list as `love/` and `work/` do.
+- **P3 · open · Doc 53 renames the analysts to `findings.v3`; code keeps `findings.v2`.** `catalog.ts:860-944`. Source:
+  05 B7. [docs]
+- **P3 · open · `houses` and `vargas` selectors are never matched.** `src/techniques/contracts.ts:17`, against doc 53 §4.3.
+  Source: 05 B8. [techniques]
+- **P3 · open · Doc 72 §1 is out of date:** the engine @ `b902bea` counts transit `natal_house` from the same-varga lagna
+  (`transit_export.py:286`). Source: 05 B13. [docs] Done: confirmed on staging and doc 72 updated.
+- **P2 · open · Stale "2 levels" dasha depth in memory and docs.** The memory note "engine release path … dasha exports
+  2 levels deep", doc 67 "Start", `docs/deep-research/dashas-nakshatra/00-overview.md` §5 and its notes item 7 all say 2.
+  Fact @ `b902bea`: `dasha.*` default 4 levels, max 6 (rasi 5, Kalachakra 1), server asks 3 lifelong
+  (`src/reading/chartData/catalog.ts:123`); only the legacy `vimsottari_dasa` / `narayana_dasa` and the annual dashas
+  stop at 2. Source: 05 B14, 03 §3.1. [docs][memory] Done: memory note and doc 67 corrected.
+- **P3 · open · Lunar-Astro items sit beside BPHS/Jaimini without a school label** ("pending karma houses",
+  `avasthas.lunar_astro`). Source: 05 B18 [F22]. [docs]
+- **P3 · open · Self specs name houses 1, 4, 5 in the title but filter 1, 4, 5, 9, 12.** Source: 01 S3. [docs]
+- **P3 · open · "Neecha vargottama = confirmed weak" (doc 76, `love.varga`) is contested in the texts.** Source: 01 S7,
+  `natal-techniques/20-yoga-neecha-bhanga-raja.md` [F19]. [docs]
+
+### Research gaps (primary texts not read)
+
+- **P3 · open · Primary-text checks owed before rules are quoted in product copy.** BPHS print edition (Santhanam or
+  Sharma) for verse numbers read through summaries (natal, Jaimini ch. 29-33, AV ch. 66-72); Phaladeepika for the
+  natal folder (403, all recalled); Laghu Parashari Sanskrit; Uttara Kalamrita khanda 4; Sarvartha Chintamani; Brihat
+  Jataka 7-8 (Iyer 1885); Saravali 41-42 verse text; Tajika Neelakanthi (Mudda, Patyayini); PVR ch. 30; Rath's TP
+  text (`pp_tp.pdf` unread); Jaimini adhyayas 3-4; Muhurta Chintamani ch. 1, 2, 6, 11; Prashna Marga verses. Source:
+  each folder's `00-overview.md` "Open questions" and `docs/deep-research/README.md`. [research]

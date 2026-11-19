@@ -1,6 +1,7 @@
 # Technique Architecture & One-Per-Page Visual Illustrations
 
 > **Design Blueprint Reference**: [`docs/reading-engine/56-technique-pieces-and-validity-windows.md`](../reading-engine/56-technique-pieces-and-validity-windows.md) · [`docs/reading-engine/56-technique-pieces-illustrations-and-date-range-cache.md`](../reading-engine/56-technique-pieces-illustrations-and-date-range-cache.md) · [`docs/admin/07-technique-pieces-and-agents.md`](../admin/07-technique-pieces-and-agents.md)  
+> **Priority #2 Roadmap**: `docs/reading-engine/` Docs 80 & 81 (Gap Analysis & Priority #2 Engine Capabilities Architecture)  
 > **Source of Truth in Code**: [`src/techniques/catalog.ts`](../../src/techniques/catalog.ts) · [`src/techniques/pieces.ts`](../../src/techniques/pieces.ts) · [`src/techniques/piecesDoc.ts`](../../src/techniques/piecesDoc.ts) · [`src/techniques/layouts.ts`](../../src/techniques/layouts.ts) · [`src/agents/registry.ts`](../../src/agents/registry.ts)
 
 Every reading and board function in AI AdAstra is a registered **Technique Contract** (`TechniqueDef`) assembled from standardized, reusable **Pieces** (`Reader`, `Scorer / Checker`, `Date-Range Window Cache Gate`, `Prompt`, `Output Schema`, and `Agent`).
@@ -138,3 +139,64 @@ While raw planetary positions, lagna degrees, and horas shift every ~2 hours (an
   - [`life.timing_agreement`](./06-lucky-times-and-life-illustrations.md#page-19-of-21--lifetiming_agreement-life-areas-when-it-improves-by-agreement-across-systems) — Life areas: when it improves, by agreement across systems
   - [`life.mahadasha_charter`](./06-lucky-times-and-life-illustrations.md#page-20-of-21--lifemahadasha_charter-remaining-largest-mahadasha-10-18-yrs-and-antardasha-life-charter) — Remaining largest Mahadasha (10–18+ yrs) and Antardasha life charter
   - [`life.dashboard`](./06-lucky-times-and-life-illustrations.md#page-21-of-21--lifedashboard-your-life-at-a-glance-and-long-term-mahadasha-charter) — Your life at a glance and long-term Mahadasha charter
+
+---
+
+## Priority #2 Modular Technique Specifications (45 Docs)
+
+Per-technique architectural specs detailing how Priority #2 engine capabilities (Docs 80 & 81 under `docs/reading-engine/`: 23 divisional vargas, Tithi Pravesha `yearLord` & divisional TP pulls, `strength.{bhava,vimsopaka,harsha}`, `daily_grade` / `muhurta` / `transit_ashtakavarga`, Gochara Vedha, Murti Nirnaya, 2027–2036 contacts, Ashtakoota/Dasakoota compatibility, Sudarshana Chakra, and Jaimini Karakamsha) feed the Oracle and board pipelines across execution steps, contracts, RBAC, PII sealing (`SEALED_MODELS`), and 45-minute cache recycling (`READING_CACHE_RECYCLE_MINUTES=45`).
+
+### 1. Work Board (`docs/techniques/work/` — 10 Docs)
+- [`work.annual_family.md`](./work/work.annual_family.md) (`work.annual_family`, `built`) — TP `yearLord` (*Vaaresha*) & return panchanga (R1), dynamic Annual `D10` (R4), TP compressed 365-day Vimshottari & Sahams (O3), Vimsopaka & Bhava Bala on TP year lord (H6).
+- [`work.character_arc.md`](./work/work.character_arc.md) (`work.character_arc`, `built`) — TP `yearLord` & Annual `D10` (R1/R4), explicit `D10` placements (R2/R3), 3-wheel Sudarshana Chakra (H4), Vimsopaka & Bhava Bala (H6), 2027–2036 contacts (R5).
+- [`work.conditional_family.md`](./work/work.conditional_family.md) (`work.conditional_family`, `built`) — `dasha.applicable` & conditional dasha serving, explicit `D10` placements (R2/R3), Vimsopaka & Harsha Bala (H6), D9 >36 mutual confirmation.
+- [`work.d10_check.md`](./work/work.d10_check.md) (`work.d10_check`, `built`) — `D10` & `D60` explicit `house`/`lagna`/`owns`/`dignity` (R2/R3), Vimsopaka & Bhava Bala (H6), D9 >36 maturation gate.
+- [`work.horizons.md`](./work/work.horizons.md) (`work.horizons`, `built`) — 2027–2036 exact transit contacts (R5), `transit_ashtakavarga` Kakshya bindus (H5), TP `yearLord` & Annual `D10` (R1/R4), Gochara Vedha & Murti Nirnaya (H1/H2), `D10` enrichment (R2/R3).
+- [`work.karaka_family.md`](./work/work.karaka_family.md) (`work.karaka_family`, `built`) — Explicit `D10` placements (R2/R3), Jaimini Karakamsha & Swamsha (R6), Vimsopaka Bala (H6), `dasha.karaka` & `dasha.chara`, Bhava Chalit shifts (H8).
+- [`work.present_tone.md`](./work/work.present_tone.md) (`work.present_tone`, `built`) — TP `yearLord` & Annual `D10` (R1/R4), `D10` enrichment (R2/R3), `transit_ashtakavarga` (H5), Gochara Vedha & Murti Nirnaya (H1/H2), Vimsopaka & Harsha Bala (H6).
+- [`work.reading.oracle.md`](./work/work.reading.oracle.md) (`work.reading.oracle`, `built`) — `family.varga` (`D10`, `D11`, `D24`, `D60`, R2/R3), `family.rasi` (`strength.{bhava,vimsopaka,harsha}`, H6; `houseShift`, H8), `family.year` (TP `yearLord`, Annual `D10`, R1/R4), `family.sky` (Ashtakavarga, Vedha, Murti, 2027–2036, R5/H1/H2/H5), `lineman.work` (Karakamsha, Sudarshana, R6/H4).
+- [`work.security_grade.md`](./work/work.security_grade.md) (`work.security_grade`, `built`) — Harsha Bala & Bhava Bala (H6), explicit `D10` placements (R2/R3), `transit_ashtakavarga` (H5), TP `yearLord` & Annual `D10` (R1/R4).
+- [`work.subarea_windows.md`](./work/work.subarea_windows.md) (`work.subarea_windows`, `built`) — `D10`, `D11`, `D4`, `D12` enrichment (R2/R3), `transit_ashtakavarga` (H5), Bhava/Vimsopaka/Harsha Bala (H6), 2027–2036 exact transit contacts (R5).
+
+### 2. Love Board (`docs/techniques/love/` — 11 Docs)
+- [`love.activation.md`](./love/love.activation.md) (`love.activation`, `built`) — `D9` & `D7` enrichment (R2/R3), TP `yearLord` & Annual `D9` (R1/R4), conditional/Chara/Karaka dashas, Vimsopaka Bala (H6), D9 >36 gate.
+- [`love.affliction.md`](./love/love.affliction.md) (`love.affliction`, `built`) — `D30` Trimshamsha unlock & `D9`/`D7` parity (R2/R3), Harsha & Bhava Bala (H6), Bhava Chalit `houseShift` (H8), TP `yearLord` (R1).
+- [`love.annual.md`](./love/love.annual.md) (`love.annual`, `built`) — TP `yearLord` & return panchanga (R1), dynamic Annual `D9` & `D7` (R4), TP Muntha/Sahams/365-day Vimshottari (O3), Vimsopaka Bala (H6).
+- [`love.bonding_chemistry.md`](./love/love.bonding_chemistry.md) (`love.synastry_koota` aliased to `love.bonding_chemistry`, `partial`) — Headless Ashtakoota (36-pt) & Dasakoota compatibility (`compatibility` / `compatibility_card` / `reading.analyst.compatibility`, H3), `D9`/`D7` enrichment (R2/R3), Bhava & Vimsopaka Bala (H6), Gochara Vedha on synastry transits (H1).
+- [`love.promise.md`](./love/love.promise.md) (`love.promise`, `built`) — Bhava & Vimsopaka Bala (H6), `D9`/`D7` enrichment (R2/R3), `D30` unlock (R2), Bhava Chalit `houseShift` (H8).
+- [`love.protection.md`](./love/love.protection.md) (`love.protection`, `built`) — `D9`/`D7` enrichment (R2/R3), expanded `VARGA_SCOPE` for `argala.d9` & `arudhas.d9` (R2), Vimsopaka & Harsha Bala (H6), TP `yearLord` (R1).
+- [`love.reading.oracle.md`](./love/love.reading.oracle.md) (`love.reading.oracle`, `built`) — `family.varga` (`D9`, `D7`, `D30`, R2/R3), `family.rasi` (`strength.{bhava,vimsopaka,harsha}`, H6; `houseShift`, H8), `family.year` (TP `yearLord`, Annual `D9`, R1/R4), `family.sky` (Vedha, Murti, `transit_ashtakavarga`, 2027–2036, R5/H1/H2/H5), `lineman.love` (Ashtakoota/Dasakoota, Sudarshana, H3/H4).
+- [`love.relationship_arc.md`](./love/love.relationship_arc.md) (`love.relationship_arc`, `built`) — TP `yearLord` & Annual `D9` (R1/R4), `D9`/`D7` enrichment (R2/R3), Vimsopaka & Bhava Bala (H6), 3-wheel Sudarshana Chakra (H4), 2027–2036 contacts (R5).
+- [`love.subareas.md`](./love/love.subareas.md) (`love.meet`, `love.health`, `love.reconcile`, `built`) — Headless Ashtakoota/Dasakoota (H3), `D9`/`D7`/`D30` enrichment (R2/R3), Gochara Vedha, Murti Nirnaya & `transit_ashtakavarga` (H1/H2/H5), TP `yearLord` & Annual `D9` (R1/R4), 2027–2036 contacts (R5).
+- [`love.transit.md`](./love/love.transit.md) (`love.transit`, `built`) — Gochara Vedha & Virodha Vedha (H1), Murti Nirnaya (H2), `transit_ashtakavarga` Kakshya bindus (H5), `D9`/`D7` divisional transit overlays (H7), 2027–2036 contacts (R5).
+- [`love.varga.md`](./love/love.varga.md) (`love.varga`, `built`) — `D30` unlock (R2), explicit `house`/`lagna`/`owns`/`dignity` on `D9`, `D7`, `D30` (R3), Vimsopaka Bala (H6), D9 >36 gate.
+
+### 3. Self / You Board (`docs/techniques/self/` — 10 Docs)
+- [`self.activation.md`](./self/self.activation.md) (`self.activation`, `built`) — TP `yearLord` & compressed dasha (R1/O3), 23 vargas with explicit houses & dignities (R2/R3), Vimsopaka Bala (H6), Sudarshana Chakra annual progression (H4).
+- [`self.affliction.md`](./self/self.affliction.md) (`self.affliction`, `built`) — `D30`, `D60`, `D27` unlock & explicit houses (R2/R3), Bhava Bala (H6), Bhava Chalit shifts (H8), Gochara Vedha & 2027–2036 contacts (R5/H1).
+- [`self.annual.md`](./self/self.annual.md) (`self.annual`, `built`) — TP `yearLord` & return panchanga (R1), dynamic TP divisional charts `D9, D20, D24, D30` (R4), TP 365-day Vimshottari & Tajaka/Muntha (O3), Sudarshana annual wheel (H4).
+- [`self.character_arc.md`](./self/self.character_arc.md) (`self.character_arc`, `built`) — 3-wheel Sudarshana Chakra (H4), TP `yearLord` (R1), Vimsopaka & Bhava Bala (H6), `D9/D10/D60` explicit houses & Karakamsha/Swamsha (R2/R3/R6).
+- [`self.nakshatra.md`](./self/self.nakshatra.md) (`self.nakshatra`, `built`) — Divisional cusp stars & padas across 23 vargas (R2/R3), `daily_grade` Tara Bala alignment (H5), Sarvatobhadra Chakra Nakshatra Vedha (O1), Vimsopaka & Harsha Bala on star lords (H6).
+- [`self.personality_joy.md`](./self/self.personality_joy.md) (`self.personality_joy`, `built`) — `D24` Chaturvimshamsha unlock & explicit houses (R2/R3), Vimsopaka & Bhava Bala (H6), Sudarshana Chandra Wheel (H4).
+- [`self.promise.md`](./self/self.promise.md) (`self.promise`, `built`) — Bhava & Vimsopaka Bala (H6), 23 vargas `D1..D60` (R2/R3), Sudarshana Chakra (H4), Bhava Chalit shifts (H8).
+- [`self.protection.md`](./self/self.protection.md) (`self.protection`, `built`) — Vimsopaka & Bhava Bala (H6), expanded `VARGA_SCOPE` Argala & Arudha across 23 vargas (R2/R3), Sudarshana Chakra (H4).
+- [`self.transit.md`](./self/self.transit.md) (`self.transit`, `built`) — `transit_ashtakavarga` Kakshya bindus (H5), Gochara Vedha (H1), Murti Nirnaya (H2), `D9/D24/D30` divisional transits (H7), 2027–2036 contacts (R5).
+- [`self.varga.md`](./self/self.varga.md) (`self.varga`, `built`) — 23 vargas in `SERVED_VARGAS` (R2), explicit divisional `house`/`lagna`/`owns`/`dignity` (R3), Vimsopaka Bala (H6), D9 >36 gate.
+
+### 4. Lucky Times (`docs/techniques/lucky/` — 5 Docs)
+- [`lucky.avoid_bands.md`](./lucky/lucky.avoid_bands.md) (`lucky.avoid_bands`, `built`) — `muhurta` catalog unlock (H5), 30 Muhurtas, Godhuli, Vijaya, Nishita, Gauri Choghadiya, Panchaka Rahitha (H5).
+- [`lucky.day_tables.md`](./lucky/lucky.day_tables.md) (`lucky.day_tables`, `built`) — `muhurta` & `daily_grade` prepull across 5 reference timezones (H5), sub-day panchanga limb transitions & end times (H5), env-driven prepull config.
+- [`lucky.panchang_limbs.md`](./lucky/lucky.panchang_limbs.md) (`lucky.panchang_limbs`, `built`) — Engine-provided tithi/star groups & sub-day limb spans (`muhurta`, `daily_grade`, H5), Dina/Tribhaga Bala & Choghadiya (H5), env-driven rule lists.
+- [`lucky.personal_overlay.md`](./lucky/lucky.personal_overlay.md) (`lucky.personal_overlay`, `built`) — `daily_grade` (H5), `transit_ashtakavarga` Kakshya bindus on Hora lords (H5), Pancha Pakshi Shastra biorhythm (O2).
+- [`lucky.scenarios.md`](./lucky/lucky.scenarios.md) (`13` `lucky.<area>.<action>` rules, `built`) — `daily_grade` (H5), `muhurta` 30-muhurta/Choghadiya/Mercury retrograde/Disha Shool (H5), `transit_ashtakavarga` Kakshya bindus (H5), Pancha Pakshi (O2).
+
+### 5. General Reading (`docs/techniques/general/` — 9 Docs)
+- [`general.annual.md`](./general/general.annual.md) (`general.annual`, `built`) — TP `yearLord` (*Vaaresha*) & return panchanga (R1), dynamic TP divisional pulls `D9, D10, D7, D2` (R4), compressed 365-day TP Vimshottari & TP Tajaka/Muntha (O3).
+- [`general.dasha.md`](./general/general.dasha.md) (`general.dasha`, `built`) — TP `yearLord` fix in `dashaAssessment.ts` (R1), 23 vargas with explicit houses & dignities (R2/R3), Vimsopaka & Harsha Bala (H6).
+- [`general.jaimini_karakamsha.md`](./general/general.jaimini_karakamsha.md) (`general.jaimini_karakamsha`, `planned`, `findings.v3`) — Engine-exported Karakamsha Lagna (`KL`) & Swamsha frame (R6), explicit `D9` houses & dignities (R3), Vimsopaka Bala (H6).
+- [`general.nakshatra.md`](./general/general.nakshatra.md) (`general.nakshatra`, `built`) — Sarvatobhadra Chakra Nakshatra Vedha (O1), `daily_grade` Tara Bala (H5), divisional lagna/placement nakshatras across 23 vargas (R2/R3).
+- [`general.oracle.md`](./general/general.oracle.md) (`general.oracle`, `built`) — Unified 23-varga & strength grounding (R2/R3/H6), unblocked TP `yearLord` & annual vargas (R1/R4), Kakshya/Vedha/Murti/2027–2036 transits (R5/H1/H2/H5), Sudarshana/Karakamsha/Synastry briefs (R6/H3/H4).
+- [`general.promise.md`](./general/general.promise.md) (`general.promise`, `built`) — Bhava & Vimsopaka Bala (H6), 23 vargas `D1..D60` (R2/R3), Bhava Chalit `houseShift` (H8).
+- [`general.sudarshana_chakra.md`](./general/general.sudarshana_chakra.md) (`general.sudarshana_chakra`, `planned`, `findings.v3`) — Headless 3-wheel Sudarshana Chakra export (`Lagna`, `Chandra`, `Surya` + annual progression, H4), divisional Sudarshana (`D9`, `D10`, R2/H4).
+- [`general.transit.md`](./general/general.transit.md) (`general.transit`, `built`) — `transit_ashtakavarga` Kakshya bindus (H5), Gochara Vedha & Virodha Vedha (H1), Murti Nirnaya (H2), divisional transit overlays `D9/D10/D7/D11` (H7), 2027–2036 exact contacts (R5).
+- [`general.varga_dynamics.md`](./general/general.varga_dynamics.md) (`general.varga_dynamics`, `built`) — All 23 vargas unlocked in `SERVED_VARGAS` (R2), explicit `house`/`lagna`/`owns`/`aspects_to`/`dignity` across all 17+ declared vargas (R3), Vimsopaka Bala (H6).
