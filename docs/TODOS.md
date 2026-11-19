@@ -2991,3 +2991,26 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   `tests/unit/reading/promptCache.test.ts` "is off by default" (a cache is created; `.env` is injected by dotenv in
   the test run) and `tests/unit/reading/self/v2/subTechniques.test.ts` "a TECHNIQUES row per sub-technique" (order
   `self.sub.periods` vs `self.sub.clock`). Owner: next session in those areas. Done: both pass.
+
+## Filed 2026-11-18 by Server S1 of doc 13 (card `chart` reading; branch `feat/card-chart-why`)
+
+- **P2 · open · `chart` is served to every plan; the v2 Chart details are gated by `feature.why_panel`.** S1 serves
+  `cards[].v3.chart` (gift, knot, certainty, per-span `shows`, from the stored Oracle card) on GET /api/self/v3 and GET
+  /api/board/:board/v3 for every card that is not locked. `applySelfFeatures` (`src/reading/self/v3/response.ts`) blanks
+  `v2.details` when `feature.why_panel` is not usable, but nothing gates `v3.chart`; doc 13 §4.2 calls the field additive
+  and names no gate. Found reading `applySelfFeatures` during S1. [Sachin: product decision; then server] Done when the
+  rule is decided and, if gated, `chart` is null for a plan without `feature.why_panel`, with a test.
+- **P3 · open · Chart sentences with a bare internal key are dropped, not repaired.** `chartText`
+  (`src/reading/cards/chart.ts`) drops a gift, knot or span `asks` that still holds a colon key outside braces
+  (`planet:D1.Sa`) or a snake_case id after brace keys are stripped, because `redactEngineText` cuts colon keys in place
+  (leaving a broken sentence) and leaves snake_case ids untouched. The two real stored cards checked (mind, body) lose
+  nothing; how often live rows lose a field is unmeasured. Owner: next session on the Oracle card prompt. Done: a
+  read-only count over stored `self.card.reading` rows shows how many gift/knot/asks are dropped, and the Oracle prompt
+  forbids bare keys if that count is not zero.
+- **P3 · open · Four unit tests fail on this branch in areas S1 does not touch** (run 2026-11-18, each alone):
+  `tests/unit/reading/run.test.ts` (thinking config: gets `thinkingLevel: 'medium'`, expects `thinkingBudget: 2048`;
+  and "day-dependent text after the cacheable prefix": `parts` of undefined), `tests/unit/reading/digestPack.test.ts`
+  (digest prefix bytes differ from the dossier path at the ROLE LIBRARY text), `tests/unit/reading/digest/event.test.ts`
+  (default candidate list includes `ready`), and the `self.sub.periods`/`self.sub.clock` order item above.
+  `specialistFailures.test.ts` and `coachAndRoutes.test.ts` fail only on timeouts in a full run and pass alone. The full
+  `tests/unit` run did not finish in 590 s on this machine. Owner: next session in those areas. Done: all pass.

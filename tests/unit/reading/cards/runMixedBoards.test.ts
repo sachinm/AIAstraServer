@@ -253,7 +253,7 @@ describe('the store id filter (S3)', () => {
       },
     } as never;
     const out = await readCardReadings(prisma, 'k1', 'vimsottari', ['dating_pulse', 'job_pulse']);
-    expect(out).toEqual({ dating_pulse: { line: 'new' } });
+    expect(out).toEqual({ dating_pulse: { line: 'new', chart: null } });
     expect(seen.take).toBe(8);
     expect(seen.where.OR).toEqual([{ digest_version: { startsWith: 'self.card|card=dating_pulse|' } }, { digest_version: { startsWith: 'self.card|card=job_pulse|' } }]);
     expect(seen.where.digest_version).toEqual({ contains: '|clock=vimsottari|' });

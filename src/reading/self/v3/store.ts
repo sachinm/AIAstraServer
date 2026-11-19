@@ -4,6 +4,7 @@
  * board's clock. Never throws on read.
  */
 import type { PrismaClient } from '@prisma/client';
+import { chartReadingOf } from '../../cards/chart.js';
 import type { PersonalPattern } from '../v2types.js';
 import type { OracleV3Output, PersonalCardV3, SelfCardId, SelfV3CardContent, YearFrameV3 } from './types.js';
 
@@ -36,6 +37,7 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
     pattern,
     ladder: personal.ladder,
     agreement: { agree: now.agree, of: now.of },
+    chart: chartReadingOf(oracle),
   };
 }
 
@@ -54,7 +56,13 @@ export async function readSelfV3Cards(prisma: PrismaClient, kundliId: string, cl
       orderBy: { created_at: 'desc' },
     });
     const stored = row?.output as StoredSelfV3 | undefined;
-    return stored?.cards && Object.keys(stored.cards).length ? stored.cards : null;
+    if (!stored?.cards || !Object.keys(stored.cards).length) return null;
+    // docs/dashboards/13 §4.1: the chart reading is derived from the stored Oracle card on every read (older rows lack it)
+    const out: Partial<Record<SelfCardId, SelfV3CardContent>> = {};
+    for (const [id, c] of Object.entries(stored.cards) as Array<[SelfCardId, SelfV3CardContent | undefined]>) {
+      if (c) out[id] = { ...c, chart: chartReadingOf(stored.oracle?.cards?.[id]) };
+    }
+    return out;
   } catch (e) {
     console.warn(JSON.stringify({ msg: 'self v3 store read failed', error: (e as Error).message?.slice(0, 200) }));
     return null;
