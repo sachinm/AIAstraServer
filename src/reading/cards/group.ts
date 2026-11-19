@@ -33,7 +33,8 @@ import { personalizerCheckOf } from '../self/v2/failures.js';
 import { type TextCheckContext } from '../self/v2/personalizerValidate.js';
 import { claimKey, normaliseEvidenceKey, profileLines, promptText, shortHash } from '../self/v2/slices.js';
 import type { PersonPortrait, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
-import { anyCardDef } from './registry.js';
+import { anyCardDef, cardBoardLabel } from './registry.js';
+import { cardTechniqueKeys, techniqueBoardsOf, type BoardTechniqueSection, type TechniqueBoard } from './techniques.js';
 import { checkOracleCard, oracleV3Schema, parseJson } from '../self/v3/oracle.js';
 import { checkPersonalCard, personalizerV3Schema, personalizerVoicePrefix, SELF_V3_PERSONALIZER_PROMPT, v3DateFrame } from '../self/v3/personalizer.js';
 import type { OracleCardV3, PersonalCardV3, CardId, SelfSectionId, YearFrameV3 } from '../self/v3/types.js';
@@ -68,6 +69,11 @@ export interface CardPackInput {
   slices: readonly RenderedSlice[];
   portrait: PersonPortrait | null;
   answers: string;
+  /**
+   * docs/dashboards/14: the Love and Work boards' own technique sections (`loadBoardTechniques`). Written only when a
+   * card of the pack maps to that board; absent, or a Self-only run: the pack text is byte for byte what it was.
+   */
+  techniques?: Partial<Record<TechniqueBoard, BoardTechniqueSection>>;
 }
 
 export interface CardPack {
@@ -132,18 +138,25 @@ export function buildCardPack(i: CardPackInput, opts: { cells?: 'by-key' | 'per-
   const cells: CardPack['cells'] = {};
   const allowed: CardPack['allowed'] = {};
   for (const id of ids) cells[id] = cardCells(i.ledger, anyCardDef(id)!.matters);
+  // docs/dashboards/14: the boards' technique sections the pack's cards read, each once (none for a Self-only pack)
+  const tBoards = techniqueBoardsOf(ids).filter((b) => i.techniques?.[b]);
+  const tSections: Partial<Record<TechniqueBoard, BoardTechniqueSection>> = Object.fromEntries(tBoards.map((b) => [b, i.techniques![b]!]));
+  const techLines = (id: CardId): string[] =>
+    cardTechniqueKeys(id, tSections).map((t) => `techniques ${t.board.toUpperCase()} (read first; their lines are under BOARD TECHNIQUES): ${t.keys.length ? t.keys.map((k) => `{${k}}`).join(' ') : '(the whole section)'}`);
   if (perCard) {
+    for (const t of tBoards) L.push(tSections[t]!.text);
     L.push('# CARD CELLS (each card\'s agreed ledger cells; the status is counted in code and final)');
-    for (const id of ids) L.push(`## CARD CELLS ${id}\n${renderCardLedger(cells[id] ?? []).text}`);
+    for (const id of ids) L.push([`## CARD CELLS ${id}\n${renderCardLedger(cells[id] ?? []).text}`, ...techLines(id)].join('\n'));
   } else {
     // doc 86: every cell any card reads, written once in ledger order; each card then names its cells by key
     const used = new Set(ids.flatMap((id) => (cells[id] ?? []).map((c) => c.id)));
     const ledger = renderCardLedger((i.ledger?.cells ?? []).filter((c) => used.has(c.id))).text.split('\n').slice(1);
     L.push(`# AGREED LEDGER (every cell the pack's cards read, each once; the status is counted in code and final)\n${used.size ? ledger.join('\n') : '(no cells)'}`);
+    for (const t of tBoards) L.push(tSections[t]!.text);
     L.push('# CARD CELLS (each card\'s agreed ledger cells, named by key; their lines are under AGREED LEDGER above)');
     for (const id of ids) {
       const c = cells[id] ?? [];
-      L.push(`## CARD CELLS ${id}\n${c.length ? c.map((x) => `{${x.id}}`).join(' ') : "(no cells for this card's matters)"}`);
+      L.push([`## CARD CELLS ${id}\n${c.length ? c.map((x) => `{${x.id}}`).join(' ') : "(no cells for this card's matters)"}`, ...techLines(id)].join('\n'));
     }
   }
   // matter rows: each matter once, each row once (a row written under an earlier matter is named by key only)
@@ -167,7 +180,9 @@ export function buildCardPack(i: CardPackInput, opts: { cells?: 'by-key' | 'per-
   L.push(`# PERSON'S ANSWERS: ${i.answers || 'none'}`);
   for (const id of ids) {
     const led = renderCardLedger(cells[id] ?? []);
-    const ks = [...i.prefix.keys, ...i.frameKeys, ...led.keys, ...anyCardDef(id)!.matters.flatMap((m) => keysOfMatter.get(m) ?? [])];
+    // a Love or Work card may cite every row of the board sections it maps to (docs/dashboards/14)
+    const tech = techniqueBoardsOf([id]).flatMap((b) => tSections[b]?.keys ?? []);
+    const ks = [...i.prefix.keys, ...i.frameKeys, ...led.keys, ...anyCardDef(id)!.matters.flatMap((m) => keysOfMatter.get(m) ?? []), ...tech];
     allowed[id] = new Set(ks.map(normaliseEvidenceKey));
   }
   const system = cardPackSystem();
@@ -202,7 +217,7 @@ export function groupRequest(asOf: string, cards: readonly CardId[], boardTitles
     `TODAY: ${asOf}`,
     `THE BOARD (the cards this person chose; each card leaves the others' subjects to them): ${boardTitles.join('; ') || 'none chosen'}`,
     'WRITE THESE CARDS, in this order:',
-    ...cards.map((id) => `- ${id}: matters ${anyCardDef(id)!.matters.join(', ')}; sections ${(sections[id] ?? DEFAULT_SECTIONS).join(', ')}`),
+    ...cards.map((id) => `- ${id}: ${cardBoardLabel(id)}; matters ${anyCardDef(id)!.matters.join(', ')}; sections ${(sections[id] ?? DEFAULT_SECTIONS).join(', ')}`),
     'Return the JSON document only.',
   ].join('\n');
 }

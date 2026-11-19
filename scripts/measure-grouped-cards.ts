@@ -124,7 +124,7 @@ async function guardedCall(o: GeminiCallOptions) {
   if (REHEARSE && o.node.startsWith('self.card.group')) {
     const s = at();
     await new Promise((r) => setTimeout(r, 50));
-    const cards = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+    const cards = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): board /gm)].map((m) => m[1]!);
     calls.push({ node: o.node, cards, startMs: s, endMs: at(), ms: at() - s, ttftMs: null, promptTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0, costUsd: 0, finish: 'STOP', maxOutputTokens: o.maxOutputTokens ?? null, cachedContent: false });
     return { text: '{"cards":[]}', usage: { node: o.node, model: o.model, promptTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0, ms: 50 }, finishReason: 'STOP', ttftMs: 50, stoppedForLoop: false } as Awaited<ReturnType<typeof realCallGemini>>;
   }
@@ -141,7 +141,7 @@ async function guardedCall(o: GeminiCallOptions) {
   const s = at();
   const r = await realCallGemini(o);
   const u = { model: o.model, promptTokens: r.usage?.promptTokens ?? 0, cachedTokens: r.usage?.cachedTokens ?? 0, outputTokens: r.usage?.outputTokens ?? 0, thoughtTokens: r.usage?.thoughtTokens ?? 0 };
-  const cards = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+  const cards = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): board /gm)].map((m) => m[1]!);
   calls.push({ node: o.node, cards, startMs: s, endMs: at(), ms: at() - s, ttftMs: r.ttftMs ?? null, ...u, costUsd: usageCostUsd(u), finish: r.finishReason, maxOutputTokens: o.maxOutputTokens ?? null, cachedContent: (r.usage?.cachedTokens ?? 0) > 0 });
   return r;
 }

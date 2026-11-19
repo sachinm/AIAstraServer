@@ -118,10 +118,10 @@ afterEach(() => {
 /** every card cites its own ledger cells when it reads work_load_and_health, else the natal key */
 const groupReply = (o: GeminiCallOptions, bad: ReadonlySet<string> = new Set()) => {
   const req = o.fullCache?.suffix[0] ?? o.parts[1]!;
-  const ids = [...req.matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+  const ids = [...req.matchAll(/^- (\w+): board /gm)].map((m) => m[1]!);
   const own = (id: string) => {
     const o2 = goodOracle(id);
-    if (/- \w+: matters [^\n]*work_load_and_health/.test(req.split('\n').find((l) => l.startsWith(`- ${id}:`)) ?? '')) return o2;
+    if (/- \w+: board [^\n]*work_load_and_health/.test(req.split('\n').find((l) => l.startsWith(`- ${id}:`)) ?? '')) return o2;
     return { ...o2, spans: (o2.spans as Array<Record<string, unknown>>).map((x) => ({ ...x, evidence: ['planet:D1.Mo'] })) };
   };
   return ok(JSON.stringify({ cards: ids.filter((id) => !bad.has(id)).map((id) => ({ card: id, oracle: own(id), face: personal(id) })) }));

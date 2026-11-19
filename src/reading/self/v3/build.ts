@@ -31,6 +31,8 @@ import { withCacheLease } from '../../llm/cacheLease.js';
 import { boardFactsOf, boardV3CardDef, defaultLens, isBoardLens, type AreaV3Board } from '../../boards/v3Cards.js';
 import { isReadable } from '../../cards/registry.js';
 import { readCards, type CardsRunResult } from '../../cards/run.js';
+import { loadBoardTechniques, techniqueBoardsOf, type BoardTechniqueSection, type TechniqueBoard } from '../../cards/techniques.js';
+import { frameRange } from '../../slices/trim.js';
 import { readCardsState, updateCardsState } from '../../cards/state.js';
 import { sharedPrefix } from '../../clocks/reader.js';
 import { pickClockLayerSlices, runClockLayer, type ClockLayerResult, type ClockLayerWords } from '../../clocks/run.js';
@@ -76,6 +78,8 @@ export interface SelfV3StepDeps {
    * layouts, the lens stored or the person's default). They join the one card pack; they are read only when queued.
    */
   loadAreaDecks?: (prisma: PrismaClient, kundliId: string) => Promise<{ cards: CardId[]; sections: Partial<Record<CardId, SelfSectionId[]>> }>;
+  /** test seam: the Love and Work boards' technique sections (docs/dashboards/14; default `loadBoardTechniques`) */
+  loadTechniques?: (q: Parameters<typeof loadBoardTechniques>[1]) => Promise<Partial<Record<TechniqueBoard, BoardTechniqueSection>>>;
   /** overrides for the card runner (its spend cap, default this step's `maxSpendUsd`; the rest flag) */
   cardsCapUsd?: number;
   cardsReadRest?: boolean;
@@ -315,6 +319,13 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
       const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
       const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
       const area = await (deps.loadAreaDecks ?? ((p: PrismaClient, k: string) => loadAreaDecks(p, k, profile)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [] as CardId[], sections: {} }));
+      // docs/dashboards/14: the Love and Work boards' own techniques, loaded only when a card of theirs is in the run
+      // (the decks in the pack, or a queued card); read-only; a Self-only run loads nothing and its pack is unchanged
+      const queuedNow = Object.entries((await readCardsState(deps.prisma, ctx.kundliId, deps.now).catch(() => null))?.cards ?? {}).filter(([id, e]) => e?.state === 'queued' && isReadable(id)).map(([id]) => id);
+      const techBoards = techniqueBoardsOf([...area.cards, ...queuedNow]);
+      const techniques: Partial<Record<TechniqueBoard, BoardTechniqueSection>> = techBoards.length
+        ? await (deps.loadTechniques ?? ((q: Parameters<typeof loadBoardTechniques>[1]) => loadBoardTechniques({ prisma: deps.prisma }, q)))({ kundliId: ctx.kundliId, asOf: ctx.asOf, boards: techBoards, ageYears: profile.ageYears ?? null, range: frameRange(frame), systems: frame.clocksRead }).catch(() => ({}))
+        : {};
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
         // one build run is one operation (docs/billing/README.md "Spend cap per operation"): the cards get what the run
@@ -333,6 +344,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
           dates,
           answers,
           model: layerModel ?? i.oracleSlice.model,
+          ...(Object.keys(techniques).length ? { techniques } : {}),
           spentBeforeUsd: layerSpent,
         },
       );

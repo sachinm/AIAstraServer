@@ -21,6 +21,7 @@ import { claimKey, profileLines, promptHash, promptText } from '../v2/slices.js'
 import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, SelfV2AgentTiming, StatedGender, ValidationIssue } from '../v2types.js';
 import { parseJson } from './oracle.js';
 import type { OracleCardV3, OracleV3Output, PersonalCardV3, CardId, SelfSectionId } from './types.js';
+import { cardBoardLabel } from '../../cards/registry.js';
 
 export const SELF_V3_PERSONALIZER_PROMPT = 'personalizer/self-v3';
 export const PERSONALIZER_V3_TIMEOUT_MS = 60_000;
@@ -120,7 +121,7 @@ export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[
     `mood today: ${p.mood ?? 'not given'}`,
     ...(input.portrait ? portraitLines(input.portrait) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
     '## WRITE: one card for each of these, with the sections the person switched on',
-    ...cards.map((c) => `- ${c.card}: sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}`),
+    ...cards.map((c) => `- ${c.card}: ${cardBoardLabel(c.card)}; sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}`),
   ].join('\n');
 }
 
@@ -146,6 +147,7 @@ export function personalizerV3Schema(cards: readonly CardId[]): Record<string, u
             },
             confirm: str('the confirm as a yes/no question, or empty'),
             pattern: str('only when the pattern section is on, else empty'),
+            why: str('one plain sentence, at most 30 words, why the reading holds for this person; no chart term'),
             ladder: {
               type: 'OBJECT',
               properties: { best: str(''), practical: str(''), drift: str(''), floor: str('') },
@@ -217,8 +219,10 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     if (empty) notes.push(`ladder dropped: ${empty[0]} empty`);
     else ladder = steps;
   }
+  // docs/dashboards/13 phase 5: optional; a missing or empty `why` never refuses the card (docs 82, 84)
+  const why = T('why', o.why) || null;
   if (problems.length) return { card: null, problems, notes };
-  return { card: { card: oracle.card, line, spans, confirm, pattern, ladder }, problems, notes };
+  return { card: { card: oracle.card, line, spans, confirm, pattern, ladder, ...(why ? { why } : {}) }, problems, notes };
 }
 
 export interface PersonalizerV3Deps {

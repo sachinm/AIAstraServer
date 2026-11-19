@@ -5,7 +5,7 @@
  * Self-only registry.
  */
 import { getBoardsV3 } from '../../config/env.js';
-import { boardV3CardDef, type BoardV3CardDef, type BoardV3CardId } from '../boards/v3Cards.js';
+import { boardV3CardDef, V3_LENSES, type BoardV3CardDef, type BoardV3CardId } from '../boards/v3Cards.js';
 import { cardDef, isCardOffered, READABLE_CARDS } from '../self/v3/cards.js';
 import type { BoardId, CardId, SelfCardDef, SelfCardId } from '../self/v3/types.js';
 
@@ -38,4 +38,15 @@ export function isReadable(id: string, boards: readonly string[] = getBoardsV3()
 /** The brief's prompt key: `cards/<board>/<id>`. Self keeps `cards/self/<id>`, so no You store key changes. */
 export function cardBriefPrompt(id: CardId | SelfCardId): string {
   return `cards/${boardOfCard(id) ?? 'self'}/${id}`;
+}
+
+/**
+ * The board (and lens) a card is read for, as the requests name it (docs/dashboards/14): the card prompts are
+ * board-neutral and each request says which board each card belongs to. `board Self` for a Self card.
+ */
+export function cardBoardLabel(id: string): string {
+  const b = boardV3CardDef(id);
+  if (!b) return 'board Self';
+  const lens = V3_LENSES[b.board].find((l) => l.id === b.lens)?.title ?? b.lens;
+  return `board ${b.board === 'love' ? 'Love' : 'Work'}, lens ${lens}`;
 }
