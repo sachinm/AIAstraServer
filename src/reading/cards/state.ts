@@ -32,6 +32,9 @@ function asDoc(raw: unknown): CardsStateDoc {
     preparing: Boolean(r.preparing),
     // docs/dashboards/10 §7 S3: kept, or every write would forget the boards opened today and re-queue them
     ...(r.opened && typeof r.opened === 'object' ? { opened: { ...(r.opened.love ? { love: true as const } : {}), ...(r.opened.work ? { work: true as const } : {}) } } : {}),
+    // docs/billing/03 per-lens refresh: kept, or the next write would drop a paid refresh's force marks and its held question
+    ...(r.force && typeof r.force === 'object' ? { force: { ...r.force } } : {}),
+    ...(r.lensRefresh && typeof r.lensRefresh === 'object' ? { lensRefresh: { ...r.lensRefresh } } : {}),
   };
 }
 

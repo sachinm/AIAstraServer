@@ -297,7 +297,8 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
           agentId: 'self.card.oracle',
           userId: ctx.userId,
           charts: [{ type: 'pressure_inventory', variant: `system=${i.frame.clock}` }],
-          forceRefresh: Boolean(deps.force),
+          // docs/billing/03: a card a paid lens refresh queued today is read again (its `force` mark in today's doc)
+          forceRefresh: Boolean(deps.force) || Boolean((await readCardsState(deps.prisma, ctx.kundliId, now)).force?.[id]),
         },
         async () => {
           if (batch) {

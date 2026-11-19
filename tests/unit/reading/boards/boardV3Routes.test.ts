@@ -1,7 +1,7 @@
 /**
  * docs/dashboards/10 §4.3, §7 S7, S10: the Love and Work boards on the You v3 card machine. BOARDS_V3 unset → 404
  * board_v3_off; set → a You-shaped body with the board, its lenses and the active lens; the lens defaults from the
- * person's facts; build on open queues the lens deck once a day; the layout PUT is dispatched on body shape; no
+ * person's facts; build on open queues the lens deck's unread cards once a day; the layout PUT is dispatched on body shape; no
  * internal id or technique key reaches the body. Fakes only: no database, no model.
  */
 import type { AddressInfo } from 'node:net';
@@ -202,8 +202,8 @@ describe('GET /api/board/:board/v3', () => {
       expect(c.title).not.toMatch(/_/);
       expect(c.subtitle).not.toMatch(/_/);
     }
-    // the stored reading is served; the first open of the day also queued the lens deck for its daily renewal
-    expect(body.cards.find((c: any) => c.id === 'dating_pulse')).toMatchObject({ state: 'queued', firstLine: 'Warmer from 5 Jan 2027.' });
+    // offline first (docs/billing/03): the stored reading is served and not re-read on open; only the unread card is queued
+    expect(body.cards.find((c: any) => c.id === 'dating_pulse')).toMatchObject({ state: 'ready', firstLine: 'Warmer from 5 Jan 2027.' });
   });
 });
 
@@ -232,13 +232,14 @@ describe('layout PUT (dispatched on body shape) and build on open', () => {
     expect(await (await put({ cards: [] })).json()).toMatchObject({ error: 'too_few_cards' });
   });
 
-  it('the first GET of the day queues the active lens deck once', async () => {
-    await call('PUT', '/api/board/love/v3/layout', 'u1', { version: '', patch: { cards: ['dating_pulse', 'friends_core_allies'] } });
+  it('the first GET of the day queues the active lens deck cards never read, once; a read card is served, not re-read', async () => {
+    await call('PUT', '/api/board/love/v3/layout', 'u1', { version: '', patch: { cards: ['dating_pulse', 'dating_delays_blocks', 'friends_core_allies'] } });
     readings = { dating_pulse: content };
     f.builds.clear();
     queuedBuilds.length = 0;
     const g1 = await (await call('GET', '/api/board/love/v3', 'u1')).json();
-    expect(g1.cards.find((c: any) => c.id === 'dating_pulse').state).toBe('queued');
+    expect(g1.cards.find((c: any) => c.id === 'dating_pulse').state).toBe('ready');
+    expect(g1.cards.find((c: any) => c.id === 'dating_delays_blocks').state).toBe('queued');
     expect(g1.cards.find((c: any) => c.id === 'friends_core_allies').state).toBe('not_read');
     expect(queuedBuilds).toEqual(['k1']);
     const doc = [...f.builds.values()][0].result;

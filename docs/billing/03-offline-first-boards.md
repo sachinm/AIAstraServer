@@ -117,3 +117,53 @@ is exactly the rule Sachin gave, and it means the same reading is never paid for
 
 Left for Sachin: none blocking. A board whose reading has no end date (`valid_until` null) is never "due"; if he wants
 a manual refresh there anyway, the rule is one line.
+
+## 10. Per-lens refresh on the Love and Work boards (Sachin, 2026-11-19)
+
+Sachin's words: "Love and Work --- dashboards and subdashboards everytime they are refreshed should charge against the
+quota and the chat within their cards should also charge against the quota", and "the 1st ever reading of the dashboard
+is always free and does not count against the quota ... this applies to sub-dashboards as well". A sub-dashboard is a
+lens: Love has `dating`, `marriage`, `friends`, `allies`; Work has `career_start`, `primary_job`, `hobby`, `business`.
+This applies while the board is on the v3 card machine (`BOARDS_V3`); the v1 Love/Work boards keep §4 above.
+
+| Action | Cost |
+| --- | --- |
+| Open a board (`GET /api/board/:board/v3`) | Free, always. Each card shows its newest stored reading on the board's clock, whatever day it was made. Once a day, the active lens's deck cards that were **never read** are queued: a lens's first reading is made on open, free. A card that has a stored reading is never re-read on open. |
+| Add a card with Edit (versioned layout PUT) | Free. Only cards never read are queued. |
+| Try again on a card (`POST …/cards/:id/read`) | Free for a failed, stuck or never-read card; a card with a good reading answers 409 `already_read`. |
+| Refresh a lens, once its own "Good until" has passed (`POST /api/boards/love\|work/refresh`, optional body `{ lens }`, else the stored active lens) | One question per lens per UTC day, key `board:<board>:<lens>:refresh:<day>` (`lensRefreshKey`). A lens never read: the refresh is its first reading, free. Two lenses are two questions. |
+| A question in a card's chat | One question per sent question, key `cardchat:<board>:<cardId>:<turnId>` (unchanged; Love and Work as You). |
+| The You board | Unchanged: first reading free, refresh one question (`board:self:refresh:<day>`). |
+
+**When a lens refresh may be asked for (each lens its own "Good until", Sachin 2026-11-19).** The Love/Work v3 body's
+`refresh` block is the active lens's own (`src/reading/boards/lensValidity.ts`), from the newest stored reading of each of
+its deck cards on the board's clock: `madeAt` is the oldest of their `created_at` (or today's recorded refresh time when
+later); `validUntil` is the earliest last good day among them, the day before the row's `valid_to` (the You rule,
+`lastDay`), else the first span end from the day it was made; `due` is the You rule `refreshDue` (today past
+`validUntil`). A lens with no reading has no dates and is never due (its first reading is made free on open). A lens
+refreshed today (and not given back) shows `due: false` for the rest of the day; its new readings then carry the next
+date. A lens already read refreshes only when due, else 409 `not_due` with its own `valid_until`.
+
+**Try again** (`POST …/cards/:id/read`) is free for a card whose last try failed, a stuck card, or one never read. A
+card with a good reading on the clock answers 409 `already_read` and nothing is queued: it is refreshed with its lens.
+
+**`charged`** in the refresh answer is true only when the gate counted a question (false for exempt roles, plans off
+and a same-day repeat of the key).
+
+**A refresh's life** (`src/reading/boards/lensRefresh.ts`):
+
+1. Read the board side-effect free; pick the lens; take its deck cards from the layout.
+2. No card of the lens has a stored reading: queue them, nothing held, 200 `{ status:'queued', first:true, charged:false }`.
+3. The same lens was refreshed today and is being read or was read: 200 `{ repeat:true, charged:false }`, nothing re-read.
+4. Not `due`: 409 `not_due`. At the limit: 402 `quota_exhausted`, nothing queued, the stored cards unchanged.
+5. Hold one question; mark the deck cards `queued` with a `force` mark in today's `self.cards` state doc and record the
+   refresh under `lensRefresh['<board>:<lens>']`; queue the one Self build. The card runner reads a card with a `force`
+   mark again even when its store key is unchanged (a forced read replaces the row under the same key). 200
+   `{ status:'queued', charged:true, queued, usage }`; the page reloads and its card poll shows the cards being read.
+6. No build will read them (one failed in the last half hour, or the queue failed): the question is given back and the
+   marks taken back, 409 `not_ready`.
+7. At the end of every Self build (`runSelfReadingBuild`, also when it throws) `settleLensRefreshes` settles each open
+   lens refresh once none of its cards is still `queued`/`reading`: committed when at least one card was read since the
+   refresh, given back when none was (all failed, or the spend cap stopped the queue). A hold the build never settles is
+   given back by the gate after ten minutes, as every reservation. A given-back lens can be asked again the same day and
+   is charged again.

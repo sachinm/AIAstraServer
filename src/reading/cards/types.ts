@@ -36,6 +36,20 @@ export interface CardsStateDoc {
   preparing: boolean;
   /** docs/dashboards/10 §4.1 step 2: the Love/Work boards opened today (their lens deck was queued once on open) */
   opened?: Partial<Record<'love' | 'work', true>>;
+  /**
+   * docs/billing/03 §per-lens refresh: cards a paid lens refresh queued today, read again even when their store key is
+   * unchanged (ISO time the refresh queued them). The card runner honours the mark; nothing else reads it.
+   */
+  force?: Partial<Record<CardId, string>>;
+  /** docs/billing/03 §per-lens refresh: today's paid lens refreshes, by `<board>:<lens>` (settled at the build's end) */
+  lensRefresh?: Record<string, LensRefreshMark>;
+}
+
+/** one paid lens refresh today: when it queued its cards, which, and how its question was settled (none: still held) */
+export interface LensRefreshMark {
+  at: string;
+  cards: CardId[];
+  outcome?: 'committed' | 'given_back';
 }
 
 export const emptyCardsState = (): CardsStateDoc => ({ cards: {}, spentUsd: 0, stage: 'idle', clocks: [], capReached: false, preparing: false });

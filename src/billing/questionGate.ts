@@ -48,6 +48,11 @@ export type BoardChargeOutcome = 'charged' | 'free' | 'at_limit' | 'off';
 
 /** One fresh reading per board per UTC day: a double tap or a retry the same day is the same question. */
 export const boardRefreshKey = (board: BoardCharge, day: string): string => `board:${board}:refresh:${day}`;
+/**
+ * A fresh reading of one Love or Work lens (a sub-dashboard; docs/billing/03 per-lens refresh): one question per lens per
+ * UTC day, so two lenses are two questions and a double tap or a retry of one lens the same day is the same question.
+ */
+export const lensRefreshKey = (board: Exclude<BoardCharge, 'self'>, lens: string, day: string): string => `board:${board}:${lens}:refresh:${day}`;
 /** A clock switch on the Self board (docs/reading-engine/66 §4.4): one question per system per UTC day. */
 export const clockChargeKey = (day: string, system: string): string => `board:self:${day}:clock:${system}`;
 
@@ -230,10 +235,24 @@ export class QuestionGate {
   }
 
   /** Settles the question held for this board's fresh reading today, once; a later call finds it settled. Never throws. */
-  async settleBoardRefresh(userId: string, board: BoardCharge, day: string, ok: boolean): Promise<void> {
+  settleBoardRefresh(userId: string, board: BoardCharge, day: string, ok: boolean): Promise<void> {
+    return this.settleKey(userId, boardRefreshKey(board, day), ok);
+  }
+
+  /** A fresh reading of one Love or Work lens: held now under `lensRefreshKey`, settled when its cards are read. */
+  reserveLensRefresh(userId: string, board: Exclude<BoardCharge, 'self'>, lens: string, day: string): Promise<ReserveResult> {
+    return this.reserve(userId, { key: lensRefreshKey(board, lens, day) });
+  }
+
+  /** Settles the question held for this lens's fresh reading that day, once. Never throws. */
+  settleLensRefresh(userId: string, board: Exclude<BoardCharge, 'self'>, lens: string, day: string, ok: boolean): Promise<void> {
+    return this.settleKey(userId, lensRefreshKey(board, lens, day), ok);
+  }
+
+  private async settleKey(userId: string, key: string, ok: boolean): Promise<void> {
     if (!this.enabled) return;
     try {
-      const row = await this.store.findUsage(userId, boardRefreshKey(board, day));
+      const row = await this.store.findUsage(userId, key);
       if (!row || row.status !== 'reserved') return;
       const ticket: QuestionTicket = { id: row.id, periodStart: row.period_start, userId };
       if (ok) await this.commit(ticket);
