@@ -130,17 +130,25 @@ This applies while the board is on the v3 card machine (`BOARDS_V3`); the v1 Lov
 | --- | --- |
 | Open a board (`GET /api/board/:board/v3`) | Free, always. Each card shows its newest stored reading on the board's clock, whatever day it was made. Once a day, the active lens's deck cards that were **never read** are queued: a lens's first reading is made on open, free. A card that has a stored reading is never re-read on open. |
 | Add a card with Edit (versioned layout PUT) | Free. Only cards never read are queued. |
-| Try again on a card (`POST …/cards/:id/read`) | Free. |
-| Refresh a lens (`POST /api/boards/love\|work/refresh`, optional body `{ lens }`, else the stored active lens) | One question per lens per UTC day, key `board:<board>:<lens>:refresh:<day>` (`lensRefreshKey`). A lens never read: the refresh is its first reading, free. Two lenses are two questions. |
+| Try again on a card (`POST …/cards/:id/read`) | Free for a failed, stuck or never-read card; a card with a good reading answers 409 `already_read`. |
+| Refresh a lens, once its own "Good until" has passed (`POST /api/boards/love\|work/refresh`, optional body `{ lens }`, else the stored active lens) | One question per lens per UTC day, key `board:<board>:<lens>:refresh:<day>` (`lensRefreshKey`). A lens never read: the refresh is its first reading, free. Two lenses are two questions. |
 | A question in a card's chat | One question per sent question, key `cardchat:<board>:<cardId>:<turnId>` (unchanged; Love and Work as You). |
 | The You board | Unchanged: first reading free, refresh one question (`board:self:refresh:<day>`). |
 
-**When a lens refresh may be asked for.** The Love/Work v3 body's `refresh` block is the You board's (`madeAt`,
-`validUntil`, `due` from `selfBoardDates`), the dates the header chip already showed; `due` is no longer forced false.
-A lens already read refreshes only when `due`, else 409 `not_due` with `valid_until`. A lens refreshed today (and not
-given back) shows `due: false` for the rest of that day. Left for Sachin: the You dates do not move when a lens is
-refreshed, so from the next day the same lens is `due` again and a tap is charged again; a per-lens "Good until" (from the
-lens's own newest card readings) would stop that, and is a small change once he picks it.
+**When a lens refresh may be asked for (each lens its own "Good until", Sachin 2026-11-19).** The Love/Work v3 body's
+`refresh` block is the active lens's own (`src/reading/boards/lensValidity.ts`), from the newest stored reading of each of
+its deck cards on the board's clock: `madeAt` is the oldest of their `created_at` (or today's recorded refresh time when
+later); `validUntil` is the earliest last good day among them, the day before the row's `valid_to` (the You rule,
+`lastDay`), else the first span end from the day it was made; `due` is the You rule `refreshDue` (today past
+`validUntil`). A lens with no reading has no dates and is never due (its first reading is made free on open). A lens
+refreshed today (and not given back) shows `due: false` for the rest of the day; its new readings then carry the next
+date. A lens already read refreshes only when due, else 409 `not_due` with its own `valid_until`.
+
+**Try again** (`POST …/cards/:id/read`) is free for a card whose last try failed, a stuck card, or one never read. A
+card with a good reading on the clock answers 409 `already_read` and nothing is queued: it is refreshed with its lens.
+
+**`charged`** in the refresh answer is true only when the gate counted a question (false for exempt roles, plans off
+and a same-day repeat of the key).
 
 **A refresh's life** (`src/reading/boards/lensRefresh.ts`):
 

@@ -1,13 +1,14 @@
 /**
  * docs/billing/03 "Per-lens refresh" (Sachin 2026-11-19): Love and Work boards and their lenses (sub-dashboards) charge
  * one question per refresh, per lens; each lens's first-ever reading is free; opening never charges and never re-reads a
- * card that has a stored reading; Try again stays free; the You board keeps its rules. Fakes only: no database, no model.
+ * card that has a stored reading; each lens has its own Good until; Try again is free for a failed or unread card only. Fakes only: no database, no model.
  */
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { lensRefreshKey, QuestionGate } from '../../../../src/billing/questionGate.js';
 import { lensRefreshOutcome, settleLensRefreshes } from '../../../../src/reading/boards/lensRefreshSettle.js';
+import { lensValidityFrom } from '../../../../src/reading/boards/lensValidity.js';
 import type { QueueOutcome } from '../../../../src/reading/self/buildEvent.js';
 import { NOTHING_STORED, type SelfV2Latest } from '../../../../src/reading/self/v2api/storeContract.js';
 import type { BoardValidity } from '../../../../src/reading/self/synthesisValidity.js';
@@ -39,6 +40,15 @@ function fakePrisma() {
       personFact: { findMany: async () => [], upsert: async ({ create }: any) => create },
       analyticsEvent: { create: async ({ data }: any) => data },
       areaCheck: { findMany: async () => [] },
+      // the stored card rows the lens's dates come from: one per read card, `meta` sets its made time and valid_to
+      techniqueOutput: {
+        findMany: async ({ where }: any) => {
+          const ids: string[] = (where.OR ?? []).map((o: any) => /card=(\w+)\|/.exec(o.digest_version.startsWith)![1]);
+          return Object.entries(readings)
+            .filter(([id]) => ids.includes(id))
+            .map(([id, c]) => ({ output: { card: id, content: c }, created_at: new Date(meta[id]?.created ?? '2026-11-06T10:00:00Z'), valid_to: new Date(meta[id]?.validTo ?? '2026-12-06T00:00:00Z') }));
+        },
+      },
       areaBuild: {
         findUnique: async ({ where }: any) => builds.get(bk(where)) ?? null,
         findFirst: async () => null,
@@ -75,6 +85,7 @@ function fakePrisma() {
 
 let f = fakePrisma();
 let readings: Record<string, any> = {};
+let meta: Record<string, { created?: string; validTo?: string }> = {};
 let dates: BoardValidity | null = null;
 let outcome: QueueOutcome = 'invoked';
 const queuedBuilds: string[] = [];
@@ -139,6 +150,7 @@ beforeEach(() => {
   NOW = new Date('2026-12-06T12:00:00Z');
   f = fakePrisma();
   readings = {};
+  meta = {};
   dates = { made_at: '2026-11-06T10:00:00.000Z', valid_until: '2026-12-05', refresh_due: true };
   outcome = 'invoked';
   queuedBuilds.length = 0;
@@ -194,19 +206,60 @@ describe('open never charges and never re-reads a stored card', () => {
     expect(store.usage).toEqual([]);
   });
 
-  it('the board reports the You dates and `due` (the header chip): due past Good until, not due before', async () => {
+  it('each lens has its own Good until (its newest card readings): two lenses with different dates', async () => {
+    readings = { dating_pulse: content('Warmer.'), dating_delays_blocks: content('Slow.'), friends_core_allies: content('Allies near.') };
+    meta = {
+      dating_pulse: { created: '2026-11-06T10:00:00Z', validTo: '2027-02-01T00:00:00Z' },
+      dating_delays_blocks: { created: '2026-11-07T10:00:00Z', validTo: '2026-12-06T00:00:00Z' },
+      friends_core_allies: { created: '2026-11-20T10:00:00Z', validTo: '2027-01-10T00:00:00Z' },
+    };
+    const put = await deck(['dating_pulse', 'dating_delays_blocks', 'friends_core_allies'], 'dating');
+    // dating: the earliest last good day of its cards (5 Dec), made when its oldest card was read; today 6 Dec: due
+    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ madeAt: '2026-11-06T10:00:00.000Z', validUntil: '2026-12-05', due: true });
+    await call('PUT', '/api/board/love/v3/layout', { version: put.json.version, patch: { boardOptions: { lens: 'friends' } } });
+    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ madeAt: '2026-11-20T10:00:00.000Z', validUntil: '2027-01-09', due: false });
+    // the refresh follows the same per-lens rule: friends is not due, dating is
+    expect((await call('POST', '/api/boards/love/refresh', { lens: 'friends' })).json).toMatchObject({ code: 'not_due', valid_until: '2027-01-09' });
+    expect((await call('POST', '/api/boards/love/refresh', { lens: 'dating' })).json).toMatchObject({ charged: true });
+  });
+
+  it('a refreshed lens is not due the next day; it is due again once its new readings expire', async () => {
     readings = { dating_pulse: content('Warmer.') };
     await deck(['dating_pulse']);
-    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ validUntil: '2026-12-05', due: true });
-    dates = { made_at: '2026-12-01T10:00:00.000Z', valid_until: '2027-01-05', refresh_due: false };
-    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ validUntil: '2027-01-05', due: false });
+    expect((await call('POST', '/api/boards/love/refresh')).json).toMatchObject({ charged: true });
+    expect((await call('GET', '/api/board/love/v3')).json.refresh.due).toBe(false);
+    // the forced read stored a new reading good until 10 Jan
+    meta = { dating_pulse: { created: '2026-12-06T12:05:00Z', validTo: '2027-01-11T00:00:00Z' } };
+    NOW = new Date('2026-12-07T09:00:00Z');
+    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ validUntil: '2027-01-10', due: false });
+    expect((await call('POST', '/api/boards/love/refresh')).status).toBe(409);
+    NOW = new Date('2027-01-11T09:00:00Z');
+    expect((await call('GET', '/api/board/love/v3')).json.refresh).toMatchObject({ validUntil: '2027-01-10', due: true });
+    expect((await call('POST', '/api/boards/love/refresh')).json).toMatchObject({ charged: true });
+    // two questions, one per refresh (a new month's count starts again, so count the rows)
+    expect(store.usage.map((u) => u.key)).toEqual([lensRefreshKey('love', 'dating', '2026-12-06'), lensRefreshKey('love', 'dating', '2027-01-11')]);
+  });
+
+  it('Try again on a card with a good reading is 409 already_read and queues nothing', async () => {
+    readings = { dating_pulse: content('Warmer.') };
+    await deck(['dating_pulse']);
+    queuedBuilds.length = 0;
+    const r = await call('POST', '/api/board/love/v3/cards/dating_pulse/read');
+    expect(r.status).toBe(409);
+    expect(r.json).toEqual({ error: 'already_read' });
+    expect(queuedBuilds).toEqual([]);
+    // a card whose last try failed is free to try again, reading or not
+    await call('GET', '/api/board/love/v3');
+    doc().cards.dating_pulse = { state: 'failed', at: NOW.toISOString() };
+    expect((await call('POST', '/api/board/love/v3/cards/dating_pulse/read')).status).toBe(202);
+    // a never-read card too
+    expect((await call('POST', '/api/board/love/v3/cards/dating_delays_blocks/read')).status).toBe(202);
   });
 });
 
 describe('POST /api/boards/love|work/refresh on v3: one question per lens', () => {
   it('a lens never read: the refresh is its first reading, free', async () => {
     await deck(['dating_pulse', 'dating_delays_blocks']);
-    dates = { made_at: '2026-12-01T10:00:00.000Z', valid_until: '2027-01-05', refresh_due: false };
     const r = await call('POST', '/api/boards/love/refresh');
     expect(r.status).toBe(200);
     expect(r.json).toMatchObject({ status: 'queued', lens: 'dating', first: true, charged: false });
@@ -265,8 +318,8 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
 
   it('not due yet: 409 not_due with valid_until; nothing charged', async () => {
     readings = { dating_pulse: content('Warmer.') };
+    meta = { dating_pulse: { validTo: '2027-01-06T00:00:00Z' } };
     await deck(['dating_pulse']);
-    dates = { made_at: '2026-12-01T10:00:00.000Z', valid_until: '2027-01-05', refresh_due: false };
     const r = await call('POST', '/api/boards/love/refresh');
     expect(r.status).toBe(409);
     expect(r.json).toMatchObject({ code: 'not_due', valid_until: '2027-01-05' });
@@ -323,6 +376,17 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
     expect(doc().force.dating_pulse).toBeTruthy();
   });
 
+  it('charged is false when the gate counted nothing: an exempt role, plans off', async () => {
+    readings = { dating_pulse: content('Warmer.'), friends_core_allies: content('Allies.') };
+    await deck(['dating_pulse', 'friends_core_allies'], 'dating');
+    store.role = 'admin';
+    expect((await call('POST', '/api/boards/love/refresh')).json).toMatchObject({ status: 'queued', charged: false });
+    store.role = 'novice';
+    gate = new QuestionGate(store, { enabled: false, now: () => NOW });
+    expect((await call('POST', '/api/boards/love/refresh', { lens: 'friends' })).json).toMatchObject({ status: 'queued', charged: false });
+    expect(store.usage).toEqual([]);
+  });
+
   it('a card still being read keeps the question held', async () => {
     readings = { dating_pulse: content('Warmer.') };
     await deck(['dating_pulse']);
@@ -331,5 +395,18 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
     expect(lensRefreshOutcome(d, d.lensRefresh['love:dating'], NOW)).toBe('pending');
     await settleLensRefreshes(f.prisma, 'u1', 'k1', NOW, gate);
     expect(store.usage[0]!.status).toBe('reserved');
+  });
+});
+
+describe('lensValidityFrom (pure)', () => {
+  it('valid_to gives the last good day; with none, the first span end from the day made; no rows, no dates', () => {
+    const rows = [
+      { output: { content: content('a') }, created_at: '2026-11-06T10:00:00Z', valid_to: '2026-12-20T00:00:00Z' },
+      { output: { content: content('b') }, created_at: '2026-11-08T10:00:00Z', valid_to: null },
+    ];
+    expect(lensValidityFrom(rows, '2026-12-06')).toMatchObject({ madeAt: '2026-11-06T10:00:00.000Z', validUntil: '2026-12-19', due: false });
+    expect(lensValidityFrom([rows[1]!], '2027-01-06')).toMatchObject({ validUntil: '2027-01-05', due: true });
+    expect(lensValidityFrom([], '2026-12-06')).toMatchObject({ madeAt: null, validUntil: null, due: false });
+    expect(lensValidityFrom(rows, '2026-12-06', { at: '2026-12-06T12:00:00.000Z', cards: [] }).madeAt).toBe('2026-12-06T12:00:00.000Z');
   });
 });

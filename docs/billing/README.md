@@ -236,5 +236,5 @@ lived ($0.0002; the cache is deleted when the build ends). The same cards one ca
 
 On the Love and Work boards (v3) each refresh of a lens (sub-dashboard) takes one question under
 `board:<board>:<lens>:refresh:<day>`; the first-ever reading of each lens is free and is made on open; opening, adding a
-card and Try again are free; a card's chat takes one question per question, as on You. The You board is unchanged.
+card and Try again on a failed or unread card are free; each lens has its own "Good until"; a card's chat takes one question per question, as on You. The You board is unchanged.
 Rules and the refresh's life: docs/billing/03 §10.

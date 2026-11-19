@@ -5,7 +5,8 @@
  *
  *   - the lens is the body's `lens` when given, else the stored layout's `boardOptions.lens` (else the person's default)
  *   - a lens never read for this kundli: this is its first reading, free (its unread deck cards are queued, nothing held)
- *   - else the board's `refresh.due` (the You rule and dates the board shows) must hold, or 409 `not_due`
+ *   - else the lens's own `due` (its newest card readings' "Good until", lensValidity.ts) must hold, or 409 `not_due`
+ *   - `charged` is true only when the gate counted a question (not for exempt roles, plans off or a same-day repeat)
  *   - one question is held under `lensRefreshKey(board, lens, day)`; at the limit 402 and nothing is queued (the stored
  *     cards stay as they are)
  *   - the lens's deck cards are queued with a `force` mark (read again even when their store key is unchanged) and the
@@ -24,6 +25,7 @@ import { readCardReadings } from '../cards/store.js';
 import type { CardsStateDoc } from '../cards/types.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../self/buildEvent.js';
 import { lensRefreshOutcome } from './lensRefreshSettle.js';
+import { lensValidity } from './lensValidity.js';
 import { getBoardV3, lensDeck, type BoardV3Deps } from './v3Service.js';
 import { isBoardLens, type AreaV3Board, type BoardLens, type BoardV3CardId } from './v3Cards.js';
 
@@ -38,6 +40,8 @@ export interface LensRefreshDeps {
   /** the one per-kundli Self build that reads the cards (default: queueSelfReadingBuild) */
   queueBuild?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<QueueOutcome>;
   readCardReadings?: typeof readCardReadings;
+  /** the lens's own refresh dates (default: its newest stored card readings) */
+  lensValidity?: typeof lensValidity;
 }
 
 export interface LensRefreshAnswer {
@@ -99,10 +103,14 @@ export async function refreshBoardLens(deps: LensRefreshDeps, userId: string, bo
     return { status: 200, body: { status: 'queued', board, lens, repeat: true, charged: false, queued: [], ...(await usage()) } };
   }
 
-  if (!body.refresh.due) return { status: 409, body: { error: 'not_due', code: 'not_due', valid_until: body.refresh.validUntil, lens } };
+  // this lens's own "Good until" (its newest card readings; docs/billing/03 §10)
+  const dates = await (deps.lensValidity ?? lensValidity)(deps.prisma, kundliId, body.clock.system, deck, day, mark);
+  if (!dates.due) return { status: 409, body: { error: 'not_due', code: 'not_due', valid_until: dates.validUntil, lens } };
 
   const held = await deps.gate.reserveLensRefresh(userId, board, lens, day);
   if (!held.ok) return { status: 402, body: { ...quotaBody(held.usage as PlanStatus), lens } };
+  // counted only when the gate took a question (not for exempt roles, plans off, or a repeat of today's key)
+  const charged = Boolean(held.ticket.id);
   let queued: BoardV3CardId[] = [];
   try {
     // a card being read right now is left to finish (its `done` lands after this refresh and counts as read)
@@ -117,7 +125,7 @@ export async function refreshBoardLens(deps: LensRefreshDeps, userId: string, bo
     await undoQueue(deps.prisma, userId, kundliId, now, queued, key).catch(() => undefined);
     throw e;
   }
-  return { status: 200, body: { status: 'queued', board, lens, charged: true, queued, ...(await usage()) } };
+  return { status: 200, body: { status: 'queued', board, lens, charged, queued, ...(await usage()) } };
 }
 
 /**

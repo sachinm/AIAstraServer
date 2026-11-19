@@ -25,6 +25,7 @@ import { keyDatesFrom, periodsFrom, plainV3Card, readTexts, staleDatesIn } from 
 import { areaLayoutRegistry, emptyLayout, mergeLayoutPatch, readBoardLayout, validateLayout, writeLayoutVersioned } from '../self/v3/layout.js';
 import { applySelfFeatures, cardWindows, railFromSpans } from '../self/v3/response.js';
 import type { BoardReadingView, CardReadError, CardReadState, LayoutError, SelfBoardLayoutView, SelfV3CardContent, SelfV3CardView, SelfV3Response } from '../self/v3/types.js';
+import { lensValidity, NO_LENS_REFRESH } from './lensValidity.js';
 import { effectiveOptions, shapeSelfCard, type BoardOptions, type CardOptions } from './cardOptions.js';
 import {
   boardFactsOf,
@@ -71,6 +72,8 @@ export interface BoardV3Deps extends SelfV2Deps {
    * open" entirely: no `opened` mark, no card queued, no build. Pass no-op `queueBuild`/`queueDigest` with it.
    */
   readOnly?: boolean;
+  /** the lens's own refresh dates (default: from its newest stored card readings; docs/billing/03 §10) */
+  lensValidity?: typeof lensValidity;
 }
 
 export const boardV3Enabled = (board: AreaV3Board, boards: readonly string[] = getBoardsV3()): boolean => boards.includes(board);
@@ -221,13 +224,14 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
     const shaped = shapeSelfCard(c, layout.options?.[c.id], layout.boardOptions as Partial<BoardOptions>);
     return { ...shaped, optionNotes: boardOptionNotes(effectiveOptions(layout.options?.[c.id], layout.boardOptions as Partial<BoardOptions>)) };
   });
-  // docs/billing/03 §10: a lens refreshed today (and not given back) is not offered again today. A read-only read (the
-  // lens refresh itself, the card chat) keeps the You rule as is: the refresh decides per lens
-  const refreshedToday = deps.readOnly ? undefined : doc.lensRefresh?.[`${board}:${lens}`];
-  const base = baseOf(board, v2.body);
+  // docs/billing/03 §10: the active lens's own dates (its newest card readings), and a lens refreshed today (not given
+  // back) is not offered again today
+  const mark = doc.lensRefresh?.[`${board}:${lens}`];
+  const own = await (deps.lensValidity ?? lensValidity)(deps.prisma, kundliId, v2.body.clock.system, deck, today, mark);
+  const refresh = mark && mark.outcome !== 'given_back' ? { ...own, due: false } : own;
   const body: BoardV3Response = {
-    ...base,
-    ...(refreshedToday && refreshedToday.outcome !== 'given_back' ? { refresh: { ...base.refresh, due: false } } : {}),
+    ...baseOf(board, v2.body),
+    refresh,
     status: doc.preparing ? 'preparing' : 'ok',
     readVersion: Object.keys(read).length ? 'v3' : null,
     layout,
@@ -246,9 +250,8 @@ function baseOf(board: AreaV3Board, v2: SelfV2Response): Omit<BoardV3Response, '
     builtAt: v2.builtAt,
     clock: v2.clock,
     profile: v2.profile,
-    // docs/billing/03 per-lens refresh: the same dates and `due` rule as You (the board shows the You reading's dates);
-    // once due, POST /api/boards/:board/refresh re-reads the active lens for one question
-    refresh: { ...v2.refresh },
+    // docs/billing/03 §10: each lens has its own dates; getBoardV3 sets them (none before a reading)
+    refresh: { ...NO_LENS_REFRESH },
     build: v2.build,
     quality: v2.quality ?? null,
     features: {} as Record<string, FeatureGrant>,
@@ -343,7 +346,8 @@ async function queueLensDeck(prisma: PrismaClient, userId: string, kundliId: str
   }
 }
 
-export type ReadBoardCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError };
+/** `already_read`: Try again is for a failed, stuck or never-read card; a good reading is refreshed with its lens (paid) */
+export type ReadBoardCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError | 'already_read' };
 
 /** POST /api/board/:board/v3/cards/:id/read: queue or retry one card of this board. */
 export async function readBoardV3Card(prisma: PrismaClient, userId: string, board: AreaV3Board, cardId: string, deps: BoardQueueDeps = {}): Promise<ReadBoardCardResult> {
@@ -357,6 +361,12 @@ export async function readBoardV3Card(prisma: PrismaClient, userId: string, boar
   const doc = await readCardsState(prisma, kundliId, now);
   const e = doc.cards[def.id];
   if (e && e.state === 'reading' && now.getTime() - Date.parse(e.at) <= CARD_STUCK_MS) return { ok: false, status: 409, error: 'already_reading' };
+  // docs/billing/03 §10: a card with a good reading on the clock is not read again for free (its last try did not fail)
+  if (e?.state !== 'failed' && e?.state !== 'queued' && e?.state !== 'reading') {
+    const clock = await (deps.clockOf ?? preferredClock)(prisma, kundliId).catch(() => null);
+    const have = clock ? ((await (deps.readCardReadings ?? readCardReadings)(prisma, kundliId, clock, [def.id]).catch(() => ({}))) as Partial<Record<string, unknown>>) : {};
+    if (have[def.id]) return { ok: false, status: 409, error: 'already_read' };
+  }
   // no day cap (docs/billing/README.md "Spend cap per operation"): the build this queues is its own operation, its own budget
   await updateCardsState(prisma, userId, kundliId, now, (d) => {
     d.cards[def.id] = { state: 'queued', at: now.toISOString() };
