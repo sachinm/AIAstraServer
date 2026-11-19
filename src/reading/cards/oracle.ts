@@ -25,6 +25,8 @@ import { cardMatterRows, frameRange } from '../slices/trim.js';
 import type { RenderedSlice } from '../slices/types.js';
 import { CARD_ORACLE_AGENT, CARD_ORACLE_PROMPT, CARD_READING_TECHNIQUE, cardBriefPrompt } from './types.js';
 import { isAgeMatureD9 } from '../dasha/dashaAssessment.js';
+import { cardBoardLabel } from './registry.js';
+import { cardTechniqueKeys, techniqueBoardsOf, type BoardTechniqueSection, type TechniqueBoard } from './techniques.js';
 
 export const CARD_ORACLE_TIMEOUT_MS = 45_000;
 /**
@@ -181,6 +183,8 @@ export interface CardOracleInput {
   answers: string;
   model: string;
   cacheOwner: { userId: string; kundliId: string };
+  /** docs/dashboards/14: the Love and Work boards' technique sections (a Love or Work card reads its own) */
+  techniques?: Partial<Record<TechniqueBoard, BoardTechniqueSection>>;
 }
 
 export interface CardOracleDeps {
@@ -277,18 +281,30 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
     card: i.card,
     motion,
   });
+  // docs/dashboards/14: a Love or Work card reads its board's technique sections first (none for a Self card)
+  const tBoards = techniqueBoardsOf([i.card]).filter((b) => i.techniques?.[b]);
+  const tSections = Object.fromEntries(tBoards.map((b) => [b, i.techniques![b]!])) as Partial<Record<TechniqueBoard, BoardTechniqueSection>>;
+  const techText = tBoards.length
+    ? [
+        ...tBoards.map((b) => tSections[b]!.text),
+        ...cardTechniqueKeys(i.card, tSections).map((t) => `THIS CARD'S TECHNIQUE ROWS (${t.board.toUpperCase()}, read first): ${t.keys.length ? t.keys.map((k) => `{${k}}`).join(' ') : '(the whole section)'}`),
+      ].join('\n\n')
+    : '';
   const text = [
     promptText(CARD_ORACLE_PROMPT),
     `CARD BRIEF\n${promptText(cardBriefPrompt(i.card))}`,
+    `BOARD: this card is on the ${cardBoardLabel(i.card).replace(/^board /, '')} board`,
     `THE BOARD (the cards this person chose; you write only \`${i.card}\` and leave the others' subjects to them): ${i.board.join('; ') || 'this card only'}`,
     timingBlock.join('\n'),
     i.frameText,
     ledger.text,
+    ...(techText ? [techText] : []),
     `MATTER ROWS (${i.matters.join(', ')}; the rows overlapping ${range.from}..${range.to}, each once)\n${matter || '(none stored)'}`,
     `PERSON'S ANSWERS: ${i.answers || 'none'}`,
     `THIS CALL: write only the card \`${i.card}\`. Return the JSON document only.`,
   ].join('\n\n');
-  return { text, keys: [...new Set([...ledger.keys, ...(i.matterSlices.length ? rows.keys : []), ...i.frameKeys])] };
+  const tech = tBoards.flatMap((b) => tSections[b]!.keys);
+  return { text, keys: [...new Set([...ledger.keys, ...(i.matterSlices.length ? rows.keys : []), ...i.frameKeys, ...tech])] };
 }
 
 const keyOf = (k: string): string => normaliseEvidenceKey(k.trim().replace(/^\{|\}$/g, ''));

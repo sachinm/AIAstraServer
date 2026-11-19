@@ -286,6 +286,8 @@ export interface PersonalCardV3 {
   /** only when the person switched the section on, else null */
   pattern: string | null;
   ladder: LadderSteps | null;
+  /** docs/dashboards/13 phase 5: one plain sentence on why the reading holds for this person (optional; never refuses a card) */
+  why?: string | null;
 }
 
 export interface PersonalizerV3Output {

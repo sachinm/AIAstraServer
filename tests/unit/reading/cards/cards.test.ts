@@ -408,7 +408,7 @@ describe('the card Oracle input and the pre-check (doc 70 Phase 3 replay fixes)'
 describe('cards in groups on one cached pack (doc 71)', () => {
   const groupReply = (o: GeminiCallOptions, bad: ReadonlySet<string> = new Set()) => {
     const req = o.fullCache?.suffix[0] ?? o.parts[1]!;
-    const ids = [...req.matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+    const ids = [...req.matchAll(/^- (\w+): board /gm)].map((m) => m[1]!);
     // a card cites only its own ledger cells (the fixture ledger holds work_load_and_health only); others cite the natal key
     const own = (id: string) => {
       const o = goodOracle(id);
@@ -459,7 +459,7 @@ describe('cards in groups on one cached pack (doc 71)', () => {
     expect(new Set(calls.map((c) => c.fullCache!.prefix)).size).toBe(1);
     expect(ensured).toHaveLength(1);
     expect(calls.every((c) => !c.node.startsWith('self.personalizer') && !c.node.startsWith('self.card.oracle'))).toBe(true);
-    const boardIds = board.flatMap((c) => [...c.fullCache!.suffix[0]!.matchAll(/^- (\w+): matters/gm)].map((m) => m[1]));
+    const boardIds = board.flatMap((c) => [...c.fullCache!.suffix[0]!.matchAll(/^- (\w+): board /gm)].map((m) => m[1]));
     expect(boardIds.sort()).toEqual([...BOARD].sort());
   });
 
@@ -538,7 +538,7 @@ describe('grouped card reads: slim pack, budgeted groups (doc 86)', () => {
     const calls: Array<{ node: string; ids: string[]; max: number | undefined; at: number }> = [];
     const t0 = Date.now();
     const callGemini = async (o: GeminiCallOptions) => {
-      const ids = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
+      const ids = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): board /gm)].map((m) => m[1]!);
       calls.push({ node: o.node, ids, max: o.maxOutputTokens, at: Date.now() - t0 });
       await new Promise((r) => setTimeout(r, 60));
       const goodFor = (id: string) => {

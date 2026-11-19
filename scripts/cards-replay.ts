@@ -180,7 +180,7 @@ async function guardedCall(o: GeminiCallOptions) {
   const t = performance.now();
   const r = await realCallGemini(o);
   const u = { model: o.model, promptTokens: r.usage?.promptTokens ?? 0, cachedTokens: r.usage?.cachedTokens ?? 0, outputTokens: r.usage?.outputTokens ?? 0, thoughtTokens: r.usage?.thoughtTokens ?? 0 };
-  const asked = o.fullCache ? [...(o.fullCache.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!) : undefined;
+  const asked = o.fullCache ? [...(o.fullCache.suffix[0] ?? '').matchAll(/^- (\w+): board /gm)].map((m) => m[1]!) : undefined;
   calls.push({ cards: asked, node: o.node, at: Math.round(performance.now() - t0), ms: Math.round(performance.now() - t), ...u, costUsd: usageCostUsd(u), finish: r.finishReason });
   return r;
 }
