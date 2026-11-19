@@ -114,7 +114,11 @@ describe('selfie', () => {
     expect(own.status).toBe(200);
     expect(own.headers.get('content-type')).toBe('image/jpeg');
     expect(own.headers.get('cache-control')).toBe('private, max-age=3600');
-    expect((await fetch(`${base}/api/profile/photo`, { headers: { 'x-user': 'u3' } })).status).toBe(404);
+    // no photo (another person's is never served): 204 with no body, which the web's fetchSelfieUrl reads as "none"
+    const none = await fetch(`${base}/api/profile/photo`, { headers: { 'x-user': 'u3' } });
+    expect(none.status).toBe(204);
+    expect(await none.text()).toBe('');
+    expect(none.headers.get('content-type')).toBeNull();
     expect(photos.get('u2').phash).toHaveLength(16);
     expect(facts.get('u2:wizard.selfie').value).toBe('done');
   });

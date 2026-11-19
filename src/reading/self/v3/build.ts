@@ -30,6 +30,7 @@ import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnab
 import { withCacheLease } from '../../llm/cacheLease.js';
 import { boardFactsOf, boardV3CardDef, defaultLens, isBoardLens, type AreaV3Board } from '../../boards/v3Cards.js';
 import { isReadable } from '../../cards/registry.js';
+import { answersLine } from '../../person/profile.js';
 import { readCards, type CardsRunResult } from '../../cards/run.js';
 import { loadBoardTechniques, techniqueBoardsOf, type BoardTechniqueSection, type TechniqueBoard } from '../../cards/techniques.js';
 import { frameRange } from '../../slices/trim.js';
@@ -317,7 +318,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
       const prefix = sharedPrefix(picked.shared);
       const years = (frame.years ?? []).flatMap((y) => [y.from, y.to]);
       const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
-      const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
+      const answers = answersLine(profile);
       const area = await (deps.loadAreaDecks ?? ((p: PrismaClient, k: string) => loadAreaDecks(p, k, profile)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [] as CardId[], sections: {} }));
       // docs/dashboards/14: the Love and Work boards' own techniques, loaded only when a card of theirs is in the run
       // (the decks in the pack, or a queued card); read-only; a Self-only run loads nothing and its pack is unchanged
@@ -405,7 +406,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         await warmPrefixes([slice], { ensureCache: deps.ensureCache });
         ms.warm = since(tw);
         const dates = new Set([...frameDates(frame), ...storedWindowsOf(ctx).endpoints]);
-        const answers = profile.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
+        const answers = answersLine(profile);
         const to = performance.now();
         const oracle = await runOracleV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, spentUsd: out.clockLayer?.spentUsd ?? 0, maxSpendUsd: deps.maxSpendUsd }, ctx, slice, frame, dates, answers);
         ms.oracle = since(to);

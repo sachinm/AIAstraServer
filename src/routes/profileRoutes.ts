@@ -4,7 +4,7 @@
  *   GET    /api/profile/facts            { facts, wizard: { done, skipped } }
  *   PUT    /api/profile/facts            { facts: { key: value | null } } → 204 | 400
  *   POST   /api/profile/photo            raw image/jpeg body (≤150 KB), header x-face-box → 201 | 400 | 413 | 429
- *   GET    /api/profile/photo            the JPEG for the signed-in person only → 200 | 404
+ *   GET    /api/profile/photo            the JPEG for the signed-in person only → 200 | 204 (no photo; no body)
  *   DELETE /api/profile/photo?restore=1  → 204 | 404
  */
 import express from 'express';
@@ -84,7 +84,8 @@ export function registerProfileRoutes(app: express.Express, deps: ProfileRouteDe
     const userId = await deps.requireUser(req, res);
     if (!userId) return;
     const p = await readPhoto(deps.prisma, userId).catch(() => null);
-    if (!p) return res.status(404).json({ error: 'no_photo' });
+    // no photo is a normal state, not an error: 204 with no body (the web's fetchSelfieUrl reads an empty answer as none)
+    if (!p) return res.status(204).end();
     res.setHeader('Content-Type', p.mime);
     res.setHeader('Cache-Control', 'private, max-age=3600');
     return res.send(p.bytes);

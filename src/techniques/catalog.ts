@@ -19,6 +19,7 @@ import { SELF_V2_REFRESH, type SelfV2AreaId } from '../reading/self/v2types.js';
 import { categoryOfLuckyArea, type TechniqueCategory } from './categories.js';
 import type { ContractInput, ContractSection, TechniqueContract, TechniqueSelectors } from './contracts.js';
 import type { LayoutId } from './layouts.js';
+import { changedSeedRows, releaseAfter, runSeedInBackground, SEED_RETRY_AFTER_MS, seedHash, writeSeed, type BackgroundSeedOptions, type RawSeedClient } from '../lib/registrySeed.js';
 
 export type TechniqueBoard = 'you' | 'love' | 'work' | 'lucky' | 'chat' | 'timeline';
 export type TechniqueStatus = 'built' | 'partial' | 'planned';
@@ -2487,6 +2488,21 @@ export function techniqueRow(t: TechniqueDef) {
 }
 
 let seedWarned = false;
+/** sha1 of the catalogue this process last found in the table: the same again is not re-read */
+let seededHash: string | null = null;
+let seedJob: Promise<number> | null = null;
+
+/** The ids whose seeded columns are new or differ from the catalogue (a read; no lock). `enabled` and
+ * `verification_status` are the admin's and are never compared or written. */
+export const TECHNIQUE_DIFF_SQL = `SELECT x.id
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, title text, category text, board text, status text, charts jsonb, algorithm jsonb,
+         special text, source text, code_ref text, agents jsonb, accuracy text, selectors jsonb, contract jsonb)
+    LEFT JOIN technique_registry t ON t.id = x.id
+   WHERE t.id IS NULL
+      OR (t.title, t.category, t.board, t.status, t.charts, t.algorithm, t.special, t.source, t.code_ref, t.agents, t.accuracy, t.selectors, t.contract)
+         IS DISTINCT FROM
+         (x.title, x.category, x.board, x.status, coalesce(x.charts, '[]'), coalesce(x.algorithm, '[]'), x.special, x.source, x.code_ref,
+          coalesce(x.agents, '[]'), x.accuracy, coalesce(x.selectors, '{}'), coalesce(x.contract, '{}'))`;
 
 /** One statement for the whole catalogue (one round trip), so it finishes inside a Lambda cold start. */
 export const TECHNIQUE_SEED_SQL = `INSERT INTO technique_registry (id, title, category, board, status, charts, algorithm, special, source, code_ref, agents, accuracy, selectors, contract, updated_at)
@@ -2500,15 +2516,23 @@ export const TECHNIQUE_SEED_SQL = `INSERT INTO technique_registry (id, title, ca
     contract = EXCLUDED.contract, updated_at = now()`;
 
 /**
- * Upserts every technique into `technique_registry`. Idempotent; awaited at boot (server.ts, before listen). With a real
- * client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert per row. Logs once and
- * never throws.
+ * Upserts every technique into `technique_registry`. Idempotent; run in the background once per process after the first
+ * response (`seedTechniqueRegistryInBackground`, server.ts). With a real client it first reads which rows differ
+ * (TECHNIQUE_DIFF_SQL) and writes only those, in one statement under a short lock_timeout; nothing differs, nothing is
+ * written. A client without raw SQL (the test fakes) falls back to one upsert per row. Logs once and never throws.
  */
 export async function seedTechniqueRegistry(prisma: Pick<PrismaClient, 'techniqueRegistry'>): Promise<number> {
   const raw = (prisma as unknown as { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => Promise<number> }).$executeRawUnsafe;
   if (typeof raw === 'function') {
     try {
-      await raw.call(prisma, TECHNIQUE_SEED_SQL, JSON.stringify(TECHNIQUES.map(techniqueRow)));
+      const rows = TECHNIQUES.map(techniqueRow);
+      const payload = JSON.stringify(rows);
+      const hash = seedHash(payload);
+      if (seededHash === hash) return TECHNIQUES.length;
+      const client = prisma as unknown as RawSeedClient;
+      const changed = await changedSeedRows(client, TECHNIQUE_DIFF_SQL, payload);
+      if (changed === null || changed.size > 0) await writeSeed(client, TECHNIQUE_SEED_SQL, changed === null ? payload : JSON.stringify(rows.filter((r) => changed.has(r.id))));
+      seededHash = hash;
       return TECHNIQUES.length;
     } catch (e) {
       if (!seedWarned) console.warn(`[techniques] registry seed failed: ${(e as Error).message}`);
@@ -2531,7 +2555,21 @@ export async function seedTechniqueRegistry(prisma: Pick<PrismaClient, 'techniqu
   return n;
 }
 
+/**
+ * The catalogue seed off the request path: once per process, after a short delay, with retries
+ * (src/lib/registrySeed.ts). Every caller gets the same job; it never rejects.
+ */
+export function seedTechniqueRegistryInBackground(prisma: Pick<PrismaClient, 'techniqueRegistry'>, opts: BackgroundSeedOptions = {}): Promise<number> {
+  seedJob ??= runSeedInBackground('techniques', () => seedTechniqueRegistry(prisma), opts).then((n) => {
+    if (!n) releaseAfter(SEED_RETRY_AFTER_MS, () => (seedJob = null));
+    return n;
+  });
+  return seedJob;
+}
+
 /** tests */
 export function resetTechniqueSeedState(): void {
   seedWarned = false;
+  seededHash = null;
+  seedJob = null;
 }

@@ -52,8 +52,9 @@ import { pageTimingMiddleware, registerPageTimingRoutes } from './src/telemetry/
 import { assertOwnAccount } from './src/graphql/rbac.js';
 import { factsFromExpress, recordAccountEvent } from './src/audit/accountEvents.js';
 import { engineAtPlace, functionalNatureOf, natalForUser, runningDashaLordsOf } from './src/reading/luckyTimes/wiring.js';
-import { seedAgentRegistry } from './src/agents/registry.js';
-import { seedTechniqueRegistry } from './src/techniques/catalog.js';
+import { seedAgentRegistryInBackground } from './src/agents/registry.js';
+import { seedTechniqueRegistryInBackground } from './src/techniques/catalog.js';
+import { releaseAfter } from './src/lib/registrySeed.js';
 import { PrismaAssistantStore } from './src/assistant/store.js';
 import { parseClientPlace } from './src/reading/chartData/place.js';
 import { intentForFocus } from './src/reading/clarify/service.js';
@@ -95,6 +96,18 @@ app.use(
   })
 );
 app.use(requestIdMiddleware);
+// registry seeds start once, after the first response has been sent (a cold-start request never waits on them)
+let registrySeedsStarted = false;
+app.use((_req, res, next) => {
+  if (!registrySeedsStarted) {
+    res.once('finish', () => {
+      if (registrySeedsStarted) return;
+      registrySeedsStarted = true;
+      seedRegistriesInBackground();
+    });
+  }
+  next();
+});
 
 // Behind Render (and most PaaS), the proxy sets X-Forwarded-For. express-rate-limit requires
 // trust proxy to be enabled or it throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
@@ -454,28 +467,27 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   });
 });
 
-/** Decoupled background execution for agent and technique registry seeding. */
+/** boot fallback: the registry seeds start this long after boot when no request has come (ms) */
+const REGISTRY_SEED_FALLBACK_MS = 15_000;
+
+/**
+ * The agent registry and technique catalogue seeds, off the request path (src/lib/registrySeed.ts): started once per
+ * container after the first response is sent (or REGISTRY_SEED_FALLBACK_MS after boot when no request comes), each after
+ * a short delay, with retries; each skips the write when the table already matches. Never throws; logs once each.
+ */
 function seedRegistriesInBackground(): void {
-  void Promise.allSettled([seedAgentRegistry(prisma), seedTechniqueRegistry(prisma)])
-    .then((results) => {
-      for (const res of results) {
-        if (res.status === 'rejected') {
-          console.warn('[boot] registry seed failed:', res.reason);
-        }
-      }
-    })
-    .catch((err: unknown) => {
-      console.warn('[boot] unexpected error during background registry seeding:', err);
-    });
+  // seedAgentRegistry(prisma) and seedTechniqueRegistry(prisma) run inside these jobs
+  void seedAgentRegistryInBackground(prisma);
+  void seedTechniqueRegistryInBackground(prisma);
 }
 
 async function start(): Promise<void> {
   await checkDatabaseConnection();
   const nodeEnv = getNodeEnv();
   console.log(`✅ Database connected | NODE_ENV=${nodeEnv}`);
-  // The agent registry and technique catalogue: decoupled from the request boot path so the server
-  // listens immediately without the blocking 4,000ms barrier. Seeds execute non-blocking in the background.
-  seedRegistriesInBackground();
+  // The agent registry and technique catalogue: never on the request path. They start after the first response
+  // (the middleware above), or after REGISTRY_SEED_FALLBACK_MS when no request arrives.
+  releaseAfter(REGISTRY_SEED_FALLBACK_MS, seedRegistriesInBackground);
   app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 Server running at http://localhost:${PORT} (env: ${nodeEnv})`);
     await ensureAdmins();

@@ -8,6 +8,8 @@
  *   PUT  /api/self/v3/layout     { version, patch } (doc 75) or { template, cards, sections?, options?, boardOptions?,
  *                                  version? } → 200 SelfBoardLayoutView & { reading?: { queued } } | 400 { error, detail? }
  *                                  | 404 | 409 { error: 'stale_layout', layout } | 503 { error: 'timeout' }
+ *   PATCH /api/self/v3/layout/cards/:id { version?, options } | /board { version?, boardOptions }
+ *                                  | /deck { version?, template, cards, sections } → the PUT's answers (doc 75)
  *   POST /api/self/v3/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
  *   POST /api/self/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404 no_kundli
  *                                       | 409 already_reading | 503 off (doc 70 §4.2)
@@ -20,7 +22,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { getSelfV3RouteBudgetMs, isSelfV3Enabled } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
-import { getSelfV3, getSelfV3Catalogue, putSelfLayout, readSelfV3Card, writeConfirmV3, type CardsQueueDeps, type SelfV3Deps } from '../reading/self/v3/service.js';
+import { getSelfV3, getSelfV3Catalogue, patchSelfLayout, putSelfLayout, readSelfV3Card, writeConfirmV3, type CardsQueueDeps, type LayoutPatchKind, type SelfV3Deps } from '../reading/self/v3/service.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
 
 export interface SelfV3RouteDeps {
@@ -143,6 +145,25 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
       return res.status(500).json({ error: 'self_layout_failed' });
     }
   });
+
+  // doc 75: the web's one-change PATCHes (card options, board options, the deck); same answers as the PUT
+  const patchRoute = (kind: LayoutPatchKind) => async (req: express.Request, res: express.Response) => {
+    const userId = await user(req, res);
+    if (!userId) return;
+    try {
+      const r = await withinBudget(patchSelfLayout(deps.prisma, userId, kind, req.body, kind === 'card' ? String(req.params.id ?? '') : undefined, deps.cards ?? {}), budgetMs());
+      if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
+      if (!r.ok) return res.status(r.status).json({ error: r.error, ...(r.detail ? { detail: r.detail } : {}) });
+      return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
+    } catch (e) {
+      if (e instanceof BudgetExceeded) return timedOut(res, '[self:v3:layout:patch]');
+      console.error('[self:v3:layout:patch]', (e as Error).message);
+      return res.status(500).json({ error: 'self_layout_failed' });
+    }
+  };
+  app.patch('/api/self/v3/layout/cards/:id', patchRoute('card'));
+  app.patch('/api/self/v3/layout/board', patchRoute('board'));
+  app.patch('/api/self/v3/layout/deck', patchRoute('deck'));
 
   app.post('/api/self/v3/confirm', async (req, res) => {
     const userId = await user(req, res);

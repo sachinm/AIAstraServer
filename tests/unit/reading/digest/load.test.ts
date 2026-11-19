@@ -70,4 +70,28 @@ describe('loadDigest', () => {
     await loadDigest(f.prisma as never, 'k1', t + 6 * 60_000 + 1);
     expect(f.calls.digestFindMany).toBe(3);
   });
+
+  it('does not read the source column unless asked; the two views are memoised apart and give the same rows', async () => {
+    const f = fakeDigestPrisma({ kundlis: [{ id: 'k1', digest_status: 'ready', digest_version: DIGEST_VERSION, digest_built_at: builtAt }] });
+    f.digest.push(...stored);
+    const selects: unknown[] = [];
+    const real = f.prisma.kundliDigest.findMany;
+    f.prisma.kundliDigest.findMany = (async (q: { where: Record<string, unknown>; select?: unknown }) => (selects.push(q.select), real(q))) as typeof real;
+    const t = Date.parse('2026-11-06T01:00:00Z');
+    const plain = await loadDigest(f.prisma as never, 'k1', t);
+    expect(selects[0]).toEqual({ section: true, key: true, row: true });
+    expect(plain?.sourceOf('house', 'D1.h1')).toEqual([]);
+    // a caller that asks for sources is never served the view without them
+    const full = await loadDigest(f.prisma as never, 'k1', t + 1, { withSource: true });
+    expect(selects[1]).toEqual({ section: true, key: true, row: true, source: true });
+    expect(full?.sourceOf('house', 'D1.h1')[0]).toMatchObject({ type: 'dignities', path: 'houses[0]' });
+    // the rows a reader uses are the same either way (every section, every annual year)
+    expect(plain?.annual()).toEqual(full?.annual());
+    expect(plain?.houses('D9')).toEqual(full?.houses('D9'));
+    expect(plain?.yogas()).toEqual(full?.yogas());
+    // both stay memoised for this build
+    await loadDigest(f.prisma as never, 'k1', t + 2);
+    await loadDigest(f.prisma as never, 'k1', t + 3, { withSource: true });
+    expect(selects).toHaveLength(2);
+  });
 });

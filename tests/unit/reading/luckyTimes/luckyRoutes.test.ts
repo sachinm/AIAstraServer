@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { registerLuckyRoutes } from '../../../../src/routes/luckyRoutes.js';
 import { clampRange } from '../../../../src/reading/luckyTimes/service.js';
-import { resetAgentRegistryState } from '../../../../src/agents/registry.js';
+import { resetAgentRegistryState, seedAgentRegistryInBackground } from '../../../../src/agents/registry.js';
 import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 import { fakeLuckyPrisma } from '../../../helpers/fakeLuckyPrisma.js';
 
@@ -112,6 +112,8 @@ describe('lucky routes', () => {
       expect(run.ms).toBeGreaterThanOrEqual(0);
       expect(run.status).toBe('ok');
     }
+    // the first run started the registry seed in the background (never on the request path): wait for that same job
+    await seedAgentRegistryInBackground(db.prisma);
     expect([...db.registry.keys()]).toEqual(expect.arrayContaining(['reading.oracle', 'lucky.day_tables', 'lucky.day_overlay', 'lucky.scenario_windows']));
     expect(db.registry.get('reading.oracle')!.kind).toBe('llm');
     // M29 tags (docs/admin/03): the bands run, one run per shown scenario, the day tables pull; muhurta charts by month

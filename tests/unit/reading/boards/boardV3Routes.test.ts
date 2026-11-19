@@ -7,6 +7,8 @@
 import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { boardV3Cards } from '../../../../src/reading/boards/v3Cards.js';
+import { answersLine, buildProfilePack } from '../../../../src/reading/person/profile.js';
 import { NOTHING_STORED, type SelfV2Latest } from '../../../../src/reading/self/v2api/storeContract.js';
 import { registerBoardCardsRoutes } from '../../../../src/routes/boardCardsRoutes.js';
 import { registerBoardV3Routes } from '../../../../src/routes/boardV3Routes.js';
@@ -263,5 +265,22 @@ describe('POST read and confirm', () => {
   it('confirm writes the same fact as You; a bad claim is 400', async () => {
     expect((await call('POST', '/api/board/love/v3/confirm', 'u1', { claimId: 'dating_pulse.quiet_stretch', answer: 'yes' })).status).toBe(204);
     expect((await call('POST', '/api/board/love/v3/confirm', 'u1', { claimId: 'BAD ID', answer: 'yes' })).status).toBe(400);
+  });
+  it('a Love/Work tap is stored as `self.confirm.<claimId>` (even the longest claim) and reaches the next build as PERSON\'S ANSWERS', async () => {
+    const written: Array<{ user_id: string; key: string; value: string }> = [];
+    f.prisma.personFact.upsert = async ({ create }: any) => (written.push(create), create);
+    // the longest Love/Work card id (28) and the Oracle's longest tag (40): 69 characters, refused before (cap 60)
+    const longest = [...boardV3Cards('love'), ...boardV3Cards('work')].map((d) => d.id).sort((a, b) => b.length - a.length)[0]!;
+    const claimId = `${longest}.${'t'.repeat(40)}`;
+    expect(claimId.length).toBeGreaterThan(60);
+    expect((await call('POST', '/api/board/love/v3/confirm', 'u1', { claimId, answer: 'partly' })).status).toBe(204);
+    expect((await call('POST', '/api/board/work/v3/confirm', 'u1', { claimId: 'job_pulse.review_due', answer: 'no' })).status).toBe(204);
+    expect(written.map((w) => [w.user_id, w.key, w.value])).toEqual([
+      ['u1', `self.confirm.${claimId}`, 'partly'],
+      ['u1', 'self.confirm.job_pulse.review_due', 'no'],
+    ]);
+    // the same store You reads: the profile pack the build loads turns the rows into the PERSON'S ANSWERS line
+    const pack = buildProfilePack({ birthDate: '1990-03-01', gender: null, role: null, facts: Object.fromEntries(written.map((w, i) => [w.key, { value: w.value, confirmed_at: `2026-11-1${i}T00:00:00Z` }])) }, '2026-11-19');
+    expect(answersLine(pack)).toBe(`job_pulse.review_due=no; ${claimId}=partly`);
   });
 });

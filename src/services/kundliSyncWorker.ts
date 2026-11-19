@@ -321,7 +321,9 @@ export function sweepWantList(plan: Pick<RegistrationPlan, 'requested'>): { ids:
 /**
  * Kundlis (each user's latest, active users only) with at least one registration-set row missing or stale, not leased,
  * oldest first; kundlis whose last run ended in an error go after the rest so a bad one cannot starve the batch. The
- * "settled" test mirrors ensureChartData's needsFetch, except that failed rows wait SWEEP_FAILED_RETRY_MS.
+ * "settled" test mirrors ensureChartData's needsFetch, except that failed rows wait SWEEP_FAILED_RETRY_MS; a failed row
+ * given up on (valid_to set by markFailure, same calc version) is settled. (The digest-version half of the give-up rule is
+ * in the sealed `error` and is checked by needsFetch only.)
  */
 export async function findIncompleteKundlis(prisma: PrismaClient, plan: Pick<RegistrationPlan, 'requested'>, batch: number, leaseMs: number, ayanamsa = 'LAHIRI'): Promise<string[]> {
   const { ids, variants, versions } = sweepWantList(plan);
@@ -340,6 +342,8 @@ export async function findIncompleteKundlis(prisma: PrismaClient, plan: Pick<Reg
         WHERE (d."status" = 'ready' AND (w."calc_version" IS NULL OR d."calc_version" = w."calc_version") AND (d."valid_to" IS NULL OR d."valid_to" > now()))
            OR (d."status" = 'fetching' AND d."fetch_started_at" > now() - interval '90 seconds')
            OR (d."status" = 'failed' AND d."fetched_at" > now() - make_interval(secs => ${failedSecs}))
+           -- given up after repeated identical failures (store.ts failedGivenUp) until the type's calc version changes
+           OR (d."status" = 'failed' AND d."valid_to" > now() AND (w."calc_version" IS NULL OR d."calc_version" = w."calc_version"))
            OR (d."status" = 'unsupported' AND d."fetched_at" > now() - interval '24 hours')
       ) < ${ids.length}
     ORDER BY (k."last_sync_error" IS NOT NULL), k."created_at" ASC

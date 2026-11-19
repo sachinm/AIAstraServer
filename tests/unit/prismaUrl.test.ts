@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { prismaPoolUrl } from '../../src/lib/prismaUrl.js';
+import { LAMBDA_DEFAULT_POOL, prismaPoolUrl } from '../../src/lib/prismaUrl.js';
 
 const direct = 'postgresql://u:p@db.example.com:5432/app';
 const pooler = 'postgresql://u:p@db.example.com:6432/app';
@@ -26,6 +26,30 @@ describe('prismaPoolUrl', () => {
     expect(prismaPoolUrl(pooler, {})).toContain('pgbouncer=true');
     expect(prismaPoolUrl(direct, {})).not.toContain('pgbouncer');
     expect(prismaPoolUrl(`${pooler}?pgbouncer=false`, {})).not.toContain('pgbouncer=true');
+  });
+
+  it('on Lambda the pool is LAMBDA_DEFAULT_POOL (3) even when the URL says 1, on the pooler or direct', () => {
+    const lambda = { AWS_LAMBDA_FUNCTION_NAME: 'aiastra-server-api' };
+    expect(LAMBDA_DEFAULT_POOL).toBe(3);
+    const pooled = prismaPoolUrl(`${pooler}?sslmode=require&pgbouncer=true&connection_limit=1`, lambda);
+    expect(pooled).toContain('connection_limit=3');
+    expect(pooled).not.toContain('connection_limit=1');
+    expect(pooled).toContain('pgbouncer=true');
+    expect(prismaPoolUrl(pooler, lambda)).toContain('connection_limit=3');
+    expect(prismaPoolUrl(`${direct}?connection_limit=1`, { LAMBDA_TASK_ROOT: '/var/task' })).toContain('connection_limit=3');
+  });
+
+  it('an env limit overrides everything (Lambda or not, pooler or direct)', () => {
+    const lambda = { AWS_LAMBDA_FUNCTION_NAME: 'aiastra-server-api' };
+    expect(prismaPoolUrl(`${pooler}?connection_limit=1`, { ...lambda, PRISMA_POOLER_CONNECTION_LIMIT: '5' })).toContain('connection_limit=5');
+    expect(prismaPoolUrl(`${pooler}?connection_limit=1`, { ...lambda, PRISMA_CONNECTION_LIMIT: '4' })).toContain('connection_limit=4');
+    expect(prismaPoolUrl(`${direct}?connection_limit=12`, { PRISMA_CONNECTION_LIMIT: '2' })).toContain('connection_limit=2');
+    // an unreadable value is ignored
+    expect(prismaPoolUrl(pooler, { ...lambda, PRISMA_POOLER_CONNECTION_LIMIT: 'lots' })).toContain('connection_limit=3');
+  });
+
+  it('off Lambda the pooler URL keeps its own limit', () => {
+    expect(prismaPoolUrl(`${pooler}?connection_limit=1`, {})).toContain('connection_limit=1');
   });
 
   it('does not take a port-like value in a parameter for the pooler port', () => {

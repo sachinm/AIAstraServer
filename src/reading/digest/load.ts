@@ -1,7 +1,11 @@
 /**
  * Reading the digest (docs/reading-engine/53 §4.2, the DigestView of 54 §2). `loadDigest` returns null unless the
- * kundli's digest is ready; the rows are held in process for five minutes per (kundli, built_at), so a new build is
- * seen at once and a burst of readers costs one query.
+ * kundli's digest is ready; the rows are held in process for five minutes per (kundli, built_at, with or without
+ * sources), so a new build is seen at once and a burst of readers costs one query.
+ *
+ * The `source` column (the engine type, variant, calc version and JSON path of every value) is not read unless asked
+ * (`withSource`): no reader of the view calls `sourceOf` today, and it was 57% of the bytes (2026-11-19, kundli
+ * c584c0a3: 14.8 MB of row and source text per load, 8.5 MB of it source, 8.2 MB of that the annual section's).
  */
 import type { PrismaClient } from '@prisma/client';
 import { digestStatusOf } from './status.js';
@@ -12,6 +16,11 @@ export type { DigestView } from './types.js';
 
 const MEMO_MS = 5 * 60_000;
 const memo = new Map<string, { at: number; view: DigestView }>();
+
+export interface LoadDigestOptions {
+  /** read the `source` column too, so `sourceOf` answers (default false: `sourceOf` gives []) */
+  withSource?: boolean;
+}
 
 export function clearDigestMemo(): void {
   memo.clear();
@@ -77,17 +86,22 @@ function backfillLegacyCharaPlanets(rows: StoredDigestRow[]): StoredDigestRow[] 
 }
 
 /** The ready digest of a kundli, or null (not built, building, stale, failed, or another rule set). */
-export async function loadDigest(prisma: PrismaClient, kundliId: string, now: number = Date.now()): Promise<DigestView | null> {
+export async function loadDigest(prisma: PrismaClient, kundliId: string, now: number = Date.now(), opts: LoadDigestOptions = {}): Promise<DigestView | null> {
   const k = await prisma.kundli.findUnique({ where: { id: kundliId }, select: { digest_status: true, digest_version: true, digest_built_at: true } });
   if (!k || k.digest_status !== 'ready' || k.digest_version !== DIGEST_VERSION || !k.digest_built_at) return null;
   const builtAt = k.digest_built_at.toISOString();
-  const memoKey = `${kundliId}|${builtAt}`;
+  const withSource = opts.withSource === true;
+  // a view without sources is never served to a caller that asked for them (the variant is in the key)
+  const memoKey = `${kundliId}|${builtAt}|${withSource ? 'src' : 'rows'}`;
   const hit = memo.get(memoKey);
   if (hit && now - hit.at < MEMO_MS) return hit.view;
-  const rawRows = await prisma.kundliDigest.findMany({ where: { kundli_id: kundliId }, select: { section: true, key: true, row: true, source: true } });
+  const rawRows: StoredDigestRow[] = withSource
+    ? await prisma.kundliDigest.findMany({ where: { kundli_id: kundliId }, select: { section: true, key: true, row: true, source: true } })
+    : (await prisma.kundliDigest.findMany({ where: { kundli_id: kundliId }, select: { section: true, key: true, row: true } })).map((r) => ({ ...r, source: null }));
   const rows = backfillLegacyCharaPlanets(rawRows);
   const view = digestView(kundliId, rows, { status: 'ready', version: k.digest_version, builtAt });
-  for (const key of memo.keys()) if (key.startsWith(`${kundliId}|`) || now - memo.get(key)!.at >= MEMO_MS) memo.delete(key);
+  // an older build of this kundli, or anything past its five minutes, goes; the other variant of this build stays
+  for (const key of memo.keys()) if ((key.startsWith(`${kundliId}|`) && !key.startsWith(`${kundliId}|${builtAt}|`)) || now - memo.get(key)!.at >= MEMO_MS) memo.delete(key);
   memo.set(memoKey, { at: now, view });
   return view;
 }
