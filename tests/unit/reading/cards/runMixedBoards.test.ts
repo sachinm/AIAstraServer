@@ -179,6 +179,49 @@ describe('one pack across boards (S4)', () => {
   });
 });
 
+describe('a paid lens refresh forces its cards (docs/billing/03 per-lens refresh)', () => {
+  /** memPrisma plus an in-memory technique_outputs keyed by cache_key */
+  function storePrisma() {
+    const base = memPrisma() as unknown as { areaBuild: unknown };
+    const rows = new Map<string, any>(); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const techniqueOutput = {
+      findUnique: async ({ where }: { where: { cache_key: string } }) => rows.get(where.cache_key) ?? null,
+      upsert: async ({ where, create, update }: { where: { cache_key: string }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        rows.set(where.cache_key, rows.has(where.cache_key) ? { ...rows.get(where.cache_key), ...update } : { ...create });
+      },
+    };
+    return new Proxy({}, { get: (_t, p) => (p === 'areaBuild' ? base.areaBuild : p === 'techniqueOutput' ? techniqueOutput : undefined) }) as never;
+  }
+
+  it('a queued card with an unchanged key is served from the store; with a force mark it is read again', async () => {
+    const prisma = storePrisma();
+    const now = new Date(`${ASOF}T12:00:00Z`);
+    const calls: GeminiCallOptions[] = [];
+    const run = () =>
+      readCards(
+        { prisma, callGemini: (async (o: GeminiCallOptions) => (calls.push(o), groupReply(o))) as never, now, capUsd: 5, readRest: false, groupPack: true, groupSizeBoard: 1, ensureCache: (async () => null) as never },
+        input([]),
+      );
+    const queue = (force: boolean) =>
+      updateCardsState(prisma, 'u1', 'k1', now, (d) => {
+        d.cards.dating_pulse = { state: 'queued', at: now.toISOString() };
+        if (force) d.force = { dating_pulse: now.toISOString() };
+      });
+    await queue(false);
+    expect((await run()).results.find((x) => x.card === 'dating_pulse')?.status).toBe('ok');
+    const first = calls.length;
+    expect(first).toBeGreaterThan(0);
+    // queued again (an open, a layout save): the same key is served, no call
+    await queue(false);
+    expect((await run()).results.find((x) => x.card === 'dating_pulse')?.status).toBe('cached');
+    expect(calls.length).toBe(first);
+    // a paid lens refresh: read again
+    await queue(true);
+    expect((await run()).results.find((x) => x.card === 'dating_pulse')?.status).toBe('ok');
+    expect(calls.length).toBeGreaterThan(first);
+  });
+});
+
 describe('the store id filter (S3)', () => {
   it('reads only the named cards, four rows each, newest wins', async () => {
     let seen: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any

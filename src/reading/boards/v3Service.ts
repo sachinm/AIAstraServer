@@ -3,8 +3,8 @@
  * doc, ledger, prefix and pack as You: only the card list differs. Nothing here calls a model and nothing here is
  * astrological: the routing reads the person's stated facts and age, everything else is stored rows.
  *
- *   GET   board body (`BoardV3Response`); the first GET of the day with a chosen deck queues the active lens deck once
- *         ("build on open"); a card whose store key is unchanged is served from the store at no cost
+ *   GET   board body (`BoardV3Response`), offline first: each card shows its newest stored reading; the first GET of the
+ *         day queues only the active lens's deck cards never read (a lens's first reading is free, made on open)
  *   PUT   versioned layout (`{version, patch}`), then the active lens's unread deck cards are queued and the build too
  *   POST  one card read (queue or Try again); confirm (the same `self.confirm.<claimId>` fact as You)
  */
@@ -189,18 +189,26 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
   const dflt = defaultLens(board, facts, age);
   const read = readings as Partial<Record<string, SelfV3CardContent>>;
 
-  // build on open (doc 10 §4.1 step 2): once per board per day, the active lens deck is queued with the one build
+  // build on open, offline first (doc 10 §4.1 step 2; docs/billing/03): opening never re-reads a card that has a stored
+  // reading (the newest one on the clock is served, whatever day it was made). Once per board per day, the active lens's
+  // deck cards that were never read are queued: a lens's first reading, and a card newly added, are made free on open.
+  // A fresh reading of a lens already read is the paid refresh (POST /api/boards/:board/refresh).
   let doc: CardsStateDoc = doc0;
   let queued: BoardV3CardId[] = [];
   const deck = lensDeck(board, layout.cards, lens);
   if (!deps.readOnly && !doc0.opened?.[board] && deck.length >= getCardsReadMinArea()) {
-    queued = deck.filter((id) => !['queued', 'reading'].includes(cardStateOf(doc0, id, false, now)));
-    doc = await updateCardsState(deps.prisma, userId, kundliId, now, (d) => {
-      d.opened = { ...(d.opened ?? {}), [board]: true };
-      for (const id of queued) d.cards[id] = { state: 'queued', at: now.toISOString() };
-      if (queued.length && d.stage === 'done') d.stage = 'cards';
-    });
-    if (queued.length) void (deps.queueCardsBuild ?? defaultQueue)(deps.prisma, userId, kundliId).catch((e) => console.warn('[board:v3] build queue failed:', (e as Error).message));
+    // the deck's own rows (the board-wide read above is capped and could leave a read card out of its window)
+    const own = (await (deps.readCardReadings ?? readCardReadings)(deps.prisma, kundliId, v2.body.clock.system, deck).catch(() => null)) as Partial<Record<string, SelfV3CardContent>> | null;
+    const has = (id: string) => Boolean(read[id] ?? own?.[id]);
+    if (own) {
+      queued = deck.filter((id) => !has(id) && !['queued', 'reading'].includes(cardStateOf(doc0, id, false, now)));
+      doc = await updateCardsState(deps.prisma, userId, kundliId, now, (d) => {
+        d.opened = { ...(d.opened ?? {}), [board]: true };
+        for (const id of queued) d.cards[id] = { state: 'queued', at: now.toISOString() };
+        if (queued.length && d.stage === 'done') d.stage = 'cards';
+      });
+      if (queued.length) void (deps.queueCardsBuild ?? defaultQueue)(deps.prisma, userId, kundliId).catch((e) => console.warn('[board:v3] build queue failed:', (e as Error).message));
+    }
   }
 
   const states: Partial<Record<string, CardReadState>> = {};
@@ -233,8 +241,9 @@ function baseOf(board: AreaV3Board, v2: SelfV2Response): Omit<BoardV3Response, '
     builtAt: v2.builtAt,
     clock: v2.clock,
     profile: v2.profile,
-    // doc 10 §4.3: the board renews itself once a day on open; the paid refresh comes in Phase B
-    refresh: { ...v2.refresh, due: false },
+    // docs/billing/03 per-lens refresh: the same dates and `due` rule as You (the board shows the You reading's dates);
+    // once due, POST /api/boards/:board/refresh re-reads the active lens for one question
+    refresh: { ...v2.refresh },
     build: v2.build,
     quality: v2.quality ?? null,
     features: {} as Record<string, FeatureGrant>,

@@ -231,3 +231,10 @@ reads of a 61,866-token pack at $0.075 per 1M, $0.039 output at $3.75 per 1M), p
 does not price (at worst the input rate, $0.046), plus storage at $0.50 per 1M tokens per hour for the 28 s the pack
 lived ($0.0002; the cache is deleted when the build ends). The same cards one call each on the morning's live build:
 **$0.172**. Either is well under the $0.45 operation cap. From 2027-01-01 every price doubles.
+
+## 11. Love and Work: one question per lens refresh (Sachin, 2026-11-19)
+
+On the Love and Work boards (v3) each refresh of a lens (sub-dashboard) takes one question under
+`board:<board>:<lens>:refresh:<day>`; the first-ever reading of each lens is free and is made on open; opening, adding a
+card and Try again are free; a card's chat takes one question per question, as on You. The You board is unchanged.
+Rules and the refresh's life: docs/billing/03 §10.
