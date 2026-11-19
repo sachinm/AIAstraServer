@@ -66,6 +66,14 @@ describe('patchSelfLayout', () => {
     expect(r.ok).toBe(true);
     expect(r.ok && r.layout).toMatchObject({ template: 'compact', cards: ['body', 'mind', 'lagna'], options: { body: { length: 'deep' } } });
   });
+  it("deck: a card's sections the page dropped are reset (replace, not merge); a card's sections it sent are kept", async () => {
+    const f = fakePrisma({ ...START, options: {}, sections: { body: ['line', 'year', 'ladder'], mind: ['line', 'year', 'pattern'] } });
+    const r = await patchSelfLayout(f.prisma, 'u1', 'deck', { version: V0, template: 'seasons', cards: ['body', 'mind', 'stuck'], sections: { mind: ['line', 'year', 'pattern'] } }, undefined, deps);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.layout.sections.body).toBeUndefined();
+    expect(r.ok && r.layout.sections.mind).toEqual(expect.arrayContaining(['pattern']));
+    expect(f.row()!.sections).toEqual({ mind: expect.arrayContaining(['pattern']) });
+  });
   it('a stale version is 409 with the layout now stored; a card not on the board or a bad body is 400', async () => {
     const f = fakePrisma({ ...START });
     expect(await patchSelfLayout(f.prisma, 'u1', 'board', { version: '2026-11-01T00:00:00.000Z', boardOptions: {} }, undefined, deps)).toMatchObject({ ok: false, status: 409, error: 'stale_layout' });

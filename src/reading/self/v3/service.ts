@@ -206,13 +206,15 @@ export async function patchSelfLayout(prisma: PrismaClient, userId: string, kind
   const version = body.version;
   if (version !== undefined && typeof version !== 'string') return { ok: false, status: 400, error: 'bad_body' };
   let patch: Record<string, unknown>;
+  if (kind === 'deck' && (body.template === undefined || !Array.isArray(body.cards) || (body.sections !== undefined && !isPlainObject(body.sections)))) return { ok: false, status: 400, error: 'bad_body' };
+  const kundliId = await latestKundliId(prisma, userId);
+  if (!kundliId) return { ok: false, status: 404, error: 'no_kundli' };
+  const current = await readLayout(prisma, kundliId);
   if (kind === 'deck') {
-    if (body.template === undefined || !Array.isArray(body.cards) || (body.sections !== undefined && !isPlainObject(body.sections))) return { ok: false, status: 400, error: 'bad_body' };
-    patch = { template: body.template, cards: body.cards, ...(body.sections !== undefined ? { sections: body.sections } : {}) };
+    // the deck's sections replace the stored map: a card whose sections the page dropped goes back to its defaults
+    const sections = isPlainObject(body.sections) ? replacingPatch(current.sections, body.sections) : undefined;
+    patch = { template: body.template, cards: body.cards, ...(sections ? { sections } : {}) };
   } else {
-    const kundliId = await latestKundliId(prisma, userId);
-    if (!kundliId) return { ok: false, status: 404, error: 'no_kundli' };
-    const current = await readLayout(prisma, kundliId);
     if (kind === 'card') {
       const id = String(cardId ?? '');
       if (!cardDef(id)) return { ok: false, status: 400, error: 'unknown_card' };
