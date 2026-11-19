@@ -251,7 +251,7 @@ try {
   }
   if (run) {
     const rr = run as CardsRunResult;
-    summary.cards = rr.results.map((x) => ({ card: x.card, status: x.status, costUsd: x.costUsd, issues: x.issues.length }));
+    summary.cards = rr.results.map((x) => ({ card: x.card, status: x.status, costUsd: x.costUsd, issues: x.issues.map((v) => ({ stage: v.stage, check: v.check, message: v.message.slice(0, 240) })) }));
     summary.cardsRun = { spentUsd: rr.spentUsd, capReached: rr.capReached, read: Object.keys(rr.cards).length, wanted: rr.results.length };
   }
   // the caches this run made: are they gone, at Gemini and in the registry?

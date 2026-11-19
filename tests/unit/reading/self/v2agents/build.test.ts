@@ -176,4 +176,37 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     expect(db.outputs.size).toBe(0);
     expect((await readSelfV2Latest(db.prisma, 'k-v2')).status).toBe('pending');
   });
+
+  it('doc 86: the build holds a recording cache lease; every prefix it used is deleted once, when it ends', async () => {
+    const { setLeaseDeleter, isCacheLeased } = await import('../../../../../src/reading/llm/cacheLease.js');
+    const { cacheNameFor, clearPromptCache, setCacheRegistry, prefixKey } = await import('../../../../../src/reading/llm/promptCache.js');
+    clearPromptCache();
+    setCacheRegistry(null);
+    const deleted: string[][] = [];
+    setLeaseDeleter(async (keys) => (deleted.push(keys), { deleted: keys.length, failed: 0 }));
+    const log: string[] = [];
+    const used: string[] = [];
+    let leasedDuring = false;
+    // the warm-up goes through the real cache lookup (which records the key under the lease), then answers as the mock
+    const ensureCache = vi.fn(async (m: string, s: string | undefined, prefix: string) => {
+      cacheNameFor(m, s, prefix, 'k', { userId: 'u-v2', kundliId: 'k-v2' });
+      used.push(prefixKey(m, s, prefix));
+      leasedDuring = isCacheLeased('k-v2');
+      log.push(`warm:${prefix.slice(0, 24)}`);
+      return 'cachedContents/mock';
+    });
+    const { deps: d } = deps(log, { ensureCache });
+    try {
+      const r = await runSelfV2Build(d, { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() });
+      expect(r.status).toBe('ok');
+      expect(leasedDuring).toBe(true);
+      expect(isCacheLeased('k-v2')).toBe(false);
+      expect(deleted).toHaveLength(1);
+      expect([...deleted[0]!].sort()).toEqual([...new Set(used)].sort());
+    } finally {
+      setLeaseDeleter(null);
+      setCacheRegistry(undefined);
+      clearPromptCache();
+    }
+  });
 });

@@ -2596,9 +2596,11 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   fixed catalogue only. Doc 71 §4.5 and §4.6. Owner: this branch, doc 71 Phases 3 and 4.
 - **Decisions for Sachin (doc 71 §10):** clocks read before the click; Oracle and Personalizer in one call per group;
   the ten memory areas; question limits of one per visit and three a week.
-- **P1 · fixed on `feat/grouped-cards` (doc 86) · Four card groups took 36 to 45 s (doc 71 §12).** Groups are now
+- **P1 · open (model part fixed on `feat/grouped-cards`, doc 86) · A board's cards in under 20 s.** Groups are now
   planned by estimated output (2,000 tokens a call, 1,000 a card, at most 3): the 11-card board went out as six calls at
-  once and the last answered 17.2 s after the first started (2026-11-18, kundli c584c0a3). Delete when merged.
+  once and the last answered 17.2 s after the first started (2026-11-18, c584c0a3; per-card path 35.7 s). End to end,
+  `readCards` took 28.6 s from a laptop (database set-up and state writes), and the page shows `reading` until the
+  state write lands. Done: under 20 s end to end on Lambda (see the entry below on measuring there).
 - **P2 · fixed on `feat/grouped-cards` (doc 86) · The card pack repeated cells and rows across cards (doc 71 §12).**
   The current pack already held the role library and matter rows once; doc 86 writes each ledger cell once, names
   cells by key per card, keeps repeated keyed rows of the natal core once and sorts card ids: about 70,200 → 61,866
@@ -2952,6 +2954,12 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   3.5 s of set-up before the first call and about 8 s of store and state writes after the last answer (readings were
   stored 2.4 s after the last answer; the state doc's `done` writes took the rest). The model part was 17.2 s. Owner:
   deploy session. Done: one board refresh on staging with `CARDS_GROUP_PACK=1`, `readCards` time from the build log.
+- **P2 · open · Four grouped cards carried notes whose text was not kept** (2026-11-18 run: lagna, diagnosis one each;
+  chapter, chapters two each; all passed). With one shared ledger in the pack, a "key not given to this card" note would
+  matter. The script now saves each issue's message. Done: the next run's notes read and judged.
+- **P2 · open · Card chat answers are now nearly always uncached** (doc 86: builds delete their caches; an answer never
+  creates one): about $0.03 an answer against about $0.003 cached. Owner: Sachin (cost) with the card-chat session.
+  Done: accepted, or a per-conversation cache.
 - **P2 · open · `scripts/measure-grouped-cards.ts` passes `portrait: null`.** The 11 readings it stored on c584c0a3
   (2026-11-18 23:57) sit under a key a real build (with the portrait) does not hit: extra rows, never served. Owner:
   whoever reruns it. Done: load the stored portrait in the script.

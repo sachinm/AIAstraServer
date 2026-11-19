@@ -540,7 +540,7 @@ describe('grouped card reads: slim pack, budgeted groups (doc 86)', () => {
     const callGemini = async (o: GeminiCallOptions) => {
       const ids = [...(o.fullCache?.suffix[0] ?? '').matchAll(/^- (\w+): matters/gm)].map((m) => m[1]!);
       calls.push({ node: o.node, ids, max: o.maxOutputTokens, at: Date.now() - t0 });
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, 60));
       const goodFor = (id: string) => {
         const g = goodOracle(id);
         if ((SELF_CARDS.find((c) => c.id === id)?.matters as readonly string[] | undefined)?.includes('work_load_and_health')) return g;
@@ -556,6 +556,33 @@ describe('grouped card reads: slim pack, budgeted groups (doc 86)', () => {
     expect(calls.map((c) => c.ids.length)).toEqual([2, 2, 1]);
     expect(calls.map((c) => c.max)).toEqual([3200, 3200, 2048]);
     // one wave: every group starts before the first one answers
-    expect(Math.max(...calls.map((c) => c.at))).toBeLessThan(20);
+    expect(Math.max(...calls.map((c) => c.at)) - Math.min(...calls.map((c) => c.at))).toBeLessThan(60);
+  });
+});
+
+describe('card state writes coalesce per kundli (doc 86)', () => {
+  it('changes that arrive during a write land together in the next write, in order; a throwing change rejects only its caller', async () => {
+    const base = memPrisma() as unknown as { areaBuild: { findUnique: (a: unknown) => Promise<unknown>; upsert: (a: unknown) => Promise<unknown> } };
+    let writes = 0;
+    const areaBuild = { findUnique: base.areaBuild.findUnique, upsert: async (a: unknown) => (writes++, await new Promise((r) => setTimeout(r, 10)), base.areaBuild.upsert(a)) };
+    const prisma = new Proxy({}, { get: (_t, p) => (p === 'areaBuild' ? areaBuild : undefined) }) as never;
+    const now = new Date(`${ASOF}T12:00:00Z`);
+    const ids = ['body', 'mind', 'stuck', 'drive', 'yogas', 'presence'] as const;
+    const at = new Date().toISOString();
+    const all = ids.map((id) => updateCardsState(prisma, 'u1', 'k1', now, (d) => void (d.cards[id] = { state: 'done', at })));
+    const bad = updateCardsState(prisma, 'u1', 'k1', now, () => {
+      throw new Error('bad change');
+    });
+    const last = updateCardsState(prisma, 'u1', 'k1', now, (d) => void (d.spentUsd = 0.5));
+    await expect(bad).rejects.toThrow('bad change');
+    await Promise.all([...all, last]);
+    const doc = await readCardsState(prisma, 'k1', now);
+    for (const id of ids) expect(doc.cards[id]?.state).toBe('done');
+    expect(doc.spentUsd).toBe(0.5);
+    expect(writes).toBeLessThan(ids.length + 2);
+    expect(writes).toBeGreaterThanOrEqual(1);
+    // a later change still writes (the queue empties and starts again)
+    await updateCardsState(prisma, 'u1', 'k1', now, (d) => void (d.capReached = true));
+    expect((await readCardsState(prisma, 'k1', now)).capReached).toBe(true);
   });
 });

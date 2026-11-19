@@ -39,8 +39,9 @@ key survives a reordered board; no explicit cache outlives the operation that ma
 - `src/reading/cards/run.ts`: the batcher splits with `planGroups`.
 - `src/reading/llm/cacheLease.ts` (new): per-kundli lease; keys used while leased are tracked and deleted at the last
   release. `src/reading/llm/promptCache.ts`: key-used and cache-created hooks, `deleteCachesByKey`, no-create lookups.
-- `src/reading/self/v2/build.ts`, `src/reading/self/v3/build.ts`: the build holds a lease; `src/reading/cardChat/answer.ts`
-  holds one per answer and never starts a create.
+- `src/reading/self/v2/build.ts` (`runSelfV2Build`, the whole dashboard build) and `src/reading/self/v3/build.ts`
+  (`runSelfV3Cards`, also run alone by the measure script) run under a recording lease; `src/reading/cardChat/answer.ts`
+  holds a non-recording one per answer and never starts a create. `src/reading/cards/state.ts`: state writes coalesce.
 - `src/reading/clocks/run.ts`: `warmOnHit` (the build passes false when grouped).
 - `src/config/env.ts`: `CARDS_GROUP_SIZE_BOARD` default 3; new `CARDS_GROUP_OUTPUT_BUDGET` (2,000),
   `CARDS_CARD_OUTPUT_TOKENS` (1,000), `READING_CACHE_DELETE_AFTER_BUILD` (default on).
@@ -49,8 +50,12 @@ key survives a reordered board; no explicit cache outlives the operation that ma
 
 ## 4. How it works when done
 
-**Backend.** A build takes `acquireCacheLease({userId,kundliId})` before its first model call. While any lease on that
-kundli is held, every prompt-cache key used or created for it is recorded. The card phase plans the board's cards
+**Backend.** The dashboard build runs under `withCacheLease({userId,kundliId}, 'build.v2')` (the v3 step nests its own).
+Every prompt-cache key the build's own calls look up or warm for that kundli is recorded: the five family prefixes,
+the v2 Oracle and Personalizer prefixes, the clock prefix and the card pack, all built from this person's data (checked:
+`prepared()` in `src/reading/self/v2/slices.ts` makes each prefix from the person's context; none is shared between
+people). Recording follows the build's own async call tree (AsyncLocalStorage), so an Ask answer for the same person
+running meanwhile is not recorded and not deleted. The card phase plans the board's cards
 greedily: a group takes cards while its estimated output (`CARDS_CARD_OUTPUT_TOKENS` each, 1,000 = the 18 Nov mean of
 Oracle plus face) stays within `CARDS_GROUP_OUTPUT_BUDGET` (2,000 ≈ 16 s at 125 tokens/s), at most
 `CARDS_GROUP_SIZE_BOARD` (3) cards: 11 cards → 6 calls, all in parallel. Each call's `maxOutputTokens` is 1.6× its
@@ -61,7 +66,9 @@ release the recorded keys are deleted at Gemini (an in-flight create is awaited 
 the next `llm-cache-sweep` deletes it. The 45-minute recycle still runs as a backstop and waits while a lease is held.
 
 **Card chat.** Each answer holds a lease. It uses the reader prefix cache when one is live (a build in flight) and never
-creates one: a single answer uncached costs about $0.03 of input, less than a create plus storage. A cache deleted by
+creates one. Since builds now delete their caches, nearly every answer is uncached: about $0.03 of input (43k tokens at
+$0.75 per 1M) where a cached follow-up would cost about $0.003. A create per answer would cost more than that and be
+deleted at once; a conversation of many answers could hold a cache later (not built). A cache deleted by
 another Lambda instance answers 403/404 and the call is retried uncached (existing path, now tested).
 
 **API, frontend, UI/UX.** No change. The board shows the same cards sooner.
@@ -109,14 +116,23 @@ Run: `npx tsx scripts/measure-grouped-cards.ts --yes-spend` (cap $0.45), summary
   (the 26 are dated lines whose meaning is their heading). Byte-stable on rebuild and on a reversed card order.
 - **Groups:** planned 2+2+2+2+2+1, all six sent at once (one state write for the phase), no repair, 11 of 11 cards.
   Output per card about 940 tokens (the 1,000 estimate holds).
-- **Time:** cache create 1.73 s; calls 10.2 to 17.2 s; **first call to last answer 17.2 s** (per-card path 35.7 s);
-  first call to last reading stored 19.6 s; `readCards` end to end 28.6 s from a laptop (3.5 s of database and cache
-  set-up before the first call, about 8 s of store and state writes after the last answer). On Lambda the database
-  part is shorter; not measured there yet.
+- **Time:** cache create 1.73 s; calls 10.2 to 17.2 s; **first call to last answer 17.2 s** (per-card path 35.7 s,
+  first Oracle call to last Personalizer answer; the brief's "about 70 s" counted from the clock readers);
+  first call to last reading stored 19.6 s; `readCards` end to end **28.6 s** from a laptop (3.5 s of database and
+  cache set-up before the first call, about 8 s of store and state writes after the last answer). The page shows a
+  card `reading` until its state write lands, so what a person sees is nearer 28.6 s here. **Verdict: the model part
+  meets 20 s; end to end it does not, as measured from a laptop.** On Lambda the database part is shorter; not measured
+  there yet (TODOS). If the slowest pair (2,140 tokens, 17.2 s) proves too close, `CARDS_CARD_OUTPUT_TOKENS=1100` makes
+  every board call a single card (11 calls, about 10 to 12 s each, about $0.02 more in cached reads).
 - **Cost:** calls $0.067 (per-card path $0.172); creation at worst $0.046 (not priced by Google); storage $0.0002 for
   the 28 s the pack lived.
 - **Cleanup:** the pack was deleted 2.4 s after the last card was stored, at the lease release; Gemini answers 403 on
-  it, its registry row has `deleted_at`. No prefix cache was made (stored layer hit, `warmOnHit` false).
+  it, its registry row has `deleted_at`. No prefix cache was made (stored layer hit, `warmOnHit` false). The run went
+  through `runSelfV3Cards` only, so immediate deletion was shown live for the pack; the v2 build's own caches are
+  covered by the same lease since the follow-up commit and by a unit test, not by this run.
+- **Issues:** 11 of 11 cards passed on the first call; four carried notes (lagna and diagnosis one, chapter and
+  chapters two). Their text was not kept (the script saved counts; issues are not stored in the database), so whether
+  they were "key not given to this card" notes is not known. The script now keeps each issue's check and message.
 - **Writes:** 11 `technique_outputs` (card readings), 16 `agent_runs`, 7 `area_builds` (cards state), the
   `llm_cache_entries` row. One `kundli_slices` upsert was swallowed. No other write.
 - **Not like a real build:** the script passes `portrait: null`, so the 11 readings are stored under a key a real build
@@ -125,3 +141,7 @@ Run: `npx tsx scripts/measure-grouped-cards.ts --yes-spend` (cap $0.45), summary
 **Recommended Lambda env:** `CARDS_GROUP_PACK=1`, `READING_EXPLICIT_CACHE=1`, `CARDS_GROUP_SIZE_BOARD=3` (the default
 now), `CARDS_GROUP_OUTPUT_BUDGET=2000`, `CARDS_CARD_OUTPUT_TOKENS=1000` (both defaults), `READING_CACHE_DELETE_AFTER_BUILD`
 unset (on).
+
+**Changes on deploy to note:** `READING_CACHE_DELETE_AFTER_BUILD` defaults on, so the per-card path (group pack off)
+also deletes its caches when a build ends: a second build the same day re-creates them. A card read alone (Try again,
+a card added) rebuilds and re-caches the whole pack (about $0.046 at worst for the create).
