@@ -5,7 +5,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { questionGate, type BoardChargeOutcome, type PlanStatus, type QuestionGate } from '../../../billing/questionGate.js';
-import { SELF_CONFIRM_PREFIX, SELF_CONFIRM_ANSWERS, writeFacts } from '../../../profile/facts.js';
+import { SELF_CONFIRM_PREFIX, SELF_CONFIRM_ANSWERS, SELF_CONFIRM_CLAIM_RE, writeFacts } from '../../../profile/facts.js';
 import { loadProfilePack } from '../../person/profile.js';
 import { defaultQueueDigest } from '../../area/boardService.js';
 import { queueSelfReadingBuild, readBuildMarker, readBuildMarkerDetail, type BuildMarkerState, type QueueOutcome } from '../buildEvent.js';
@@ -241,12 +241,13 @@ export async function switchClock(deps: SelfV2Deps, userId: string, system: unkn
   return { ok: true, status: 202, body: { usage: await gate.getStatus(userId), status: 'building', alsoChanges: ['love', 'work'] }, charged };
 }
 
-const CLAIM_RE = /^[a-z0-9_.]{1,60}$/;
-
-/** POST /api/self/v2/confirm: `self.confirm.<claimId>` in person_facts. The next build reads it; no model runs here. */
+/**
+ * POST /api/self/v2/confirm (and the v3 You, Love and Work confirm routes): `self.confirm.<claimId>` in person_facts. The
+ * next build reads it (PERSON'S ANSWERS); no model runs here.
+ */
 export async function writeConfirm(prisma: PrismaClient, userId: string, body: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
   const b = (body ?? {}) as { claimId?: unknown; answer?: unknown };
-  if (typeof b.claimId !== 'string' || !CLAIM_RE.test(b.claimId)) return { ok: false, error: 'bad_claim' };
+  if (typeof b.claimId !== 'string' || !SELF_CONFIRM_CLAIM_RE.test(b.claimId)) return { ok: false, error: 'bad_claim' };
   if (typeof b.answer !== 'string' || !(SELF_CONFIRM_ANSWERS as readonly string[]).includes(b.answer)) return { ok: false, error: 'bad_answer' };
   const r = await writeFacts(prisma, userId, { [`${SELF_CONFIRM_PREFIX}${b.claimId}`]: b.answer });
   return r.ok ? { ok: true } : { ok: false, error: r.error };

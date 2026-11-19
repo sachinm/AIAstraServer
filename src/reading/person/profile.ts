@@ -125,6 +125,14 @@ export function buildProfilePack(src: ProfileSource, asOf: string): ProfilePack 
   return { ageBand, ageYears, gender, role, facts, declined, lastConfirms, mood, hash };
 }
 
+/**
+ * The PERSON'S ANSWERS line of a build (`<claimId>=<answer>; …`): the newest confirm taps from every board (You, Love,
+ * Work share the `self.confirm.<claimId>` store), skips left out.
+ */
+export function answersLine(p: Pick<ProfilePack, 'lastConfirms'>): string {
+  return p.lastConfirms.filter((c) => c.answer !== 'skip').map((c) => `${c.claimId}=${c.answer}`).join('; ');
+}
+
 /** reads `auth` and `person_facts` for one user; two queries */
 export async function loadProfilePack(prisma: PrismaClient, userId: string, asOf: string): Promise<ProfilePack> {
   const [auth, rows] = await Promise.all([
