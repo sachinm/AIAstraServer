@@ -71,6 +71,12 @@ export interface KundliRequest {
 export interface ChartDataRepo {
   loadTypes(): Promise<ChartTypeRow[]>;
   readRows(kundliId: string, keys: RowKey[], ayanamsa: string): Promise<StoredRow[]>;
+  /**
+   * The same rows without `payload` and `params` (they come back null and {}): status, calc version, error and times
+   * only, for a caller that asks what is stored, not what it says (EnsureOptions.statusOnly). Optional: a repository
+   * without it is read in full.
+   */
+  readRowStatus?(kundliId: string, keys: RowKey[], ayanamsa: string): Promise<StoredRow[]>;
   readLegacy(kundliId: string, columns: string[]): Promise<Record<string, unknown>>;
   /** Atomically mark the row 'fetching' if it is absent, not fetching, or its lease expired. True = caller owns it. */
   claim(kundliId: string, key: RowKey, params: Record<string, unknown>, ayanamsa: string, leaseMs: number): Promise<boolean>;
@@ -88,6 +94,11 @@ export interface EnsureOptions {
   leaseMs?: number;
   /** Don't call Radha; return what is stored (e.g. inside a latency-critical path) */
   noFetch?: boolean;
+  /**
+   * With noFetch: read each row's status only, never its payload (ready items come back with `payload: null`). For a
+   * caller that only counts what is stored, such as the 5-minute digest sweep's annual-set check.
+   */
+  statusOnly?: boolean;
   now?: () => number;
   /** Poll interval while waiting for another caller's fetch */
   pollMs?: number;
@@ -298,7 +309,8 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
   let degraded = false;
   let rows: StoredRow[] = [];
   try {
-    rows = await repo.readRows(kundliId, wanted.map((w) => ({ dataType: w.id, variant: w.variant })), ayanamsa);
+    const keys = wanted.map((w) => ({ dataType: w.id, variant: w.variant }));
+    rows = opts.noFetch && opts.statusOnly && repo.readRowStatus ? await repo.readRowStatus(kundliId, keys, ayanamsa) : await repo.readRows(kundliId, keys, ayanamsa);
   } catch (err) {
     if (!isMissingTable(err)) throw err;
     degraded = true;
@@ -682,6 +694,27 @@ export function prismaChartDataRepo(prisma: PrismaClient): ChartDataRepo {
         params: (r.params ?? {}) as Record<string, unknown>,
         calcVersion: r.calc_version,
         payload: r.payload,
+        status: r.status as StoredRow['status'],
+        error: r.error,
+        fetchStartedAt: r.fetch_started_at,
+        fetchedAt: r.fetched_at,
+        validTo: r.valid_to,
+      }));
+    },
+    async readRowStatus(kundliId, keys, ayanamsa) {
+      if (!keys.length) return [];
+      // no payload, no params: the annual-set check read 9 MB of payloads to learn 210 statuses (pg_stat_statements,
+      // 2026-11-19: 3,087 calls, 643 ms mean)
+      const rows = await prisma.kundliData.findMany({
+        where: { kundli_id: kundliId, ayanamsa, OR: keys.map((k) => ({ data_type: k.dataType, variant: k.variant })) },
+        select: { data_type: true, variant: true, status: true, calc_version: true, error: true, fetch_started_at: true, fetched_at: true, valid_to: true },
+      });
+      return rows.map((r) => ({
+        dataType: r.data_type,
+        variant: r.variant,
+        params: {},
+        calcVersion: r.calc_version,
+        payload: null,
         status: r.status as StoredRow['status'],
         error: r.error,
         fetchStartedAt: r.fetch_started_at,

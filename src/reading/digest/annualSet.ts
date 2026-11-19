@@ -84,7 +84,8 @@ export async function ensureAnnualSet(
   const year = opts.year ?? new Date().getUTCFullYear();
   const keys = annualSetKeys(year, opts.span ?? ANNUAL_SPAN_YEARS);
   const maxCalls = Math.max(0, Math.floor(opts.maxCalls ?? annualMaxCalls()));
-  const stored = await ensureChartData(deps, kundliId, keys, { ...opts, noFetch: true });
+  // statuses only (no payloads): this check runs every 5 minutes per kundli and only counts what is stored
+  const stored = await ensureChartData(deps, kundliId, keys, { ...opts, noFetch: true, statusOnly: true });
   const missing = keys.filter((k) => stored[k]?.status !== 'ready');
   const now = opts.now?.() ?? Date.now();
   const coolingDown = (k: string) => {
