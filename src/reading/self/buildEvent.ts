@@ -17,6 +17,7 @@ import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { getKundliDigestEventToken } from '../../config/env.js';
 import { queueLog, queueLogError } from '../../lib/queueLogger.js';
 import { questionGate, type QuestionGate } from '../../billing/questionGate.js';
+import { settleLensRefreshes, type LensSettleGate } from '../boards/lensRefreshSettle.js';
 import { getBoardReading, type SelfDeps, type SelfReadingResult } from './service.js';
 import { selfV2OwnsBoard } from './synthesisValidity.js';
 import type { ReadingBoardId } from './types.js';
@@ -172,6 +173,8 @@ export interface QueueDeps {
   now?: () => Date;
   /** settles the question held for a fresh reading the person asked for (docs/billing/03; tests replace it) */
   gate?: Pick<QuestionGate, 'settleBoardRefresh'>;
+  /** settles the questions held for paid Love/Work lens refreshes whose cards this build read (tests replace it) */
+  lensGate?: LensSettleGate;
   /**
    * the Self v2 build run after the self build when SELF_V2_BUILD=1 (docs/reading-engine/66 §4.8; tests replace it).
    * `refreshDay`: a fresh reading the person asked for; the build is forced and stored under a new key for that day.
@@ -284,6 +287,9 @@ export async function runSelfReadingBuild(deps: QueueDeps, userId: string, kundl
     if (opts.refreshDay) await (deps.gate ?? questionGate(deps.prisma)).settleBoardRefresh(userId, board, opts.refreshDay, false);
     queueLogError({ event: 'reading_build_failed', kundli_id: kundliId, board, error: (e as Error).message?.slice(0, 300), ms: Date.now() - t0 });
     return null;
+  } finally {
+    // docs/billing/03 per-lens refresh: the Love/Work lens cards are read by this (the Self) build; settle their questions
+    if (board === 'self') await settleLensRefreshes(deps.prisma, userId, kundliId, (deps.now ?? (() => new Date()))(), deps.lensGate);
   }
 }
 

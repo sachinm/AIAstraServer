@@ -148,4 +148,24 @@ describe('a fresh reading the person asked for settles its question (docs/billin
     expect(parseSelfReadingBuildEvent({ ...payload, refreshDay: 'soon' })).toEqual({ userId: 'u1', board: 'self' });
     expect(parseSelfReadingBuildEvent(selfReadingBuildEventPayload('u1', 'love'))).toEqual({ userId: 'u1', board: 'love' });
   });
+  it('the Self build settles a paid Love/Work lens refresh at its end (docs/billing/03 per-lens refresh); a thrown build too', async () => {
+    const f = fakePrisma();
+    const at = NOW.toISOString();
+    const later = new Date(NOW.getTime() + 60_000).toISOString();
+    await f.prisma.areaBuild.upsert({
+      where: { kundli_id_area_as_of: { kundli_id: 'k1', area: 'self.cards', as_of: new Date('2026-11-08T00:00:00Z') } },
+      create: { kundli_id: 'k1', area: 'self.cards', as_of: new Date('2026-11-08T00:00:00Z'), status: 'ready', result: { cards: { dating_pulse: { state: 'done', at: later }, job_pulse: { state: 'failed', at: later } }, spentUsd: 0, stage: 'done', clocks: [], capReached: false, preparing: false, force: { dating_pulse: at, job_pulse: at }, lensRefresh: { 'love:dating': { at, cards: ['dating_pulse'] }, 'work:primary_job': { at, cards: ['job_pulse'] } } } },
+      update: {},
+    });
+    const settled: unknown[][] = [];
+    const lensGate = { settleLensRefresh: async (...a: unknown[]) => void settled.push(a) };
+    await runSelfReadingBuild({ prisma: f.prisma, build: async () => { throw new Error('boom'); }, now: () => new Date(NOW.getTime() + 120_000), lensGate: lensGate as never }, 'u1', 'k1', 'self');
+    expect(settled).toEqual([
+      ['u1', 'love', 'dating', '2026-11-08', true],
+      ['u1', 'work', 'primary_job', '2026-11-08', false],
+    ]);
+    // settled once: a later build finds nothing open
+    await runSelfReadingBuild({ prisma: f.prisma, build: async () => okReading('ok'), now: () => new Date(NOW.getTime() + 180_000), lensGate: lensGate as never }, 'u1', 'k1', 'self');
+    expect(settled).toHaveLength(2);
+  });
 });

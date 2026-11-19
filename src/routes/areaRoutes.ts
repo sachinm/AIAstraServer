@@ -12,6 +12,10 @@
  *                                          takes one question → 200 (love, work: the new board + usage) | 202 (self: the
  *                                          synthesis is made in the background; { status:'building', usage }) |
  *                                          409 not_due | not_ready | building | 402 quota_exhausted | 404 | 400 | 500
+ *                                          Love/Work on v3 (BOARDS_V3): one lens (body `lens`, else the stored active
+ *                                          lens), one question per lens per day; its first reading is free
+ *                                          (src/reading/boards/lensRefresh.ts) → 200 { status:'queued', lens, queued,
+ *                                          charged, first?, repeat?, usage } | 409 not_due | not_ready | 402 | 404 | 400
  *   POST /api/area/:area/checks            area career|self|love; { month: 'YYYY-MM', side: support|test,
  *                                          answer: yes|partly|no|skip } → 204 | 400 | 404 unknown area
  */
@@ -28,6 +32,7 @@ import { questionGate, quotaBody, type BoardCharge, type QuestionGate } from '..
 import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
 import { selfBoardDates } from '../reading/self/synthesisValidity.js';
 import { logChatProviderError, publicCodeFromChatProviderError } from '../services/publicChatError.js';
+import { refreshBoardLens, type LensRefreshDeps, type LensRefreshGate } from '../reading/boards/lensRefresh.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -42,6 +47,10 @@ export interface AreaRouteDeps {
   gate?: Pick<QuestionGate, 'reserveBoardRefresh' | 'settleBoardRefresh' | 'getStatus'>;
   /** tests: the You synthesis build a fresh reading queues */
   queue?: Pick<QueueDeps, 'build' | 'invoke' | 'now' | 'self'>;
+  /** tests: the gate a Love/Work v3 lens refresh is charged to (default: the question gate) */
+  lensGate?: LensRefreshGate;
+  /** tests: the Love/Work v3 board read and card queue seams of a lens refresh */
+  lens?: Omit<LensRefreshDeps, 'prisma' | 'gate' | 'now'>;
 }
 
 export function isAreaEnabled(): boolean {
@@ -52,6 +61,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
   if (!(deps.enabled ?? isAreaEnabled())) return false;
   const svc: CareerDeps = { prisma: deps.prisma, loadInputs: deps.loadInputs, now: deps.now };
   const gate = deps.gate ?? questionGate(deps.prisma);
+  const lensGate: LensRefreshGate = deps.lensGate ?? questionGate(deps.prisma);
   const today = () => (deps.now ?? (() => new Date()))().toISOString().slice(0, 10);
   const kundliOf = (userId: string) => deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   /** The You board's dates: its synthesis's own once one is made, else the area reading's (docs/billing/03; selfBoardDates). */
@@ -107,8 +117,16 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
     if (!userId) return;
     const board = req.params.board as BoardCharge;
     if (!BOARDS.includes(board)) return res.status(400).json({ error: 'unknown_board' });
-    // docs/dashboards/10 §4.3: a Love/Work board on v3 renews itself once a day on open; the paid refresh comes later
-    if (board !== 'self' && (getBoardsV3() as readonly string[]).includes(board)) return res.status(409).json({ error: 'not_due', code: 'not_due' });
+    // docs/billing/03 per-lens refresh: a Love/Work board on v3 refreshes its active lens, one question per lens per day
+    if (board !== 'self' && (getBoardsV3() as readonly string[]).includes(board)) {
+      try {
+        const r = await refreshBoardLens({ prisma: deps.prisma, gate: lensGate, ...(deps.now ? { now: deps.now } : {}), ...(deps.lens ?? {}) }, userId, board, (req.body as { lens?: unknown } | undefined)?.lens);
+        return res.status(r.status).json(r.body);
+      } catch (e) {
+        console.error(`[boards:refresh:${board}:lens]`, (e as Error).message);
+        return res.status(500).json({ error: 'refresh_failed' });
+      }
+    }
     const day = today();
     const build = (force: boolean) =>
       board === 'work' ? getCareer(svc, userId, { force }) : board === 'love' ? getLoveBoard(boardDeps, userId, { force }) : getSelfBoard(boardDeps, userId, { force });

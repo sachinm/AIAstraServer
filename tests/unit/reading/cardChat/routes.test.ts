@@ -255,6 +255,17 @@ describe('POST /api/chat/ask-stream with card', () => {
     expect(streamed[1]!.parts[1]).toContain('Work board');
   });
 
+  it('a Love card question and a Work card question each take one question (Sachin 2026-11-19)', async () => {
+    expect((await gate.getStatus('u1'))!.used).toBe(0);
+    await ask({ question: 'When does it warm up?', card: { board: 'love', id: 'dating_pulse' }, turnId: randomUUID() });
+    expect((await gate.getStatus('u1'))!.used).toBe(1);
+    await ask({ question: 'Is my job steady?', card: { board: 'work', id: 'job_pulse' }, turnId: randomUUID() });
+    const after = (await gate.getStatus('u1'))!;
+    expect(after.used).toBe(2);
+    expect(store.usage.map((u) => u.status)).toEqual(['committed', 'committed']);
+    expect(breakdownOf(store.usage.map((u) => u.key))).toMatchObject({ cardchat: 2, board_refresh: 0 });
+  });
+
   it('errors come before any SSE frame', async () => {
     expect(await ask(cardBody({ focus: 'career_work' }))).toMatchObject({ status: 400, json: { error: 'card_with_focus' } });
     expect(await ask(cardBody({ turnId: 'abc' }))).toMatchObject({ status: 400, json: { error: 'bad_turn_id' } });
