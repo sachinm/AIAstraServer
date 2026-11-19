@@ -135,3 +135,34 @@ describe('spend cap and redaction', () => {
     expect(s.text()).toBe(out.join(''));
   });
 });
+
+describe('card chat and the build cache lease (doc 86)', () => {
+  it('the answer holds a lease on the kundli while it streams, never creates a cache, and records no key', async () => {
+    const { isCacheLeased, leaseState } = await import('../../../../src/reading/llm/cacheLease.js');
+    const ctx = await ctxFor();
+    let leasedDuring = false;
+    let keysDuring: string[] | null = null;
+    const seen: GeminiCallOptions[] = [];
+    const a = await answerCardQuestion(
+      {
+        prisma,
+        model: MODEL,
+        stream: async (o) => {
+          seen.push(o);
+          leasedDuring = isCacheLeased('k1');
+          keysDuring = leaseState('k1')?.keys ?? null;
+          return result('ok');
+        },
+      },
+      'u1',
+      ctx,
+      'q',
+      [],
+    );
+    expect(a.text).toBe('ok');
+    expect(seen[0]!.cacheCreate).toBe(false);
+    expect(leasedDuring).toBe(true);
+    expect(keysDuring).toEqual([]);
+    expect(isCacheLeased('k1')).toBe(false);
+  });
+});

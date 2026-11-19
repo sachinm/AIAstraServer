@@ -224,3 +224,10 @@ written when the cap stops a call: `{msg:'reading spend cap', op, spentUsd, capU
 | Card-chat answer | One answer under the same cap (docs/reading-engine/85 §9). |
 
 `CARDS_SPEND_CAP_USD` (per person per day) and `SELF_READING_MAX_SPEND_USD` (per Self build) are no longer read.
+
+**What one board's cards cost, measured 2026-11-18** (docs/reading-engine/86, kundli `c584c0a3`, 11 cards,
+`gemini-3.8-flash`): grouped on one cached pack (`CARDS_GROUP_PACK=1`), 6 calls, **$0.067** for the calls ($0.028 cached
+reads of a 61,866-token pack at $0.075 per 1M, $0.039 output at $3.75 per 1M), plus the pack's creation, which Google
+does not price (at worst the input rate, $0.046), plus storage at $0.50 per 1M tokens per hour for the 28 s the pack
+lived ($0.0002; the cache is deleted when the build ends). The same cards one call each on the morning's live build:
+**$0.172**. Either is well under the $0.45 operation cap. From 2027-01-01 every price doubles.

@@ -2581,11 +2581,11 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
 
 ## Filed 2026-11-10 by doc 71 (ready on click, one cache per person, person memory; branch `feat/self-v3`)
 
-- **P1 · open · Cache storage price and creation time for `gemini-3.8-flash` are not known.** Doc 71 §8 assumes about
-  $0.50 per million input tokens (inferred from the replay bill), a tenth of that cached, and a 150,000-token pack. At
-  $1 per million tokens per hour a 45-minute cache costs about $0.11, close to the reading itself. Owner: this branch,
-  doc 71 Phase 0. Done: measured pack size, creation time, storage and cached-read price written into doc 71 §8. Needs
-  Sachin's yes (paid call).
+- **P1 · measured (doc 86, branch `feat/grouped-cards`) · Cache storage price and creation time for `gemini-3.8-flash`.**
+  2026-11-18: creation 1.73 s for a 61,866-token pack; storage $0.50 per 1M tokens per hour (list price), $0.0002 for
+  the 28 s the pack now lives (deleted when the build ends); cached reads $0.075 per 1M ($0.0046 per call). Still
+  open: Google does not state a creation charge (at worst the input rate, $0.046 per pack). Done when the billing
+  export shows the creation line; owner: Sachin (billing console). Numbers in doc 71 §8.
 - **P1 · open · Every call on a shared cache pays the cached rate on the whole pack.** A bigger pack is not free: ten
   calls on 150,000 cached tokens is 1.5 million cached tokens. Doc 71 step 2 decides one pack or two from the Phase 0
   numbers. Owner: this branch.
@@ -2596,11 +2596,15 @@ Branch `fix/backfill-safety` (docs/reading-engine/67 §6.1, §6.2). Owner of eac
   fixed catalogue only. Doc 71 §4.5 and §4.6. Owner: this branch, doc 71 Phases 3 and 4.
 - **Decisions for Sachin (doc 71 §10):** clocks read before the click; Oracle and Personalizer in one call per group;
   the ten memory areas; question limits of one per visit and three a week.
-- **P1 · open · Four card groups take 36 to 45 s, not 15 (doc 71 §12).** Measured 2026-11-11: the cache removed the
-  input wait (first token 2 to 4 s); output at about 125 tokens a second sets the time. Fix: seven groups of three
-  cards, then measure. Owner: this branch.
-- **P2 · open · The card pack repeats the card prompt 21 times and shared rows across cards (doc 71 §12).** 234k tokens
-  raw, 79k with each line once. Build the pack with each row once and cards naming rows by key. Owner: this branch.
+- **P1 · open (model part fixed on `feat/grouped-cards`, doc 86) · A board's cards in under 20 s.** Groups are now
+  planned by estimated output (2,000 tokens a call, 1,000 a card, at most 3): the 11-card board went out as six calls at
+  once and the last answered 17.2 s after the first started (2026-11-18, c584c0a3; per-card path 35.7 s). End to end,
+  `readCards` took 28.6 s from a laptop (database set-up and state writes), and the page shows `reading` until the
+  state write lands. Done: under 20 s end to end on Lambda (see the entry below on measuring there).
+- **P2 · fixed on `feat/grouped-cards` (doc 86) · The card pack repeated cells and rows across cards (doc 71 §12).**
+  The current pack already held the role library and matter rows once; doc 86 writes each ledger cell once, names
+  cells by key per card, keeps repeated keyed rows of the natal core once and sorts card ids: about 70,200 → 61,866
+  tokens on c584c0a3, byte-stable on a reordered board. Delete when merged.
 - **P2 · open · The Phase 0 test ran with an empty ledger (doc 71 §12).** Cards wrote "agreement" sentences without
   ledger cells to stand on. The next replay runs the readers on the pack first. Owner: this branch.
 - **P2 · open · Gemini prices double on 2027-01-01** (input $1.50, output $7.50, cached $0.15, storage $1.00 per 1M per
@@ -2963,3 +2967,27 @@ Source: `docs/reading-engine/73-self-card-faces-tools-and-lenses.md` (Appendix B
   non-foundation switch: voice, Compact, premium locks) never shows. Both GETs do carry `feature.card_chat` as a map key.
   Done: the web maps the server's map (allowed = keys with `locked:false`, locked = the rest; card `usable = !locked`), or
   the server adds the list form beside the map, with a test on each side.
+
+## Filed 2026-11-18 by doc 86 (grouped card reads; branch `feat/grouped-cards`)
+
+- **P2 · open · The cache lease is per Lambda instance.** `src/reading/llm/cacheLease.ts` counts holders in memory, so a
+  card chat on another instance does not keep a build's pack alive; its call is refused (403) and retried uncached
+  (tested in `tests/unit/reading/llm/cacheLease.test.ts`), costing about $0.03 of input. A cross-instance lease needs a
+  DB row (a migration). Owner: next session on caches. Done: a decision (accept, or a lease row).
+- **P2 · open · Card phase database overhead not measured on Lambda.** The 2026-11-18 grouped read ran from a laptop:
+  3.5 s of set-up before the first call and about 8 s of store and state writes after the last answer (readings were
+  stored 2.4 s after the last answer; the state doc's `done` writes took the rest). The model part was 17.2 s. Owner:
+  deploy session. Done: one board refresh on staging with `CARDS_GROUP_PACK=1`, `readCards` time from the build log.
+- **P2 · open · Four grouped cards carried notes whose text was not kept** (2026-11-18 run: lagna, diagnosis one each;
+  chapter, chapters two each; all passed). With one shared ledger in the pack, a "key not given to this card" note would
+  matter. The script now saves each issue's message. Done: the next run's notes read and judged.
+- **P2 · open · Card chat answers are now nearly always uncached** (doc 86: builds delete their caches; an answer never
+  creates one): about $0.03 an answer against about $0.003 cached. Owner: Sachin (cost) with the card-chat session.
+  Done: accepted, or a per-conversation cache.
+- **P2 · open · `scripts/measure-grouped-cards.ts` passes `portrait: null`.** The 11 readings it stored on c584c0a3
+  (2026-11-18 23:57) sit under a key a real build (with the portrait) does not hit: extra rows, never served. Owner:
+  whoever reruns it. Done: load the stored portrait in the script.
+- **P3 · open · Two tests fail on `develop` before doc 86** (checked by stashing the doc 86 changes):
+  `tests/unit/reading/promptCache.test.ts` "is off by default" (a cache is created; `.env` is injected by dotenv in
+  the test run) and `tests/unit/reading/self/v2/subTechniques.test.ts` "a TECHNIQUES row per sub-technique" (order
+  `self.sub.periods` vs `self.sub.clock`). Owner: next session in those areas. Done: both pass.

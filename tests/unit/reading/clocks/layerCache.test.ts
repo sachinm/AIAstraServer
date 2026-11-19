@@ -62,6 +62,18 @@ describe('the clock layer cache', () => {
     return { d, calls, warmed };
   }
 
+  it('with warmOnHit false (the card group pack, doc 86) a hit warms nothing; a miss still warms before the readers', async () => {
+    const store = memoryStore();
+    const first = deps(store.prisma, { warmOnHit: false });
+    await runClockLayer(first.d, { ctx, frame: frame(), slices: slices() });
+    expect(first.warmed).toHaveLength(1);
+    const second = deps(store.prisma, { warmOnHit: false });
+    const b = await runClockLayer(second.d, { ctx, frame: frame(), slices: slices() });
+    expect(b.cached).toBe(true);
+    expect(second.calls).toHaveLength(0);
+    expect(second.warmed).toHaveLength(0);
+  });
+
   it('the second run with identical hashes makes zero reader and concordance calls, and still warms the region the cards read', async () => {
     const store = memoryStore();
     const first = deps(store.prisma);

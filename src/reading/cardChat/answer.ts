@@ -4,6 +4,9 @@
  * model, the common reader system prompt, the shared prefix as parts[0], `cachePrefix` with the person as cache owner),
  * so the answer reads the same cached prefix the card was written on: one cache key, `prefixKey(model, system, prefix)`.
  *
+ * Caches (doc 86): the answer runs under a non-recording lease on the kundli and never creates a cache; a live one is
+ * used, a missing or refused one means an uncached call, never a failure.
+ *
  * Spend: each answer is one operation under READING_SPEND_CAP_USD (default $0.45). Before the call the worst case
  * (the estimated input, all uncached, plus the output cap) is priced; the output cap is lowered to fit, and a call that
  * cannot fit even a short answer is not made (`CardChatSpendCapError`). No word filters on the answer (doc 82): only the
@@ -15,6 +18,7 @@ import { getReadingSpendCapUsd } from '../../config/env.js';
 import { streamGemini, type GeminiCallOptions, type GeminiResult } from '../llm/gemini.js';
 import { modelFor, priceFor, usageCostUsd } from '../llm/models.js';
 import { prefixKey } from '../llm/promptCache.js';
+import { withCacheLease } from '../llm/cacheLease.js';
 import { markAgentUsed } from '../self/v2/cache.js';
 import { estProviderTokens } from '../self/v2/slices.js';
 import { redactEngineTerms } from '../self/words.js';
@@ -130,11 +134,14 @@ export async function answerCardQuestion(
     thinking: 'low',
     maxOutputTokens: budget.maxOutputTokens,
     timeoutMs: CARD_CHAT_TIMEOUT_MS,
-    ...(parts.prefix ? { cachePrefix: true, cacheOwner } : {}),
+    // doc 86: a live prefix cache is used (a build of this kundli in flight); none is ever created for an answer
+    ...(parts.prefix ? { cachePrefix: true, cacheOwner, cacheCreate: false } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   };
   const red = redactingStream((s) => onDelta?.(s));
-  const res = await withAgentRun(
+  // doc 86: the answer holds a lease on the person's caches, so a build ending meanwhile does not delete them under it;
+  // a cache already gone (another instance deleted it) is refused by Gemini and the call is retried uncached
+  const res = await withCacheLease(cacheOwner, 'card.chat', () => withAgentRun(
     deps.prisma,
     CARD_CHAT_AGENT,
     {
@@ -167,7 +174,7 @@ export async function answerCardQuestion(
         output: { chars: g.text.length, finish: g.finishReason ?? null },
       };
     },
-  );
+  ), { record: false });
   if (parts.prefix) markAgentUsed({ cacheOwner }, deps.informUsed);
   const usage: Usage = res.usage ?? { node: o.node, model, promptTokens: 0, cachedTokens: 0, outputTokens: 0, thoughtTokens: 0, ms: 0 };
   const costUsd = Math.round(usageCostUsd({ ...usage, model }) * 1e6) / 1e6;

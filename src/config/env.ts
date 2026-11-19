@@ -1036,11 +1036,38 @@ export function isCardsGroupPackEnabled(env: NodeJS.ProcessEnv = process.env): b
 }
 
 /**
- * Cards per call for the board's cards (fast first). Env `CARDS_GROUP_SIZE_BOARD` (default 1, 1..6): a card writes about
- * 1,400 tokens and one card per call finished in 12 to 16 s on 2026-11-11 (doc 71 §13); three would take about 40 s.
+ * The most cards per call for the board's cards. Env `CARDS_GROUP_SIZE_BOARD` (default 3, 1..6). The actual groups are
+ * planned by estimated output (doc 86): a group stays within CARDS_GROUP_OUTPUT_BUDGET at CARDS_CARD_OUTPUT_TOKENS a card,
+ * so with the defaults a board group holds two cards.
  */
 export function getCardsGroupSizeBoard(): number {
-  return parseClampedIntEnv('CARDS_GROUP_SIZE_BOARD', 1, 1, 6);
+  return parseClampedIntEnv('CARDS_GROUP_SIZE_BOARD', 3, 1, 6);
+}
+
+/**
+ * Output tokens a board group call may plan for (doc 86). Env `CARDS_GROUP_OUTPUT_BUDGET` (default 2,000, 500..16,000):
+ * output runs at about 125 tokens a second, so 2,000 is about 16 s, plus 2 to 4 s to the first token.
+ */
+export function getCardsGroupOutputBudget(): number {
+  return parseClampedIntEnv('CARDS_GROUP_OUTPUT_BUDGET', 2_000, 500, 16_000);
+}
+
+/**
+ * Estimated output tokens of one card in a group call, Oracle object plus face (doc 86). Env `CARDS_CARD_OUTPUT_TOKENS`
+ * (default 1,000, 200..4,000): the 2026-11-18 live build on c584c0a3 wrote 620 to 1,150 Oracle tokens and 230 to 340
+ * face tokens a card, about 1,000 together on average. Re-measure and set it when the cards change length.
+ */
+export function getCardsCardOutputTokens(): number {
+  return parseClampedIntEnv('CARDS_CARD_OUTPUT_TOKENS', 1_000, 200, 4_000);
+}
+
+/**
+ * Delete the explicit caches a dashboard build made as soon as it ends (doc 86, Sachin 2026-11-18), at the last release
+ * of the kundli's cache lease. Env `READING_CACHE_DELETE_AFTER_BUILD` (default on; `0` leaves them to the 45-minute
+ * recycle).
+ */
+export function isCacheDeleteAfterBuildEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.READING_CACHE_DELETE_AFTER_BUILD?.trim() !== '0';
 }
 
 /** Cards per call for the cards not on the board (fewer reads of the pack). Env `CARDS_GROUP_SIZE_REST` (default 6, 1..8). */
