@@ -11,6 +11,7 @@ import { clarifyModelConfig } from '../reading/llm/bedrock.js';
 import { modelFor, PRICE_TABLE_VERSION, priceFor, usageCostUsd, type ModelRole } from '../reading/llm/models.js';
 import { techniqueById } from '../techniques/catalog.js';
 import { categoryOfSubject } from '../techniques/categories.js';
+import { changedSeedRows, releaseAfter, runSeedInBackground, SEED_RETRY_AFTER_MS, seedHash, writeSeed, type BackgroundSeedOptions, type RawSeedClient } from '../lib/registrySeed.js';
 
 export type AgentKind = 'engine_pull' | 'code' | 'llm';
 
@@ -494,20 +495,49 @@ const AGENT_SEED_SQL = `INSERT INTO agent_registry (id, title, kind, module, sub
     price_cached = EXCLUDED.price_cached, price_version = EXCLUDED.price_version, description = EXCLUDED.description,
     enabled = EXCLUDED.enabled, updated_at = now()`;
 
-type RawCapable = { $executeRawUnsafe?: (sql: string, ...values: unknown[]) => Promise<number> };
+/** The ids whose seeded columns are new or differ from the definitions (a read; no lock). */
+export const AGENT_DIFF_SQL = `SELECT x.id
+    FROM jsonb_to_recordset($1::jsonb) AS x(id text, title text, kind text, module text, sub_module text, provider text, model text,
+         price_in numeric, price_out numeric, price_cached numeric, price_version text, description text, enabled boolean)
+    LEFT JOIN agent_registry a ON a.id = x.id
+   WHERE a.id IS NULL
+      OR (a.title, a.kind, a.module, a.sub_module, a.provider, a.model, a.price_in, a.price_out, a.price_cached, a.price_version, a.description, a.enabled)
+         IS DISTINCT FROM
+         (x.title, x.kind, x.module, x.sub_module, x.provider, x.model, x.price_in, x.price_out, x.price_cached, x.price_version, x.description, coalesce(x.enabled, true))`;
+
+type RawCapable = RawSeedClient;
+
+/** sha1 of the definitions this process last found in the table (checked or written): the same again is not re-read */
+let seededHash: string | null = null;
+let seedJob: Promise<number> | null = null;
 
 /**
- * Upserts every definition into `agent_registry`. Idempotent; awaited before the first run of each process
- * (`withAgentRun`), again when a run's write finds its agent row missing, and by scripts/write-techniques-doc.ts. This is
- * how every agent gets its row, the new ones included: there is no migration that inserts agent rows. With a real client it is one statement; a client without raw SQL (the test fakes) falls back to one upsert
- * per row. Logs once and never throws.
+ * Upserts every definition into `agent_registry`. Idempotent; run in the background once per process (server boot after
+ * the first response, or the first `withAgentRun`: `seedAgentRegistryInBackground`), awaited when a run's write finds its
+ * agent row missing, and by scripts/write-techniques-doc.ts. This is how every agent gets its row, the new ones included:
+ * there is no migration that inserts agent rows. With a real client it first reads which rows differ (AGENT_DIFF_SQL)
+ * and writes only those, in one statement under a short lock_timeout; nothing differs, nothing is written. A client
+ * without raw SQL (the test fakes) falls back to one upsert per row. Returns the definitions in force (AGENTS.length) or
+ * 0 on failure. Logs once and never throws.
  */
 export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
   if (!prisma) return 0;
   const raw = (prisma as unknown as RawCapable).$executeRawUnsafe;
   if (typeof raw === 'function') {
     try {
-      await raw.call(prisma, AGENT_SEED_SQL, JSON.stringify(AGENTS.map((a) => registryRow(a))));
+      const rows = AGENTS.map((a) => registryRow(a));
+      const payload = JSON.stringify(rows);
+      const hash = seedHash(payload);
+      if (seededHash === hash) {
+        seeded = true;
+        return AGENTS.length;
+      }
+      const changed = await changedSeedRows(prisma as unknown as RawCapable, AGENT_DIFF_SQL, payload);
+      if (changed === null || changed.size > 0) {
+        const write = changed === null ? payload : JSON.stringify(rows.filter((r) => changed.has(r.id)));
+        await writeSeed(prisma as unknown as RawCapable, AGENT_SEED_SQL, write);
+      }
+      seededHash = hash;
       seeded = true;
       return AGENTS.length;
     } catch (e) {
@@ -533,6 +563,19 @@ export async function seedAgentRegistry(prisma: PrismaClient): Promise<number> {
   }
   seeded = true;
   return n;
+}
+
+/**
+ * The agent seed off the request path: once per process, after a short delay, with retries (src/lib/registrySeed.ts).
+ * Every caller gets the same job; it never rejects.
+ */
+export function seedAgentRegistryInBackground(prisma: PrismaClient, opts: BackgroundSeedOptions = {}): Promise<number> {
+  if (seeded) return Promise.resolve(AGENTS.length);
+  seedJob ??= runSeedInBackground('agents', () => seedAgentRegistry(prisma), opts).then((n) => {
+    if (!n) releaseAfter(SEED_RETRY_AFTER_MS, () => (seedJob = null));
+    return n;
+  });
+  return seedJob;
 }
 
 /** One engine payload a run read (docs/admin/03 §4.1): its catalogue type, and the range or month it covered. */
@@ -642,7 +685,8 @@ export function runTags(ctx: RunContext, resultCharts?: ChartUsed[]) {
 export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx: RunContext, fn: () => Promise<RunResult<T>>): Promise<T> {
   const def = agentById(agentId);
   if (!def) throw new Error(`unknown agent ${agentId}`);
-  if (!seeded) await seedAgentRegistry(prisma);
+  // the seed never runs on the request path: it is started in the background (a missing row is handled at the write)
+  if (!seeded) void seedAgentRegistryInBackground(prisma);
   const started = new Date();
   let result: RunResult<T> | undefined;
   let error: unknown;
@@ -713,7 +757,9 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
         } catch (e) {
           // the agent's registry row is missing: seed again (idempotent upsert of every definition), then write once more
           if (!isMissingAgentRow(e)) throw e;
+          // the table lost a row this process thought it had: read and write again, whatever the memo says
           seeded = false;
+          seededHash = null;
           await seedAgentRegistry(prisma);
           await once();
         }
@@ -732,6 +778,8 @@ export async function withAgentRun<T>(prisma: PrismaClient, agentId: string, ctx
 export function resetAgentRegistryState(): void {
   seeded = false;
   warned = false;
+  seededHash = null;
+  seedJob = null;
   m29MissingUntil = 0;
   unknownTechniques.clear();
 }
