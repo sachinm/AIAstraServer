@@ -41,7 +41,7 @@ export function isoDatesToWords(text: string): string {
   return text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (iso) => dayLabel(iso));
 }
 
-/** Read prose: empty references dropped, then any sentence with a chart term or engine name, then one date format. */
+/** Read prose: empty references dropped, engine names and internal keys redacted in place (doc 82: no sentence dropped), then one date format. */
 export function plainProse(text: string): string {
   return isoDatesToWords(redactChartTerms(cleanEmptyRefs(text)));
 }

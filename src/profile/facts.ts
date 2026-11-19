@@ -43,6 +43,12 @@ const FOCUS = new Set(['career', 'money', 'love', 'family', 'home', 'learning', 
 /** answers to the You reading's confirm question (docs/reading-engine/58 §4.1): key `self.confirm.<claimId>` */
 export const SELF_CONFIRM_PREFIX = 'self.confirm.';
 export const SELF_CONFIRM_ANSWERS = ['yes', 'partly', 'no', 'skip'] as const;
+/**
+ * The longest claim id a card can carry: `<card>.<tag>`, a card id (Love/Work ids run to 28 characters) and the Oracle's
+ * tag (up to 40, `self/v3/oracle.ts`). 60 refused a long Love/Work claim with 400 `bad_claim`; 80 holds every one.
+ */
+export const SELF_CONFIRM_CLAIM_MAX = 80;
+export const SELF_CONFIRM_CLAIM_RE = new RegExp(`^[a-z0-9_.]{1,${SELF_CONFIRM_CLAIM_MAX}}$`);
 
 /** the mood tap's values and its stored form */
 export const SELF_MOODS = ['heavy', 'mixed', 'fine'] as const;
@@ -73,7 +79,7 @@ export type FactCheck = { ok: true; value: string } | { ok: false; error: string
 
 export function checkFact(key: string, value: unknown): FactCheck {
   if (key.startsWith(SELF_CONFIRM_PREFIX)) {
-    if (!/^self\.confirm\.[a-z0-9_.]{1,60}$/.test(key)) return { ok: false, error: `unknown_key:${key}` };
+    if (!SELF_CONFIRM_CLAIM_RE.test(key.slice(SELF_CONFIRM_PREFIX.length))) return { ok: false, error: `unknown_key:${key}` };
     return typeof value === 'string' && (SELF_CONFIRM_ANSWERS as readonly string[]).includes(value) ? { ok: true, value } : { ok: false, error: `bad_value:${key}` };
   }
   const allowed = FACT_CATALOG[key];

@@ -38,24 +38,33 @@ export function cardStoreKey(p: {
   ].join('|') + '|';
 }
 
+export type StoredCardRow = { output: unknown; digest_version?: string; created_at: Date; valid_to?: Date | null };
+
 type StorePrisma = {
   techniqueOutput?: {
-    findMany?: (q: unknown) => Promise<Array<{ output: unknown; digest_version?: string; created_at: Date }>>;
+    findMany?: (q: unknown) => Promise<StoredCardRow[]>;
   };
+  $queryRaw?: (q: TemplateStringsArray, ...values: unknown[]) => Promise<Array<{ cache_key: string }>>;
 };
 
+/** rows kept per card by the newest-per-card read: the newest, and one spare in case it carries no content */
+const ROWS_PER_CARD = 2;
+
 /**
- * The newest stored reading of every card on the clock (cards with none are absent). With `ids` (docs/dashboards/10
- * §7 S3) only those cards' rows are read, at most four per card, so another board's rows never crowd them out of the
- * window; without, the 300 newest rows (the Self board, unchanged).
+ * The newest stored rows of each card on the clock, newest first (TODOS: `readCardReadings` read only the 300 newest
+ * rows, and the board read `take: ids×4`, so a card whose rows were older than other cards' newer ones showed blank or
+ * old). The winners are picked in SQL per card (`row_number() OVER (PARTITION BY card ORDER BY created_at DESC)`,
+ * at most ROWS_PER_CARD each) over the (kundli_id, technique_id, created_at DESC) index, reading only plain key columns;
+ * the sealed `output` is then read through the Prisma client by `cache_key`. A client without raw SQL (test fakes)
+ * falls back to the old window. Throws on a read error (callers catch).
  */
-export async function readCardReadings(prisma: PrismaClient, kundliId: string, clock: string, ids?: readonly string[]): Promise<Partial<Record<CardId, SelfV3CardContent>>> {
-  const out: Partial<Record<CardId, SelfV3CardContent>> = {};
-  if (ids && !ids.length) return out;
-  try {
-    const p = prisma as unknown as StorePrisma;
-    if (!p.techniqueOutput?.findMany) return out;
-    const rows = await p.techniqueOutput.findMany(
+export async function newestCardRows(prisma: PrismaClient, kundliId: string, clock: string, ids?: readonly string[]): Promise<StoredCardRow[]> {
+  if (ids && !ids.length) return [];
+  const p = prisma as unknown as StorePrisma;
+  if (!p.techniqueOutput?.findMany) return [];
+  const select = { output: true, digest_version: true, created_at: true, valid_to: true };
+  if (typeof p.$queryRaw !== 'function') {
+    return p.techniqueOutput.findMany(
       ids
         ? {
             where: {
@@ -66,13 +75,41 @@ export async function readCardReadings(prisma: PrismaClient, kundliId: string, c
             },
             orderBy: { created_at: 'desc' },
             take: ids.length * 4,
+            select,
           }
         : {
             where: { kundli_id: kundliId, technique_id: CARD_READING_TECHNIQUE, digest_version: { startsWith: CARD_KEY_PREFIX, contains: `|clock=${clock}|` } },
             orderBy: { created_at: 'desc' },
             take: 300,
+            select,
           },
     );
+  }
+  // the key is `self.card|card=<id>|clock=<clock>|…` (cardStoreKey): fields matched exactly with split_part, so the
+  // `_` in card ids is never a LIKE wildcard
+  const cards = ids ? ids.map((id) => `card=${id}`) : null;
+  const winners = await p.$queryRaw`
+    SELECT "cache_key" FROM (
+      SELECT "cache_key", row_number() OVER (PARTITION BY split_part("digest_version", '|', 2) ORDER BY "created_at" DESC) AS rn
+      FROM "technique_outputs"
+      WHERE "kundli_id" = ${kundliId} AND "technique_id" = ${CARD_READING_TECHNIQUE}
+        AND split_part("digest_version", '|', 1) = 'self.card'
+        AND split_part("digest_version", '|', 3) = ${`clock=${clock}`}
+        AND (${cards}::text[] IS NULL OR split_part("digest_version", '|', 2) = ANY(${cards}::text[]))
+    ) t WHERE rn <= ${ROWS_PER_CARD}`;
+  if (!winners.length) return [];
+  return p.techniqueOutput.findMany({ where: { cache_key: { in: winners.map((w) => w.cache_key) } }, orderBy: { created_at: 'desc' }, select });
+}
+
+/**
+ * The newest stored reading of every card on the clock (cards with none are absent), whatever the other cards hold:
+ * the newest row per card (`newestCardRows`). With `ids` only those cards are read.
+ */
+export async function readCardReadings(prisma: PrismaClient, kundliId: string, clock: string, ids?: readonly string[]): Promise<Partial<Record<CardId, SelfV3CardContent>>> {
+  const out: Partial<Record<CardId, SelfV3CardContent>> = {};
+  if (ids && !ids.length) return out;
+  try {
+    const rows = await newestCardRows(prisma, kundliId, clock, ids);
     for (const r of rows) {
       const s = r.output as StoredCardReading | undefined;
       if (!s?.card || !s.content || out[s.card]) continue;

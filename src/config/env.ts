@@ -1653,6 +1653,14 @@ export function getDigestAnnualMaxCalls(): number {
   return parseClampedIntEnv('DIGEST_ANNUAL_MAX_CALLS', 40, 0, 500);
 }
 
+/**
+ * A stored chart row that failed this many times in a row with the same error, on the same engine calc version and
+ * digest version, is not fetched again until one of them changes (`CHART_DATA_FAILED_MAX_TRIES`, 1..20, default 3).
+ */
+export function getChartDataFailedMaxTries(): number {
+  return parseClampedIntEnv('CHART_DATA_FAILED_MAX_TRIES', 3, 1, 20);
+}
+
 export interface RetrogradeScoreWeights {
   /** Uplift applied to non-vargottama debilitated retrograde planets in `nuanced_parashari` mode (default 0.75). */
   neechaUplift: number;

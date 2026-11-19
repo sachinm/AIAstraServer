@@ -19,6 +19,7 @@ describe('server.ts mounts what it imports', () => {
     });
   }
   it('seeds the agent registry at boot', () => {
-    expect(/seedAgentRegistry\(prisma\)/.test(src)).toBe(true);
+    expect(/seedAgentRegistryInBackground\(prisma\)/.test(src)).toBe(true);
+    expect(/seedTechniqueRegistryInBackground\(prisma\)/.test(src)).toBe(true);
   });
 });

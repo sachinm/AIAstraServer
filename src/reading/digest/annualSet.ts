@@ -63,7 +63,7 @@ export interface AnnualSetResult {
   failed: number;
   /** still missing after this run (the next run continues) */
   remaining: number;
-  /** failed rows left alone this run because they tried within ANNUAL_FAILED_BACKOFF_MS */
+  /** failed rows left alone this run: tried within ANNUAL_FAILED_BACKOFF_MS, or given up on (store.ts failedGivenUp) */
   backedOff: number;
   /** years whose every key is ready now and was not before this run: the only change the digest needs a rebuild for */
   yearsCompleted: number[];
@@ -84,12 +84,16 @@ export async function ensureAnnualSet(
   const year = opts.year ?? new Date().getUTCFullYear();
   const keys = annualSetKeys(year, opts.span ?? ANNUAL_SPAN_YEARS);
   const maxCalls = Math.max(0, Math.floor(opts.maxCalls ?? annualMaxCalls()));
-  const stored = await ensureChartData(deps, kundliId, keys, { ...opts, noFetch: true });
+  // statuses only (no payloads): this check runs every 5 minutes per kundli and only counts what is stored
+  const stored = await ensureChartData(deps, kundliId, keys, { ...opts, noFetch: true, statusOnly: true });
   const missing = keys.filter((k) => stored[k]?.status !== 'ready');
   const now = opts.now?.() ?? Date.now();
   const coolingDown = (k: string) => {
     const it = stored[k];
-    if (!it || (it.status !== 'failed' && it.status !== 'unsupported') || !it.triedAt) return false;
+    if (!it || (it.status !== 'failed' && it.status !== 'unsupported')) return false;
+    // given up after repeated identical failures: not asked again until the engine or digest version changes
+    if (it.gaveUp) return true;
+    if (!it.triedAt) return false;
     return now - Date.parse(it.triedAt) < ANNUAL_FAILED_BACKOFF_MS;
   };
   const due = missing.filter((k) => !coolingDown(k));
