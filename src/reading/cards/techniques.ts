@@ -184,8 +184,10 @@ export interface BoardTechniqueSection {
   rows: TechniqueRow[];
   /** every key of the section */
   keys: string[];
-  /** every ISO date the section names (a card may copy them) */
+  /** every ISO date the section names (evidence; the dates a card states stay span edges) */
   dates: string[];
+  /** the day the section was rendered (windows running now start on it) */
+  asOf: string;
 }
 
 export interface BoardTechniqueInput {
@@ -254,7 +256,9 @@ export function renderBoardTechniques(board: TechniqueBoard, i: BoardTechniqueIn
   // the board's tone today (the same buildBoard the board service runs)
   const built = buildBoard({ view, cfg, asOf, activation: i.activation, running: i.running, transit: i.transit, ageYears: i.ageYears });
   const t = built.board.tone;
-  add({ id: 'now', layer: 'tone', subareas: [], line: `${t.tone} (${t.confidence})${t.date ? `, changes ${t.date}` : ''}; families ${t.families.map((f) => `${f.family}=${f.vote}`).join(', ')}` });
+  // Work: the stored Work board map (career.ts) is the tone and the windows of record; the layers' tone is evidence only
+  const mapOfRecord = board === 'work' && Boolean(i.careerMap?.present);
+  add({ id: 'now', layer: 'tone', subareas: [], line: `${mapOfRecord ? "the house layers' tone (evidence only; the Work board's own tone is work:map/present): " : ''}${t.tone} (${t.confidence})${t.date ? `, changes ${t.date}` : ''}; families ${t.families.map((f) => `${f.family}=${f.vote}`).join(', ')}` });
 
   // the karakas and the points the board names, always (plain selects of the digest)
   for (const ref of cfg.karakas) {
@@ -360,12 +364,14 @@ export function renderBoardTechniques(board: TechniqueBoard, i: BoardTechniqueIn
     annual: 'ANNUAL',
     varga: 'VARGA',
     nakshatra: 'NAKSHATRA',
-    sub: 'SUB-AREAS (support and test windows ahead; score = strength of the next 12 months)',
+    sub: mapOfRecord
+      ? "SUB-AREAS (the house layers' windows ahead, evidence only; the STORED WORK BOARD MAP's windows are the Work board's own and win; score = strength of the next 12 months)"
+      : 'SUB-AREAS (support and test windows ahead; score = strength of the next 12 months)',
     check: 'D1/D10 CHECK OF THE RUNNING LORDS',
     family: 'FAMILY VOTES',
-    map: 'STORED WORK BOARD MAP',
+    map: "STORED WORK BOARD MAP (the Work board's own tone and windows: these are of record; where the layers above differ, these win)",
   };
-  const order: Array<TechniqueRow['layer']> = ['tone', 'karaka', 'point', 'chart', 'saham', 'promise', 'affliction', 'protection', 'activation', 'transit', 'annual', 'varga', 'nakshatra', 'sub', 'check', 'family', 'map'];
+  const order: Array<TechniqueRow['layer']> = board === 'work' ? ['map', 'tone', 'karaka', 'point', 'chart', 'saham', 'promise', 'affliction', 'protection', 'activation', 'transit', 'annual', 'varga', 'nakshatra', 'sub', 'check', 'family'] : ['tone', 'karaka', 'point', 'chart', 'saham', 'promise', 'affliction', 'protection', 'activation', 'transit', 'annual', 'varga', 'nakshatra', 'sub', 'check', 'family', 'map'];
   const T = [head];
   for (const l of order) {
     const rs = rows.filter((r) => r.layer === l);
@@ -375,7 +381,7 @@ export function renderBoardTechniques(board: TechniqueBoard, i: BoardTechniqueIn
     }
     T.push(`## ${LABEL[l]}\n${rs.map((r) => `{${r.key}} ${r.line}`).join('\n')}`);
   }
-  return { board, text: T.join('\n'), rows, keys: rows.map((r) => r.key), dates: [...new Set(rows.flatMap((r) => r.dates))].sort(cmp) };
+  return { board, text: T.join('\n'), rows, keys: rows.map((r) => r.key), dates: [...new Set(rows.flatMap((r) => r.dates))].sort(cmp), asOf };
 }
 
 /** The keys a card is pointed to first: its sub-area rows, and its layers' rows on those sub-areas (all, when none). */
@@ -399,13 +405,24 @@ export function cardTechniqueKeys(id: string, sections: Partial<Record<Technique
 }
 
 /**
- * The card's store-key stamp for the technique rows it reads: `.t<hash>` of its board sections, '' for a Self card (its
- * key is unchanged) or when no section was loaded. A change in the rows reads the card again.
+ * The card's store-key stamp for the technique rows it reads: `.t<hash>` of its own rows and its board's always-present
+ * rows, '' for a Self card (its key is unchanged) or when no section was loaded. A change in those rows reads the card
+ * again; the day moving on does not.
  */
 export function techniqueStamp(id: string, sections: Partial<Record<TechniqueBoard, BoardTechniqueSection>> | undefined): string {
-  const texts = techniqueBoardsOf([id]).map((b) => sections?.[b]?.text).filter((t): t is string => Boolean(t));
-  return texts.length ? `.t${createHash('sha256').update(texts.join('\n')).digest('hex').slice(0, 12)}` : '';
+  if (!sections) return '';
+  // the card's own rows and the rows every card of the board reads, with today's date written as "now": a window that
+  // runs now starts on today's date, and that alone must not read the card again every day
+  const own = new Set(cardTechniqueKeys(id, sections).flatMap((t) => t.keys));
+  const parts: string[] = [];
+  for (const b of techniqueBoardsOf([id])) {
+    const sec = sections[b];
+    if (!sec) continue;
+    for (const r of sec.rows) if (own.has(r.key) || STAMP_ALWAYS.has(r.layer)) parts.push(`${r.key} ${r.line.split(sec.asOf).join('now')}`);
+  }
+  return parts.length ? `.t${createHash('sha256').update(parts.join('\n')).digest('hex').slice(0, 12)}` : '';
 }
+const STAMP_ALWAYS: ReadonlySet<TechniqueRow['layer']> = new Set(['tone', 'karaka', 'point', 'chart', 'saham', 'check', 'family']);
 
 // ---------------------------------------------------------------------------------------------------------------- load
 

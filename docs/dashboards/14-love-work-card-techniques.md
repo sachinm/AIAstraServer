@@ -46,15 +46,23 @@ card.
    - activation and the sub-area windows give the timing;
    - it reads D9 and D7 for Love, or D10 for Work.
 
-   The ledger status rules still decide every dated statement.
+   The ledger status rules still decide every dated statement. A row's dates are evidence only: the dates a card states
+   stay span edges, the YEARS line or dates in the prefix. The section's dates are not added to the run's allowed dates.
+
+   For Work, the stored Work board map (`work:map/*`, career.ts) is the tone and the windows of record. It is written
+   first. The house layers' tone and sub-area windows are marked "evidence only", and the prompt says the map wins.
 5. **Plain `why`** (doc 13 phase 5).
    - `why` is an optional field in `personalizerV3Schema` and in the grouped face schema (inherited), and it is on
      `PersonalCardV3`.
    - The prompt line is in `personalizer/self-v3.md` and `cards/group.md`.
    - `checkPersonalCard` keeps it when written and never refuses a card without it (docs 82, 84).
    - `cardContent` passes it to `content.why` (on top of `508c279`, merged from `feat/card-chart-why`).
-6. **Store key.** A Love or Work card's key carries `.t<hash>` of its board sections (`techniqueStamp`), so a change in
-   its rows reads it again. A Self card's key is unchanged.
+6. **Store key.** A Love or Work card's key carries `.t<hash>` (`techniqueStamp`). The hash covers the card's own
+   technique rows and the board's always-present rows (tone, karakas, points, charts, sahams, D10 check, family votes).
+   - Today's date is written as "now" in the hash: a window that runs now starts on today, and that alone must not
+     re-read the card every day. A test covers this.
+   - A change in the card's own rows reads it again.
+   - A Self card's key is unchanged.
 
 ## 3. Card → technique mapping
 
@@ -91,7 +99,13 @@ Layer shorthands used in the table:
 | | marriage_children_family | Love · health, family_accept | promise, varga, activation |
 | | marriage_longterm_longevity | Love · commitment, health | promise, protection, varga, nakshatra |
 | | marriage_personal_growth | Love · health, commitment | promise, varga, annual |
-| Friends | all seven friends_* | Love · friends | per card: TIMING, or affliction/protection/activation/transit mixes |
+| Friends | friends_social_energy | Love · friends | promise, activation, transit, annual |
+|  | friends_core_allies | Love · friends | promise, protection, activation |
+|  | friends_outgrowing_circles | Love · friends | affliction, activation, transit |
+|  | friends_finding_tribe | Love · friends | activation, transit, annual |
+|  | friends_boundaries_drains | Love · friends | affliction, protection, transit |
+|  | friends_mentors_guides | Love · friends | promise, protection, activation |
+|  | friends_reputation_belonging | Love · friends | promise, annual, varga |
 | Allies at work | allies_pulse | **Work** · promotion, job_security | TIMING |
 | | allies_bosses_authority | Work · promotion | promise, activation, varga |
 | | allies_team_politics | Work · job_security | affliction, protection, activation |
@@ -100,7 +114,13 @@ Layer shorthands used in the table:
 | | allies_managing_people | Work · promotion | promise, protection, varga |
 | | allies_networking_allies | Work · promotion, job_change **+ Love · friends** | activation, transit, annual |
 | | allies_contracts_disputes | Work · job_security, business | STRAIN |
-| Starting out | start_* | Work · get_job (+ job_change, pay, promotion, abroad by card) | by card |
+| Starting out | start_launch_window | Work · get_job | promise, activation, transit, annual |
+|  | start_degree_to_career | Work · get_job, job_change | promise, varga, activation |
+|  | start_first_role_timing | Work · get_job | activation, transit, annual |
+|  | start_offer_decision | Work · get_job, job_change, pay | activation, annual, varga |
+|  | start_imposter_syndrome | Work · get_job | affliction, protection, nakshatra |
+|  | start_relocation_abroad | Work · abroad | activation, transit, annual |
+|  | start_three_year_foundation | Work · get_job, promotion | promise, activation, varga |
 | Your job | job_pulse | Work · promotion, job_security, job_change | promise, affliction, activation, transit, annual |
 | | job_security_layoff, job_burnout_load | Work · job_security | STRAIN / affliction, protection, transit, nakshatra |
 | | job_stay_or_leave | Work · job_change, job_security | activation, transit, annual, affliction |
@@ -110,10 +130,23 @@ Layer shorthands used in the table:
 | | job_industry_switch | Work · job_change | activation, transit, varga |
 | | job_remote_abroad | Work · abroad, job_change | activation, transit, annual |
 | | job_skill_building | Work · promotion, job_change | promise, varga, activation |
-| Craft & hobby | craft_creative_flow, craft_energizing_medium, craft_creative_blocks, craft_shipping_projects | Work · no sub-area (the career houses' layers) | by card |
-| | craft_monetize_hobby | Work · pay, business | TIMING |
-| | craft_audience_community | Work · business | promise, activation, annual |
-| Business | biz_* | Work · business (+ pay, job_change, promotion, job_security by card) | by card |
+| Craft & hobby | craft_creative_flow | Work · (no sub-area) | promise, activation, annual |
+|  | craft_energizing_medium | Work · (no sub-area) | promise, varga, nakshatra |
+|  | craft_creative_blocks | Work · (no sub-area) | affliction, protection, activation |
+|  | craft_monetize_hobby | Work · pay, business | promise, activation, transit, annual |
+|  | craft_shipping_projects | Work · (no sub-area) | activation, transit, annual |
+|  | craft_audience_community | Work · business | promise, activation, annual |
+| Business | biz_readiness | Work · business, job_change | promise, varga, activation |
+|  | biz_ideal_industry | Work · business | promise, varga, nakshatra |
+|  | biz_launch_timing | Work · business | promise, activation, transit, annual |
+|  | biz_cashflow_margins | Work · pay, business | promise, activation, annual |
+|  | biz_clients_sales | Work · business, pay | activation, transit, annual |
+|  | biz_partnerships_fit | Work · business | promise, affliction, varga |
+|  | biz_hiring_team | Work · business, promotion | promise, protection, activation |
+|  | biz_capital_assets | Work · pay, business | promise, affliction, annual |
+|  | biz_scaling_risk | Work · business | activation, transit, annual, affliction |
+|  | biz_legal_safeguards | Work · job_security, business | affliction, protection, activation, transit |
+|  | biz_founder_burnout | Work · job_security | affliction, protection, transit, nakshatra |
 
 Two decisions are recorded here:
 
@@ -160,7 +193,7 @@ from 2026 to 2037, and the activation block had 118 rows. With the board familie
   sky), and for Work the newest stored career map.
 - It is called from `self/v3/build.ts` only when a deck in the pack, or a queued card, maps to Love or Work.
 - It never throws.
-- The section's dates are added to the run's allowed dates.
+- It runs in series before the first card is read, and only for queued cards that are readable.
 - One pack per run, cached once, as before.
 
 ## 5. Data check (kundli c584c0a3, read only, 2026-11-19)
@@ -191,16 +224,16 @@ figure of 61,866 tokens was measured on a different day's board.
 | Pack | Cards | Characters | Est. tokens |
 | --- | ---: | ---: | ---: |
 | before (Self board, old prompts) | 8 | 140,286 | 63,767 |
-| (a) Self only | 8 | 142,271 | 64,669 |
-| (b) Self + 9 Dating cards | 17 | 179,626 | 81,649 |
-| (c) Self + this person's 2 Your-job cards | 10 | 160,591 | 72,996 |
-| (c′) Self + all 11 offered Your-job cards | 19 | 188,372 | 85,624 |
+| (a) Self only | 8 | 142,480 | 64,764 |
+| (b) Self + 9 Dating cards | 17 | 179,835 | 81,744 |
+| (c) Self + this person's 2 Your-job cards | 10 | 161,076 | 73,217 |
+| (c′) Self + all 11 offered Your-job cards | 19 | 188,857 | 85,845 |
 
-- **Self-only text is unchanged.** Its sha256 is `ec004abdc28c29e5` before and after. The system prompt grew by 1,985
+- **Self-only text is unchanged.** Its sha256 is `ec004abdc28c29e5` before and after. The system prompt grew by 2,194
   characters (board-neutral wording, the techniques paragraph and `why`).
-- **Section sizes.** Love: 112 rows, 13,004 characters (about 5.9 k tokens). Work: 102 rows, 11,751 characters
-  (about 5.3 k tokens).
-- **Load time.** About 4.6 s warm, about 9 s on a first connection.
+- **Section sizes.** Love: 112 rows, 13,004 characters (about 5.9 k tokens). Work: 102 rows, 12,027 characters
+  (about 5.5 k tokens).
+- **Load time.** 4.6 to 6.7 s warm, about 9 s on a first connection.
 - **Card counts.** For this person, `showsFor` shows 9 Dating cards. It shows only 2 Your-job cards
   (`job_stay_or_leave`, `job_skill_building`), because the stated facts put them outside EMP. The brief's "8
   primary_job cards" matches neither set, so both are measured.
@@ -217,8 +250,9 @@ These are not fixed here. Per the brief, they go to the session that owns `docs/
 
 1. **TP sahams missing** (§5). This is an engine export gap.
 2. **Two Work tones disagree.** The Work layers' tone today is "demanding (likely)"; the stored Work board map
-   (career.ts timeline) says "steady (likely)". These are two methods over the same houses, and the cards see both
-   rows.
+   (career.ts timeline) says "steady (likely)". These are two methods over the same houses. In the pack, the map is now
+   of record and the layer tone is marked evidence only. The two methods still disagree, and that belongs to the Work
+   board.
 3. **Merged windows run for ten years.** `aheadWindows` over all 42 stored systems merges every sub-area window into
    one span of about ten years. The old Love board, which reads every system, shows this to people. The card section
    limits itself to the board families.
@@ -226,5 +260,12 @@ These are not fixed here. Per the brief, they go to the session that owns `docs/
    - `tests/unit/techniques/piecesDoc.test.ts`: the checked-in doc 07 is stale, and there is no page for
      `self.card.chat`.
    - `tests/unit/reading/self/v2/subTechniques.test.ts`: the order of the TECHNIQUES rows.
+
+   Regenerating doc 07 adds only the `self.card.chat` / `card.chat` technique from develop; no prompt of this change
+   appears in it. No file under `src/techniques` or `src/reading/self/sub` changed since 38c4c41.
+6. **`why` is not gated.** `src/reading/self/v3/response.ts` nulls `chart` without the `feature.why_panel` grant, but
+   `why` passes through with the v3 content. This is for the doc 13 owner to decide; `response.ts` was not edited here.
+7. **Load in series.** The technique load (about 4.6 s warm, 9 s cold) runs before the first card is read. It could
+   start as soon as the frame exists, in parallel with the clock layer.
 5. **Worktree install.** `@aws-sdk/client-kms` and `@upstash/*` are in develop's lockfile but not in the main checkout.
    This worktree therefore has its own `npm ci` (no junction), and a Haiku sub-agent did the install.

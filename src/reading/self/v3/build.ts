@@ -321,12 +321,11 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
       const area = await (deps.loadAreaDecks ?? ((p: PrismaClient, k: string) => loadAreaDecks(p, k, profile)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [] as CardId[], sections: {} }));
       // docs/dashboards/14: the Love and Work boards' own techniques, loaded only when a card of theirs is in the run
       // (the decks in the pack, or a queued card); read-only; a Self-only run loads nothing and its pack is unchanged
-      const queuedNow = Object.entries((await readCardsState(deps.prisma, ctx.kundliId, deps.now).catch(() => null))?.cards ?? {}).filter(([, e]) => e?.state === 'queued').map(([id]) => id);
+      const queuedNow = Object.entries((await readCardsState(deps.prisma, ctx.kundliId, deps.now).catch(() => null))?.cards ?? {}).filter(([id, e]) => e?.state === 'queued' && isReadable(id)).map(([id]) => id);
       const techBoards = techniqueBoardsOf([...area.cards, ...queuedNow]);
       const techniques: Partial<Record<TechniqueBoard, BoardTechniqueSection>> = techBoards.length
         ? await (deps.loadTechniques ?? ((q: Parameters<typeof loadBoardTechniques>[1]) => loadBoardTechniques({ prisma: deps.prisma }, q)))({ kundliId: ctx.kundliId, asOf: ctx.asOf, boards: techBoards, ageYears: profile.ageYears ?? null, range: frameRange(frame), systems: frame.clocksRead }).catch(() => ({}))
         : {};
-      for (const sec of Object.values(techniques)) for (const d of sec?.dates ?? []) dates.add(d);
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
         // one build run is one operation (docs/billing/README.md "Spend cap per operation"): the cards get what the run

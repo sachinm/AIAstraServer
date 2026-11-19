@@ -135,6 +135,24 @@ describe('the board technique sections (docs/dashboards/14)', () => {
     const again = renderBoardTechniques('love', { view, asOf: ASOF, activation: [...activation].reverse(), running, transit: null, ageYears: 40, range });
     expect(again.text).toBe(love.text);
   });
+  it('the store-key stamp does not move with the day alone (a window running now starts on today)', () => {
+    const next = '2026-11-11';
+    const love2 = renderBoardTechniques('love', { view, asOf: next, activation, running, transit: null, ageYears: 40, range });
+    expect(love2.text).not.toBe(love.text);
+    expect(techniqueStamp('dating_pulse', { love: love2 })).toBe(techniqueStamp('dating_pulse', { love }));
+    // a change in the card's own rows does move it
+    const fewer = renderBoardTechniques('love', { view, asOf: ASOF, activation: activation.slice(0, 2), running, transit: null, ageYears: 40, range });
+    expect(techniqueStamp('dating_pulse', { love: fewer })).not.toBe(techniqueStamp('dating_pulse', { love }));
+  });
+  it('Work: the stored Work board map is of record and comes first; the layer tone is marked evidence only', () => {
+    const careerMap = { asOf: '2026-11-09', month: '2026-11', present: { tone: 'steady', confidence: 'likely', votes: [], available: 3, agree: 2, ease_date: null, window_end: null, next_window_start: '2027-10-01', security: 'clear' }, ahead: [{ subarea: 'promotion', side: 'support', from: '2027-10-01', to: '2027-11-30', peakMonth: '2027-10', band: 'moderate', score: 2, families: [], drivers: [] }], horizons: [], security: [], back: [], notes: [] } as never;
+    const w = renderBoardTechniques('work', { view, asOf: ASOF, activation, running, transit: null, ageYears: 40, range, careerMap });
+    const first = w.text.split('\n## ')[1]!;
+    expect(first.startsWith('STORED WORK BOARD MAP')).toBe(true);
+    expect(w.text).toContain('{work:map/present} stored Work board 2026-11-09: tone steady');
+    expect(w.text).toContain('{work:map/promotion} support moderate 2027-10-01..2027-11-30');
+    expect(w.text).toMatch(/\{work:tone\/now\} the house layers' tone \(evidence only/);
+  });
   it('every v3 card has a mapping onto sub-areas its board config knows', () => {
     for (const c of BOARD_V3_CARDS) {
       const srcs = CARD_TECHNIQUES[c.id];
