@@ -13,6 +13,7 @@
  *   8    validator (§4.1) → its drops to `reading_validation_failures`; the Oracle's failed areas take the last good
  *        reading's card (stale) or are withheld; `technique_outputs` `self.v2.personalizer` only when the build serves the
  *        page (the hero and 8 of 11 areas ok or repaired; failures.ts `servesPage`), else `partial`, nothing stored
+ *   7–8 run beside the v3 step (SELF_V3_BUILD=1) once the portrait is built; both share the build's one spend cap
  *
  * Returns timings and tokens per agent. A stored Oracle that still covers today skips steps 4–6 (no model call); a
  * stored card document for the same Oracle key and profile hash skips step 7. Charging stays with the existing build
@@ -21,7 +22,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { usageCostUsd } from '../../llm/models.js';
 import { runSelfV3Cards, type SelfV3StepResult } from '../v3/build.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
 import { canonicalJson } from '../../../techniques/pieces.js';
@@ -539,8 +541,17 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
     out.slices = sliceTable([...FAMILY_IDS.map((id) => fam.slices[id]), oracleSlice, p.slice]);
     const cardsKey = cardsStoreKey(ctx, oracleKey, shortHash(canonicalJson(portrait)));
     out.keys.cards = cardsKey;
-    t = performance.now();
-    const storedCards = await withTechniqueOutput<StoredSelfV2Cards>(
+    // the v2 Personalizer and the v3 step run side by side (2026-11-19: the v3 step needs the portrait and the Oracle
+    // slice, not the Personalizer's cards; one after the other cost a first open about 48 s). One operation, one budget
+    // (docs/billing/README.md "Spend cap per operation"): both start from the spend before the fork; while the
+    // Personalizer is in flight it holds its upper-bound cost, and the v3 step may spend only what the cap leaves after
+    // that hold (its `maxSpendUsd` is read live), so the two together never pass READING_SPEND_CAP_USD
+    const spentBefore = round6(agents.reduce((n, x) => n + x.costUsd, 0));
+    const v3On = isSelfV3BuildEnabled();
+    let personalizerHold = v3On && spentBefore < maxSpendUsd ? personalizerHoldUsd(p.slice) : 0;
+    let personalizerSpent = 0;
+    const tc = performance.now();
+    const v2Cards = withTechniqueOutput<StoredSelfV2Cards>(
       deps.prisma,
       {
         technique: SELF_V2_PERSONALIZER_TECHNIQUE,
@@ -556,8 +567,10 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
         step('warm.personalizer');
         out.warmed.push(...(await warmPrefixes([p.slice], { ensureCache: deps.ensureCache })));
         step('personalizer');
-        const spent = round6(agents.reduce((n, x) => n + x.costUsd, 0));
-        const r = await runPersonalizer({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: spent, maxSpendUsd }, ctx, p.slice, p.input, ctx.sub.windows?.strip ?? []);
+        const r = await runPersonalizer({ prisma: deps.prisma, callGemini: call, informUsed: deps.informUsed, spentUsd: spentBefore, maxSpendUsd }, ctx, p.slice, p.input, ctx.sub.windows?.strip ?? []);
+        // the hold becomes what the call cost: the v3 step's later checks see the rest of the cap
+        personalizerSpent = r.call?.costUsd ?? 0;
+        personalizerHold = personalizerSpent;
         if (r.call) agents.push(r.call);
         step('personalizer.validated');
         if (r.metrics) logPersonalizerMetrics(ctx, r.metrics);
@@ -592,24 +605,45 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
           summary: { status: r.status, cards: r.doc ? Object.keys(r.doc.cards).length : 0, withheld: Object.values(r.cardStatus).filter((s) => s === 'withheld').length },
         };
       },
-    );
-    ms.personalizerStep = since(t);
+    ).finally(() => {
+      // a stored hit, a throw or a call that never started holds nothing past this point
+      personalizerHold = personalizerSpent;
+      ms.personalizerStep = since(tc);
+    });
+    // the v3 cards (doc 68 Phase B / doc 70 per-card) over the same context and prefix. They run whenever the Oracle
+    // served, whatever the v2 Personalizer did (doc 83 step 1, 2026-11-18: the you board shows v3 cards; one v2 failure
+    // must not leave it blank). A v3 failure never fails the build.
+    let v3Cards: Promise<SelfV3StepResult | null> = Promise.resolve(null);
+    if (v3On) {
+      step('v3');
+      const v3Deps: Parameters<typeof runSelfV3Cards>[0] = {
+        prisma: deps.prisma,
+        callGemini: call,
+        ensureCache: deps.ensureCache,
+        informUsed: deps.informUsed,
+        now,
+        force: deps.force,
+        // read at each budget check inside the v3 step (clock layer, cards): the cap less the spend before the fork and
+        // the Personalizer's hold (its upper bound while in flight, its cost once done)
+        get maxSpendUsd() {
+          return Math.max(0, round6(maxSpendUsd - spentBefore - personalizerHold));
+        },
+      };
+      v3Cards = runSelfV3Cards(v3Deps, { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait, buildId: out.buildId });
+    }
+    // both settle before either outcome is used; a v2 throw is re-thrown as before, once the v3 step has ended
+    const [v2Settled, v3Settled] = await Promise.allSettled([v2Cards, v3Cards]);
+    if (v2Settled.status === 'rejected') throw v2Settled.reason;
+    const storedCards = v2Settled.value;
     const cards: SelfV2CardsResult = storedCards.cached ? { ...storedCards.value.result, cached: true } : storedCards.value.result;
     out.cards = cards;
     const served = cards.status === 'ok' && servesPage(cards.quality ?? out.quality ?? { okAreas: [], repaired: [], failed: [] });
     out.stored.cards = !storedCards.cached && served;
     gaps.push(...cards.gaps);
     out.status = served ? 'ok' : cards.status === 'budget_exceeded' ? 'budget_exceeded' : cards.status === 'ok' ? 'partial' : 'failed';
-    // the v3 cards (doc 68 Phase B / doc 70 per-card) over the same context and prefix. They run whenever the Oracle
-    // served, whatever the v2 Personalizer did (doc 83 step 1, 2026-11-18: the you board shows v3 cards; one v2 failure
-    // must not leave it blank). A v3 failure never fails the build.
-    if (isSelfV3BuildEnabled()) {
-      step('v3');
-      const spent = round6(agents.reduce((n, x) => n + x.costUsd, 0));
-      const v3 = await runSelfV3Cards(
-        { prisma: deps.prisma, callGemini: call, ensureCache: deps.ensureCache, informUsed: deps.informUsed, maxSpendUsd: Math.max(0, maxSpendUsd - spent), now, force: deps.force },
-        { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait, buildId: out.buildId },
-      );
+    if (v3Settled.status === 'rejected') gaps.push(`v3: ${String((v3Settled.reason as Error)?.message ?? v3Settled.reason).slice(0, 300)}`);
+    const v3 = v3Settled.status === 'fulfilled' ? v3Settled.value : null;
+    if (v3) {
       agents.push(...v3.agents);
       gaps.push(...v3.gaps);
       ms.v3 = v3.ms.total ?? 0;
@@ -650,6 +684,16 @@ export function oracleServes(r: Pick<SelfV2OracleResult, 'status' | 'areaStatus'
   if (r.status !== 'partial') return false;
   const q = oracleQuality(r);
   return q.okAreas.length + q.repaired.length >= SERVE_MIN_AREAS;
+}
+
+/**
+ * The most the v2 Personalizer can cost: its hold on the build's budget while it runs beside the v3 step. Every prompt
+ * token of the first call and its one retry uncached, plus both calls' output caps (thinking counts against the cap).
+ */
+export function personalizerHoldUsd(slice: Pick<PreparedAgentSlice, 'model' | 'estTokens'>): number {
+  const prompt = slice.estTokens.prefix + slice.estTokens.suffix;
+  const outputTokens = getSelfPersonalizerMaxOutputTokens() + getSelfPersonalizerRetryMaxOutputTokens();
+  return round6(usageCostUsd({ model: slice.model, promptTokens: 2 * prompt, cachedTokens: 0, outputTokens, thoughtTokens: 0 }));
 }
 
 /** The per-build Oracle-echo metric (doc 66 replay run 2, failure 1): one log line, never a reject. */
