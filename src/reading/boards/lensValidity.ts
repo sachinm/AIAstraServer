@@ -13,8 +13,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { refreshDue } from '../area/validity.js';
-import { CARD_KEY_PREFIX } from '../cards/store.js';
-import { CARD_READING_TECHNIQUE, type LensRefreshMark } from '../cards/types.js';
+import { newestCardRows } from '../cards/store.js';
+import type { LensRefreshMark } from '../cards/types.js';
 
 export interface LensRefreshView {
   madeAt: string | null;
@@ -27,7 +27,6 @@ export interface LensRefreshView {
 export const NO_LENS_REFRESH: Readonly<LensRefreshView> = Object.freeze({ madeAt: null, validUntil: null, due: false, building: false, failed: false });
 
 type Row = { output: unknown; created_at: Date | string; valid_to?: Date | string | null };
-type LensPrisma = { techniqueOutput?: { findMany?: (q: unknown) => Promise<Row[]> } };
 
 const iso = (d: Date | string): string => (d instanceof Date ? d : new Date(d)).toISOString();
 
@@ -55,19 +54,8 @@ export function lensValidityFrom(rows: readonly Row[], today: string, mark?: Len
 export async function lensValidity(prisma: PrismaClient, kundliId: string, clock: string, deck: readonly string[], today: string, mark?: LensRefreshMark | null): Promise<LensRefreshView> {
   if (!deck.length) return { ...NO_LENS_REFRESH };
   try {
-    const p = prisma as unknown as LensPrisma;
-    if (!p.techniqueOutput?.findMany) return { ...NO_LENS_REFRESH };
-    const rows = await p.techniqueOutput.findMany({
-      where: {
-        kundli_id: kundliId,
-        technique_id: CARD_READING_TECHNIQUE,
-        digest_version: { contains: `|clock=${clock}|` },
-        OR: deck.map((id) => ({ digest_version: { startsWith: `${CARD_KEY_PREFIX}card=${id}|` } })),
-      },
-      orderBy: { created_at: 'desc' },
-      take: deck.length * 4,
-      select: { output: true, created_at: true, valid_to: true },
-    });
+    // the newest rows per deck card, whatever other cards hold (newestCardRows; a fixed window could miss a card)
+    const rows: Row[] = await newestCardRows(prisma, kundliId, clock, deck);
     const newest = new Map<string, Row>();
     for (const r of rows) {
       const card = (r.output as { card?: string; content?: unknown } | null)?.card;
