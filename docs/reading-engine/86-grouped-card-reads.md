@@ -99,6 +99,29 @@ Ship the lease and the token-budgeted groups together with `CARDS_GROUP_PACK=1` 
 20 s. Alternatives: fixed groups of three (about 3,000 tokens, 24 s+: misses the target); one card per call (fastest,
 one cached pack read per card: kept as what the planner gives when cards run long).
 
-## 10. Measured (filled after the run)
+## 10. Measured (2026-11-18 23:57 UTC, one paid run)
 
-See §10 below once the run is done.
+Run: `npx tsx scripts/measure-grouped-cards.ts --yes-spend` (cap $0.45), summary in
+`docs/reading-engine/replays/86-grouped-2026-11-18/summary.json`. Same 11 board cards as the 08:41 live build.
+
+- **Pack:** 61,866 tokens (Gemini's count at create). The pre-doc-86 layout of the same data is about 70,200 tokens
+  (162,790 against 143,448 characters at the measured 2.32 characters a token): 12% smaller. Duplicate lines 177 → 26
+  (the 26 are dated lines whose meaning is their heading). Byte-stable on rebuild and on a reversed card order.
+- **Groups:** planned 2+2+2+2+2+1, all six sent at once (one state write for the phase), no repair, 11 of 11 cards.
+  Output per card about 940 tokens (the 1,000 estimate holds).
+- **Time:** cache create 1.73 s; calls 10.2 to 17.2 s; **first call to last answer 17.2 s** (per-card path 35.7 s);
+  first call to last reading stored 19.6 s; `readCards` end to end 28.6 s from a laptop (3.5 s of database and cache
+  set-up before the first call, about 8 s of store and state writes after the last answer). On Lambda the database
+  part is shorter; not measured there yet.
+- **Cost:** calls $0.067 (per-card path $0.172); creation at worst $0.046 (not priced by Google); storage $0.0002 for
+  the 28 s the pack lived.
+- **Cleanup:** the pack was deleted 2.4 s after the last card was stored, at the lease release; Gemini answers 403 on
+  it, its registry row has `deleted_at`. No prefix cache was made (stored layer hit, `warmOnHit` false).
+- **Writes:** 11 `technique_outputs` (card readings), 16 `agent_runs`, 7 `area_builds` (cards state), the
+  `llm_cache_entries` row. One `kundli_slices` upsert was swallowed. No other write.
+- **Not like a real build:** the script passes `portrait: null`, so the 11 readings are stored under a key a real build
+  (with its portrait) does not hit; they are extra rows, not served.
+
+**Recommended Lambda env:** `CARDS_GROUP_PACK=1`, `READING_EXPLICIT_CACHE=1`, `CARDS_GROUP_SIZE_BOARD=3` (the default
+now), `CARDS_GROUP_OUTPUT_BUDGET=2000`, `CARDS_CARD_OUTPUT_TOKENS=1000` (both defaults), `READING_CACHE_DELETE_AFTER_BUILD`
+unset (on).

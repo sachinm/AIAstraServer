@@ -161,7 +161,7 @@ const est = (s: string) => Math.ceil(s.length / 2.2);
 const prisma = guarded(db);
 const raw = db;
 mkdirSync(OUT_DIR, { recursive: true });
-const summary: Record<string, unknown> = { kundli: KUNDLI, asOf: AS_OF, model: MODEL, mode: REHEARSE ? 'rehearse' : DRY ? 'dry' : 'live', capUsd: CAP_USD, keyTail: key ? key.slice(-4) : null };
+const summary: Record<string, unknown> = { kundli: KUNDLI, asOf: AS_OF, model: MODEL, mode: REHEARSE ? 'rehearse' : DRY ? 'dry' : 'live', capUsd: CAP_USD };
 let captured: CardsRunInput | null = null;
 let run: CardsRunResult | null = null;
 let layerFallback = false;
