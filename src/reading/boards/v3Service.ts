@@ -221,8 +221,13 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
     const shaped = shapeSelfCard(c, layout.options?.[c.id], layout.boardOptions as Partial<BoardOptions>);
     return { ...shaped, optionNotes: boardOptionNotes(effectiveOptions(layout.options?.[c.id], layout.boardOptions as Partial<BoardOptions>)) };
   });
+  // docs/billing/03 §10: a lens refreshed today (and not given back) is not offered again today. A read-only read (the
+  // lens refresh itself, the card chat) keeps the You rule as is: the refresh decides per lens
+  const refreshedToday = deps.readOnly ? undefined : doc.lensRefresh?.[`${board}:${lens}`];
+  const base = baseOf(board, v2.body);
   const body: BoardV3Response = {
-    ...baseOf(board, v2.body),
+    ...base,
+    ...(refreshedToday && refreshedToday.outcome !== 'given_back' ? { refresh: { ...base.refresh, due: false } } : {}),
     status: doc.preparing ? 'preparing' : 'ok',
     readVersion: Object.keys(read).length ? 'v3' : null,
     layout,

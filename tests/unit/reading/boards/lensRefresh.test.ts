@@ -227,6 +227,8 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
     const d = doc();
     expect(Object.keys(d.force).sort()).toEqual(['dating_delays_blocks', 'dating_pulse']);
     expect(d.lensRefresh['love:dating']).toMatchObject({ cards: ['dating_pulse', 'dating_delays_blocks'] });
+    // the board no longer offers this lens today; another lens still is due
+    expect((await call('GET', '/api/board/love/v3')).json.refresh.due).toBe(false);
     // a double tap the same day: free, nothing queued again
     queuedBuilds.length = 0;
     const again = await call('POST', '/api/boards/love/refresh');
@@ -308,6 +310,17 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
     const again = await call('POST', '/api/boards/love/refresh');
     expect(again.json).toMatchObject({ charged: true });
     expect(await used()).toBe(1);
+  });
+
+  it('a build already running takes the queued cards: the question stays held, 200', async () => {
+    readings = { dating_pulse: content('Warmer.') };
+    await deck(['dating_pulse']);
+    outcome = 'already_building';
+    const r = await call('POST', '/api/boards/love/refresh');
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ charged: true, queued: ['dating_pulse'] });
+    expect(store.usage[0]!.status).toBe('reserved');
+    expect(doc().force.dating_pulse).toBeTruthy();
   });
 
   it('a card still being read keeps the question held', async () => {

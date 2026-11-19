@@ -137,7 +137,10 @@ This applies while the board is on the v3 card machine (`BOARDS_V3`); the v1 Lov
 
 **When a lens refresh may be asked for.** The Love/Work v3 body's `refresh` block is the You board's (`madeAt`,
 `validUntil`, `due` from `selfBoardDates`), the dates the header chip already showed; `due` is no longer forced false.
-A lens already read refreshes only when `due`, else 409 `not_due` with `valid_until`.
+A lens already read refreshes only when `due`, else 409 `not_due` with `valid_until`. A lens refreshed today (and not
+given back) shows `due: false` for the rest of that day. Left for Sachin: the You dates do not move when a lens is
+refreshed, so from the next day the same lens is `due` again and a tap is charged again; a per-lens "Good until" (from the
+lens's own newest card readings) would stop that, and is a small change once he picks it.
 
 **A refresh's life** (`src/reading/boards/lensRefresh.ts`):
 

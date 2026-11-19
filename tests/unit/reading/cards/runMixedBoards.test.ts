@@ -9,6 +9,7 @@ import { sharedPrefix } from '../../../../src/reading/clocks/reader.js';
 import { pickClockLayerSlices } from '../../../../src/reading/clocks/run.js';
 import { readCards, type CardsRunInput } from '../../../../src/reading/cards/run.js';
 import { updateCardsState } from '../../../../src/reading/cards/state.js';
+import { settleLensRefreshes } from '../../../../src/reading/boards/lensRefreshSettle.js';
 import { readCardReadings } from '../../../../src/reading/cards/store.js';
 import type { GeminiCallOptions, GeminiResult } from '../../../../src/reading/llm/gemini.js';
 import type { PressureInventoryDetail, PressureRowDetail } from '../../../../src/reading/self/sub/pressure.js';
@@ -219,6 +220,21 @@ describe('a paid lens refresh forces its cards (docs/billing/03 per-lens refresh
     await queue(true);
     expect((await run()).results.find((x) => x.card === 'dating_pulse')?.status).toBe('ok');
     expect(calls.length).toBeGreaterThan(first);
+  });
+
+  it('the chain: a forced lens card read by the runner, then the build-end settle commits the question', async () => {
+    const prisma = storePrisma();
+    const now = new Date(`${ASOF}T12:00:00Z`);
+    await updateCardsState(prisma, 'u1', 'k1', now, (d) => {
+      d.cards.dating_pulse = { state: 'queued', at: now.toISOString() };
+      d.force = { dating_pulse: now.toISOString() };
+      d.lensRefresh = { 'love:dating': { at: now.toISOString(), cards: ['dating_pulse'] } };
+    });
+    const later = new Date(now.getTime() + 60_000);
+    await readCards({ prisma, callGemini: (async (o: GeminiCallOptions) => groupReply(o)) as never, now: later, capUsd: 5, readRest: false, groupPack: true, groupSizeBoard: 1, ensureCache: (async () => null) as never }, input([]));
+    const settled: unknown[][] = [];
+    await settleLensRefreshes(prisma, 'u1', 'k1', new Date(later.getTime() + 60_000), { settleLensRefresh: async (...a: unknown[]) => void settled.push(a) } as never);
+    expect(settled).toEqual([['u1', 'love', 'dating', ASOF, true]]);
   });
 });
 
