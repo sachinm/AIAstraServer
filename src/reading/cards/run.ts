@@ -37,6 +37,7 @@ import { cardContent } from '../self/v3/store.js';
 import type { CardId, SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
 import { renderYearFrame } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
+import { chartReadingOf } from './chart.js';
 import { readCardOracle } from './oracle.js';
 import { readCardsState, updateCardsState } from './state.js';
 import { cardStoreKey } from './store.js';
@@ -330,7 +331,8 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
         },
       );
       if (stored.value) {
-        content = stored.value.content;
+        // a cached row may predate the chart field (docs/dashboards/13 §4.1): derive it from its Oracle card
+        content = { ...stored.value.content, chart: chartReadingOf(stored.value.oracle) };
         oracleCard = stored.value.oracle;
         status = stored.cached ? 'cached' : 'ok';
       }
