@@ -3835,3 +3835,7 @@ items 05 marks "Filed"). Nothing below was fixed.
 - **P2 · open · `tests/unit/reading/self/v2/subTechniques.test.ts` fails on `develop` `de135cd`** ("a TECHNIQUES row
   per sub-technique and per area": the catalog no longer lists `self.sub.clock` first; expected and received orders
   differ). Pre-existing; found while running the Self suite for doc 08, not touched. [server]
+- **P2 · open · Four more `tests/unit/reading` failures on `develop` `de135cd` in a worktree with the copied `.env`:**
+  `digestPack.test.ts` (cache prefix bytes), `promptCache.test.ts` ("off by default"), `run.test.ts` (thinking config),
+  `digest/event.test.ts` (default candidate list). Same result before and after the reading-recipes commits; they look
+  sensitive to `.env` flags (e.g. `READING_EXPLICIT_CACHE=1`). Tests should pin their env. [server]
