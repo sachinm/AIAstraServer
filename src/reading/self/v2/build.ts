@@ -61,7 +61,7 @@ import { runFamilyReaders } from '../../families/run.js';
 import { buildNatalContext } from '../../slices/natalPrefix.js';
 import { CARD_READING_TECHNIQUE } from '../../cards/types.js';
 import { storeLayerOutputs } from '../layerStore.js';
-import { readLastGoodAreas, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
+import { readLastGoodAreas, readSelfV2Marker, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
 import { buildAreaBriefs } from '../areas/index.js';
 import { runSelfSubTechniques, type SelfV2Deps } from '../sub/index.js';
 
@@ -200,12 +200,22 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
   // the build, and the last stage write lands before the build's own ready/failed write
   const startedAt = now.toISOString();
   let stageWrites: Promise<void> = Promise.resolve();
+  // plan "retire the v2 Self reading" step 3: SELF_V2_RETIRED=1 with the per-card reading on
+  const retired = deps.retired ?? isSelfV2Retired();
+  // with the v2 reading retired, today's earlier read time (the board's builtAt) is carried through this build's marker
+  // writes, which replace the marker's result; read once, before the first write
+  const priorReadAt: Promise<string | null> = retired ? readSelfV2Marker(deps.prisma, args.kundliId, now).then((m) => m.readAt ?? null).catch(() => null) : Promise.resolve(null);
   const step = (s: string) => {
     deps.onStep?.(s);
     const stage = stageOfStep(s);
     if (!stage) return;
     const at = new Date().toISOString();
-    stageWrites = stageWrites.then(() => writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'building', undefined, { started_at: startedAt, stage, stage_at: at })).catch(() => undefined);
+    stageWrites = stageWrites
+      .then(async () => {
+        const readAt = await priorReadAt;
+        await writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'building', undefined, { started_at: startedAt, stage, stage_at: at, ...(readAt ? { read_at: readAt } : {}) });
+      })
+      .catch(() => undefined);
   };
   const ms: Record<string, number> = {};
   const gaps: string[] = [];
@@ -232,8 +242,6 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
   // readers, the Oracle, the Personalizer and the v3 step (clock layer and cards) share READING_SPEND_CAP_USD
   // docs/techniques/09 §3.5: a board build spends up to READING_BOARD_SPEND_CAP_USD (chat answers keep READING_SPEND_CAP_USD)
   const maxSpendUsd = deps.maxSpendUsd ?? getReadingBoardSpendCapUsd();
-  // plan "retire the v2 Self reading" step 3: SELF_V2_RETIRED=1 with the per-card reading on
-  const retired = deps.retired ?? isSelfV2Retired();
   try {
     // 0–1: sub-techniques
     step('subs');
@@ -332,7 +340,7 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
       // `failed`, which would hold the next build back 30 minutes. `read_at`: a card was read now (the board's builtAt)
       const doneAt = new Date().toISOString();
       const ready = out.status === 'ok' || out.status === 'preparing';
-      await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, ready ? 'ready' : 'failed', ready ? undefined : `cards ${v3.status}`, { started_at: startedAt, stage: 'personalizer', stage_at: doneAt, ...(readNow ? { read_at: doneAt } : {}) });
+      await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, ready ? 'ready' : 'failed', ready ? undefined : `cards ${v3.status}`, { started_at: startedAt, stage: 'personalizer', stage_at: doneAt, ...(readNow ? { read_at: doneAt } : (await priorReadAt) ? { read_at: (await priorReadAt)! } : {}) });
       return out;
     }
 

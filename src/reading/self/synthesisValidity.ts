@@ -4,7 +4,7 @@
  * the reading the page shows (offline first). Nothing here is computed from the chart.
  */
 import type { PrismaClient } from '@prisma/client';
-import { isSelfBoardFromCardsEnabled, isSelfReadingModelEnabled, isSelfV2BuildEnabled } from '../../config/env.js';
+import { isSelfBoardFromCards, isSelfReadingModelEnabled, isSelfV2BuildEnabled } from '../../config/env.js';
 import { selfCardDates } from './boardState.js';
 import { latestStoredOutput } from '../../techniques/outputStore.js';
 import { latestReadyBuild, refreshDue, storedValidity, type ReadingValidity } from '../area/validity.js';
@@ -71,7 +71,7 @@ export async function selfBoardDates(
 ): Promise<BoardValidity | null> {
   // plan "retire the v2 Self reading" step 2 (SELF_BOARD_FROM_CARDS=1): the dates of the Self card readings, the lens
   // rule over the Self deck; null until a Self card was read (the first reading is the free automatic one)
-  if (isSelfBoardFromCardsEnabled()) return selfCardDates(prisma, kundliId, today, opts.clock ?? null);
+  if (isSelfBoardFromCards()) return selfCardDates(prisma, kundliId, today, opts.clock ?? null);
   const made = (selfV2OwnsBoard() ? await v2SynthesisValidity(prisma, kundliId, today, held) : null) ?? (await synthesisValidity(prisma, kundliId, 'self', today));
   if (made) return made;
   let v: ReadingValidity | null = area ? { made_at: area.made_at, valid_until: area.valid_until } : null;

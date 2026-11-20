@@ -150,6 +150,17 @@ describe('SELF_V2_RETIRED=1: the Self build without the v2 Oracle and Personaliz
     expect(marker.result.read_at).toBeUndefined();
   });
 
+  it('a later build the same day that reads no card keeps the earlier read time (builtAt never moves back)', async () => {
+    seen.result = fakeV3({ status: 'skipped', cards: {}, stored: false, cardsRun: undefined });
+    const db = makePrisma();
+    db.builds.set('k-v2|self.v2', { status: 'ready', result: { started_at: '2026-11-19T08:00:00.000Z', stage: 'personalizer', read_at: '2026-11-19T08:05:00.000Z' } });
+    (db.prisma as unknown as { areaBuild: { findUnique: (q: { where: { kundli_id_area_as_of: { kundli_id: string; area: string } } }) => Promise<unknown> } }).areaBuild.findUnique = async ({ where }) =>
+      db.builds.get(`${where.kundli_id_area_as_of.kundli_id}|${where.kundli_id_area_as_of.area}`) ?? null;
+    const r = await build(db, []).done;
+    expect(r.status).toBe('preparing');
+    expect((db.builds.get('k-v2|self.v2') as { result: { read_at?: string } }).result.read_at).toBe('2026-11-19T08:05:00.000Z');
+  });
+
   it('a failed card step fails the build (marker failed)', async () => {
     seen.result = fakeV3({ status: 'failed', cards: {}, stored: false, cardsRun: { order: ['mind'], spentUsd: 0, capReached: false, results: [{ card: 'mind', status: 'failed' }] } });
     const db = makePrisma();

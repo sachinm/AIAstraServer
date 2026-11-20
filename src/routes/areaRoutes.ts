@@ -22,7 +22,7 @@
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
-import { getBoardsV3, isSelfBoardFromCardsEnabled } from '../config/env.js';
+import { getBoardsV3, isSelfBoardFromCards } from '../config/env.js';
 import { CHECK_AREAS, checksFor, getCareer, recordCheck, setWorkStatus, type CareerDeps, type CheckArea } from '../reading/area/careerService.js';
 import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js';
 import { getSelfBoard } from '../reading/area/selfService.js';
@@ -138,7 +138,7 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       if (current.status === 'no_kundli') return res.status(404).json({ error: 'no_kundli' });
       if (current.status !== 'ok') return res.status(409).json({ error: 'not_ready', code: 'not_ready' });
       const selfDates = board === 'self' ? await selfBoardDates(deps.prisma, kundli.id, day, current) : null;
-      if (board === 'self' && !selfDates && isSelfBoardFromCardsEnabled()) {
+      if (board === 'self' && !selfDates && isSelfBoardFromCards()) {
         // plan "retire the v2 Self reading" step 2: no Self card was ever read, so this is the board's first reading,
         // free (docs/billing/03 "automatic builds only when nothing was ever stored"): queued with no question held
         const outcome = await queueSelfReadingBuild(queueDeps, userId, kundli.id, 'self');

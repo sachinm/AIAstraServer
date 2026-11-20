@@ -18,7 +18,7 @@ import { selfBoardDates, selfV2OwnsBoard, type BoardValidity } from '../synthesi
 import type { HeldOracleRow } from '../v2/store.js';
 import { buildSelfV2Response, noKundliResponse } from './response.js';
 import { defaultReadSelfV2Latest, NOTHING_STORED, type ReadSelfV2Latest, type SelfV2Latest } from './storeContract.js';
-import { isSelfBoardFromCardsEnabled, isSelfV2Retired } from '../../../config/env.js';
+import { isSelfBoardFromCards, isSelfV2Retired } from '../../../config/env.js';
 import { readSelfBoardState, type SelfBoardState } from '../boardState.js';
 
 export interface SelfV2Deps {
@@ -120,7 +120,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   if (!kundli) return { body: noKundliResponse(), queued: null, kundliId: null };
   const now = (deps.now ?? (() => new Date()))();
   const asOf = dayOf(now);
-  if (deps.boardFromCards ?? isSelfBoardFromCardsEnabled()) return getSelfV2FromCards(deps, userId, kundli, now);
+  if (deps.boardFromCards ?? isSelfBoardFromCards()) return getSelfV2FromCards(deps, userId, kundli, now);
   // everything that does not need the clock starts now and overlaps the clock read
   const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
   // on the default path the refresh block's build marker is the same `area_builds` row the progress markers read

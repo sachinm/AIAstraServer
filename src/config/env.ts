@@ -1213,6 +1213,15 @@ export function isSelfV2Retired(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /**
+ * The Self board reads its state from the card rows: SELF_BOARD_FROM_CARDS=1, or the v2 build retired (no v2 row is
+ * written then, so the v2-row reads would re-queue a build on every GET). Rollback order: SELF_V2_RETIRED first, then
+ * SELF_BOARD_FROM_CARDS.
+ */
+export function isSelfBoardFromCards(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isSelfBoardFromCardsEnabled(env) || isSelfV2Retired(env);
+}
+
+/**
  * The engine's `pressure_inventory` pull for the Self v2 windows (docs/reading-engine/66 §4.3). Env
  * `SELF_V2_PRESSURE_PULL`: '0' / 'false' / 'off' turns the pull off (S3 stays degraded); default on. A failed pull never
  * fails the build.

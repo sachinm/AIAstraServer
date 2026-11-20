@@ -116,3 +116,53 @@ describe('GET /api/self/v2 with SELF_BOARD_FROM_CARDS=1', () => {
     expect(h.queued).toEqual(['q']);
   });
 });
+
+describe('selfCardDates and the board clock (POST /api/boards/self/refresh, GET /api/area/self)', () => {
+  const db = (rows: unknown[]) =>
+    ({
+      kundli: { findUnique: async () => ({ preferred_dasha: null }) },
+      kundliActivation: { groupBy: async () => PRESENT.map((p) => ({ system: p.system, family: p.family })) },
+      kundliData: { findFirst: async ({ where }: any) => (where.data_type === 'dasha.applicable' ? { payload: APPLICABLE_RAW } : null) },
+      // no $queryRaw: newestCardRows reads the fallback window
+      techniqueOutput: { findMany: async ({ where }: any) => (String(where.digest_version?.contains ?? '').includes('|clock=chathuraaseethi_sama|') ? rows : []) },
+      boardLayout: { findUnique: async () => null },
+    }) as any;
+
+  it('resolves the board clock the way GET /api/self/v2 does', async () => {
+    const { resolveSelfClock } = await import('../../../../src/reading/self/boardState.js');
+    expect(await resolveSelfClock(db([]), 'k1')).toBe('chathuraaseethi_sama');
+  });
+
+  it('null until a Self card was read on the board clock; then made at, Good until and due', async () => {
+    const { selfCardDates } = await import('../../../../src/reading/self/boardState.js');
+    const none = async () => ({});
+    expect(await selfCardDates(db([row('dating_pulse', '2026-11-18T09:00:00Z')]), 'k1', TODAY, null, { readMarker: none })).toBeNull();
+    const d = await selfCardDates(db([row('mind', '2026-11-18T09:00:00Z', '2026-12-01T00:00:00Z')]), 'k1', TODAY, null, { readMarker: none });
+    expect(d).toEqual({ made_at: '2026-11-18T09:00:00.000Z', valid_until: '2026-11-30', refresh_due: false });
+  });
+});
+
+describe('SELF_V2_RETIRED=1 implies the card state (a one-flag rollback never re-queues on every GET)', () => {
+  const KEYS = ['SELF_V2_RETIRED', 'SELF_V3_BUILD', 'READING_CLOCK_LAYER', 'SELF_BOARD_FROM_CARDS'] as const;
+  const saved: Record<string, string | undefined> = {};
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it('with SELF_BOARD_FROM_CARDS unset the GET still keys on the cards and reads no v2 row', async () => {
+    for (const k of KEYS) saved[k] = process.env[k];
+    Object.assign(process.env, { SELF_V2_RETIRED: '1', SELF_V3_BUILD: '1', READING_CLOCK_LAYER: '1' });
+    delete process.env.SELF_BOARD_FROM_CARDS;
+    const h = harness(READ, 'ready');
+    const deps = { ...h.deps } as any;
+    delete deps.boardFromCards;
+    delete deps.v2Retired;
+    const r = await getSelfV2(deps, 'u1');
+    expect(r.queued).toBeNull();
+    expect(r.body.builtAt).toBe(READ.builtAt);
+    expect(h.v2Reads).toEqual([]);
+  });
+});

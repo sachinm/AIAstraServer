@@ -4,8 +4,9 @@
  * so any change to a byte of it re-reads every card. The literals below were recorded on the unmoved code
  * (develop 9fc0cf3, `buildOracleSlice` in `self/v2/slices.ts`) over the v2 agent fixtures.
  *
- * `slice.prefixHash` also covers the v2 Oracle prompt text (the slice's system); it moves when that prompt is edited or
- * deleted (phase D), the other two pins do not.
+ * `slice.prefixHash` also covers the Oracle model id and the v2 Oracle prompt text (the slice's system), which move for
+ * other reasons (an env model, phase D's prompt deletion); it is checked for equality, not pinned. The prefix bytes and
+ * `natal.core` are pinned.
  */
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -20,7 +21,6 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 const PIN = {
   prefixSha256: '11931c46e30e3d114c46e45752622e68289994bd6e4c494aa32f35359b0a9eda',
-  prefixHash: '92fe3f09ff0885cb843c95e5',
   natalCoreHash: 'd63b25b186dd1f4da5d68637',
   keys: 130,
 };
@@ -32,7 +32,6 @@ describe('natal prefix pin (byte-identical across the move)', () => {
   it('the v2 Oracle slice still builds the pinned prefix', () => {
     const { slice } = buildOracleSlice(ctx, packs, makeBriefs());
     expect(sha(slice.prefix)).toBe(PIN.prefixSha256);
-    expect(slice.prefixHash).toBe(PIN.prefixHash);
     expect(natalCoreFromPrefix(slice.prefix, 'dv-1').hash).toBe(PIN.natalCoreHash);
     expect(slice.keys.length).toBe(PIN.keys);
   });
@@ -41,7 +40,7 @@ describe('natal prefix pin (byte-identical across the move)', () => {
     const { slice } = buildOracleSlice(ctx, packs, makeBriefs());
     const natal = buildNatalContext(ctx, packs, makeBriefs());
     expect(sha(natal.prefix)).toBe(PIN.prefixSha256);
-    expect(natal.hash).toBe(PIN.prefixHash);
+    expect(natal.hash).toBe(slice.prefixHash);
     expect(natal.model).toBe(slice.model);
     expect(natal.keys).toEqual(slice.keys);
     expect(natal.estTokens).toEqual(slice.estTokens);
