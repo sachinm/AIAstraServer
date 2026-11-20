@@ -126,6 +126,8 @@ export interface CardChatPrefix {
   text: string;
   keys: readonly string[];
   hash: string;
+  /** the dated block (TODAY and the frame), sent uncached before the suffix (docs/techniques/09 §8 step 4); '' when none */
+  dated?: string;
   /** true when its hash is the `pre=` of the stored card's key (the same bytes the card's calls cached) */
   matchesCard: boolean;
 }

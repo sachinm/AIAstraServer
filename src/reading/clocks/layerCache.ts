@@ -3,8 +3,9 @@
  * once per kundli, so a second open the same day reads one row and makes no reader or concordance call.
  *
  * Stored in the slice store (`kundli_slices`, M48) as the row `layer.clock`: `hash` is the cache key, `text` the entry as
- * JSON (sealed like every slice text). The key carries everything the layer's output depends on: the as-of day, the
- * clock set, the model, the hash of every slice the readers read (the shared prefix and each `clock.<system>`), the frame,
+ * JSON (sealed like every slice text). The key carries everything the layer's output depends on except the day (docs/
+ * techniques/09 §8 step 4: the as-of day is out of the key; the entry holds until `validUntil`, the earliest edge of the
+ * now span and of the dated rows the frame and the clock slices carry after today): the clock set, the model, the hash of every slice the readers read (the shared prefix and each `clock.<system>`), the frame,
  * the three prompts' hashes and the reader input version. Any change misses.
  *
  * M48 is not applied on staging yet: with no table (Prisma P2021, "does not exist") or no store in the client (test
@@ -18,7 +19,7 @@ import { CLOCK_READER_PROMPT, CONCORDANCE_PROMPT, READER_SYSTEM_PROMPT, type Agr
 
 export const LAYER_CACHE_SLICE_ID = 'layer.clock';
 /** bump when the layer's output changes for the same inputs (a validator or a count rule) */
-export const LAYER_CACHE_VERSION = 1;
+export const LAYER_CACHE_VERSION = 2;
 /**
  * The readers' and the concordance's input version (how the slices are cut and the count is rendered). 1 = as built in
  * Phase 3; 2 = each `clock.<system>` slice cut to the frame before it is read, and the trimmed count.
@@ -26,7 +27,6 @@ export const LAYER_CACHE_VERSION = 1;
 export const READER_INPUT_VERSION = 2;
 
 export interface LayerCacheKeyInput {
-  asOf: string;
   model: string;
   /** hash of the shared prefix (natal.core, sky.window, year.tp, frame) */
   prefixHash: string;
@@ -48,7 +48,6 @@ export function layerCacheKey(i: LayerCacheKeyInput): string {
   return [
     `v${LAYER_CACHE_VERSION}`,
     `in${READER_INPUT_VERSION}`,
-    i.asOf,
     `set=${clockSetHash(i.clockSlices)}`,
     `m=${i.model}`,
     `pre=${i.prefixHash}`,
@@ -61,7 +60,10 @@ export function layerCacheKey(i: LayerCacheKeyInput): string {
 export interface LayerCacheEntry {
   v: number;
   key: string;
+  /** the day the entry was written (record only; not part of the key) */
   asOf: string;
+  /** YYYY-MM-DD: the entry serves a day before this one only (the earliest edge it stands on) */
+  validUntil?: string | null;
   status: 'ok' | 'partial';
   sheets: ClockSheet[];
   ledger: AgreedLedger;
@@ -89,7 +91,7 @@ const warnOnce = (what: string, e: unknown) => {
 };
 
 /** The stored entry for this key, or null (no row, another key, unreadable, no table). */
-export async function readLayerCache(prisma: PrismaClient, kundliId: string, key: string): Promise<LayerCacheEntry | null> {
+export async function readLayerCache(prisma: PrismaClient, kundliId: string, key: string, asOf: string | null = null): Promise<LayerCacheEntry | null> {
   const store = (prisma as unknown as Store | null)?.kundliSlice;
   if (!store?.findMany) return null;
   try {
@@ -98,6 +100,8 @@ export async function readLayerCache(prisma: PrismaClient, kundliId: string, key
     if (!row || row.hash !== key || typeof row.text !== 'string') return null;
     const e = JSON.parse(row.text) as LayerCacheEntry;
     if (e?.key !== key || e.v !== LAYER_CACHE_VERSION || !Array.isArray(e.sheets) || !e.ledger || !Array.isArray(e.ledger.cells)) return null;
+    // past the earliest edge it stands on: a period it read has ended (or a new one begun), so it is read again
+    if (asOf && e.validUntil && asOf >= e.validUntil) return null;
     return e;
   } catch (e) {
     warnOnce('read', e);
@@ -123,4 +127,21 @@ export async function writeLayerCache(prisma: PrismaClient, kundliId: string, en
 /** tests */
 export function resetLayerCacheWarning(): void {
   warned = false;
+}
+
+/**
+ * The earliest day the layer's reading may change without its key changing (docs/techniques/09 §8 step 4: validity by
+ * the earliest edge of the cited periods): the end of the span covering today, and the first start or end after today
+ * of any dated row in the clock slices the readers read. Comparison of stored dates only; null when none lies ahead.
+ */
+export function layerValidUntil(frame: { spans: ReadonlyArray<{ from: string; to: string; place?: string }> }, picked: { clocks: ReadonlyArray<{ text: string }> }, asOf: string): string | null {
+  const edges: string[] = [];
+  const now = frame.spans.find((s) => s.place === 'now') ?? frame.spans.find((s) => s.from <= asOf && asOf < s.to);
+  if (now && now.to > asOf) edges.push(now.to);
+  for (const c of picked.clocks)
+    for (const m of c.text.matchAll(/(d{4}-d{2}-d{2})..(d{4}-d{2}-d{2})/g)) {
+      if (m[1]! > asOf) edges.push(m[1]!);
+      if (m[2]! > asOf) edges.push(m[2]!);
+    }
+  return edges.sort(cmp)[0] ?? null;
 }

@@ -14,4 +14,6 @@ Each cell:
 - `strength`: 1, 2 or 3, from the strength of the rows you cite (the strongest one).
 - `evidence`: the keys of the rows the cell rests on, at most three. At least one dated row of your clock (a `pressure:` key listed under that span in `CLOCK <system>`); you may add one natal key from NATAL CORE or one row from SKY WINDOW that explains it.
 
+How a period is judged (docs/techniques/09 §4): a star dasha (Vimshottari and the conditional nakshatra dashas) by its lord from the lagna (the houses it owns, where it sits, its dignity, its navamsa, its links), then by its star; a sign dasha (Narayana and the other rasi dashas) by the sign itself, its occupants, its lord and its place from the arudhas; a sub-period by its house from the maha dasha lord. Your sentence names the system and the period it reads; it is passed up to the lens lineman and the card Oracle as you write it.
+
 Return `{ "cells": [ ... ] }` and nothing else.

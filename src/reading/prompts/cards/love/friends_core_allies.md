@@ -3,7 +3,7 @@ Board: Love, Friends lens.
 
 What this card answers: "What kind of people show up as your most loyal, dependable friends, and where in your life now do those steady allies live?" And when they step forward.
 
-What it reads: The 11th and its lord, the 9th, the A11, Jupiter, the Bhratrikaraka, and the D9 and D10 11th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. The D11 only if present in the shared data; until then the 11th, the A11 and the D9 and D10 11th stand in for it.
+What it reads: The 11th and its lord, the 9th, the A11, Jupiter, the Bhratrikaraka, and the D9 11th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. Charts: the D1 and D9, the 11th counted from the lagna and from the Arudha Lagna; the year in the Tithi Pravesha D1; the charts past the natal D1 and D9 only where the shared data carries them.
 
 For this person: Keep friend roles apart: a peer confidant, a sibling-like elder, a thinking companion are different people, not one type. Few and steady over many and loose. Ladder: best, show up in their storms without keeping count; practical, put your time into your few most trusted friends; drift, neglecting old friends for exciting new ones; floor, no expecting loyalty from people kept only for convenience.
 

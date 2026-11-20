@@ -136,10 +136,10 @@ describe('technique catalogue', () => {
     for (const id of ['diagnosis', 'chapters', 'vocation', 'standing', 'ground', 'gain', 'struggle', 'year', 'clock', 'purview', 'audit', 'oracle']) {
       expect(techniqueById(`work.reading.${id}`)?.status, `work.reading.${id}`).toBe('built');
     }
-    // 143 built (including self/love/work reading panels, stage checks, oracle synthesizers, character arcs, the 22 Self v2 rows of doc 66 §4.8 and the card chat of doc 85); 0 planned
-    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(143);
+    // 144 built (the lens thread of docs/techniques/09; including self/love/work reading panels, stage checks, oracle synthesizers, character arcs, the 22 Self v2 rows of doc 66 §4.8 and the card chat of doc 85); 0 planned
+    expect(TECHNIQUES.filter((t) => t.status === 'built')).toHaveLength(144);
     expect(TECHNIQUES.filter((t) => t.status === 'planned').map((t) => t.id)).toEqual([]);
-    expect(TECHNIQUES).toHaveLength(143);
+    expect(TECHNIQUES).toHaveLength(144);
   });
 
   it('the work families and the house-state layers are built', () => {

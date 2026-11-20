@@ -69,22 +69,45 @@ export interface ClockCallContext {
   asOf: string;
 }
 
-/** The one cached prefix every reading agent shares: natal.core, sky.window, year.tp and frame, in that order. */
+/**
+ * What every reading agent shares (docs/techniques/09 §3.2, §8 step 4), in two parts:
+ *
+ *   text   the CACHED natal prefix: natal.core, sky.window and year.tp. None carries today's date (the slice window is
+ *          snapped to month starts, `render.ts` sliceWindow), so one cache region and every key built on `hash` hold
+ *          from one day to the next.
+ *   dated  the DATED block, sent as the first uncached part of each request (`withDated`): TODAY and the frame (its
+ *          spans and which one is now). Never cached in the prefix.
+ *
+ * `keys` and `rows` are the union of both parts, so a validator accepts a citation from either. `hash` covers the
+ * four slices' own hashes (none of which holds today's date): the store keys of the sheets, the ledger and the cards.
+ * `cacheHash` is the natal part's alone (the explicit cache region).
+ */
 export interface SharedPrefix {
   text: string;
+  dated: string;
   keys: string[];
   hash: string;
+  cacheHash: string;
   rows: Map<string, SliceRowRef>;
 }
 
-export function sharedPrefix(s: ClockLayerSlices['shared']): SharedPrefix {
-  const parts = [s.natal, s.sky, s.year, s.frame].filter((x): x is RenderedSlice => Boolean(x));
-  const text = parts.map((p) => p.text).join('\n\n');
-  const keys = [...new Set(parts.flatMap((p) => p.keys))].sort(cmp);
+export function sharedPrefix(s: ClockLayerSlices['shared'], asOf: string | null = null): SharedPrefix {
+  const cached = [s.natal, s.sky, s.year].filter((x): x is RenderedSlice => Boolean(x));
+  const all = [...cached, s.frame];
+  const text = cached.map((p) => p.text).join(PART_SEP);
+  const dated = [asOf ? `TODAY: ${asOf}` : '', s.frame.text].filter(Boolean).join(PART_SEP);
+  const keys = [...new Set(all.flatMap((p) => p.keys))].sort(cmp);
   const rows = new Map<string, SliceRowRef>();
-  for (const p of parts) for (const [k, r] of parseRowLines(p.text)) if (!rows.has(k)) rows.set(k, r);
-  return { text, keys, hash: shortHash(`${parts.map((p) => `${p.id}:${p.hash}`).join('|')}`), rows };
+  for (const p of all) for (const [k, r] of parseRowLines(p.text)) if (!rows.has(k)) rows.set(k, r);
+  return { text, dated, keys, hash: shortHash(`${all.map((p) => `${p.id}:${p.hash}`).join('|')}`), cacheHash: shortHash(cached.map((p) => `${p.id}:${p.hash}`).join('|')), rows };
 }
+
+/** The uncached part of a request: the dated block first, then the caller's own text (a repair note last). */
+export function withDated(prefix: Pick<SharedPrefix, 'dated'>, ...rest: string[]): string {
+  return [prefix.dated, ...rest].filter(Boolean).join(PART_SEP);
+}
+
+const PART_SEP = '\n\n';
 
 export const systemOfSlice = (s: Pick<RenderedSlice, 'id'>): string => s.id.replace(/^clock\./, '');
 
@@ -315,7 +338,7 @@ export async function readOneClock(deps: ClockCallDeps, i: ReadOneInput): Promis
               model: i.model,
               node: `reading.clock.${system}`,
               system: promptText(READER_SYSTEM_PROMPT),
-              parts: [i.prefix.text, readerInstruction(system, i.slice)],
+              parts: [i.prefix.text, withDated(i.prefix, readerInstruction(system, i.slice))],
               thinking: 'low',
               maxOutputTokens: CLOCK_READER_MAX_OUTPUT_TOKENS,
               timeoutMs: limit,
@@ -383,7 +406,7 @@ export async function readOneClock(deps: ClockCallDeps, i: ReadOneInput): Promis
 
 /** Every clock reader at once (one per `clock.<system>` slice, the year included). Never throws. */
 export async function readClocks(deps: ClockCallDeps, ctx: ClockCallContext, frame: YearFrameV3, slices: ClockLayerSlices, model: string): Promise<ClockReadResult[]> {
-  const prefix = sharedPrefix(slices.shared);
+  const prefix = sharedPrefix(slices.shared, ctx.asOf);
   const overBudget = (deps.spentUsd ?? 0) >= deps.maxSpendUsd;
   // each clock slice cut to the frame: a cell must cite a row of its own clock overlapping a frame span, so rows that end
   // before the frame or start after it can never ground a cell (doc 70 Phase 3 replay fixes)

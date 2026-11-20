@@ -431,7 +431,7 @@ export interface AreaBrief {
 // Layer 3: model agents
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type SelfV2AgentId = 'family.rasi' | 'family.varga' | 'family.dasha' | 'family.year' | 'family.sky' | 'self.oracle' | 'self.personalizer';
+export type SelfV2AgentId = 'family.rasi' | 'family.moon' | 'family.varga' | 'family.star' | 'family.dasha' | 'family.year' | 'family.sky' | 'self.oracle' | 'self.personalizer';
 
 /** a slice handed to an agent: the stable prefix (cached) and the variable suffix */
 export interface AgentSlice {

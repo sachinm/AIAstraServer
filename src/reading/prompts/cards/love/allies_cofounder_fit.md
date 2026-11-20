@@ -3,7 +3,7 @@ Board: Love, Allies lens.
 
 What this card answers: "Does partnering strengthen your path right now, and what clear rules and timing protect the relationship?" When forming an alliance is supported, and when caution is wiser.
 
-What it reads: The 7th lord against the lagna lord, the 7th and 11th, the A7, the Darakaraka, and the D10 7th and 11th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. The D11 and D30 only if present in the shared data; until then the 11th, the A11 and the D9 and D10 11th stand in for the D11.
+What it reads: The 7th lord against the lagna lord, the 7th and 11th, the A7, the Darakaraka, and the D10 7th and 11th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. Charts: the D1, D9 and D10; the year in the Tithi Pravesha D1, then its D10; the charts past the natal D1 and D9 only where the shared data carries them.
 
 For this person: Running their own business. Keep partner kinds apart: an equal co-founder, a client who acts like a boss, a quiet investor. Speak of the working relationship and fit, never what the partner intends; no legal advice, though qualified counsel may be suggested. Ladder: best, partner only on shared ethics; practical, put roles, tie-breaks and exits in writing early; drift, an equal split on a handshake; floor, no partnering out of loneliness.
 

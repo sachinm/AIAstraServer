@@ -22,7 +22,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
-import { getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { callWithContinuation } from '../../llm/continue.js';
+import { getReadingBoardSpendCapUsd, getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
 import { usageCostUsd } from '../../llm/models.js';
 import { runSelfV3Cards, type SelfV3StepResult } from '../v3/build.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
@@ -298,14 +299,16 @@ async function runFamilyReaders(
             charts: pack.charts,
           },
           async () => {
-            const g = await deps.callGemini({
+            // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
+            // (6,000, docs/techniques/09 §3.1); a finding that reaches it is continued, never thrown away (§3.5)
+            const g = await callWithContinuation(deps.callGemini, {
               model: slice.model,
               node: id,
               system: slice.system,
               parts: [slice.prefix, slice.suffix],
               thinking: 'medium',
-              // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
               maxOutputTokens: getSelfFamilyMaxOutputTokens(),
+              timeoutMs: 60_000,
               cachePrefix: true,
               cacheOwner: slice.cacheOwner,
             });
@@ -317,9 +320,10 @@ async function runFamilyReaders(
           },
         );
         markAgentUsed(slice, deps.informUsed);
-        // a finding cut at the output cap (MAX_TOKENS) never reaches the Oracle as it is: only its complete sentences,
-        // with a note, or nothing; it is never cached (doc 66 replay run 2, failure 7)
+        // a finding is continued at its ceiling (llm/continue.ts); one still cut after the continuations keeps its complete
+        // sentences with a note and is not cached (doc 66 replay run 2, failure 7)
         const cut = res.finishReason === 'MAX_TOKENS';
+        if (res.continued) gaps.push(`${id}: continued ${res.continued} time(s) at the output ceiling${cut ? '; still cut' : ''}`);
         const kept = cut ? completeSentencesOf(res.text) : res.text;
         if (cut) gaps.push(`${id}: cut at the output cap (MAX_TOKENS); ${kept ? `${kept.length} of ${res.text.length} chars kept, complete sentences only` : 'no complete sentence; not passed to the Oracle'}`);
         const text = kept ? redactEngineTerms(cut ? [kept, CUT_FINDING_NOTE].join('\n') : kept) : '';
@@ -399,7 +403,8 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
   const d = { ...deps, callGemini: call };
   // one build run is one operation with one budget (docs/billing/README.md "Spend cap per operation"): the family
   // readers, the Oracle, the Personalizer and the v3 step (clock layer and cards) share READING_SPEND_CAP_USD
-  const maxSpendUsd = deps.maxSpendUsd ?? getReadingSpendCapUsd();
+  // docs/techniques/09 §3.5: a board build spends up to READING_BOARD_SPEND_CAP_USD (chat answers keep READING_SPEND_CAP_USD)
+  const maxSpendUsd = deps.maxSpendUsd ?? getReadingBoardSpendCapUsd();
   try {
     // 0–1: sub-techniques
     step('subs');
@@ -629,7 +634,7 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
           return Math.max(0, round6(maxSpendUsd - spentBefore - personalizerHold));
         },
       };
-      v3Cards = runSelfV3Cards(v3Deps, { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait, buildId: out.buildId });
+      v3Cards = runSelfV3Cards(v3Deps, { ctx, pressure: sub.loaded.pressure ?? null, oracleSlice, portrait, buildId: out.buildId, findings: oracle.familyFindings ?? [], activation: sub.loaded.activation ?? [] });
     }
     // both settle before either outcome is used; a v2 throw is re-thrown as before, once the v3 step has ended
     const [v2Settled, v3Settled] = await Promise.allSettled([v2Cards, v3Cards]);

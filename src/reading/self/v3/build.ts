@@ -26,7 +26,15 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnabled, isCardsReadEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnabled, isCardsReadEnabled, isCardsStoryContractEnabled, isLensLinemenEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import type { ActivationRow } from '../../digest/activation.js';
+import { anyCardDef } from '../../cards/registry.js';
+import { lensOf } from '../../cards/ownCharts.js';
+import { type CardsStoryRunInput, type LensThreadRef } from '../../cards/storyInputs.js';
+import { countedNames, renderShownPeriods, shownLabels, shownSystems } from '../../clocks/systems.js';
+import type { ClockSheet } from '../../clocks/types.js';
+import { runLensLineman } from '../../lens/lineman.js';
+import { parseApplicability, type ApplicabilityRow } from '../clock.js';
 import { withCacheLease } from '../../llm/cacheLease.js';
 import { boardFactsOf, boardV3CardDef, defaultLens, isBoardLens, type AreaV3Board } from '../../boards/v3Cards.js';
 import { isReadable } from '../../cards/registry.js';
@@ -84,6 +92,11 @@ export interface SelfV3StepDeps {
   /** overrides for the card runner (its spend cap, default this step's `maxSpendUsd`; the rest flag) */
   cardsCapUsd?: number;
   cardsReadRest?: boolean;
+  /** docs/techniques/09: overrides CARDS_STORY_CONTRACT and LENS_LINEMEN; test seams for the engine's verdict on the conditional dashas and the lens lineman */
+  storyContract?: boolean;
+  lensLinemen?: boolean;
+  loadApplicability?: (prisma: PrismaClient, kundliId: string) => Promise<ApplicabilityRow[] | null>;
+  runLensLineman?: typeof runLensLineman;
 }
 
 export interface SelfV3StepInput {
@@ -94,6 +107,9 @@ export interface SelfV3StepInput {
   oracleSlice: PreparedAgentSlice;
   portrait: PersonPortrait | null;
   buildId: string;
+  /** docs/techniques/09 §3: the seven family findings of this build (stored in reading_findings_cache) and the stored periods */
+  findings?: ReadonlyArray<{ family: string; text: string }>;
+  activation?: readonly ActivationRow[];
 }
 
 export interface SelfV3StepResult {
@@ -113,6 +129,8 @@ export interface SelfV3StepResult {
   ledger?: AgreedLedger | null;
   /** the slices the clock layer read (the cards read the same prefix and their matter slices) */
   sliceSet?: RenderedSlice[];
+  /** docs/techniques/09 §3.1: the lens threads read for this run (lens, links written, cached) */
+  lensThreads?: Array<{ lens: string; ok: boolean; cached: boolean }>;
   /** doc 70 Phase 3: the per-card run, when it ran */
   cardsRun?: Pick<CardsRunResult, 'order' | 'spentUsd' | 'capReached'> & { results: Array<{ card: CardId; status: string }> };
 }
@@ -219,6 +237,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
     }
     // 1c (gate): with the per-card reading on, nothing is read before the person chose a board or asked for a card
     const cardsOn = deps.cardsRead ?? isCardsReadEnabled();
+    const storyOn = deps.storyContract ?? isCardsStoryContractEnabled();
     let board: { cards: SelfCardId[]; sections: Partial<Record<SelfCardId, SelfSectionId[]>> } = { cards: [], sections: {} };
     if (cardsOn) {
       board = await (deps.loadBoard ?? (async (p: PrismaClient, k: string) => readLayout(p, k)))(deps.prisma, ctx.kundliId).catch(() => ({ cards: [], sections: {} }));
@@ -237,6 +256,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
     }
     // 1b: the slices and the clock layer (doc 70 §4.1 layers 1–3), behind READING_CLOCK_LAYER
     let layerModel: string | null = null;
+    let layerSheets: ClockSheet[] = [];
     let layerWords: Promise<ClockLayerWords> | null = null;
     // the concordance's words, once written: the worded ledger, its call and its spend (on the result and the day's doc)
     const foldWords = async () => {
@@ -270,12 +290,15 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
       // with the per-card reading on, the cards start on the counted ledger and the concordance writes its words
       // meanwhile (doc 70 Phase 3 replay fixes); they are folded in after the cards (`foldWords`)
       const layer = await (deps.runClockLayer ?? runClockLayer)(
-        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true, words: cardsOn ? 'background' : 'await', warmOnHit: !(cardsOn && isCardsGroupPackEnabled()) },
+        // one value decides the card path (doc 09 decision 7): with the story contract the cards go one per call over this
+        // prefix, so it is warmed on a hit too; only the grouped path (contract off) reads its own pack instead
+        { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, maxSpendUsd: deps.maxSpendUsd, now: deps.now, force: deps.force, ensureCache: deps.ensureCache, enabled: true, words: cardsOn ? 'background' : 'await', warmOnHit: !(cardsOn && !storyOn && isCardsGroupPackEnabled()) },
         { ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf }, frame, slices: prepared.slices },
       );
       ms.clockLayer = since(tc);
       layerWords = layer.words ?? null;
       layerModel = layer.model;
+      layerSheets = layer.sheets;
       out.agents.push(...(layer.timings as unknown as SelfV2AgentTiming[]));
       out.ledger = layer.ledger;
       out.clockLayer = {
@@ -315,7 +338,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         d.clocks = clocksView;
         d.spentUsd = Math.round((d.spentUsd + layerSpent) * 1e6) / 1e6;
       });
-      const prefix = sharedPrefix(picked.shared);
+      const prefix = sharedPrefix(picked.shared, ctx.asOf);
       const years = (frame.years ?? []).flatMap((y) => [y.from, y.to]);
       const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
       const answers = answersLine(profile);
@@ -327,6 +350,60 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
       const techniques: Partial<Record<TechniqueBoard, BoardTechniqueSection>> = techBoards.length
         ? await (deps.loadTechniques ?? ((q: Parameters<typeof loadBoardTechniques>[1]) => loadBoardTechniques({ prisma: deps.prisma }, q)))({ kundliId: ctx.kundliId, asOf: ctx.asOf, boards: techBoards, ageYears: profile.ageYears ?? null, range: frameRange(frame), systems: frame.clocksRead }).catch(() => ({}))
         : {};
+      // docs/techniques/09 §3: the story inputs (verified systems, stored periods, findings, sheets) and the lens threads
+      let story: CardsStoryRunInput | undefined;
+      let linemenSpent = 0;
+      if (storyOn) {
+        const tl = performance.now();
+        const applicability = await (deps.loadApplicability ?? loadApplicability)(deps.prisma, ctx.kundliId).catch(() => null);
+        const activation = i.activation ?? [];
+        const shown = shownSystems([...new Set(activation.map((r) => r.system))], applicability);
+        story = { findings: i.findings ?? [], sheets: layerSheets, shown, periodRows: activation, threads: {} };
+        const lensCards = new Map<string, string[]>();
+        for (const id of [...new Set([...board.cards, ...area.cards, ...queuedNow])]) {
+          const lens = lensOf(id);
+          if (lens && isReadable(id)) lensCards.set(lens, [...(lensCards.get(lens) ?? []), id]);
+        }
+        if (deps.lensLinemen ?? isLensLinemenEnabled()) {
+          const verified = countedNames(shown);
+          const periods = renderShownPeriods(activation, shown, { from: frame.spans[0]!.from, to: frame.spans[frame.spans.length - 1]!.to });
+          const threads = await Promise.all(
+            [...lensCards.entries()].map(async ([lens, ids]) => {
+              const matters = [...new Set(ids.flatMap((id) => anyCardDef(id)?.matters ?? []))];
+              const r = await (deps.runLensLineman ?? runLensLineman)(
+                { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, now: deps.now, force: deps.force },
+                {
+                  ctx: { userId: ctx.userId, kundliId: ctx.kundliId, asOf: ctx.asOf, digestVersion: ctx.stamps.digestVersion },
+                  lens,
+                  matters,
+                  cards: ids.map((id) => anyCardDef(id)?.title ?? id),
+                  prefix: { text: prefix.text, dated: prefix.dated, keys: prefix.keys, hash: prefix.hash },
+                  findings: story!.findings,
+                  sheets: layerSheets,
+                  ledger: out.ledger ?? null,
+                  frame,
+                  systemsText: periods.text,
+                  systemsKeys: periods.keys,
+                  verified,
+                  verifiedLine: shownLabels(shown),
+                  model: layerModel ?? i.oracleSlice.model,
+                },
+              );
+              return { lens, r };
+            }),
+          );
+          const threadMap: Partial<Record<string, LensThreadRef>> = {};
+          for (const { lens, r } of threads) {
+            if (r.thread) threadMap[lens] = r.thread;
+            out.agents.push(...r.timings);
+            out.issues.push(...r.issues);
+            linemenSpent += r.timings.reduce((n, x) => n + x.costUsd, 0);
+          }
+          story.threads = threadMap;
+          out.lensThreads = threads.map(({ lens, r }) => ({ lens, ok: Boolean(r.thread), cached: r.cached }));
+        }
+        ms.lensLinemen = since(tl);
+      }
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
         // one build run is one operation (docs/billing/README.md "Spend cap per operation"): the cards get what the run
@@ -336,7 +413,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
           ctx,
           frame,
           ledger: out.ledger,
-          prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash },
+          prefix: { text: prefix.text, dated: prefix.dated, keys: prefix.keys, hash: prefix.hash },
           slices: out.sliceSet!,
           board: board.cards,
           ...(area.cards.length ? { packCards: area.cards } : {}),
@@ -346,7 +423,8 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
           answers,
           model: layerModel ?? i.oracleSlice.model,
           ...(Object.keys(techniques).length ? { techniques } : {}),
-          spentBeforeUsd: layerSpent,
+          spentBeforeUsd: Math.round((layerSpent + linemenSpent) * 1e6) / 1e6,
+          ...(story ? { story } : {}),
         },
       );
       ms.cards = since(tcards);
@@ -460,4 +538,13 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
   } finally {
     ms.total = since(t0);
   }
+}
+
+/** The engine's `dasha.applicable` verdicts for the kundli (null when none stored). Read only. */
+export async function loadApplicability(prisma: PrismaClient, kundliId: string): Promise<ApplicabilityRow[] | null> {
+  const row = await (prisma as unknown as { kundliData?: { findFirst?: (q: unknown) => Promise<{ payload: unknown } | null> } }).kundliData?.findFirst?.({
+    where: { kundli_id: kundliId, data_type: 'dasha.applicable' },
+    select: { payload: true },
+  });
+  return row?.payload != null ? parseApplicability(row.payload) : null;
 }

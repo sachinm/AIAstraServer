@@ -3792,3 +3792,124 @@ items 05 marks "Filed"). Nothing below was fixed.
   Jataka 7-8 (Iyer 1885); Saravali 41-42 verse text; Tajika Neelakanthi (Mudda, Patyayini); PVR ch. 30; Rath's TP
   text (`pp_tp.pdf` unread); Jaimini adhyayas 3-4; Muhurta Chintamani ch. 1, 2, 6, 11; Prashna Marga verses. Source:
   each folder's `00-overview.md` "Open questions" and `docs/deep-research/README.md`. [research]
+
+## Filed 2026-11-19 by reading recipes (feat/reading-recipes)
+
+- **P1 · open · The chart-routing block still prints the old Self-only table.** `renderActiveTimingAndVargaBlock`
+  (`src/reading/cards/oracle.ts:95-165`) gives `lagna`/`presence` the D7, `stuck`/`mood` the D30, `diagnosis` and the
+  time cards the D10, and every Love and Work card D1+D9. Done when it (and the grouped pack, `cards/group.ts:126`) reads
+  `routeFor()` from `src/reading/cards/routing.ts` (doc 08). Wiring belongs to the parallel plan-09 agent.
+- **P1 · open · The pack must carry the routed charts.** Routes name D16 (`mood`, `restores`, `play`), D20 (`purpose`),
+  D24 (mind cards, Craft, `start_launch_window`, `job_skill_building`), D5 (`yogas`), D4 (`marriage_inlaws_family`,
+  `start_relocation_abroad`, `biz_capital_assets`), D2 (money cards) and year D2/D4/D10/D16/D20/D24. Check `natal.core`
+  and the year rows before the Oracle is told to read them. [server]
+- **P2 · open · Romance still routes to the D7 outside the briefs.** `src/reading/area/love.ts` (vargas D1, D9, D7) and
+  the `love:chart/D7.h7` row of `src/reading/cards/techniques.ts` (asserted in `tests/unit/reading/cards/techniques.test.ts`)
+  read the D7 for love. Plan 09 §4: the D7 is for children only. [server]
+- **P2 · open · Divisional Narayana is named but not cast.** Doc 08 routes Narayana D9 (Marriage) and D10 (Allies, Work);
+  the engine casts Narayana on D1 only (doc 07 E5), so the recipes fall back to Narayana D1 and say so. Seeds:
+  `NARAYANA_CONTROLLING_HOUSE` (Table 29). [engine]
+- **P2 · open · D30 removed from ten Love/Work briefs; decide whether the burnout cards should read it for strain words.**
+  Removed from `dating_karmic_compatibility`, `marriage_conflict_cycles`, `allies_cofounder_fit`,
+  `allies_contracts_disputes`, `allies_team_politics`, `job_boss_politics`, `job_burnout_load`, `job_security_layoff`,
+  `biz_partnerships_fit`, `biz_founder_burnout` (sensitive: sanjay-rath/15 #17, #23; doc 07 §4.2 allows it only on the
+  Self body cards). Most read it "only if present"; whether the pack carried it was not checked (the varga family
+  lists D30). Sachin's yes is owed under the depth rule for this and the other unapproved removals listed in doc 08
+  (D7 in Craft, D24 ×4, D16 ×3, the D10 11th in `friends_core_allies`); revert any on his word. [decision]
+- **P1 · open · Prompt edits do not reach a database that already holds the prompt.** `ensurePromptSchemaAndSeed`
+  (`src/reading/prompts/registry.ts`) inserts every `PROMPTS` key into `system_prompts` but `ON CONFLICT` never updates
+  `prompt`, and `loadAgentPrompts` then copies the stored text over `PROMPTS`. The 52 brief edits of doc 08 (and any
+  earlier brief edit) stay stale on staging until those `cards/*` rows are refreshed; the 13 new `cards/threads/*`
+  rows will seed fresh. [server]
+- **P3 · open · Craft briefs read the natal A5 as "the work".** `craft_creative_flow`, `craft_creative_blocks`,
+  `craft_monetize_hobby`, `craft_audience_community`. No source; the A5 is the mantra pada (sanjay-rath/09 rule 1.8).
+  The `work.hobby` recipe reads it only as recognition (Rao, 02 §2.2); the briefs were left as they are. [prompts]
+- **P3 · open · Two business-partner briefs read the Darakaraka.** `allies_cofounder_fit`, `biz_partnerships_fit`. The
+  DK is the spouse (Rao, sanjay-rath/02 §6); the recipes read it only to keep the spouse apart. [prompts]
+- **P3 · open · Friends briefs read the A11 and Jupiter as friendship; no source.** The `love.friends` recipe tags every
+  friendship meaning "gap" and says the texts give no rule. [prompts]
+- **P3 · open · Two routes are [Inferred] and want Sachin's look:** the D16 (mental happiness, sanjay-rath/06 rule 1.3)
+  on the Self happiness cards, and the D24 on the Craft cards (doc 07 §4.2 "D24 for skill"). [decision]
+- **P3 · open · `marriage_children_family` (later) has no route.** When it opens it reads the D7 (children: D7 decides,
+  sanjay-rath/09 §3) and the routing test's "no D7 in Marriage" check must exempt it by id. [server]
+- **P2 · open · `tests/unit/reading/self/v2/subTechniques.test.ts` fails on `develop` `de135cd`** ("a TECHNIQUES row
+  per sub-technique and per area": the catalog no longer lists `self.sub.clock` first; expected and received orders
+  differ). Pre-existing; found while running the Self suite for doc 08, not touched. [server]
+- **P2 · open · Four more `tests/unit/reading` failures on `develop` `de135cd` in a worktree with the copied `.env`:**
+  `digestPack.test.ts` (cache prefix bytes), `promptCache.test.ts` ("off by default"), `run.test.ts` (thinking config),
+  `digest/event.test.ts` (default candidate list). Same result before and after the reading-recipes commits; they look
+  sensitive to `.env` flags (e.g. `READING_EXPLICIT_CACHE=1`). Tests should pin their env. [server]
+
+## Filed 2026-11-19 by reading depth (feat/reading-depth)
+
+Branch `feat/reading-depth` (docs/techniques/09 §8 steps 2, 4–10, server side). Each item: what is wrong, where, how we
+know, who holds it, what done means.
+
+- **No pressure rows for Sudasa, Lagna Kendradi or Patyayini (engine).** Read-only check of the shared DB on
+  2026-11-19: `kundli_data` `pressure_inventory` exists only for vimsottari, narayana, yogini, chara, kaala and five
+  conditional dashas. Sudasa and Lagna Kendradi (stored as `kendradhi_rasi`) exist only as `kundli_activation` periods
+  (6 kundlis, L1–L4); Patyayini only as `kundli_data` `annual.patyayini` (141 rows). They reach the reading as stored
+  period rows (`clocks/systems.ts` feed `periods`, `renderShownPeriods`) and are never counted as a clock's tone.
+  Owner: engine (doc 07 E-list). Done: pressure inventories for the three, then flip `feed` to `pressure` and add them
+  to `READING_CLOCK_ORDER`.
+- **Patyayini is shown but not read anywhere yet.** `systems.ts` marks it `always` / feed `annual`; no slice or pack
+  renders `annual.patyayini`. Owner: server. Done: `family.year` carries this year's Patyayini periods, keyed.
+- **Tara per planet is not stored (engine E4).** `PlanetCard` has star, starLord and pada only. `family.star` says so
+  and forbids computing it. Owner: engine. Done: a tara field per planet, then `family.star` reads it.
+- **A flagged preferred clock stays the spine.** `resolveReadingClocks` keeps the person's `preferred_dasha` as the
+  spine even when `systems.ts` marks it `never` (e.g. Yogini). Owner: Sachin (product). Done: a decision and a test.
+- **The continuation of a JSON answer is unproven on the live model.** `llm/continue.ts` sends a continuation turn
+  without the schema and joins the tail; `closeJson` keeps a still-cut answer. Tested with fakes only. Owner: the paid
+  replay (doc 09 §8 step 12). Done: one card forced to its ceiling continues into a parseable card.
+- **`generated.ts` will conflict with `feat/reading-recipes` at merge.** Both branches add prompts. Owner: whoever
+  merges. Done: take either side, then run `node scripts/embed-prompts.mjs` and commit the regenerated file.
+- **The routing stub (`cards/routing.ts`) is replaced at merge.** Its exports are identical to the recipes branch;
+  `ROUTED_CARDS` and `NARAYANA_CONTROLLING_HOUSE` arrive with it. `ownCharts.ts` falls back to today's routing words
+  while `routeFor` returns null; `family.year` reads `YEAR_ROUTED_VARGAS` (D10, D7, D4) until it reads the routes.
+  Owner: the merge session. Done: after merge, `family.year` takes its year charts from `routeFor(...).yearCharts`.
+- **Queued cards wait for the next build.** A card stopped by the board cap, the per-card stop, the depth floor or a
+  pending plain story is marked `queued`; the same run never retakes it, and nothing schedules the next round except the
+  next open or sync. Owner: server. Done: the sweep re-runs a kundli with queued cards older than N minutes, charged
+  only to the build budget.
+- **The dated block is smaller than the plan's.** doc 09 §3.2 puts the sky window and the year frame in the uncached
+  dated block. On this branch only TODAY and the frame are uncached; `sky.window` and `year.tp` stay in the cached part
+  because their window now snaps to month starts and carries no day (about 8–13 k tokens a call would otherwise go
+  uncached on ~38 calls, ~$0.25 a build). Owner: Sachin (confirm). Done: a yes, or move them to the dated block.
+- **The confirm stamp left the Oracle's key.** A confirm tap re-runs only the card's Personalizer (the Oracle card is
+  reused by its own key, `oracleKey`); the Oracle reads the new answer when its Good until passes or the person
+  refreshes. Owner: Sachin (confirm the trade). Done: a yes.
+- **A depth gap the input cannot fill is served.** When the only gaps left are kinds the input never carried (no year
+  row stored, no key of the card's own chart), the card is stored and served with `depth.inputGaps`, and the gap is
+  logged to `reading_validation_failures`; it is not looped on. Owner: engine/server. Done: the depth replay shows no
+  card with input gaps.
+- **Love and Work board v3 reads.** The per-card story path runs inside the Self build (the Love/Work decks join it).
+  Any other caller of `readCards` without `story` inputs keeps the doc 70 path (grouped when `CARDS_GROUP_PACK=1`).
+  Owner: server. Done: every caller passes story inputs, then the group path is retired (doc 09 §8 step 13).
+- **The web must render the new fields.** `v3.story`, `v3.plain.story` (with `pending`), `v3.spans[].growth`,
+  `v3.systems`, `v3.goodUntil` and `reading.deeperReadingReady` are served additively. Owner: web (`feat/board-polish`).
+  Done: `servedFieldsRendered` proves each has a place; the refresh notice shows on `deeperReadingReady`.
+- **piecesDoc tests failed before this branch.** `tests/unit/techniques/piecesDoc.test.ts` (2 tests: docs/admin/07 is
+  stale; the 01..06 manual check) fail on `develop` `de135cd`. Owner: docs. Done: `npx tsx scripts/write-technique-pieces-doc.ts` and the manual fixed.
+- **Narayana is verified at the maha dasha level only, but its sub-periods are still read.** `systems.ts` marks it
+  `maha_only` and `levelShown` enforces it for the periods-only block, but the Narayana clock slice (levels 1–3), the
+  year frame tone (level 3) and `family.dasha` still read its sub-periods. Owner: server. Done: the clock slice and the
+  dasha pack cut Narayana to level 1, and the frame takes no tone from its sub-periods (or the engine reference test
+  clears them, and the mark goes).
+- **Every card is re-read when a month turns.** The slice window snaps to month starts (doc 09 step 4), so the sky and
+  year slices, the shared prefix hash and every sheet, thread and card key change on the 1st (rows enter and leave the
+  window). Same-day and same-month reopens make no call. Cost: one full board build a month per active board, not
+  charged to the person. Owner: Sachin (accept) or server (key the window by the frame's spans instead). Done: a decision.
+- **`family.moon` and `family.star` are below the explicit-cache minimum.** Their packs are small (~1 k tokens); only
+  `family.sky` is padded. They go uncached (a few hundred tokens each). Owner: server. Done: pad them from allowed rows,
+  or accept and note in doc 09 §3.1.
+- **The Now card prompt still speaks of "clocks" agreeing.** `prompts/cards/now.md` asks how many clocks agree (an
+  integer field); whether the web prints the word is not checked here. Owner: web/server (naming rule "AdAstra AI").
+  Done: the served Now-card wording says "AdAstra AI" or "timing views".
+- **Prompt seed: 23 stored prompts differ from the code and will be replaced on the first load after deploy.**
+  Read-only diff of `system_prompts` on 2026-11-19 (the shared database): annual, cards/chat, cards/group, cards/oracle,
+  clock/reader, common/reader-system, concordance, dasha, oracle/self, oracle/self-cards-v3, personalizer/self-v3,
+  promise, readers/P1-pressure, readers/P3-luck, readers/R01-backbone, readers/R03-varga, readers/R05-strength,
+  readers/R08-vimshottari, readers/R11-annual, readers/R15-self, v2/dasha, v2/promise, v2/synth. Before this fix the
+  stored (older) text overrode the code for all of them. Each replaced text is archived by the trigger in
+  `system_prompt_versions`. If any was a deliberate live edit, it must be put into the code `.md`. Owner: Sachin
+  (confirm none was a live edit). Done: a yes, or the edits moved into the code.

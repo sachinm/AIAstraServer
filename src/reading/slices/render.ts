@@ -54,7 +54,15 @@ export interface SliceWindow {
   to: string;
 }
 
-export const sliceWindow = (asOf: string): SliceWindow => ({ from: addMonthsIso(asOf, -SLICE_MONTHS_BACK), to: addMonthsIso(asOf, SLICE_MONTHS_AHEAD) });
+/**
+ * docs/techniques/09 §8 step 4: the window is snapped to month starts (the first of today's month, a year back, to the
+ * first of the month after eighteen months ahead), so a slice's bytes, and every key built on its hash, do not change
+ * from one day to the next; they change when a month turns, a row is added, or the frame's spans change.
+ */
+export const sliceWindow = (asOf: string): SliceWindow => {
+  const m = `${asOf.slice(0, 7)}-01`;
+  return { from: addMonthsIso(m, -SLICE_MONTHS_BACK), to: addMonthsIso(m, SLICE_MONTHS_AHEAD + 1) };
+};
 const overlaps = (r: { from: string; to: string }, w: { from: string; to: string }): boolean => r.from < w.to && w.from < r.to;
 
 function finish(id: string, text: string, keys: Iterable<string>, sources: SliceSource[]): RenderedSlice {
@@ -181,7 +189,8 @@ export function renderFrame(frame: YearFrameV3, invs: readonly SliceInventory[])
   const w = { from: frame.spans[0]?.from ?? frame.asOf, to: frame.to };
   const shared = sharedRows(invs, [...SHARED_KINDS], w).rows;
   const book = new KeyBook();
-  const L = [`# FRAME (today ${frame.asOf}; ${frame.spans.length} spans to ${frame.to}; every date you write is an edge below)`];
+  // no date of today here (docs/techniques/09 §8 step 4): TODAY rides in the dated block (`clocks/reader.ts` sharedPrefix)
+  const L = [`# FRAME (${frame.spans.length} spans; every date you write is an edge below)`];
   for (const s of frame.spans) {
     const rows = shared.filter((r) => overlaps(r, s));
     L.push(`${s.id} ${s.from}..${s.to} place=${s.place}`);

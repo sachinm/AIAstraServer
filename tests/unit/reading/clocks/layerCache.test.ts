@@ -134,11 +134,12 @@ describe('the clock layer cache', () => {
     expect(again.calls.length).toBeGreaterThan(0);
   });
 
-  it('the key: every part changes it, the order of the clock slices does not', () => {
-    const base = { asOf: ASOF, model: 'm', prefixHash: 'p', frameHash: 'f', clockSlices: [{ id: 'clock.a', hash: '1' }, { id: 'clock.b', hash: '2' }], promptVersion: 'pv' };
+  it('the key: every part changes it, the order of the clock slices does not, and the day does not (doc 09 step 4)', () => {
+    const base = { model: 'm', prefixHash: 'p', frameHash: 'f', clockSlices: [{ id: 'clock.a', hash: '1' }, { id: 'clock.b', hash: '2' }], promptVersion: 'pv' };
     const k = layerCacheKey(base);
     expect(layerCacheKey({ ...base, clockSlices: [...base.clockSlices].reverse() })).toBe(k);
-    for (const over of [{ asOf: '2026-11-11' }, { model: 'n' }, { prefixHash: 'q' }, { frameHash: 'g' }, { promptVersion: 'pw' }, { clockSlices: [{ id: 'clock.a', hash: '1' }, { id: 'clock.b', hash: '3' }] }, { clockSlices: [{ id: 'clock.a', hash: '1' }] }]) {
+    expect(k).not.toContain(ASOF);
+    for (const over of [{ model: 'n' }, { prefixHash: 'q' }, { frameHash: 'g' }, { promptVersion: 'pw' }, { clockSlices: [{ id: 'clock.a', hash: '1' }, { id: 'clock.b', hash: '3' }] }, { clockSlices: [{ id: 'clock.a', hash: '1' }] }]) {
       expect(layerCacheKey({ ...base, ...over }), JSON.stringify(over)).not.toBe(k);
     }
   });
@@ -153,14 +154,14 @@ describe('the clock layer cache', () => {
     expect(r.ledger).not.toBeNull();
     expect(run.calls.length).toBeGreaterThan(0);
     expect(await readLayerCache(prisma, 'k1', 'x')).toBeNull();
-    expect(await writeLayerCache(prisma, 'k1', { v: 1, key: 'x', asOf: ASOF, status: 'ok', sheets: [], ledger: r.ledger! })).toBe(false);
+    expect(await writeLayerCache(prisma, 'k1', { v: 2, key: 'x', asOf: ASOF, status: 'ok', sheets: [], ledger: r.ledger! })).toBe(false);
     expect(warn).not.toHaveBeenCalled();
   });
 
   it('a client without the store (test fakes) reads null and writes nothing', async () => {
     const prisma = new Proxy({}, { get: () => undefined }) as never;
     expect(await readLayerCache(prisma, 'k1', 'x')).toBeNull();
-    expect(await writeLayerCache(prisma, 'k1', { v: 1, key: 'x', asOf: ASOF, status: 'ok', sheets: [], ledger: { frameHash: 'f', sheetHashes: {}, cells: [], pairs: [], byStatus: { confirmed: 0, leaning: 0, single: 0, contested: 0 } } })).toBe(false);
+    expect(await writeLayerCache(prisma, 'k1', { v: 2, key: 'x', asOf: ASOF, status: 'ok', sheets: [], ledger: { frameHash: 'f', sheetHashes: {}, cells: [], pairs: [], byStatus: { confirmed: 0, leaning: 0, single: 0, contested: 0 } } })).toBe(false);
   });
 
   it('a stored row with another key, or text that is not an entry, is a miss', async () => {
