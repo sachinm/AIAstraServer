@@ -3792,3 +3792,55 @@ items 05 marks "Filed"). Nothing below was fixed.
   Jataka 7-8 (Iyer 1885); Saravali 41-42 verse text; Tajika Neelakanthi (Mudda, Patyayini); PVR ch. 30; Rath's TP
   text (`pp_tp.pdf` unread); Jaimini adhyayas 3-4; Muhurta Chintamani ch. 1, 2, 6, 11; Prashna Marga verses. Source:
   each folder's `00-overview.md` "Open questions" and `docs/deep-research/README.md`. [research]
+
+
+## Filed 2026-11-19 by reading depth (feat/reading-depth)
+
+Branch `feat/reading-depth` (docs/techniques/09 §8 steps 2, 4–10, server side). Each item: what is wrong, where, how we
+know, who holds it, what done means.
+
+- **No pressure rows for Sudasa, Lagna Kendradi or Patyayini (engine).** Read-only check of the shared DB on
+  2026-11-19: `kundli_data` `pressure_inventory` exists only for vimsottari, narayana, yogini, chara, kaala and five
+  conditional dashas. Sudasa and Lagna Kendradi (stored as `kendradhi_rasi`) exist only as `kundli_activation` periods
+  (6 kundlis, L1–L4); Patyayini only as `kundli_data` `annual.patyayini` (141 rows). They reach the reading as stored
+  period rows (`clocks/systems.ts` feed `periods`, `renderShownPeriods`) and are never counted as a clock's tone.
+  Owner: engine (doc 07 E-list). Done: pressure inventories for the three, then flip `feed` to `pressure` and add them
+  to `READING_CLOCK_ORDER`.
+- **Patyayini is shown but not read anywhere yet.** `systems.ts` marks it `always` / feed `annual`; no slice or pack
+  renders `annual.patyayini`. Owner: server. Done: `family.year` carries this year's Patyayini periods, keyed.
+- **Tara per planet is not stored (engine E4).** `PlanetCard` has star, starLord and pada only. `family.star` says so
+  and forbids computing it. Owner: engine. Done: a tara field per planet, then `family.star` reads it.
+- **A flagged preferred clock stays the spine.** `resolveReadingClocks` keeps the person's `preferred_dasha` as the
+  spine even when `systems.ts` marks it `never` (e.g. Yogini). Owner: Sachin (product). Done: a decision and a test.
+- **The continuation of a JSON answer is unproven on the live model.** `llm/continue.ts` sends a continuation turn
+  without the schema and joins the tail; `closeJson` keeps a still-cut answer. Tested with fakes only. Owner: the paid
+  replay (doc 09 §8 step 12). Done: one card forced to its ceiling continues into a parseable card.
+- **`generated.ts` will conflict with `feat/reading-recipes` at merge.** Both branches add prompts. Owner: whoever
+  merges. Done: take either side, then run `node scripts/embed-prompts.mjs` and commit the regenerated file.
+- **The routing stub (`cards/routing.ts`) is replaced at merge.** Its exports are identical to the recipes branch;
+  `ROUTED_CARDS` and `NARAYANA_CONTROLLING_HOUSE` arrive with it. `ownCharts.ts` falls back to today's routing words
+  while `routeFor` returns null; `family.year` reads `YEAR_ROUTED_VARGAS` (D10, D7, D4) until it reads the routes.
+  Owner: the merge session. Done: after merge, `family.year` takes its year charts from `routeFor(...).yearCharts`.
+- **Queued cards wait for the next build.** A card stopped by the board cap, the per-card stop, the depth floor or a
+  pending plain story is marked `queued`; the same run never retakes it, and nothing schedules the next round except the
+  next open or sync. Owner: server. Done: the sweep re-runs a kundli with queued cards older than N minutes, charged
+  only to the build budget.
+- **The dated block is smaller than the plan's.** doc 09 §3.2 puts the sky window and the year frame in the uncached
+  dated block. On this branch only TODAY and the frame are uncached; `sky.window` and `year.tp` stay in the cached part
+  because their window now snaps to month starts and carries no day (about 8–13 k tokens a call would otherwise go
+  uncached on ~38 calls, ~$0.25 a build). Owner: Sachin (confirm). Done: a yes, or move them to the dated block.
+- **The confirm stamp left the Oracle's key.** A confirm tap re-runs only the card's Personalizer (the Oracle card is
+  reused by its own key, `oracleKey`); the Oracle reads the new answer when its Good until passes or the person
+  refreshes. Owner: Sachin (confirm the trade). Done: a yes.
+- **A depth gap the input cannot fill is served.** When the only gaps left are kinds the input never carried (no year
+  row stored, no key of the card's own chart), the card is stored and served with `depth.inputGaps`, and the gap is
+  logged to `reading_validation_failures`; it is not looped on. Owner: engine/server. Done: the depth replay shows no
+  card with input gaps.
+- **Love and Work board v3 reads.** The per-card story path runs inside the Self build (the Love/Work decks join it).
+  Any other caller of `readCards` without `story` inputs keeps the doc 70 path (grouped when `CARDS_GROUP_PACK=1`).
+  Owner: server. Done: every caller passes story inputs, then the group path is retired (doc 09 §8 step 13).
+- **The web must render the new fields.** `v3.story`, `v3.plain.story` (with `pending`), `v3.spans[].growth`,
+  `v3.systems`, `v3.goodUntil` and `reading.deeperReadingReady` are served additively. Owner: web (`feat/board-polish`).
+  Done: `servedFieldsRendered` proves each has a place; the refresh notice shows on `deeperReadingReady`.
+- **piecesDoc tests failed before this branch.** `tests/unit/techniques/piecesDoc.test.ts` (2 tests: docs/admin/07 is
+  stale; the 01..06 manual check) fail on `develop` `de135cd`. Owner: docs. Done: `npx tsx scripts/write-technique-pieces-doc.ts` and the manual fixed.

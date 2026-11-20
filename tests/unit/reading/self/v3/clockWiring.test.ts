@@ -258,7 +258,11 @@ describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]!.capUsd).toBe(0.3);
     expect(seen[0]!.spentBeforeUsd).toBeGreaterThan(0);
-    expect(seen[0]!.spentBeforeUsd).toBeLessThanOrEqual(r.clockLayer!.spentUsd);
+    // the clock layer and the lens linemen (docs/techniques/09 §3.1) count against the same build budget
+    const linemen = r.agents.filter((a) => /^lineman\./.test((a as { call?: string }).call ?? '')).reduce((n, a) => n + a.costUsd, 0);
+    expect(linemen).toBeGreaterThan(0);
+    expect(seen[0]!.spentBeforeUsd).toBeGreaterThan(linemen);
+    expect(seen[0]!.spentBeforeUsd).toBeLessThanOrEqual(r.clockLayer!.spentUsd + linemen + 1e-9);
   });
   it('the cards start on the counted ledger while the concordance is still writing; its words are folded in after', async () => {
     let release: () => void = () => undefined;

@@ -1025,9 +1025,77 @@ export function getCardsReadMinArea(): number {
   return parseClampedIntEnv('CARDS_READ_MIN_AREA', 1, 1, 8);
 }
 
-/** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 8, 1..12). */
+// ── The full-thread reading (docs/techniques/09 §3.1, §3.5): allotments a limit never cuts ─
+//
+// Every ceiling below is continued at, never cut at (`llm/continue.ts`); lowering one needs the depth replay and
+// Sachin's written yes (AGENTS.md "Reading depth is a release gate", rule 5).
+
+/**
+ * The story contract (doc 09 §3.4): one card per Oracle call with the technical story and the beat index, the depth gate
+ * before a card is ready, one Personalizer per card. Default on; `CARDS_STORY_CONTRACT=0` returns to the doc 70 cards
+ * (and lets CARDS_GROUP_PACK=1 group them again).
+ */
+export function isCardsStoryContractEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CARDS_STORY_CONTRACT?.trim() !== '0';
+}
+
+/** The grouped card call is the path in force: CARDS_GROUP_PACK=1 and the story contract off (doc 09 decision 7). */
+export function isCardsGroupPathActive(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isCardsGroupPackEnabled(env) && !isCardsStoryContractEnabled(env);
+}
+
+/** Card Oracle output ceiling per call (doc 09 decision 7). Env `CARDS_ORACLE_MAX_OUTPUT_TOKENS` (default 10,000; 4,096..32,000). */
+export function getCardsOracleMaxOutputTokens(): number {
+  return parseClampedIntEnv('CARDS_ORACLE_MAX_OUTPUT_TOKENS', 10_000, 4_096, 32_000);
+}
+
+/** Card Oracle wall time per card, continuations included. Env `CARDS_ORACLE_TIMEOUT_MS` (default 150 s; 45..300 s). */
+export function getCardsOracleTimeoutMs(): number {
+  return parseClampedIntEnv('CARDS_ORACLE_TIMEOUT_MS', 150_000, 45_000, 300_000);
+}
+
+/** Card Personalizer output ceiling per call (doc 09 §3.1). Env `CARDS_PERSONALIZER_MAX_OUTPUT_TOKENS` (default 6,000; 4,096..16,000). */
+export function getCardsPersonalizerMaxOutputTokens(): number {
+  return parseClampedIntEnv('CARDS_PERSONALIZER_MAX_OUTPUT_TOKENS', 6_000, 4_096, 16_000);
+}
+
+/** Card Personalizer wall time per card. Env `CARDS_PERSONALIZER_TIMEOUT_MS` (default 90 s; 30..180 s). */
+export function getCardsPersonalizerTimeoutMs(): number {
+  return parseClampedIntEnv('CARDS_PERSONALIZER_TIMEOUT_MS', 90_000, 30_000, 180_000);
+}
+
+/** Lens lineman output ceiling (doc 09 §3.1). Env `LENS_LINEMAN_MAX_OUTPUT_TOKENS` (default 10,000; 4,096..32,000). */
+export function getLensLinemanMaxOutputTokens(): number {
+  return parseClampedIntEnv('LENS_LINEMAN_MAX_OUTPUT_TOKENS', 10_000, 4_096, 32_000);
+}
+
+/** Lens lineman wall time. Env `LENS_LINEMAN_TIMEOUT_MS` (default 90 s; 30..180 s). */
+export function getLensLinemanTimeoutMs(): number {
+  return parseClampedIntEnv('LENS_LINEMAN_TIMEOUT_MS', 90_000, 30_000, 180_000);
+}
+
+/** The lens linemen run (doc 09 §8 step 7). Default on; `LENS_LINEMEN=0` reads the cards without a lens thread. */
+export function isLensLinemenEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.LENS_LINEMEN?.trim() !== '0';
+}
+
+/**
+ * The spend cap of one board build (doc 09 §3.5): the clock layer, the lens linemen and every card of the build share
+ * it; the cards it does not reach are queued for the next round, never written shorter. Chat answers keep
+ * READING_SPEND_CAP_USD. Env `READING_BOARD_SPEND_CAP_USD` (default 1.50; 0.10..10).
+ */
+export function getReadingBoardSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_BOARD_SPEND_CAP_USD', 1.5, 0.1, 10);
+}
+
+/** The per-card safety stop (doc 09 §3.5): a card past it is queued and retried, never served thin. Env `READING_CARD_SPEND_CAP_USD` (default 0.12). */
+export function getReadingCardSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_CARD_SPEND_CAP_USD', 0.12, 0.02, 1);
+}
+
+/** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 12, 1..16; doc 09 §3.1). */
 export function getCardsBoardParallel(): number {
-  return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 8, 1, 12);
+  return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 12, 1, 16);
 }
 
 /**
@@ -1187,10 +1255,10 @@ export function getSelfPersonalizerRetryMaxOutputTokens(): number {
  * Output cap of the Self v2 family readers (and the v1 Self family readers). Env `SELF_FAMILY_MAX_OUTPUT_TOKENS`
  * (integer, 1000–16000; default 4000). Measured on run 2 (2026-11-09): `family.dasha` stopped at `MAX_TOKENS` with
  * 654 out + 1,342 thought = 1,996 of the old fixed 2,000 (thought tokens count against the cap on Gemini 3.x); the
- * longest complete reader was `family.rasi` at 951 + 1,005 = 1,956. 4,000 is twice the longest measured finish.
+ * longest complete reader was `family.rasi` at 951 + 1,005 = 1,956. 6,000 since docs/techniques/09 §3.1 (continued at the ceiling).
  */
 export function getSelfFamilyMaxOutputTokens(): number {
-  return parseClampedIntEnv('SELF_FAMILY_MAX_OUTPUT_TOKENS', 4000, 1000, 16000);
+  return parseClampedIntEnv('SELF_FAMILY_MAX_OUTPUT_TOKENS', 6000, 1000, 16000);
 }
 
 /*

@@ -64,6 +64,11 @@ export interface StoredCardReading {
   /** the ledger hash and the frame hash it stood on */
   ledgerHash: string;
   frameHash: string;
+  /**
+   * docs/techniques/09 §3.2: the Oracle card's own key (no person, portrait, sections or confirm stamp): a later read
+   * with the same Oracle key re-runs only the Personalizer over this row's Oracle card
+   */
+  oracleKey?: string;
 }
 
 export interface CardRunResult {

@@ -750,7 +750,7 @@ function buildAdAreaNote(s: ScoredAdArea, tone: LifeAntardashaTone, from: string
 
   const clockCount = systems.length;
   const confirmParts: string[] = [
-    clockCount > 1 ? `confirmed across ${clockCount} timing systems` : 'marked by your primary timing clock',
+    clockCount > 1 ? `confirmed on ${clockCount} timing views, as AdAstra AI reads them` : 'marked by the main timing view AdAstra AI reads',
   ];
   if (annualConfirms) confirmParts.push('backed by the year chart');
   if (transitOpen) confirmParts.push('supported by the sky');

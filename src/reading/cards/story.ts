@@ -180,7 +180,7 @@ export function storyKeys(text: string): string[] {
 }
 
 /** every key a card's beat index and its evidence list cite, de-duplicated */
-export function beatKeys(beats: readonly StoryBeat[] | null | undefined, extra: readonly string[] = []): string[] {
+export function beatKeys(beats: ReadonlyArray<{ evidence: readonly string[] }> | null | undefined, extra: readonly string[] = []): string[] {
   return [...new Set([...(beats ?? []).flatMap((b) => b.evidence), ...extra].map((k) => normaliseEvidenceKey(k.trim().replace(/^\{|\}$/g, ''))))];
 }
 

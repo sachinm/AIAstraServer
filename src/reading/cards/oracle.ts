@@ -8,17 +8,27 @@
  * and dates from the input, a knot and a gift) plus the ledger: a span that has ledger cells for this card cites one of
  * them; `build` needs a confirmed or leaning light or mixed cell of the card in that span, or a held light span. A failed
  * card is re-asked once, alone. Never throws.
+ *
+ * The story contract (docs/techniques/09 §3.4, §8 step 8; on unless CARDS_STORY_CONTRACT=0): the card also writes its
+ * technical story (700–1,400 words, the nine beats in order) and the beat index, over its lens thread, the family
+ * findings it cites, the clock sentences of its matters and the verified systems. The call's ceiling is 10,000 tokens and
+ * it is continued at the ceiling, never cut (`llm/continue.ts`); the depth floor (`cards/story.ts` checkDepth) is checked
+ * before the card is returned as ready: one repair names what is missing; a card still below it comes back `thin` and
+ * the runner queues it. A kind the input never carried (no year row stored) is reported as an input gap, not repaired.
  */
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../agents/registry.js';
+import { getCardsOracleMaxOutputTokens, getCardsOracleTimeoutMs, isCardsStoryContractEnabled } from '../../config/env.js';
 import type { AgreedLedger, LedgerCell } from '../clocks/types.js';
 import { READER_SYSTEM_PROMPT } from '../clocks/types.js';
+import { callWithContinuation, parseContinuedJson } from '../llm/continue.js';
 import type { GeminiCallOptions, GeminiResult } from '../llm/gemini.js';
 import { markAgentUsed } from '../self/v2/cache.js';
 import { timingOf } from '../self/v2/oracle.js';
+import { redactEngineText } from '../self/v2/personalizerValidate.js';
 import { normaliseEvidenceKey, promptText } from '../self/v2/slices.js';
 import type { SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../self/v2types.js';
-import { checkOracleCard, oracleV3Schema, parseJson } from '../self/v3/oracle.js';
+import { checkOracleCard, oracleV3Schema } from '../self/v3/oracle.js';
 import type { CardMatter, OracleCardV3, CardId, YearFrameV3 } from '../self/v3/types.js';
 import { cmp } from '../slices/render.js';
 import { cardMatterRows, frameRange } from '../slices/trim.js';
@@ -26,14 +36,17 @@ import type { RenderedSlice } from '../slices/types.js';
 import { CARD_ORACLE_AGENT, CARD_ORACLE_PROMPT, CARD_READING_TECHNIQUE, cardBriefPrompt } from './types.js';
 import { isAgeMatureD9 } from '../dasha/dashaAssessment.js';
 import { cardBoardLabel } from './registry.js';
+import { beatKeys, beatsSchema, checkDepth, depthRepairNote, parseBeats, STORY_BEATS, TECH_STORY_MAX_WORDS, TECH_STORY_MIN_WORDS, type DepthResult } from './story.js';
 import { cardTechniqueKeys, techniqueBoardsOf, type BoardTechniqueSection, type TechniqueBoard } from './techniques.js';
 
-export const CARD_ORACLE_TIMEOUT_MS = 45_000;
+/** the default wall time per card, continuations included (env CARDS_ORACLE_TIMEOUT_MS; doc 09 §3.1) */
+export const CARD_ORACLE_TIMEOUT_MS = 150_000;
 /**
- * One card's document: the replay's 23 card calls wrote 979 to 1,466 tokens, 0 thought tokens reported at `low`.
- * 4,096 bounds output and thought together (they share the cap on Gemini 3.x); the three-card v3 Oracle keeps its 8,000.
+ * One card's document with its technical story (doc 09 decision 7): 10,000 tokens a call, continued at the ceiling.
+ * Expected 3,000–6,000 (story 700–1,400 words ≈ 1,000–2,000 tokens, the spans and the beat index, thought tokens).
+ * Env CARDS_ORACLE_MAX_OUTPUT_TOKENS. Before doc 09 it was 4,096 for a one-paragraph card.
  */
-export const CARD_ORACLE_MAX_OUTPUT_TOKENS = 4_096;
+export const CARD_ORACLE_MAX_OUTPUT_TOKENS = 10_000;
 
 /** the agreed ledger cells of the card's matters, in span then matter order */
 export function cardCells(ledger: AgreedLedger | null, matters: readonly CardMatter[]): LedgerCell[] {
@@ -185,6 +198,26 @@ export interface CardOracleInput {
   cacheOwner: { userId: string; kundliId: string };
   /** docs/dashboards/14: the Love and Work boards' technique sections (a Love or Work card reads its own) */
   techniques?: Partial<Record<TechniqueBoard, BoardTechniqueSection>>;
+  /** docs/techniques/09 §3.4: the story contract's inputs (all optional; absent ones are left out of the request) */
+  story?: CardStoryInputs | null;
+}
+
+/** what the card Oracle reads for its technical story (doc 09 §3, "Card Oracle" row of §3.1) */
+export interface CardStoryInputs {
+  /** the lens thread the lens lineman wrote (promise → period → year → star → trigger, keyed); null when none */
+  thread: { lens: string; text: string; keys: readonly string[] } | null;
+  /** the lens recipe (`routing.ts` recipeText) or the generic line when the routing table has none */
+  recipe: string;
+  /** the card's own divisional charts (`ownCharts.ts`) */
+  ownCharts: readonly string[];
+  /** the verified systems shown for this chart (stored names) and the periods-only block (`systems.ts`) */
+  verifiedSystems: readonly string[];
+  systemsText: string;
+  systemsKeys: readonly string[];
+  /** the family findings, as written, each citing `{key}` (natal ones kept until the chart data changes) */
+  findings: ReadonlyArray<{ family: string; text: string }>;
+  /** the clock readers' sentences for this card's matters (`clocks/sentences.ts`), keyed */
+  clockSentences: string;
 }
 
 export interface CardOracleDeps {
@@ -192,13 +225,55 @@ export interface CardOracleDeps {
   callGemini: (o: GeminiCallOptions) => Promise<GeminiResult>;
   informUsed?: Parameters<typeof markAgentUsed>[1];
   timeoutMs?: number;
+  /** overrides CARDS_STORY_CONTRACT (tests) */
+  storyContract?: boolean;
+  /** the USD this card may spend before its repair is skipped and it is queued (doc 09 §3.5 per-card safety stop) */
+  cardCapUsd?: number;
 }
 
 export interface CardOracleResult {
   card: OracleCardV3 | null;
-  status: 'ok' | 'repaired' | 'failed';
+  /** `thin`: a card that passed the validator but stayed below the depth floor after its repair; never served */
+  status: 'ok' | 'repaired' | 'failed' | 'thin';
   issues: ValidationIssue[];
   calls: SelfV2AgentTiming[];
+  /** the depth gate's verdict on the returned (or thin) card; null with the story contract off */
+  depth?: DepthResult | null;
+}
+
+/** the generic recipe line when the routing table has no recipe for the card's lens (doc 09 §8 step 3 is pending) */
+export const GENERIC_RECIPE =
+  'Read this card in the order of the story: the maha dasha lord judged from the lagna (owner, seat, dignity, navamsa, links) and then its star; the sub-period by its house from the maha dasha lord; the Tithi Pravesha year this year (D1 houses, then D9, then the year chart routed to this card) and one line on last year; the same houses counted from the Moon; D9 and this card\'s own divisional chart; the other verified systems and where they overlap; the trigger in the sky; the verdict and what would change it.';
+
+/** the Oracle schema of one card with the story contract: today's fields, then the beat index, then the story LAST */
+export function cardStorySchema(card: CardId, spanIds: readonly string[]): Record<string, unknown> {
+  const base = oracleV3Schema([card], spanIds) as { properties: { cards: { items: { properties: Record<string, unknown>; required: string[] } } } };
+  const item = base.properties.cards.items;
+  item.properties.beats = beatsSchema();
+  item.properties.story = { type: 'STRING', description: `${TECH_STORY_MIN_WORDS}-${TECH_STORY_MAX_WORDS} words, continuous prose, no headings, the nine beats in order` };
+  item.required = [...item.required, 'beats', 'story'];
+  // the story is written last, so a cut at the ceiling lands in prose and is continued as prose (llm/continue.ts)
+  (item as Record<string, unknown>).propertyOrdering = ['card', 'headline', 'spans', 'confirm', 'gift', 'knot', 'pattern', 'certainty', 'evidence', 'beats', 'story'];
+  return base as unknown as Record<string, unknown>;
+}
+
+/** `{key}` mentions in a text (the family findings cite every bullet this way) */
+export const keysInText = (text: string): string[] => [...text.matchAll(/\{([a-z_]+:[^{}\s]+)\}/gi)].map((m) => normaliseEvidenceKey(m[1]!));
+
+/** The story part of the request (uncached, after the card's own blocks). Pure. */
+export function storyBlock(card: CardId, s: CardStoryInputs): { text: string; keys: string[] } {
+  const findingKeys = s.findings.flatMap((f) => keysInText(f.text));
+  const text = [
+    `STORY CONTRACT (this card: \`${card}\`): write \`story\`, ${TECH_STORY_MIN_WORDS}-${TECH_STORY_MAX_WORDS} words, one continuous text with no headings, in this order: ${STORY_BEATS.join(' → ')}. Name every period with its system, and every placement with its chart, house, sign and star. Fill \`beats\` with one entry per beat: held yes/partly/no/na, the systems it used, and the keys it rests on (cite the maha dasha and the sub-period rows, the year chart, D9 and this card's own chart by key). Where the research has no rule for this lens, say so and do not fill it.`,
+    `LENS RECIPE\n${s.recipe}`,
+    `THIS CARD'S OWN CHARTS: ${s.ownCharts.join(', ')} (read after D1 and D9)`,
+    `VERIFIED SYSTEMS (read, show and count only these): ${s.verifiedSystems.join(', ') || 'none stored'}`,
+    ...(s.systemsText ? [s.systemsText] : []),
+    s.thread ? `LENS THREAD (${s.thread.lens}; the lens lineman's reading of this subject, keyed)\n${s.thread.text}` : 'LENS THREAD: none for this card; read the subject from the data above',
+    s.findings.length ? `FAMILY FINDINGS (the chart-family readers; cite their keys)\n${s.findings.map((f) => `## ${f.family}\n${f.text}`).join('\n')}` : 'FAMILY FINDINGS: none stored',
+    s.clockSentences ? `CLOCK SENTENCES (each verified clock's reader on this card's matters, by span)\n${s.clockSentences}` : 'CLOCK SENTENCES: none',
+  ].join('\n\n');
+  return { text, keys: [...new Set([...(s.thread?.keys ?? []), ...s.systemsKeys, ...findingKeys])] };
 }
 
 /** The ledger checks on top of `checkOracleCard`. Pure. */
@@ -290,6 +365,7 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
         ...cardTechniqueKeys(i.card, tSections).map((t) => `THIS CARD'S TECHNIQUE ROWS (${t.board.toUpperCase()}, read first): ${t.keys.length ? t.keys.map((k) => `{${k}}`).join(' ') : '(the whole section)'}`),
       ].join('\n\n')
     : '';
+  const story = i.story ? storyBlock(i.card, i.story) : null;
   const text = [
     promptText(CARD_ORACLE_PROMPT),
     `CARD BRIEF\n${promptText(cardBriefPrompt(i.card))}`,
@@ -300,11 +376,12 @@ export function cardInstruction(i: CardOracleInput, cells: readonly LedgerCell[]
     ledger.text,
     ...(techText ? [techText] : []),
     `MATTER ROWS (${i.matters.join(', ')}; the rows overlapping ${range.from}..${range.to}, each once)\n${matter || '(none stored)'}`,
+    ...(story ? [story.text] : []),
     `PERSON'S ANSWERS: ${i.answers || 'none'}`,
-    `THIS CALL: write only the card \`${i.card}\`. Return the JSON document only.`,
+    `THIS CALL: write only the card \`${i.card}\`${story ? ', its story last' : ''}. Return the JSON document only.`,
   ].join('\n\n');
   const tech = tBoards.flatMap((b) => tSections[b]!.keys);
-  return { text, keys: [...new Set([...ledger.keys, ...(i.matterSlices.length ? rows.keys : []), ...i.frameKeys, ...tech])] };
+  return { text, keys: [...new Set([...ledger.keys, ...(i.matterSlices.length ? rows.keys : []), ...i.frameKeys, ...tech, ...(story?.keys ?? [])])] };
 }
 
 const keyOf = (k: string): string => normaliseEvidenceKey(k.trim().replace(/^\{|\}$/g, ''));
@@ -361,15 +438,33 @@ export function precheckCard(raw: unknown, c: { allowed: ReadonlySet<string>; al
   return { raw: o, notes };
 }
 
-/** One card: call, validate (v3 checks + ledger), repair once alone. Never throws. */
+
+/** the cost of the calls so far (USD) */
+const costOf = (calls: readonly SelfV2AgentTiming[]): number => calls.reduce((n, c) => n + c.costUsd, 0);
+
+/**
+ * The story and beat index of a validated raw card (doc 09 §3.4): the story as written (engine names made plain), the
+ * beats with their keys mapped through the frame's aliases and cut to the keys the card was given (an unknown key in
+ * the index is dropped, never the card). Pure.
+ */
+export function storyOf(raw: unknown, allowed: ReadonlySet<string>, aliases: Readonly<Record<string, string>> = {}): Pick<OracleCardV3, 'story' | 'beats'> {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const story = typeof o.story === 'string' ? redactEngineText(o.story.trim()) : '';
+  const beats = parseBeats(o.beats).map((b) => ({ ...b, evidence: b.evidence.map((k) => aliases[k] ?? k).filter((k) => allowed.has(k)) }));
+  return { ...(story ? { story } : {}), ...(beats.length ? { beats } : {}) };
+}
+
+/** One card: call (continued at its ceiling), validate (v3 checks + ledger), the depth gate, repair once alone. Never throws. */
 export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): Promise<CardOracleResult> {
+  const storyOn = (deps.storyContract ?? isCardsStoryContractEnabled()) && Boolean(i.story);
   const cells = cardCells(i.ledger, i.matters);
-  const instr = cardInstruction(i, cells);
+  const instr = cardInstruction(storyOn ? i : { ...i, story: null }, cells);
   const allowed = new Set([...i.prefix.keys, ...instr.keys].map(normaliseEvidenceKey));
   const spanIds = i.frame.spans.map((s) => s.id);
   const calls: SelfV2AgentTiming[] = [];
   const issues: ValidationIssue[] = [];
-  const limit = deps.timeoutMs ?? CARD_ORACLE_TIMEOUT_MS;
+  const limit = deps.timeoutMs ?? getCardsOracleTimeoutMs();
+  const ceiling = getCardsOracleMaxOutputTokens();
   const ask = async (call: string, extra = ''): Promise<unknown | null> => {
     const t0 = performance.now();
     try {
@@ -381,59 +476,100 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
           kundliId: i.ctx.kundliId,
           technique: CARD_READING_TECHNIQUE,
           task: `self.card.oracle ${i.card} ${i.ctx.asOf}`,
-          input: { card: i.card, spans: spanIds.length, cells: cells.length, keys: allowed.size },
+          input: { card: i.card, spans: spanIds.length, cells: cells.length, keys: allowed.size, story: storyOn ? 1 : 0, thread: i.story?.thread ? 1 : 0 },
           charts: [{ type: 'kundli_digest', variant: i.ctx.stamps.digestVersion }, { type: 'pressure_inventory', variant: `system=${i.frame.clock}` }],
         },
         async () => {
-          const g = await deps.callGemini({
+          const o: GeminiCallOptions = {
             model: i.model,
             node: `self.card.oracle.${i.card}${call.endsWith('repair') ? '.repair' : ''}`,
             system: promptText(READER_SYSTEM_PROMPT),
             parts: [i.prefix.text, [i.prefix.dated ?? '', instr.text, extra].filter(Boolean).join('\n\n')],
             thinking: 'low',
-            maxOutputTokens: CARD_ORACLE_MAX_OUTPUT_TOKENS,
+            maxOutputTokens: ceiling,
             timeoutMs: limit,
             cachePrefix: true,
             cacheOwner: i.cacheOwner,
-            responseSchema: oracleV3Schema([i.card], spanIds),
-          });
-          return { value: g, usage: { model: i.model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 }, output: { chars: g.text.length } };
+            responseSchema: storyOn ? cardStorySchema(i.card, spanIds) : oracleV3Schema([i.card], spanIds),
+          };
+          // a limit never discards (AGENTS.md "Reading depth is a release gate", rule 4): continued at the ceiling
+          const g = await callWithContinuation(deps.callGemini, o, { deadlineMs: limit });
+          return {
+            value: g,
+            usage: { model: i.model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
+            output: { chars: g.text.length, continued: g.continued, stillCut: g.stillCut },
+          };
         },
       );
       markAgentUsed({ cacheOwner: i.cacheOwner }, deps.informUsed);
-      const cut = res.finishReason === 'MAX_TOKENS';
-      const parsed = cut ? null : (parseJson(res.text) as { cards?: unknown } | null);
+      if (res.continued) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: ${call}: continued ${res.continued} time(s) at the ${ceiling}-token ceiling${res.stillCut ? '; still cut, closed as written' : ''}`, callId: call });
+      const parsed = parseContinuedJson(res.text) as { cards?: unknown } | null;
       const list = parsed && Array.isArray(parsed.cards) ? (parsed.cards as unknown[]) : null;
       calls.push(timingOf('self.oracle', call, i.model, res, performance.now() - t0, list ? 'ok' : 'failed'));
-      if (!list) issues.push({ stage: 'oracle', area: i.card, check: cut ? 'truncated' : 'json_schema', message: `${i.card}: ${call}: no card document`, callId: call });
-      return list?.find((x) => (x as { card?: unknown } | null)?.card === i.card) ?? (list ? null : null);
+      if (!list) issues.push({ stage: 'oracle', area: i.card, check: res.stillCut ? 'truncated' : 'json_schema', message: `${i.card}: ${call}: no card document`, callId: call });
+      return list?.find((x) => (x as { card?: unknown } | null)?.card === i.card) ?? null;
     } catch (e) {
       calls.push(timingOf('self.oracle', call, i.model, null, performance.now() - t0, 'failed'));
       issues.push({ stage: 'oracle', area: i.card, check: 'call_failed', message: `${i.card}: ${call}: ${String((e as Error).message ?? e).slice(0, 160)}`, callId: call });
       return null;
     }
   };
-  const check = (got: unknown | null): { card: OracleCardV3 | null; problems: string[] } => {
-    if (!got) return { card: null, problems: ['not returned'] };
+  const check = (got: unknown | null): { card: OracleCardV3 | null; problems: string[]; depth: DepthResult | null } => {
+    if (!got) return { card: null, problems: ['not returned'], depth: null };
     const pre = precheckCard(got, { allowed, aliases: i.frame.aliases ?? {}, cells });
     for (const n of pre.notes) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: precheck: ${n}`.slice(0, 300), callId: null });
     const raw = pre.raw;
     const r = checkOracleCard(raw, { frame: i.frame, allowedKeys: allowed, dates: i.dates, expected: [i.card], aliases: i.frame.aliases ?? {} });
     for (const n of r.notes) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: ${n}`.slice(0, 300), callId: null });
-    if (!r.card) return { card: null, problems: r.problems };
+    if (!r.card) return { card: null, problems: r.problems, depth: null };
     const lp = checkAgainstLedger(r.card, i.frame, cells);
-    return lp.length ? { card: null, problems: lp } : { card: r.card, problems: [] };
+    if (lp.length) return { card: null, problems: lp, depth: null };
+    if (!storyOn) return { card: r.card, problems: [], depth: null };
+    const card: OracleCardV3 = { ...r.card, ...storyOf(raw, allowed, i.frame.aliases ?? {}) };
+    // the depth floor (AGENTS.md "Reading depth is a release gate", rule 1): word count and evidence-key kinds only
+    const depth = checkDepth({
+      story: card.story,
+      evidence: beatKeys(card.beats, [...card.evidence, ...card.spans.flatMap((s) => s.evidence)]),
+      ownCharts: i.story!.ownCharts,
+      verifiedSystems: i.story!.verifiedSystems,
+      available: allowed,
+    });
+    card.depth = { technicalWords: depth.words.technical, ok: depth.technicalOk, inputGaps: depth.gaps.filter((g) => g.unavailable).map((g) => g.kind) };
+    return { card, problems: [], depth };
   };
   const note = (call: string, problems: string[]) => {
     for (const p of problems) issues.push({ stage: 'oracle', area: i.card, check: p.includes('evidence') || p.includes('ledger') ? 'unknown_evidence_key' : p.includes('date') ? 'date_not_stored' : p === 'not returned' ? 'missing_area' : 'other', message: `${i.card}: ${p}`.slice(0, 300), callId: call });
   };
+  const noteDepth = (call: string, d: DepthResult) => {
+    for (const g of d.gaps) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: depth${g.unavailable ? ' (input gap: not in the data given)' : ''}: ${g.message}`.slice(0, 300), callId: call });
+  };
+  /** the card stands: it passed, or only input gaps remain (the data has no such key; filed, never looped on) */
+  const stands = (c: ReturnType<typeof check>) => Boolean(c.card) && (!c.depth || c.depth.gaps.every((g) => g.unavailable));
   const call = `card.${i.card}`;
   const first = check(await ask(call));
-  if (first.card) return { card: first.card, status: 'ok', issues, calls };
-  note(call, first.problems);
+  if (stands(first)) {
+    if (first.depth?.gaps.length) noteDepth(call, first.depth);
+    return { card: first.card, status: 'ok', issues, calls, depth: first.depth };
+  }
+  if (first.card) noteDepth(call, first.depth!);
+  else note(call, first.problems);
+  // the per-card safety stop (doc 09 §3.5): past it, no repair is bought here; the card is queued and retried
+  if (deps.cardCapUsd !== undefined && costOf(calls) >= deps.cardCapUsd) {
+    issues.push({ stage: 'oracle', area: i.card, check: 'budget', message: `${i.card}: spent ${costOf(calls).toFixed(4)} of the per-card stop ${deps.cardCapUsd}; queued`, callId: null });
+    return { card: first.card, status: first.card ? 'thin' : 'failed', issues, calls, depth: first.depth };
+  }
   const repairCall = `${call}.repair`;
-  const second = check(await ask(repairCall, `REPAIR: this card failed the checks. Write it again and fix exactly this:\n- ${first.problems.slice(0, 6).join('\n- ')}`));
-  if (second.card) return { card: second.card, status: 'repaired', issues, calls };
+  const reasons = first.card ? (depthRepairNote(first.depth!) ?? '') : `REPAIR: this card failed the checks. Write it again and fix exactly this:\n- ${first.problems.slice(0, 6).join('\n- ')}`;
+  const second = check(await ask(repairCall, reasons));
+  if (stands(second)) {
+    if (second.depth?.gaps.length) noteDepth(repairCall, second.depth);
+    return { card: second.card, status: 'repaired', issues, calls, depth: second.depth };
+  }
+  if (second.card) {
+    noteDepth(repairCall, second.depth!);
+    // below the floor after its repair: returned `thin`, never served; the runner queues it (never written shorter)
+    return { card: second.card, status: 'thin', issues, calls, depth: second.depth };
+  }
   note(repairCall, second.problems);
-  return { card: null, status: 'failed', issues, calls };
+  return first.card ? { card: first.card, status: 'thin', issues, calls, depth: first.depth } : { card: null, status: 'failed', issues, calls, depth: null };
 }
