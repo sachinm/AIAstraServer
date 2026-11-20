@@ -3792,3 +3792,40 @@ items 05 marks "Filed"). Nothing below was fixed.
   Jataka 7-8 (Iyer 1885); Saravali 41-42 verse text; Tajika Neelakanthi (Mudda, Patyayini); PVR ch. 30; Rath's TP
   text (`pp_tp.pdf` unread); Jaimini adhyayas 3-4; Muhurta Chintamani ch. 1, 2, 6, 11; Prashna Marga verses. Source:
   each folder's `00-overview.md` "Open questions" and `docs/deep-research/README.md`. [research]
+
+## Filed 2026-11-19 by reading recipes (feat/reading-recipes)
+
+- **P1 · open · The chart-routing block still prints the old Self-only table.** `renderActiveTimingAndVargaBlock`
+  (`src/reading/cards/oracle.ts:95-165`) gives `lagna`/`presence` the D7, `stuck`/`mood` the D30, `diagnosis` and the
+  time cards the D10, and every Love and Work card D1+D9. Done when it (and the grouped pack, `cards/group.ts:126`) reads
+  `routeFor()` from `src/reading/cards/routing.ts` (doc 08). Wiring belongs to the parallel plan-09 agent.
+- **P1 · open · The pack must carry the routed charts.** Routes name D16 (`mood`, `restores`, `play`), D20 (`purpose`),
+  D24 (mind cards, Craft, `start_launch_window`, `job_skill_building`), D5 (`yogas`), D4 (`marriage_inlaws_family`,
+  `start_relocation_abroad`, `biz_capital_assets`), D2 (money cards) and year D2/D4/D10/D16/D20/D24. Check `natal.core`
+  and the year rows before the Oracle is told to read them. [server]
+- **P2 · open · Romance still routes to the D7 outside the briefs.** `src/reading/area/love.ts` (vargas D1, D9, D7) and
+  the `love:chart/D7.h7` row of `src/reading/cards/techniques.ts` (asserted in `tests/unit/reading/cards/techniques.test.ts`)
+  read the D7 for love. Plan 09 §4: the D7 is for children only. [server]
+- **P2 · open · Divisional Narayana is named but not cast.** Doc 08 routes Narayana D9 (Marriage) and D10 (Allies, Work);
+  the engine casts Narayana on D1 only (doc 07 E5), so the recipes fall back to Narayana D1 and say so. Seeds:
+  `NARAYANA_CONTROLLING_HOUSE` (Table 29). [engine]
+- **P2 · open · D30 removed from ten Love/Work briefs; decide whether the burnout cards should read it for strain words.**
+  Removed from `dating_karmic_compatibility`, `marriage_conflict_cycles`, `allies_cofounder_fit`,
+  `allies_contracts_disputes`, `allies_team_politics`, `job_boss_politics`, `job_burnout_load`, `job_security_layoff`,
+  `biz_partnerships_fit`, `biz_founder_burnout` (sensitive: sanjay-rath/15 #17, #23; doc 07 §4.2 allows it only on the
+  Self body cards). None of them was reading it (pack lacked it). Sachin to decide on `job_burnout_load` and
+  `biz_founder_burnout`. [decision]
+- **P3 · open · Craft briefs read the natal A5 as "the work".** `craft_creative_flow`, `craft_creative_blocks`,
+  `craft_monetize_hobby`, `craft_audience_community`. No source; the A5 is the mantra pada (sanjay-rath/09 rule 1.8).
+  The `work.hobby` recipe reads it only as recognition (Rao, 02 §2.2); the briefs were left as they are. [prompts]
+- **P3 · open · Two business-partner briefs read the Darakaraka.** `allies_cofounder_fit`, `biz_partnerships_fit`. The
+  DK is the spouse (Rao, sanjay-rath/02 §6); the recipes read it only to keep the spouse apart. [prompts]
+- **P3 · open · Friends briefs read the A11 and Jupiter as friendship; no source.** The `love.friends` recipe tags every
+  friendship meaning "gap" and says the texts give no rule. [prompts]
+- **P3 · open · Two routes are [Inferred] and want Sachin's look:** the D16 (mental happiness, sanjay-rath/06 rule 1.3)
+  on the Self happiness cards, and the D24 on the Craft cards (doc 07 §4.2 "D24 for skill"). [decision]
+- **P3 · open · `marriage_children_family` (later) has no route.** When it opens it reads the D7 (children: D7 decides,
+  sanjay-rath/09 §3) and the routing test's "no D7 in Marriage" check must exempt it by id. [server]
+- **P2 · open · `tests/unit/reading/self/v2/subTechniques.test.ts` fails on `develop` `de135cd`** ("a TECHNIQUES row
+  per sub-technique and per area": the catalog no longer lists `self.sub.clock` first; expected and received orders
+  differ). Pre-existing; found while running the Self suite for doc 08, not touched. [server]

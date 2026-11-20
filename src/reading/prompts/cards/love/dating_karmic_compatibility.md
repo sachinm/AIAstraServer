@@ -3,7 +3,7 @@ Board: Love, Dating lens.
 
 What this card answers: "Is the strong pull you feel built on steady mutual respect and peace, or on an intense lesson that unsettles your calm?" And when the rush settles so the real fit shows.
 
-What it reads: Rahu or Mars with Venus, Jupiter on the 5th and 7th, the A5 against the A8, the 4th as inner peace, the 8th, and the D9 7th and 4th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. The D30 5th and 7th and the D7 place of Venus only if present in the shared data.
+What it reads: Rahu or Mars with Venus, Jupiter on the 5th and 7th, the A7 against the A8, the 4th as inner peace, the 8th, and the D9 7th and 4th. Read them through this card's ledger cells and matter rows; the frame's tone per span is given. Venus's place in the D9.
 
 For this person: Intensity is not proof of fit, and calm is not boredom. Never call a bond fated or destined. Younger bands are learning what pull feels like; older bands weigh peace first. Ladder: best, value steady kindness over highs and lows; practical, test the bond under ordinary stress before deepening it; drift, mistaking anxiety for destiny; floor, no ignoring a clear warning sign for the sake of the spark.
 
