@@ -4,7 +4,8 @@
  * the reading the page shows (offline first). Nothing here is computed from the chart.
  */
 import type { PrismaClient } from '@prisma/client';
-import { isSelfReadingModelEnabled, isSelfV2BuildEnabled } from '../../config/env.js';
+import { isSelfBoardFromCardsEnabled, isSelfReadingModelEnabled, isSelfV2BuildEnabled } from '../../config/env.js';
+import { selfCardDates } from './boardState.js';
 import { latestStoredOutput } from '../../techniques/outputStore.js';
 import { latestReadyBuild, refreshDue, storedValidity, type ReadingValidity } from '../area/validity.js';
 import type { SelfOracleResult } from './oracle.js';
@@ -56,9 +57,21 @@ export async function v2SynthesisValidity(prisma: PrismaClient, kundliId: string
  * GET /api/area/self, POST /api/boards/self/refresh and GET /api/self/v2, so the v1 and v2 pages agree: the synthesis's
  * own dates once one is made, else the area reading's. With the v2 build owning the board (selfV2OwnsBoard) the v2
  * Oracle's dates come first (no v1 synthesis is made then); a kundli with no v2 reading yet falls back to the v1 rule. `area` is the area reading's dates when the caller already has
- * them; without it the newest ready `self` area build is read (nothing is built). Null when neither exists.
+ * them; without it the newest ready `self` area build is read (nothing is built). Null when neither exists. With
+ * SELF_BOARD_FROM_CARDS=1 the dates are the Self card readings' (`selfCardDates`; `opts.clock`: the board clock when the
+ * caller holds it), null until a Self card was read.
  */
-export async function selfBoardDates(prisma: PrismaClient, kundliId: string, today: string, area?: ReadingValidity | null, held?: HeldOracleRow | null): Promise<BoardValidity | null> {
+export async function selfBoardDates(
+  prisma: PrismaClient,
+  kundliId: string,
+  today: string,
+  area?: ReadingValidity | null,
+  held?: HeldOracleRow | null,
+  opts: { clock?: string | null } = {},
+): Promise<BoardValidity | null> {
+  // plan "retire the v2 Self reading" step 2 (SELF_BOARD_FROM_CARDS=1): the dates of the Self card readings, the lens
+  // rule over the Self deck; null until a Self card was read (the first reading is the free automatic one)
+  if (isSelfBoardFromCardsEnabled()) return selfCardDates(prisma, kundliId, today, opts.clock ?? null);
   const made = (selfV2OwnsBoard() ? await v2SynthesisValidity(prisma, kundliId, today, held) : null) ?? (await synthesisValidity(prisma, kundliId, 'self', today));
   if (made) return made;
   let v: ReadingValidity | null = area ? { made_at: area.made_at, valid_until: area.valid_until } : null;

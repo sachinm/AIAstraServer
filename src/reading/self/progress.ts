@@ -82,6 +82,8 @@ export interface V2MarkerView {
   status: 'building' | 'ready' | 'failed' | null;
   stage: string | null;
   stageAt: string | null;
+  /** when today's build last read a card with the v2 reading retired (SELF_V2_RETIRED); absent otherwise */
+  readAt?: string;
 }
 
 const ms = (iso: string | null): number => {

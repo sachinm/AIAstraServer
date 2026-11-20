@@ -206,15 +206,16 @@ export async function writeSelfV2Marker(prisma: PrismaClient, userId: string, ku
 }
 
 /** Today's v2 marker as the progress view reads it (docs/loading-overlay/05). Never throws. */
-export async function readSelfV2Marker(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ status: 'building' | 'ready' | 'failed' | null; stage: string | null; stageAt: string | null }> {
+export async function readSelfV2Marker(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ status: 'building' | 'ready' | 'failed' | null; stage: string | null; stageAt: string | null; readAt?: string }> {
   try {
     const row = (await (prisma as unknown as { areaBuild?: { findUnique?: (q: unknown) => Promise<{ status: string; result: unknown } | null> } }).areaBuild?.findUnique?.({
       where: { kundli_id_area_as_of: { kundli_id: kundliId, area: SELF_V2_MARKER_AREA, as_of: dayOf(now) } },
     })) ?? null;
     if (!row) return { status: null, stage: null, stageAt: null };
-    const r = (row.result ?? {}) as { stage?: unknown; stage_at?: unknown };
+    const r = (row.result ?? {}) as { stage?: unknown; stage_at?: unknown; read_at?: unknown };
     const status = row.status === 'building' || row.status === 'ready' || row.status === 'failed' ? row.status : null;
-    return { status, stage: typeof r.stage === 'string' ? r.stage : null, stageAt: typeof r.stage_at === 'string' ? r.stage_at : null };
+    // read_at: when a build with the v2 reading retired last read a card today (the Self board's builtAt, boardState.ts)
+    return { status, stage: typeof r.stage === 'string' ? r.stage : null, stageAt: typeof r.stage_at === 'string' ? r.stage_at : null, ...(typeof r.read_at === 'string' ? { readAt: r.read_at } : {}) };
   } catch {
     return { status: null, stage: null, stageAt: null };
   }

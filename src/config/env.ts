@@ -1186,6 +1186,33 @@ export function isSelfV2BuildEnabled(): boolean {
 }
 
 /**
+ * Plan "retire the v2 Self reading", server step 2: the Self board's state comes from its card readings
+ * (`self.card.reading` rows of the Self cards on the board clock), not from the v2 rows: `builtAt`, `status`,
+ * `nothingStored` (so a GET queues a build only when no card was ever read and no build ran today), the Self "Good until"
+ * (the lens rule over the Self deck), the first-reading-free rule and the refresh quota gate (a card was read). Env
+ * `SELF_BOARD_FROM_CARDS=1`; default off (the v2 rows, as before). Rollback: unset or 0.
+ */
+export function isSelfBoardFromCardsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_BOARD_FROM_CARDS?.trim() === '1';
+}
+
+/**
+ * Plan "retire the v2 Self reading", server step 3: the Self build skips the v2 Oracle and the v2 Personalizer and reads
+ * the cards over the natal context (family readers → clock layer → lens linemen → card Oracle → card Personalizer). Env
+ * `SELF_V2_RETIRED=1`; default off (the v2 path intact). It takes effect only with the per-card reading on
+ * (`isCardsReadEnabled`: SELF_V3_BUILD=1 and READING_CLOCK_LAYER=1), so the legacy three-call v3 path never runs
+ * without a v2 reading behind it. Rollback: unset or 0.
+ */
+export function isSelfV2RetiredEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_V2_RETIRED?.trim() === '1';
+}
+
+/** SELF_V2_RETIRED=1 and the per-card reading on: the retired build path runs. */
+export function isSelfV2Retired(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isSelfV2RetiredEnabled(env) && isCardsReadEnabled(env);
+}
+
+/**
  * The engine's `pressure_inventory` pull for the Self v2 windows (docs/reading-engine/66 §4.3). Env
  * `SELF_V2_PRESSURE_PULL`: '0' / 'false' / 'off' turns the pull off (S3 stays degraded); default on. A failed pull never
  * fails the build.
