@@ -54,7 +54,7 @@ export const MIN_CACHE_TOKENS = 1024;
 export const ORACLE_RISK_TOP = 12;
 export const ORACLE_PROMISE_TOP = 8;
 
-export const FAMILY_IDS: readonly SelfV2FamilyAgentId[] = ['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky'];
+export const FAMILY_IDS: readonly SelfV2FamilyAgentId[] = ['family.rasi', 'family.moon', 'family.varga', 'family.star', 'family.dasha', 'family.year', 'family.sky'];
 
 /**
  * chars / 4: a lower bound on the provider's count, used only to pad a prefix past the cache minimum (it never pads

@@ -5,6 +5,7 @@
  * cards do not overwrite each other's entries. Nothing here throws.
  */
 import type { PrismaClient } from '@prisma/client';
+import { isCardsStoryContractEnabled } from '../../config/env.js';
 import { clockLabel } from '../self/words.js';
 import type { BoardReadingView, CardId, CardReadState, SelfV3CardContent } from '../self/v3/types.js';
 import { CARD_STUCK_MS, CARDS_STATE_AREA, emptyCardsState, type CardsStateDoc } from './types.js';
@@ -150,5 +151,8 @@ export function boardReadingView(
     total: board.length,
     capReached: doc.capReached,
     preparing: doc.preparing,
+    // docs/techniques/09 §6: a board card read before the full-thread reading (no technical story): the page offers a
+    // refresh ("A deeper reading is ready. Refresh uses 1 of your questions."); the refresh is charged as usual
+    deeperReadingReady: isCardsStoryContractEnabled() && board.some((id) => Boolean(readings[id]) && !readings[id]!.story),
   };
 }

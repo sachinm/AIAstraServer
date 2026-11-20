@@ -22,6 +22,8 @@ export interface CardStateEntry {
   at: string;
   /** staff-only reason (never shown to the person) */
   error?: string | null;
+  /** docs/techniques/09: rounds this card was queued today without a served reading (below the floor) */
+  attempts?: number;
 }
 
 /** the day's state of a kundli's card readings (one `area_builds` row per day) */
@@ -64,6 +66,11 @@ export interface StoredCardReading {
   /** the ledger hash and the frame hash it stood on */
   ledgerHash: string;
   frameHash: string;
+  /**
+   * docs/techniques/09 §3.2: the Oracle card's own key (no person, portrait, sections or confirm stamp): a later read
+   * with the same Oracle key re-runs only the Personalizer over this row's Oracle card
+   */
+  oracleKey?: string;
 }
 
 export interface CardRunResult {

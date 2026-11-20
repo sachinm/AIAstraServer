@@ -61,10 +61,10 @@ describe('Self v2 warm-up and cache ledger (AGENTS.md machinery rules 4 and 5)',
     setCacheRegistry(prismaCacheRegistry(db.prisma));
     const all = slices();
     const warmed = await warmPrefixes(all);
-    expect(warmed).toHaveLength(6);
+    expect(warmed).toHaveLength(8);
     expect(warmed.every((w) => w.name?.startsWith('cachedContents/v2-'))).toBe(true);
-    expect(created).toHaveLength(6);
-    expect(db.cacheRows.size).toBe(6);
+    expect(created).toHaveLength(8);
+    expect(db.cacheRows.size).toBe(8);
     for (const name of created) {
       const row = db.cacheRows.get(name)!;
       expect(row).toMatchObject({ name, provider: 'gemini', user_id: 'u-v2', kundli_id: 'k-v2', deleted_at: null });
@@ -111,8 +111,8 @@ describe('Self v2 warm-up and cache ledger (AGENTS.md machinery rules 4 and 5)',
     });
     const all = slices();
     await warmPrefixes([...all, all[0]!], { ensureCache: ensure as never });
-    expect(ensure).toHaveBeenCalledTimes(6);
-    expect(peak).toBe(6);
+    expect(ensure).toHaveBeenCalledTimes(8);
+    expect(peak).toBe(8);
   });
 
   it('markAgentUsed informs the 45-minute recycler for the slice owner', () => {

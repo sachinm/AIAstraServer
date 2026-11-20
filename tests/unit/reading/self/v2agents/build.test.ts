@@ -56,8 +56,8 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
 
     const firstCall = log.findIndex((x) => x.startsWith('call:'));
     const warmsBefore = log.slice(0, firstCall).filter((x) => x.startsWith('warm:'));
-    expect(warmsBefore).toHaveLength(6); // five families + the Oracle
-    expect(log.slice(firstCall).filter((x) => x.startsWith('call:family.'))).toHaveLength(5);
+    expect(warmsBefore).toHaveLength(8); // seven families (docs/techniques/09 §3.1) + the Oracle
+    expect(log.slice(firstCall).filter((x) => x.startsWith('call:family.'))).toHaveLength(7);
     const oracleCalls = log.filter((x) => x.startsWith('call:self.oracle.v2.'));
     expect(oracleCalls).toHaveLength(3);
     // the Oracle runs after every family reader; the Personalizer's prefix is warmed before its call
@@ -65,7 +65,7 @@ describe('runSelfV2Build: the order of a build (doc 66 §4.8 steps 0–8), every
     const pWarm = log.lastIndexOf('step:warm.personalizer');
     expect(log[pWarm + 1]).toMatch(/^warm:/);
     expect(log.indexOf('call:self.personalizer')).toBeGreaterThan(pWarm + 1);
-    expect(d.informUsed).toHaveBeenCalledTimes(5 + 3 + 1);
+    expect(d.informUsed).toHaveBeenCalledTimes(7 + 3 + 1);
 
     // timings and tokens per agent
     expect(r.agents.map((a) => a.call)).toEqual(expect.arrayContaining(['family.rasi', 'oracle.a', 'oracle.b', 'oracle.c', 'self.personalizer']));

@@ -239,8 +239,8 @@ export async function resolveCardContext(deps: CardChatResolveDeps, userId: stri
   const by = slices as Record<string, RenderedSlice | undefined>;
   let prefix: CardChatPrefix | null = null;
   if (by['sky.window'] && by['year.tp'] && by['frame']) {
-    const sp = sharedPrefix({ natal: by['natal.core'] ?? null, sky: by['sky.window'], year: by['year.tp'], frame: by['frame'] });
-    prefix = { text: sp.text, keys: sp.keys, hash: sp.hash, matchesCard: Boolean(stored?.key && stored.key.includes(`|pre=${sp.hash}|`)) };
+    const sp = sharedPrefix({ natal: by['natal.core'] ?? null, sky: by['sky.window'], year: by['year.tp'], frame: by['frame'] }, dayOf(now));
+    prefix = { text: sp.text, dated: sp.dated, keys: sp.keys, hash: sp.hash, matchesCard: Boolean(stored?.key && stored.key.includes(`|pre=${sp.hash}|`)) };
   }
   const ledger = parseLayer(by[LAYER_CACHE_SLICE_ID]?.text);
   const cells = ledger ? cardCells(ledger, card.matters as CardMatter[]) : [];

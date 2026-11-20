@@ -194,6 +194,24 @@ export const AGENTS: AgentDef[] = [
     description: 'Reads the D1 house cards, planet cards, avasthas, dispositor/star-lord chains, points, yogas/doshas, and star profile to extract afflictions, malefics, graces, and what helps or delays the running Mahadasha promise',
   },
   {
+    id: 'family.moon',
+    title: 'Chart from the Moon family sub-agent',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'family',
+    role: 'reader',
+    description: 'Reads the natal chart from the Moon (Chandra Lagna): the Moon sign as the first house, each house read from it by the model from the listed signs (Node counts nothing), its lord, occupants and the arudhas; where the Moon view confirms or differs from the lagna view (docs/techniques/09 §3.1, §4)',
+  },
+  {
+    id: 'family.star',
+    title: 'Star (nakshatra) family sub-agent',
+    kind: 'llm',
+    module: 'self',
+    subModule: 'family',
+    role: 'reader',
+    description: 'Reads each planet through its stored star, star lord, pada and star-lord chain; which planets deliver through which star lords; tara per planet is not stored yet and is never computed (docs/techniques/09 §3.1, §4)',
+  },
+  {
     id: 'family.varga',
     title: 'Divisional vargas (D2-D60) family sub-agent',
     kind: 'llm',
@@ -236,7 +254,7 @@ export const AGENTS: AgentDef[] = [
     module: 'self',
     subModule: 'lineman',
     role: 'specialist',
-    description: 'Compiles the five family sub-agent findings, the nine deterministic Self panel claims, the whole-chart purview rules, and the person confirmed facts into a unified brief for the Self Oracle',
+    description: 'Lens lineman for a Self lens (docs/techniques/09 §3.1, revived): one call per lens with cards on the board over the natal prefix, the seven family findings, the clock sheets with their sentences, the gate statuses and the lens recipe; writes the lens thread (promise, period, year, star, trigger, each keyed and source-tagged) stored as reading.lens.thread for the card Oracle. Also the v1 Self board brief',
   },
   {
     id: 'self.reading_oracle',

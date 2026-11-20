@@ -20,7 +20,14 @@ const DATES = /(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/;
 const KEYS = /\{([^}]+)\}/g;
 
 /** the frame's date range: its first span's start to its end */
-export const frameRange = (frame: { asOf: string; to: string; spans: ReadonlyArray<{ from: string }> }): DateRange => ({ from: frame.spans[0]?.from ?? frame.asOf, to: frame.to });
+/**
+ * The frame's dates: its first span's start to its last span's end (docs/techniques/09 §8 step 4: never `frame.to`, which
+ * is today plus twelve months and moves every day; the spans' edges are stored period edges and stay put).
+ */
+export const frameRange = (frame: { asOf: string; to: string; spans: ReadonlyArray<{ from: string; to?: string }> }): DateRange => ({
+  from: frame.spans[0]?.from ?? frame.asOf,
+  to: frame.spans[frame.spans.length - 1]?.to ?? frame.to,
+});
 
 const overlaps = (from: string, to: string, r: DateRange): boolean => from < r.to && r.from < to;
 

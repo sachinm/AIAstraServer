@@ -84,12 +84,12 @@ describe('self oracle', () => {
     const v = validateSelfText('Good {planet:D1.Ju}\n\nInvented {planet:D1.Ve}\n\nNo cite', new Set(['planet:D1.Ju']));
     expect(v).toEqual({ text: 'Good\n\nNo cite', dropped: 1 });
   });
-  it('builds all 5 family packs with all stored dasha systems, parses structured blocks, and runs scoped sub-agents + lineman + oracle', async () => {
+  it('builds all 7 family packs (the Moon and the stars added, docs/techniques/09 §3.1) with the verified dasha systems, parses structured blocks, and runs scoped sub-agents + lineman + oracle', async () => {
     process.env.SELF_READING_MODEL = '1';
     const view = digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' });
     const clock = resolveClock('dwisatpathi', FIX.systems);
     const packs = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-07', null);
-    expect(Object.keys(packs)).toEqual(['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky']);
+    expect(Object.keys(packs).sort()).toEqual(['family.dasha', 'family.moon', 'family.rasi', 'family.sky', 'family.star', 'family.varga', 'family.year']);
     expect(packs['family.dasha'].prefix).toContain('vimsottari');
     expect(packs['family.dasha'].prefix).toContain('narayana');
     expect(packs['family.dasha'].expiresAt?.toISOString().slice(0, 10)).toBe('2027-01-01');
@@ -168,3 +168,22 @@ describe('tidyOracleParagraph', () => {
   });
 });
 
+
+describe('family packs from one day to the next (docs/techniques/09 §8 step 4)', () => {
+  it('the cached pack text and its hash do not carry the day: N and N+1 give the same packs (dynamic parts may differ)', () => {
+    const view = digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' });
+    const clock = resolveClock('dwisatpathi', FIX.systems);
+    const a = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-07', null);
+    const b = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-08', null);
+    for (const id of ['family.rasi', 'family.moon', 'family.varga', 'family.star', 'family.dasha', 'family.year'] as const) {
+      expect(b[id].prefix, id).toBe(a[id].prefix);
+      expect(b[id].packHash, id).toBe(a[id].packHash);
+      expect(a[id].prefix, id).not.toContain('2026-11-07');
+    }
+    // the Moon pack names the Moon and every D1 house sign; Node writes no house counted from the Moon
+    expect(a['family.moon'].prefix).toContain('{planet:D1.Mo}');
+    expect(a['family.moon'].prefix).not.toMatch(/from the Moon=\d|H\d+ from the Moon/);
+    // the dasha pack holds only verified systems (no Yogini, no Chara)
+    expect(a['family.dasha'].prefix).not.toMatch(/clock=yogini|clock=chara\(/);
+  });
+});

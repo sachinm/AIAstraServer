@@ -269,6 +269,17 @@ export interface OracleCardV3 {
   pattern: { text: string; since: IsoDate | null; until: IsoDate | null; evidence: EvidenceKey[] } | null;
   certainty: AreaCertainty;
   evidence: EvidenceKey[];
+  /**
+   * docs/techniques/09 §3.4: the technical story, 700–1,400 words, continuous, in the fixed order of the nine beats
+   * (`cards/story.ts` STORY_BEATS); shown on the Astrology Reading tab. Absent on cards read before the story contract.
+   */
+  story?: string;
+  /** the beat index (not shown): per beat, held, the systems used and the evidence keys; the depth gate reads it */
+  beats?: Array<{ beat: string; held: 'yes' | 'partly' | 'no' | 'na'; systems: string[]; evidence: EvidenceKey[] }>;
+  /** the depth gate's verdict when the card was stored (counts only) */
+  depth?: { technicalWords: number; ok: boolean; inputGaps: string[] };
+  /** "Good until" (YYYY-MM-DD): the earliest of the cited sub-period end, the year end and the now span end */
+  goodUntil?: IsoDate | null;
 }
 
 export interface OracleV3Output {
@@ -280,7 +291,12 @@ export interface PersonalCardV3 {
   card: CardId;
   /** ≤ 20 words, one sentence with a date copied from a span */
   line: string;
-  spans: Array<{ span: string; asks: string; obstacle: string; step: string }>;
+  /** docs/techniques/09 §3.3: what each stretch asks, one if-then step, and what it is building in the person (`growth`) */
+  spans: Array<{ span: string; asks: string; obstacle: string; step: string; growth?: string }>;
+  /** docs/techniques/09 §3.3: the plain story, 350–700 words, the Oracle's story retold in the same order, no chart term */
+  story?: string;
+  /** the §3.3 fallback: the Personalizer failed twice; the card shows the Oracle story and "The plain reading is being written" */
+  plainPending?: boolean;
   /** the Oracle's confirm statement as a plain yes/no question; null when the Oracle gave none */
   confirm: string | null;
   /** only when the person switched the section on, else null */
@@ -313,6 +329,8 @@ export interface SpanReading {
   agreement?: { agree: number; of: number } | null;
   /** doc 70 §4.3 item 6, Chart details: each clock read for this span, its tone, and whether it holds the span's tone */
   clocks?: SpanClockView[];
+  /** docs/techniques/09 §3.3: what this stretch is building in the person (plain words) */
+  growth?: string;
 }
 
 /** one clock's word for a span, as Chart details lists it (labels are plain names, never an engine's) */
@@ -339,6 +357,22 @@ export interface SelfV3CardContent {
   chart?: CardChartReading | null;
   /** docs/dashboards/13 §4.1 phase 5 (gated, not written yet): one plain sentence on why the reading holds */
   why?: string | null;
+  /** docs/techniques/09 §6: the Oracle's technical story (Astrology Reading tab; follows `feature.why_panel`); null on older cards */
+  story?: string | null;
+  /** docs/techniques/09 §6: the plain story (Outlook); `pending` while the Personalizer is being re-run (§3.3 fallback) */
+  plain?: { story: string | null; pending: boolean } | null;
+  /** docs/techniques/09 §6: the verified systems read for this card, by name, and the period each is running today */
+  systems?: CardSystemView[] | null;
+  /** docs/techniques/09 §3.2: the reading holds until this day (YYYY-MM-DD) unless the person refreshes */
+  goodUntil?: IsoDate | null;
+}
+
+/** one verified dasha system as the card shows it (plain names; never an engine's) */
+export interface CardSystemView {
+  system: string;
+  label: string;
+  /** the period running today on this system (lord or sign, and its dates); null when none is stored */
+  running: { lord: string; from: IsoDate; to: IsoDate | null } | null;
 }
 
 /** the chart-language reading of a card, from the stored Oracle card (docs/dashboards/13 §4.1); text only */
@@ -497,6 +531,8 @@ export interface BoardReadingView {
   capReached: boolean;
   /** fewer clocks stored than READING_CLOCKS_MIN: "Your chart is still being prepared" */
   preparing: boolean;
+  /** docs/techniques/09 §6: a card on this board was read before the full-thread reading; refresh (charged) reads it again */
+  deeperReadingReady?: boolean;
 }
 
 /** POST /api/self/v3/cards/:id/read */

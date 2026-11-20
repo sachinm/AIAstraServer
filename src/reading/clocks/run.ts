@@ -16,7 +16,7 @@ import type { YearFrameV3 } from '../self/v3/types.js';
 import { TP_SYSTEM } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
 import { countConcordance, ledgerFromCount, runConcordance, sheetHashesOf } from './concordance.js';
-import { LAYER_CACHE_VERSION, layerCacheKey, readLayerCache, writeLayerCache } from './layerCache.js';
+import { LAYER_CACHE_VERSION, layerCacheKey, layerValidUntil, readLayerCache, writeLayerCache } from './layerCache.js';
 import { clockTiming, readClocks, sharedPrefix, systemOfSlice, type ClockCallContext, type ClockCallDeps } from './reader.js';
 import {
   CLOCK_AGENT,
@@ -163,14 +163,14 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
     }
 
     // 1. one cache for every agent of the layer: the common system prompt + the shared prefix
-    const prefix = sharedPrefix(picked.shared);
+    const prefix = sharedPrefix(picked.shared, input.ctx.asOf);
     result.prefixHash = prefix.hash;
     const system = promptText(READER_SYSTEM_PROMPT);
     const warmSlice = {
       agent: CLOCK_AGENT,
       prefix: prefix.text,
       suffix: '',
-      prefixHash: prefix.hash,
+      prefixHash: prefix.cacheHash,
       cacheOwner: { userId: input.ctx.userId, kundliId: input.ctx.kundliId },
       model,
       system,
@@ -178,8 +178,9 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       keys: prefix.keys,
     } as unknown as PreparedAgentSlice;
     // the cards read over this region too, so it is warmed on a cache hit as well; the cache row is read meanwhile
+    // docs/techniques/09 §8 step 4: no as-of day in the key; the entry holds until the earliest edge it stands on
+    const validUntil = layerValidUntil(input.frame, picked, input.ctx.asOf);
     const key = layerCacheKey({
-      asOf: input.ctx.asOf,
       model,
       prefixHash: prefix.hash,
       frameHash: picked.shared.frame.hash,
@@ -188,7 +189,7 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
     });
     result.cacheKey = key;
     const tw = performance.now();
-    const readHit = () => (deps.force ? Promise.resolve(null) : (deps.readCache ?? readLayerCache)(deps.prisma, input.ctx.kundliId, key));
+    const readHit = () => (deps.force ? Promise.resolve(null) : (deps.readCache ?? readLayerCache)(deps.prisma, input.ctx.kundliId, key, input.ctx.asOf));
     let warmed: Awaited<ReturnType<typeof warmPrefixes>> = [];
     let hit: Awaited<ReturnType<typeof readLayerCache>>;
     if (deps.warmOnHit === false) {
@@ -247,7 +248,7 @@ export async function runClockLayer(deps: ClockLayerDeps, input: ClockLayerInput
       const status: ClockLayerStatus = c.issues.some((x) => x.check === 'budget') ? 'budget_exceeded' : sheetsClean && !c.issues.length ? 'ok' : 'partial';
       // stored only when the ledger has its words (the concordance wrote, came from its store, or had nothing to write)
       if (status !== 'budget_exceeded' && (!c.timing || c.timing.status === 'ok' || c.timing.status === 'cached')) {
-        await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, status, sheets: result.sheets, ledger: c.ledger }, deps.now);
+        await (deps.writeCache ?? writeLayerCache)(deps.prisma, input.ctx.kundliId, { v: LAYER_CACHE_VERSION, key, asOf: input.ctx.asOf, validUntil, status, sheets: result.sheets, ledger: c.ledger }, deps.now);
       }
       return { status, ledger: c.ledger, timing: c.timing, issues, spentUsd: round6(cost), ms };
     });

@@ -195,7 +195,8 @@ export function applySelfFeatures<C extends AnyCardView = SelfV3CardView, B exte
     if (!usable(grants, 'feature.key_dates')) out.keyDates = [];
     if (!usable(grants, 'feature.why_panel') && out.v2) out.v2 = { ...out.v2, details: { evidence: [] } };
     // the chart-language reading is the Why of a v3 card (docs/dashboards/13 §4.1): it follows the same grant
-    if (!usable(grants, 'feature.why_panel') && (out.v3?.chart || out.v3?.why)) out.v3 = { ...out.v3, chart: null, why: null };
+    // docs/techniques/09 §6: the technical story and the systems list are the Astrology Reading, under the same grant
+    if (!usable(grants, 'feature.why_panel') && (out.v3?.chart || out.v3?.why || out.v3?.story || out.v3?.systems)) out.v3 = { ...out.v3, chart: null, why: null, story: null, systems: null };
     if (!usable(grants, 'feature.confirm') && out.v3) out.v3 = { ...out.v3, confirm: null };
     if (out.options && !faceOk(out.options.face)) out.options = { ...out.options, face: 'read' };
     cards.push(out);

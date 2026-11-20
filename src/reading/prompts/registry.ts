@@ -178,6 +178,22 @@ function buildBuiltinPrompts(): Record<string, AgentPromptEntry> {
 
 export const BUILTIN_AGENT_PROMPTS: Record<string, AgentPromptEntry> = buildBuiltinPrompts();
 
+/** the hash a row records of the code text it was seeded from */
+export function promptCodeHash(text: string): string {
+  return crypto.createHash('sha256').update(text.replace(/\r\n/g, '\n').trim()).digest('hex').slice(0, 16);
+}
+
+/**
+ * Which text a prompt runs with (docs/techniques/09, 2026-11-19: rewritten prompts never reached staging because the
+ * seed kept the stored row and the stored row overrode the code). The code text wins when the row was seeded from a
+ * different code text, or records none (a row from before `code_hash`); the stored text wins only while the code text
+ * it was seeded from is unchanged (a live database edit). A prompt with no code text is the stored row's. Pure.
+ */
+export function pickPromptText(code: string | undefined, row: { prompt: string; code_hash: string | null }): string {
+  if (code === undefined) return row.prompt;
+  return row.code_hash && row.code_hash === promptCodeHash(code) ? row.prompt : code;
+}
+
 const CACHE_TTL_MS = 60_000;
 let promptCache: {
   at: number;
@@ -202,6 +218,8 @@ export async function ensurePromptSchemaAndSeed(prisma: PrismaClient): Promise<v
       `ALTER TABLE system_prompts ADD COLUMN IF NOT EXISTS description TEXT`,
       `ALTER TABLE system_prompts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`,
       `ALTER TABLE system_prompts ADD COLUMN IF NOT EXISTS updated_by TEXT`,
+      // docs/techniques/09: the hash of the code text a row was last seeded from (see `pickPromptText`)
+      `ALTER TABLE system_prompts ADD COLUMN IF NOT EXISTS code_hash TEXT`,
       `CREATE TABLE IF NOT EXISTS system_prompt_versions (
         id TEXT PRIMARY KEY DEFAULT (uuid_generate_v4())::text,
         prompt_name TEXT NOT NULL,
@@ -243,9 +261,13 @@ export async function ensurePromptSchemaAndSeed(prisma: PrismaClient): Promise<v
 
     for (const item of Object.values(BUILTIN_AGENT_PROMPTS)) {
       await prisma.$executeRawUnsafe(
-        `INSERT INTO system_prompts (name, prompt, is_active, version, agent_role, prompt_type, description, updated_at)
-         VALUES ($1, $2, true, 1, $3, $4, $5, now())
+        // a changed code text wins over the stored row (the trigger archives the row's text as a version first); a
+        // row edited live in the database keeps its text while the code text it was seeded from is unchanged
+        `INSERT INTO system_prompts (name, prompt, is_active, version, agent_role, prompt_type, description, updated_at, code_hash)
+         VALUES ($1, $2, true, 1, $3, $4, $5, now(), $6)
          ON CONFLICT (name) DO UPDATE SET
+           prompt = CASE WHEN system_prompts.code_hash IS DISTINCT FROM EXCLUDED.code_hash THEN EXCLUDED.prompt ELSE system_prompts.prompt END,
+           code_hash = EXCLUDED.code_hash,
            agent_role = COALESCE(system_prompts.agent_role, EXCLUDED.agent_role),
            prompt_type = COALESCE(system_prompts.prompt_type, EXCLUDED.prompt_type),
            description = COALESCE(system_prompts.description, EXCLUDED.description)`,
@@ -254,6 +276,7 @@ export async function ensurePromptSchemaAndSeed(prisma: PrismaClient): Promise<v
         item.agentRole,
         item.promptType,
         item.description,
+        promptCodeHash(item.prompt),
       );
     }
     // Ensure existing rows (such as pvr_oracle) also have a baseline row in system_prompt_versions
@@ -292,16 +315,19 @@ export async function loadAgentPrompts(prisma?: PrismaClient | null): Promise<Ma
   refreshInFlight = (async () => {
     try {
       await ensurePromptSchemaAndSeed(prisma);
-      const rows = (await prisma.$queryRawUnsafe<Array<{ name: string; prompt: string; version: number | null }>>(
-        `SELECT name, prompt, COALESCE(version, 1)::int AS version FROM system_prompts WHERE is_active = true`,
-      )) ?? [];
+      const rows = (await prisma
+        .$queryRawUnsafe<Array<{ name: string; prompt: string; version: number | null; code_hash?: string | null }>>(
+          `SELECT name, prompt, COALESCE(version, 1)::int AS version, code_hash FROM system_prompts WHERE is_active = true`,
+        )
+        // a table without the code_hash column (the seed could not alter it): rows read without it; the code text wins
+        .catch(() => prisma.$queryRawUnsafe<Array<{ name: string; prompt: string; version: number | null; code_hash?: string | null }>>(`SELECT name, prompt, COALESCE(version, 1)::int AS version FROM system_prompts WHERE is_active = true`))) ?? [];
       const map = new Map<string, { prompt: string; version: number }>();
       for (const [k, v] of Object.entries(BUILTIN_AGENT_PROMPTS)) {
         map.set(k, { prompt: v.prompt, version: v.version });
       }
       for (const r of rows) {
         if (r.name && typeof r.prompt === 'string' && r.prompt.trim()) {
-          const clean = r.prompt.trim();
+          const clean = pickPromptText(BUILTIN_AGENT_PROMPTS[r.name]?.prompt, { prompt: r.prompt, code_hash: r.code_hash ?? null }).trim();
           const ver = Number(r.version) || 1;
           map.set(r.name, { prompt: clean, version: ver });
           // Synchronise reading engine PROMPTS in-place when a matching key is edited in DB

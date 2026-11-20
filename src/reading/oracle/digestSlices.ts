@@ -41,7 +41,9 @@ export type SubAgentId =
   | 'code:annual'
   | 'code:person'
   | 'family.rasi'
+  | 'family.moon'
   | 'family.varga'
+  | 'family.star'
   | 'family.dasha'
   | 'family.year'
   | 'family.sky'
@@ -432,6 +434,26 @@ const RAW_SUBAGENT_DIGEST_SPECS: Record<SubAgentId, RawSubAgentDigestSpec> = {
     sections: ['house', 'planet', 'point', 'yoga', 'star'],
     vargas: ['D1'],
     tableTypes: ['strength_matrix', 'planetary_avasthas', 'planetary_yogas', 'arudha_padas', 'special_lagnas', 'upagrahas', 'charakaraka'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.moon': {
+    id: 'family.moon',
+    techniqueId: 'self.v2.oracle',
+    sections: ['house', 'planet', 'point'],
+    vargas: ['D1'],
+    tableTypes: ['arudha_padas'],
+    usesActivation: false,
+    cachePromptPrefix: true,
+    cacheOutput: 'reading_findings_cache',
+  },
+  'family.star': {
+    id: 'family.star',
+    techniqueId: 'self.v2.oracle',
+    sections: ['planet', 'star'],
+    vargas: ['D1'],
+    tableTypes: [],
     usesActivation: false,
     cachePromptPrefix: true,
     cacheOutput: 'reading_findings_cache',
