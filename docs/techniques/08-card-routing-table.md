@@ -195,3 +195,12 @@ Eight registry cards are not readable yet, so `routeFor` returns null for them:
   `lagna` and `presence`, D30 for `stuck` and `mood`, D10 for `diagnosis` and the time cards) and must read this table.
 - `src/reading/area/love.ts` (vargas D1, D9, D7) and the `love:chart/D7.h7` technique row still route romance to the D7.
 - The Craft briefs still name the natal A5 as "the work"; the recipe reads it only as recognition (Rao).
+
+## Sachin's yes on the chart removals (2026-11-19)
+
+Under the depth rule (`AGENTS.md`, "Reading depth is a release gate", rule 5), every chart removed from a brief needs
+Sachin's written yes. He approved keeping all of them on 2026-11-19: D30 out of ten Love and Work briefs (the research
+reserves it for illness, which stays out of readings), D24 out of four briefs, D16 out of three Craft briefs, D7 out of
+the Craft briefs, and the D10 11th house out of `friends_core_allies`. No depth replay was run for these; each card still
+reads D1, D9, its own routed chart and the year charts.
+
