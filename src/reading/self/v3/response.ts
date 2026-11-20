@@ -220,5 +220,7 @@ export function buildSelfV3Response(i: CardViewsInput & { layout: SelfBoardLayou
     cards: i.v2.status === 'no_kundli' ? [] : cardViews(i),
     reading: i.reading ?? null,
     features: {},
+    // the key is always sent (null until the diagnosis card's line is served; getSelfV3 sets it after the features)
+    headerLine: null,
   };
 }

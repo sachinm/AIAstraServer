@@ -505,7 +505,8 @@ export interface SelfV3Response {
    * The Self board's header line (docs/techniques/09 §3.1 "the Self hero line is written by the Personalizer of the
    * `diagnosis` card"; plan "retire the v2 Self reading" step 4): the diagnosis card's plain one-sentence `line`, engine
    * names redacted. Null when that card is off or locked for the person, not read, or its plain reading is pending (the
-   * Personalizer is being re-run). No model call: it is the stored card's line. Absent on bodies built before this field.
+   * Personalizer is being re-run). No model call: it is the stored card's line. The key is always sent (null, never
+   * omitted); it is absent only on a body from a server that predates this field.
    */
   headerLine?: string | null;
 }
