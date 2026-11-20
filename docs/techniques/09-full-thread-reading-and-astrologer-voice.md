@@ -281,7 +281,11 @@ budgets of §3.5; the 10 s interactive deadline stays for chat only):
 - **Personalize wizard:** suggests cards from age and known facts (`suggested` flag already in `self/v3/types.ts:87`).
 - Phone layout unchanged until approved.
 - **Self header line** (retire-v2 step 4): GET /api/self/v3 serves `headerLine: string | null`, the `diagnosis` card's
-  plain `line` (redacted as served); null when that card is off, locked, unread or its plain reading is pending.
+  plain `line` (redacted as served); null when that card is off, locked, unread or its plain reading is pending. The
+  key is always present (`null`, never omitted); it is absent only on a body from a server that predates the field.
+- **Two "Good until" dates:** each card's `v3.goodUntil` stays per card; the Self board chip's `refresh.validUntil`
+  (SELF_BOARD_FROM_CARDS) is the earliest per-card Good until across the shown deck (a card with none counts by its
+  stored row's last good day), so the chip never claims a later day than any card on the board.
 
 ## 7. Files
 

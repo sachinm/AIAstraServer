@@ -10,7 +10,8 @@
  *   cardsRead      Self cards with a stored reading on the clock (Love and Work card rows share the technique and are
  *                  never counted: only the Self registry's ids are read)
  *   nothingStored  no Self card was ever read on this clock: the first reading is the free automatic one
- *   validity       the Self "Good until": the lens rule (`lensValidityFrom`) over the Self deck's newest readings (the
+ *   validity       the Self "Good until": the earliest card Good until (`cardGoodUntil`: the card's `goodUntil`, else
+ *                  its row's last good day) over the Self deck's newest readings (the
  *                  board layout's cards; every read Self card when the layout holds none of them)
  *
  * Read only; never throws (an unreadable store reads as nothing stored and no dates).
@@ -18,7 +19,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { newestCardRows, readCardReadings } from '../cards/store.js';
 import { deeperReadingReady } from '../cards/state.js';
-import { lensValidityFrom, NO_LENS_REFRESH, type LensRefreshView } from '../boards/lensValidity.js';
+import { cardGoodUntil, lensValidityFrom, NO_LENS_REFRESH, type LensRefreshView } from '../boards/lensValidity.js';
 import { READABLE_CARDS } from './v3/cards.js';
 import { readLayout } from './v3/layout.js';
 
@@ -48,7 +49,9 @@ export function selfBoardStateFrom(rows: readonly Row[], today: string, deck: re
   let builtAt = made[made.length - 1]!;
   if (readAt && readAt > builtAt) builtAt = readAt;
   const onDeck = deck.length ? [...newest.entries()].filter(([id]) => deck.includes(id)).map(([, r]) => r) : [];
-  const v = lensValidityFrom(onDeck.length ? onDeck : [...newest.values()], today, readAt ? { at: readAt, cards: [], outcome: 'committed' } : null);
+  // the chip's Good until is the earliest card Good until on the shown deck (each card's own `goodUntil`, else its row's
+  // last good day): never later than any card on the board (docs/techniques/09 §6)
+  const v = lensValidityFrom(onDeck.length ? onDeck : [...newest.values()], today, readAt ? { at: readAt, cards: [], outcome: 'committed' } : null, cardGoodUntil);
   return { builtAt, cardsRead: newest.size, nothingStored: false, validity: { madeAt: v.madeAt, validUntil: v.validUntil, due: v.due } };
 }
 

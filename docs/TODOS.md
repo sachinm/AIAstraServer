@@ -3941,3 +3941,12 @@ know, who holds it, what done means.
   (cards, clocks, lens, now, cardChat, v3) still import `self/v2/{slices,cache,oracle,failures,personalizerValidate,
   portrait,progress}.js`. Owner: server (phase D). Done: every non-v2 import points at the new homes before the v2 files
   are deleted.
+- **A Love/Work lens chip still counts by row validity, not the cards' own Good until.** The Self chip
+  (`refresh.validUntil`, SELF_BOARD_FROM_CARDS) is now the earliest card `goodUntil` on the deck (`cardGoodUntil`);
+  `lensValidity` keeps `readingLastDay` (the day before the row's `valid_to`), which can be later than a card's
+  `v3.goodUntil`, so a lens chip may claim a later day than a card shows. Owner: server + Sachin (it moves Love/Work due
+  dates). Done: `lensValidity` passes `cardGoodUntil` too, with the lens refresh tests updated.
+- **The "deeper reading" refresh is charged for every board read before the story contract.** Per Sachin's decision a
+  board or lens with a read card lacking a technical story counts as due and costs one question; there is no free re-read
+  after a prompt release. Owner: Sachin (confirm the support line for people who ask why). Done: confirmed, or a free
+  window added to `deeperReadingReady`'s callers.

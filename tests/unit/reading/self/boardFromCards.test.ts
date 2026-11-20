@@ -193,3 +193,20 @@ describe('selfDeeperReadingReady (POST /api/boards/self/refresh counts it as due
     expect(await selfDeeperReadingReady(db({ mind: bare }), 'k1')).toBe(false);
   });
 });
+
+describe('the Self chip Good until (refresh.validUntil) is the earliest card Good until on the shown deck', () => {
+  const card = (id: string, goodUntil: string | null, validTo = '2027-06-01T00:00:00Z') => ({ output: { card: id, content: { line: 'x', spans: [], ...(goodUntil ? { goodUntil } : {}) } }, created_at: new Date('2026-11-18T09:00:00Z'), valid_to: new Date(validTo) });
+
+  it('takes each card goodUntil, the earliest across the deck, never later than any card', () => {
+    const rows = [card('mind', '2027-02-20'), card('body', '2026-12-15'), card('year', '2026-12-01')];
+    // `year` is not on the shown deck: it does not set the chip
+    const s = selfBoardStateFrom(rows, TODAY, ['mind', 'body']);
+    expect(s.validity.validUntil).toBe('2026-12-15');
+    for (const r of rows.slice(0, 2)) expect(s.validity.validUntil! <= (r.output.content as { goodUntil: string }).goodUntil).toBe(true);
+  });
+
+  it('a card with no goodUntil counts by its row last good day', () => {
+    const s = selfBoardStateFrom([card('mind', '2027-02-20'), card('body', null, '2026-12-10T00:00:00Z')], TODAY, ['mind', 'body']);
+    expect(s.validity.validUntil).toBe('2026-12-09');
+  });
+});
