@@ -4,7 +4,7 @@ Board: Work, Career start lens. Sensitive card.
 
 What this card answers: What pressure makes this person's ability feel smaller than it is in these first years, and when their footing steadies. The question: what temporary pressure is amplifying self-doubt, and when does inner footing steady?
 
-What it reads: The Moon (its house, its dispositor, and Kemadruma where stored), the Sun (confidence), Mercury (ability), the lagna and its lord, the 4th and 5th; Saturn over the Moon and its long passage around it where stored; running sub-periods 6th or 8th from the main period. Charts: the D1, D9 and D10; the year in the Tithi Pravesha D1, then its D10. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
+What it reads: The Moon (its house, its dispositor, and Kemadruma where stored), the Sun (confidence), Mercury (ability), the lagna and its lord, the 4th and 5th; Saturn over the Moon and its long passage around it where stored; running sub-periods 6th or 8th from the main period. Charts: the D1, D9 and D10; the year in the Tithi Pravesha D1, then its D10; the charts past the natal D1 and D9 only where the shared data carries them. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
 
 For the person: Normalise the beginner's curve: the ability is real even while confidence is tested. Studying: exams, presentations and first critiques. Working: first reviews and new rooms. Under 25 short and kind; 25 to 35 practical. A build span is for visible work, asking questions and trusting preparation; a get-through span is for small wins written down and a gentler inner judge.
 

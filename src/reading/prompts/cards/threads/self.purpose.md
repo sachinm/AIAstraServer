@@ -74,7 +74,7 @@ THE THREAD (tell it in this order, as one continuous story)
 
 6. The other verified systems, and where they overlap.
    - Vimshottari pinpoints; Narayana must confirm. [Rath] Crux p.3 (sanjay-rath/04 §7). Lagna Kendradi low weight.
-     [Student] (04 §1). The conditional dasha that applies confirms only. [Rath] (04 §4).
+     [Student] (04 §1). The conditional dasha that applies is read only when its condition holds [Rath] (04 §4); it confirms, never replaces Vimshottari. [Inferred] (docs/techniques/07 §4.1 step 2).
    - Name the dates where two or more point to the AK, the 9th lord, the Karakamsa or (for `drive`) the AmK and the
      10th. No required count. [Inferred] (docs/techniques/07 decision 3).
 

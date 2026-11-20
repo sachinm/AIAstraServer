@@ -40,8 +40,8 @@ THE THREAD (tell it in this order, as one continuous story)
    - Sign dasha: the route names Narayana D9. A D9 Narayana starts from the sign the D1 9th lord occupies in the D9
      (Table 29: the 9th controls the D9). [Rath] (sanjay-rath/04 §2); its use for marriage is [Student]
      (docs/techniques/07 §4.2). It is not cast yet: read the Narayana D1 maha dasha sign (its occupants, its lord, its
-     place from the 7th, the UL and the A7) and say the marriage timing comes from Narayana D1. [Rath] (04 "Use in the
-     product").
+     place from the 7th, the UL and the A7) and say the marriage timing comes from Narayana D1. [Inferred] (04 "Use in
+     the product").
 
 2. Its sub-period.
    - The antardasha lord should relate to the D9 7th lord. [Rath] (09 §2 M1).
@@ -85,7 +85,7 @@ THE THREAD (tell it in this order, as one continuous story)
 
 6. The other verified systems, and where they overlap.
    - Vimshottari pinpoints; Narayana must confirm. [Rath] Crux p.3 (sanjay-rath/04 §7). Lagna Kendradi low weight.
-     [Student] (04 §1). The conditional dasha that applies confirms only. [Rath] (04 §4).
+     [Student] (04 §1). The conditional dasha that applies is read only when its condition holds [Rath] (04 §4); it confirms, never replaces Vimshottari. [Inferred] (docs/techniques/07 §4.1 step 2).
    - `marriage_finances_chores`: Sudasa times finance and fortune [Rath] role; its calculation from the Sree Lagna is
      [Student] (sanjay-rath/08 §2 W1, W2). Check Narayana with Sudasa. [Student] Rao (04 §7).
    - Do not claim that Narayana is more accurate than Vimshottari for marriage, or that Sudasa leads when the Moon sign

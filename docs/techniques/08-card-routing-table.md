@@ -146,8 +146,18 @@ doc 07 §4.2 are overruled by this list: Drig for purpose, and "Naisargika stage
 
 ## Charts removed from briefs (and why)
 
-Every brief now names only charts in its route or the natal D1/D9 (tested). None of the removed charts was in the card
-pack: each brief read it "only if present in the shared data", so no card loses a chart it was reading.
+Every brief now names only charts in its route or the natal D1/D9 (tested). Two kinds of removal:
+
+- **Named by plan 09 §4 (approved 2026-11-19):** the D7 for romance, the "D11 proxy", the A5 for friends and romance.
+- **My call, needing Sachin's yes under "Reading depth is a release gate" rule 5:** the D7 in the Craft briefs, the D30
+  in ten Love/Work briefs, the D24 in four briefs, the D16 in three Craft briefs, and the D10 11th in
+  `friends_core_allies`. Each is unsourced for its subject or sensitive (reasons below), but not every one was absent
+  from the pack: the pack's varga family lists D2-D60 (`self/oracle.ts`, `family.varga`), the D7 is in the Love rows
+  (`love:chart/D7.h7`), and `friends_core_allies` read the D10 11th unconditionally. Most of the others were written
+  "only if present in the shared data". No depth replay was run (no paid call); revert any of them on Sachin's word.
+
+The "Charts:" sentences added to briefs name every chart past the natal D1 and D9 "only where the shared data carries
+them", so no brief orders a chart the pack does not hold.
 
 | Chart | Removed from | Reason |
 |---|---|---|

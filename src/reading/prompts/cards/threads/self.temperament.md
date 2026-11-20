@@ -82,8 +82,8 @@ THE THREAD (tell it in this order, as one continuous story)
 6. The other verified systems, and where they overlap.
    - Vimshottari pinpoints; a sign dasha (Narayana) must confirm. [Rath] Crux p.3 (sanjay-rath/04 §7). Narayana and
      Vimshottari never truly conflict; a gap between them is the reader's limit. [Rath] (04 §7).
-   - Lagna Kendradi: material fortune, low weight. [Student] (04 §1). The conditional dasha that applies confirms only.
-     [Rath] (04 §4).
+   - Lagna Kendradi: material fortune, low weight. [Student] (04 §1). The conditional dasha that applies is read only when its condition holds [Rath] (04 §4);
+     it confirms, never replaces Vimshottari. [Inferred] (docs/techniques/07 §4.1 step 2).
    - Name the dates where two or more of these point to the lagna, its lord, the AL or the AK. No source requires a
      number of agreeing systems; the count is support, not proof. [Inferred] (docs/techniques/07 decision 3).
 

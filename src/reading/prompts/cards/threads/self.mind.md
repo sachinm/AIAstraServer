@@ -77,7 +77,7 @@ THE THREAD (tell it in this order, as one continuous story)
 
 6. The other verified systems, and where they overlap.
    - Vimshottari pinpoints; Narayana must confirm. [Rath] Crux p.3 (sanjay-rath/04 §7). Lagna Kendradi low weight.
-     [Student] (04 §1). The conditional dasha that applies confirms only. [Rath] (04 §4).
+     [Student] (04 §1). The conditional dasha that applies is read only when its condition holds [Rath] (04 §4); it confirms, never replaces Vimshottari. [Inferred] (docs/techniques/07 §4.1 step 2).
    - A D24 Narayana times education abroad. [Rath] (sanjay-rath/10 §2 "Timing method"). Not cast yet: say the timing
      comes from Narayana D1. Rao starts Vimshottari from the D24 Moon for education: [Student], not computed (10 §2).
    - Name the dates where two or more point to the Moon, Mercury, the lagna lord's star lord, the 4th or the 5th. No

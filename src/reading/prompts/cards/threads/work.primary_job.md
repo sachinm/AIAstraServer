@@ -94,7 +94,7 @@ THE THREAD (tell it in this order, as one continuous story)
 
 6. The other verified systems, and where they overlap.
    - Vimshottari pinpoints; Narayana must confirm. [Rath] Crux p.3 (sanjay-rath/04 §7). Lagna Kendradi: material
-     fortune, low weight. [Student] (04 §1). The conditional dasha that applies confirms only. [Rath] (04 §4).
+     fortune, low weight. [Student] (04 §1). The conditional dasha that applies is read only when its condition holds [Rath] (04 §4); it confirms, never replaces Vimshottari. [Inferred] (docs/techniques/07 §4.1 step 2).
    - Pay cards: Sudasa [Rath] role, calculation [Student] (08 §2 W1, W2); a Sudasa sign holding or aspecting the HL
      brings wealth, the GL power [Student] (08 W2); check Narayana with Sudasa [Student] Rao (04 §7). Never "Sudasa when
      the Moon sign is stronger": withdrawn (04 §8).

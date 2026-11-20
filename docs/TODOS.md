@@ -3813,8 +3813,14 @@ items 05 marks "Filed"). Nothing below was fixed.
   Removed from `dating_karmic_compatibility`, `marriage_conflict_cycles`, `allies_cofounder_fit`,
   `allies_contracts_disputes`, `allies_team_politics`, `job_boss_politics`, `job_burnout_load`, `job_security_layoff`,
   `biz_partnerships_fit`, `biz_founder_burnout` (sensitive: sanjay-rath/15 #17, #23; doc 07 §4.2 allows it only on the
-  Self body cards). None of them was reading it (pack lacked it). Sachin to decide on `job_burnout_load` and
-  `biz_founder_burnout`. [decision]
+  Self body cards). Most read it "only if present"; whether the pack carried it was not checked (the varga family
+  lists D30). Sachin's yes is owed under the depth rule for this and the other unapproved removals listed in doc 08
+  (D7 in Craft, D24 ×4, D16 ×3, the D10 11th in `friends_core_allies`); revert any on his word. [decision]
+- **P1 · open · Prompt edits do not reach a database that already holds the prompt.** `ensurePromptSchemaAndSeed`
+  (`src/reading/prompts/registry.ts`) inserts every `PROMPTS` key into `system_prompts` but `ON CONFLICT` never updates
+  `prompt`, and `loadAgentPrompts` then copies the stored text over `PROMPTS`. The 52 brief edits of doc 08 (and any
+  earlier brief edit) stay stale on staging until those `cards/*` rows are refreshed; the 13 new `cards/threads/*`
+  rows will seed fresh. [server]
 - **P3 · open · Craft briefs read the natal A5 as "the work".** `craft_creative_flow`, `craft_creative_blocks`,
   `craft_monetize_hobby`, `craft_audience_community`. No source; the A5 is the mantra pada (sanjay-rath/09 rule 1.8).
   The `work.hobby` recipe reads it only as recognition (Rao, 02 §2.2); the briefs were left as they are. [prompts]
