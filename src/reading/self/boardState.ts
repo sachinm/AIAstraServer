@@ -16,7 +16,8 @@
  * Read only; never throws (an unreadable store reads as nothing stored and no dates).
  */
 import type { PrismaClient } from '@prisma/client';
-import { newestCardRows } from '../cards/store.js';
+import { newestCardRows, readCardReadings } from '../cards/store.js';
+import { deeperReadingReady } from '../cards/state.js';
 import { lensValidityFrom, NO_LENS_REFRESH, type LensRefreshView } from '../boards/lensValidity.js';
 import { READABLE_CARDS } from './v3/cards.js';
 import { readLayout } from './v3/layout.js';
@@ -100,6 +101,24 @@ export async function selfCardDates(
   const s = await readSelfBoardState(prisma, kundliId, c, today, { ...deps, readAt });
   if (s.nothingStored || !s.validity.madeAt) return null;
   return { made_at: s.validity.madeAt, valid_until: s.validity.validUntil, refresh_due: s.validity.due };
+}
+
+/**
+ * The Self board's `reading.deeperReadingReady` from the store (POST /api/boards/self/refresh): a card on the board
+ * layout read on the board clock without a technical story, with the story contract on. Such a board counts as due
+ * (the refresh is charged as usual). False when the store cannot be read. Never throws.
+ */
+export async function selfDeeperReadingReady(prisma: PrismaClient, kundliId: string, clock?: string | null): Promise<boolean> {
+  try {
+    const c = clock ?? (await resolveSelfClock(prisma, kundliId));
+    if (!c) return false;
+    const deck = (await readLayout(prisma, kundliId)).cards as readonly string[];
+    if (!deck.length) return false;
+    const readings = await readCardReadings(prisma, kundliId, c, deck);
+    return deeperReadingReady(deck, readings as Partial<Record<string, { story?: string | null }>>);
+  } catch {
+    return false;
+  }
 }
 
 /** The Self board's state on the clock from the store. Never throws. */

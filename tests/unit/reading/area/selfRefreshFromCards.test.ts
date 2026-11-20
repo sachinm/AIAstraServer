@@ -1,7 +1,8 @@
 /**
  * POST /api/boards/self/refresh with SELF_BOARD_FROM_CARDS=1 (plan "retire the v2 Self reading" step 2): the charge keys
  * on "a Self card was read". No card read: the board's first reading, free, queued with no question held (202 `first`).
- * A card read but its Good until not passed: 409 not_due, nothing held. Due: one question held and the build queued with
+ * A card read but its Good until not passed: 409 not_due, nothing held, unless a board card was read without a technical
+ * story (deeperReadingReady: due, charged as usual). Due: one question held and the build queued with
  * the refresh day. The card dates (`selfBoardDates`) are faked here; `selfCardDates` has its own test. Fakes only.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,7 @@ import { runningOn } from '../../../../src/reading/area/houseLayers.js';
 import { fakeRequireUser } from '../../../helpers/fakeAuth.js';
 import { selfActivation, selfFixture } from '../../../helpers/fakeDigest.js';
 
-const dates = vi.hoisted(() => ({ value: null as null | { made_at: string; valid_until: string | null; refresh_due: boolean } }));
+const dates = vi.hoisted(() => ({ value: null as null | { made_at: string; valid_until: string | null; refresh_due: boolean }, deeper: false }));
 vi.mock('../../../../src/reading/self/synthesisValidity.js', async (orig) => ({
   ...(await orig<typeof import('../../../../src/reading/self/synthesisValidity.js')>()),
   selfBoardDates: async () => dates.value,
@@ -81,6 +82,7 @@ describe('POST /api/boards/self/refresh with SELF_BOARD_FROM_CARDS=1', () => {
       boards: { loadDigest: async (_p, id) => (id === 'k1' ? view : null), activationFor: async (_p, _id, q) => (q.from === q.to ? runningOn(activation, q.from) : activation), loadTransit: async () => null, queueDigest: async () => undefined },
       gate,
       queue: { invoke: async (payload) => void invoked.push(payload) },
+      selfDeeperReady: async () => dates.deeper,
     });
     server = app.listen(0);
     await new Promise((r) => server.once('listening', r));
@@ -99,6 +101,7 @@ describe('POST /api/boards/self/refresh with SELF_BOARD_FROM_CARDS=1', () => {
   });
   afterEach(() => {
     dates.value = null;
+    dates.deeper = false;
   });
   const post = async () => {
     const r = await fetch(`${base}/api/boards/self/refresh`, { method: 'POST', headers: { 'content-type': 'application/json' } });
@@ -123,6 +126,18 @@ describe('POST /api/boards/self/refresh with SELF_BOARD_FROM_CARDS=1', () => {
     expect(r.json).toMatchObject({ code: 'not_due', valid_until: '2026-11-30' });
     expect(gate.reserveBoardRefresh).not.toHaveBeenCalled();
     expect(invoked).toHaveLength(0);
+  });
+
+  it('a card read without a technical story (deeperReadingReady) and not due: accepted and charged one question, like a due refresh', async () => {
+    dates.value = { made_at: '2026-11-18T09:00:00.000Z', valid_until: '2026-11-30', refresh_due: false };
+    dates.deeper = true;
+    const r = await post();
+    expect(r.status).toBe(202);
+    expect(r.json.status).toBe('building');
+    expect(gate.reserveBoardRefresh).toHaveBeenCalledTimes(1);
+    expect(gate.reserveBoardRefresh).toHaveBeenCalledWith('u1', 'self', '2026-11-19');
+    expect(invoked).toHaveLength(1);
+    expect(invoked[0]!.refreshDay).toBe('2026-11-19');
   });
 
   it('due: one question held and the build queued for that refresh day', async () => {

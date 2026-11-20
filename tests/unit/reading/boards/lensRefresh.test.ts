@@ -94,7 +94,8 @@ let gate = new QuestionGate(store, { enabled: true, now: () => NOW, env: { PLAN_
 let base = '';
 let server: ReturnType<express.Express['listen']>;
 
-const content = (line: string) => ({ line, spans: [{ span: 's1', from: '2026-11-01', to: '2027-01-05', tone: 'mixed', mode: 'build', asks: 'Go out more.', obstacle: 'Tired evenings.', step: 'If a friend asks, then say yes.', held: true }], confirm: null, pattern: null, ladder: null, agreement: { agree: 3, of: 4 } });
+// a card read with the full-thread reading (a technical story); `bare` is one read before it (deeperReadingReady)
+const content = (line: string) => ({ line, story: 'The technical story.', spans: [{ span: 's1', from: '2026-11-01', to: '2027-01-05', tone: 'mixed', mode: 'build', asks: 'Go out more.', obstacle: 'Tired evenings.', step: 'If a friend asks, then say yes.', held: true }], confirm: null, pattern: null, ladder: null, agreement: { agree: 3, of: 4 } });
 const doc = () => f.builds.get(`k1|self.cards|${new Date(`${NOW.toISOString().slice(0, 10)}T00:00:00Z`).toISOString()}`)?.result;
 const used = async () => (await gate.getStatus('u1'))?.used ?? 0;
 
@@ -324,6 +325,20 @@ describe('POST /api/boards/love|work/refresh on v3: one question per lens', () =
     expect(r.status).toBe(409);
     expect(r.json).toMatchObject({ code: 'not_due', valid_until: '2027-01-05' });
     expect(store.usage).toEqual([]);
+  });
+
+  it('a card read before the full-thread reading (no story, deeperReadingReady) and not due: accepted and charged one question', async () => {
+    const { story: _s, ...bare } = content('Warmer.');
+    readings = { dating_pulse: bare, dating_delays_blocks: content('Slow.') };
+    meta = { dating_pulse: { validTo: '2027-01-06T00:00:00Z' }, dating_delays_blocks: { validTo: '2027-01-06T00:00:00Z' } };
+    await deck(['dating_pulse', 'dating_delays_blocks'], 'dating');
+    queuedBuilds.length = 0;
+    const r = await call('POST', '/api/boards/love/refresh');
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ status: 'queued', lens: 'dating', charged: true, queued: ['dating_pulse', 'dating_delays_blocks'] });
+    expect(store.usage.map((u) => [u.key, u.status])).toEqual([[lensRefreshKey('love', 'dating', '2026-12-06'), 'reserved']]);
+    expect(queuedBuilds).toEqual(['k1']);
+    expect(await used()).toBe(1);
   });
 
   it('at the limit: 402 quota_exhausted, nothing queued, the stored cards stay as they are', async () => {

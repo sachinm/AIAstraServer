@@ -166,3 +166,30 @@ describe('SELF_V2_RETIRED=1 implies the card state (a one-flag rollback never re
     expect(h.v2Reads).toEqual([]);
   });
 });
+
+describe('selfDeeperReadingReady (POST /api/boards/self/refresh counts it as due)', () => {
+  const db = (contents: Record<string, Record<string, unknown>>) =>
+    ({
+      kundli: { findUnique: async () => ({ preferred_dasha: null }) },
+      kundliActivation: { groupBy: async () => PRESENT.map((p) => ({ system: p.system, family: p.family })) },
+      kundliData: { findFirst: async ({ where }: any) => (where.data_type === 'dasha.applicable' ? { payload: APPLICABLE_RAW } : null) },
+      techniqueOutput: { findMany: async () => Object.entries(contents).map(([card, content]) => ({ output: { card, content }, created_at: new Date('2026-11-18T09:00:00Z'), valid_to: null })) },
+      boardLayout: { findUnique: async () => ({ template: 'seasons', cards: ['mind', 'body'], sections: {}, options: {}, board_options: {}, updated_at: new Date('2026-11-18T09:00:00Z') }) },
+    }) as any;
+  const saved = process.env.CARDS_STORY_CONTRACT;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CARDS_STORY_CONTRACT;
+    else process.env.CARDS_STORY_CONTRACT = saved;
+  });
+
+  it('true when a board card was read without a technical story; false once every read card carries one, or the contract is off', async () => {
+    const { selfDeeperReadingReady } = await import('../../../../src/reading/self/boardState.js');
+    delete process.env.CARDS_STORY_CONTRACT;
+    const bare = { line: 'x', spans: [] };
+    const told = { ...bare, story: 'The technical story.' };
+    expect(await selfDeeperReadingReady(db({ mind: bare, body: told }), 'k1')).toBe(true);
+    expect(await selfDeeperReadingReady(db({ mind: told, body: told }), 'k1')).toBe(false);
+    process.env.CARDS_STORY_CONTRACT = '0';
+    expect(await selfDeeperReadingReady(db({ mind: bare }), 'k1')).toBe(false);
+  });
+});

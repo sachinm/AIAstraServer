@@ -31,6 +31,7 @@ import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area
 import { questionGate, quotaBody, type BoardCharge, type QuestionGate } from '../billing/questionGate.js';
 import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
 import { selfBoardDates } from '../reading/self/synthesisValidity.js';
+import { selfDeeperReadingReady } from '../reading/self/boardState.js';
 import { logChatProviderError, publicCodeFromChatProviderError } from '../services/publicChatError.js';
 import { refreshBoardLens, type LensRefreshDeps, type LensRefreshGate } from '../reading/boards/lensRefresh.js';
 
@@ -51,6 +52,8 @@ export interface AreaRouteDeps {
   lensGate?: LensRefreshGate;
   /** tests: the Love/Work v3 board read and card queue seams of a lens refresh */
   lens?: Omit<LensRefreshDeps, 'prisma' | 'gate' | 'now'>;
+  /** tests: whether a You board card was read without a technical story (default selfDeeperReadingReady) */
+  selfDeeperReady?: (prisma: PrismaClient, kundliId: string) => Promise<boolean>;
 }
 
 export function isAreaEnabled(): boolean {
@@ -147,7 +150,10 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
         return res.status(202).json({ status: 'building', first: true, charged: false, ...(usage ? { usage } : {}) });
       }
       const dates = selfDates ?? current;
-      if (!dates.refresh_due) return res.status(409).json({ error: 'not_due', code: 'not_due', valid_until: dates.valid_until });
+      // a You board card read before the full-thread reading (no technical story, `reading.deeperReadingReady`) makes the
+      // board due: charged as usual (Sachin: after a prompt release everyone refreshes and the quota pays)
+      const deeper = board === 'self' && !dates.refresh_due && (await (deps.selfDeeperReady ?? selfDeeperReadingReady)(deps.prisma, kundli.id));
+      if (!dates.refresh_due && !deeper) return res.status(409).json({ error: 'not_due', code: 'not_due', valid_until: dates.valid_until });
 
       const reserved = await gate.reserveBoardRefresh(userId, board, day);
       if (!reserved.ok) return res.status(402).json(quotaBody(reserved.usage));
