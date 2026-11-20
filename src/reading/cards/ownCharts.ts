@@ -38,3 +38,20 @@ export function lensOf(cardId: string): LensId | null {
   const s = cardDef(cardId);
   return s ? (SELF_GROUP_LENS[s.group] ?? null) : null;
 }
+
+/**
+ * The sign dasha a card's route names, as the pack says it (doc 08 routes may name Narayana on D9 or D10, which the
+ * engine does not cast yet, doc 07 E5): the stored system to read, and a note when it falls back to Narayana on D1.
+ * A routing words table only; nothing computed.
+ */
+export function signDashaOf(cardId: string): { system: string; varga: string; note: string | null } | null {
+  const raw = routeFor(cardId)?.signDasha?.trim();
+  if (!raw) return null;
+  const m = /^([a-z_ ]+?)(?:\s*(?:on|@|\/|\()?\s*(D\d+)\)?)?$/i.exec(raw);
+  const system = (m?.[1] ?? raw).trim().toLowerCase().replace(/\s+/g, '_');
+  const varga = (m?.[2] ?? 'D1').toUpperCase();
+  if (system === 'narayana' && varga !== 'D1') {
+    return { system, varga: 'D1', note: `The route names Narayana on ${varga}; the engine does not cast Narayana on ${varga} yet, so Narayana on D1 is read instead (say so; never present it as the ${varga} reading).` };
+  }
+  return { system, varga, note: null };
+}
