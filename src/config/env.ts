@@ -859,7 +859,10 @@ export function getSelfConfirmSystems(): string[] {
  * a weighted order (doc 70 E2) this list is the weighting. Env: `READING_CLOCK_ORDER`.
  */
 export function getReadingClockOrder(): string[] {
-  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional', 'yogini', 'chara']);
+  // docs/techniques/09 decision 2: Yogini and Chara are flagged and left out; a flagged system named here is skipped
+  // (`not_verified`) whatever the env says. Sudasa and Lagna Kendradi are shown but have no pressure inventory yet: they
+  // reach the reading as stored period rows (clocks/systems.ts feed `periods`), so they are not clock-reader slots.
+  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional']);
 }
 
 /** Clocks in the set, the year counted as one. Env `READING_CLOCKS` (default 5, 3..6). */
