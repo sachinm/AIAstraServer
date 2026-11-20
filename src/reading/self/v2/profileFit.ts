@@ -5,31 +5,8 @@
  *
  * Words and the person's own answers only; nothing astrological is computed.
  */
-import {
-  getSelfV2JuniorBands,
-  getSelfV2SeniorStageBands,
-  getSelfV2SeniorStageLevels,
-  getSelfV2SeniorStageWords,
-} from '../../../config/env.js';
-import type { PersonalizerInput } from '../v2types.js';
-
-const escapeRe = (w: string): string => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
-
-/**
- * The career-stage words this person may not be given ("seasoned", "mentorship", "advisory leadership"), or null when
- * their band or level allows them: a junior band never allows them; a senior band always does; otherwise a senior
- * `work.level` does. Env tables in src/config/env.ts (`SELF_V2_SENIOR_STAGE_*`, `SELF_V2_JUNIOR_BANDS`).
- */
-export function seniorStageWordsFor(profile: Pick<PersonalizerInput['profile'], 'ageBand' | 'facts'> | undefined): RegExp | null {
-  const band = profile?.ageBand ?? null;
-  const level = profile?.facts?.work?.level?.trim().toLowerCase() ?? null;
-  const junior = band !== null && getSelfV2JuniorBands().includes(band);
-  const seniorBand = band !== null && getSelfV2SeniorStageBands().includes(band);
-  const seniorLevel = level !== null && getSelfV2SeniorStageLevels().map((x) => x.toLowerCase()).includes(level);
-  if (!junior && (seniorBand || seniorLevel)) return null;
-  const words = getSelfV2SeniorStageWords();
-  return words.length ? new RegExp(`\\b(${words.map(escapeRe).join('|')})\\b`, 'i') : null;
-}
+// moved unchanged to src/reading/person/profileLines.ts (plan "retire the v2 Self reading", server step 1)
+export { seniorStageWordsFor } from '../../person/profileLines.js';
 
 /** function words left out of the overlap measures */
 const STOP = new Set(

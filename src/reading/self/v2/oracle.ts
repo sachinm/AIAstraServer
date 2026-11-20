@@ -34,6 +34,12 @@ import type {
 import { issuesFromGaps } from './failures.js';
 import { markAgentUsed } from './cache.js';
 import { normaliseEvidenceKey, promptHash, SELF_V2_ORACLE_PROMPT } from './slices.js';
+import { timingOf } from '../agentTiming.js';
+import { storedWindowsOf } from '../storedWindows.js';
+
+// moved out unchanged (plan "retire the v2 Self reading", server step 1); re-exported so every import keeps working
+export { reportedThoughtTokens, timingOf } from '../agentTiming.js';
+export { storedWindowsOf, type StoredFrame } from '../storedWindows.js';
 
 /** the areas the Oracle writes: the eleven v2 areas (the hero is the Personalizer's) */
 export const ORACLE_V2_AREAS: readonly SelfV2AreaId[] = ['diagnosis', 'stuck', 'chapter', 'chapters', 'lagna', 'mind', 'drive', 'presence', 'body', 'yogas', 'year'];
@@ -93,72 +99,6 @@ export function callInstruction(areas: readonly SelfV2AreaId[]): string {
     pat.length ? `Patterns: up to ${PATTERNS_MAX} in all, only for ${pat.join(' and ')}.` : 'No patterns in this call (return none).',
     'Return the JSON document only.',
   ].join('\n');
-}
-
-/** The validator's date frame: the days and windows of the input, and the exact spans and edges a date may name. */
-export interface StoredFrame {
-  boundaries: Set<string>;
-  windows: Array<{ from: string; to: string }>;
-  /** exact stored spans, `from|to`: every window, consecutive period boundaries of one level, the briefs' dates */
-  spans: Set<string>;
-  /** every boundary and every window or brief-date edge */
-  endpoints: Set<string>;
-}
-
-/**
- * The dated windows S2, S3 and S9 carry (and the S7/S8 engine spans the prompt asks about), plus the briefs' dates: the
- * validator's frame. A date must be one of `spans` exactly (doc 66 replay failure 8: made-up 1–7-day spans passed
- * because each day lay inside the year span).
- */
-export function storedWindowsOf(ctx: SelfBuildContext, briefs: readonly Pick<AreaBrief, 'dates'>[] = []): StoredFrame {
-  const boundaries = new Set<string>();
-  const windows: Array<{ from: string; to: string }> = [];
-  const span = (x: { from: string; to: string } | null | undefined) => {
-    if (x?.from && x.to) windows.push({ from: x.from, to: x.to });
-  };
-  const day = (d: string | null | undefined) => {
-    if (d) boundaries.add(d);
-  };
-  const s = ctx.sub;
-  if (s.periods) {
-    for (const p of [s.periods.previous, s.periods.running, s.periods.next, s.periods.runningSub, s.periods.runningSubSub]) span(p);
-    for (const b of s.periods.boundaries) day(b.date);
-  }
-  if (s.windows) {
-    const rows: WindowRef[] = [...s.windows.strip, ...s.windows.startedLast12m, ...s.windows.endingNext6m, ...Object.values(s.windows.byMatter).flatMap((x) => x ?? [])];
-    if (s.windows.heaviestNow) rows.push(s.windows.heaviestNow);
-    for (const r of rows) span(r);
-    day(s.windows.easesAt);
-    day(s.windows.nextSupportFrom);
-  }
-  if (s.year && !s.year.noCoverage) {
-    span(s.year);
-    span(s.year.shortClock);
-    span(s.year.confirmClock);
-  }
-  for (const l of s.body?.liveLords ?? []) day(l.until);
-  for (const r of s.body?.liveTransits ?? []) span(r);
-  span(s.presence?.bestWindow);
-  day(s.presence?.liveCare?.until);
-  const spans = new Set(windows.map((w) => `${w.from}|${w.to}`));
-  const endpoints = new Set([...boundaries, ...windows.flatMap((w) => [w.from, w.to])]);
-  // a sub-period ahead is the span between two consecutive boundaries of its level
-  const byLevel = new Map<number, string[]>();
-  for (const b of s.periods?.boundaries ?? []) byLevel.set(b.level, [...(byLevel.get(b.level) ?? []), b.date]);
-  for (const days of byLevel.values()) {
-    const sorted = [...new Set(days)].sort();
-    for (let i = 1; i < sorted.length; i++) spans.add(`${sorted[i - 1]}|${sorted[i]}`);
-  }
-  for (const b of briefs) {
-    for (const d of b.dates) {
-      if (!d.from || !d.to) continue;
-      spans.add(`${d.from}|${d.to}`);
-      endpoints.add(d.from);
-      endpoints.add(d.to);
-      windows.push({ from: d.from, to: d.to });
-    }
-  }
-  return { boundaries, windows, spans, endpoints };
 }
 
 /** Every evidence key of a call's raw areas and patterns with one prefix (`risk:risk:x` → `risk:x`), inline keys too. */
@@ -261,31 +201,6 @@ export interface OracleV2Deps {
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-
-export function timingOf(agent: SelfV2AgentTiming['agent'], call: string, model: string, res: GeminiResult | null, ms: number, status: SelfV2AgentTiming['status']): SelfV2AgentTiming {
-  const u = res?.usage;
-  const promptTokens = u?.promptTokens ?? 0;
-  const cachedTokens = u?.cachedTokens ?? 0;
-  const outputTokens = u?.outputTokens ?? 0;
-  const thoughtTokens = u?.thoughtTokens ?? 0;
-  return {
-    agent,
-    call,
-    status,
-    ms: Math.round(ms * 100) / 100,
-    promptTokens,
-    cachedTokens,
-    outputTokens,
-    thoughtTokens,
-    costUsd: res ? round6(usageCostUsd({ model, promptTokens, cachedTokens, outputTokens, thoughtTokens })) : 0,
-    // run 2: a provider usage without a thought count is "not reported" (the Lab shows it so), never a measured 0
-    ...(u && u.thoughtTokensReported !== undefined ? { thoughtTokensReported: u.thoughtTokensReported } : {}),
-  };
-}
-
-/** The thought count as the Lab and the reports show it: null when the provider did not report one (run 2, failure 10). */
-export const reportedThoughtTokens = (t: Pick<SelfV2AgentTiming, 'thoughtTokens' | 'thoughtTokensReported'>): number | null =>
-  t.thoughtTokensReported === false ? null : t.thoughtTokens;
 
 /** The calls' ids, for a finding on an area (the call that wrote it). */
 export const callOfArea = (area: string | null): string | null => (area ? (ORACLE_V2_CALLS.find((c) => (c.areas as readonly string[]).includes(area))?.call ?? null) : null);
