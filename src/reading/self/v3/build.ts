@@ -47,6 +47,7 @@ import { sharedPrefix } from '../../clocks/reader.js';
 import { pickClockLayerSlices, runClockLayer, type ClockLayerResult, type ClockLayerWords } from '../../clocks/run.js';
 import type { AgreedLedger } from '../../clocks/types.js';
 import { natalCoreFromPrefix, prepareSlices, type SliceSetReport } from '../../slices/prepare.js';
+import type { NatalContext } from '../../slices/natalPrefix.js';
 import { renderSliceSet, type SliceInventory } from '../../slices/render.js';
 import type { RenderedSlice } from '../../slices/types.js';
 import type { ReadingClockSet } from '../clock.js';
@@ -97,14 +98,22 @@ export interface SelfV3StepDeps {
   lensLinemen?: boolean;
   loadApplicability?: (prisma: PrismaClient, kundliId: string) => Promise<ApplicabilityRow[] | null>;
   runLensLineman?: typeof runLensLineman;
+  /** each step a person sees, as it starts (plan "retire the v2 Self reading" step 3: the build maps it onto its stage names) */
+  onStage?: (stage: 'clocks' | 'cards') => void;
 }
 
 export interface SelfV3StepInput {
   ctx: SelfBuildContext;
   /** the reading clock's inventory, as the v2 sub-techniques loaded it */
   pressure: PressureInventoryDetail | null;
-  /** the v2 Oracle slice: its natal prefix and keys are reused */
-  oracleSlice: PreparedAgentSlice;
+  /**
+   * The natal context (plan "retire the v2 Self reading" step 3: `buildNatalContext`, slices/natalPrefix.ts): its prefix
+   * is the cards' `natal.core` and its model reads the linemen and the cards. `hash`, `keys`, `estTokens` and `slice`
+   * serve the legacy three-call path only (per-card reading off). One of `natal` and `oracleSlice` is given; `natal` wins.
+   */
+  natal?: Pick<NatalContext, 'prefix' | 'model'> & Partial<Pick<NatalContext, 'hash' | 'keys' | 'estTokens' | 'slice'>>;
+  /** the v2 Oracle slice (the v2 build and scripts/cards-replay.ts): its natal prefix and keys are reused */
+  oracleSlice?: PreparedAgentSlice;
   portrait: PersonPortrait | null;
   buildId: string;
   /** docs/techniques/09 §3: the seven family findings of this build (stored in reading_findings_cache) and the stored periods */
@@ -210,6 +219,11 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
   const out: SelfV3StepResult = { status: 'failed', cards: {}, frame: null, agents: [], issues: [], gaps: [], cached: false, stored: false, key: null, ms };
   const { ctx } = i;
   try {
+    const natal = natalOf(i);
+    if (!natal) {
+      out.gaps.push('v3: no natal context given');
+      return out;
+    }
     const clock = ctx.sub.clock;
     const profile = ctx.sub.profile;
     if (!clock || !profile) {
@@ -278,10 +292,11 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         });
       }
     };
+    if (cardsOn || (deps.clockLayer ?? isReadingClockLayerEnabled())) deps.onStage?.('clocks');
     if (cardsOn || (deps.clockLayer ?? isReadingClockLayerEnabled())) {
       const tl = performance.now();
       const invs: SliceInventory[] = [{ system: frame.clock, inventory: i.pressure }, ...inventories].filter((x): x is SliceInventory => Boolean(x.inventory));
-      const fresh = [natalCoreFromPrefix(i.oracleSlice.prefix, ctx.stamps.digestVersion), ...renderSliceSet({ frame, inventories: invs, year: ctx.sub.year ?? null })];
+      const fresh = [natalCoreFromPrefix(natal.prefix, ctx.stamps.digestVersion), ...renderSliceSet({ frame, inventories: invs, year: ctx.sub.year ?? null })];
       const prepared = await (deps.prepareSlices ?? prepareSlices)(deps.prisma, ctx.kundliId, fresh);
       out.slices = { ...prepared.report, count: prepared.slices.length };
       out.sliceSet = prepared.slices;
@@ -386,7 +401,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
                   systemsKeys: periods.keys,
                   verified,
                   verifiedLine: shownLabels(shown),
-                  model: layerModel ?? i.oracleSlice.model,
+                  model: layerModel ?? natal.model,
                 },
               );
               return { lens, r };
@@ -404,6 +419,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         }
         ms.lensLinemen = since(tl);
       }
+      deps.onStage?.('cards');
       const tcards = performance.now();
       const run = await (deps.readCards ?? readCards)(
         // one build run is one operation (docs/billing/README.md "Spend cap per operation"): the cards get what the run
@@ -421,7 +437,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
           sections: { ...area.sections, ...board.sections },
           dates,
           answers,
-          model: layerModel ?? i.oracleSlice.model,
+          model: layerModel ?? natal.model,
           ...(Object.keys(techniques).length ? { techniques } : {}),
           spentBeforeUsd: Math.round((layerSpent + linemenSpent) * 1e6) / 1e6,
           ...(story ? { story } : {}),
@@ -447,9 +463,15 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
     if (frame.clocksRead.length < minClocks) out.gaps.push(`v3: only ${frame.clocksRead.length} clock(s) read (${frame.clocksRead.join(', ')}); ${minClocks} wanted`);
     if (frame.degraded) out.gaps.push(`v3: frame degraded (clocks read: ${frame.clocksRead.join(', ')})`);
 
+    // the legacy three-call path (per-card reading off) reads the whole natal slice
+    const legacy = natal.slice;
+    if (!legacy) {
+      out.gaps.push('v3: the three-call path needs the natal slice (per-card reading off)');
+      return out;
+    }
     const sections = await (deps.loadSections ?? (async (p, k) => (await readLayout(p, k)).sections))(deps.prisma, ctx.kundliId).catch(() => ({}));
     const portraitHash = shortHash(canonicalJson(i.portrait ?? null));
-    const key = v3StoreKey(ctx, frame, i.oracleSlice.prefixHash, portraitHash, sections);
+    const key = v3StoreKey(ctx, frame, natal.hash ?? legacy.prefixHash, portraitHash, sections);
     out.key = key;
     const first = frame.spans[0]!;
     const last = frame.spans[frame.spans.length - 1]!;
@@ -473,12 +495,12 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         const rendered = renderYearFrame(frame, clockLabel(frame.clock));
         const system = promptText(SELF_V3_ORACLE_PROMPT);
         const slice: PreparedAgentSlice = {
-          ...i.oracleSlice,
+          ...legacy,
           system,
           suffix: rendered.text,
-          prefixHash: shortHash(`self.oracle|${i.oracleSlice.model}|${system}|${i.oracleSlice.prefix}`),
-          keys: [...new Set([...i.oracleSlice.keys, ...rendered.keys])],
-          estTokens: { prefix: i.oracleSlice.estTokens.prefix, suffix: Math.ceil(rendered.text.length / 2.2) },
+          prefixHash: shortHash(`self.oracle|${legacy.model}|${system}|${legacy.prefix}`),
+          keys: [...new Set([...(natal.keys ?? legacy.keys), ...rendered.keys])],
+          estTokens: { prefix: (natal.estTokens ?? legacy.estTokens).prefix, suffix: Math.ceil(rendered.text.length / 2.2) },
         };
         const tw = performance.now();
         await warmPrefixes([slice], { ensureCache: deps.ensureCache });
@@ -501,10 +523,10 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         // 3: the Personalizer, one call per Oracle call that kept a card
         const spanDates = new Map(frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
         const pInput = { profile: { ...profile }, portrait: i.portrait, sections };
-        const pcalls = personalizerV3Calls(ctx, ORACLE_V3_CALLS, oracle.output, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), i.oracleSlice.model);
+        const pcalls = personalizerV3Calls(ctx, ORACLE_V3_CALLS, oracle.output, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), natal.model);
         const tp = performance.now();
         const repair = (cards: Parameters<typeof personalizerV3Call>[2], note: string) =>
-          personalizerV3Call(ctx, 'v3.personalizer.repair', cards, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), i.oracleSlice.model, note);
+          personalizerV3Call(ctx, 'v3.personalizer.repair', cards, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), natal.model, note);
         const personal = await runPersonalizerV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed }, ctx, pcalls, pInput, dates, repair);
         ms.personalizer = since(tp);
         out.agents.push(...personal.calls);
@@ -538,6 +560,13 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
   } finally {
     ms.total = since(t0);
   }
+}
+
+/** The step's natal context: `natal` when given, else the v2 Oracle slice's (null when neither). */
+export function natalOf(i: Pick<SelfV3StepInput, 'natal' | 'oracleSlice'>): NonNullable<SelfV3StepInput['natal']> | null {
+  if (i.natal) return i.natal;
+  const s = i.oracleSlice;
+  return s ? { prefix: s.prefix, model: s.model, hash: s.prefixHash, keys: s.keys, estTokens: s.estTokens, slice: s } : null;
 }
 
 /** The engine's `dasha.applicable` verdicts for the kundli (null when none stored). Read only. */

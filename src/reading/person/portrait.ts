@@ -155,26 +155,37 @@ export function lifeStateOf(ctx: SelfBuildContext, matters: readonly Matter[]): 
 
 const PERSONALITY_AREAS = ['lagna', 'mind', 'drive', 'presence'];
 
-/** The portrait (pure): every block from its source, or null and a gap. */
-export function buildPersonPortrait(ctx: SelfBuildContext, oracle: OracleV2Output, src: PortraitSources): PersonPortrait {
+/**
+ * The portrait (pure): every block from its source, or null and a gap. `oracle` null (the v2 reading retired,
+ * SELF_V2_RETIRED): the character block is the S6 mind keys only, with no v2 paragraph id or pattern (the card
+ * Personalizer never receives those paragraphs; plan "retire the v2 Self reading", finding 6).
+ */
+export function buildPersonPortrait(ctx: SelfBuildContext, oracle: OracleV2Output | null, src: PortraitSources): PersonPortrait {
   const gaps = [...src.gaps];
   const p = ctx.sub.profile;
   const asOf = ctx.asOf;
   const declined = new Set(p?.declined ?? []);
 
   // personality
-  const areas = oracle.doc.areas as Record<string, { paragraphs: string[] } | undefined>;
-  const oracleParagraphs = PERSONALITY_AREAS.flatMap((id) => (areas[id]?.paragraphs ?? []).map((_, i) => `${id}.p${i + 1}`));
   const m = ctx.sub.mind;
-  const personality =
-    oracleParagraphs.length || m
-      ? {
-          oracleParagraphs,
-          patterns: oracle.patterns.map((x) => x.behaviour),
-          mindKeys: { feeling: [...(m?.feeling ?? [])], thinking: [...(m?.thinking ?? [])], peace: [...(m?.peace ?? [])], judgement: [...(m?.judgement ?? [])] },
-        }
-      : null;
-  if (!personality) gaps.push('personality: no natal area in the Oracle document and no S6 mind facts');
+  const mindKeys = () => ({ feeling: [...(m?.feeling ?? [])], thinking: [...(m?.thinking ?? [])], peace: [...(m?.peace ?? [])], judgement: [...(m?.judgement ?? [])] });
+  let personality: PersonPortrait['personality'];
+  if (oracle) {
+    const areas = oracle.doc.areas as Record<string, { paragraphs: string[] } | undefined>;
+    const oracleParagraphs = PERSONALITY_AREAS.flatMap((id) => (areas[id]?.paragraphs ?? []).map((_, i) => `${id}.p${i + 1}`));
+    personality =
+      oracleParagraphs.length || m
+        ? {
+            oracleParagraphs,
+            patterns: oracle.patterns.map((x) => x.behaviour),
+            mindKeys: mindKeys(),
+          }
+        : null;
+    if (!personality) gaps.push('personality: no natal area in the Oracle document and no S6 mind facts');
+  } else {
+    personality = m ? { mindKeys: mindKeys() } : null;
+    if (!personality) gaps.push('personality: no S6 mind facts');
+  }
 
   // biography
   const rows = src.facts ?? [];
@@ -262,8 +273,10 @@ export function buildPersonPortrait(ctx: SelfBuildContext, oracle: OracleV2Outpu
 export function portraitLines(x: PersonPortrait): string[] {
   const L = ['## PORTRAIT (build your picture of this person from this first; it is never shown)'];
   if (x.personality) {
-    L.push(`- character: read the Oracle paragraphs ${x.personality.oracleParagraphs.join(', ') || 'none'}`);
-    for (const pt of x.personality.patterns) L.push(`  - pattern: ${pt}`);
+    // the v2 build only: the v2 Oracle's paragraph ids and patterns (absent with the v2 reading retired)
+    if (x.personality.oracleParagraphs) L.push(`- character: read the Oracle paragraphs ${x.personality.oracleParagraphs.join(', ') || 'none'}`);
+    else L.push('- character:');
+    for (const pt of x.personality.patterns ?? []) L.push(`  - pattern: ${pt}`);
     const mk = x.personality.mindKeys;
     L.push(`  - mind keys: feeling ${mk.feeling.length}, thinking ${mk.thinking.length}, peace ${mk.peace.length}, judgement ${mk.judgement.length}`);
   }

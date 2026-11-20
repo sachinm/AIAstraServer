@@ -785,8 +785,12 @@ export type LifeLabel = 'career' | 'love' | 'self' | 'home' | 'family' | 'busine
 export type LifeState = 'presses' | 'mixed' | 'supports' | 'quiet';
 
 export interface PersonPortrait {
-  /** character: the Oracle's natal areas as paragraph ids, its patterns, and S6 mind keys */
-  personality: { oracleParagraphs: string[]; patterns: string[]; mindKeys: { feeling: string[]; thinking: string[]; peace: string[]; judgement: string[] } } | null;
+  /**
+   * character: S6 mind keys, and, on the v2 build only, the v2 Oracle's natal areas as paragraph ids and its patterns.
+   * With the v2 reading retired (SELF_V2_RETIRED) there is no v2 Oracle: both are absent (the card Personalizer never
+   * received those paragraphs; plan "retire the v2 Self reading", finding 6).
+   */
+  personality: { oracleParagraphs?: string[]; patterns?: string[]; mindKeys: { feeling: string[]; thinking: string[]; peace: string[]; judgement: string[] } } | null;
   /** what the person has told us, with dates: wizard facts, life events, monthly checks, confirm answers */
   biography: {
     facts: Array<{ key: string; value: string; at: IsoDate | null }>;

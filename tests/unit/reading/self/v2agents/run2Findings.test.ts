@@ -458,7 +458,7 @@ describe('portrait (Sachin 2026-11-09): everything and more to the Personalizer,
     const ctx = run2Ctx({ ...profile, mood: 'heavy' });
     const x = buildPersonPortrait(ctx, oracleOut, fullSrc());
     expect(x.personality!.oracleParagraphs).toEqual(expect.arrayContaining(['lagna.p1', 'mind.p1', 'drive.p3', 'presence.p1']));
-    expect(x.personality!.patterns.length).toBe(3);
+    expect(x.personality!.patterns!.length).toBe(3);
     expect(x.biography!.facts.map((f) => f.key)).toEqual(['work.status', 'work.level', 'love.status', 'self.focus']);
     expect(x.biography!.lifeEvents).toEqual([{ category: 'business_started', date: '2024-03-01', precision: 'month' }]);
     expect(x.biography!.confirms).toEqual([{ claimId: 'stuck.heaviest_now', answer: 'yes', at: '2026-11-07' }]);
