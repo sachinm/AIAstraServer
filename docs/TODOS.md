@@ -3984,3 +3984,39 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   region proposed in atlas `05-clocks.md` §3 (only the star-and-sign overlap is Rath's rule). (6) The retire-v2 plan (another session) removes the v2
   Self path, where the family readers that plan 09 now feeds to every card run.
 
+## Filed 2026-11-19 by retire-v2 (feat/retire-v2)
+
+- **A forced card re-read keeps its row's `created_at`.** `insertStoredRow` (`techniques/outputStore.ts`) on the Prisma
+  upsert path updates a replaced row without `created_at`; the raw-SQL path sets `created_at = NOW()`. A charged Self
+  refresh re-reads cards under unchanged card keys, so the rows' `created_at` stays old. `readSelfBoardState` covers it
+  with the `self.v2` marker's `read_at` (today only): on later days the Self `builtAt` falls back to the older row time.
+  Owner: server. Done: one rule for both paths (bump `created_at` on replace, its own release with Love/Work checked), or
+  a refresh tag in the card key.
+- **The retired Self build runs the family readers even when the board will read no card.** With SELF_V2_RETIRED=1 a
+  build on a board of fewer than CARDS_READ_MIN cards (nothing queued) still pays the seven family readers (cached by
+  pack hash after the first) before the card step says `skipped`. Owner: server. Done: check the card gate before the
+  families, or accept (they warm the findings the first board will read).
+- **Optional reorder not done: the clock layer beside the family readers.** The clock layer runs inside
+  `runSelfV3Cards` after the year frame; moving it beside the families needs the frame and slices built before the
+  card step and the lens linemen to wait on both. Not trivial, so not in retire-v2. Saves up to ~7 s on a cold board.
+  Owner: server. Done: a measured change with the depth replay unchanged.
+- **Self header strip and eases-at not served.** Step 4 serves `headerLine` (the diagnosis card's line) on GET
+  /api/self/v3; the code-filled `strip` and `easesAt` from the S3 windows need a stored `self.sub.windows` row read on
+  every GET, so they were left out. Owner: server + web. Done: decide whether the header needs them; if so, read the
+  stored S3 row once per GET (counted in `boardReadCounts`).
+- **SELF_V2_RETIRED needs SELF_V2_BUILD=1 to run at all.** The build event reaches `runSelfV2Build` only when
+  `selfV2OwnsBoard()` (SELF_V2_BUILD=1 and the model on); the retired path lives inside it. The flag name `SELF_V2_BUILD`
+  is kept as the entry until phase D. Owner: server (phase D). Done: the entry renamed or documented in env.ts.
+- **Shared code still imported through the v2 paths.** Step 1 moved the shared code and left re-exports; most callers
+  (cards, clocks, lens, now, cardChat, v3) still import `self/v2/{slices,cache,oracle,failures,personalizerValidate,
+  portrait,progress}.js`. Owner: server (phase D). Done: every non-v2 import points at the new homes before the v2 files
+  are deleted.
+- **A Love/Work lens chip still counts by row validity, not the cards' own Good until.** The Self chip
+  (`refresh.validUntil`, SELF_BOARD_FROM_CARDS) is now the earliest card `goodUntil` on the deck (`cardGoodUntil`);
+  `lensValidity` keeps `readingLastDay` (the day before the row's `valid_to`), which can be later than a card's
+  `v3.goodUntil`, so a lens chip may claim a later day than a card shows. Owner: server + Sachin (it moves Love/Work due
+  dates). Done: `lensValidity` passes `cardGoodUntil` too, with the lens refresh tests updated.
+- **The "deeper reading" refresh is charged for every board read before the story contract.** Per Sachin's decision a
+  board or lens with a read card lacking a technical story counts as due and costs one question; there is no free re-read
+  after a prompt release. Owner: Sachin (confirm the support line for people who ask why). Done: confirmed, or a free
+  window added to `deeperReadingReady`'s callers.

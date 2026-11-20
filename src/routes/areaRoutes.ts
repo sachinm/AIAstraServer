@@ -22,7 +22,7 @@
 import type express from 'express';
 import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
-import { getBoardsV3 } from '../config/env.js';
+import { getBoardsV3, isSelfBoardFromCards } from '../config/env.js';
 import { CHECK_AREAS, checksFor, getCareer, recordCheck, setWorkStatus, type CareerDeps, type CheckArea } from '../reading/area/careerService.js';
 import type { AreaBoardResult, BoardDeps } from '../reading/area/boardService.js';
 import { getSelfBoard } from '../reading/area/selfService.js';
@@ -31,6 +31,7 @@ import { pinActiveGoalWindow, recordWindowOutcomeCheckin } from '../reading/area
 import { questionGate, quotaBody, type BoardCharge, type QuestionGate } from '../billing/questionGate.js';
 import { queueSelfReadingBuild, type QueueDeps } from '../reading/self/buildEvent.js';
 import { selfBoardDates } from '../reading/self/synthesisValidity.js';
+import { selfDeeperReadingReady } from '../reading/self/boardState.js';
 import { logChatProviderError, publicCodeFromChatProviderError } from '../services/publicChatError.js';
 import { refreshBoardLens, type LensRefreshDeps, type LensRefreshGate } from '../reading/boards/lensRefresh.js';
 
@@ -51,6 +52,8 @@ export interface AreaRouteDeps {
   lensGate?: LensRefreshGate;
   /** tests: the Love/Work v3 board read and card queue seams of a lens refresh */
   lens?: Omit<LensRefreshDeps, 'prisma' | 'gate' | 'now'>;
+  /** tests: whether a You board card was read without a technical story (default selfDeeperReadingReady) */
+  selfDeeperReady?: (prisma: PrismaClient, kundliId: string) => Promise<boolean>;
 }
 
 export function isAreaEnabled(): boolean {
@@ -137,8 +140,20 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       const current = await build(false);
       if (current.status === 'no_kundli') return res.status(404).json({ error: 'no_kundli' });
       if (current.status !== 'ok') return res.status(409).json({ error: 'not_ready', code: 'not_ready' });
-      const dates = (board === 'self' ? await selfBoardDates(deps.prisma, kundli.id, day, current) : null) ?? current;
-      if (!dates.refresh_due) return res.status(409).json({ error: 'not_due', code: 'not_due', valid_until: dates.valid_until });
+      const selfDates = board === 'self' ? await selfBoardDates(deps.prisma, kundli.id, day, current) : null;
+      if (board === 'self' && !selfDates && isSelfBoardFromCards()) {
+        // plan "retire the v2 Self reading" step 2: no Self card was ever read, so this is the board's first reading,
+        // free (docs/billing/03 "automatic builds only when nothing was ever stored"): queued with no question held
+        const outcome = await queueSelfReadingBuild(queueDeps, userId, kundli.id, 'self');
+        if (outcome !== 'invoked' && outcome !== 'in_process') return res.status(409).json({ error: outcome === 'already_building' ? 'building' : 'not_ready', code: outcome === 'already_building' ? 'building' : 'not_ready' });
+        const usage = await gate.getStatus(userId);
+        return res.status(202).json({ status: 'building', first: true, charged: false, ...(usage ? { usage } : {}) });
+      }
+      const dates = selfDates ?? current;
+      // a You board card read before the full-thread reading (no technical story, `reading.deeperReadingReady`) makes the
+      // board due: charged as usual (Sachin: after a prompt release everyone refreshes and the quota pays)
+      const deeper = board === 'self' && !dates.refresh_due && (await (deps.selfDeeperReady ?? selfDeeperReadingReady)(deps.prisma, kundli.id));
+      if (!dates.refresh_due && !deeper) return res.status(409).json({ error: 'not_due', code: 'not_due', valid_until: dates.valid_until });
 
       const reserved = await gate.reserveBoardRefresh(userId, board, day);
       if (!reserved.ok) return res.status(402).json(quotaBody(reserved.usage));

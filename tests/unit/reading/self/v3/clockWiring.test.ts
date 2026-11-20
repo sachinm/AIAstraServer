@@ -235,6 +235,43 @@ describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
     expect(r.cards.body).toBeTruthy();
     expect(r.status).toBe('ok');
   });
+  it('retire-v2 step 3: given only the natal context (no v2 Oracle slice) the cards read the same natal.core and prefix, with the stages in order', async () => {
+    const callGemini = async (o: GeminiCallOptions) => {
+      if (o.node.startsWith('reading.clock.')) return ok(reader(o.parts));
+      if (o.node === 'reading.concordance') return ok(boastful(o.parts[1]!));
+      return ok(JSON.stringify({ cards: [] }));
+    };
+    const runWith = async (input: Record<string, unknown>) => {
+      const seen: Array<{ prefix: string; hash: string; natal: string | undefined; model: string }> = [];
+      const stages: string[] = [];
+      const r = await runSelfV3Cards(
+        base({
+          callGemini: callGemini as never,
+          onStage: (s: string) => stages.push(s),
+          loadBoard: async () => ({ cards: ['body', 'mind', 'stuck', 'sleep', 'year'], sections: {} }),
+          readCards: async (_d: unknown, i: { model: string; prefix: { text: string; dated?: string; hash: string }; slices: RenderedSlice[] }) => {
+            seen.push({ prefix: `${i.prefix.text}${i.prefix.dated ?? ''}`, hash: i.prefix.hash, natal: i.slices.find((s) => s.id === 'natal.core')?.hash, model: i.model });
+            return { results: [{ card: 'body', status: 'ok', content: null, timings: [], issues: [], costUsd: 0 }], cards: { body: { line: 'x', spans: [], confirm: null, pattern: null, ladder: null, agreement: null } }, timings: [], issues: [], spentUsd: 0, capReached: false, order: ['body'] };
+          },
+        }) as never,
+        { ctx, pressure: primary, portrait: null, buildId: 'b-natal', ...input } as never,
+      );
+      return { r, seen, stages };
+    };
+    const old = await runWith({ oracleSlice: slice });
+    const now = await runWith({ natal: { prefix: slice.prefix, model: slice.model } });
+    expect(now.r.status).toBe('ok');
+    expect(now.seen).toHaveLength(1);
+    expect(now.seen[0]!.natal).toBe(natalCoreFromPrefix(slice.prefix, ctx.stamps.digestVersion).hash);
+    expect(now.seen[0]).toEqual(old.seen[0]);
+    expect(now.stages).toEqual(['clocks', 'cards']);
+    // neither given: a gap, nothing read
+    const none = await runWith({});
+    expect(none.r.status).toBe('failed');
+    expect(none.r.gaps).toContain('v3: no natal context given');
+    expect(none.seen).toHaveLength(0);
+  });
+
   it('one build run, one budget: the cards get what the run has left and count the clock layer, not the day', async () => {
     const callGemini = async (o: GeminiCallOptions) => {
       if (o.node.startsWith('reading.clock.')) return ok(reader(o.parts));

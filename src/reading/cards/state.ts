@@ -131,6 +131,16 @@ export function cardStateOf(doc: CardsStateDoc, id: CardId, hasReading: boolean,
   return 'not_read';
 }
 
+/**
+ * docs/techniques/09 §6: a deck card read before the full-thread reading (stored without a technical story) while the
+ * story contract is on. The page offers "A deeper reading is ready. Refresh uses 1 of your questions.", and the refresh
+ * routes count such a board or lens as due (Sachin: after a prompt release everyone refreshes and the quota pays; no free
+ * re-read). False once every read deck card carries a story.
+ */
+export function deeperReadingReady(deck: readonly string[], readings: Partial<Record<string, { story?: string | null } | null | undefined>>): boolean {
+  return isCardsStoryContractEnabled() && deck.some((id) => Boolean(readings[id]) && !readings[id]!.story);
+}
+
 /** The board's reading line (doc 70 §4.2 `reading`). */
 export function boardReadingView(
   doc: CardsStateDoc,
@@ -153,6 +163,6 @@ export function boardReadingView(
     preparing: doc.preparing,
     // docs/techniques/09 §6: a board card read before the full-thread reading (no technical story): the page offers a
     // refresh ("A deeper reading is ready. Refresh uses 1 of your questions."); the refresh is charged as usual
-    deeperReadingReady: isCardsStoryContractEnabled() && board.some((id) => Boolean(readings[id]) && !readings[id]!.story),
+    deeperReadingReady: deeperReadingReady(board, readings),
   };
 }

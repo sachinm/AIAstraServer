@@ -17,7 +17,9 @@ import type { Mood, ProfilePack, SelfV2AreaId, SelfV2RefreshView, SelfV2Response
 import { selfBoardDates, selfV2OwnsBoard, type BoardValidity } from '../synthesisValidity.js';
 import type { HeldOracleRow } from '../v2/store.js';
 import { buildSelfV2Response, noKundliResponse } from './response.js';
-import { defaultReadSelfV2Latest, type ReadSelfV2Latest } from './storeContract.js';
+import { defaultReadSelfV2Latest, NOTHING_STORED, type ReadSelfV2Latest, type SelfV2Latest } from './storeContract.js';
+import { isSelfBoardFromCards, isSelfV2Retired } from '../../../config/env.js';
+import { readSelfBoardState, type SelfBoardState } from '../boardState.js';
 
 export interface SelfV2Deps {
   prisma: PrismaClient;
@@ -43,6 +45,12 @@ export interface SelfV2Deps {
   /** the two markers the `build` progress view is made from (docs/loading-overlay/05); defaults read area_builds */
   progressMarkers?: (prisma: PrismaClient, kundliId: string, now: Date) => Promise<{ queue: QueueMarkerView; v2: V2MarkerView }>;
   now?: () => Date;
+  /** overrides SELF_BOARD_FROM_CARDS (plan "retire the v2 Self reading" step 2: the board state from the card rows) */
+  boardFromCards?: boolean;
+  /** overrides SELF_V2_RETIRED for the read (the v2 rows are not read when the v2 build is retired) */
+  v2Retired?: boolean;
+  /** the Self board state from the card rows (default `readSelfBoardState`) */
+  boardState?: (prisma: PrismaClient, kundliId: string, clock: string, today: string, readAt: string | null) => Promise<SelfBoardState>;
 }
 
 /**
@@ -112,6 +120,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   if (!kundli) return { body: noKundliResponse(), queued: null, kundliId: null };
   const now = (deps.now ?? (() => new Date()))();
   const asOf = dayOf(now);
+  if (deps.boardFromCards ?? isSelfBoardFromCards()) return getSelfV2FromCards(deps, userId, kundli, now);
   // everything that does not need the clock starts now and overlaps the clock read
   const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
   // on the default path the refresh block's build marker is the same `area_builds` row the progress markers read
@@ -165,6 +174,71 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     }
   }
   // nothing was queued: the markers read above are still today's, so they are not read again
+  const build =
+    queued === null && markers
+      ? buildView(markers.queue, markers.v2, now, false)
+      : await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
+  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued, kundliId: kundli.id };
+}
+
+/**
+ * GET /api/self/v2 with SELF_BOARD_FROM_CARDS=1 (plan "retire the v2 Self reading", server step 2): `builtAt`, `status`,
+ * `refresh` and whether a build is queued come from the Self card readings (`readSelfBoardState`), not from the v2 rows.
+ *
+ * - A Self card was read on the board clock: the board is made. The GET never queues a build (a fresh reading is the
+ *   paid refresh, POST /api/boards/self/refresh; a new card is queued by the layout save or its own read).
+ * - No Self card was ever read: the free first build is queued once, when no build ran today (today's `self.reading`
+ *   marker none), or the last one is stuck or failed past its cooldown. A build that ran today and read no card (fewer
+ *   than CARDS_READ_MIN cards on the board, or no ledger yet) is not queued again on every poll.
+ *
+ * With SELF_V2_RETIRED=1 the v2 rows are not read at all (`v2.card`, `details`, `hero` and `quality` are null); without
+ * it they are served as before beside the card state.
+ */
+async function getSelfV2FromCards(deps: SelfV2Deps, userId: string, kundli: { id: string; preferred_dasha: string | null; digest_status: string | null }, now: Date): Promise<GetSelfV2Result> {
+  const prisma = deps.prisma;
+  const asOf = dayOf(now);
+  const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
+  const profileP = (deps.loadProfile ?? loadProfilePack)(prisma, userId, asOf);
+  const floorsP = deps.floors ? deps.floors(prisma, userId, kundli.id).catch(() => ({})) : Promise.resolve({});
+  profileP.catch(() => undefined);
+  const clock = await clockFor(deps, kundli.id, kundli.preferred_dasha);
+  const retired = deps.v2Retired ?? isSelfV2Retired();
+  const readState = deps.boardState ?? ((p: PrismaClient, k: string, c: string, t: string, readAt: string | null) => readSelfBoardState(p, k, c, t, { readAt }));
+  const [v2Latest, profile, floors, [markers, state]] = await Promise.all([
+    retired ? Promise.resolve<SelfV2Latest>({ ...NOTHING_STORED }) : (deps.readLatest ?? defaultReadSelfV2Latest)(prisma, kundli.id, clock.primary),
+    profileP,
+    floorsP,
+    markersP.then(async (m) => [m, await readState(prisma, kundli.id, clock.primary, asOf, m?.v2.readAt ?? null)] as const),
+  ]);
+  const q = markers?.queue.state;
+  const digestReady = !kundli.digest_status || kundli.digest_status === 'ready';
+  let status: SelfV2Response['status'] = 'ok';
+  let queued: QueueOutcome | null = null;
+  if (state.nothingStored) {
+    if (!digestReady) {
+      await (deps.queueDigest ?? defaultQueueDigest)(prisma, kundli.id).catch((e) => console.warn('[self:v2] digest queue failed:', (e as Error).message));
+      status = 'preparing';
+    } else if (q === undefined || q === 'none' || q === 'stuck' || q === 'failed') {
+      queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary).catch((e) => {
+        console.warn('[self:v2] build queue failed:', (e as Error).message);
+        return 'skipped' as const;
+      });
+      status = queued === 'invoked' || queued === 'in_process' || queued === 'already_building' ? 'pending' : 'ok';
+    } else if (q === 'building') status = 'pending';
+  }
+  const latest: SelfV2Latest = {
+    ...v2Latest,
+    builtAt: state.builtAt ?? (retired ? null : v2Latest.builtAt),
+    // the v2 area statuses: made once a card was read; a first build running is pending
+    status: !state.nothingStored ? 'ok' : status === 'pending' ? 'pending' : q === 'failed' || q === 'failed_recently' ? 'failed' : 'ok',
+  };
+  const refresh: SelfV2RefreshView = {
+    madeAt: state.validity.madeAt,
+    validUntil: state.validity.validUntil,
+    due: state.validity.due,
+    building: q === 'building',
+    failed: q === 'failed' || q === 'failed_recently',
+  };
   const build =
     queued === null && markers
       ? buildView(markers.queue, markers.v2, now, false)

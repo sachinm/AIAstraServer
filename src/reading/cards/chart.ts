@@ -6,7 +6,7 @@
  * Never served: the Oracle's span `agreement` sentence (it names internal subject keys such as `home_and_peace`; which
  * clocks agree stays the code-built `span.agreement` counts and `span.clocks`), and every evidence key array.
  */
-import { INTERNAL_ID, redactEngineText } from '../self/v2/personalizerValidate.js';
+import { INTERNAL_ID, redactEngineText } from '../self/textChecks.js';
 import type { CardChartReading } from '../self/v3/types.js';
 
 /** `{evidence keys}` the Oracle cites inline (the `stripKeys` rule of self/oracle.ts) */

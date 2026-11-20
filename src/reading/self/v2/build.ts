@@ -21,9 +21,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { withAgentRun } from '../../../agents/registry.js';
-import { callWithContinuation } from '../../llm/continue.js';
-import { getReadingBoardSpendCapUsd, getReadingSpendCapUsd, getSelfFamilyMaxOutputTokens, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, isSelfV3BuildEnabled } from '../../../config/env.js';
+import { getReadingBoardSpendCapUsd, getReadingSpendCapUsd, getSelfPersonalizerMaxOutputTokens, getSelfPersonalizerRetryMaxOutputTokens, isSelfV2Retired, isSelfV3BuildEnabled } from '../../../config/env.js';
 import { usageCostUsd } from '../../llm/models.js';
 import { runSelfV3Cards, type SelfV3StepResult } from '../v3/build.js';
 import { withTechniqueOutput } from '../../../techniques/outputStore.js';
@@ -31,19 +29,12 @@ import { canonicalJson } from '../../../techniques/pieces.js';
 import { informIndividualCacheUsed } from '../../llm/cacheSweep.js';
 import { callGemini as realCallGemini, type GeminiCallOptions, type GeminiResult } from '../../llm/gemini.js';
 import type { ensurePromptCache } from '../../llm/promptCache.js';
-import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../../oracle/prewarm.js';
-import { PROMPT_VERSION } from '../../prompts/generated.js';
-import { redactEngineTerms } from '../oracle.js';
-import { completeSentencesOf, CUT_FINDING_NOTE } from '../words.js';
-import { SELF_V2_REFRESH } from '../v2types.js';
 import type {
   AreaBrief,
   PreparedAgentSlice,
-  RefreshTrigger,
   SelfBuildContext,
   SelfV2AgentTiming,
   SelfV2CardsResult,
-  SelfV2FamilyAgentId,
   SelfV2Frame,
   SelfV2OracleResult,
   SelfV2Quality,
@@ -51,8 +42,8 @@ import type {
 } from '../v2types.js';
 import { issuesFromGaps, logValidation, qualityOf, recordValidationIssues, SERVE_MIN_AREAS, servesPage, type RecordMeta } from './failures.js';
 import { withCacheLease } from '../../llm/cacheLease.js';
-import { markAgentUsed, warmPrefixes } from './cache.js';
-import { runOracleV2, timingOf } from './oracle.js';
+import { warmPrefixes } from './cache.js';
+import { runOracleV2 } from './oracle.js';
 import { runPersonalizer } from './personalizer.js';
 import { buildPersonPortrait, loadPortraitSources, type PortraitSources } from './portrait.js';
 import {
@@ -64,12 +55,15 @@ import {
   SELF_V2_ORACLE_PROMPT,
   SELF_V2_PERSONALIZER_PROMPT,
   shortHash,
-  type FamilySlices,
 } from './slices.js';
 import { stageOfStep } from './progress.js';
-import { readLastGoodAreas, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
+import { runFamilyReaders } from '../../families/run.js';
+import { buildNatalContext } from '../../slices/natalPrefix.js';
+import { CARD_READING_TECHNIQUE } from '../../cards/types.js';
+import { storeLayerOutputs } from '../layerStore.js';
+import { readLastGoodAreas, readSelfV2Marker, SELF_V2_ORACLE_TECHNIQUE, SELF_V2_PERSONALIZER_TECHNIQUE, writeSelfV2Marker, type StoredSelfV2Cards, type StoredSelfV2Oracle } from './store.js';
 import { buildAreaBriefs } from '../areas/index.js';
-import { runSelfSubTechniques, subTechniqueId, type SelfV2Deps } from '../sub/index.js';
+import { runSelfSubTechniques, type SelfV2Deps } from '../sub/index.js';
 
 /** the sub-techniques and area briefs (doc 66 §4.8 Layers 1–2); injectable so tests run on fixtures */
 export interface SelfV2Subs {
@@ -95,6 +89,8 @@ export interface SelfV2BuildDeps {
   onStep?: (step: string) => void;
   /** test seam: this build run's spend cap (default READING_SPEND_CAP_USD, which cannot go below 0.05) */
   maxSpendUsd?: number;
+  /** overrides SELF_V2_RETIRED (with the per-card reading on): the build without the v2 Oracle and Personalizer */
+  retired?: boolean;
 }
 
 export interface SelfV2BuildArgs {
@@ -181,179 +177,10 @@ function runningPeriodOf(ctx: SelfBuildContext): { from: Date; to: Date } | null
   return x ? { from: new Date(`${x.from}T00:00:00Z`), to: new Date(`${x.to}T00:00:00Z`) } : null;
 }
 
-/** the sub-technique slots of the build context and their catalogue ids (self.sub.mind_facts …) */
-const SUB_SLOTS: ReadonlyArray<[keyof SelfBuildContext['sub'], string]> = [
-  ['clock', 'clock'],
-  ['periods', 'periods'],
-  ['windows', 'windows'],
-  ['promise', 'promise'],
-  ['risk', 'risk'],
-  ['mind', 'mindFacts'],
-  ['body', 'bodyFacts'],
-  ['presence', 'presenceFacts'],
-  ['year', 'year'],
-  ['profile', 'profile'],
-];
+// the Layer 1 and Layer 2 stores moved unchanged to src/reading/self/layerStore.ts (plan "retire the v2 Self reading", step 1)
+export { ALL_TRIGGERS, layerStoreKey, storeLayerOutputs, SUB_REFRESH, SUB_SLOTS } from '../layerStore.js';
 
-/**
- * What can make each sub-technique's output stale (doc 66 §4.8 Layer 1); the digest version and the clock are in every
- * key. The areas use SELF_V2_REFRESH.
- */
-export const SUB_REFRESH: Readonly<Record<string, readonly RefreshTrigger[]>> = {
-  clock: ['digest'],
-  periods: ['main_period', 'sub_period', 'sub_sub_period'],
-  windows: ['sub_sub_period', 'sky_week'],
-  promise: ['digest'],
-  risk: ['sub_sub_period', 'sky_week'],
-  mindFacts: ['digest'],
-  bodyFacts: ['sub_sub_period', 'sky_week'],
-  presenceFacts: ['main_period', 'sub_period'],
-  year: ['year'],
-  profile: ['profile', 'confirm'],
-};
-
-const ALL_TRIGGERS: readonly RefreshTrigger[] = ['main_period', 'sub_period', 'sub_sub_period', 'sky_week', 'year', 'profile', 'confirm'];
-
-/**
- * The key of a Layer 1 or Layer 2 output: its id, the digest version, the clock and the stamps of the triggers that can
- * change it (default: every stamp). Unchanged stamps give the same key, so a rebuild writes nothing.
- */
-export function layerStoreKey(id: string, ctx: SelfBuildContext, triggers: readonly RefreshTrigger[] = ALL_TRIGGERS): string {
-  const s = ctx.stamps;
-  const t = new Set(triggers);
-  const parts = [id, s.digestVersion, `clock=${s.clock}`];
-  if (t.has('main_period')) parts.push(`main=${s.mainPeriod ?? '-'}`);
-  if (t.has('sub_period')) parts.push(`sub=${s.subPeriod ?? '-'}`);
-  if (t.has('sub_sub_period')) parts.push(`subsub=${s.subSubPeriod ?? '-'}`);
-  if (t.has('sky_week')) parts.push(`sky=${s.skyWeek ?? '-'}`);
-  if (t.has('year')) parts.push(`year=${s.year ?? '-'}`);
-  if (t.has('profile')) parts.push(`profile=${s.profileHash ?? '-'}`);
-  if (t.has('confirm')) parts.push(`confirm=${s.confirmHash ?? '-'}`);
-  return parts.join('|');
-}
-
-/**
- * Step 2's stores (doc 66 §4.8; AGENTS.md machinery rule 1): each sub-technique output under `self.sub.<name>` and each
- * area brief under `self.v2.<area>`, keyed by the stamps. An unchanged key is a hit and writes nothing. Never throws.
- */
-export async function storeLayerOutputs(
-  prisma: PrismaClient,
-  ctx: SelfBuildContext,
-  briefs: readonly AreaBrief[],
-  now: Date,
-  runningPeriod: { from: Date; to: Date } | null,
-): Promise<{ stored: string[]; cached: string[]; unkeyed: string[]; failed: string[] }> {
-  const items: Array<{ id: string; agent: string; value: unknown; triggers: readonly RefreshTrigger[] }> = [
-    ...SUB_SLOTS.filter(([slot]) => ctx.sub[slot] !== undefined).map(([slot, name]) => ({ id: subTechniqueId(name), agent: 'self.sub', value: ctx.sub[slot], triggers: SUB_REFRESH[name] ?? ALL_TRIGGERS })),
-    ...briefs.map((b) => ({ id: `self.v2.${b.areaId}`, agent: 'self.reading_panel', value: b, triggers: SELF_V2_REFRESH[b.areaId] ?? ALL_TRIGGERS })),
-  ];
-  const stored: string[] = [];
-  const cached: string[] = [];
-  const unkeyed: string[] = [];
-  const failed: string[] = [];
-  await Promise.all(
-    items.map(async (it) => {
-      try {
-        const res = await withTechniqueOutput(
-          prisma,
-          { technique: it.id, kundliId: ctx.kundliId, digestVersion: layerStoreKey(it.id, ctx, it.triggers), context: { now, runningPeriod }, agentId: it.agent, userId: ctx.userId, logCachedRun: false },
-          async () => it.value,
-        );
-        // a technique whose freshness is per question (a `findings` input with no synthesizer upstream) gets no key
-        (!res.cacheKey ? unkeyed : res.cached ? cached : stored).push(it.id);
-      } catch {
-        failed.push(it.id);
-      }
-    }),
-  );
-  return { stored, cached, unkeyed, failed };
-}
-
-/** Step 4: the five family readers, in parallel, each read through `reading_findings_cache` first. */
-async function runFamilyReaders(
-  deps: SelfV2BuildDeps & { callGemini: NonNullable<SelfV2BuildDeps['callGemini']> },
-  ctx: SelfBuildContext,
-  fam: FamilySlices,
-): Promise<{ findings: Array<{ family: string; text: string }>; timings: SelfV2AgentTiming[]; gaps: string[] }> {
-  const gaps: string[] = [];
-  const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
-  const outs = await Promise.all(
-    FAMILY_IDS.map(async (id: SelfV2FamilyAgentId) => {
-      const slice = fam.slices[id];
-      const pack = fam.packs[id];
-      const cacheKey = `self:${ctx.kundliId}:${id}:${pack.packHash}:${PROMPT_VERSION}`;
-      const t0 = performance.now();
-      const held = !deps.force ? await loadDbReaderCache(deps.prisma, cacheKey, owner).catch(() => undefined) : undefined;
-      const cachedText = (held?.finding as unknown as { rawText?: string } | undefined)?.rawText;
-      if (cachedText) return { family: id, text: cachedText, timing: timingOf(id, id, slice.model, null, since(t0), 'cached') };
-      try {
-        const res = await withAgentRun(
-          deps.prisma,
-          id,
-          {
-            userId: ctx.userId,
-            kundliId: ctx.kundliId,
-            technique: SELF_V2_ORACLE_TECHNIQUE,
-            task: `${id} v2 ${ctx.asOf}`,
-            input: { family: id, keys: slice.keys.length, natal: pack.natal ? 1 : 0, prefixTokens: slice.estTokens.prefix },
-            charts: pack.charts,
-          },
-          async () => {
-            // doc 66 replay run 2: 2,000 cut family.dasha (654 out + 1,342 thought); env SELF_FAMILY_MAX_OUTPUT_TOKENS
-            // (6,000, docs/techniques/09 §3.1); a finding that reaches it is continued, never thrown away (§3.5)
-            const g = await callWithContinuation(deps.callGemini, {
-              model: slice.model,
-              node: id,
-              system: slice.system,
-              parts: [slice.prefix, slice.suffix],
-              thinking: 'medium',
-              maxOutputTokens: getSelfFamilyMaxOutputTokens(),
-              timeoutMs: 60_000,
-              cachePrefix: true,
-              cacheOwner: slice.cacheOwner,
-            });
-            return {
-              value: g,
-              usage: { model: slice.model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 },
-              output: { chars: g.text.length, cachedTokens: g.usage?.cachedTokens ?? 0, finish: g.finishReason ?? null, thoughtsReported: g.usage?.thoughtTokensReported ?? null },
-            };
-          },
-        );
-        markAgentUsed(slice, deps.informUsed);
-        // a finding is continued at its ceiling (llm/continue.ts); one still cut after the continuations keeps its complete
-        // sentences with a note and is not cached (doc 66 replay run 2, failure 7)
-        const cut = res.finishReason === 'MAX_TOKENS';
-        if (res.continued) gaps.push(`${id}: continued ${res.continued} time(s) at the output ceiling${cut ? '; still cut' : ''}`);
-        const kept = cut ? completeSentencesOf(res.text) : res.text;
-        if (cut) gaps.push(`${id}: cut at the output cap (MAX_TOKENS); ${kept ? `${kept.length} of ${res.text.length} chars kept, complete sentences only` : 'no complete sentence; not passed to the Oracle'}`);
-        const text = kept ? redactEngineTerms(cut ? [kept, CUT_FINDING_NOTE].join('\n') : kept) : '';
-        const timing = timingOf(id, id, slice.model, res, since(t0), 'ok');
-        if (cut) return { family: id, text, timing };
-        const stored: HeldReader = {
-          finding: { reader: id, rawText: text } as unknown as HeldReader['finding'],
-          usage: { node: id, model: slice.model, promptTokens: timing.promptTokens, cachedTokens: timing.cachedTokens, outputTokens: timing.outputTokens, thoughtTokens: timing.thoughtTokens, ms: timing.ms },
-        };
-        await saveDbReaderCache(deps.prisma, {
-          cacheKey,
-          kundliId: ctx.kundliId,
-          userId: ctx.userId,
-          readerId: id,
-          packHash: pack.packHash,
-          horizonKey: pack.horizonKey,
-          promptVersion: PROMPT_VERSION,
-          natal: pack.natal,
-          ...(pack.expiresAt ? { expiresAt: pack.expiresAt } : {}),
-          held: stored,
-          used: true,
-        }).catch(() => undefined);
-        return { family: id, text, timing };
-      } catch (e) {
-        return { family: id, text: '', timing: timingOf(id, id, slice.model, null, since(t0), 'failed'), error: String((e as Error).message ?? e).slice(0, 160) };
-      }
-    }),
-  );
-  return { findings: outs.filter((o) => o.text).map((o) => ({ family: o.family, text: o.text })), timings: outs.map((o) => o.timing), gaps };
-}
+// step 4, the family readers, moved unchanged to src/reading/families/run.ts (plan "retire the v2 Self reading", step 1)
 
 /** Runs one Self v2 build to the end (doc 66 §4.8). Never throws. */
 /**
@@ -373,12 +200,22 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
   // the build, and the last stage write lands before the build's own ready/failed write
   const startedAt = now.toISOString();
   let stageWrites: Promise<void> = Promise.resolve();
+  // plan "retire the v2 Self reading" step 3: SELF_V2_RETIRED=1 with the per-card reading on
+  const retired = deps.retired ?? isSelfV2Retired();
+  // with the v2 reading retired, today's earlier read time (the board's builtAt) is carried through this build's marker
+  // writes, which replace the marker's result; read once, before the first write
+  const priorReadAt: Promise<string | null> = retired ? readSelfV2Marker(deps.prisma, args.kundliId, now).then((m) => m.readAt ?? null).catch(() => null) : Promise.resolve(null);
   const step = (s: string) => {
     deps.onStep?.(s);
     const stage = stageOfStep(s);
     if (!stage) return;
     const at = new Date().toISOString();
-    stageWrites = stageWrites.then(() => writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'building', undefined, { started_at: startedAt, stage, stage_at: at })).catch(() => undefined);
+    stageWrites = stageWrites
+      .then(async () => {
+        const readAt = await priorReadAt;
+        await writeSelfV2Marker(deps.prisma, args.userId, args.kundliId, now, 'building', undefined, { started_at: startedAt, stage, stage_at: at, ...(readAt ? { read_at: readAt } : {}) });
+      })
+      .catch(() => undefined);
   };
   const ms: Record<string, number> = {};
   const gaps: string[] = [];
@@ -431,13 +268,17 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
     step('slices');
     t = performance.now();
     const fam = buildFamilySlices(ctx, sub.loaded);
-    const first = buildOracleSlice(ctx, fam.packs, briefs);
+    // the natal context (slices/natalPrefix.ts): byte for byte the v2 Oracle slice, so no card key moves
+    const natal = buildNatalContext(ctx, fam.packs, briefs);
+    const first = { slice: natal.slice, input: natal.input };
     ms.slices = since(t);
     step('warm');
     t = performance.now();
-    // step 2's stores (self.sub.* and self.v2.<area>) run beside the warm-up; neither waits on the other
+    // step 2's stores (self.sub.* and self.v2.<area>) run beside the warm-up; neither waits on the other. With the v2
+    // reading retired the v2 Oracle's system prompt is not warmed (its cache would never be read): the clock layer warms
+    // the natal prefix the cards read under their own system prompt
     const [warmed, storedLayers] = await Promise.all([
-      warmPrefixes([...FAMILY_IDS.map((id) => fam.slices[id]), first.slice], { ensureCache: deps.ensureCache }),
+      warmPrefixes([...FAMILY_IDS.map((id) => fam.slices[id]), ...(retired ? [] : [first.slice])], { ensureCache: deps.ensureCache }),
       storeLayerOutputs(deps.prisma, ctx, briefs, now, runningPeriodOf(ctx)),
     ]);
     out.warmed.push(...warmed);
@@ -445,6 +286,63 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
     if (storedLayers.failed.length) gaps.push(`layer outputs not stored: ${storedLayers.failed.join(', ')}`);
     if (storedLayers.unkeyed.length) gaps.push(`layer outputs with no store key (catalogue freshness is per question): ${storedLayers.unkeyed.join(', ')}`);
     out.layers = storedLayers;
+
+    if (retired) {
+      // plan "retire the v2 Self reading" step 3: natal context → family readers → clock layer → lens linemen → card
+      // Oracle → card Personalizer. No v2 Oracle, no v2 Personalizer, no `self.v2.*` row; the portrait without the Oracle
+      const tp = performance.now();
+      const portraitSrcP: Promise<PortraitSources> = loadPortraitSources(deps.prisma, ctx.userId, ctx.kundliId, ctx.asOf)
+        .catch((e: Error): PortraitSources => ({ facts: null, lifeEvents: null, areaChecks: null, chatCategories: null, birth: null, currentLocation: null, gaps: [`portrait sources: ${e.message?.slice(0, 80)}`] }))
+        .finally(() => {
+          ms.portraitLoad = since(tp);
+        });
+      step('families');
+      const tf = performance.now();
+      // the findings layer: the same readers and cache key as before; their runs are tagged with the card reading
+      const fr = await runFamilyReaders(d, ctx, fam, { technique: CARD_READING_TECHNIQUE });
+      ms.families = since(tf);
+      agents.push(...fr.timings);
+      gaps.push(...fr.gaps);
+      out.slices = sliceTable(FAMILY_IDS.map((id) => fam.slices[id]));
+      const familySpend = round6(fr.timings.reduce((n, x) => n + x.costUsd, 0));
+      if (familySpend >= maxSpendUsd) {
+        out.status = 'budget_exceeded';
+        gaps.push(`family readers spent ${familySpend} over the cap ${maxSpendUsd}; no card read`);
+        await stageWrites;
+        await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, 'failed', 'families budget_exceeded');
+        return out;
+      }
+      const portrait = buildPersonPortrait(ctx, null, await portraitSrcP);
+      for (const g of portrait.gaps) gaps.push(`portrait: ${g}`);
+      // the card step's progress on the stage names the page knows: the clock and lens layers as `oracle`, the cards as
+      // `personalizer` (the web's BUILD_STAGE_WORDS is a record over exactly these names)
+      const v3 = await runSelfV3Cards(
+        {
+          prisma: deps.prisma,
+          callGemini: call,
+          ensureCache: deps.ensureCache,
+          informUsed: deps.informUsed,
+          now,
+          force: deps.force,
+          maxSpendUsd: Math.max(0, round6(maxSpendUsd - familySpend)),
+          onStage: (s) => step(s === 'clocks' ? 'oracle' : 'personalizer'),
+        },
+        { ctx, pressure: sub.loaded.pressure ?? null, natal, portrait, buildId: out.buildId, findings: fr.findings, activation: sub.loaded.activation ?? [] },
+      ).catch((e: Error): SelfV3StepResult => ({ status: 'failed', cards: {}, frame: null, agents: [], issues: [], gaps: [`v3: ${String(e?.message ?? e).slice(0, 300)}`], cached: false, stored: false, key: null, ms: {} }));
+      agents.push(...v3.agents);
+      gaps.push(...v3.gaps);
+      ms.v3 = v3.ms.total ?? 0;
+      out.v3 = { status: v3.status, cached: v3.cached, stored: v3.stored, key: v3.key, ms: v3.ms, cards: Object.keys(v3.cards).length, spans: v3.frame?.spans.length ?? 0, issues: v3.issues.length };
+      out.status = retiredStatus(v3, Boolean(args.refreshDay));
+      const readNow = (v3.cardsRun?.results ?? []).some((r) => r.status === 'ok');
+      await stageWrites;
+      // `ready` for a board served or still being prepared (fewer than CARDS_READ_MIN cards, no ledger yet): never
+      // `failed`, which would hold the next build back 30 minutes. `read_at`: a card was read now (the board's builtAt)
+      const doneAt = new Date().toISOString();
+      const ready = out.status === 'ok' || out.status === 'preparing';
+      await writeSelfV2Marker(deps.prisma, ctx.userId, ctx.kundliId, now, ready ? 'ready' : 'failed', ready ? undefined : `cards ${v3.status}`, { started_at: startedAt, stage: 'personalizer', stage_at: doneAt, ...(readNow ? { read_at: doneAt } : (await priorReadAt) ? { read_at: (await priorReadAt)! } : {}) });
+      return out;
+    }
 
     const inputHash = shortHash(canonicalJson({ ...first.input, familyFindings: [] }));
     const oracleKey = oracleStoreKey(ctx, first.slice, inputHash, args.refreshDay, args.refreshRetry);
@@ -671,6 +569,26 @@ async function runSelfV2BuildUnleased(deps: SelfV2BuildDeps, args: SelfV2BuildAr
   } finally {
     ms.total = since(tAll);
   }
+}
+
+/**
+ * The status of a build with the v2 reading retired (plan "retire the v2 Self reading" step 3), from its card step:
+ *
+ *   ok               the board is served by its cards: at least one card stored or served; on a fresh reading the person
+ *                    asked for (`refresh`), at least one card read by this run (its question is committed)
+ *   preparing        nothing read and nothing wrong: the board holds fewer than CARDS_READ_MIN cards and none was asked
+ *                    for, no agreed ledger yet, no year frame, or the clock or profile missing (`skipped`). Never failed:
+ *                    a failed marker would hold the next build back 30 minutes and give a question back for nothing
+ *   budget_exceeded  the spend cap stopped every card (they are queued for the next round, never read shorter)
+ *   failed           the card step failed (or, on a fresh reading, read no card: its question is given back)
+ */
+export function retiredStatus(v3: Pick<SelfV3StepResult, 'status' | 'cards' | 'cardsRun'>, refresh: boolean): SelfV2BuildResult['status'] {
+  const readNow = (v3.cardsRun?.results ?? []).some((r) => r.status === 'ok');
+  const served = Object.keys(v3.cards).length > 0 && (v3.status === 'ok' || v3.status === 'partial');
+  if (refresh) return readNow ? 'ok' : v3.status === 'budget_exceeded' ? 'budget_exceeded' : 'failed';
+  if (served) return 'ok';
+  if (v3.status === 'skipped') return 'preparing';
+  return v3.status === 'budget_exceeded' ? 'budget_exceeded' : 'failed';
 }
 
 /**
