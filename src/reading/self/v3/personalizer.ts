@@ -308,6 +308,8 @@ export interface PersonalizerV3Deps {
   /** docs/techniques/09 §3.1: the output ceiling and wall time of each call (default 4,096 and 60 s); continued at the ceiling */
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /** false: a one-card prefix (unique per card) is never worth an explicit cache create (doc 86 rule; doc 09 one call per card) */
+  cacheCreate?: boolean;
 }
 
 export interface PersonalizerV3Result {
@@ -409,6 +411,7 @@ export async function runPersonalizerV3(
               thinking: 'low',
               timeoutMs: limit,
               ...(deps.maxOutputTokens ? { maxOutputTokens: deps.maxOutputTokens } : {}),
+              ...(deps.cacheCreate === false ? { cacheCreate: false } : {}),
               cachePrefix: true,
               cacheOwner: c.cacheOwner,
               responseSchema: personalizerV3Schema(ids, Boolean(input.story)),

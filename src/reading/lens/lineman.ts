@@ -89,6 +89,8 @@ export interface LensLinemanInput {
   systemsText: string;
   systemsKeys: readonly string[];
   verified: readonly string[];
+  /** the verified systems by their plain names (the request line) */
+  verifiedLine?: string;
   model: string;
 }
 
@@ -125,7 +127,7 @@ export function linemanRequest(i: LensLinemanInput): { text: string; keys: strin
     promptText(LENS_LINEMAN_PROMPT),
     `THE LENS: ${i.lens} (cards on the board: ${i.cards.join('; ') || 'none'}); its matters: ${i.matters.join(', ')}`,
     `LENS RECIPE\n${recipe}`,
-    `VERIFIED SYSTEMS (read only these): ${i.verified.join(', ') || 'none'}`,
+    `VERIFIED SYSTEMS (read only these): ${i.verifiedLine || i.verified.join(', ') || 'none'}`,
     ...(i.systemsText ? [i.systemsText] : []),
     `FAMILY FINDINGS\n${i.findings.map((f) => `## ${f.family}\n${f.text}`).join('\n') || '(none stored)'}`,
     `CLOCK SENTENCES (each verified clock's reader, by span and matter)\n${clockSentencesFor(i.sheets, i.matters, new Set(i.verified)) || '(none)'}`,

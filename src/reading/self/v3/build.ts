@@ -31,7 +31,7 @@ import type { ActivationRow } from '../../digest/activation.js';
 import { anyCardDef } from '../../cards/registry.js';
 import { lensOf } from '../../cards/ownCharts.js';
 import { type CardsStoryRunInput, type LensThreadRef } from '../../cards/storyInputs.js';
-import { countedNames, renderShownPeriods, shownSystems } from '../../clocks/systems.js';
+import { countedNames, renderShownPeriods, shownLabels, shownSystems } from '../../clocks/systems.js';
 import type { ClockSheet } from '../../clocks/types.js';
 import { runLensLineman } from '../../lens/lineman.js';
 import { parseApplicability, type ApplicabilityRow } from '../clock.js';
@@ -385,6 +385,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
                   systemsText: periods.text,
                   systemsKeys: periods.keys,
                   verified,
+                  verifiedLine: shownLabels(shown),
                   model: layerModel ?? i.oracleSlice.model,
                 },
               );

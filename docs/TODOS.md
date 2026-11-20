@@ -3844,3 +3844,26 @@ know, who holds it, what done means.
   Done: `servedFieldsRendered` proves each has a place; the refresh notice shows on `deeperReadingReady`.
 - **piecesDoc tests failed before this branch.** `tests/unit/techniques/piecesDoc.test.ts` (2 tests: docs/admin/07 is
   stale; the 01..06 manual check) fail on `develop` `de135cd`. Owner: docs. Done: `npx tsx scripts/write-technique-pieces-doc.ts` and the manual fixed.
+- **Narayana is verified at the maha dasha level only, but its sub-periods are still read.** `systems.ts` marks it
+  `maha_only` and `levelShown` enforces it for the periods-only block, but the Narayana clock slice (levels 1–3), the
+  year frame tone (level 3) and `family.dasha` still read its sub-periods. Owner: server. Done: the clock slice and the
+  dasha pack cut Narayana to level 1, and the frame takes no tone from its sub-periods (or the engine reference test
+  clears them, and the mark goes).
+- **Every card is re-read when a month turns.** The slice window snaps to month starts (doc 09 step 4), so the sky and
+  year slices, the shared prefix hash and every sheet, thread and card key change on the 1st (rows enter and leave the
+  window). Same-day and same-month reopens make no call. Cost: one full board build a month per active board, not
+  charged to the person. Owner: Sachin (accept) or server (key the window by the frame's spans instead). Done: a decision.
+- **`family.moon` and `family.star` are below the explicit-cache minimum.** Their packs are small (~1 k tokens); only
+  `family.sky` is padded. They go uncached (a few hundred tokens each). Owner: server. Done: pad them from allowed rows,
+  or accept and note in doc 09 §3.1.
+- **The Now card prompt still speaks of "clocks" agreeing.** `prompts/cards/now.md` asks how many clocks agree (an
+  integer field); whether the web prints the word is not checked here. Owner: web/server (naming rule "AdAstra AI").
+  Done: the served Now-card wording says "AdAstra AI" or "timing views".
+- **Prompt seed: 23 stored prompts differ from the code and will be replaced on the first load after deploy.**
+  Read-only diff of `system_prompts` on 2026-11-19 (the shared database): annual, cards/chat, cards/group, cards/oracle,
+  clock/reader, common/reader-system, concordance, dasha, oracle/self, oracle/self-cards-v3, personalizer/self-v3,
+  promise, readers/P1-pressure, readers/P3-luck, readers/R01-backbone, readers/R03-varga, readers/R05-strength,
+  readers/R08-vimshottari, readers/R11-annual, readers/R15-self, v2/dasha, v2/promise, v2/synth. Before this fix the
+  stored (older) text overrode the code for all of them. Each replaced text is archived by the trigger in
+  `system_prompt_versions`. If any was a deliberate live edit, it must be put into the code `.md`. Owner: Sachin
+  (confirm none was a live edit). Done: a yes, or the edits moved into the code.

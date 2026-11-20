@@ -138,7 +138,10 @@ export function shownSystems(present: readonly string[], applicability: readonly
   for (const d of SYSTEMS) {
     if (d.duplicateOf || d.show === 'never') continue;
     if (d.show === 'if_applies' && applies(d, applicability) !== true) continue;
-    const stored = d.feed === 'year' || d.feed === 'annual' ? d.id : d.storedAs.find((n) => has.has(n));
+    // a system whose rows nothing renders yet is not padded in (SOUL.md §5): Patyayini (`annual.patyayini`) waits for
+    // `family.year` to read it (docs/TODOS.md "Patyayini is shown but not read anywhere yet")
+    if (d.feed === 'annual') continue;
+    const stored = d.feed === 'year' ? d.id : d.storedAs.find((n) => has.has(n));
     if (!stored) continue;
     out.push({ id: d.id, label: d.label, stored, feed: d.feed, levels: d.levels });
   }
@@ -152,6 +155,11 @@ export function floorMissing(shown: readonly ShownSystem[]): string[] {
   if (!shown.some((s) => systemDef(s.id)?.family === 'rasi')) miss.push('a sign dasha');
   if (!shown.some((s) => s.id === 'tithi_pravesha')) miss.push('the year');
   return miss;
+}
+
+/** the shown systems by their plain names, as the requests list them (Narayana marked maha dasha level only) */
+export function shownLabels(shown: readonly ShownSystem[]): string {
+  return shown.map((s) => (s.levels === 'maha_only' ? `${s.label} (maha dasha level only)` : s.label)).join(', ');
 }
 
 /** the counted systems of a shown set, by stored name (the depth floor's verified list) */

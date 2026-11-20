@@ -8,7 +8,7 @@ import { canonicalJson } from '../../techniques/pieces.js';
 import { clockLabel } from '../self/words.js';
 import { shortHash } from '../self/v2/slices.js';
 import type { CardSystemView, OracleCardV3, YearFrameV3 } from '../self/v3/types.js';
-import { countedNames, periodKey, renderShownPeriods, systemDef, type PeriodRowLike, type ShownSystem } from '../clocks/systems.js';
+import { countedNames, periodKey, renderShownPeriods, shownLabels, systemDef, type PeriodRowLike, type ShownSystem } from '../clocks/systems.js';
 import type { ClockSheet } from '../clocks/types.js';
 import { GENERIC_RECIPE, type CardStoryInputs } from './oracle.js';
 import { lensOf, ownChartsOf, signDashaOf } from './ownCharts.js';
@@ -64,6 +64,7 @@ export function cardStoryInputs(card: string, matters: readonly string[], frame:
     recipe: (lens ? recipeText(lens as LensId) : null) ?? GENERIC_RECIPE,
     ownCharts: ownChartsOf(card),
     verifiedSystems: verified,
+    systemsLine: shownLabels(run.shown),
     systemsText,
     systemsKeys: periods.keys,
     findings: run.findings,

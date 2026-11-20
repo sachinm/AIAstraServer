@@ -168,3 +168,22 @@ describe('tidyOracleParagraph', () => {
   });
 });
 
+
+describe('family packs from one day to the next (docs/techniques/09 §8 step 4)', () => {
+  it('the cached pack text and its hash do not carry the day: N and N+1 give the same packs (dynamic parts may differ)', () => {
+    const view = digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' });
+    const clock = resolveClock('dwisatpathi', FIX.systems);
+    const a = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-07', null);
+    const b = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-08', null);
+    for (const id of ['family.rasi', 'family.moon', 'family.varga', 'family.star', 'family.dasha', 'family.year'] as const) {
+      expect(b[id].prefix, id).toBe(a[id].prefix);
+      expect(b[id].packHash, id).toBe(a[id].packHash);
+      expect(a[id].prefix, id).not.toContain('2026-11-07');
+    }
+    // the Moon pack names the Moon and every D1 house sign; Node writes no house counted from the Moon
+    expect(a['family.moon'].prefix).toContain('{planet:D1.Mo}');
+    expect(a['family.moon'].prefix).not.toMatch(/from the Moon=\d|H\d+ from the Moon/);
+    // the dasha pack holds only verified systems (no Yogini, no Chara)
+    expect(a['family.dasha'].prefix).not.toMatch(/clock=yogini|clock=chara\(/);
+  });
+});

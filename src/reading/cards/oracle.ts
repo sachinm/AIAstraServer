@@ -212,6 +212,8 @@ export interface CardStoryInputs {
   ownCharts: readonly string[];
   /** the verified systems shown for this chart (stored names) and the periods-only block (`systems.ts`) */
   verifiedSystems: readonly string[];
+  /** the same systems by their plain names, for the request (never the raw ids and aliases) */
+  systemsLine?: string;
   systemsText: string;
   systemsKeys: readonly string[];
   /** the family findings, as written, each citing `{key}` (natal ones kept until the chart data changes) */
@@ -267,7 +269,7 @@ export function storyBlock(card: CardId, s: CardStoryInputs): { text: string; ke
     `STORY CONTRACT (this card: \`${card}\`): write \`story\`, ${TECH_STORY_MIN_WORDS}-${TECH_STORY_MAX_WORDS} words, one continuous text with no headings, in this order: ${STORY_BEATS.join(' → ')}. Name every period with its system, and every placement with its chart, house, sign and star. Fill \`beats\` with one entry per beat: held yes/partly/no/na, the systems it used, and the keys it rests on (cite the maha dasha and the sub-period rows, the year chart, D9 and this card's own chart by key). Where the research has no rule for this lens, say so and do not fill it.`,
     `LENS RECIPE\n${s.recipe}`,
     `THIS CARD'S OWN CHARTS: ${s.ownCharts.join(', ')} (read after D1 and D9)`,
-    `VERIFIED SYSTEMS (read, show and count only these): ${s.verifiedSystems.join(', ') || 'none stored'}`,
+    `VERIFIED SYSTEMS (read, show and count only these): ${s.systemsLine || s.verifiedSystems.join(', ') || 'none stored'}`,
     ...(s.systemsText ? [s.systemsText] : []),
     s.thread ? `LENS THREAD (${s.thread.lens}; the lens lineman's reading of this subject, keyed)\n${s.thread.text}` : 'LENS THREAD: none for this card; read the subject from the data above',
     s.findings.length ? `FAMILY FINDINGS (the chart-family readers; cite their keys)\n${s.findings.map((f) => `## ${f.family}\n${f.text}`).join('\n')}` : 'FAMILY FINDINGS: none stored',
@@ -465,6 +467,8 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
   const issues: ValidationIssue[] = [];
   const limit = deps.timeoutMs ?? getCardsOracleTimeoutMs();
   const ceiling = getCardsOracleMaxOutputTokens();
+  /** the last answer still stopped at its ceiling after its continuations (closed as written): never ready as is */
+  let lastCut = false;
   const ask = async (call: string, extra = ''): Promise<unknown | null> => {
     const t0 = performance.now();
     try {
@@ -503,6 +507,7 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
       );
       markAgentUsed({ cacheOwner: i.cacheOwner }, deps.informUsed);
       if (res.continued) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: ${call}: continued ${res.continued} time(s) at the ${ceiling}-token ceiling${res.stillCut ? '; still cut, closed as written' : ''}`, callId: call });
+      lastCut = res.stillCut;
       const parsed = parseContinuedJson(res.text) as { cards?: unknown } | null;
       const list = parsed && Array.isArray(parsed.cards) ? (parsed.cards as unknown[]) : null;
       calls.push(timingOf('self.oracle', call, i.model, res, performance.now() - t0, list ? 'ok' : 'failed'));
@@ -544,7 +549,7 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
     for (const g of d.gaps) issues.push({ stage: 'oracle', area: i.card, check: 'other', message: `${i.card}: depth${g.unavailable ? ' (input gap: not in the data given)' : ''}: ${g.message}`.slice(0, 300), callId: call });
   };
   /** the card stands: it passed, or only input gaps remain (the data has no such key; filed, never looped on) */
-  const stands = (c: ReturnType<typeof check>) => Boolean(c.card) && (!c.depth || c.depth.gaps.every((g) => g.unavailable));
+  const stands = (c: ReturnType<typeof check>) => Boolean(c.card) && !(storyOn && lastCut) && (!c.depth || c.depth.gaps.every((g) => g.unavailable));
   const call = `card.${i.card}`;
   const first = check(await ask(call));
   if (stands(first)) {
@@ -559,7 +564,8 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
     return { card: first.card, status: first.card ? 'thin' : 'failed', issues, calls, depth: first.depth };
   }
   const repairCall = `${call}.repair`;
-  const reasons = first.card ? (depthRepairNote(first.depth!) ?? '') : `REPAIR: this card failed the checks. Write it again and fix exactly this:\n- ${first.problems.slice(0, 6).join('\n- ')}`;
+  const cutNote = storyOn && lastCut ? 'CUT: the answer stopped at the output limit before the story ended. Write the whole card again; finish the story.' : '';
+  const reasons = first.card ? [depthRepairNote(first.depth!) ?? '', cutNote].filter(Boolean).join('\n\n') : `REPAIR: this card failed the checks. Write it again and fix exactly this:\n- ${first.problems.slice(0, 6).join('\n- ')}`;
   const second = check(await ask(repairCall, reasons));
   if (stands(second)) {
     if (second.depth?.gaps.length) noteDepth(repairCall, second.depth);

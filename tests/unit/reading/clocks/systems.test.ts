@@ -36,7 +36,9 @@ describe('the systems table', () => {
   });
   it('shownSystems: the stored ones that are shown, the year and Patyayini always; the floor', () => {
     const shown = shownSystems(['vimsottari', 'narayana', 'yogini', 'sudasa', 'kendradhi_rasi', 'dwisatpathi', 'ashtottari'], APPLIES);
-    expect(shown.map((s) => s.id)).toEqual(['vimsottari', 'narayana', 'sudasa', 'lagna_kendradi', 'patyayini', 'tithi_pravesha', 'dwisatpathi']);
+    expect(shown.map((s) => s.id)).toEqual(['vimsottari', 'narayana', 'sudasa', 'lagna_kendradi', 'tithi_pravesha', 'dwisatpathi']);
+    // Patyayini is verified but nothing renders its rows yet: never padded in
+    expect(shown.map((s) => s.id)).not.toContain('patyayini');
     expect(shown.find((s) => s.id === 'lagna_kendradi')?.stored).toBe('kendradhi_rasi');
     expect(floorMissing(shown)).toEqual([]);
     expect(floorMissing(shownSystems(['vimsottari'], null))).toEqual(['a sign dasha']);

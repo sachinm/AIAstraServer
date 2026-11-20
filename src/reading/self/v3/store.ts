@@ -51,7 +51,7 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
  */
 export function storyFields(oracle: { story?: string; goodUntil?: string | null } | null | undefined, personal: { story?: string; plainPending?: boolean } | null | undefined): Pick<SelfV3CardContent, 'story' | 'plain' | 'goodUntil'> {
   if (!oracle?.story) return {};
-  const story = redactEngineText(oracle.story.replace(/\s*\{[^{}]+\}/g, '')).trim() || null;
+  const story = redactEngineText(oracle.story.replace(/\s*\{[^{}]+\}/g, '').replace(/\s*\b(?:pressure|ledger|activation|annual|planet|house|point|star|promise|claim):[\w.@/:-]+/gi, '')).trim() || null;
   const plainStory = personal?.story && !personal.plainPending ? redactEngineText(personal.story).trim() || null : null;
   return { story, plain: { story: plainStory, pending: !plainStory }, goodUntil: oracle.goodUntil ?? null };
 }

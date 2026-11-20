@@ -726,3 +726,85 @@ describe('the story contract (doc 09)', async () => {
     expect((await readCardsState(prisma, 'k1', NOW)).cards.body?.state).toBe('queued');
   });
 });
+
+describe('the story contract: reuse, refresh and the per-card stop (doc 09 §3.2, §3.5)', async () => {
+  const { shownSystems } = await import('../../../../src/reading/clocks/systems.js');
+  const many = (n: number) => Array.from({ length: n }, (_, k) => `w${k}`).join(' ');
+  const story = {
+    findings: [
+      { family: 'family.dasha', text: '{activation:vimsottari/1/Ra@2020-01-01} {activation:vimsottari/2/Sa@2026-06-01}' },
+      { family: 'family.varga', text: '{planet:D9.Ju} {planet:D30.Sa}' },
+      { family: 'family.year', text: '{annual:TP2026.D1}' },
+    ],
+    sheets: [],
+    shown: shownSystems(['vimsottari', 'sudasa'], null),
+    periodRows: [{ system: 'sudasa', level: 1, lord: null, sign: 'Le', from: '2020-01-01', to: '2029-01-01', houses: [6] }],
+    threads: {},
+  };
+  const KEYS = ['activation:vimsottari/1/Ra@2020-01-01', 'activation:vimsottari/2/Sa@2026-06-01', 'activation:sudasa/1/Le@2020-01-01', 'annual:TP2026.D1', 'planet:D9.Ju', 'planet:D30.Sa'];
+  const deepOracle = (id: string) => ({ ...goodOracle(id), beats: [{ beat: 'maha', held: 'yes', systems: ['vimsottari'], evidence: KEYS }], story: many(760) });
+  const deepPersonal = (id: string) => ({
+    ...personal(id),
+    spans: frame.spans.map((s) => ({ span: s.id, asks: 'a', obstacle: 'b', step: 'If x, then y.', growth: 'g' })),
+    why: 'w',
+    ladder: { best: 'a', practical: 'b', drift: 'c', floor: 'd' },
+    story: many(380),
+  });
+  const NOW = new Date(`${ASOF}T12:00:00Z`);
+  /** area_builds and technique_outputs in memory */
+  function storePrisma() {
+    const base = memPrisma() as unknown as { areaBuild: unknown };
+    const rows = new Map<string, Record<string, unknown>>();
+    const techniqueOutput = {
+      findUnique: async ({ where }: { where: { cache_key: string } }) => rows.get(where.cache_key) ?? null,
+      upsert: async ({ where, create }: { where: { cache_key: string }; create: Record<string, unknown> }) => {
+        rows.set(where.cache_key, { ...create, created_at: new Date(Date.now() + rows.size) });
+      },
+      update: async () => ({}),
+      findMany: async ({ where }: { where: { digest_version: { startsWith: string } } }) =>
+        [...rows.values()].filter((r) => String(r.digest_version).startsWith(where.digest_version.startsWith)).sort((a, b) => (b.created_at as Date).getTime() - (a.created_at as Date).getTime()),
+    };
+    return new Proxy({}, { get: (_t, p) => (p === 'areaBuild' ? base.areaBuild : p === 'techniqueOutput' ? techniqueOutput : undefined) }) as never;
+  }
+  const fake = (nodes: string[]) => async (o: GeminiCallOptions) => {
+    nodes.push(o.node);
+    const text = o.parts.join('\n');
+    if (o.node.startsWith('self.card.oracle')) return ok(JSON.stringify({ cards: [deepOracle(/THIS CALL: write only the card `(\w+)`/.exec(text)![1]!)] }));
+    return ok(JSON.stringify({ cards: [deepPersonal(/## WRITE[^\n]*\n- (\w+):/.exec(text)![1]!)] }));
+  };
+  const run = (prisma: never, nodes: string[], c = ctx, extra: Record<string, unknown> = {}) =>
+    readCards({ prisma, callGemini: fake(nodes) as never, now: NOW, capUsd: 5, readRest: false, storyContract: true, ...extra }, { ...input(['body']), ctx: c, story });
+
+  it('a confirm tap re-runs only the Personalizer; a paid refresh reads the Oracle again', async () => {
+    const prisma = storePrisma();
+    const n1: string[] = [];
+    await run(prisma, n1);
+    expect(n1.filter((x) => x.startsWith('self.card.oracle'))).toHaveLength(1);
+    // the same day, a confirm answer recorded: a new card key, the same Oracle key
+    const n2: string[] = [];
+    await run(prisma, n2, { ...ctx, stamps: { ...ctx.stamps, confirmHash: 'c2' } } as never);
+    expect(n2.filter((x) => x.startsWith('self.card.oracle'))).toHaveLength(0);
+    expect(n2.filter((x) => x.startsWith('self.personalizer'))).toHaveLength(1);
+    // a paid lens refresh marks the card: the Oracle is read again, never reused
+    await updateCardsState(prisma, 'u1', 'k1', NOW, (d) => {
+      d.force = { body: NOW.toISOString() };
+    });
+    const n3: string[] = [];
+    await run(prisma, n3, { ...ctx, stamps: { ...ctx.stamps, confirmHash: 'c3' } } as never);
+    expect(n3.filter((x) => x.startsWith('self.card.oracle'))).toHaveLength(1);
+  });
+
+  it('past the per-card stop the paid Oracle card is stored with the plain reading pending, and the card queued', async () => {
+    const prisma = storePrisma();
+    const n: string[] = [];
+    const r = await run(prisma, n, ctx, { cardCapUsd: 0.000001 });
+    expect(n.filter((x) => x.startsWith('self.personalizer'))).toHaveLength(0);
+    expect(r.cards.body?.plain).toEqual({ story: null, pending: true });
+    expect((await readCardsState(prisma, 'k1', NOW)).cards.body?.state).toBe('queued');
+    // the next round completes it with the Personalizer alone
+    const n2: string[] = [];
+    await run(prisma, n2);
+    expect(n2.filter((x) => x.startsWith('self.card.oracle'))).toHaveLength(0);
+    expect(n2.filter((x) => x.startsWith('self.personalizer'))).toHaveLength(1);
+  });
+});

@@ -224,6 +224,9 @@ function groupBatcher(run: (cards: CardId[], call: string) => Promise<{ cards: P
   };
 }
 
+/** rounds a card may come back below the depth floor in one day before it is shown failed (doc 09 §3.5) */
+export const THIN_ATTEMPTS = 3;
+
 export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<CardsRunResult> {
   const { ctx } = i;
   const out: CardsRunResult = { results: [], cards: {}, timings: [], issues: [], spentUsd: 0, capReached: false, order: [] };
@@ -342,7 +345,9 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     try {
       // doc 09 §3.2/§3.3: the newest stored row of this card whose Oracle key is this one serves its Oracle card again
       // (a confirm tap, a profile change, or a Personalizer that fell back): only the Personalizer runs
-      const prior = storyOn && !deps.force ? await readStoredCardReading(deps.prisma, ctx.kundliId, i.frame.clock, id) : null;
+      // a charged refresh (deps.force, or a paid lens refresh's `force` mark today) reads the Oracle again: never reused
+      const forced = Boolean(deps.force) || Boolean((await readCardsState(deps.prisma, ctx.kundliId, now)).force?.[id]);
+      const prior = storyOn && !forced ? await readStoredCardReading(deps.prisma, ctx.kundliId, i.frame.clock, id) : null;
       const reuse = prior && prior.oracleKey === oracleKey && prior.oracle?.story ? prior : null;
       const stored = await withTechniqueOutput<StoredCardReading | null>(
         deps.prisma,
@@ -356,7 +361,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
           charts: [{ type: 'pressure_inventory', variant: `system=${i.frame.clock}` }],
           // docs/billing/03: a card a paid lens refresh queued today is read again (its `force` mark in today's doc);
           // doc 09 §3.3: a stored card whose plain story is still pending is completed
-          forceRefresh: Boolean(deps.force) || Boolean((await readCardsState(deps.prisma, ctx.kundliId, now)).force?.[id]) || Boolean(reuse?.key === key && reuse.personal?.plainPending),
+          forceRefresh: forced || Boolean(reuse?.key === key && reuse.personal?.plainPending),
         },
         async () => {
           if (batch) {
@@ -390,10 +395,14 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
             ostatus = oracle.status;
             if (storyOn) oc = { ...oc, goodUntil: goodUntilOf(oc, i.frame, rowDates) };
           }
-          // doc 09 §3.5 per-card safety stop: past it the Personalizer is not bought now; the card is queued
+          // doc 09 §3.5 per-card safety stop: past it the Personalizer is not bought now; the paid Oracle card is stored
+          // with the plain reading pending (never bought twice) and the card is queued for its Personalizer
           if (storyOn && cardSpent() >= (deps.cardCapUsd ?? getReadingCardSpendCapUsd())) {
             queued = `per-card spend stop ${deps.cardCapUsd ?? getReadingCardSpendCapUsd()} reached before the plain reading`;
-            return { value: null, skipStore: true, summary: { card: id, status: 'card_cap' } };
+            const pending = plainPendingCard(oc);
+            const pc0 = withClocks(cardContent(oc, pending, i.frame), i.frame);
+            if (!pc0) return { value: null, skipStore: true, summary: { card: id, status: 'card_cap' } };
+            return { value: { key, card: id, content: { ...pc0, systems: systemsViewOf(i.frame, i.story!.shown, i.story!.periodRows) }, oracle: oc, personal: pending, ledgerHash, frameHash, oracleKey }, skipStore: false, summary: { card: id, status: 'card_cap' } };
           }
           const pInput: PersonalizerV3Input = {
             profile: { ...ctx.sub.profile! },
@@ -411,7 +420,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
               informUsed: deps.informUsed,
               agentId: CARD_PERSONALIZER_AGENT,
               technique: CARD_READING_TECHNIQUE,
-              ...(storyOn ? { maxOutputTokens: getCardsPersonalizerMaxOutputTokens(), timeoutMs: getCardsPersonalizerTimeoutMs() } : {}),
+              ...(storyOn ? { maxOutputTokens: getCardsPersonalizerMaxOutputTokens(), timeoutMs: getCardsPersonalizerTimeoutMs(), cacheCreate: false } : {}),
             },
             ctx,
             [pcall],
@@ -457,7 +466,15 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
       const at = new Date().toISOString();
       // a queued card (thin, past its spend stop, or its plain reading pending) is read again on the next round
-      d.cards[id] = queued ? { state: 'queued', at, error: queued.slice(0, 300) } : content ? { state: 'done', at } : { state: 'failed', at, error: issues.slice(0, 2).map((x) => x.message).join('; ').slice(0, 300) || 'not read' };
+      // a card queued again and again without a served reading (thin every time) stops after THIN_ATTEMPTS rounds the
+      // same day: shown failed (Try again), never re-bought on every build without end
+      const attempts = (d.cards[id]?.attempts ?? 0) + (queued && !content ? 1 : 0);
+      d.cards[id] =
+        queued && !(attempts >= THIN_ATTEMPTS && !content)
+          ? { state: 'queued', at, error: queued.slice(0, 300), ...(attempts ? { attempts } : {}) }
+          : content
+            ? { state: 'done', at }
+            : { state: 'failed', at, error: (queued ?? issues.slice(0, 2).map((x) => x.message).join('; ')).slice(0, 300) || 'not read' };
       d.spentUsd = round6(d.spentUsd + costUsd);
     });
   };

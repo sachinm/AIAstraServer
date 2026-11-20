@@ -22,6 +22,8 @@ export interface CardStateEntry {
   at: string;
   /** staff-only reason (never shown to the person) */
   error?: string | null;
+  /** docs/techniques/09: rounds this card was queued today without a served reading (below the floor) */
+  attempts?: number;
 }
 
 /** the day's state of a kundli's card readings (one `area_builds` row per day) */

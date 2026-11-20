@@ -306,7 +306,7 @@ export function buildSelfFamilyPacks(
   const tpRun = runningTithiPravesha(view, asOf);
   const tpRow = tpRun.row;
   const mudda = tpRun.varsha;
-  yearLines.push(`TODAY ${asOf}`);
+  // docs/techniques/09 §8 step 4: no date of today in the cached pack (the dynamic part carries TODAY)
   if (tpRow && tpRun.year != null) {
     const ak = `annual:TP${tpRun.year}.D1`;
     yearLines.push(
