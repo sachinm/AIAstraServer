@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 560" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+  <title id="t">Three voices and their overlaps</title>
+  <desc id="d">Three overlapping circles: the star dasha (how the person meets it), the sign dasha (what the surroundings deliver) and the Tithi Pravesha year. Each overlap region carries a letter explained in the table under the figure.</desc>
+  <rect width="640" height="560" fill="#ffffff"/>
+  <g font-size="15" font-weight="700" fill="#12284a" text-anchor="middle">
+    <text x="190" y="28">STAR DASHA</text>
+    <text x="190" y="47" font-size="12" font-weight="400">Vimshottari (or its one alternate)</text>
+    <text x="190" y="63" font-size="12" font-weight="400">how the person meets it</text>
+  </g>
+  <g font-size="15" font-weight="700" fill="#10382b" text-anchor="middle">
+    <text x="450" y="28">SIGN DASHA</text>
+    <text x="450" y="47" font-size="12" font-weight="400">Narayana</text>
+    <text x="450" y="63" font-size="12" font-weight="400">what the surroundings deliver</text>
+  </g>
+  <g transform="translate(0,34)">
+    <g fill-opacity="0.38" stroke-width="2">
+      <circle cx="245" cy="180" r="135" fill="#8fb8ff" stroke="#2f5fa8"/>
+      <circle cx="395" cy="180" r="135" fill="#8fe0bd" stroke="#1f7a5a"/>
+      <circle cx="320" cy="300" r="135" fill="#ffd27a" stroke="#b07a00"/>
+    </g>
+    <g font-size="22" font-weight="800" fill="#1a1a1a" text-anchor="middle">
+      <text x="185" y="165">A</text>
+      <text x="455" y="165">B</text>
+      <text x="320" y="385">C</text>
+      <text x="320" y="128">D</text>
+      <text x="238" y="290">E</text>
+      <text x="402" y="290">F</text>
+      <text x="320" y="228">G</text>
+    </g>
+    <g font-size="11" fill="#1a1a1a" text-anchor="middle">
+      <text x="320" y="146">confirmed in</text>
+      <text x="320" y="160">the period</text>
+      <text x="320" y="246">dated</text>
+    </g>
+  </g>
+  <text x="320" y="500" font-size="15" font-weight="700" fill="#4a3500" text-anchor="middle">YEAR · Tithi Pravesha</text>
+  <text x="320" y="520" font-size="12" fill="#4a3500" text-anchor="middle">what this year carries</text>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 430" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+  <title id="t">Forty-two served dasha systems collapse into three voices</title>
+  <desc id="d">A bar of 42 systems split into groups: 1 lead star dasha, 9 conditional alternates of which at most the one that applies is used, 1 Tara, 2 that are one sign system, 5 with a stated purpose, 6 popular systems that are not Rath's, 1 fixed by age, 8 for death, illness or curses, and 9 with no stated purpose. For one person this leaves three voices plus up to two purpose dashas.</desc>
+  <rect width="720" height="430" fill="#ffffff"/>
+  <text x="20" y="30" font-size="16" font-weight="700" fill="#1a1a1a">42 systems are stored for every person</text>
+  <!-- 42 units, 16px each = 672 wide, x from 24 -->
+  <g stroke="#ffffff" stroke-width="2">
+    <rect x="24" y="46" width="16" height="44" fill="#2f5fa8"/>
+    <rect x="40" y="46" width="144" height="44" fill="#8fb8ff"/>
+    <rect x="184" y="46" width="16" height="44" fill="#b7d0f7"/>
+    <rect x="200" y="46" width="32" height="44" fill="#1f7a5a"/>
+    <rect x="232" y="46" width="80" height="44" fill="#8fe0bd"/>
+    <rect x="312" y="46" width="96" height="44" fill="#d9c7f2"/>
+    <rect x="408" y="46" width="16" height="44" fill="#c9c9c9"/>
+    <rect x="424" y="46" width="128" height="44" fill="#f2a7a7"/>
+    <rect x="552" y="46" width="144" height="44" fill="#e3e3e3"/>
+  </g>
+  <g font-size="13" font-weight="700" fill="#1a1a1a" text-anchor="middle">
+    <text x="32" y="74" fill="#ffffff">1</text>
+    <text x="112" y="74">9</text>
+    <text x="192" y="74">1</text>
+    <text x="216" y="74" fill="#ffffff">2</text>
+    <text x="272" y="74">5</text>
+    <text x="360" y="74">6</text>
+    <text x="416" y="74">1</text>
+    <text x="488" y="74">8</text>
+    <text x="624" y="74">9</text>
+  </g>
+  <g font-size="12.5" fill="#1a1a1a">
+    <rect x="24" y="112" width="12" height="12" fill="#2f5fa8"/><text x="44" y="123"><tspan font-weight="700">1 · Vimshottari.</tspan> The lead star dasha, for everyone.</text>
+    <rect x="24" y="136" width="12" height="12" fill="#8fb8ff"/><text x="44" y="147"><tspan font-weight="700">9 · Conditional star dashas.</tspan> Alternates of Vimshottari. Only the one whose condition holds is read.</text>
+    <rect x="24" y="160" width="12" height="12" fill="#b7d0f7"/><text x="44" y="171"><tspan font-weight="700">1 · Tara.</tspan> Takes Vimshottari's place when four or more planets are in kendras. Not flagged by the engine yet.</text>
+    <rect x="24" y="184" width="12" height="12" fill="#1f7a5a"/><text x="44" y="195"><tspan font-weight="700">2 · Narayana and Chara.</tspan> One sign system; Chara is its form for a movable lagna. Never two votes.</text>
+    <rect x="24" y="208" width="12" height="12" fill="#8fe0bd"/><text x="44" y="219"><tspan font-weight="700">5 · Sign dashas with a purpose.</tspan> Sudasa, Drig, Lagnamsaka, Padanadhamsa, Lagna Kendradi. Only for their subject.</text>
+    <rect x="24" y="232" width="12" height="12" fill="#d9c7f2"/><text x="44" y="243"><tspan font-weight="700">6 · Popular, not Rath's.</tspan> Yogini, Tithi Yogini, Kalachakra, karaka, Kaala, Tithi Ashtottari. Tie-break or in-year only.</text>
+    <rect x="24" y="256" width="12" height="12" fill="#c9c9c9"/><text x="44" y="267"><tspan font-weight="700">1 · Naisargika.</tspan> Fixed by age. Background, never a trigger.</text>
+    <rect x="24" y="280" width="12" height="12" fill="#f2a7a7"/><text x="44" y="291"><tspan font-weight="700">8 · Death, illness, curses.</tspan> Shoola, Niryana Shoola, Sthira, Navamsa, Moola, Mandooka, Paryaya, Aayu. Kept out.</text>
+    <rect x="24" y="304" width="12" height="12" fill="#e3e3e3"/><text x="44" y="315"><tspan font-weight="700">9 · No stated purpose in any source.</tspan> Trikona, Yogardha, Chakra, Varnada and five more. Research only.</text>
+  </g>
+  <line x1="24" y1="338" x2="696" y2="338" stroke="#bdbdbd"/>
+  <text x="24" y="366" font-size="15" font-weight="700" fill="#1a1a1a">For one person that leaves three voices:</text>
+  <g font-size="13.5" fill="#1a1a1a">
+    <text x="24" y="392">Star dasha (Vimshottari, with its one alternate)  ·  Sign dasha (Narayana)  ·  This year (Tithi Pravesha)</text>
+    <text x="24" y="414">plus at most two purpose dashas for the card's subject, such as Sudasa for pay or Narayana cast on the D10.</text>
+  </g>
+</svg>

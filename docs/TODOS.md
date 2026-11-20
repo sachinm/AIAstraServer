@@ -3913,3 +3913,74 @@ know, who holds it, what done means.
   stored (older) text overrode the code for all of them. Each replaced text is archived by the trigger in
   `system_prompt_versions`. If any was a deliberate live edit, it must be put into the code `.md`. Owner: Sachin
   (confirm none was a live edit). Done: a yes, or the edits moved into the code.
+
+## Filed 2026-11-20 by the technique atlas (docs/techniques/atlas; live `0fc6bfa` drawn against develop `9fc0cf3`)
+
+Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas is documentation only.
+
+- **P1 · open · The lens recipes and the card-section code disagree on develop.** `cards/techniques.ts`, `area/love.ts`,
+  `area/work.ts`, `area/houseLayers.ts` and `area/career.ts` are identical to live, so Love and Work cards still get D7
+  rows and D7 varga grading for romance, the A5 point (`techniques.ts:270`), and periods from Yogini, Tithi Ashtottari and
+  the karaka dasha (`SECTION_SYSTEMS`, `techniques.ts:216`), plus the karaka family vote and the Work map "of record"
+  built from them. The recipes and `clocks/systems.ts` forbid all of these. Atlas: Love · Board pipeline, Work · Board
+  pipeline. Done: the section reads the route and the verified set, or the recipes say what the section may carry.
+- **P1 · open · Recipes cite a "ROUTE line" that no request carries.** Only `promiseCharts` and `signDasha` of
+  `cards/routing.ts` reach a card (`ownChartsOf`, `signDashaOf`); the route's `houses`, `yearCharts` and `points` have no
+  caller. Done: the route is rendered into the card request, or the recipes stop relying on it.
+- **P1 · open · A conditional dasha that applies still becomes the reading clock** (`self/clock.ts:142`,
+  `conditional_applies`), cutting the spans and printing its periods as "the" maha dasha, while every recipe and
+  `clocks/systems.ts` say Vimshottari leads and the conditional confirms. Atlas: Clocks §1, Shared · Clock layer.
+- **P1 · open · "Narayana at maha dasha level only" is not enforced for tone.** `slices/render.ts` `clockRows` (levels
+  1-3) and `yearFrame.ts` `deepestAt` still read Narayana's level 2-3 rows into the span tone and the agreement count.
+- **P1 · open · The Tithi Ashtottari year rows still set the year's tone** and print as the "Annual Short Clock",
+  although `clocks/systems.ts` marks that system `never`.
+- **P1 · open · Releasing develop switches the card path.** `CARDS_STORY_CONTRACT` and `LENS_LINEMEN` default to on
+  (`config/env.ts:1039, 1079`); the merge message says "flags unchanged". Done: the deploy sets both explicitly.
+- **P1 · open · "Confirmed" is counted five ways** (`yearFrame.ts:115`, `clocks/concordance.ts:59`,
+  `houseLayers.ts:899` repeated at `career.ts:436`, `dashaAssessment.ts:456`, `area/shadeResolver.ts:834`). With three
+  tone clocks, "three or more agree" needs all three; with an applying conditional it can be Vimshottari, its own
+  alternate and one other (two voices). Plan 07 step 9 does not list the shade count. Atlas: Shared · Status rule.
+- **P2 · open · The old timing block is still printed beside the new route** (`cards/oracle.ts`
+  `renderActiveTimingAndVargaBlock`): the Self-only chart list (D7 and D9 for `lagna`, D10 for the time cards), "focus on
+  D1+D9" for every Love and Work card on the one-card path, and the over-or-under-36 line, which contradicts the
+  temperament recipe (D9 leads at any age). `prompts/cards/oracle.md:13,22` still name D7 for Love.
+- **P2 · open · Routed charts missing from the pack.** D16, D20 and D24 carry the 1st house only; D5 and D11 are
+  absent; `family.year` keeps D1, D9, D10, D7, D4 (`self/oracle.ts:529`), so the year D2, D20 and D24 that routes name
+  never reach a card, the year D7 reaches every card, and `ANNUAL_CHART_VARGAS` (1, 9, 10) does not pull the year D4
+  for a new chart.
+- **P2 · open · D10 debilitation is scored as a test** (`area/career.ts:207`, `houseLayers.ts:454`, `vargaLayer`
+  `:593`). Rath: exaltation or debilitation in the D10 both show success (`sanjay-rath/08` rule 1.19), which the Work
+  recipes state. Atlas: Work · D1/D10 check.
+- **P2 · open · The age reaches only two of the four callers of `workD10Check`** (`career.ts:335, 364` pass none), and
+  the real age reaches only the Personalizer; the recipes' years-of-fortune notes cannot be applied by the Oracle.
+- **P2 · open · Catalogue drift on Work.** `work.d10_check` describes a D60 step with no code (`catalog.ts:302-305`);
+  `work.conditional_family` says level 2 weighs 0.5 (`catalog.ts:265`) where the code uses 1.5 (`career.ts:338`); "a vote
+  counts only when D1 and D10 agree" is not what the code does (it drops a lord only on `split`, `career.ts:336`).
+- **P2 · open · `workAnnualVote` overwrites the year lord as lead** whenever the year 10th has a lord (`career.ts:287`).
+- **P2 · open · Sudasa reaches every card.** It is `show: always` with no lens filter; the Self recipes say it is not
+  read on those lenses and doc 08 names it for pay and money cards only. It has no tone rows, so it cannot agree or
+  disagree with a clock. Patyayini is `counted` and named in every recipe but rendered nowhere.
+- **P2 · open · The `family.varga` reader still frames D30 as "physical/constitutional vulnerabilities" and D60 as root
+  karma** (`self/oracle.ts:486, 539`), and its findings now reach every card, against the body recipe and doc 08.
+- **P2 · open · Status words differ.** `prompts/lens/lineman.md` and the code use four (confirmed, leaning, contested,
+  single); the recipes use the five-status gate (adds open, not promised), which is not built.
+- **P2 · open · Doc 09 §4 lists two fixes as done that are still in `houseLayers.ts`:** Jupiter's aspect counted as
+  protection, and the tara matched by a word list.
+- **P2 · open · Craft cards read career-house rows** (10, 6, 1, 2, 11) from the Work section, not the 3rd and 5th their
+  recipe uses; Allies rows still point at Work sub-areas. No plan step covers either.
+- **P3 · open · Stored Work-map changes may not re-read cards.** `work:map/present` is in no card's own keys and not in
+  `STAMP_ALWAYS` (`techniques.ts:397, 425`). Not tested.
+- **P3 · open · `digest/activation.ts:68` treats a conditional dasha with no `applies` value as applying.**
+- **P3 · open · `marriage_children_family` has a `CARD_TECHNIQUES` row but no brief or route;** `YEAR_ROUTED_VARGAS`
+  keeps the year D7 though no route uses it; `buildBoard` passes D7 as the Love area chart to
+  `evaluateActiveDashaWithVargaAndTP` (`houseLayers.ts:956`) and the result is unused.
+- **P3 · open · Docs.** Doc 07 cites `dashaAssessment.ts:449` (the count is at 456); doc 09 lists eight decisions;
+  `docs/techniques/love/love.bonding_chemistry.md` names the engine library in its text.
+- **Decisions for Sachin (drawn amber in the atlas).** (1) Drig for the purpose cards and Naisargika for chapters: plan
+  07 kept both, doc 08 dropped both; Drig is Rath's own clock for spiritual matters. (2) The A5 for friends: plan 07
+  reads BPHS 29.35 as friendship from the A5 counted from the AL, doc 08 reads it as amity between padas and drops it.
+  (3) Reading order: the research says promise then period; the nine-beat thread starts with the maha dasha and reaches
+  the divisional chart at beat 6. (4) Sudasa on every card or only pay and money cards. (5) The wording per overlap
+  region proposed in atlas `05-clocks.md` §3 (only the star-and-sign overlap is Rath's rule). (6) The retire-v2 plan (another session) removes the v2
+  Self path, where the family readers that plan 09 now feeds to every card run.
+
