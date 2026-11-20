@@ -315,7 +315,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
         d.clocks = clocksView;
         d.spentUsd = Math.round((d.spentUsd + layerSpent) * 1e6) / 1e6;
       });
-      const prefix = sharedPrefix(picked.shared);
+      const prefix = sharedPrefix(picked.shared, ctx.asOf);
       const years = (frame.years ?? []).flatMap((y) => [y.from, y.to]);
       const dates = new Set([...frameDates(frame), ...years, ...storedWindowsOf(ctx).endpoints]);
       const answers = answersLine(profile);
@@ -336,7 +336,7 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
           ctx,
           frame,
           ledger: out.ledger,
-          prefix: { text: prefix.text, keys: prefix.keys, hash: prefix.hash },
+          prefix: { text: prefix.text, dated: prefix.dated, keys: prefix.keys, hash: prefix.hash },
           slices: out.sliceSet!,
           board: board.cards,
           ...(area.cards.length ? { packCards: area.cards } : {}),

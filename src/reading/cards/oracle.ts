@@ -174,8 +174,8 @@ export interface CardOracleInput {
   /** the frame as the Oracle suffix renders it (tones, held, clocks, YEARS) */
   frameText: string;
   frameKeys: readonly string[];
-  /** the shared prefix (natal.core, sky.window, year.tp, frame) and its keys */
-  prefix: { text: string; keys: readonly string[] };
+  /** the shared prefix: the cached natal part, the uncached dated block (TODAY, frame) and the keys of both */
+  prefix: { text: string; dated?: string; keys: readonly string[] };
   ledger: AgreedLedger | null;
   /** the `matter.<key>` slices of the card's matters */
   matterSlices: readonly RenderedSlice[];
@@ -389,7 +389,7 @@ export async function readCardOracle(deps: CardOracleDeps, i: CardOracleInput): 
             model: i.model,
             node: `self.card.oracle.${i.card}${call.endsWith('repair') ? '.repair' : ''}`,
             system: promptText(READER_SYSTEM_PROMPT),
-            parts: [i.prefix.text, extra ? `${instr.text}\n\n${extra}` : instr.text],
+            parts: [i.prefix.text, [i.prefix.dated ?? '', instr.text, extra].filter(Boolean).join('\n\n')],
             thinking: 'low',
             maxOutputTokens: CARD_ORACLE_MAX_OUTPUT_TOKENS,
             timeoutMs: limit,

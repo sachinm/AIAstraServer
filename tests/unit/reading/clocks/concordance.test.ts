@@ -203,7 +203,7 @@ describe('the concordance input and answer, trimmed (doc 70 Phase 3 replay fixes
     const frame = { asOf: '2026-11-10', to: '2027-11-10', spans: [{ id: 's1', from: '2026-11-01', to: '2027-02-01', place: 'now' }, { id: 's2', from: '2027-02-01', to: '2027-11-10', place: 'next' }] } as never;
     const r = await runConcordance(
       { prisma: new Proxy({}, { get: () => undefined }) as never, callGemini, maxSpendUsd: 1, now: new Date('2026-11-10T12:00:00Z') },
-      { ctx: { userId: 'u', kundliId: 'k', asOf: '2026-11-10' }, frame, prefix: { text: 'PREFIX', keys: [], hash: 'ph', rows: new Map() }, sheets, model: 'gemini-3.8-flash', frameHash: 'fh', overBudget: false },
+      { ctx: { userId: 'u', kundliId: 'k', asOf: '2026-11-10' }, frame, prefix: { text: 'PREFIX', dated: '', keys: [], hash: 'ph', cacheHash: 'ph', rows: new Map() }, sheets, model: 'gemini-3.8-flash', frameHash: 'fh', overBudget: false },
     );
     expect(seen).toHaveLength(1);
     expect(seen[0]!.thinking).toBe('minimal');

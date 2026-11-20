@@ -101,7 +101,8 @@ const ok = (text: string): GeminiResult => ({ text, usage: { promptTokens: 100, 
 
 /** reads its own clock slice honestly (the graded tone per span and matter) */
 function reader(parts: string[]): string {
-  const spans = [...parts[0]!.matchAll(/^(s\d+) (\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2}) place=/gm)].map((m) => ({ id: m[1]!, from: m[2]!, to: m[3]! }));
+  // the frame rides in the dated block (parts[1]) since docs/techniques/09 §8 step 4
+  const spans = [...parts.join('\n').matchAll(/^(s\d+) (\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2}) place=/gm)].map((m) => ({ id: m[1]!, from: m[2]!, to: m[3]! }));
   const own = parts[1]!.slice(parts[1]!.indexOf('# CLOCK'));
   const rows = [...parseRowLines(own).values()];
   const cells = spans.flatMap((s) => {
@@ -219,8 +220,8 @@ describe('the v3 step with the per-card reading on (doc 70 Phase 3)', () => {
       base({
         callGemini: callGemini as never,
         loadBoard: async () => ({ cards: ['body', 'mind', 'stuck', 'sleep', 'year'], sections: {} }),
-        readCards: async (_d: unknown, i: { board: readonly string[]; ledger: unknown; prefix: { text: string } }) => {
-          seen.push({ board: i.board, ledger: i.ledger, prefix: i.prefix.text });
+        readCards: async (_d: unknown, i: { board: readonly string[]; ledger: unknown; prefix: { text: string; dated?: string } }) => {
+          seen.push({ board: i.board, ledger: i.ledger, prefix: `${i.prefix.text}${i.prefix.dated ?? ''}` });
           return { results: [{ card: 'body', status: 'ok', content: null, timings: [], issues: [], costUsd: 0 }], cards: { body: { line: 'x', spans: [], confirm: null, pattern: null, ladder: null, agreement: null } }, timings: [], issues: [], spentUsd: 0, capReached: false, order: ['body'] };
         },
       }) as never,

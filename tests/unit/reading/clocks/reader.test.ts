@@ -20,11 +20,13 @@ const ME = 'pressure:dasha:vimsottari/2/Me@2027-03-01';
 const cell = (extra: Record<string, unknown> = {}) => ({ span: 's1', matter: 'career_and_standing', tone: 'heavy', sentence: 'The Saturn sub-period loads the tenth.', strength: 2, evidence: [SA], ...extra });
 
 describe('the shared prefix', () => {
-  it('is natal.core, sky.window, year.tp and frame, and carries no clock', () => {
+  it('is natal.core, sky.window and year.tp cached, then the frame in the dated block, and carries no clock', () => {
     expect(picked.clocks.map((s) => s.id)).toEqual(['clock.narayana', 'clock.vimsottari', 'clock.yogini', 'clock.tithi_pravesha']);
     expect(prefix.text.indexOf('# NATAL SLICE')).toBe(0);
     expect(prefix.text.indexOf('# SKY WINDOW')).toBeLessThan(prefix.text.indexOf('# YEAR TP'));
-    expect(prefix.text.indexOf('# YEAR TP')).toBeLessThan(prefix.text.indexOf('# FRAME'));
+    // docs/techniques/09 §8 step 4: the frame (and TODAY) is the uncached dated block
+    expect(prefix.text).not.toContain('# FRAME');
+    expect(prefix.dated).toContain('# FRAME');
     expect(prefix.text).not.toContain('pressure:dasha:');
     expect(sharedPrefix(pickClockLayerSlices(renderSliceSet({ frame: frame(), inventories: [...inventories()].reverse(), natal: natal() })).picked!.shared).hash).toBe(prefix.hash);
   });

@@ -27,7 +27,7 @@ import { markAgentUsed } from '../self/v2/cache.js';
 import { promptHash, promptText, shortHash } from '../self/v2/slices.js';
 import type { YearFrameV3 } from '../self/v3/types.js';
 import { cmp } from '../slices/render.js';
-import { clockTiming, keysOf, nowSpanOf, parseJson, withLimit, words, type ClockCallContext, type ClockCallDeps, type SharedPrefix } from './reader.js';
+import { clockTiming, keysOf, nowSpanOf, parseJson, withDated, withLimit, words, type ClockCallContext, type ClockCallDeps, type SharedPrefix } from './reader.js';
 import {
   CONCORDANCE_AGENT,
   CONCORDANCE_PROMPT,
@@ -353,7 +353,7 @@ export async function runConcordance(deps: ClockCallDeps, i: ConcordanceInput): 
               model: i.model,
               node: 'reading.concordance',
               system: promptText(READER_SYSTEM_PROMPT),
-              parts: [i.prefix.text, [promptText(CONCORDANCE_PROMPT), renderCount(count), 'Return the JSON document only.'].join('\n\n')],
+              parts: [i.prefix.text, withDated(i.prefix, promptText(CONCORDANCE_PROMPT), renderCount(count), 'Return the JSON document only.')],
               // the count is final and the words are short: the least thinking the model allows
               thinking: 'minimal',
               maxOutputTokens: CONCORDANCE_MAX_OUTPUT_TOKENS,

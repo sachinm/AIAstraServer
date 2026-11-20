@@ -74,8 +74,11 @@ export interface CardsRunInput {
   ctx: SelfBuildContext;
   frame: YearFrameV3;
   ledger: AgreedLedger | null;
-  /** the shared prefix the clock layer warmed (natal.core, sky.window, year.tp, frame) */
-  prefix: { text: string; keys: readonly string[]; hash: string };
+  /**
+   * the shared prefix the clock layer warmed: `text` the cached natal part (natal.core, sky.window, year.tp), `dated` the
+   * uncached dated block (TODAY, frame; docs/techniques/09 §8 step 4), `keys` both, `hash` the four slices' hashes
+   */
+  prefix: { text: string; dated?: string; keys: readonly string[]; hash: string };
   /** every slice the build holds; the card reads its `matter.<key>` slices */
   slices: readonly RenderedSlice[];
   /** the person's board, in their order */

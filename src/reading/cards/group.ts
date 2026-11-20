@@ -64,7 +64,7 @@ export interface CardPackInput {
   frame: YearFrameV3;
   frameText: string;
   frameKeys: readonly string[];
-  prefix: { text: string; keys: readonly string[] };
+  prefix: { text: string; dated?: string; keys: readonly string[] };
   ledger: AgreedLedger | null;
   slices: readonly RenderedSlice[];
   portrait: PersonPortrait | null;
@@ -109,7 +109,9 @@ export function buildCardPack(i: CardPackInput, opts: { cells?: 'by-key' | 'per-
   const p = i.ctx.sub.profile!;
   // doc 86: a keyed row the shared data writes again verbatim (the natal core lists the same yoga rows under several
   // headings) is kept at its first place only; the key names it everywhere else
-  const L: string[] = perCard ? [i.prefix.text, i.frameText] : [dedupeKeyedRows(`${i.prefix.text}\n\n${i.frameText}`)];
+  // docs/techniques/09 §8 step 4: the dated block (TODAY, frame) joins the pack here; the pack is cached per build only
+  const shared = [i.prefix.text, i.prefix.dated ?? ''].filter(Boolean).join('\n\n');
+  const L: string[] = perCard ? [shared, i.frameText] : [dedupeKeyedRows(`${shared}\n\n${i.frameText}`)];
   L.push(
     '# THE PERSON',
     ...profileLines(p),

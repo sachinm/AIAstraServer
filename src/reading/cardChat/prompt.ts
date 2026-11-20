@@ -113,6 +113,7 @@ export function cardChatParts(ctx: CardChatContext, question: string, history: r
   const others = c.boardCards.map((x) => `${x.title} (\`${x.id}\`)`).join('; ');
   const turns = capHistory(history);
   const suffix = [
+    ...(ctx.prefix?.dated ? [ctx.prefix.dated] : []),
     promptText(CARD_CHAT_PROMPT),
     `THE CARD: ${c.title} (\`${c.id}\`, ${CARD_CHAT_BOARD_TITLE[c.board]} board)`,
     `CARD BRIEF\n${ctx.brief || '(no brief stored: keep to the card on screen)'}`,
