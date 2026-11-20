@@ -636,12 +636,12 @@ describe('the story contract (doc 09)', async () => {
   const cardOf = (text: string) => /THIS CALL: write only the card `(\w+)`/.exec(text)![1]!;
   const NOW = new Date(`${ASOF}T12:00:00Z`);
 
-  it('the inputs: verified systems only, the stored periods keyed, the generic recipe while the routing table has none', () => {
+  it('the inputs: verified systems only, the stored periods keyed, the lens recipe from the routing table', () => {
     const s = cardStoryInputs('body', ['work_load_and_health'], frame, story);
     expect(s.verifiedSystems).toEqual(expect.arrayContaining(['vimsottari', 'sudasa']));
     expect(s.verifiedSystems).not.toContain('yogini');
     expect(s.systemsKeys).toEqual(['activation:sudasa/1/Le@2020-01-01']);
-    expect(s.ownCharts).toEqual(['D30']);
+    expect(s.ownCharts).toEqual(['D9', 'D30']);
     expect(s.recipe).toContain('maha dasha');
   });
 
