@@ -29,6 +29,7 @@ release gate") and `CLAUDE.md`.
 | 5 | The Personalizer gets the age in years (never prints it). The Personalize wizard also uses age and known facts to suggest which cards apply. |
 | 6 | Doc 07's five decisions at their defaults (age-36 rule kept as a house rule; year D1 before year D9; one gate; nakshatra rules on planets and star dashas, not Narayana; Vimshottari from the Moon). |
 | 7 | Output ceiling 10,000 tokens per Oracle call, one card per call, cards written in parallel. |
+| 8 | Naming (2026-11-19): wherever the product refers to its own reading as "the systems", "systems read" or "timing systems", the words shown to the person are "AdAstra AI": "How AdAstra AI read it", "AdAstra AI read", "On 5 of 7 timing views, AdAstra AI reads this stretch as mixed". Applies to the web, the served sentences and the Personalizer prompt. |
 
 ## 1. Start (checked 2026-11-19: server `develop` `dd1dad5`, live Lambda env, `agent_runs` of the last 4 days)
 
