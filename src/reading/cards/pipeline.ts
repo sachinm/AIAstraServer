@@ -24,6 +24,8 @@ export const BOARD_BUILD_SUBMODULES: readonly string[] = ['family', 'lineman', '
 
 export const PIPELINE_CONSUMERS: Readonly<Record<string, AgentConsumers>> = {
   'family.rasi': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle', 'self.oracle.v2'], what: 'keyed D1 findings (from the lagna), stored in reading_findings_cache' },
+  'family.moon': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle'], what: 'keyed findings with the houses read from the Moon' },
+  'family.star': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle'], what: 'keyed star, star lord and pada findings per planet' },
   'family.varga': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle', 'self.oracle.v2'], what: 'keyed D9 and routed divisional findings' },
   'family.dasha': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle', 'self.oracle.v2'], what: 'keyed findings on the verified dasha systems' },
   'family.year': { consumers: ['lineman.self', 'lineman.love', 'lineman.work', 'self.card.oracle', 'self.oracle.v2'], what: 'keyed findings on this and last Tithi Pravesha year' },

@@ -282,7 +282,7 @@ describe('Self v2 end to end on fixtures (SELF_V2_BUILD=1, every model call mock
 
   it('records wall time and tokens per agent call, thought tokens included', () => {
     const calls = v2!.agents;
-    expect(calls.map((c) => c.call).sort()).toEqual(['family.dasha', 'family.rasi', 'family.sky', 'family.varga', 'family.year', 'oracle.a', 'oracle.b', 'oracle.c', 'self.personalizer']);
+    expect(calls.map((c) => c.call).sort()).toEqual(['family.dasha', 'family.moon', 'family.rasi', 'family.sky', 'family.star', 'family.varga', 'family.year', 'oracle.a', 'oracle.b', 'oracle.c', 'self.personalizer']);
     for (const c of calls) {
       expect(c.status).toBe('ok');
       expect(c.ms).toBeTypeOf('number');
@@ -291,7 +291,7 @@ describe('Self v2 end to end on fixtures (SELF_V2_BUILD=1, every model call mock
     }
     expect(calls.filter((c) => c.agent.startsWith('family.')).every((c) => c.thoughtTokens === USAGE.family.thoughtTokens)).toBe(true);
     expect(calls.filter((c) => c.agent === 'self.oracle').every((c) => c.promptTokens === 11_000 && c.cachedTokens === 8_000 && c.thoughtTokens === 420)).toBe(true);
-    expect(log.filter((n) => n.startsWith('family.'))).toHaveLength(5);
+    expect(log.filter((n) => n.startsWith('family.'))).toHaveLength(7);
     // the figures the report quotes (Lab-style table on the fixture)
     console.log(
       JSON.stringify({

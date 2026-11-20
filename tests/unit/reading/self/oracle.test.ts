@@ -84,12 +84,12 @@ describe('self oracle', () => {
     const v = validateSelfText('Good {planet:D1.Ju}\n\nInvented {planet:D1.Ve}\n\nNo cite', new Set(['planet:D1.Ju']));
     expect(v).toEqual({ text: 'Good\n\nNo cite', dropped: 1 });
   });
-  it('builds all 5 family packs with all stored dasha systems, parses structured blocks, and runs scoped sub-agents + lineman + oracle', async () => {
+  it('builds all 7 family packs (the Moon and the stars added, docs/techniques/09 §3.1) with the verified dasha systems, parses structured blocks, and runs scoped sub-agents + lineman + oracle', async () => {
     process.env.SELF_READING_MODEL = '1';
     const view = digestView('k1', FIX.digest as never, { status: 'ready', version: 'd1.test' });
     const clock = resolveClock('dwisatpathi', FIX.systems);
     const packs = buildSelfFamilyPacks(view, FIX.activation, clock, '2026-11-07', null);
-    expect(Object.keys(packs)).toEqual(['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky']);
+    expect(Object.keys(packs).sort()).toEqual(['family.dasha', 'family.moon', 'family.rasi', 'family.sky', 'family.star', 'family.varga', 'family.year']);
     expect(packs['family.dasha'].prefix).toContain('vimsottari');
     expect(packs['family.dasha'].prefix).toContain('narayana');
     expect(packs['family.dasha'].expiresAt?.toISOString().slice(0, 10)).toBe('2027-01-01');

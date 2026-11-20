@@ -168,7 +168,9 @@ const TECHNIQUE_TO_SUBAGENTS: Readonly<Record<string, SubAgentId[]>> = {
     'oracle.work',
   ],
   // You board v2 (docs/reading-engine/66 §4.8 Layer 3)
-  'self.v2.oracle': ['family.rasi', 'family.varga', 'family.dasha', 'family.year', 'family.sky', 'self.oracle'],
+  'self.v2.oracle': ['family.rasi', 'family.moon', 'family.varga', 'family.star', 'family.dasha', 'family.year', 'family.sky', 'self.oracle'],
+  // docs/techniques/09 §3.1: the lens linemen over the natal prefix and the seven family findings
+  'reading.lens.thread': ['lineman.self', 'lineman.love', 'lineman.work'],
   'self.v2.personalizer': ['self.personalizer'],
   'self.v2.hero': ['self.personalizer'],
   'self.v3.cards': ['self.oracle', 'self.personalizer'],

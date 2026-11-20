@@ -25,9 +25,9 @@ const oracleOut = (): OracleV2Output => ({
 });
 
 describe('Self v2 slices (doc 66 §4.8 Layer 3)', () => {
-  it('builds every slice from the context with no database: five families and the Oracle, owned by the person', () => {
+  it('builds every slice from the context with no database: seven families and the Oracle, owned by the person', () => {
     const s = buildSelfV2Slices(makeCtx(), loaded, makeBriefs());
-    expect(Object.keys(s.families).sort()).toEqual(['family.dasha', 'family.rasi', 'family.sky', 'family.varga', 'family.year']);
+    expect(Object.keys(s.families).sort()).toEqual(['family.dasha', 'family.moon', 'family.rasi', 'family.sky', 'family.star', 'family.varga', 'family.year']);
     for (const sl of [...Object.values(s.families), s.oracle]) {
       expect(sl.cacheOwner).toEqual({ userId: 'u-v2', kundliId: 'k-v2' });
       expect(sl.prefixHash).toMatch(/^[0-9a-f]{24}$/);
