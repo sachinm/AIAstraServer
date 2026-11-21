@@ -33,17 +33,17 @@ Phase 0, the paid replay of doc 09 and retire-v2, is still the first step and st
 | 3 | **Current maha dasha first, then by Tithi Pravesha year.** Not ten years at once, and not the previous maha dasha | **Changed in rev 2** (rev 1 cut sub-period windows over 10 years back and 2 ahead) |
 | 4 | **A queue with a status**, dashboards in sequence, one passing to the next | New in rev 2 |
 | 5 | **The engine pull covers 15 years back and 15 ahead** of Tithi Pravesha charts in every divisional chart; the readings cover 10 and 10 | New in rev 2 |
-| 6 | **A cache lives only as long as the work that reads it** | New in rev 2 |
 
 Open points. Each has a default I will build unless you change it:
 
 | # | Open point | Default |
 |---|---|---|
+| J | **The cache.** You asked for the cache to end as soon as each sub-agent is done (about a minute) and understood that was already built. It is not: today a cache lives 30 minutes from its last use and is deleted when the whole build ends. Ending it after each sub-agent means every call pays for the chart data in full: about **$0.92 a chart** in pass 1 | One cache per chart for the run of the queue, ended when the last job finishes and never alive more than two minutes after its last use: about **$0.13** for the same reads, plus storage for about 12 minutes (about 25 if every call is sequential), which the code cannot price yet. Say "per sub-agent" and I build yours |
 | A | **Money for the year passes.** Reading 20 more years for all 12 dashboards is about **$8.60 a person today and about $17 from January** (estimate, §4.6). The current maha dasha pass is about $0.85 | Build it as you described, nearest years first, under a daily ceiling ($25) and a per-person stop, behind `READING_PREP_YEARS=0` until the first measured run. The cheaper setting (all 20 years for the chart, dashboards' year threads two years each way: about $4.45) is one number |
 | B | **What blocks the dashboards.** You said to wait for the engine to finish everything. The full 15 + 15 pull is 868 engine calls and takes 2–4 hours at today's rate | Dashboards start when everything the **current maha dasha pass** needs has arrived (about 5 minutes). Each year pass waits for its own year. One setting makes it wait for all 868 |
 | C | **Starter cards.** With no Oracle at signup, a new person sees no reading until they choose cards; the first reading then takes about 30 s for the technical story | As you said: nothing until cards are chosen. Writing the eight suggested You cards in the first pass would add about $0.29 a person and make the first open instant |
 | D | **Inside one dashboard's job**, calls that do not depend on each other | Four at a time (the repo's rule). Dashboards themselves strictly one after another. `READING_PREP_PARALLEL=1` makes every call sequential; the first run is timed both ways |
-| E | **Disk.** A chart takes about 88 MB today, so about 30 more charts fit before the disk guard stops writes (§1) | Rebuild the three `kundli_activation` indexes (asked on 19 Nov, unanswered) and decide the disk size before signups open. The preparation refuses to start when the guard says no |
+| E | **Disk.** A chart takes about 88 MB today, so about 35 more charts fit before the disk guard stops writes (§1) | Rebuild the three `kundli_activation` indexes (asked on 19 Nov, unanswered) and decide the disk size before signups open. The preparation refuses to start when the guard says no |
 | F | Lens linemen and the Oracle read the titles of the cards on the person's board, so their answers cannot be prepared before the person chooses | They read the lens's full card list (the same for everyone). Now a prerequisite, with the depth replay table (AGENTS.md rule 5) |
 | G | Standing yes for preparation spend on every new chart | Switch `READING_PREP=1`, stop of $1.50 a chart for the first pass ($3.00 from January), daily ceiling $25, only for verified e-mail and complete birth data. Off until phase 0 passes |
 | H | SQS or the database as the queue | The database, woken by the events the server already uses (§10). SQS is new infrastructure and would need its own yes |
@@ -57,13 +57,13 @@ Open points. Each has a default I will build unless you change it:
 |---|---|
 | Registration invokes the server's own Lambda with a `kundli-sync` event. A lease on `kundlis.queue_started_at` keeps two workers off one chart. A 15-minute sweep picks up what is incomplete | `services/kundliSyncWorker.ts:1-31,166-177,384-447` |
 | The pull is the engine catalogue: 186 natal types and 7 yearly types marked served in `chart_data_types`. Each stored row has a status: ready, fetching, failed or unsupported | `services/chartCatalogSync.ts`; `chartData/registration.ts`; `kundli_data` |
-| For the newest chart the 186 natal rows landed within 2 minutes of signup; the digest took 1 minute 41 seconds after the pull | `kundli_data.fetched_at`, `kundlis.digest_built_at`, chart `e1df0fcf` |
+| For the newest chart about 180 rows landed in the first 2 minutes after signup. How long signup to digest takes is **not in the data**: the charts were re-synced together on 15 Nov and `fetched_at` is overwritten on a refetch (that re-sync went from pull to digest in 1 min 41 s). "About 5 minutes to chart ready" below is an estimate that phase 1 measures | `kundli_data.fetched_at`, `kundlis.digest_built_at`, chart `e1df0fcf` |
 | **There is no single status.** A chart has `queue_status`, `facts_status`, `digest_status`, `last_sync_error` and row counts worked out on request | `schema.prisma:113-128`; `services/chartStatusService.ts` |
 | **A failed, given-up or unsupported row counts as settled**, so "complete" can have holes. The failed-row retry waits 6 hours | `kundliSyncWorker.ts:35,340-348`; `chartStatusService.ts:67` |
 | Three holes on the test chart today, none reported anywhere: the `kaala` pressure row failed on 10 Nov and was never refetched; `kalachakra` has no level-2 rows in its running maha dasha; `aayu` has no running level-1 row | `kundli_data`, `kundli_activation` |
 | Yearly charts are filled later by the digest sweep: 10 years back and 10 ahead, Tithi Pravesha and Varsha in D1, D9, D10 only, at most 40 engine calls a run. The newest chart's 218 yearly rows took about 25 minutes | `digest/annualSet.ts:12-16`; `env.ts:1757-1760` |
 | The test chart holds 31 years (2006–2036) with the Tithi Pravesha chart in 20 divisional charts for 25 of them, from a one-off pull | `kundli_data`, `variant LIKE 'year=%'` |
-| Dasha rows: 42 systems; levels 1–3 from birth to 30 years ahead; level 4 only from 90 days back to 365 ahead, written by a separate worker. Three of the six charts have no level-4 rows | `digest/activation.ts:3-4`; `workers/dashaDeep.ts`; `kundli_activation` |
+| Dasha rows: 42 systems; levels 1–3 from birth to 30 years ahead; level 4 only from 90 days back to 365 ahead, written by a separate Lambda (`aiastra-dasha-deep-worker`) that runs one chart at a time and only for charts someone has opened. Three of the six charts have no level-4 rows | `digest/activation.ts:3-4`; `workers/dashaDeep.ts:12-16`; `workers/dashaDeepFocus.ts:37`; Lambda env |
 | Nothing model-related runs at sync. No reading is queued until a page is opened | `kundliSyncWorker.ts:198-214`; callers of `queueSelfReadingBuild` |
 
 **The current maha dasha, measured on the test chart**
@@ -88,7 +88,7 @@ Open points. Each has a default I will build unless you change it:
 | **A cache is not deleted after each sub-agent.** An explicit cache is created on its second use, lives 30 minutes from its last use, and is deleted when the whole build ends. No branch has a per-agent delete. The price table has no rate for cache storage, so that cost is not recorded | `llm/promptCache.ts:11-61`; `llm/cacheLease.ts:73-93`; `llm/models.ts:38-49`; `git log --all -- src/reading/llm` |
 | Background work runs as events the server sends itself (`kundli-sync`, `kundli-digest`, `self-reading-build`), each with a marker row as its lease and a sweep as its retry. **There is no SQS** in the repo or the package list | `server.ts:143-167`; `digest/event.ts`; `self/buildEvent.ts`; `package.json:39` |
 | Every digest rebuild deletes all stored answers for the chart; rows a day past `valid_to` are swept; `kundli_slices` holds one row per slice with no date | `digest/build.ts:1735-1738`; `techniques/outputStore.ts:552-563`; `schema.prisma:1632-1648` |
-| **Disk: 532 MB for 6 charts, about 88 MB a chart.** `kundli_activation` is 360 MB: 78 MB of rows (281,397) and 282 MB of indexes. The guard stops bulk writes at 70 % of 5 GB, which leaves room for about 30 more charts | `pg_total_relation_size`; `digest/diskGuard.ts` |
+| **Disk: 532 MB for 6 charts, about 88 MB a chart.** `kundli_activation` is 360 MB: 78 MB of rows (281,397) and 282 MB of indexes. The guard is set on staging (`DB_DISK_LIMIT_BYTES` = 5 GB, fill 0.7, so 3,758 MB) but it checks bulk dasha-row writes only. At today's size about 35 more charts fit under it; about 33 with what this plan stores | `pg_total_relation_size`; `digest/diskGuard.ts:1-9`; Lambda env |
 | Card model prices (`gemini-3.8-flash`): input $0.75, cached $0.075, output $3.75 per million tokens, **doubling on 1 January 2027**. Reader model (`gemini-3.1-flash-lite`): $0.25, $0.025, $1.50 | `llm/models.ts:38-56` |
 | The doc 09 pipeline has never run on the live model. **Every time and cost in this plan is an estimate** until phase 0 | doc 09 §8 step 12 |
 
@@ -99,6 +99,11 @@ Open points. Each has a default I will build unless you change it:
 - About 5 minutes after signup the chart is checked and complete for the first pass. About 12 minutes after that, every
   dashboard has its sub-agent answers for the current maha dasha stored (estimate; about 25 minutes if every call is
   sequential). The You dashboard is ready for cards first.
+- **The first reading for a brand-new person is slower than today, and every reading after it is faster.** Today a
+  first board builds in 2–3 minutes once the chart is in. With this plan the You dashboard is ready for cards about
+  11–12 minutes after signup (about 25 if every call is sequential), then the cards take about 45 seconds. A person who
+  chooses cards before that sees the status line, and their dashboard's jobs run first. Open point C (starter cards)
+  and more calls side by side in the chart job are the two ways to shorten it.
 - When the person chooses cards, only the Oracle and the Personalizer run, visible cards first: technical stories in
   about 30 s, plain stories about 15 s after.
 - Opening a dashboard whose stories are stored makes no model call. A refresh after new facts or answers runs only the
@@ -194,8 +199,10 @@ flowchart TD
   and is shown on the admin page. An optional gap is named in the sub-agent's input as "not available" and is never
   filled in. D1, D9, the reading clock and the Tithi Pravesha year are required everywhere; a single unverified dasha
   system is optional.
-- **Level 4** comes from a separate worker that has not run for three of the six charts. Chart-ready asks for it; pass 1
-  waits up to 10 minutes, then goes on with levels 1–3 and names the gap. The level-4 cells are added when the rows land.
+- **Level 4** comes from a separate worker that runs one chart at a time and has not run for three of the six charts.
+  Chart-ready asks it for the new chart; pass 1 waits up to 10 minutes, then goes on with levels 1–3 and names the gap,
+  and the level-4 cells are added when the rows land. With several signups at once, level 4 will often arrive after
+  pass 1. To make pass 1 always wait for it, level 4 becomes a required item (one line), at the cost of that wait.
 - **Retry:** a row that blocks pass 1 is refetched after 1, 5 and 15 minutes, then at every sweep, in place of the
   6-hour wait. After 6 failures it is given up and named. The Retry button and the admin page clear a give-up.
 - **`kundli_pipeline`** holds the result so the queue and the admin page read one row: `stage`, the verdict per need,
@@ -291,16 +298,17 @@ The You dashboard is ready for cards about 6–7 minutes after the chart is read
 | With each answer | the same row | — | the keys it was given, the keys it cited, tokens, time, cost, model, job |
 | The natal context (about 45,000 tokens that every card-model agent reads first) | one Gemini explicit cache per chart **per run of the queue** | model, text, no date | created when a run starts, lives about 2 minutes from its last use, deleted when the last job of the run ends |
 
-- **Cache rule (decision 6).** A slice read by one call is sent as plain input and never cached. Only the natal context
+- **Cache rule (open point J, the default).** A slice read by one call is sent as plain input and never cached. Only the natal context
   is cached, because 27 of pass 1's calls read it. Deleting it after each sub-agent would cost more, not less: creating
   a cache is charged as one full read ($0.034 today), so 27 calls would pay about $0.92 in creations against about
-  $0.13 with one cache for the run. With a two-minute life it cannot outlive the work by more than two minutes. The
-  cache name is kept on the status row so the next job reuses it. Cache storage gets a rate in the price table so it is
+  $0.13 with one cache for the run. With a two-minute life it cannot outlive the work by more than two minutes; the $0.13 leaves out storage, which the price table cannot
+  price yet. The cache name is kept on the status row so the next job reuses it. Cache storage gets a rate in the price table so it is
   recorded.
 - `digest/build.ts` stops deleting every stored answer; an answer is reused only when the hash of the rows it read is
   unchanged. The date sweep skips `reading_prepared`.
 - **Disk.** Estimated addition per chart: about 1 MB for pass 1, about 7 MB for twenty years, about 1 MB for the wider
-  yearly pull. The disk guard runs before each job; a refusal sets the status to `paused`.
+  yearly pull. The same disk limits are checked before each preparation job (the guard covers only dasha-row
+  writes today); a refusal sets the status to `paused`.
 
 ### 4.6 Backend: the year passes
 
@@ -324,8 +332,12 @@ The You dashboard is ready for cards about 6–7 minutes after the chart is read
 
 ### 4.7 Backend: cards, when the person chooses them
 
-- Saving the card choice queues the board build that exists today. It reads the prepared answers. If that dashboard's
-  pass-1 job is not finished, the build claims and runs that job itself under the job's lease, then goes on.
+- Saving the card choice queues the board build that exists today. It reads the prepared answers.
+- **The chart jobs (0a–0c) and the dashboard's own job are prerequisites.** If any is not finished, the build claims it
+  and runs it itself, in order, under the job's lease, then goes on to the cards.
+- **If another invocation holds that job's lease**, the build starts no second run. It moves the dashboard to the front,
+  watches the job row (every 5 s, up to its own 12-minute budget) while the board shows the status line, and goes on
+  when the job is done. If the lease lapses first, the build claims the job.
 - **Order:** the cards on screen first, in deck order, then the rest. The Oracle runs for the chosen cards side by side
   (limit 12, as today); each card's Personalizer starts as its technical story lands. Cards appear one by one.
 - The Oracle reads the lens thread, the weave and the cells for its lens, the family findings it cites, the card brief
@@ -449,7 +461,7 @@ been measured and the sub-agent prompts have settled, because every prompt chang
 |---|---|
 | SQS (FIFO, one group per chart) as the queue | Not now: new infrastructure, IAM and a deploy path, and the status would still live in the database. The queue is one module, so it can move later |
 | One job that prepares everything (rev 1) | Replaced: no order, no status per dashboard, nothing to review step by step |
-| Delete the cache after every sub-agent | Rejected: about $0.92 a chart in cache creation against $0.13; the two-minute life gives the same protection |
+| End the cache after every sub-agent (as Sachin described) | Not the default: about $0.92 a chart against $0.13; priced in open point J, his to choose |
 | Wait for all 868 yearly rows before any dashboard starts | Not the default: 2–4 hours before the first reading. One setting (open point B) |
 | One model call per dasha system | Rejected: 41 calls for the same rows; eight grouped calls write the same cells |
 | Read all level-3 rows of every running maha dasha in pass 1 | Not now: 4,367 rows, about three times the cost; the year passes cover them year by year |

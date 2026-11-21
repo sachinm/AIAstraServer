@@ -4070,7 +4070,7 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   the test chart (`c584c0a3`): the `pressure_inventory` row `system=kaala` has been `failed` since 2026-11-10;
   `kalachakra` has no level-2 rows inside its running maha dasha; `aayu` has no running level-1 row. Doc 11 rev 2
   steps 2–3 (manifest, one status, retry at 1, 5 and 15 minutes). Done: the status names each gap.
-- **P1 · open · Disk: about 88 MB a chart, so about 30 more charts fit under the guard.** 532 MB for 6 charts.
+- **P1 · open · Disk: about 88 MB a chart, so about 35 more charts fit under the guard.** 532 MB for 6 charts.
   `kundli_activation` is 360 MB: 78 MB of rows (281,397) and 282 MB of indexes, about five times what three indexes on
   that many rows should take (estimate: about 55 MB after a rebuild). The `REINDEX CONCURRENTLY` asked on 2026-11-19 is
   still waiting for Sachin's yes. Done: indexes rebuilt, bytes per chart measured again, disk size decided before
@@ -4079,7 +4079,7 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   back and 10 ahead, Tithi Pravesha and Varsha in D1, D9, D10 only, 40 engine calls a run; a new chart's 218 yearly rows
   took about 25 minutes. Sachin asked for 15 + 15 years and every Tithi Pravesha divisional chart (868 rows, 2–4 hours
   at this rate). Doc 11 rev 2 step 4. Done: 868 keys, nearest first, this and last year inside the sync run.
-- **P2 · open · Three of the six charts have no level-4 dasha rows.** The deep-level worker has not run for `75b0d618`,
+- **P2 · open · Three of the six charts have no level-4 dasha rows.** The deep-level worker (`aiastra-dasha-deep-worker`, one chart at a time, only for charts someone opened) has not run for `75b0d618`,
   `7bab9ee9` and `f3d117b0`. Pass 1 of doc 11 reads level 4. Done: chart-ready asks for the rows and the status names
   the gap when they do not land.
 - **P3 · open · Cache storage is not priced and a cache outlives its readers.** `llm/models.ts` has no storage rate, so
