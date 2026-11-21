@@ -4020,3 +4020,31 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   board or lens with a read card lacking a technical story counts as due and costs one question; there is no free re-read
   after a prompt release. Owner: Sachin (confirm the support line for people who ask why). Done: confirmed, or a free
   window added to `deeperReadingReady`'s callers.
+
+## Filed 2026-11-21 by plan 10 (docs/techniques/10-sixty-seconds-fifty-cents.md: 60 s and $0.50 per read)
+
+- **P1 · open · No read is limited in total time, and no money cap is checked before spending.** Per-call timeouts run
+  to 150 s (`config/env.ts:1053`), a build is "stuck" only after 10 minutes (`self/buildEvent.ts:27`), caps are
+  post-spend checks between steps (`cards/run.ts:298`), and 12 cards start under the cap together. Done: plan 10
+  steps 2, 5, 7.
+- **P1 · open · Lens linemen are given no spend cap** (`self/v3/build.ts:388-389`).
+- **P1 · open · Later rounds and "Try again" start with a fresh board cap** (`cards/run.ts:509-525`), so a board can
+  spend the cap up to three times in one build.
+- **P1 · open · Some cost is never counted.** A timed-out or failed call is recorded at $0 though it may be billed
+  (`agents/registry.ts:722-735`); creating the cached prefix (about $0.047 a build) and cache storage have no line in
+  the price table (`llm/models.ts:42-62`).
+- **P1 · open · `agent_runs` has no build or read id,** and no log line or table carries a read's total cost and time
+  (`buildEvent.ts:232,265` log `{status, ms}` to the queue log, which does not reach CloudWatch by default). Done: plan
+  10 step 2 (`reading_units`, `agent_runs.unit_id`).
+- **P1 · open · The develop pipeline (one story per card, lens linemen) has never been measured.** Plan 09's $0.65 /
+  150 s for Self and $0.35 / 110 s for a lens are estimates and both break the new limits. Done: plan 10 step 3.
+- **P2 · open · Prices for the card model double on 2027-01-01** (`PRICE_CHANGES`); a read fitted to $0.40 in November
+  costs about $0.80 in January. [Sachin: plan 10 decision 3] Done: re-fit by 2026-12-15 and gates re-run at that price.
+- **P2 · open · Nothing can hold one lens back;** `BOARDS_V3` is per board and `boards/features.ts` keys are per card.
+  Done: plan 10 step 8 (`READING_UNITS_LIVE`).
+- **P3 · open · Stale comments:** `config/env.ts:946-949` and `self/v2/build.ts:90` say a build uses
+  `READING_SPEND_CAP_USD` (it uses the board cap on develop); `self/v2/build.ts:7` says five family readers (seven run).
+- **P3 · open · The server Lambda's timeout is stated as 300, 600 and 900 s in three places** (`docs/reading-engine/83`
+  line 69, `src/workers/dashaDeep.ts:61`, an earlier entry in this file); not read from AWS on 2026-11-21 (credentials
+  expired). Done: plan 10 step 1.
+
