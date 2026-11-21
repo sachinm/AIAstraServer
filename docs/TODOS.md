@@ -4048,3 +4048,17 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   line 69, `src/workers/dashaDeep.ts:61`, an earlier entry in this file); not read from AWS on 2026-11-21 (credentials
   expired). Done: plan 10 step 1.
 
+
+## Filed 2026-11-21 by the reading-prepared-ahead plan (docs/techniques/11)
+
+- **P2 · open · The clock layer's "valid until" never matches.** `layerValidUntil` (`src/reading/clocks/layerCache.ts:142`)
+  uses a pattern with literal backspace bytes and `d{4}` without a backslash, so it finds no date and the layer cache is
+  valid only to the end of the current stretch. Done: the pattern matches a dated edge (unit test with a real slice).
+- **P1 · open · Every digest rebuild deletes all stored answers for the chart** (`digest/build.ts:1735-1738`), including
+  the yearly top-ups the sweep triggers, so doc 09's stored stories are lost on any top-up. Doc 11 step 3 scopes the
+  delete to answers whose inputs changed. Done: a rebuild leaves an answer with unchanged inputs in place (test).
+- **P2 · open · Nothing model-related runs at sync and no reading is queued**, so every first open pays the whole
+  build. Doc 11 phases 1–3. Done: the preparation job runs at chart ready on staging.
+- **P3 · open · On a first registration the clock pulls run before the digest exists** and wait for the 15-minute sweep
+  (`self/sub/pressure.ts:362-378`). Doc 11 makes "chart ready" the trigger. Done: clocks pulled in the same run as the
+  digest on a new chart.
