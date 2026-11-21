@@ -4062,3 +4062,29 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · On a first registration the clock pulls run before the digest exists** and wait for the 15-minute sweep
   (`self/sub/pressure.ts:362-378`). Doc 11 makes "chart ready" the trigger. Done: clocks pulled in the same run as the
   digest on a new chart.
+
+### Added by rev 2 of doc 11 (2026-11-21, read-only checks on staging)
+
+- **P1 · open · A chart is called complete with holes in it.** A `failed`, given-up or `unsupported` `kundli_data` row
+  counts as settled (`kundliSyncWorker.ts:340-348`, `chartStatusService.ts:67`) and nothing lists what is missing. On
+  the test chart (`c584c0a3`): the `pressure_inventory` row `system=kaala` has been `failed` since 2026-11-10;
+  `kalachakra` has no level-2 rows inside its running maha dasha; `aayu` has no running level-1 row. Doc 11 rev 2
+  steps 2–3 (manifest, one status, retry at 1, 5 and 15 minutes). Done: the status names each gap.
+- **P1 · open · Disk: about 88 MB a chart, so about 30 more charts fit under the guard.** 532 MB for 6 charts.
+  `kundli_activation` is 360 MB: 78 MB of rows (281,397) and 282 MB of indexes, about five times what three indexes on
+  that many rows should take (estimate: about 55 MB after a rebuild). The `REINDEX CONCURRENTLY` asked on 2026-11-19 is
+  still waiting for Sachin's yes. Done: indexes rebuilt, bytes per chart measured again, disk size decided before
+  signups open.
+- **P2 · open · The yearly set is narrower and slower than the dashboards need.** `digest/annualSet.ts` pulls 10 years
+  back and 10 ahead, Tithi Pravesha and Varsha in D1, D9, D10 only, 40 engine calls a run; a new chart's 218 yearly rows
+  took about 25 minutes. Sachin asked for 15 + 15 years and every Tithi Pravesha divisional chart (868 rows, 2–4 hours
+  at this rate). Doc 11 rev 2 step 4. Done: 868 keys, nearest first, this and last year inside the sync run.
+- **P2 · open · Three of the six charts have no level-4 dasha rows.** The deep-level worker has not run for `75b0d618`,
+  `7bab9ee9` and `f3d117b0`. Pass 1 of doc 11 reads level 4. Done: chart-ready asks for the rows and the status names
+  the gap when they do not land.
+- **P3 · open · Cache storage is not priced and a cache outlives its readers.** `llm/models.ts` has no storage rate, so
+  `agent_runs` never shows it; an explicit cache lives 30 minutes from its last use and is deleted only when the whole
+  build ends. No branch deletes it after a sub-agent. Doc 11 rev 2 §4.5 (one cache per run, two-minute life). Done: a
+  storage rate in the price table; no cache alive two minutes after a run.
+- **P3 · open · `ensurePastReadingData` has no caller** (`chartData/registration.ts:132-147`). Done: used by the year
+  passes or removed.
