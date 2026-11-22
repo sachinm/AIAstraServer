@@ -203,6 +203,8 @@ function build(): ChartDataType[] {
   natal({ id: 'relations', family: 'strength', radhaType: 'relations', tier: 'on_demand', sortOrder: 410, label: 'Planet relations (natural, temporary, compound)' });
   natal({ id: 'benefic_malefic', family: 'strength', radhaType: 'benefic_malefic', tier: 'on_demand', sortOrder: 420, label: 'Benefics and malefics (natural and functional, maraka lords)' });
   natal({ id: 'dignities', family: 'strength', radhaType: 'dignities', tier: 'on_demand', sortOrder: 430, label: 'Planet dignities (combust, retrograde, planetary war)' });
+  natal({ id: 'sahams', family: 'special', radhaType: 'sahams', tier: 'on_demand', sortOrder: 432, label: 'Natal sahams (36, natal day/night rule; doc 13 E-R3)' });
+  natal({ id: 'maturity_ages', family: 'special', radhaType: 'maturity_ages', tier: 'on_demand', sortOrder: 434, label: 'Planet maturity ages and dates (tradition; doc 13 E-R7)' });
   // Radha param bhava_madhya_method 1-5, default 1; the stored row is the default method.
   natal({ id: 'bhava', family: 'special', radhaType: 'bhava', tier: 'on_demand', sortOrder: 440, label: 'Bhavas (cusps, lords, occupants)' });
   // Radha params varga (default 1) and chart_method (default 1); the stored row is the D1 default (M16).
