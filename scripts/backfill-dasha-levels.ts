@@ -14,9 +14,7 @@
  * config) and the engine transport env, like the API.
  *
  * Safety (2026-11-09 disk-full incident): only systems pulled complete this run are replaced (a failed pull keeps its
- * rows; all failed writes nothing), and the disk guard reads the database size before the run, before every write and
- * after every kundli. A wet run REFUSES unless DB_DISK_LIMIT_BYTES is set (e.g. 5368709120 for the 5 GB Render disk);
- * DB_DISK_MAX_FILL defaults to 0.7. Read the dry run's byte estimate first.
+ * rows; all failed writes nothing).
  */
 import 'dotenv/config';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
@@ -28,7 +26,6 @@ import { buildActivationRows } from '../src/reading/digest/activation.js';
 import { activationCountsByLevel, replaceActivationBand } from '../src/reading/digest/activationWrite.js';
 import { dashaSystemOfKey } from '../src/reading/digest/activation.js';
 import { buildDigestRows, loadDigestInputs } from '../src/reading/digest/build.js';
-import { createDiskGuard, diskLimitsFromEnv, prismaDiskProbe } from '../src/reading/digest/diskGuard.js';
 import { probeEngine, runLevelsBackfill } from '../src/reading/digest/levelsBackfill.js';
 
 function arg(name: string): string | undefined {
@@ -66,7 +63,6 @@ async function main(): Promise<void> {
           : items;
         return buildActivationRows(use, buildDigestRows(items, { kundliId: id, calcVersions }), { today: new Date().toISOString().slice(0, 10) });
       },
-      disk: createDiskGuard(prismaDiskProbe(prisma), diskLimitsFromEnv()),
       writeBand: (id, rows, band) => replaceActivationBand(prisma, id, rows, band),
       counts: (id) => activationCountsByLevel(prisma, id),
       probe: async () => {

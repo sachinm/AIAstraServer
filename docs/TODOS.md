@@ -4186,3 +4186,16 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · Not in the research at all:** KP, Nadi, Jaimini adhyayas 3–4, K.N. Rao's own text on combining
   dashas, Rath's *Vimsottari and Udu Dasas* ch. 3 (tie-break between conditional dashas), PVR's controlling-planet
   strength test as an engine field.
+
+## Filed 2026-11-22 by the disk-guard removal (branch chore/remove-disk-guard)
+
+- **P3 · open · `stopped_disk` was removed, although doc 11 rev 4 §8 step 2b says it stays readable.** It was only ever
+  a status on the in-memory `BackfillPlanRow` of `src/reading/digest/levelsBackfill.ts`; the progress file
+  (`scripts/backfill-dasha-levels.ts` `progress.mark`) writes only finished kundlis with no status, and no table or
+  migration names it (grep over `src`, `scripts`, `prisma`). `deferred_disk` is kept (stored in `kundli_data.status`,
+  M54 check; read by `deepFreshness` and `dashaDeepFocus.ts`). Done: doc 11 §8 2b says `stopped_disk` was never stored, by
+  whoever next revises doc 11.
+- **P3 · open · `DB_DISK_LIMIT_BYTES` / `DB_DISK_MAX_FILL` are now read by no code** but stay on the Lambda where set (doc
+  11 rev 4 §8 2b leaves `DB_DISK_LIMIT_BYTES` as it is). The 2026-11-10 entry above still calls `scripts/pull-sachin-annual.ts` "disk-guarded"; it
+  now only prints the database size and a byte estimate. Done: the deploy session drops the two env vars from the
+  Lambda configuration when Sachin agrees.

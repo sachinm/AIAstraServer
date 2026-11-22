@@ -34,7 +34,6 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'src/assistant/store.ts': 'public-page assistant log: no account, no personal table',
   'src/lib/dbCheck.ts': 'SELECT 1 at boot',
   'src/workers/dashaDeepSlots.ts': 'pg_advisory_xact_lock(constant) only; the marker count and write use the Prisma client',
-  'src/reading/digest/diskGuard.ts': 'disk guard: pg_database_size(current_database()), pg_total_relation_size(kundli_activation) and count(*); sizes only, reads no row value',
   'src/reading/prompts/registry.ts': 'system prompt rows: no personal data',
   'scripts/check-assistant-store.ts': 'assistant log check script: no personal table',
   'scripts/self-v3-replay.ts': 'doc 68 replay: finds one test kundli id by prefix and swallows raw writes (storage dry); reads no sealed value',
@@ -44,7 +43,7 @@ const REVIEWED_PLAIN: Record<string, string> = {
   'scripts/clock-rows-check.ts':'doc 70 Phase 1 check: database size and one test kundli id by prefix; reads no sealed value',
   'scripts/cache-pack-measure.ts': 'doc 71 Phase 0 measure: reads one test kundli user id through Prisma and swallows raw writes (storage dry); runs no raw SQL',
   'scripts/oracle-slice-sizes.ts': 'counts byte sizes of chart rows; reads no value (reviewed for B1; B4.2 reviews scripts again)',
-  'scripts/pull-sachin-annual.ts': 'one-off annual backfill disk guard: pg_database_size and pg_total_relation_size(kundli_data)/count(*) only; reads no row value',
+  'scripts/pull-sachin-annual.ts': 'one-off annual backfill size readout (no guard since 2026-11-22): pg_database_size and pg_total_relation_size(kundli_data)/count(*) only; reads no row value',
   'src/telemetry/pageTiming.ts': 'page timing telemetry logging: writes timings/spans to page_execution_logs, reads no sealed value',
 };
 

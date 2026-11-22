@@ -64,6 +64,8 @@ patterns below (house-class literals `[6, 8, 12]`, `[1, 4, 7, 10]`, gochara hous
 | B17 | doc 11 §2, `codeReaders/rules.ts:53-54`, doc 76 §0.1, love specs (harsha `>= 15`) | Thresholds without a classical citation (SAV 28/22, harsha 15, ±1.0..1.5 adjustments) | Each threshold gets a source and an `env.ts` setting |
 | B18 | Specs `general.nakshatra`, `self.nakshatra`; engine `avasthas.lunar_astro` | "Pending karma houses" and Lunar-Astro points are presented beside BPHS/Jaimini without a school label | Label the school in the spec and in evidence ids |
 
+B11: Note 2026-11-22: the disk guard was removed on Sachin's instruction; nothing in code now refuses a bulk write when the disk is nearly full (see `docs/techniques/11` rev 4, open point E).
+
 ## C. Engine gaps and bugs that affect the specs (from 03 §12, engine @ `b902bea`)
 
 | # | file:line (engine) | What is wrong | Suggested engine addition |

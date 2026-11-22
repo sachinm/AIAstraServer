@@ -10,22 +10,17 @@
  *   - Never strip on failure: only the systems whose pull came back as a complete tree THIS run (and was stored) are
  *     replaced, per kundli, in one transaction (delete + insert of that kundli's levels 1-3 for exactly those systems).
  *     A failed, locked or empty pull leaves that system's rows untouched; when every pull failed nothing is written.
- *   - Disk guard (src/reading/digest/diskGuard.ts): a wet run refuses without DB_DISK_LIMIT_BYTES; before the run, before
- *     every kundli's write and after every kundli it reads the database size and stops when size + estimate would pass
- *     DB_DISK_LIMIT_BYTES x DB_DISK_MAX_FILL. The dry run prints the byte estimate.
  */
 import { DASHA_DEEP_TYPE, DASHA_LIFELONG_LEVELS, type ChartDataType } from '../chartData/catalog.js';
 import { normalizeDasha } from '../chartData/dashaShape.js';
 import { radhaRequestFields, type ChartDataRepo, type FetchResult, type RadhaFetcher } from '../chartData/store.js';
 import { dashaSystemOfKey, LIFELONG_MAX_LEVEL, type ActivationRowInput } from './activation.js';
-import { DB_DISK_LIMIT_HINT, FALLBACK_ACTIVATION_BYTES_PER_ROW, type DiskGuard, type DiskVerdict } from './diskGuard.js';
 import type { ActivationBand } from './activationWrite.js';
 
 export const BACKFILL_AYANAMSA = 'LAHIRI';
 const LEASE_MS = 90_000;
 /**
- * Rows one kundli adds when nothing better is known (the dry run before the three-level trees are stored, the check
- * before the next kundli): measured 2026-11-09 at 31k-47k level-3 rows per kundli over 47 dasha types, plus levels 1-2.
+ * Rows one kundli adds when nothing better is known (the dry run before the three-level trees are stored): measured 2026-11-09 at 31k-47k level-3 rows per kundli over 47 dasha types, plus levels 1-2.
  */
 export const PLAN_ROWS_PER_KUNDLI = 50_000;
 
@@ -103,8 +98,6 @@ export interface BackfillDeps {
   counts: (kundliId: string) => Promise<Record<number, number>>;
   progress: { done: () => Promise<Set<string>>; mark: (kundliId: string, line: Record<string, unknown>) => Promise<void> };
   probe: () => Promise<EngineProbe>;
-  /** the database disk guard; a wet run refuses without one (or without DB_DISK_LIMIT_BYTES) */
-  disk?: DiskGuard;
   log: (line: string) => void;
   concurrency?: number;
 }
@@ -117,11 +110,10 @@ export interface BackfillPlanRow {
   failed?: number;
   /** systems whose rows were replaced */
   replaced?: string[];
-  /** dry run: rows this kundli is expected to add, and the bytes */
+  /** dry run: rows this kundli is expected to add */
   estimateRows?: number;
-  estimateBytes?: number;
   /** done: every type pulled; partial: some failed (their rows kept, not marked done, a rerun retries); failed: nothing written */
-  status: 'planned' | 'done' | 'partial' | 'skipped_done' | 'failed' | 'stopped_disk';
+  status: 'planned' | 'done' | 'partial' | 'skipped_done' | 'failed';
   error?: string;
 }
 
@@ -130,14 +122,10 @@ export interface BackfillResult {
   types: string[];
   probe: EngineProbe | null;
   refused: boolean;
-  /** the disk guard stopped the run (before it or part-way) */
-  stoppedForDisk: boolean;
-  disk: DiskVerdict | null;
   rows: BackfillPlanRow[];
 }
 
 const fmt = (c: Record<number, number>) => [1, 2, 3, 4, 5, 6].map((l) => `L${l}=${c[l] ?? 0}`).join(' ');
-const mb = (b: number) => `${(b / 1_048_576).toFixed(1)} MB`;
 
 async function pool<T>(items: readonly T[], n: number, run: (t: T) => Promise<void>): Promise<void> {
   let i = 0;
@@ -155,13 +143,11 @@ export async function runLevelsBackfill(deps: BackfillDeps, opts: { dryRun: bool
   // fail early (and in the dry run too) if the catalogue would ever ask for more than three levels
   for (const t of types) lifelongRequest(t);
   const ids = await deps.listKundlis({ ...(opts.kundliId ? { kundliId: opts.kundliId } : {}), ...(opts.limit ? { limit: opts.limit } : {}) });
-  const out: BackfillResult = { dryRun: opts.dryRun, types: types.map((t) => t.id), probe: null, refused: false, stoppedForDisk: false, disk: null, rows: [] };
+  const out: BackfillResult = { dryRun: opts.dryRun, types: types.map((t) => t.id), probe: null, refused: false, rows: [] };
   deps.log(`dasha levels backfill: ${ids.length} kundli(s), ${types.length} dasha types to ${DASHA_LIFELONG_LEVELS} levels${opts.dryRun ? ' (dry run: nothing is fetched or written)' : ''}`);
   const done = await deps.progress.done();
 
   if (opts.dryRun) {
-    const bpr = deps.disk ? await deps.disk.bytesPerRow() : null;
-    let totalRows = 0;
     for (const kundliId of ids) {
       const before = await deps.counts(kundliId);
       if (done.has(kundliId)) {
@@ -171,52 +157,20 @@ export async function runLevelsBackfill(deps: BackfillDeps, opts: { dryRun: bool
       }
       const stored = await deps.buildRows(kundliId, {}).then((r) => r.length).catch(() => 0);
       const estimateRows = Math.max(stored, PLAN_ROWS_PER_KUNDLI);
-      totalRows += estimateRows;
-      const estimateBytes = bpr != null ? Math.ceil(estimateRows * bpr) : undefined;
-      out.rows.push({ kundliId, before, status: 'planned', estimateRows, ...(estimateBytes != null ? { estimateBytes } : {}) });
-      deps.log(`${kundliId.slice(0, 8)} would re-pull ${types.length} types and rebuild levels 1–3; now ${fmt(before)}; adds ~${estimateRows} rows${estimateBytes != null ? ` ≈ ${mb(estimateBytes)}` : ''}`);
+      out.rows.push({ kundliId, before, status: 'planned', estimateRows });
+      deps.log(`${kundliId.slice(0, 8)} would re-pull ${types.length} types and rebuild levels 1–3; now ${fmt(before)}; adds ~${estimateRows} rows`);
     }
-    if (deps.disk) {
-      out.disk = await deps.disk.check(totalRows);
-      deps.log(`dry-run byte estimate: ${totalRows} rows × ${(bpr ?? 0).toFixed(0)} B ≈ ${mb(out.disk.estimateBytes)} for ${out.rows.filter((r) => r.status === 'planned').length} kundli(s)`);
-      deps.log(out.disk.message);
-      if (out.disk.thresholdBytes != null && !out.disk.ok) {
-        const room = Math.max(0, out.disk.thresholdBytes - out.disk.sizeBytes);
-        deps.log(`the wet run would stop after about ${Math.floor(room / (PLAN_ROWS_PER_KUNDLI * (bpr ?? FALLBACK_ACTIVATION_BYTES_PER_ROW)))} kundli(s)`);
-      }
-    } else deps.log(`no disk guard: ${DB_DISK_LIMIT_HINT}`);
     return out;
   }
 
-  // wet run: the disk guard first (no engine call, no write without it), then the engine probe
-  if (!deps.disk || deps.disk.limits.limitBytes == null) {
-    out.refused = true;
-    deps.log(`refused: ${deps.disk?.limits.problem ?? `no disk guard: ${DB_DISK_LIMIT_HINT}`}`);
-    return out;
-  }
-  const disk = deps.disk;
-  const stop = (v: DiskVerdict, where: string): void => {
-    out.disk = v;
-    out.stoppedForDisk = true;
-    out.refused = true;
-    deps.log(`stopped ${where}: ${v.message}`);
-  };
-  if (ids.some((id) => !done.has(id))) {
-    const v = await disk.check(PLAN_ROWS_PER_KUNDLI);
-    out.disk = v;
-    deps.log(v.message);
-    if (!v.ok) {
-      stop(v, 'before the run');
-      return out;
-    }
-  }
+  // wet run: the engine probe first (no engine pull, no write without it)
   out.probe = await deps.probe();
   if (!out.probe.ok) {
     out.refused = true;
     deps.log(`refused: ${out.probe.reason}`);
     return out;
   }
-  for (const [index, kundliId] of ids.entries()) {
+  for (const kundliId of ids) {
     const before = await deps.counts(kundliId);
     if (done.has(kundliId)) {
       out.rows.push({ kundliId, before, status: 'skipped_done' });
@@ -267,12 +221,6 @@ export async function runLevelsBackfill(deps: BackfillDeps, opts: { dryRun: bool
       } else {
         const systems = [...new Set(Object.keys(fresh).map(dashaSystemOfKey).filter((s): s is string => Boolean(s)))].sort();
         const rows = (await deps.buildRows(kundliId, fresh)).filter((r) => r.level >= 1 && r.level <= LIFELONG_MAX_LEVEL && systems.includes(r.system));
-        const v = await disk.check(rows.length);
-        if (!v.ok) {
-          out.rows.push({ kundliId, before, pulled, failed, status: 'stopped_disk', error: v.message });
-          stop(v, `before writing ${kundliId.slice(0, 8)}`);
-          return out;
-        }
         await deps.writeBand(kundliId, rows, { minLevel: 1, maxLevel: LIFELONG_MAX_LEVEL, systems });
         const after = await deps.counts(kundliId);
         const status = failed ? 'partial' : 'done';
@@ -286,15 +234,6 @@ export async function runLevelsBackfill(deps: BackfillDeps, opts: { dryRun: bool
       const error = String((err as Error).message ?? err).slice(0, 300);
       out.rows.push({ kundliId, before, status: 'failed', error });
       deps.log(`${kundliId.slice(0, 8)} failed (its rows are as they were): ${error}`);
-    }
-    // after every kundli: is there room for the next one?
-    if (index < ids.length - 1) {
-      const v = await disk.check(PLAN_ROWS_PER_KUNDLI);
-      out.disk = v;
-      if (!v.ok) {
-        stop(v, `after ${kundliId.slice(0, 8)}`);
-        return out;
-      }
     }
   }
   return out;
