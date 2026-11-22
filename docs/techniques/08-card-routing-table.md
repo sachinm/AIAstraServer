@@ -30,6 +30,15 @@ only chooses which rows a card is given.
 - **Source tags:** [Rath] his own text · [Student] Rao or Poddar · [Text] a classical verse · [Inferred] assembled by
   the research · gap. File numbers refer to `docs/deep-research/sanjay-rath/` unless named; "r" is a rule number.
 
+## Dasha systems for every card (amended 2026-11-21, doc 12)
+
+**Every card on every lens reads every dasha system that applies to the person, for the running and the next maha
+dasha.** What is counted is the voice, not the system: the star voice (Vimshottari with the conditional dasha that
+applies), the sign voice (Narayana), the lens's purpose voice (the "Sign dasha" column below) and the Tithi Pravesha
+year. Two voices confirm; at most four are counted; the other systems are reported as support. The rule, the voices
+and the statuses are in `docs/techniques/12-confirming-across-dasha-systems.md`. This takes effect with the build of
+doc 11 (period readers and the weave); until then the list below is what the cards are given.
+
 ## Verified dasha systems (plan 09 §1, decision 2)
 
 Read, named and counted: Vimshottari (all levels); Narayana at maha dasha level only; Sudasa (Work and money cards);

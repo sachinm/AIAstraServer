@@ -81,6 +81,12 @@ flowchart TD
   line or a retrograde signal (`cards/group.ts:126-133` passes neither).
 - The pack has no houses counted from the Moon. Node may not count them; the model may read them from the signs.
 
+> **Amended 2026-11-21 (doc 12, doc 11 rev 3).** Every dasha system that applies to the person is read, for the running
+> and the next maha dasha; the table below becomes the list of *counted voices and verified systems*, not the list of
+> what is read. In the story order of §2, the first beat is "the maha dasha: the running one, its closing stretch, and
+> the next one with what changes", and the beat "the other verified systems" becomes "the other systems that apply:
+> which voices confirm and which only support". Takes effect with the build of doc 11.
+
 **Systems that pass decision 2 for the test chart** (`dasha.applicable`: only Dwisaptati applies of nine conditional):
 
 | Shown and counted | Why |

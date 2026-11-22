@@ -4070,7 +4070,7 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   the test chart (`c584c0a3`): the `pressure_inventory` row `system=kaala` has been `failed` since 2026-11-10;
   `kalachakra` has no level-2 rows inside its running maha dasha; `aayu` has no running level-1 row. Doc 11 rev 2
   steps 2–3 (manifest, one status, retry at 1, 5 and 15 minutes). Done: the status names each gap.
-- **P1 · open · Disk: about 88 MB a chart, so about 35 more charts fit under the guard.** 532 MB for 6 charts.
+- **P1 · indexes done 2026-11-21, disk size still open · Disk: was about 88 MB a chart; now about 49 MB, so about 70 more charts fit under the guard.** The three indexes were rebuilt on 2026-11-21 (282 MB → 44 MB; database 532 MB → 294 MB; record in `docs/db-maintenance/2026-11-21-kundli-activation-index-rebuild.md`). Still open: decide the disk size before signups open. Earlier text: 532 MB for 6 charts.
   `kundli_activation` is 360 MB: 78 MB of rows (281,397) and 282 MB of indexes, about five times what three indexes on
   that many rows should take (estimate: about 55 MB after a rebuild). The `REINDEX CONCURRENTLY` asked on 2026-11-19 is
   still waiting for Sachin's yes. Done: indexes rebuilt, bytes per chart measured again, disk size decided before
@@ -4088,3 +4088,40 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   storage rate in the price table; no cache alive two minutes after a run.
 - **P3 · open · `ensurePastReadingData` has no caller** (`chartData/registration.ts:132-147`). Done: used by the year
   passes or removed.
+
+### Added by rev 3 of doc 11 and doc 12 (2026-11-21, read-only checks)
+
+- **P1 · open · The digest rebuild rewrites every dasha row of a chart, so the indexes will bloat again.**
+  `digest/build.ts:1768-1802` deletes and re-inserts a chart's level 1–3 rows on every rebuild, and it is not covered
+  by the disk guard. Done: a rebuild writes only rows that changed; re-check the index-to-rows ratio (0.6 on
+  2026-11-21; rebuild again above 1.5).
+- **P1 · open · Six dashas that do not apply to the chart are stored and can be read.** `dasha.applicable` on the test
+  chart says Ashtottari, Chaturashiti-sama, Dwadashottari, Panchottari, Shatabdika and Shashtihayani do not apply, and
+  Shodashottari and Shat-trimsha-sama are unchecked, yet all eight have lifelong rows in `kundli_activation` (family
+  `other`). `self/oracle.ts:261` decides from the row's family, not from the engine's verdict. Doc 12 §2, doc 11 rev 3
+  step 6. Done: applicability read from the verdict; the eight absent from every slice.
+- **P1 · open · Three engine-data holes on the test chart (`c584c0a3`), detail.** (a) `pressure_inventory`
+  `system=kaala` failed 2026-11-10 and is never retried, because the sweep only counts four ready clock rows.
+  (b) Kalachakra has 8 level-1 rows and no level 2 or 3 at all. (c) Aayu has no period between 2016-10-22 and
+  2027-12-13. Done: each is a named gap in the manifest; (b) and (c) raised with the engine.
+- **P2 · open · The shared readers are written for the Self board.** The data they read is the same for every
+  dashboard, but `FAMILY_SYSTEM_PROMPTS` and the pack texts ask for "the self, mind, and body houses"
+  (`self/oracle.ts:456,497,531-548`) and the natal context carries only the 12 Self area briefs. Love and Work lenses
+  therefore get findings slanted to Self. Doc 11 rev 3 step 8 (subject-neutral prompts; depth replay when paid runs
+  are allowed).
+- **P2 · open · The Love and Work house layers are recomputed on every build and not stored, and the lens linemen do
+  not read them** (`cards/techniques.ts:441-477`, `lens/lineman.ts:76-95`). Doc 11 rev 3 step 4 and step 8.
+- **P2 · open · Nothing records which upstream results a technique used or where they are stored.** A family-reader
+  cache hit writes no `agent_runs` row (`families/run.ts:121`). Doc 11 rev 3 §4.5 (`prep/requirements.ts`).
+- **P2 · open · No limit on model calls in flight.** `llm/gemini.ts` retries once on 429/500/503 and the readers use
+  unbounded `Promise.all`. Doc 11 rev 3 step 5 adds a limiter before twelve period readers run together.
+- **P3 · open · Research files still give two withdrawn claims as Rath's** ("Sudasa when the Moon sign is stronger",
+  "Narayana is more accurate for marriage") in `docs/deep-research/sanjay-rath/07` L73/L90, `08` W1 and `09` M2/M7;
+  `04` §8 withdrew them and the lens recipes already forbid both. Also: `docs/research/sanjay-rath-open-items-2026-11-21.md`
+  says *Narayana Dasa* was not read while `04` says it was; Yogini is the "main agreement dasha" in `yogini.md` §8 and
+  a tie-breaker in the atlas. Done: the three files corrected to match `04` and doc 12.
+- **P3 · open · Engine requests from doc 12 §8:** a dasha-entry chart for the next maha dasha; Tara's condition and
+  the hora rules for Shodashottari and Shat-trimsha-sama in `dasha.applicable`; Narayana on a divisional chart.
+- **P3 · open · `last_analyze` on `kundli_activation` was empty before 2026-11-21** although an `ANALYZE` was run on
+  2026-11-19; the statistics counters look reset (a database restart or upgrade to 18.6). No action; noted for the
+  next maintenance record.

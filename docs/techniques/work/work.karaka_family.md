@@ -90,3 +90,23 @@ Integrating Priority #2 capabilities from `docs/reading-engine/80-radha-and-cata
   - Enforces `assertOwnAccount(ctx.userId, targetUserId)` (`src/graphql/rbac.ts:62`).
   - `AreaBuild`, `TechniqueOutput`, `KundliDigest`, and `KundliData` are encrypted at rest under `SEALED_MODELS` (`src/lib/pii/fields.ts`, `pii2:v1` AES-256-GCM).
   - HTTP responses send `Cache-Control: private, no-store, no-cache, must-revalidate`.
+
+---
+
+## Dasha systems read by this technique (rule of 2026-11-21, `docs/techniques/12`)
+
+This section overrides any narrower list of dasha systems above.
+
+- **Which systems:** every dasha system the engine says applies to the person (`dasha.applicable`). A conditional
+  dasha that does not apply, or that the engine has not checked, is not read.
+- **Which periods:** for each of those systems, the **running maha dasha** (with its sub-periods and its closing
+  stretch) and the **next maha dasha** (its lord or sign, its start date, its first sub-period, and what changes).
+- **How they confirm:** the star voice (Vimshottari with the conditional dasha that applies) and the sign voice
+  (Narayana) must both point to this technique's significators for "confirmed". Systems of one family are one voice.
+  At most four voices are counted (star, sign, purpose, year); every other system is reported as support and never
+  raises the count. Longevity dashas are read and never named to the person.
+- **Tested against, for this technique:** the Amatyakaraka and the 10th from it.
+- **Purpose voice:** none: the karaka dashas are read and reported as support, never counted.
+- **Where the reading comes from:** the stored cells and the weave of the preparation queue (`docs/techniques/11`
+  §4.4), not a fresh read of the dasha rows. The code and the lens recipes change with that build; until then this
+  technique reads the systems listed above.
