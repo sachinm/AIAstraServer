@@ -26,6 +26,7 @@ import { readCardReadings } from '../cards/store.js';
 import type { CardsStateDoc } from '../cards/types.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../self/buildEvent.js';
 import { lensRefreshOutcome } from './lensRefreshSettle.js';
+import { preparingRefusal } from '../pipeline/types.js';
 import { lensValidity } from './lensValidity.js';
 import { getBoardV3, lensDeck, type BoardV3Deps } from './v3Service.js';
 import { isBoardLens, type AreaV3Board, type BoardLens, type BoardV3CardId } from './v3Cards.js';
@@ -69,6 +70,8 @@ export async function refreshBoardLens(deps: LensRefreshDeps, userId: string, bo
   );
   const body = read.body;
   if (body.status === 'no_kundli') return { status: 404, body: { error: 'no_kundli' } };
+  // doc 11 §4.8: the gate the board read just asked; locked, nothing is marked, held or queued
+  if (body.pipeline?.locked) return { status: 409, body: { ...preparingRefusal(body.pipeline) } };
   if (body.status === 'preparing') return { status: 409, body: { error: 'not_ready', code: 'not_ready' } };
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 404, body: { error: 'no_kundli' } };

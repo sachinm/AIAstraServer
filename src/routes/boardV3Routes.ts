@@ -7,6 +7,8 @@
  *                                               | 404 { error: 'board_v3_off' } | 400 unknown_board | 503 off | timeout
  *   POST /api/board/:board/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404
  *                                               | 409 already_reading | 503 off
+ *                                               | 409 { error, code: 'preparing', pipeline } (the reading gate,
+ *                                                 docs/techniques/11 §4.8: nothing marked or queued)
  *   POST /api/board/:board/v3/confirm         { claimId, answer } → 204 | 400 bad_claim | bad_answer
  *
  * PUT /api/board/:board/v3/layout stays in boardCardsRoutes.ts and is dispatched there on the body's shape.
@@ -20,6 +22,7 @@ import { isAreaV3Board, type AreaV3Board } from '../reading/boards/v3Cards.js';
 import { getBoardV3, readBoardV3Card, writeConfirmBoardV3, type BoardQueueDeps, type BoardV3Deps } from '../reading/boards/v3Service.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
 import { BudgetExceeded, ifNoneMatchHas, strongETag, withinBudget } from './selfV3Routes.js';
+import { preparingRefusal } from '../reading/pipeline/types.js';
 
 export interface BoardV3RouteDeps {
   prisma: PrismaClient;
@@ -102,6 +105,7 @@ export function registerBoardV3Routes(app: express.Express, deps: BoardV3RouteDe
     if (!u) return;
     try {
       const r = await readBoardV3Card(deps.prisma, u.userId, u.board, String(req.params.id ?? ''), deps.cards ?? {});
+      if (!r.ok && r.error === 'preparing') return res.status(409).json(preparingRefusal(r.pipeline));
       return r.ok ? res.status(202).json({ state: r.state }) : res.status(r.status).json({ error: r.error });
     } catch (e) {
       console.error('[board:v3:card-read]', (e as Error).message);

@@ -222,5 +222,6 @@ export function buildSelfV3Response(i: CardViewsInput & { layout: SelfBoardLayou
     features: {},
     // the key is always sent (null until the diagnosis card's line is served; getSelfV3 sets it after the features)
     headerLine: null,
+    ...(i.v2.pipeline ? { pipeline: i.v2.pipeline } : {}),
   };
 }

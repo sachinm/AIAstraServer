@@ -4186,3 +4186,52 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · Not in the research at all:** KP, Nadi, Jaimini adhyayas 3–4, K.N. Rao's own text on combining
   dashas, Rath's *Vimsottari and Udu Dasas* ch. 3 (tie-break between conditional dashas), PVR's controlling-planet
   strength test as an engine field.
+
+## Filed 2026-11-22 by the prep phase 1 build (branch feat/prep-p1-status)
+
+- **P1 · open · Deliverable C of doc 11 phase 1 is not built** (stopped on the owner's instruction). Not done:
+  `src/reading/pipeline/retry.ts` (refetch at 1, 5, 15 minutes, then every sweep, give up after 6); the four waits it
+  must replace (`store.ts` give-up at `CHART_DATA_FAILED_MAX_TRIES`=3, the 6 h settle in `findIncompleteKundlis`
+  `kundliSyncWorker.ts:SWEEP_FAILED_RETRY_MS`, `ANNUAL_FAILED_BACKOFF_MS` 6 h in `annualSet.ts`, the 24 h
+  `SELF_V2_PRESSURE_RETRY_HOURS` wait in `loadPressureInventory`); the fix that `findKundlisMissingClocks` counts rows
+  against a number, not against the clock set, so a failed clock row is never asked again; this and last year's yearly
+  rows pulled inside the registration run (before `queueDigestBuild` in `processOneKundliRow`); the dry-run of the
+  wider span. The env helpers `getAnnualSpanYears` (default 10) and `isAnnualTpAllVargas` (default off) are added in
+  `config/env.ts` but nothing reads them yet. Done: doc 11 step 3's checks.
+- **P1 · open · The `kaala` clock row fails because the engine refuses it.** Test chart `c584c0a3`:
+  `pressure_inventory` `system=kaala` failed 2026-11-10 with the engine's "invalid export type" answer. A retry will
+  not fix it; it is named as a gap by the manifest (`clock_failed`). Done: the engine serves the type for `kaala`, or
+  `kaala` is left out of the pulled clock set.
+- **P2 · open · A fourth hole on the test chart: `dasha.saptharishi_nakshathra` is stored `ready` but has no
+  activation rows** (read-only probe 2026-11-22: 43 stored dasha types, 42 systems in `kundli_activation`). The
+  manifest names it `no_periods`. Done: the engine payload checked; empty answer raised with the engine or the digest
+  fixed to read it.
+- **P2 · open · The build marker claim is still check-then-write** (`self/buildEvent.ts` `queueSelfReadingBuild`). A
+  single statement cannot test the 10-minute age: `started_at` lives in the sealed `area_builds.result`. Done: a plain
+  `started_at` column (migration) and an `UPDATE … WHERE` claim.
+- **P2 · open · The gate locks while the digest is `stale`** (plain reading of doc 11 §4.8 "digest not ready").
+  `markDigestInputsChanged` marks a ready digest stale whenever new engine rows land (yearly top-ups), so an existing
+  chart is locked for the few minutes until the digest sweep rebuilds it. Decide: keep, or treat `stale` as ready.
+- **P2 · open · A clock switch during a running build now answers 409 `preparing`** (the gate locks on any running
+  build). Doc 66 §4.4 had a switch queue a build over the old clock. Follows doc 11 §4.8; the web must show it.
+- **P2 · open · Phase 1 tests not run (owner's instruction, 2026-11-22).** `tests/unit/reading/pipeline/manifest.test.ts`
+  passed once (9 of 9) before the stop; `tests/unit/reading/prep/gate.test.ts` was written and never run (some card ids
+  and layout bodies in it are guesses); the existing suites (`tests/unit/reading`, `workers`, `pii`, `graphql`,
+  `chartStatus`, `kundliQueue*`, `rawSqlAllowList`) were not run after the gate went into `getSelfV2`, the card reads, the
+  layout saves, the clock switch and the refresh route. Done: all run green.
+- **P3 · open · M56 (`kundli_pipeline`) is written, not applied.** Until it is, the status is computed and logged
+  (`kundli_pipeline` event) but not stored, and the gate builds its stage from the chart status and the digest. The
+  `npx prisma generate` for this branch regenerated the shared client in the main checkout's `node_modules` (the
+  junction): generate again from the main checkout when this branch is done.
+- **P3 · open · The gate fails open.** A failed read in `prep/gate.ts` returns an open gate (logged
+  `reading_gate_read_failed`), so a database hiccup keeps today's behaviour rather than locking every reading.
+- **P3 · open · `READING_PREP=1` sets the stage to `preparing` after chart ready but the gate does not lock on it yet**
+  (the job list and the 15-minute fallback are doc 11 phase 2, step 5). Do not turn the flag on before phase 2.
+- **P2 · open · The manifest's dasha checks need tuning against the real charts** (read-only `scripts/gate-check.ts`,
+  2026-11-22, all 6 charts open). Real holes found beyond the three: Kalachakra level 1 only and
+  `saptharishi_nakshathra` with no periods on all 6 charts; Aayu holes on `f3d117b0` and `75b0d618`; Narayana with no
+  level 3 on `f3d117b0` (a required voice, so that chart reads `incomplete`). Likely false positives: a zero-length
+  next period (`from == to`, e.g. `paryaaya` 2035-12-18 on `f3d117b0`) is reported as having no sub-periods, and a karaka
+  dasha that simply ends is reported `no_next_period` / `no_running_period`. The script prints "(given up)" for content
+  holes, which are never retried; the word only fits failed rows. Done: zero-length periods skipped, a finite dasha's end
+  not called a hole, the label fixed.

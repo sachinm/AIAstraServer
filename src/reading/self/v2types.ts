@@ -9,6 +9,7 @@
  * Nothing in this file is astrological arithmetic; every planet, house, window, polarity and strength is an engine value
  * carried through by id.
  */
+import type { PipelineView } from '../pipeline/types.js';
 import type { OracleArea, OracleAreaDoc, AreaCertainty, AreaDate } from './areaDoc.js';
 import type { SelfV2BuildView } from './v2/progress.js';
 
@@ -911,6 +912,15 @@ export interface SelfV2CardsResult {
 export interface SelfV2Response {
   /** the build's Oracle quality (null when no build is stored, or one stored before 2026-11-09) */
   quality?: SelfV2Quality | null;
+}
+
+export interface SelfV2Response {
+  /**
+   * Appended 2026-11-22 (docs/techniques/11 rev 4 §4.8): the chart's one status and the reading gate. `locked` true: no
+   * reading may be started (the page shows "Building your chart data" and disables the refresh and card-read controls).
+   * Absent only on a body from a server that predates it.
+   */
+  pipeline?: PipelineView;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

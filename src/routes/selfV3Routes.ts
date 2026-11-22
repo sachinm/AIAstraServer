@@ -13,6 +13,9 @@
  *   POST /api/self/v3/confirm    { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
  *   POST /api/self/v3/cards/:id/read  → 202 { state: 'queued' } | 400 unknown_card | card_not_offered | 404 no_kundli
  *                                       | 409 already_reading | 503 off (doc 70 §4.2)
+ *                                       | 409 { error, code: 'preparing', pipeline }: the reading gate is locked
+ *                                         (docs/techniques/11 §4.8); nothing is marked or queued
+ * A layout save while the gate is locked still saves the layout (200) and carries `pipeline`; it queues nothing.
  *
  * The clock switch stays PUT /api/self/v2/clock. GET /api/self/v2 keeps working until v3 is the default.
  */
@@ -24,6 +27,7 @@ import { getSelfV3RouteBudgetMs, isSelfV3Enabled } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
 import { getSelfV3, getSelfV3Catalogue, patchSelfLayout, putSelfLayout, readSelfV3Card, writeConfirmV3, type CardsQueueDeps, type LayoutPatchKind, type SelfV3Deps } from '../reading/self/v3/service.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
+import { preparingRefusal, type PipelineView } from '../reading/pipeline/types.js';
 
 export interface SelfV3RouteDeps {
   prisma: PrismaClient;
@@ -87,6 +91,11 @@ function ownAccount(userId: string, req: express.Request, res: express.Response)
   }
 }
 
+/** A saved layout's answer: the layout, the cards it queued, and the gate when it was locked (nothing queued then). */
+export function layoutBody<L extends object>(r: { layout: L; reading?: unknown; pipeline?: PipelineView }): L & { reading?: unknown; pipeline?: PipelineView } {
+  return { ...r.layout, ...(r.reading ? { reading: r.reading } : {}), ...(r.pipeline ? { pipeline: r.pipeline } : {}) };
+}
+
 export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps): boolean {
   if (!(deps.enabled ?? isSelfV3Enabled())) return false;
   const v3: SelfV3Deps = { prisma: deps.prisma, ...(deps.v3 ?? {}) };
@@ -138,7 +147,7 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
       const r = await withinBudget(putSelfLayout(deps.prisma, userId, req.body, deps.cards ?? {}), budgetMs());
       if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
       if (!r.ok) return res.status(r.status).json({ error: r.error, ...(r.detail ? { detail: r.detail } : {}) });
-      return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
+      return res.status(200).json(layoutBody(r));
     } catch (e) {
       if (e instanceof BudgetExceeded) return timedOut(res, '[self:v3:layout]');
       console.error('[self:v3:layout]', (e as Error).message);
@@ -154,7 +163,7 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
       const r = await withinBudget(patchSelfLayout(deps.prisma, userId, kind, req.body, kind === 'card' ? String(req.params.id ?? '') : undefined, deps.cards ?? {}), budgetMs());
       if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
       if (!r.ok) return res.status(r.status).json({ error: r.error, ...(r.detail ? { detail: r.detail } : {}) });
-      return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
+      return res.status(200).json(layoutBody(r));
     } catch (e) {
       if (e instanceof BudgetExceeded) return timedOut(res, '[self:v3:layout:patch]');
       console.error('[self:v3:layout:patch]', (e as Error).message);
@@ -177,6 +186,7 @@ export function registerSelfV3Routes(app: express.Express, deps: SelfV3RouteDeps
     if (!userId) return;
     try {
       const r = await readSelfV3Card(deps.prisma, userId, String(req.params.id ?? ''), deps.cards ?? {});
+      if (!r.ok && r.error === 'preparing') return res.status(409).json(preparingRefusal(r.pipeline));
       return r.ok ? res.status(202).json({ state: r.state }) : res.status(r.status).json({ error: r.error });
     } catch (e) {
       console.error('[self:v3:card-read]', (e as Error).message);
