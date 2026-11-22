@@ -17,10 +17,6 @@
  * dasha system with { max_level, deep_from, deep_to } (≤ 2 in flight, the export client's spacing, 50 s per call); build
  * the deep rows with the lifelong house rule (engine fields only); replace the level 4–6 rows of the systems that answered
  * in one transaction; write the marker (window, per-system ms / rows / levels / error). Never throws to the caller.
- * Disk guard (2026-11-09 disk-full incident): before writing, the database size + rows × measured bytes per row must stay
- * under DB_DISK_LIMIT_BYTES × DB_DISK_MAX_FILL (src/reading/digest/diskGuard.ts); past it nothing is written and the
- * marker says `deferred_disk` (retried after DEEP_FAILED_RETRY_HOURS). Without DB_DISK_LIMIT_BYTES the guard is off
- * (logged as `dasha_deep_disk_guard_unset`).
  * Nothing here computes astrology: every date, lord and sign is the engine's.
  */
 import type { PrismaClient } from '@prisma/client';
@@ -37,10 +33,9 @@ import { fetchEngineExport } from '../lib/astroKundliClient.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { DASHA_DEEP_TYPE, type ChartDataType } from '../reading/chartData/catalog.js';
 import { normalizeDasha } from '../reading/chartData/dashaShape.js';
-import type { ChartDataRepo, FetchResult, RadhaFetcher, StoredRow } from '../reading/chartData/store.js';
+import type { ChartDataRepo, RadhaFetcher, StoredRow } from '../reading/chartData/store.js';
 import { buildDeepActivationRows, LIFELONG_MAX_LEVEL, type ActivationLevel, type ActivationRowInput } from '../reading/digest/activation.js';
 import type { ActivationBand } from '../reading/digest/activationWrite.js';
-import type { DiskGuard } from '../reading/digest/diskGuard.js';
 import type { DigestRowInput } from '../reading/digest/types.js';
 import type { DeepSlots } from './dashaDeepSlots.js';
 
@@ -52,7 +47,7 @@ export const FOCUS_VARIANT = 'focus';
 export const DEEP_COVER_DAYS = 30;
 /** A pull older than this is refreshed */
 export const DEEP_MAX_AGE_DAYS = 7;
-/** The marker status when the disk guard stopped the write */
+/** The marker status when the disk guard stopped the write. No longer written (guard removed 2026-11-22); kept so old rows still read. */
 export const DEFERRED_DISK = 'deferred_disk';
 /** When no system answered a level deeper than 3 (the engine before its release), look again after this long */
 export const DEEP_NO_ENGINE_RETRY_HOURS = 24;
@@ -181,8 +176,6 @@ export interface DashaDeepDeps {
   loadTypes: () => Promise<readonly ChartDataType[]>;
   loadInputs: (kundliId: string) => Promise<DeepInputs>;
   writeBand: (kundliId: string, rows: ActivationRowInput[], band: ActivationBand) => Promise<{ deleted: number; inserted: number }>;
-  /** the database disk guard (production: when DB_DISK_LIMIT_BYTES is set). Unset = no disk check. */
-  diskGuard?: DiskGuard;
   /** the account-wide cap (production: prismaDeepSlots). Unset = the per-kundli row claim only (tests, no cap). */
   slots?: Pick<DeepSlots, 'acquire'>;
   /** the engine call (default: the throttled export client) */
@@ -273,18 +266,6 @@ export async function runDashaDeepPull(deps: DashaDeepDeps, event: DashaDeepEven
     stats.sort((a, b) => a.system.localeCompare(b.system));
     const ok = stats.filter((s) => !s.error).map((s) => s.system);
     const engineDeep = stats.some((s) => !s.error && (s.levels ?? 0) > LIFELONG_MAX_LEVEL);
-    if (ok.length && deps.diskGuard) {
-      const v = await deps.diskGuard.check(rows.length);
-      if (!v.ok) {
-        // past the disk threshold: write nothing, keep every stored row, and say so on the marker
-        // the marker's own status (stored as text in kundli_data.status, like the slot statuses); no payload is written
-        const deferred = { status: DEFERRED_DISK, error: v.message.slice(0, 500), calcVersion: null, validTo: previous?.validTo ?? null };
-        await deps.repo.complete(kundliId, key, DASHA_DEEP_AYANAMSA, deferred as unknown as FetchResult);
-        owned = false;
-        queueLog({ event: 'dasha_deep_deferred_disk', kundli_id: kundliId, reason: event.reason, rows: rows.length, size_bytes: v.sizeBytes, estimate_bytes: v.estimateBytes, threshold_bytes: v.thresholdBytes });
-        return { kundliId, status: 'skipped', why: DEFERRED_DISK, error: v.message };
-      }
-    }
     // replace the deep band (4..6) of the systems that answered; a failed system keeps what it had
     const written = ok.length ? await deps.writeBand(kundliId, rows, { minLevel: (LIFELONG_MAX_LEVEL + 1) as ActivationLevel, maxLevel: 6, systems: ok }) : { deleted: 0, inserted: 0 };
     const payload: DeepMarkerPayload = { as_of: asOf, deep_from: window.from, deep_to: window.to, max_level: maxLevel, engine_deep: engineDeep, pulled_at: new Date(now()).toISOString(), reason: event.reason, rows: written.inserted, systems: stats };
@@ -314,13 +295,9 @@ export async function prismaDashaDeepDeps(prisma: PrismaClient): Promise<DashaDe
   const { loadMergedChartTypes, prismaChartDataRepo } = await import('../reading/chartData/store.js');
   const { replaceActivationBand } = await import('../reading/digest/activationWrite.js');
   const { prismaDeepSlots } = await import('./dashaDeepSlots.js');
-  const { createDiskGuard, diskLimitsFromEnv, prismaDiskProbe } = await import('../reading/digest/diskGuard.js');
   const repo = prismaChartDataRepo(prisma);
-  const limits = diskLimitsFromEnv();
-  if (limits.limitBytes == null) queueLog({ event: 'dasha_deep_disk_guard_unset', problem: limits.problem ?? 'DB_DISK_LIMIT_BYTES unset' });
   return {
     repo,
-    ...(limits.limitBytes != null ? { diskGuard: createDiskGuard(prismaDiskProbe(prisma), limits) } : {}),
     slots: prismaDeepSlots(prisma),
     loadTypes: () => loadMergedChartTypes(repo),
     writeBand: (kundliId, rows, band) => replaceActivationBand(prisma, kundliId, rows, band),
