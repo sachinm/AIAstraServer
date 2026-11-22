@@ -23,6 +23,7 @@ import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, 
 import { parseJson } from './oracle.js';
 import type { OracleCardV3, OracleV3Output, PersonalCardV3, CardId, SelfSectionId } from './types.js';
 import { cardBoardLabel } from '../../cards/registry.js';
+import { gatedPortrait, type PersonForModel } from '../../person/modelContext.js';
 
 export const SELF_V3_PERSONALIZER_PROMPT = 'personalizer/self-v3';
 export const PERSONALIZER_V3_TIMEOUT_MS = 60_000;
@@ -115,9 +116,36 @@ export interface PersonalizerV3Input {
    * the person's age in whole years and stage of life (never printed). Absent: the doc 70 card face.
    */
   story?: { ageYears: number | null; lifeStage: string | null } | null;
+  /**
+   * docs/techniques/13 §2.4, READING_PERSON_GATE=1: the person lines from the gate (`person/modelContext.ts`, role
+   * `personalizer`). Present: THE PERSON is these lines only, the portrait loses its personal blocks and places, and the
+   * age and stage lines come from the gate. Absent (the flag off): today's bytes.
+   */
+  person?: PersonForModel;
+}
+
+const CONFIDENCE_LINES = [
+  '## CONFIDENCE (follow the Oracle card certainty and its beats; never more sure than the Oracle)',
+  '- strong / confirmed: state it with its dates. likely / leaning: "the signs lean toward". possible / open: say what would bring it, and ask. split: give both sides. not promised: never time it.',
+];
+
+/** The suffix with the person from the gate (doc 13 §2.4): no profile, portrait place or biography read here. */
+function gatedSuffix(asOf: string, cards: readonly OracleCardV3[], spans: ReadonlyMap<string, { from: string; to: string }>, input: PersonalizerV3Input, person: PersonForModel): string {
+  return [
+    `TODAY: ${asOf}`,
+    '## SPAN DATES',
+    ...spanDates(cards, spans),
+    '## THE PERSON',
+    ...(person.lines.length ? person.lines : ['(facts not read: assume nothing about work, a partner or children; use no gendered words)']),
+    ...(input.portrait ? portraitLines(gatedPortrait(input.portrait)) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
+    ...(input.story ? CONFIDENCE_LINES : []),
+    '## WRITE: one card for each of these, with the sections the person switched on',
+    ...cards.map((c) => `- ${c.card}: ${cardBoardLabel(c.card)}; sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}${input.story ? '; story, growth, why and ladder always' : ''}`),
+  ].join('\n');
 }
 
 export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[], spans: ReadonlyMap<string, { from: string; to: string }>, input: PersonalizerV3Input): string {
+  if (input.person) return gatedSuffix(asOf, cards, spans, input, input.person);
   const p = input.profile;
   return [
     `TODAY: ${asOf}`,
@@ -400,7 +428,7 @@ export async function runPersonalizerV3(
         const res = await withAgentRun(
           deps.prisma,
           deps.agentId ?? 'self.personalizer',
-          { userId: ctx.userId, kundliId: ctx.kundliId, technique: deps.technique ?? 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
+          { userId: ctx.userId, kundliId: ctx.kundliId, technique: deps.technique ?? 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length, ...(input.person ? { fieldsSent: input.person.fieldsSent } : {}) }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
           async () => {
             const limit = deps.timeoutMs ?? PERSONALIZER_V3_TIMEOUT_MS;
             const o: GeminiCallOptions = {

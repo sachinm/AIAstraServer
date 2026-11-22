@@ -162,6 +162,8 @@ export async function answerCardQuestion(
         history: history.length,
         clarified: clarified.length,
         estTokens: estProviderTokens(parts.suffix),
+        // doc 13 §2.4: the field names the gate sent (never values); absent with READING_PERSON_GATE off
+        ...(ctx.person ? { fieldsSent: ctx.person.fieldsSent } : {}),
       },
       charts: [{ type: 'pressure_inventory', variant: `system=${ctx.card.clock || 'unknown'}` }],
     },

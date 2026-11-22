@@ -108,12 +108,13 @@ describe('the manifest on the three holes of the test chart', () => {
     expect(s.verdicts.pass1).toBe('complete_with_gaps');
     expect(s.stage).toBe('ready');
     const named = s.gaps.map((g) => `${g.id}:${g.code}`);
-    expect(named).toContain('pressure_inventory@system=kaala:clock_failed');
+    // the engine refuses that type for that clock (retry.ts): named unsupported, not retried
+    expect(named).toContain('pressure_inventory@system=kaala:unsupported');
     expect(named).toContain('dasha:kalachakra:level_1_only');
     expect(named).toContain('dasha:aayu:no_running_period');
     expect(s.gaps.find((g) => g.id === 'dasha:aayu')?.detail).toBe('no period from 2016-10-22 to 2027-12-13');
-    // the failed clock is named and still asked again (not given up after one failure)
-    expect(s.gaps.find((g) => g.id === 'pressure_inventory@system=kaala')?.givenUp).toBe(false);
+    // a refusal is not asked again (doc 11 §4.2 retry: unsupported, named)
+    expect(s.gaps.find((g) => g.id === 'pressure_inventory@system=kaala')?.givenUp).toBe(true);
     // none of the three is required: the chart is ready with them named
     expect(s.gaps.every((g) => !g.required)).toBe(true);
     // a system the engine says does not apply is not checked at all

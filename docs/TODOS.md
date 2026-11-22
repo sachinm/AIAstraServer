@@ -4232,14 +4232,11 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   translations before the recipes quote verse numbers to a person.
 ## Filed 2026-11-22 by the prep phase 1 build (branch feat/prep-p1-status)
 
-- **P1 · open · Deliverable C of doc 11 phase 1 is not built** (stopped on the owner's instruction). Not done:
-  `src/reading/pipeline/retry.ts` (refetch at 1, 5, 15 minutes, then every sweep, give up after 6); the four waits it
-  must replace (`store.ts` give-up at `CHART_DATA_FAILED_MAX_TRIES`=3, the 6 h settle in `findIncompleteKundlis`
-  `kundliSyncWorker.ts:SWEEP_FAILED_RETRY_MS`, `ANNUAL_FAILED_BACKOFF_MS` 6 h in `annualSet.ts`, the 24 h
-  `SELF_V2_PRESSURE_RETRY_HOURS` wait in `loadPressureInventory`); the fix that `findKundlisMissingClocks` counts rows
-  against a number, not against the clock set, so a failed clock row is never asked again; this and last year's yearly
-  rows pulled inside the registration run (before `queueDigestBuild` in `processOneKundliRow`); the dry-run of the
-  wider span. The env helpers `getAnnualSpanYears` (default 10) and `isAnnualTpAllVargas` (default off) are added in
+- **P1 · open · Deliverable C of doc 11 phase 1 is half built.** Built 2026-11-22 (see "Filed 2026-11-22 by the
+  person gate and retry build"): `pipeline/retry.ts`, the store give-up for registration rows, the 6 h sweep settle,
+  the 24 h clock wait, and the clock sweep that never asked a failed clock row again. Not done: `ANNUAL_FAILED_BACKOFF_MS`
+  6 h in `annualSet.ts` and the yearly rows' give-up at 3; this and last year's yearly rows pulled inside the
+  registration run (before `queueDigestBuild` in `processOneKundliRow`); the dry-run of the wider span. The env helpers `getAnnualSpanYears` (default 10) and `isAnnualTpAllVargas` (default off) are added in
   `config/env.ts` but nothing reads them yet. Done: doc 11 step 3's checks.
 - **P1 · open · The `kaala` clock row fails because the engine refuses it.** Test chart `c584c0a3`:
   `pressure_inventory` `system=kaala` failed 2026-11-10 with the engine's "invalid export type" answer. A retry will
@@ -4281,9 +4278,6 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 
 ## Filed 2026-11-22 by the roles pack and person gate build (branch feat/roles-pack-person-gate)
 
-- **The personal-data gate (`src/reading/person/modelContext.ts`) is not built.** The owner stopped the session before
-  module 2 was written (only the roles pack was committed). Who: the next session on this branch. Done: the gate,
-  wired behind `READING_PREP=1` / `READING_PERSON_GATE`, with the tests doc 13 §2.4 and the brief name.
 - **The roles pack tests were written but never run** (`tests/unit/reading/roles/pack.test.ts`; the owner said no test
   runs on 2026-11-22). Only `npx tsc --noEmit` was run. Done: the file passes, or is fixed until it does.
 - **The Personalizer receives the birth place today (live path).** `person/portrait.ts` `portraitLines` writes
@@ -4335,3 +4329,60 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   the winner is missing and disputed (brightness vs the more northern planet). Engine findings: the saham 30° test
   compares whole signs, not degrees; Vyapara and Shatru sahams share a formula, as do Rajya and Pitri; the annual
   docstring's night-flag default is wrong; `charts.benefics_and_malefics` misnames Mercury counters `mars_*`.
+
+## Filed 2026-11-22 by the person gate and retry build
+
+- **P2 · open · The person gate (`src/reading/person/modelContext.ts`) is built but off.** `READING_PERSON_GATE`
+  (default 0) wires it into the card Personalizer (`cards/run.ts`, `self/v3/build.ts`), card chat (`cardChat/resolve.ts`,
+  `prompt.ts`, `answer.ts`, and the clarified "where do you live" line dropped in `cardChatRoutes.ts`) and Clarify
+  (`clarify/service.ts`, `planner.ts`). With it on, `born in`, `lives in`, `place:`, `BIRTH PLACE`, `CURRENT LOCATION`
+  and the raw `Known profile facts` JSON are not sent, and `fieldsSent` (names only) is on the run's `input_summary`.
+  This closes the two leak entries above (roles pack build; dev session) once the flag is on in production. Who: the
+  deploy session (env on the API Lambda) after the tests below pass. Done: flag on, the two entries deleted.
+- **P2 · open · Person gate tests written, not run** (owner: no test runs this release):
+  `tests/unit/reading/person/modelContext.test.ts`. Only `npx tsc --noEmit` was run. Done: the file passes.
+- **P2 · open · Callers the gate does not cover yet, still sending places with the flag on:** `cards/group.ts`
+  (`buildCardPack` puts `profileLines` with `place:` and `portraitLines` with `born in` / `lives in` into the grouped
+  pack; used only with the story contract off), `self/v2/slices.ts` (the v2 Personalizer) and `reading/now/service.ts`
+  (`profileLines` with `place:`). The card Oracle and the roles unit do not take the `oracle` / `roles` lines yet (the
+  gate serves them; nothing calls it with those roles). Done: each reads `personForModel` by role.
+- **P3 · open · The card store key does not include the gate's lines** (`cards/run.ts` `profileHash`). Turning the flag
+  on re-runs no stored card (no surprise spend), but a new life event (not in `profile.hash`) does not refresh a stored
+  Personalizer card either. Decide with the depth/cost owner whether to stamp the gate hash into the key.
+- **P3 · open · The gate reads the account holder's profile for any kundli of the account** (as `loadProfilePack` does
+  today). A chart of a relative under the same account gets the account holder's sex, age and events. Done: a per-kundli
+  person (the kundli's own birth date and stated sex) when relatives' charts are added.
+- **P2 · open · Retry for failed engine rows (doc 11 step 3, first half) built, not test-run.**
+  `src/reading/pipeline/retry.ts` (1, 5, 15 minutes, then every 15 minutes; given up after 6, a clock row for
+  `PIPELINE_REFUSED_RECHECK_DAYS` then asked again; an engine refusal is `unsupported`), wired into `chartData/store.ts` (`needsFetch`, `countFailure` for natal rows and the annual `current`
+  pointers), `self/sub/pressure.ts` (clock rows: the 24 h `SELF_V2_PRESSURE_RETRY_HOURS` wait is gone; refusals stored
+  `unsupported`; failed clocks outside the set asked while due) and both sweep queries in `services/kundliSyncWorker.ts`
+  (registration: 60 s settle instead of 6 h; clocks: a due failed row picks the chart, which fixes the `kaala` row never
+  being asked). Tests: `tests/unit/reading/pipeline/retry.test.ts`, and `pipeline/manifest.test.ts` and
+  `self/v2/pressure.test.ts` updated for the refusal rule; none run. Done: they pass.
+- **P2 · open · Doc 11 step 3, second half, not done (owner: yearly span and pull unchanged).** The yearly rows
+  (`year=<y>`) keep `ANNUAL_FAILED_BACKOFF_MS` (6 h, `digest/annualSet.ts`) and the give-up at
+  `CHART_DATA_FAILED_MAX_TRIES` (3); this and last year's rows are not yet pulled inside the registration run; no dry run
+  of the wider span. Done: doc 11 step 3's remaining checks.
+- **P3 · open · The 1- and 5-minute waits are "not before" times.** Nothing waits inside a run; the sweep runs every 15
+  minutes, so a failed row is in practice asked again at the next sync run, chat read or sweep after its wait. Done:
+  accepted, or a short re-check inside the sync run's budget.
+- **P3 · open · The clock sweep's count can hide a missing clock.** `findKundlisMissingClocks` counts settled rows
+  (ready and fresh, given up, `unsupported`, just failed) against `READING_CLOCKS - 1`, not against the set: an
+  `unsupported` or given-up row of a clock outside today's set fills the place of a missing or stale clock of the set,
+  and that chart is not picked for it (the same class as the `kaala` bug; due failed rows are now picked by their own
+  clause). Done: the count compares against the set, e.g. the set's clocks stored per chart where SQL can read them.
+- **P3 · open · Rows given up under the old rule (3 failures, `valid_to` 9999) stay settled for the registration sweep.**
+  `needsFetch` now gives up at 6, so a chat read asks them again, but the sweep SQL still treats them as settled until
+  the type's calc version changes. Done: a one-off clear of `valid_to` on those failed rows (a database write: Sachin's
+  OK), or accepted.
+- **P3 · open · The staging `kaala` clock row will be rewritten `unsupported` by the code** (the next clock sweep that
+  picks the chart calls `markClockUnsupported`; no write was made from this session). It is then named
+  `pressure_inventory@system=kaala:unsupported` and asked again only after `PIPELINE_REFUSED_RECHECK_DAYS` (30) if kaala is
+  in the pulled set. The P1 entry above ("The `kaala` clock row fails because the engine refuses it") stays open until the
+  engine serves it or kaala leaves the set.
+- **P3 · open · A registration type the engine refuses is asked again every 24 h for ever** (`store.ts`
+  `UNSUPPORTED_RETRY_MS`, and the sweep counts `unsupported` as settled for 24 h only), when the catalogue says it is
+  served. Not changed here. Done: the same recheck as the clock rows (`PIPELINE_REFUSED_RECHECK_DAYS`).
+- **P3 · open · `SELF_V2_PRESSURE_RETRY_HOURS` is no longer read** (`getSelfV2PressureRetryHours` in `config/env.ts` is
+  unused). Done: removed from env.ts and the Lambda configuration by the deploy session.

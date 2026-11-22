@@ -32,7 +32,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { RequireUser } from '../auth/requestAuth.js';
 import { questionGate, quotaBody, type PlanStatus, type QuestionGate, type QuestionTicket } from '../billing/questionGate.js';
 import { chatTurnService } from '../chat/chatTurnService.js';
-import { getSelfV3RouteBudgetMs } from '../config/env.js';
+import { getSelfV3RouteBudgetMs, isReadingPersonGateEnabled } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
 import { checkRateLimit } from '../lib/redis/rateLimiter.js';
 import { SSE_CACHE_CONTROL } from '../lib/noStore.js';
@@ -253,7 +253,7 @@ export async function handleCardConfirm(deps: CardChatRouteDeps, req: express.Re
     chatId: typeof body.chatId === 'string' ? body.chatId : null,
     question: s.question,
     clarify: false,
-    clarified: clarifiedLines(s),
+    clarified: clarifiedLines(s, { dropPlaces: isReadingPersonGateEnabled() }),
     childAgeConfirmed: s.childAge === 'adult',
     clarifyRunId: runId,
   });

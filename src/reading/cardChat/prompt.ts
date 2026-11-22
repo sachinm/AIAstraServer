@@ -94,6 +94,8 @@ export function howItWasRead(ctx: CardChatContext): string {
 }
 
 function personBlock(ctx: CardChatContext): string {
+  // doc 13 §2.4, READING_PERSON_GATE=1: the gate's lines only (no place, no birth time; a failed read sends nothing)
+  if (ctx.person) return ['THE PERSON', ...(ctx.person.lines.length ? ctx.person.lines : ['(facts not read: assume nothing about work, a partner or children)'])].join('\n');
   const p = ctx.profile;
   if (!p) return "THE PERSON\n(facts not read: assume nothing about work, a partner or children)";
   return [

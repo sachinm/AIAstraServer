@@ -22,6 +22,7 @@ import type { CacheOwner } from '../llm/promptCache.js';
 import { MAX_QUESTIONS, parseHorizonValue, type Ask, type ClarifyState, type PrashnaEligibility } from './machine.js';
 import { detectTopic } from '../policy/declined.js';
 import { CRITERION_ASTROLOGICAL_PURPOSE, getAgentPrompt, renderPromptTemplate } from '../prompts/registry.js';
+import type { PersonForModel } from '../person/modelContext.js';
 
 export const CLARIFY_MODEL_TIMEOUT_MS = 900;
 
@@ -46,11 +47,19 @@ export function evictClarifyCacheForIndividual(owner: CacheOwner): number {
   return deleted;
 }
 
-/** Builds the stable digested chart/fact context prefix for Clarify calls so `parts[0]` is cacheable per individual. */
-export function buildClarifyContextPrefix(s: Pick<ClarifyState, 'asOf' | 'card' | 'facts' | 'birthPlace' | 'location'>): string {
+/**
+ * Builds the stable digested chart/fact context prefix for Clarify calls so `parts[0]` is cacheable per individual.
+ * `person` given (READING_PERSON_GATE on, docs/techniques/13 §2.4): the person is the gate's lines only; no profile facts
+ * JSON, no current location and no birth place. Absent: today's bytes.
+ */
+export function buildClarifyContextPrefix(s: Pick<ClarifyState, 'asOf' | 'card' | 'facts' | 'birthPlace' | 'location'>, person?: PersonForModel): string {
   const lines = [`CLARIFY CONTEXT AS OF: ${s.asOf}`];
   if (s.card?.md) {
     lines.push(`RUNNING DASHA: ${s.card.md}-${s.card.ad ?? '?'}${s.card.pd ? `-${s.card.pd}` : ''} (AD until ${s.card.adEnd ?? '?'})`);
+  }
+  if (person) {
+    if (person.lines.length) lines.push('THE PERSON:', ...person.lines);
+    return lines.join('\n');
   }
   if (s.facts && Object.keys(s.facts).length > 0) {
     const sorted = Object.entries(s.facts).sort(([a], [b]) => a.localeCompare(b));
@@ -129,6 +138,7 @@ export async function phraseAsk(
   ask: Ask,
   prisma?: PrismaClient | null,
   cacheOwner?: CacheOwner,
+  person?: PersonForModel,
 ): Promise<{ ask: Ask; usage: Usage | null; driver?: 'ai' | 'machine_fallback' | 'rules' }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { ask, usage: null, driver: 'rules' };
@@ -140,7 +150,8 @@ export async function phraseAsk(
     const system = getAgentPrompt('clarify.system', prisma);
     const userTemplate = getAgentPrompt('clarify.phrase_user', prisma);
     const runningPeriod = s.card?.md ? `Running dasha period: ${s.card.md}-${s.card.ad} until ${s.card.adEnd}.` : '';
-    const knownFacts = s.facts && Object.keys(s.facts).length > 0 ? ` Known profile facts: ${JSON.stringify(s.facts)}.` : '';
+    // with the gate on (doc 13 §2.4) the facts are in the context prefix, from the gate; never this raw JSON (it holds place.current)
+    const knownFacts = !person && s.facts && Object.keys(s.facts).length > 0 ? ` Known profile facts: ${JSON.stringify(s.facts)}.` : '';
     const astrologicalPurpose =
       (CRITERION_ASTROLOGICAL_PURPOSE[ask.criterion] ??
         'Clarify the specific parameter needed by the Vedic astrology Oracle.') + knownFacts;
@@ -160,7 +171,7 @@ export async function phraseAsk(
       model: cfg.model,
       node: 'clarify.phrase',
       system,
-      contextPrefix: buildClarifyContextPrefix(s),
+      contextPrefix: buildClarifyContextPrefix(s, person),
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
@@ -190,11 +201,12 @@ export async function planAiClarifyTurn(
   s: ClarifyState,
   prisma?: PrismaClient | null,
   cacheOwner?: CacheOwner,
+  person?: PersonForModel,
 ): Promise<{ state: ClarifyState; ask: Ask | null; usage: Usage | null; driver: 'ai' | 'machine_fallback' | 'rules' }> {
   if (s.status !== 'ASKING' || !s.pending) {
     return { state: s, ask: null, usage: null, driver: s.driver ?? 'rules' };
   }
-  const { ask, usage, driver = 'rules' } = await phraseAsk(s, s.pending, prisma, cacheOwner);
+  const { ask, usage, driver = 'rules' } = await phraseAsk(s, s.pending, prisma, cacheOwner, person);
   const turns = s.turns.map((t, idx) => (idx === s.turns.length - 1 ? { ...t, ask } : t));
   const decisionLog = (s.decisionLog ?? []).map((entry, idx, arr) => {
     if (idx === arr.length - 1 && entry.action === 'asked' && entry.criterion === ask.criterion) {
@@ -228,6 +240,7 @@ export async function resolveFreeText(
   text: string,
   prisma?: PrismaClient | null,
   cacheOwner?: CacheOwner,
+  person?: PersonForModel,
 ): Promise<{ value: string | null; usage: Usage | null }> {
   const cfg = clarifyModelConfig();
   if (cfg.provider === 'off') return { value: null, usage: null };
@@ -260,7 +273,7 @@ export async function resolveFreeText(
       model: cfg.model,
       node: 'clarify.resolve',
       system,
-      contextPrefix: buildClarifyContextPrefix(s),
+      contextPrefix: buildClarifyContextPrefix(s, person),
       user,
       maxTokens: 300,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
@@ -286,6 +299,7 @@ export async function judgePrashna(
   rules: PrashnaEligibility,
   prisma?: PrismaClient | null,
   cacheOwner?: CacheOwner,
+  person?: PersonForModel,
 ): Promise<{ result: PrashnaEligibility; usage: Usage | null }> {
   if (rules.rule !== 'unsure') return { result: rules, usage: null };
   const cfg = clarifyModelConfig();
@@ -301,7 +315,7 @@ export async function judgePrashna(
       model: cfg.model,
       node: 'clarify.prashna',
       system,
-      contextPrefix: buildClarifyContextPrefix(s),
+      contextPrefix: buildClarifyContextPrefix(s, person),
       user,
       maxTokens: 100,
       timeoutMs: CLARIFY_MODEL_TIMEOUT_MS,
