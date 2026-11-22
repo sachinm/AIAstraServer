@@ -4,7 +4,7 @@ Board: Work, Hobby lens.
 
 What this card answers: Which hands-on or creative medium restores this person rather than feeling like a chore. The question: which mediums and hands-on crafts fit the chart's wiring, to restore energy and open easy expression?
 
-What it reads: The 3rd and 5th lords and their placements; the strongest of Venus (beauty, music, design), Mercury (words, code, puzzles), Mars (tools, building, sport), the Moon (nurture, water, growing things), Saturn (wood, stone, slow patient craft) and Rahu (new technology, unusual media); the D7 where stored; the running periods for which medium is lit this year. Read only if present in the shared data: the D16 and the D24. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
+What it reads: The 3rd and 5th lords and their placements; the strongest of Venus (beauty, music, design), Mercury (words, code, puzzles), Mars (tools, building, sport), the Moon (nurture, water, growing things), Saturn (wood, stone, slow patient craft) and Rahu (new technology, unusual media); the D9 3rd and 5th and the D24; the running periods for which medium is lit this year. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
 
 For the person: Name concrete kinds of medium. Working: an outlet that balances the day's work rather than repeating it. Studying: something that rests the mind from study. Retired or 60 and over: a craft that suits the rhythm of the day. A build span is for tools, a space or lessons; a get-through span is for zero-equipment play first.
 

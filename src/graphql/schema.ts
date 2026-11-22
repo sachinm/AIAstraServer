@@ -48,6 +48,7 @@ import * as adminService from '../services/adminService.js';
 import { enqueueKundliSync, kundliStatusFromQueue, ensureUserGateReady } from '../services/kundliQueueService.js';
 import { resumeChartBuild, scheduleKundliSync } from '../services/kundliSyncWorker.js';
 import { getChartStatus } from '../services/chartStatusService.js';
+import { readingGateForUser } from '../reading/prep/gate.js';
 import { readChartColumns } from '../reading/chartData/chartsPageReader.js';
 import { prismaChartDataRepo } from '../reading/chartData/store.js';
 import { writeLegacyColumnsThrough } from '../reading/chartData/writeThrough.js';
@@ -135,6 +136,23 @@ const typeDefs = /* GraphQL */ `
     reading_mode: String!
     "A sentence for the user when status is failed"
     last_error: String
+    "The chart's one status and the reading gate (docs/techniques/11 rev 4 §4.8); null without a chart"
+    pipeline: PipelineView
+  }
+
+  "The one status of a chart from registration to ready, and whether a reading may start"
+  type PipelineView {
+    "registered | pulling | checking | chart_ready | preparing | ready | blocked | paused"
+    stage: String!
+    "steps or jobs finished"
+    done: Int!
+    total: Int!
+    "one plain sentence for the person"
+    line: String!
+    "true: no reading may be started for this chart"
+    locked: Boolean!
+    "chart | building | preparing, or null when not locked"
+    reason: String
   }
 
   type UserDetails {
@@ -515,6 +533,12 @@ function withAdmin<T>(
 }
 
 const resolvers = {
+  // the gate is read only when the client asks for it (chat turns and page timing read the chart status without it)
+  ChartStatus: {
+    pipeline(_parent: unknown, _args: unknown, context: GraphQLContext) {
+      return context.userId ? readingGateForUser(context.prisma, context.userId) : null;
+    },
+  },
   Query: {
     currentTerms() {
       return currentTermsInfo();

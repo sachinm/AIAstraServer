@@ -19,7 +19,8 @@ const CALL_SITES = [
   'src/techniques/outputStore.ts',
   'src/reading/self/v2/oracle.ts',
   'src/reading/self/v2/personalizer.ts',
-  'src/reading/self/v2/build.ts',
+  // the family readers' withAgentRun moved out of self/v2/build.ts (plan "retire the v2 Self reading", step 1)
+  'src/reading/families/run.ts',
   'src/reading/self/sub/index.ts',
 ];
 const PERSONAL = /email|name|birth|dob|place|lat|lon|question/i;

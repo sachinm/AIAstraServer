@@ -5,7 +5,8 @@
  *
  *   - the lens is the body's `lens` when given, else the stored layout's `boardOptions.lens` (else the person's default)
  *   - a lens never read for this kundli: this is its first reading, free (its unread deck cards are queued, nothing held)
- *   - else the lens's own `due` (its newest card readings' "Good until", lensValidity.ts) must hold, or 409 `not_due`
+ *   - else the lens's own `due` (its newest card readings' "Good until", lensValidity.ts) must hold, or a deck card was
+ *     read before the full-thread reading (no technical story: `deeperReadingReady`, charged as usual), or 409 `not_due`
  *   - `charged` is true only when the gate counted a question (not for exempt roles, plans off or a same-day repeat)
  *   - one question is held under `lensRefreshKey(board, lens, day)`; at the limit 402 and nothing is queued (the stored
  *     cards stay as they are)
@@ -20,11 +21,12 @@
 import type { PrismaClient } from '@prisma/client';
 import { getCardsReadMinArea } from '../../config/env.js';
 import { quotaBody, type PlanStatus, type QuestionGate } from '../../billing/questionGate.js';
-import { cardStateOf, readCardsState, updateCardsState } from '../cards/state.js';
+import { cardStateOf, deeperReadingReady, readCardsState, updateCardsState } from '../cards/state.js';
 import { readCardReadings } from '../cards/store.js';
 import type { CardsStateDoc } from '../cards/types.js';
 import { queueSelfReadingBuild, type QueueOutcome } from '../self/buildEvent.js';
 import { lensRefreshOutcome } from './lensRefreshSettle.js';
+import { preparingRefusal } from '../pipeline/types.js';
 import { lensValidity } from './lensValidity.js';
 import { getBoardV3, lensDeck, type BoardV3Deps } from './v3Service.js';
 import { isBoardLens, type AreaV3Board, type BoardLens, type BoardV3CardId } from './v3Cards.js';
@@ -68,6 +70,8 @@ export async function refreshBoardLens(deps: LensRefreshDeps, userId: string, bo
   );
   const body = read.body;
   if (body.status === 'no_kundli') return { status: 404, body: { error: 'no_kundli' } };
+  // doc 11 §4.8: the gate the board read just asked; locked, nothing is marked, held or queued
+  if (body.pipeline?.locked) return { status: 409, body: { ...preparingRefusal(body.pipeline) } };
   if (body.status === 'preparing') return { status: 409, body: { error: 'not_ready', code: 'not_ready' } };
   const kundli = await deps.prisma.kundli.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' }, select: { id: true } });
   if (!kundli) return { status: 404, body: { error: 'no_kundli' } };
@@ -105,7 +109,11 @@ export async function refreshBoardLens(deps: LensRefreshDeps, userId: string, bo
 
   // this lens's own "Good until" (its newest card readings; docs/billing/03 §10)
   const dates = await (deps.lensValidity ?? lensValidity)(deps.prisma, kundliId, body.clock.system, deck, day, mark);
-  if (!dates.due) return { status: 409, body: { error: 'not_due', code: 'not_due', valid_until: dates.validUntil, lens } };
+  // a deck card read before the full-thread reading (no technical story) makes the lens due: the refresh is charged as
+  // usual (Sachin: after a prompt release everyone refreshes and the quota pays); once every card carries a story the
+  // lens is due again only when its Good until passes
+  const deeper = deeperReadingReady(deck, have as Partial<Record<string, { story?: string | null }>>);
+  if (!dates.due && !deeper) return { status: 409, body: { error: 'not_due', code: 'not_due', valid_until: dates.validUntil, lens } };
 
   const held = await deps.gate.reserveLensRefresh(userId, board, lens, day);
   if (!held.ok) return { status: 402, body: { ...quotaBody(held.usage as PlanStatus), lens } };

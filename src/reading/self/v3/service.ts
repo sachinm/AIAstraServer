@@ -22,7 +22,9 @@ import { featureContext, readFeatureOverrides, resolveFeatures, type FeatureStat
 import { effectivePlan, type PlanCode } from '../../../billing/plans.js';
 import { PrismaPlanStore } from '../../../billing/store.js';
 import { readSelfV3Cards } from './store.js';
-import type { CardReadError, CardReadState, LayoutError, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CatalogueEntry, SelfV3Response } from './types.js';
+import { readingGate, type ReadingGateFn } from '../../prep/gate.js';
+import type { PipelineView } from '../../pipeline/types.js';
+import type { CardReadError, CardReadState, LayoutError, SelfBoardLayoutView, SelfCardId, SelfV3CardContent, SelfV3CardView, SelfV3CatalogueEntry, SelfV3Response } from './types.js';
 
 export interface SelfV3Deps extends SelfV2Deps {
   /** the stored v3 cards for the board clock (Phase B); default: the newest `self.v3.cards` row; none: filled from v2 */
@@ -93,7 +95,20 @@ export async function getSelfV3(deps: SelfV3Deps, userId: string): Promise<GetSe
   // doc 71 §4.4 item 4: each card shaped by the person's options, then the board's (a filter over stored content,
   // nothing new made; no option adds a field, so no role-gated content follows a face)
   body.cards = body.cards.map((c) => shapeSelfCard(c, layout.options?.[c.id], layout.boardOptions));
-  return { body: applySelfFeatures(body, resolveFeatures(featureContext(plan, overrides))), queued: v2.queued };
+  const shaped = applySelfFeatures(body, resolveFeatures(featureContext(plan, overrides)));
+  // the header line after the features: a locked or off diagnosis card gives none
+  return { body: { ...shaped, headerLine: headerLineOf(shaped.cards) }, queued: v2.queued };
+}
+
+/**
+ * The Self board's header line (plan "retire the v2 Self reading" step 4): the `diagnosis` card's plain `line`, as served
+ * (already redacted with the card). Null when the card is absent (off), locked, not read, or its plain reading pending.
+ */
+export function headerLineOf(cards: readonly SelfV3CardView[]): string | null {
+  const d = cards.find((c) => c.id === 'diagnosis');
+  if (!d || d.locked || !d.v3 || d.v3.plain?.pending) return null;
+  const line = d.v3.line?.trim();
+  return line ? line : null;
 }
 
 /**
@@ -127,8 +142,12 @@ export async function getSelfV3Catalogue(deps: SelfV3Deps, userId: string): Prom
   });
 }
 
+/**
+ * `pipeline` is set when the reading gate is locked (docs/techniques/11 §4.8): the layout is saved, and no card is marked
+ * and no build is queued; the page shows "Building your chart data".
+ */
 export type PutLayoutResult =
-  | { ok: true; layout: SelfBoardLayoutView; reading?: { queued: SelfCardId[] } }
+  | { ok: true; layout: SelfBoardLayoutView; reading?: { queued: SelfCardId[] }; pipeline?: PipelineView }
   | { ok: false; status: 409; error: 'stale_layout'; layout: SelfBoardLayoutView; detail?: string }
   | { ok: false; status: 400 | 404; error: LayoutError | 'no_kundli'; detail?: string };
 
@@ -139,6 +158,8 @@ export interface CardsQueueDeps {
   queueBuild?: (prisma: PrismaClient, userId: string, kundliId: string) => Promise<QueueOutcome>;
   readCardReadings?: typeof readCardReadings;
   clockOf?: (prisma: PrismaClient, kundliId: string) => Promise<string | null>;
+  /** the reading gate (docs/techniques/11 rev 4 §4.8; default `readingGate`) */
+  readingGate?: ReadingGateFn;
 }
 
 const defaultQueue = (prisma: PrismaClient, userId: string, kundliId: string) => queueSelfReadingBuild({ prisma }, userId, kundliId, 'self');
@@ -231,6 +252,9 @@ export async function patchSelfLayout(prisma: PrismaClient, userId: string, kind
 
 async function queueAfterLayout(prisma: PrismaClient, userId: string, kundliId: string, layout: SelfBoardLayoutView, deps: CardsQueueDeps): Promise<PutLayoutResult> {
   if (!(deps.cardsRead ?? isCardsReadEnabled()) || layout.cards.length < getCardsReadMin()) return { ok: true, layout };
+  // doc 11 §4.8: the layout is saved; while the gate is locked no card is marked and no build starts
+  const pipeline = await (deps.readingGate ?? readingGate)(prisma, kundliId);
+  if (pipeline.locked) return { ok: true, layout, reading: { queued: [] }, pipeline };
   try {
     const now = (deps.now ?? (() => new Date()))();
     const [read, doc] = await Promise.all([
@@ -256,7 +280,10 @@ async function queueAfterLayout(prisma: PrismaClient, userId: string, kundliId: 
   }
 }
 
-export type ReadCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError };
+export type ReadCardResult =
+  | { ok: true; status: 202; state: 'queued' }
+  | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError }
+  | { ok: false; status: 409; error: 'preparing'; pipeline: PipelineView };
 
 /** POST /api/self/v3/cards/:id/read: queue or retry one card (doc 70 §4.2). */
 export async function readSelfV3Card(prisma: PrismaClient, userId: string, cardId: string, deps: CardsQueueDeps = {}): Promise<ReadCardResult> {
@@ -270,6 +297,9 @@ export async function readSelfV3Card(prisma: PrismaClient, userId: string, cardI
   const doc = await readCardsState(prisma, kundliId, now);
   const e = doc.cards[def.id];
   if (e && e.state === 'reading' && now.getTime() - Date.parse(e.at) <= CARD_STUCK_MS) return { ok: false, status: 409, error: 'already_reading' };
+  // doc 11 §4.8: no card is marked and no build queued while the gate is locked
+  const pipeline = await (deps.readingGate ?? readingGate)(prisma, kundliId);
+  if (pipeline.locked) return { ok: false, status: 409, error: 'preparing', pipeline };
   // no day cap (docs/billing/README.md "Spend cap per operation"): the build this queues is its own operation, its own budget
   await updateCardsState(prisma, userId, kundliId, now, (d) => {
     d.cards[def.id] = { state: 'queued', at: now.toISOString() };

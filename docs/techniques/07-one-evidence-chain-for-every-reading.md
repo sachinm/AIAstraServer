@@ -229,6 +229,7 @@ Cards built before the release show today's view.
 - **Model** (Oracle) reads the routed pack and writes the chain sentences; (Personalizer) writes plain words.
 - Boundaries: engine calls on the request path stay under the 60 s limit, one call per item; the disk guard runs before
   any pull; a prompt change re-keys every card, so prompts ship twice only.
+  Note 2026-11-22: the disk guard was removed on Sachin's instruction; nothing in code now refuses a bulk write when the disk is nearly full (see `docs/techniques/11` rev 4, open point E).
 
 ## 6. Ingredients
 
@@ -262,6 +263,7 @@ Sachin (five decisions, each paid replay, entering the events).
 5. Pack content: real age; all houses of each routed chart; year D1 houses and the routed year chart; D1 star lord and tara lines for cited planets; Naisargika stage from the stored row. Widen `ANNUAL_CHART_VARGAS` to the routed charts for this year and last. Done: a brief never names a chart the pack lacks (unit test over all briefs).
 6. Prompt release 1: `cards/oracle.md` gets the chain order and source tags; the 90 briefs name their routed charts; romance off D7; friends off D11; nakshatra rule added; "40+ dasha systems" wording removed. Done: one measured board read (paid, on Sachin's yes) shows time and cost within limits.
 7. Engine E2, E3, E4, E7 then a re-pull for the six test kundlis after the disk check. Done: year lord and hora lord named in the pack; unverified clocks tagged.
+   Note 2026-11-22: the disk guard was removed on Sachin's instruction; nothing in code now refuses a bulk write when the disk is nearly full (see `docs/techniques/11` rev 4, open point E).
 8. Engine E5, E6. Server stores varga Narayana in `kundli_data`; `clocks/` reads it for routed cards.
 9. One gate: `clocks/concordance.ts`, `yearFrame.ts`, `houseLayers.ts`, `career.ts` use the §4.1 step 3 table; `dashaAssessment.ts` D1/D9 code removed in favour of E6; guard test widened. Done: one function decides status; four old counts deleted.
 10. Prompt release 2 and the `chain` field; web shows the five rows on the Astrology Reading tab.

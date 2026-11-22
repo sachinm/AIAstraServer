@@ -22,6 +22,9 @@ Read and follow `AGENTS.md`. It holds the rules for every agent in this repo. Th
 - **Every sub-task runs in the background.** Sub-agents, side sessions, test runs, builds and long scripts start in
   background mode so nothing blocks the next step; keep working and read the result when notified. Sub-agents run on
   Opus 5.5 at medium effort with fast mode. See "Work in parallel by default" in `AGENTS.md`.
+- **The reading is never cut for cost or speed.** No limit, prompt, merge of calls or layout may shorten or hide the
+  astrological reading; a limit continues or queues, never cuts. See "Reading depth is a release gate" in `AGENTS.md`
+  and §5 of `SOUL.md`.
 - **Kill any local server you started** (Node or otherwise) as soon as the work that needed it is done.
 - **Plans cover the whole thing before code.** Any plan goes under `docs/` and follows "How a plan is written" in
   `AGENTS.md`: start (facts checked), end goal, deliverable, exactly how backend / API / frontend / UI-UX work when done,

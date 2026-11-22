@@ -317,14 +317,14 @@ describe('run 2 · 5 · a family finding cut at MAX_TOKENS never reaches the Ora
       clearPendingIndividualRecycles();
     });
 
-    it('raises the readers\' cap to 4,000; the cut finding passes complete sentences with a note, a gap, and is never cached', async () => {
+    it('raises the readers\' cap to 6,000 (docs/techniques/09 §3.1); a cut finding is continued; one still cut passes complete sentences with a note, a gap, and is never cached', async () => {
       const log: string[] = [];
       const base = makeGemini(log);
       const sent: GeminiCallOptions[] = [];
       const call = async (o: GeminiCallOptions): Promise<GeminiResult> => {
         sent.push(o);
-        if (o.node === 'family.dasha') return { ...geminiResult(dasha), finishReason: 'MAX_TOKENS' };
-        if (o.node === 'family.year') return { ...geminiResult('*   **Outlook:** The year opens with'), finishReason: 'MAX_TOKENS' };
+        if (o.node.startsWith('family.dasha')) return { ...geminiResult(o.node === 'family.dasha' ? dasha : ''), finishReason: 'MAX_TOKENS' };
+        if (o.node.startsWith('family.year')) return { ...geminiResult(o.node === 'family.year' ? '*   **Outlook:** The year opens with' : ''), finishReason: 'MAX_TOKENS' };
         return base(o);
       };
       const db = makePrisma();
@@ -333,7 +333,9 @@ describe('run 2 · 5 · a family finding cut at MAX_TOKENS never reaches the Ora
         { userId: 'u-v2', kundliId: 'k-v2', asOf: '2026-11-09', subs: makeSubs() },
       );
       expect(r.status).toBe('ok');
-      for (const o of sent.filter((x) => x.node.startsWith('family.'))) expect(o.maxOutputTokens).toBe(4000);
+      for (const o of sent.filter((x) => x.node.startsWith('family.'))) expect(o.maxOutputTokens).toBe(6000);
+      // every cut finding was continued (llm/continue.ts) before it was cut down to its complete sentences
+      expect(sent.some((x) => x.node === 'family.dasha.continue1')).toBe(true);
       const oracleParts = sent.filter((x) => x.node.startsWith('self.oracle.v2.')).flatMap((x) => x.parts).join('\n');
       expect(oracleParts).not.toContain('The convergence of the Kaala PD (');
       expect(oracleParts).toContain(CUT_FINDING_NOTE);
@@ -456,7 +458,7 @@ describe('portrait (Sachin 2026-11-09): everything and more to the Personalizer,
     const ctx = run2Ctx({ ...profile, mood: 'heavy' });
     const x = buildPersonPortrait(ctx, oracleOut, fullSrc());
     expect(x.personality!.oracleParagraphs).toEqual(expect.arrayContaining(['lagna.p1', 'mind.p1', 'drive.p3', 'presence.p1']));
-    expect(x.personality!.patterns.length).toBe(3);
+    expect(x.personality!.patterns!.length).toBe(3);
     expect(x.biography!.facts.map((f) => f.key)).toEqual(['work.status', 'work.level', 'love.status', 'self.focus']);
     expect(x.biography!.lifeEvents).toEqual([{ category: 'business_started', date: '2024-03-01', precision: 'month' }]);
     expect(x.biography!.confirms).toEqual([{ claimId: 'stuck.heaviest_now', answer: 'yes', at: '2026-11-07' }]);

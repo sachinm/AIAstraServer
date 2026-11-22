@@ -859,7 +859,10 @@ export function getSelfConfirmSystems(): string[] {
  * a weighted order (doc 70 E2) this list is the weighting. Env: `READING_CLOCK_ORDER`.
  */
 export function getReadingClockOrder(): string[] {
-  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional', 'yogini', 'chara']);
+  // docs/techniques/09 decision 2: Yogini and Chara are flagged and left out; a flagged system named here is skipped
+  // (`not_verified`) whatever the env says. Sudasa and Lagna Kendradi are shown but have no pressure inventory yet: they
+  // reach the reading as stored period rows (clocks/systems.ts feed `periods`), so they are not clock-reader slots.
+  return listEnv('READING_CLOCK_ORDER', ['vimsottari', 'narayana', 'tithi_pravesha', 'conditional']);
 }
 
 /** Clocks in the set, the year counted as one. Env `READING_CLOCKS` (default 5, 3..6). */
@@ -1022,9 +1025,77 @@ export function getCardsReadMinArea(): number {
   return parseClampedIntEnv('CARDS_READ_MIN_AREA', 1, 1, 8);
 }
 
-/** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 8, 1..12). */
+// ── The full-thread reading (docs/techniques/09 §3.1, §3.5): allotments a limit never cuts ─
+//
+// Every ceiling below is continued at, never cut at (`llm/continue.ts`); lowering one needs the depth replay and
+// Sachin's written yes (AGENTS.md "Reading depth is a release gate", rule 5).
+
+/**
+ * The story contract (doc 09 §3.4): one card per Oracle call with the technical story and the beat index, the depth gate
+ * before a card is ready, one Personalizer per card. Default on; `CARDS_STORY_CONTRACT=0` returns to the doc 70 cards
+ * (and lets CARDS_GROUP_PACK=1 group them again).
+ */
+export function isCardsStoryContractEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CARDS_STORY_CONTRACT?.trim() !== '0';
+}
+
+/** The grouped card call is the path in force: CARDS_GROUP_PACK=1 and the story contract off (doc 09 decision 7). */
+export function isCardsGroupPathActive(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isCardsGroupPackEnabled(env) && !isCardsStoryContractEnabled(env);
+}
+
+/** Card Oracle output ceiling per call (doc 09 decision 7). Env `CARDS_ORACLE_MAX_OUTPUT_TOKENS` (default 10,000; 4,096..32,000). */
+export function getCardsOracleMaxOutputTokens(): number {
+  return parseClampedIntEnv('CARDS_ORACLE_MAX_OUTPUT_TOKENS', 10_000, 4_096, 32_000);
+}
+
+/** Card Oracle wall time per card, continuations included. Env `CARDS_ORACLE_TIMEOUT_MS` (default 150 s; 45..300 s). */
+export function getCardsOracleTimeoutMs(): number {
+  return parseClampedIntEnv('CARDS_ORACLE_TIMEOUT_MS', 150_000, 45_000, 300_000);
+}
+
+/** Card Personalizer output ceiling per call (doc 09 §3.1). Env `CARDS_PERSONALIZER_MAX_OUTPUT_TOKENS` (default 6,000; 4,096..16,000). */
+export function getCardsPersonalizerMaxOutputTokens(): number {
+  return parseClampedIntEnv('CARDS_PERSONALIZER_MAX_OUTPUT_TOKENS', 6_000, 4_096, 16_000);
+}
+
+/** Card Personalizer wall time per card. Env `CARDS_PERSONALIZER_TIMEOUT_MS` (default 90 s; 30..180 s). */
+export function getCardsPersonalizerTimeoutMs(): number {
+  return parseClampedIntEnv('CARDS_PERSONALIZER_TIMEOUT_MS', 90_000, 30_000, 180_000);
+}
+
+/** Lens lineman output ceiling (doc 09 §3.1). Env `LENS_LINEMAN_MAX_OUTPUT_TOKENS` (default 10,000; 4,096..32,000). */
+export function getLensLinemanMaxOutputTokens(): number {
+  return parseClampedIntEnv('LENS_LINEMAN_MAX_OUTPUT_TOKENS', 10_000, 4_096, 32_000);
+}
+
+/** Lens lineman wall time. Env `LENS_LINEMAN_TIMEOUT_MS` (default 90 s; 30..180 s). */
+export function getLensLinemanTimeoutMs(): number {
+  return parseClampedIntEnv('LENS_LINEMAN_TIMEOUT_MS', 90_000, 30_000, 180_000);
+}
+
+/** The lens linemen run (doc 09 §8 step 7). Default on; `LENS_LINEMEN=0` reads the cards without a lens thread. */
+export function isLensLinemenEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.LENS_LINEMEN?.trim() !== '0';
+}
+
+/**
+ * The spend cap of one board build (doc 09 §3.5): the clock layer, the lens linemen and every card of the build share
+ * it; the cards it does not reach are queued for the next round, never written shorter. Chat answers keep
+ * READING_SPEND_CAP_USD. Env `READING_BOARD_SPEND_CAP_USD` (default 1.50; 0.10..10).
+ */
+export function getReadingBoardSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_BOARD_SPEND_CAP_USD', 1.5, 0.1, 10);
+}
+
+/** The per-card safety stop (doc 09 §3.5): a card past it is queued and retried, never served thin. Env `READING_CARD_SPEND_CAP_USD` (default 0.12). */
+export function getReadingCardSpendCapUsd(): number {
+  return parseClampedFloatEnv('READING_CARD_SPEND_CAP_USD', 0.12, 0.02, 1);
+}
+
+/** The first board cards read at once (the visible ones). Env `CARDS_BOARD_PARALLEL` (default 12, 1..16; doc 09 §3.1). */
 export function getCardsBoardParallel(): number {
-  return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 8, 1, 12);
+  return parseClampedIntEnv('CARDS_BOARD_PARALLEL', 12, 1, 16);
 }
 
 /**
@@ -1115,6 +1186,42 @@ export function isSelfV2BuildEnabled(): boolean {
 }
 
 /**
+ * Plan "retire the v2 Self reading", server step 2: the Self board's state comes from its card readings
+ * (`self.card.reading` rows of the Self cards on the board clock), not from the v2 rows: `builtAt`, `status`,
+ * `nothingStored` (so a GET queues a build only when no card was ever read and no build ran today), the Self "Good until"
+ * (the lens rule over the Self deck), the first-reading-free rule and the refresh quota gate (a card was read). Env
+ * `SELF_BOARD_FROM_CARDS=1`; default off (the v2 rows, as before). Rollback: unset or 0.
+ */
+export function isSelfBoardFromCardsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_BOARD_FROM_CARDS?.trim() === '1';
+}
+
+/**
+ * Plan "retire the v2 Self reading", server step 3: the Self build skips the v2 Oracle and the v2 Personalizer and reads
+ * the cards over the natal context (family readers → clock layer → lens linemen → card Oracle → card Personalizer). Env
+ * `SELF_V2_RETIRED=1`; default off (the v2 path intact). It takes effect only with the per-card reading on
+ * (`isCardsReadEnabled`: SELF_V3_BUILD=1 and READING_CLOCK_LAYER=1), so the legacy three-call v3 path never runs
+ * without a v2 reading behind it. Rollback: unset or 0.
+ */
+export function isSelfV2RetiredEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SELF_V2_RETIRED?.trim() === '1';
+}
+
+/** SELF_V2_RETIRED=1 and the per-card reading on: the retired build path runs. */
+export function isSelfV2Retired(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isSelfV2RetiredEnabled(env) && isCardsReadEnabled(env);
+}
+
+/**
+ * The Self board reads its state from the card rows: SELF_BOARD_FROM_CARDS=1, or the v2 build retired (no v2 row is
+ * written then, so the v2-row reads would re-queue a build on every GET). Rollback order: SELF_V2_RETIRED first, then
+ * SELF_BOARD_FROM_CARDS.
+ */
+export function isSelfBoardFromCards(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isSelfBoardFromCardsEnabled(env) || isSelfV2Retired(env);
+}
+
+/**
  * The engine's `pressure_inventory` pull for the Self v2 windows (docs/reading-engine/66 §4.3). Env
  * `SELF_V2_PRESSURE_PULL`: '0' / 'false' / 'off' turns the pull off (S3 stays degraded); default on. A failed pull never
  * fails the build.
@@ -1184,10 +1291,10 @@ export function getSelfPersonalizerRetryMaxOutputTokens(): number {
  * Output cap of the Self v2 family readers (and the v1 Self family readers). Env `SELF_FAMILY_MAX_OUTPUT_TOKENS`
  * (integer, 1000–16000; default 4000). Measured on run 2 (2026-11-09): `family.dasha` stopped at `MAX_TOKENS` with
  * 654 out + 1,342 thought = 1,996 of the old fixed 2,000 (thought tokens count against the cap on Gemini 3.x); the
- * longest complete reader was `family.rasi` at 951 + 1,005 = 1,956. 4,000 is twice the longest measured finish.
+ * longest complete reader was `family.rasi` at 951 + 1,005 = 1,956. 6,000 since docs/techniques/09 §3.1 (continued at the ceiling).
  */
 export function getSelfFamilyMaxOutputTokens(): number {
-  return parseClampedIntEnv('SELF_FAMILY_MAX_OUTPUT_TOKENS', 4000, 1000, 16000);
+  return parseClampedIntEnv('SELF_FAMILY_MAX_OUTPUT_TOKENS', 6000, 1000, 16000);
 }
 
 /*
@@ -1426,6 +1533,16 @@ export function getSelfV3RouteBudgetMs(): number {
  */
 export function isPersonalizerVoiceByGenderEnabled(): boolean {
   return boolEnv('PERSONALIZER_VOICE_BY_GENDER', true);
+}
+
+/**
+ * docs/techniques/13 §2.4: the one gate for personal data (`src/reading/person/modelContext.ts`). `READING_PERSON_GATE=1`:
+ * the card Personalizer, card chat and Clarify take their person lines from the gate (by role; never a name, email,
+ * phone, place, birth time or coordinates) and record the field names sent on their run row. Off (default): today's
+ * prompt bytes, unchanged.
+ */
+export function isReadingPersonGateEnabled(): boolean {
+  return boolEnv('READING_PERSON_GATE', false);
 }
 
 /** The voice prompt's version: part of the card cache key and the prefix, so a new voice never serves an old card. */
@@ -1734,4 +1851,52 @@ export function getLuckyRetrogradeAvoidMap(): LuckyRetrogradeAvoidConfig {
     retrogradeKarakaPenalty: parseClampedIntEnv('LUCKY_RETROGRADE_KARAKA_PENALTY', 2, 0, 5),
     stationaryKarakaPenalty: parseClampedIntEnv('LUCKY_STATIONARY_KARAKA_PENALTY', 3, 0, 5),
   };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The reading prepared ahead (docs/techniques/11 rev 4): one status per chart, the gate, the retry and the yearly span
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * `READING_PREP=1` turns on the preparation queue (doc 11 §4.3, phase 2). Off (default 0): no queue exists, the stages
+ * used are registered → pulling → checking → chart_ready → ready, and the gate locks on the chart status, the digest and
+ * a running build only (§4.8, first version).
+ */
+export function isReadingPrepEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.READING_PREP?.trim() === '1';
+}
+
+/**
+ * The dasha systems whose stored periods are required everywhere (doc 11 §4.2: "the star voice, the sign voice"; doc 12
+ * §3: Vimshottari and Narayana). A hole in one of them makes the chart incomplete; a hole in any other system that applies
+ * is a named gap. Env `PIPELINE_REQUIRED_DASHAS` (comma list of stored system ids; default `vimsottari,narayana`).
+ */
+export function getPipelineRequiredDashas(): string[] {
+  return listEnv('PIPELINE_REQUIRED_DASHAS', ['vimsottari', 'narayana']);
+}
+
+/**
+ * doc 11 §4.2 retry: a row the engine refuses for its input (a clock's dated rows the engine does not serve) is kept
+ * `unsupported` and not asked again for this many days (`PIPELINE_REFUSED_RECHECK_DAYS`, 1..365, default 30); then it is
+ * asked once more when something needs it (a new engine release may serve it).
+ */
+export function getPipelineRefusedRecheckDays(): number {
+  return parseClampedIntEnv('PIPELINE_REFUSED_RECHECK_DAYS', 30, 1, 365);
+}
+
+/**
+ * Years back and ahead of the yearly set the digest sweep keeps filling (`ANNUAL_SPAN_YEARS`, 1..15, default 10: today's
+ * span). Doc 11 asks for 15; the deploy session raises it.
+ */
+export function getAnnualSpanYears(): number {
+  return parseClampedIntEnv('ANNUAL_SPAN_YEARS', 10, 1, 15);
+}
+
+/**
+ * `ANNUAL_TP_ALL_VARGAS=1`: the yearly set draws the Tithi Pravesha chart in every divisional chart the engine casts it in
+ * (doc 11 §4.2: 20 charts) and adds the Tajaka year row. Off (default): today's set, Tithi Pravesha and Varsha in D1, D9
+ * and D10 only.
+ */
+export function isAnnualTpAllVargas(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ANNUAL_TP_ALL_VARGAS?.trim() === '1';
 }

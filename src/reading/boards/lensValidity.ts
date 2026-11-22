@@ -41,12 +41,25 @@ export function readingLastDay(row: Row): string | null {
   return spans[0] ?? null;
 }
 
-/** Pure: the lens's dates from the newest row of each deck card. */
-export function lensValidityFrom(rows: readonly Row[], today: string, mark?: LensRefreshMark | null): LensRefreshView {
+/**
+ * Pure: a stored card reading's own "Good until" as the card shows it (`content.goodUntil`, docs/techniques/09 §3.2),
+ * else the row's last good day (`readingLastDay`). The Self board chip takes the earliest of these over its deck, so it
+ * never claims a later day than any card on the board (retire-v2 contract item 3).
+ */
+export function cardGoodUntil(row: Row): string | null {
+  const g = (row.output as { content?: { goodUntil?: unknown } } | null)?.content?.goodUntil;
+  return typeof g === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(g) ? g : readingLastDay(row);
+}
+
+/**
+ * Pure: the lens's dates from the newest row of each deck card. `lastDay`: each card's last good day (default
+ * `readingLastDay`, the lens rule; the Self board passes `cardGoodUntil`); `validUntil` is the earliest of them.
+ */
+export function lensValidityFrom(rows: readonly Row[], today: string, mark?: LensRefreshMark | null, lastDay: (row: Row) => string | null = readingLastDay): LensRefreshView {
   if (!rows.length) return { ...NO_LENS_REFRESH };
   let madeAt = rows.map((r) => iso(r.created_at)).sort()[0]!;
   if (mark && mark.outcome !== 'given_back' && mark.at > madeAt) madeAt = mark.at;
-  const validUntil = rows.map(readingLastDay).filter((d): d is string => d !== null).sort()[0] ?? null;
+  const validUntil = rows.map(lastDay).filter((d): d is string => d !== null).sort()[0] ?? null;
   return { madeAt, validUntil, due: refreshDue(validUntil, today), building: false, failed: false };
 }
 

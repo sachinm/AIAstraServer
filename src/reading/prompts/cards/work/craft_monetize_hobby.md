@@ -4,7 +4,7 @@ Board: Work, Hobby lens.
 
 What this card answers: Whether the craft should stay pure play for now or can carry a small, sustainable side income. The question: should the creative project stay a protected joy right now, or does the chart support a structured side income?
 
-What it reads: The 5th's link to the 11th (income) and the 2nd (savings); the 7th (customers); A5, A11 and A7; Mercury and Venus (the commercial touch); the D2; the D10 10th and 11th; the D7 5th where stored; the running periods; the year's D10 chart. Read only if present in the shared data: the D16 and the year lord. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
+What it reads: The 5th's link to the 11th (income) and the 2nd (savings); the 7th (customers); A5, A11 and A7; Mercury and Venus (the commercial touch); the D2; the D10 10th and 11th; the D9 5th and the D24; the running periods; the year's D10 chart. Read only if present in the shared data: the year lord. Read them through this card's ledger cells and matter rows; the frame's tone per span is given.
 
 For the person: Push back on monetise-everything: either a green light for small low-friction offers, or protection for the hobby. Employed: never at the cost of the day job too early. Studying: small sales that fit around study. Between jobs: never a replacement for the search. 25 to 35 practical. A build span is for testing small paid offers; a get-through span is for keeping it unpaid, or selling only finished pieces with no commissions.
 

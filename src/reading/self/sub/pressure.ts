@@ -12,14 +12,15 @@
  */
 import type { PrismaClient, Prisma } from '@prisma/client';
 import {
+  getPipelineRefusedRecheckDays,
   getSelfV2PressureMaxAgeDays,
-  getSelfV2PressureRetryHours,
   getSelfV2PressureTimeoutMs,
   isSelfV2PressurePullEnabled,
 } from '../../../config/env.js';
 import { fetchEngineExport, RadhaHttpError } from '../../../lib/astroKundliClient.js';
 import { CHART_TYPE_BY_ID } from '../../chartData/catalog.js';
-import type { KundliRequest, RadhaFetcher } from '../../chartData/store.js';
+import { countFailure, parseFailureMark, type KundliRequest, type RadhaFetcher } from '../../chartData/store.js';
+import { clocksToAsk, isEngineRefusal, PIPELINE_GIVE_UP_FAILURES, retryVerdict, type RetryVerdict, type StoredClockRow } from '../../pipeline/retry.js';
 import type { Matter, Polarity, PressureBoundary, PressureInventory, PressureKind, PressureRow, Strength } from '../v2types.js';
 import { parseApplicability, resolveClockV2, resolveReadingClocks, type ReadingClockSet } from '../clock.js';
 
@@ -207,19 +208,46 @@ type KundliDataRow = {
   error?: string | null;
   fetched_at?: Date | string | null;
   fetch_started_at?: Date | string | null;
+  valid_to?: Date | string | null;
 };
 
 type PressurePrisma = {
   kundliData?: {
     findUnique?: (q: { where: { kundli_data_key: { kundli_id: string; data_type: string; variant: string; ayanamsa: string } } }) => Promise<KundliDataRow | null>;
     upsert?: (q: { where: { kundli_data_key: { kundli_id: string; data_type: string; variant: string; ayanamsa: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => Promise<unknown>;
+    findMany?: (q: { where: Record<string, unknown>; select: Record<string, boolean> }) => Promise<Array<{ variant: string; status: string; error?: string | null; fetch_started_at?: Date | string | null; valid_to?: Date | string | null }>>;
+    updateMany?: (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => Promise<unknown>;
   };
   chartDataType?: { upsert?: (q: { where: { id: string }; create: Record<string, unknown>; update: Record<string, unknown> }) => Promise<unknown> };
 };
 
 const ms = (d: Date | string | null | undefined): number => (d ? (d instanceof Date ? d : new Date(d)).getTime() : 0);
 const DAY = 86_400_000;
-const HOUR = 3_600_000;
+
+const DATE_OF = (d: Date | string | null | undefined): Date | null => (d ? (d instanceof Date ? d : new Date(d)) : null);
+
+/**
+ * docs/techniques/11 §4.2 retry, for a clock's stored row: due, waiting (1, 5, 15 minutes after its 1st, 2nd, 3rd failure,
+ * then 15), given up (its `valid_to` mark, set at the PIPELINE_GIVE_UP_FAILURES-th failure for
+ * PIPELINE_REFUSED_RECHECK_DAYS; due again after it) or unsupported (the engine refuses this type for this clock; looked at
+ * again after PIPELINE_REFUSED_RECHECK_DAYS). A row with no failure is due.
+ */
+export function clockRowRetry(row: Pick<KundliDataRow, 'status' | 'error' | 'fetch_started_at' | 'valid_to'>, now: Date): RetryVerdict {
+  const failed = row.status === 'failed' || row.status === 'unsupported' || Boolean(row.error);
+  if (!failed) return { state: 'due', failures: 0, dueAt: null };
+  const mark = parseFailureMark(row.error ?? null);
+  return retryVerdict(
+    {
+      failures: mark?.failures ?? 1,
+      lastAttemptAt: DATE_OF(row.fetch_started_at),
+      message: mark?.message ?? row.error ?? null,
+      unsupported: row.status === 'unsupported',
+      givenUpUntil: DATE_OF(row.valid_to),
+    },
+    now,
+    { refusedRecheckMs: getPipelineRefusedRecheckDays() * DAY },
+  );
+}
 
 export function pressureParams(asOf: string, system: string): Record<string, unknown> {
   return { as_of: asOf, years_back: PRESSURE_YEARS_BACK, years_ahead: PRESSURE_YEARS_AHEAD, system, levels: PRESSURE_LEVELS };
@@ -298,11 +326,15 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
     gaps.push('pressure_inventory: pull off (SELF_V2_PRESSURE_PULL=0)');
     return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
   }
-  // a recent failed attempt (the engine refused or was down): wait before asking again
-  const lastAttempt = ms(row?.fetch_started_at);
-  if (row && row.error && lastAttempt && now.getTime() - lastAttempt < getSelfV2PressureRetryHours() * HOUR) {
-    gaps.push(`pressure_inventory: last pull failed (${String(row.error).slice(0, 120)}); next try after ${getSelfV2PressureRetryHours()} h`);
-    return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
+  // doc 11 §4.2 retry: a failed pull is asked again 1, 5 and 15 minutes after its failures, then whenever asked; given up
+  // after PIPELINE_GIVE_UP_FAILURES; an engine refusal of this clock is not asked again (unsupported, named)
+  if (row) {
+    const r = clockRowRetry(row, now);
+    if (r.state !== 'due') {
+      const why = r.state === 'unsupported' ? 'the engine does not serve this clock' : r.state === 'given_up' ? `given up after ${r.failures} failures` : `last pull failed; next try after ${r.dueAt?.toISOString() ?? '?'}`;
+      gaps.push(`pressure_inventory: ${why} (${String(parseFailureMark(row.error ?? null)?.message ?? row.error ?? '').slice(0, 120)})`);
+      return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
+    }
   }
 
   try {
@@ -321,6 +353,8 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
       error: null,
       fetch_started_at: now,
       fetched_at: now,
+      // a pull that lands clears any give-up mark (doc 11 §4.2 retry)
+      valid_to: null,
     };
     await p.kundliData?.upsert?.({ where, create: { kundli_id: kundliId, data_type: PRESSURE_TYPE, variant: pressureVariant(system), ayanamsa: PRESSURE_AYANAMSA, ...data }, update: data }).catch((e: Error) => {
       gaps.push(`pressure_inventory: pulled but not stored (${e.message?.slice(0, 120)})`);
@@ -336,13 +370,25 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
       return storedPayload ? mapStored('stale') : { inventory: null, source: 'none', gaps };
     }
     gaps.push(`pressure_inventory: pull failed (${error.slice(0, 120)})`);
-    // the engine's own refusal: remember the attempt; an older payload is kept as it is
+    // the engine's own answer: remember the attempt; an older payload is kept as it is. doc 11 §4.2 retry: a refusal of
+    // this type for this clock is `unsupported` (not asked again); any other failure is counted (`[failures=n …]`) and
+    // given up at PIPELINE_GIVE_UP_FAILURES (`valid_to` = the store's give-up mark, which the sweep SQL reads)
+    const refusal = isEngineRefusal(error);
+    // a ready row whose last refresh failed carries the failure in `error`: counted as a failed row. A row asked again
+    // after its give-up expired starts the count over.
+    const prevFailures = parseFailureMark(row?.error ?? null)?.failures ?? 0;
+    const prev = row && (row.error || row.status === 'failed') && prevFailures < PIPELINE_GIVE_UP_FAILURES ? { status: 'failed' as const, error: row.error ?? null } : undefined;
+    const mark = refusal ? null : countFailure(prev, error, null);
+    const status = refusal ? 'unsupported' : 'failed';
+    const stored = mark?.error ?? error;
+    // given up for PIPELINE_REFUSED_RECHECK_DAYS, then asked again (the sweep SQL reads `valid_to`)
+    const validTo = mark?.validTo ? new Date(now.getTime() + getPipelineRefusedRecheckDays() * DAY) : null;
     await ensureTypeRow(p)
       .then(() =>
         p.kundliData?.upsert?.({
           where,
-          create: { kundli_id: kundliId, data_type: PRESSURE_TYPE, variant: pressureVariant(system), ayanamsa: PRESSURE_AYANAMSA, status: 'failed', error, fetch_started_at: now, fetched_at: now },
-          update: storedPayload ? { error, fetch_started_at: now } : { status: 'failed', error, fetch_started_at: now, fetched_at: now },
+          create: { kundli_id: kundliId, data_type: PRESSURE_TYPE, variant: pressureVariant(system), ayanamsa: PRESSURE_AYANAMSA, status, error: stored, fetch_started_at: now, fetched_at: now, valid_to: validTo },
+          update: storedPayload ? { error: stored, fetch_started_at: now, valid_to: validTo } : { status, error: stored, fetch_started_at: now, fetched_at: now, valid_to: validTo },
         }),
       )
       .catch(() => undefined);
@@ -386,19 +432,61 @@ export interface EnsureInventoriesResult {
 export interface EnsureInventoriesDeps extends PressureDeps {
   loadSet?: (prisma: PrismaClient, kundliId: string) => Promise<ReadingClockSet>;
   load?: typeof loadPressureInventory;
+  /** the kundli's failed clock rows (default: read from kundli_data); and the rewrite of a refused one to unsupported */
+  loadFailed?: (prisma: PrismaClient, kundliId: string) => Promise<StoredClockRow[]>;
+  markUnsupported?: (prisma: PrismaClient, kundliId: string, system: string) => Promise<void>;
+}
+
+/** The kundli's failed clock rows, for the retry (status, failure mark, last attempt, give-up mark). Never throws. */
+export async function loadFailedClockRows(prisma: PrismaClient, kundliId: string): Promise<StoredClockRow[]> {
+  const p = prisma as unknown as PressurePrisma;
+  if (!p.kundliData?.findMany) return [];
+  const rows = await p.kundliData
+    .findMany({ where: { kundli_id: kundliId, data_type: PRESSURE_TYPE, ayanamsa: PRESSURE_AYANAMSA, status: 'failed' }, select: { variant: true, status: true, error: true, fetch_started_at: true, valid_to: true } })
+    .catch(() => []);
+  return rows.map((r) => {
+    const mark = parseFailureMark(r.error ?? null);
+    return {
+      system: r.variant.replace(/^system=/, ''),
+      status: r.status,
+      failures: mark?.failures ?? 1,
+      lastAttemptAt: DATE_OF(r.fetch_started_at),
+      message: mark?.message ?? r.error ?? null,
+      givenUpUntil: DATE_OF(r.valid_to),
+    };
+  });
+}
+
+/** A failed clock row the engine refused: rewritten `unsupported` (status only; its error and times are kept). */
+export async function markClockUnsupported(prisma: PrismaClient, kundliId: string, system: string): Promise<void> {
+  const p = prisma as unknown as PressurePrisma;
+  await p.kundliData?.updateMany?.({ where: { kundli_id: kundliId, data_type: PRESSURE_TYPE, variant: pressureVariant(system), ayanamsa: PRESSURE_AYANAMSA, status: 'failed' }, data: { status: 'unsupported' } });
 }
 
 /**
  * Every pulled clock of the kundli's set, in parallel: a stored fresh row is only read; a missing or stale one is pulled
- * (each pull limited to SELF_V2_PRESSURE_TIMEOUT_MS, default 15 s; a failure waits SELF_V2_PRESSURE_RETRY_HOURS).
+ * (each pull limited to SELF_V2_PRESSURE_TIMEOUT_MS, default 15 s). doc 11 §4.2 retry: a failed row is asked again on
+ * the 1, 5, 15-minute schedule and given up after PIPELINE_GIVE_UP_FAILURES (`clocksToAsk`), a failed clock outside the
+ * set is asked too while it is due (so the sweep settles it), and a row the engine refused is rewritten `unsupported`.
  * Called by the sync worker so a build normally finds the rows stored. Never throws.
  */
 export async function ensurePressureInventories(prisma: PrismaClient, kundliId: string, asOf: string, deps: EnsureInventoriesDeps = {}): Promise<EnsureInventoriesResult> {
   try {
     const set = await (deps.loadSet ?? ((p, k) => loadReadingClockSet(p, k)))(prisma, kundliId);
     const load = deps.load ?? loadPressureInventory;
+    const now = (deps.now ?? (() => new Date()))();
+    const failed = await (deps.loadFailed ?? loadFailedClockRows)(prisma, kundliId).catch((): StoredClockRow[] => []);
+    const plan = clocksToAsk(set.pulled, failed, now, { refusedRecheckMs: getPipelineRefusedRecheckDays() * DAY });
+    await Promise.all(
+      plan.refused.map((system) =>
+        (deps.markUnsupported ?? markClockUnsupported)(prisma, kundliId, system).catch((e: Error) =>
+          // logged, not thrown: a row left `failed` makes the sweep pick the chart again, and the next run retries this
+          console.warn(JSON.stringify({ msg: 'pressure_inventory: refused clock row not marked unsupported', kundliId, system, error: String(e?.message ?? e).slice(0, 160) })),
+        ),
+      ),
+    );
     const clocks = await Promise.all(
-      set.pulled.map(async (system) => {
+      plan.ask.map(async (system) => {
         const r = await load(prisma, kundliId, system, asOf, deps).catch(
           (e: Error): PressureLoad => ({ inventory: null, source: 'none', gaps: [`pressure_inventory: ${String(e?.message ?? e).slice(0, 120)}`] }),
         );

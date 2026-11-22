@@ -166,8 +166,32 @@ Modus operandi for dashboard changes (Self, Love, Work, Today, Lucky times) and 
 3. **Types first, then registration.** Export sub-technique and agent `Input`/`Output` types from the board's `types.ts` before use, with a validator (Zod or `responseSchema`), an `AGENTS` row (`src/agents/registry.ts`), a `TECHNIQUES` row (`src/techniques/catalog.ts`) with `selectors` + `contract` (checked by `tests/unit/techniques/contracts.test.ts`), and count/id/tone/score-only summaries. Plans adding an agent list its types in deliverables.
 4. **Every agent has a slice and cache plan.** Build agent inputs from build context (never DB) as a stable prefix (`>= 1,024` tokens, padded from allowed rows if short) + variable suffix; register in `SUBAGENT_DIGEST_SPECS` (`src/reading/oracle/digestSlices.ts`) and `src/techniques/subagentCachePlan.ts` with `cachePrefix: true`, `cacheOwner: { userId, kundliId }` and stable prefix in `parts[0]`. Warm all prefixes in parallel before the first call (`READING_EXPLICIT_CACHE=1`); Lab displays cached vs total tokens.
 5. **Every cache region is in the ledger for 45-min cleanup.** Every explicit cache region requires an `llm_cache_entries` row (`name`, `provider`, `user_id`, `kundli_id`, `prefix_hash`, `model`, `created_at`, `last_used_at`, `expires_at`); reusable outputs go to `reading_findings_cache` or `technique_outputs`. Consumers call `informIndividualCacheUsed({ userId, kundliId })` (`src/reading/llm/cacheSweep.ts`), and `recycleIndividualCaches` deletes used regions after `READING_CACHE_RECYCLE_MINUTES` (45); `runScheduledSweep` is the safety net. Unregistered regions are merge-blocking defects.
-6. **Budgets are stated and measured.** Plans state, and builds log per agent: wall time, prompt/cached/output tokens and cost. Default targets: code `< 1 s`, cold build `< 30 s`, profile-only rebuild `< 10 s`, warm cached input share `> 70 %`. Lab replay gates merge.
+6. **Budgets are stated and measured.** Plans state, and builds log per agent: wall time, prompt/cached/output tokens and cost. Default targets: code `< 1 s`; a cold board shows its first card within `120 s` and all cards within `180 s`, with stage and card-by-card progress; profile-only rebuild `< 10 s`; reopen makes no model call; warm cached input share `> 70 %`. These targets are met by caching, parallel calls and validity windows, never by reading less (next section). Lab replay gates merge.
 7. **No paid call without a yes.** Phases state key, model, call count and cost, replaying first on stored Lab dossiers (`docs/reading-engine/65 §9`).
+
+## Reading depth is a release gate (Sachin, 2026-11-19)
+
+Between 9 and 18 Nov 2026 the card reading was cut from paragraphs to one sentence of gift, one of knot and one to three
+sentences a stretch, in five steps, each for a speed or cost target, with no rule against it and no test of depth
+(`docs/techniques/09` §1). These rules stop that happening again. They outrank every speed and cost target in this file.
+See also `SOUL.md` §5.
+
+1. **Depth floor.** Every stored card has a technical story of at least 700 words that cites, by evidence key, the maha
+   dasha and sub-period with their system, the year chart, D9, the card's own divisional chart and at least two verified
+   dasha systems; and a plain story of at least 350 words. A card below the floor is repaired or continued, not served.
+   The floor is checked in code (word count and evidence-key kinds; no word lists) before a card is marked ready.
+2. **Nothing is dropped upward.** Each agent's output is either read by the next layer or the agent is removed from the
+   pipeline. An agent whose output no one reads is a bug (`tests/unit/reading/noDroppedOutputs.test.ts`).
+3. **Nothing served is hidden.** Every reading field the API serves has a place on screen, and a web test proves it
+   (`servedFieldsRendered`). A layout change that hides a served field fails that test.
+4. **A limit never discards.** A call that stops at its output ceiling is continued; a build that reaches its spend cap
+   queues the remaining cards. No code path throws a reading away because it was long.
+5. **Lowering depth needs a replay and a yes.** Any change that lowers an output ceiling, shortens a prompt contract,
+   merges model calls, removes a layer, drops a chart or a dasha system from a pack, or hides a field includes the
+   depth replay (`scripts/depth-replay.ts`: old against new on the test charts: words, charts cited, systems cited) and
+   Sachin's written yes. Speed and cost are bought with caching, parallel calls and validity windows, never with depth.
+6. **Plans state allotments.** A plan that adds or changes an agent states its model, thinking level, input tokens
+   (cached and not), output ceiling and expected output, timeout and cost, as `docs/techniques/09` §3.1 does.
 
 ## Enterprise security, scale & Admin error reconciliation (Sachin, 2026-11-13)
 
@@ -177,7 +201,7 @@ Applies to every session and `/teamwork` swarm across `AIAstra_Server`, `AIAstra
 2. **Mask to consumers; capture & correlate for Admin.** GraphQL/REST mask internal/Prisma errors on the wire (`INTERNAL_SERVER_ERROR` + `requestId`) while keeping allowlisted domain codes (`UNAUTHENTICATED`, `FORBIDDEN`, `ACCOUNT_LOCKED`, `BAD_USER_INPUT`). Every server 5xx, GraphQL error, RBAC denial, depth/alias block, client JS/React crash and CSP violation writes a PII-redacted row to `app_error_events` (joined via `request_id`/`session_id`) for `aiadastra_admin` (`Usage › Errors`, `People › Security`).
 3. **Audit every staff read; sign service calls.** Staff inspections of customer charts/profiles (`chart.inspect`, `lab.person_view`) record `admin_actions` and authenticate `aiadastra_admin` -> `AIAstra_Server` with HMAC-signed staff-attributed headers, never anonymous static tokens.
 4. **Headers, CSP & header-only secrets.** Web and API ship `Content-Security-Policy`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Strict-Transport-Security` and `Permissions-Policy`. Provider keys (`x-goog-api-key`) go in headers, never URLs.
-5. **Scale & `/teamwork` gate.** Enforce GraphQL depth/alias caps (`src/config/env.ts`), small per-Lambda DB pools, bounded LLM fan-out and `<=100ms` UI / `<=500ms` cached API / `<=10s` interactive AI deadlines; `/teamwork` verifiers check ASVS 5.0 L2 + Admin error capture before approval.
+5. **Scale & `/teamwork` gate.** Enforce GraphQL depth/alias caps (`src/config/env.ts`), small per-Lambda DB pools, bounded LLM fan-out and `<=100ms` UI / `<=500ms` cached API / `<=10s` interactive AI deadlines (chat answers; board readings follow "Reading depth is a release gate"); `/teamwork` verifiers check ASVS 5.0 L2 + Admin error capture before approval.
 
 ## Tracking files
 

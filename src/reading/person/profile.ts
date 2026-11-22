@@ -143,3 +143,28 @@ export async function loadProfilePack(prisma: PrismaClient, userId: string, asOf
   for (const r of rows) facts[r.key] = { value: r.value, confirmed_at: r.confirmed_at?.toISOString() ?? null };
   return buildProfilePack({ birthDate: auth?.date_of_birth ?? null, gender: auth?.gender ?? null, role: auth?.role ?? null, facts }, asOf);
 }
+
+/**
+ * docs/techniques/09 §3.3 and decision 5: the person's stage of life for the Personalizer (it gets the age in whole years
+ * and this stage; it never prints the age). Words from the age band and the work status the person gave; nothing
+ * astrological, nothing guessed.
+ */
+export function lifeStageOf(p: Pick<ProfilePack, 'ageBand' | 'facts'>): string | null {
+  const status = (p.facts as { work?: { status?: string } } | null)?.work?.status ?? null;
+  if (status === 'studying') return 'student years: study, first steps, finding a direction';
+  if (status === 'retired') return 'retired: rest, meaning, the family and community around them';
+  switch (p.ageBand) {
+    case 'under_25':
+      return 'starting out: study, a first job, first money, who they are becoming';
+    case '25_35':
+      return 'building years: big first decisions (work, a partner, a home, a venture)';
+    case '36_45':
+      return 'load-bearing years: responsibility, a plateau to break, home and stamina';
+    case '46_60':
+      return 'consolidating years: what to keep, what to hand on, health habits, family';
+    case '60_plus':
+      return 'later years: rhythm, meaning, the people around them';
+    default:
+      return null;
+  }
+}

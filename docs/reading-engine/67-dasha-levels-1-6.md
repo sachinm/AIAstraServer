@@ -450,6 +450,8 @@ of a system whose tree is `failed` or `fetching`, and a disk guard (`src/reading
 `DB_DISK_MAX_FILL` (default 0.7). A wet backfill refuses without `DB_DISK_LIMIT_BYTES` (5368709120 for the 5 GB disk);
 the dry run prints the byte estimate (50k rows per kundli unless the stored trees give more).
 
+Note 2026-11-22: the disk guard was removed on Sachin's instruction; nothing in code now refuses a bulk write when the disk is nearly full (see `docs/techniques/11` rev 4, open point E).
+
 **Deep window (455 days), level 4 (the default), focused kundlis only.**
 
 - Vimsottari level 4 averages about 6.7 days, so about 70 rows per window.
@@ -507,6 +509,8 @@ Env vars option 2 would use (names reserved, not read by any code yet):
 
 Recommendation: option 2, decided by Sachin before the backfill runs on more kundlis. Until then, run the backfill only
 with `DB_DISK_LIMIT_BYTES` set and after reading the dry run's byte estimate.
+
+Note 2026-11-22: the disk guard was removed on Sachin's instruction; nothing in code now refuses a bulk write when the disk is nearly full (see `docs/techniques/11` rev 4, open point E).
 
 **Indexes.** Every query filters by `kundli_id` and `level`, and the worker and the backfill delete one level band per
 kundli. Without the new index, a lifelong query over a kundli with deep rows walks the deep rows through the range

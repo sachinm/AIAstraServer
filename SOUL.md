@@ -53,3 +53,20 @@ Every coding agent and every runtime astrological reading/synthesis agent must r
   - When the active Mahadasha/Antardasha lord or the running *Tithi Pravesha* Year Lord (`yearLordRetro === true`) is retrograde, shift the temporal posture from `linear_build` to `iterative_review` (auditing, renegotiating terms, restructuring existing systems, and refining second drafts rather than rushing irreversible brand-new commitments, especially across ` Vikala` station windows).
 - **Zero Sanskrit Motion Jargon on Consumer Read/Short Faces:**
   - Consumer-facing `Read` and `Short` card prose (`headline`, `line`, `asks`, `step`, `plainBehavior`, `plainCounsel`) must translate motion states into 100% plain English (*"second-pass review"*, *"renegotiating terms"*, *"deliberate pacing around turning points"*) and **never** leak Sanskrit or chart jargon (`Vakra`, `Cheshta Bala`, `Ashtagati`, `Anuvakra`, `Atichara`, `Vikala`, `Neecha`, `Uchcha`, `Mahadasha`, `Tithi Pravesha`, `D9`, `D10`) or internal engine names. Technical terms belong exclusively in structured `evidence` / `Research` layers.
+
+## 5. The reading comes first (Sachin, 2026-11-19; `docs/techniques/09`)
+
+- **The astrological reading is the product.** No agent, prompt, limit or layout may shorten it, summarise it away,
+  drop a chart, a dasha system, the year chart or a divisional chart from it, or hide it from the person, in order to
+  save cost, tokens or time.
+- **A limit never cuts the reading.** When an output ceiling is reached the call is continued from where it stopped;
+  when a spend cap is reached the remaining cards are queued for the next round. Neither ever produces a shorter card.
+- **Every card carries two tellings of one story.** The Oracle's technical story (700–1,400 words, opening with the
+  maha dasha and relating it to the sub-period, the Tithi Pravesha year, the Moon, D9 and the card's own divisional
+  chart, and every verified dasha system that applies) is shown on the **Astrology Reading** tab, which is a Research
+  layer in the sense of §4: chart terms belong there, engine names never do. The Personalizer's plain story (350–700
+  words, same order, the astrologer's voice, no chart terms) is shown on **Outlook**.
+- **Only verified systems that apply to this chart are read, shown and counted.** A system the research flags or the
+  engine marks as not applying is left out, never padded in to look thorough.
+- **A change that reduces what a card reads or shows** is made only with Sachin's written yes and the depth replay
+  table beside it (`AGENTS.md`, "Reading depth is a release gate").

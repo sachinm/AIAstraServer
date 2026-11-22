@@ -5,6 +5,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { chartReadingOf } from '../../cards/chart.js';
+import { redactEngineText } from '../v2/personalizerValidate.js';
 import type { PersonalPattern } from '../v2types.js';
 import type { OracleV3Output, PersonalCardV3, SelfCardId, SelfV3CardContent, YearFrameV3 } from './types.js';
 
@@ -24,7 +25,7 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
   const spans = oracle.spans.flatMap((os) => {
     const fs = frame.spans.find((s) => s.id === os.span);
     const ps = personal.spans.find((s) => s.span === os.span);
-    return fs && ps ? [{ span: os.span, from: fs.from, to: fs.to, tone: os.tone, mode: os.mode, asks: ps.asks, obstacle: ps.obstacle, step: ps.step, held: fs.held !== false }] : [];
+    return fs && ps ? [{ span: os.span, from: fs.from, to: fs.to, tone: os.tone, mode: os.mode, asks: ps.asks, obstacle: ps.obstacle, step: ps.step, held: fs.held !== false, ...(ps.growth ? { growth: ps.growth } : {}) }] : [];
   });
   if (!spans.length) return null;
   const now = frame.spans.find((s) => s.place === 'now') ?? frame.spans[0]!;
@@ -39,7 +40,20 @@ export function cardContent(oracle: OracleV3Output['cards'][SelfCardId], persona
     agreement: { agree: now.agree, of: now.of },
     chart: chartReadingOf(oracle),
     ...(personal.why ? { why: personal.why } : {}),
+    ...storyFields(oracle, personal),
   };
+}
+
+/**
+ * docs/techniques/09 §6: the two stories as served. The technical story with its inline `{keys}` cut and engine names
+ * made plain (the Astrology Reading tab is a Research layer: chart terms stay, engine names never); the plain story,
+ * or `pending` while the Personalizer is re-run. Nothing for a card read before the story contract.
+ */
+export function storyFields(oracle: { story?: string; goodUntil?: string | null } | null | undefined, personal: { story?: string; plainPending?: boolean } | null | undefined): Pick<SelfV3CardContent, 'story' | 'plain' | 'goodUntil'> {
+  if (!oracle?.story) return {};
+  const story = redactEngineText(oracle.story.replace(/\s*\{[^{}]+\}/g, '').replace(/\s*\b(?:pressure|ledger|activation|annual|planet|house|point|star|promise|claim):[\w.@/:-]+/gi, '')).trim() || null;
+  const plainStory = personal?.story && !personal.plainPending ? redactEngineText(personal.story).trim() || null : null;
+  return { story, plain: { story: plainStory, pending: !plainStory }, goodUntil: oracle.goodUntil ?? null };
 }
 
 type StorePrisma = {

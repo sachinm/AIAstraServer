@@ -6,6 +6,7 @@
  */
 import { getReadingClockOrder, getReadingClocks, getSelfClockConditionalOrder, getSelfConfirmSystems } from '../../config/env.js';
 import { applicableConditionalSystems } from '../digest/activation.js';
+import { systemDef } from '../clocks/systems.js';
 import type { SelfClock } from './types.js';
 import { clockLabel } from './words.js';
 
@@ -173,7 +174,11 @@ export interface ReadingClockSet {
   pulled: string[];
   /** the conditional clock in the set, if one applies */
   conditional: string | null;
-  skipped: Array<{ system: string; reason: 'no_periods' | 'does_not_apply' | 'none_applies' | 'limit' }>;
+  /**
+   * `not_verified`: the system is not shown (`clocks/systems.ts`: flagged, longevity or unchecked); `periods_only`: shown
+   * but fed from its stored period rows, not an engine pressure inventory (docs/techniques/09 §8 step 5)
+   */
+  skipped: Array<{ system: string; reason: 'no_periods' | 'does_not_apply' | 'none_applies' | 'limit' | 'not_verified' | 'periods_only' }>;
 }
 
 /**
@@ -193,10 +198,21 @@ export function resolveReadingClocks(spine: string, present: readonly SystemPres
   const ordered: string[] = [];
   let conditional: string | null = null;
   for (const slot of getReadingClockOrder()) {
+    // docs/techniques/09 decision 2: only verified systems that apply are read; a periods-only system is not a clock
+    // reader's (it has no engine verdict rows) and reaches the reading as stored period rows instead
+    const def = slot === YEAR_CLOCK || slot === CONDITIONAL_SLOT ? null : systemDef(slot);
+    if (slot !== YEAR_CLOCK && slot !== CONDITIONAL_SLOT && (!def || def.show === 'never')) {
+      skipped.push({ system: slot, reason: 'not_verified' });
+      continue;
+    }
+    if (def && def.feed !== 'pressure') {
+      skipped.push({ system: slot, reason: 'periods_only' });
+      continue;
+    }
     if (slot === YEAR_CLOCK) {
       ordered.push(YEAR_CLOCK);
     } else if (slot === CONDITIONAL_SLOT) {
-      const c = applying.find((s) => !ordered.includes(s));
+      const c = applying.find((s) => !ordered.includes(s) && systemDef(s)?.show === 'if_applies');
       if (c) {
         ordered.push(c);
         conditional ??= c;

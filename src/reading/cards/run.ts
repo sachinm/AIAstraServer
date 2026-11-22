@@ -19,7 +19,26 @@
  * throws.
  */
 import type { PrismaClient } from '@prisma/client';
-import { getCardsBoardParallel, getCardsCardOutputTokens, getCardsGroupOutputBudget, getCardsGroupSizeBoard, getCardsGroupSizeRest, getCardsRestParallel, getReadingSpendCapUsd, isCardsGroupPackEnabled, isCardsReadRestEnabled } from '../../config/env.js';
+import {
+  getCardsBoardParallel,
+  getCardsCardOutputTokens,
+  getCardsGroupOutputBudget,
+  getCardsGroupSizeBoard,
+  getCardsGroupSizeRest,
+  getCardsPersonalizerMaxOutputTokens,
+  getCardsPersonalizerTimeoutMs,
+  getCardsRestParallel,
+  getReadingBoardSpendCapUsd,
+  getReadingCardSpendCapUsd,
+  isCardsGroupPackEnabled,
+  isCardsReadRestEnabled,
+  isCardsStoryContractEnabled,
+  isReadingPersonGateEnabled,
+} from '../../config/env.js';
+import { personForModel, type PersonForModel } from '../person/modelContext.js';
+import { lifeStageOf } from '../person/profile.js';
+import { parseRowLines } from '../slices/render.js';
+import { cardStoryInputs, goodUntilOf, storyInputsHash, systemsViewOf, type CardsStoryRunInput } from './storyInputs.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
 import { techniqueStamp } from './techniques.js';
 import { buildCardPack, CARD_GROUP_PROMPT, planGroups, readCardGroup, splitGroups, type CardPack, type CardPackInput, type GroupCardResult } from './group.js';
@@ -35,13 +54,13 @@ import { READABLE_CARDS } from '../self/v3/cards.js';
 import { anyCardDef, isReadable } from './registry.js';
 import { personalizerV3Call, personalizerVoiceToken, runPersonalizerV3, SELF_V3_PERSONALIZER_PROMPT, type PersonalizerV3Input } from '../self/v3/personalizer.js';
 import { cardContent } from '../self/v3/store.js';
-import type { CardId, SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
+import type { CardId, OracleCardV3, PersonalCardV3, SelfCardId, SelfV3CardContent, YearFrameV3 } from '../self/v3/types.js';
 import { renderYearFrame } from '../self/v3/yearFrame.js';
 import type { RenderedSlice } from '../slices/types.js';
 import { chartReadingOf } from './chart.js';
 import { readCardOracle } from './oracle.js';
 import { readCardsState, updateCardsState } from './state.js';
-import { cardStoreKey } from './store.js';
+import { cardStoreKey, readStoredCardReading } from './store.js';
 import { CARD_ORACLE_PROMPT, CARD_PERSONALIZER_AGENT, CARD_READING_TECHNIQUE, cardBriefPrompt, type CardRunResult, type StoredCardReading } from './types.js';
 import { READER_SYSTEM_PROMPT } from '../clocks/types.js';
 
@@ -60,6 +79,9 @@ export interface CardsRunDeps {
   readRest?: boolean;
   boardParallel?: number;
   restParallel?: number;
+  /** overrides READING_PERSON_GATE (tests); and the gate's read (default personForModel, role `personalizer`) */
+  personGate?: boolean;
+  loadPerson?: (prisma: PrismaClient, ctx: SelfBuildContext) => Promise<PersonForModel>;
   /** overrides: read in groups on one cached pack (doc 71), and the group sizes */
   groupPack?: boolean;
   groupSizeBoard?: number;
@@ -68,14 +90,20 @@ export interface CardsRunDeps {
   groupOutputBudget?: number;
   cardOutputTokens?: number;
   ensureCache?: typeof ensurePromptCache;
+  /** overrides CARDS_STORY_CONTRACT and READING_CARD_SPEND_CAP_USD (tests) */
+  storyContract?: boolean;
+  cardCapUsd?: number;
 }
 
 export interface CardsRunInput {
   ctx: SelfBuildContext;
   frame: YearFrameV3;
   ledger: AgreedLedger | null;
-  /** the shared prefix the clock layer warmed (natal.core, sky.window, year.tp, frame) */
-  prefix: { text: string; keys: readonly string[]; hash: string };
+  /**
+   * the shared prefix the clock layer warmed: `text` the cached natal part (natal.core, sky.window, year.tp), `dated` the
+   * uncached dated block (TODAY, frame; docs/techniques/09 §8 step 4), `keys` both, `hash` the four slices' hashes
+   */
+  prefix: { text: string; dated?: string; keys: readonly string[]; hash: string };
   /** every slice the build holds; the card reads its `matter.<key>` slices */
   slices: readonly RenderedSlice[];
   /** the person's board, in their order */
@@ -95,6 +123,11 @@ export interface CardsRunInput {
   techniques?: CardPackInput['techniques'];
   /** USD spent by this operation before the cards (the clock layer of this build); counted against `capUsd` */
   spentBeforeUsd: number;
+  /**
+   * docs/techniques/09 §3.4: what the story contract reads (family findings, clock sheets with sentences, verified
+   * systems and their stored periods, lens threads). Absent: the doc 70 cards, whatever the flag says.
+   */
+  story?: CardsStoryRunInput;
 }
 
 export interface CardsRunResult {
@@ -196,11 +229,15 @@ function groupBatcher(run: (cards: CardId[], call: string) => Promise<{ cards: P
   };
 }
 
+/** rounds a card may come back below the depth floor in one day before it is shown failed (doc 09 §3.5) */
+export const THIN_ATTEMPTS = 3;
+
 export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<CardsRunResult> {
   const { ctx } = i;
   const out: CardsRunResult = { results: [], cards: {}, timings: [], issues: [], spentUsd: 0, capReached: false, order: [] };
   // one operation, one budget (docs/billing/README.md "Spend cap per operation"): the stored day's spend is not read
-  let cap = deps.capUsd ?? getReadingSpendCapUsd();
+  // doc 09 §3.5: a board build's cards share READING_BOARD_SPEND_CAP_USD (chat answers keep READING_SPEND_CAP_USD)
+  let cap = deps.capUsd ?? getReadingBoardSpendCapUsd();
   let spentBefore = i.spentBeforeUsd;
   let roundSpent = 0;
   let capLogged = false;
@@ -222,6 +259,12 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const ledgerHash = i.ledger ? shortHash(canonicalJson(i.ledger.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of, c.evidence]))) : '-';
   const frameHash = shortHash(canonicalJson(i.frame.spans.map((s) => [s.from, s.to, s.tone, s.held, s.clocks.map((c) => [c.system, c.tone])])));
   const portraitHash = shortHash(canonicalJson(i.portrait ?? null));
+  // doc 13 §2.4: with READING_PERSON_GATE on the Personalizer's person comes from the gate, read once per run; off,
+  // nothing is read and the prompt is today's. The store key is left as it is (turning the flag on re-reads no stored
+  // card; docs/TODOS.md)
+  const person: PersonForModel | undefined = (deps.personGate ?? isReadingPersonGateEnabled())
+    ? await (deps.loadPerson ?? ((p, c) => personForModel(p, { userId: c.userId, kundliId: c.kundliId }, 'personalizer', { asOf: c.asOf })))(deps.prisma, ctx)
+    : undefined;
   const nowSpan = i.frame.spans.find((s) => s.place === 'now') ?? i.frame.spans[0]!;
   const spanDates = new Map(i.frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
   const pHash = [...[READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash), personalizerVoiceToken(ctx.sub.profile?.gender)].join('.');
@@ -229,7 +272,16 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const owner = { userId: ctx.userId, kundliId: ctx.kundliId };
 
   // doc 71: one pack for every card this run may read, cached once; the board's cards in small groups, the rest after
-  const grouped = deps.groupPack ?? isCardsGroupPackEnabled();
+  // doc 09 decision 7: one card per call with the story contract; the group call only with the contract off
+  const storyOn = (deps.storyContract ?? isCardsStoryContractEnabled()) && Boolean(i.story);
+  const grouped = deps.groupPack ?? (storyOn ? false : isCardsGroupPackEnabled());
+  const pHashOracle = [READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT].map(promptHash).join('.');
+  // the stored rows' dates by key (period and year rows of every slice, and the stored periods): for "Good until"
+  const rowDates = new Map<string, { from: string; to: string }>();
+  if (storyOn) {
+    for (const sl of i.slices) for (const [k, r] of parseRowLines(sl.text)) if (!rowDates.has(k)) rowDates.set(k, { from: r.from, to: r.to });
+    for (const r of i.story!.periodRows) rowDates.set(`activation:${r.system}/${r.level}/${r.lord ?? r.sign}@${r.from}`, { from: r.from, to: r.to });
+  }
   let pack: CardPack | null = null;
   let packCache: Promise<string | null> = Promise.resolve(null);
   let batch: ReturnType<typeof groupBatcher> | null = null;
@@ -261,8 +313,11 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
         console.log(JSON.stringify({ msg: 'reading spend cap', op: 'cards', kundliId: ctx.kundliId, spentUsd: spent(), capUsd: cap }));
       }
       out.results.push({ card: id, status: 'skipped_cap', content: null, timings: [], issues: [], costUsd: 0 });
+      // doc 09 §3.5: a card the cap stopped is queued for the next round, never written shorter
       await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
-        if (d.cards[id]?.state === 'queued' || premarked.delete(id)) delete d.cards[id];
+        if (storyOn) d.cards[id] = { state: 'queued', at: new Date().toISOString(), error: 'board spend cap: next round' };
+        else if (d.cards[id]?.state === 'queued' || premarked.delete(id)) delete d.cards[id];
+        premarked.delete(id);
         d.capReached = true;
       });
       return;
@@ -273,24 +328,38 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       });
     }
     const sections = (i.sections[id] ?? ['line', 'year', 'stretch', 'confirm']) as PersonalizerV3Input['sections'][CardId];
+    const story = storyOn ? cardStoryInputs(id, def.matters, i.frame, i.story!) : null;
+    const storyHash = story ? `.s${storyInputsHash(story)}` : '';
+    // the Oracle's own key (doc 09 §3.2): without the person, the portrait, the sections or the confirm stamp, so a
+    // confirm tap or a profile change re-runs this card's Personalizer only (the Oracle reads the answers again when its
+    // "Good until" passes or the person refreshes)
+    const oracleKey = shortHash(canonicalJson([id, i.frame.clock, frameHash, ledgerHash, i.prefix.hash, pHashOracle, promptHash(cardBriefPrompt(id)), techniqueStamp(id, i.techniques), storyHash]));
     const key = cardStoreKey({
       card: id,
       clock: i.frame.clock,
       frameHash,
       ledgerHash,
       prefixHash: i.prefix.hash,
-      profileHash: ctx.sub.profile?.hash ?? '-',
+      profileHash: `${ctx.sub.profile?.hash ?? '-'}${storyOn ? `.a${ctx.sub.profile?.ageYears ?? '-'}` : ''}`,
       portraitHash,
       sectionsHash: shortHash(canonicalJson(sections ?? null)),
       confirmHash: ctx.stamps.confirmHash ?? '-',
-      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}${grouped ? `.g${promptHash(CARD_GROUP_PROMPT)}` : ''}${techniqueStamp(id, i.techniques)}`,
+      promptHash: `${pHash}.${promptHash(cardBriefPrompt(id))}${grouped ? `.g${promptHash(CARD_GROUP_PROMPT)}` : ''}${techniqueStamp(id, i.techniques)}${storyHash}`,
     });
     const timings: SelfV2AgentTiming[] = [];
     const issues: ValidationIssue[] = [];
     let status: CardRunResult['status'] = 'failed';
     let content: SelfV3CardContent | null = null;
     let oracleCard: StoredCardReading['oracle'] | null = null;
+    let queued: string | null = null;
+    const cardSpent = () => timings.reduce((n, x) => n + x.costUsd, 0);
     try {
+      // doc 09 §3.2/§3.3: the newest stored row of this card whose Oracle key is this one serves its Oracle card again
+      // (a confirm tap, a profile change, or a Personalizer that fell back): only the Personalizer runs
+      // a charged refresh (deps.force, or a paid lens refresh's `force` mark today) reads the Oracle again: never reused
+      const forced = Boolean(deps.force) || Boolean((await readCardsState(deps.prisma, ctx.kundliId, now)).force?.[id]);
+      const prior = storyOn && !forced ? await readStoredCardReading(deps.prisma, ctx.kundliId, i.frame.clock, id) : null;
+      const reuse = prior && prior.oracleKey === oracleKey && prior.oracle?.story ? prior : null;
       const stored = await withTechniqueOutput<StoredCardReading | null>(
         deps.prisma,
         {
@@ -301,8 +370,9 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
           agentId: 'self.card.oracle',
           userId: ctx.userId,
           charts: [{ type: 'pressure_inventory', variant: `system=${i.frame.clock}` }],
-          // docs/billing/03: a card a paid lens refresh queued today is read again (its `force` mark in today's doc)
-          forceRefresh: Boolean(deps.force) || Boolean((await readCardsState(deps.prisma, ctx.kundliId, now)).force?.[id]),
+          // docs/billing/03: a card a paid lens refresh queued today is read again (its `force` mark in today's doc);
+          // doc 09 §3.3: a stored card whose plain story is still pending is completed
+          forceRefresh: forced || Boolean(reuse?.key === key && reuse.personal?.plainPending),
         },
         async () => {
           if (batch) {
@@ -313,25 +383,80 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
             if (!gc || !g.result.oracle || !g.result.personal) return { value: null, skipStore: true, summary: { card: id, status: g.result.oracle ? 'personalizer_failed' : 'oracle_failed' } };
             return { value: { key, card: id, content: gc, oracle: g.result.oracle, personal: g.result.personal, ledgerHash, frameHash }, skipStore: false, summary: { card: id, status: 'grouped', spans: gc.spans.length } };
           }
-          const matterSlices = i.slices.filter((s) => def.matters.some((m) => s.id === `matter.${m}`));
-          const oracle = await readCardOracle(
-            { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed },
-            { ctx, card: id, matters: def.matters, board: titles, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, matterSlices, dates: i.dates, answers: i.answers, model: i.model, cacheOwner: owner, techniques: i.techniques },
-          );
-          timings.push(...oracle.calls);
-          issues.push(...oracle.issues);
-          if (!oracle.card) return { value: null, skipStore: true, summary: { card: id, status: 'oracle_failed' } };
-          const pInput: PersonalizerV3Input = { profile: { ...ctx.sub.profile! }, portrait: i.portrait, sections: { [id]: sections } as PersonalizerV3Input['sections'] };
+          let oc: OracleCardV3;
+          let ostatus: string;
+          if (reuse) {
+            oc = reuse.oracle;
+            ostatus = 'reused';
+          } else {
+            const matterSlices = i.slices.filter((s) => def.matters.some((m) => s.id === `matter.${m}`));
+            const oracle = await readCardOracle(
+              { prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, storyContract: storyOn, ...(storyOn ? { cardCapUsd: deps.cardCapUsd ?? getReadingCardSpendCapUsd() } : {}) },
+              { ctx, card: id, matters: def.matters, board: titles, frame: i.frame, frameText: frameRender.text, frameKeys: frameRender.keys, prefix: i.prefix, ledger: i.ledger, matterSlices, dates: i.dates, answers: i.answers, model: i.model, cacheOwner: owner, techniques: i.techniques, story },
+            );
+            timings.push(...oracle.calls);
+            issues.push(...oracle.issues);
+            if (oracle.status === 'thin') {
+              // AGENTS.md "Reading depth is a release gate", rule 1: never served thin; queued for the next round
+              queued = `below the depth floor (${oracle.depth?.words.technical ?? 0} words; ${oracle.depth?.gaps.map((g) => g.kind).join(', ') ?? ''})`;
+              return { value: null, skipStore: true, summary: { card: id, status: 'thin', words: oracle.depth?.words.technical ?? 0 } };
+            }
+            if (!oracle.card) return { value: null, skipStore: true, summary: { card: id, status: 'oracle_failed' } };
+            oc = oracle.card;
+            ostatus = oracle.status;
+            if (storyOn) oc = { ...oc, goodUntil: goodUntilOf(oc, i.frame, rowDates) };
+          }
+          // doc 09 §3.5 per-card safety stop: past it the Personalizer is not bought now; the paid Oracle card is stored
+          // with the plain reading pending (never bought twice) and the card is queued for its Personalizer
+          if (storyOn && cardSpent() >= (deps.cardCapUsd ?? getReadingCardSpendCapUsd())) {
+            queued = `per-card spend stop ${deps.cardCapUsd ?? getReadingCardSpendCapUsd()} reached before the plain reading`;
+            const pending = plainPendingCard(oc);
+            const pc0 = withClocks(cardContent(oc, pending, i.frame), i.frame);
+            if (!pc0) return { value: null, skipStore: true, summary: { card: id, status: 'card_cap' } };
+            return { value: { key, card: id, content: { ...pc0, systems: systemsViewOf(i.frame, i.story!.shown, i.story!.periodRows) }, oracle: oc, personal: pending, ledgerHash, frameHash, oracleKey }, skipStore: false, summary: { card: id, status: 'card_cap' } };
+          }
+          const pInput: PersonalizerV3Input = {
+            profile: { ...ctx.sub.profile! },
+            portrait: i.portrait,
+            sections: { [id]: sections } as PersonalizerV3Input['sections'],
+            ...(storyOn ? { story: { ageYears: ctx.sub.profile?.ageYears ?? null, lifeStage: ctx.sub.profile ? lifeStageOf(ctx.sub.profile) : null } } : {}),
+            ...(person ? { person } : {}),
+          };
           const system = promptText(SELF_V3_PERSONALIZER_PROMPT);
-          const pcall = personalizerV3Call(ctx, `card.${id}.personalizer`, [oracle.card], spanDates, pInput, system, i.model);
+          const pcall = personalizerV3Call(ctx, `card.${id}.personalizer`, [oc], spanDates, pInput, system, i.model);
           const repair = (cards: Parameters<typeof personalizerV3Call>[2], note: string) => personalizerV3Call(ctx, `card.${id}.personalizer.repair`, cards, spanDates, pInput, system, i.model, note);
-          const personal = await runPersonalizerV3({ prisma: deps.prisma, callGemini: deps.callGemini, informUsed: deps.informUsed, agentId: CARD_PERSONALIZER_AGENT, technique: CARD_READING_TECHNIQUE }, ctx, [pcall], pInput, i.dates, repair);
+          const personal = await runPersonalizerV3(
+            {
+              prisma: deps.prisma,
+              callGemini: deps.callGemini,
+              informUsed: deps.informUsed,
+              agentId: CARD_PERSONALIZER_AGENT,
+              technique: CARD_READING_TECHNIQUE,
+              ...(storyOn ? { maxOutputTokens: getCardsPersonalizerMaxOutputTokens(), timeoutMs: getCardsPersonalizerTimeoutMs(), cacheCreate: false } : {}),
+            },
+            ctx,
+            [pcall],
+            pInput,
+            i.dates,
+            repair,
+          );
           timings.push(...personal.calls);
           issues.push(...personal.issues);
-          const pc = personal.cards[id];
-          const c = pc ? withClocks(cardContent(oracle.card, pc, i.frame), i.frame) : null;
+          let pc = personal.cards[id];
+          if (!pc && storyOn) {
+            // doc 09 §3.3 fallback: the Oracle's headline and story are served with "The plain reading is being written";
+            // the Personalizer runs again on the next round (the stored row is completed then); never blank, never thin
+            pc = plainPendingCard(oc);
+            queued = 'the plain reading is being written';
+          }
+          const c = pc ? withClocks(cardContent(oc, pc, i.frame), i.frame) : null;
           if (!c || !pc) return { value: null, skipStore: true, summary: { card: id, status: 'personalizer_failed' } };
-          return { value: { key, card: id, content: c, oracle: oracle.card, personal: pc, ledgerHash, frameHash }, skipStore: false, summary: { card: id, status: oracle.status, spans: c.spans.length } };
+          const served = storyOn ? { ...c, systems: systemsViewOf(i.frame, i.story!.shown, i.story!.periodRows) } : c;
+          return {
+            value: { key, card: id, content: served, oracle: oc, personal: pc, ledgerHash, frameHash, ...(storyOn ? { oracleKey } : {}) },
+            skipStore: false,
+            summary: { card: id, status: ostatus, spans: c.spans.length, plainPending: pc.plainPending ? 1 : 0 },
+          };
         },
       );
       if (stored.value) {
@@ -351,7 +476,17 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
     if (content) out.cards[id] = content;
     out.results.push({ card: id, status, content, oracle: oracleCard, timings, issues, costUsd });
     await updateCardsState(deps.prisma, ctx.userId, ctx.kundliId, now, (d) => {
-      d.cards[id] = content ? { state: 'done', at: new Date().toISOString() } : { state: 'failed', at: new Date().toISOString(), error: issues.slice(0, 2).map((x) => x.message).join('; ').slice(0, 300) || 'not read' };
+      const at = new Date().toISOString();
+      // a queued card (thin, past its spend stop, or its plain reading pending) is read again on the next round
+      // a card queued again and again without a served reading (thin every time) stops after THIN_ATTEMPTS rounds the
+      // same day: shown failed (Try again), never re-bought on every build without end
+      const attempts = (d.cards[id]?.attempts ?? 0) + (queued && !content ? 1 : 0);
+      d.cards[id] =
+        queued && !(attempts >= THIN_ATTEMPTS && !content)
+          ? { state: 'queued', at, error: queued.slice(0, 300), ...(attempts ? { attempts } : {}) }
+          : content
+            ? { state: 'done', at }
+            : { state: 'failed', at, error: (queued ?? issues.slice(0, 2).map((x) => x.message).join('; ')).slice(0, 300) || 'not read' };
       d.spentUsd = round6(d.spentUsd + costUsd);
     });
   };
@@ -388,7 +523,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
       const more = (Object.entries(later.cards) as Array<[CardId, { state: string }]>).filter(([id, e]) => e.state === 'queued' && !done.has(id) && isReadable(id)).map(([id]) => id);
       if (!more.length) break;
       // a new request: its own budget (the run's cards do not use it up)
-      cap = deps.laterCapUsd ?? getReadingSpendCapUsd();
+      cap = deps.laterCapUsd ?? getReadingBoardSpendCapUsd();
       spentBefore = 0;
       roundSpent = 0;
       capLogged = false;
@@ -422,4 +557,14 @@ export function withClocks(c: SelfV3CardContent | null, frame: YearFrameV3): Sel
       };
     }),
   };
+}
+
+/**
+ * The §3.3 fallback face (docs/techniques/09): the Oracle's headline as the line, and per span the note that the plain
+ * reading is being written; the technical story is served beside it. Marked `plainPending`, so the next round runs the
+ * Personalizer again on the same Oracle card.
+ */
+export function plainPendingCard(oc: OracleCardV3): PersonalCardV3 {
+  const note = 'The plain reading is being written.';
+  return { card: oc.card, line: oc.headline, spans: oc.spans.map((s) => ({ span: s.span, asks: note, obstacle: '', step: '' })), confirm: null, pattern: null, ladder: null, plainPending: true };
 }

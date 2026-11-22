@@ -38,11 +38,16 @@ export function cardClarifySeed(card: ResolvedCard, o: { turnId: string; newThre
   return { buckets, horizon, subBucket: { value: `card:${card.id}`, text: card.title }, cardChat };
 }
 
-/** What the person settled with the clarifier, one line each, for the answer's prompt ("Which brother? → Elder brother"). */
-export function clarifiedLines(s: Pick<ClarifyState, 'turns'>): string[] {
+/**
+ * What the person settled with the clarifier, one line each, for the answer's prompt ("Which brother? → Elder brother").
+ * `dropPlaces` (READING_PERSON_GATE on, doc 13 §2.4): the answer to "where do you live now" is left out (no place goes to
+ * the model).
+ */
+export function clarifiedLines(s: Pick<ClarifyState, 'turns'>, opts: { dropPlaces?: boolean } = {}): string[] {
   const out: string[] = [];
   for (const t of s.turns) {
     if (!t.answer) continue;
+    if (opts.dropPlaces && t.ask.criterion === 'location') continue;
     const chip = t.ask.chips.find((c) => c.value === t.answer!.value);
     out.push(`${t.ask.question} → ${chip?.label ?? t.answer.value}`);
   }

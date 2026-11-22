@@ -22,6 +22,8 @@ import { loadAgentPrompts } from '../prompts/registry.js';
 import { inferRealWant } from './realWant.js';
 import { confirmedFacts } from '../../profile/facts.js';
 import { withAgentRun } from '../../agents/registry.js';
+import { isReadingPersonGateEnabled } from '../../config/env.js';
+import { EMPTY_PERSON, personForModel, type PersonForModel } from '../person/modelContext.js';
 
 export const CARD_BUDGET_MS = 300;
 
@@ -66,10 +68,11 @@ async function eventFor(
   store?: ClarifyStore,
   userId?: string,
   kundliId?: string | null,
+  person?: PersonForModel,
 ): Promise<{ event: ClarifyEvent | null; state: ClarifyState }> {
   if (s.status === 'ASKING' && s.pending) {
     const owner = userId ? { userId, ...(kundliId ? { kundliId } : {}) } : undefined;
-    const planned = await planAiClarifyTurn(s, prisma, owner);
+    const planned = await planAiClarifyTurn(s, prisma, owner, person);
     const ask = planned.ask ?? s.pending;
     if (planned.usage) usage.push(planned.usage);
     if (store && userId && planned.state !== s) {
@@ -110,6 +113,16 @@ const locationUnsaved = new Set<string>();
 /** For tests. */
 export function clearLocationMemo(): void {
   locationUnsaved.clear();
+}
+
+/**
+ * docs/techniques/13 §2.4: with READING_PERSON_GATE on, the person Clarify's model reads comes from the gate (role
+ * `clarify`; no place, no birth time); a failed read sends nothing personal. Off: undefined, and every prompt is today's.
+ */
+async function gatedPerson(prisma: PrismaClient | null, userId: string, asOf: string): Promise<PersonForModel | undefined> {
+  if (!isReadingPersonGateEnabled()) return undefined;
+  if (!prisma) return { ...EMPTY_PERSON, lines: [], fieldsSent: [] };
+  return personForModel(prisma, { userId }, 'clarify', { asOf });
 }
 
 async function lookupLocation(store: UserLocationStore, userId: string): Promise<LocationLookup> {
@@ -178,7 +191,7 @@ export async function beginClarify(
   const needsCard = !seed && mode !== 'never' && cls.missing.includes('horizon');
   // the stored current location is read alongside the card (own short budget; a missing table reads as unavailable)
   const locStore = opts.locationStore ?? new PrismaUserLocationStore(prisma);
-  const [cardRes, loc, facts] = await Promise.all([
+  const [cardRes, loc, facts, person] = await Promise.all([
     needsCard
       ? headlineCard(prisma, userId, asOf)
       : // a card's answer reads the stored card, not the reading data: nothing to prefetch for it
@@ -187,6 +200,7 @@ export async function beginClarify(
         : (startPrefetch(prisma, userId, { asOf }), Promise.resolve({ card: null, kundliId: null })),
     mode !== 'never' ? lookupLocation(locStore, userId) : Promise.resolve<LocationLookup>({ status: 'unavailable' }),
     mode !== 'never' ? confirmedFacts(prisma, userId).catch(() => ({})) : Promise.resolve<Record<string, string>>({}),
+    gatedPerson(prisma, userId, asOf),
   ]);
   const card = cardRes.card;
   const kundliId = cardRes.kundliId;
@@ -216,10 +230,10 @@ export async function beginClarify(
       ...(kundliId ? { kundliId } : {}),
       technique: 'general.clarify',
       task: 'clarify-begin',
-      input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length, ...(seed ? { card: `${seed.cardChat.board}.${seed.cardChat.id}` } : {}) },
+      input: { bucket: initialState.bucket, mode, knownFactsCount: Object.keys(facts).length, ...(seed ? { card: `${seed.cardChat.board}.${seed.cardChat.id}` } : {}), ...(person ? { fieldsSent: person.fieldsSent } : {}) },
     },
     async () => {
-      const res = await eventFor(runId, initialState, usage, prisma, store, userId, kundliId);
+      const res = await eventFor(runId, initialState, usage, prisma, store, userId, kundliId, person);
       const u = usage[0];
       return {
         value: res,
@@ -272,12 +286,13 @@ export async function answerClarify(
   }
   const usage: Usage[] = [];
   const tz = opts.tz ?? null;
+  const person = await gatedPerson(prisma, userId, s.asOf);
   let next = absorbAnswer(s, value, { viaChip, threshold: classifierThreshold(), tz });
   // the rules could not read the free text: let the model map it to a closed value, then apply that as a chip
   const last = next.turns[next.turns.length - 1];
   const lastAnswered = next.turns.find((t) => t.answer && t.ask.criterion === s.pending!.criterion && t.answer.value === value.slice(0, 300));
   if (!viaChip && lastAnswered && lastAnswered.answer && !lastAnswered.answer.resolved) {
-    const r = await resolveFreeText(s, s.pending.criterion, value, prisma, { userId });
+    const r = await resolveFreeText(s, s.pending.criterion, value, prisma, { userId }, person);
     if (r.usage) usage.push(r.usage);
     if (r.value) next = absorbAnswer(s, r.value, { viaChip: true, threshold: classifierThreshold(), tz });
   }
@@ -300,10 +315,10 @@ export async function answerClarify(
       userId,
       technique: 'general.clarify',
       task: 'clarify-answer',
-      input: { bucket: next.bucket, criterion: s.pending.criterion, viaChip: viaChip ? 1 : 0 },
+      input: { bucket: next.bucket, criterion: s.pending.criterion, viaChip: viaChip ? 1 : 0, ...(person ? { fieldsSent: person.fieldsSent } : {}) },
     },
     async () => {
-      const res = await eventFor(runId, next, usage, prisma, store, userId);
+      const res = await eventFor(runId, next, usage, prisma, store, userId, undefined, person);
       const u = usage[usage.length - 1];
       return {
         value: res,
@@ -339,12 +354,13 @@ export async function confirmAndBuildIntent(store: ClarifyStore, userId: string,
   let next = s.status === 'CONFIRMED' ? s : confirmClarify(s, edits);
   // prashna eligibility: the rules decided at confirmation; an unsure rule may ask the optional model once
   if (next.status === 'CONFIRMED' && s.status !== 'CONFIRMED' && next.prashna?.rule === 'unsure') {
-    const { result } = await judgePrashna(next, next.prashna, null, { userId });
+    // no database here: with the gate on nothing personal is sent (an empty person), never today's facts and places
+    const { result } = await judgePrashna(next, next.prashna, null, { userId }, isReadingPersonGateEnabled() ? { lines: [], fieldsSent: [] } : undefined);
     next = { ...next, prashna: result };
   }
   await store.save(userId, runId, next);
   if (next.status !== 'CONFIRMED') {
-    const { event, state: updatedState } = await eventFor(runId, next, [], null, store, userId);
+    const { event, state: updatedState } = await eventFor(runId, next, [], null, store, userId, undefined, isReadingPersonGateEnabled() ? { lines: [], fieldsSent: [] } : undefined);
     return { state: updatedState, intent: null, event };
   }
   return { state: next, intent: await intentFromState(next, runId), event: null };

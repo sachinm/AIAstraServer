@@ -17,13 +17,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { getKundliSyncEventToken, getKundliSyncMaxMs, getKundliSyncSweepBatch, getReadingClocks, getSelfV2PressureMaxAgeDays, getSelfV2PressureRetryHours } from '../config/env.js';
+import { getKundliSyncEventToken, getKundliSyncMaxMs, getKundliSyncSweepBatch, getReadingClocks, getSelfV2PressureMaxAgeDays } from '../config/env.js';
+import { RETRY_DELAYS_MS } from '../reading/pipeline/retry.js';
 import { queueLog, queueLogError } from '../lib/queueLogger.js';
 import { chartDataDeps } from '../reading/chartData/tool.js';
 import { loadRegistrationPlan, type RegistrationPlan } from '../reading/chartData/registration.js';
 import { CURRENT_VARIANT } from '../reading/chartData/store.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { buildFactsForKundli } from '../reading/data/factsBuilder.js';
+import { recomputePipeline } from '../reading/pipeline/status.js';
 import { enqueueKundliSync, processKundliSyncQueue, processOneKundliRow, type KundliQueueDeps, type KundliRowWithUser } from './kundliQueueService.js';
 
 export const KUNDLI_SYNC_SOURCE = 'aiastra';
@@ -32,8 +34,13 @@ export const KUNDLI_SYNC_SWEEP_TASK = 'kundli-sync-sweep';
 
 /** Extra lease time over the budget: one chunk that started just before the deadline may still be running. */
 export const LEASE_MARGIN_MS = 3 * 60_000;
-/** The sweep leaves a kundli whose only open items failed less than this long ago (a broken type would starve the batch). */
-export const SWEEP_FAILED_RETRY_MS = 6 * 3_600_000;
+/**
+ * The sweep leaves a kundli whose only open items failed less than this long ago. doc 11 §4.2 retry: the first wait of the
+ * 1, 5, 15-minute schedule (was 6 h); the row's own schedule (`chartData/store.ts` needsFetch) decides whether a picked
+ * row is asked, and a row given up after PIPELINE_GIVE_UP_FAILURES (its `valid_to` mark) stays settled, so a broken type
+ * cannot starve the batch for more than six sweeps.
+ */
+export const SWEEP_FAILED_RETRY_MS = RETRY_DELAYS_MS[0]!;
 /** The Invoke API call (not the pull) is awaited at most this long by the request that schedules it. */
 const INVOKE_TIMEOUT_MS = 2_000;
 /** When the invoke fails on Lambda, the request itself pulls the gate for at most this long. */
@@ -186,6 +193,15 @@ export interface WorkerDeps {
   invoke?: (kundliId: string) => Promise<boolean>;
   /** The reading clock set's inventories (doc 70 §4.1); default ensurePressureInventories. Never throws. */
   ensurePressure?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<unknown>;
+  /** The chart's one status, recomputed at the end of every sync and clock run (doc 11 §4.2); default recomputePipeline */
+  pipeline?: (prisma: PrismaClient, kundliId: string, trigger: 'sync' | 'clock') => Promise<unknown>;
+}
+
+const defaultPipeline = (prisma: PrismaClient, kundliId: string, trigger: 'sync' | 'clock') => recomputePipeline(prisma, kundliId, { trigger });
+
+/** Recompute the status row; never throws (doc 11 §4.2: the stored rows stay the truth, the row follows them). */
+async function refreshPipeline(deps: WorkerDeps, kundliId: string, trigger: 'sync' | 'clock'): Promise<void> {
+  await (deps.pipeline ?? defaultPipeline)(deps.prisma, kundliId, trigger).catch(() => undefined);
 }
 
 /**
@@ -215,15 +231,17 @@ async function defaultEnsurePressure(prisma: PrismaClient, kundliId: string, asO
 
 /**
  * Kundlis (each user's latest, active, not leased, digest ready) whose clock set is not settled: fewer pressure
- * inventories than the set pulls (READING_CLOCKS minus the year) are either ready and fresh (younger than
- * SELF_V2_PRESSURE_MAX_AGE_DAYS) or failed within SELF_V2_PRESSURE_RETRY_HOURS. A kundli synced before the clock set
- * existed, or whose rows went stale, is picked here (docs/TODOS.md, doc 70). Oldest settled pull first.
+ * inventories than the set pulls (READING_CLOCKS minus the year) are ready and fresh (younger than
+ * SELF_V2_PRESSURE_MAX_AGE_DAYS), given up (`valid_to` mark), unsupported (the engine refuses that clock) or failed within
+ * the first retry wait; OR any failed clock row is due again (doc 11 §4.2 retry: before, the check counted rows against a
+ * number, so a failed clock beside four ready ones was never asked again). A kundli synced before the clock set existed,
+ * or whose rows went stale, is picked here (docs/TODOS.md, doc 70). Oldest settled pull first.
  */
 // Raw SQL reviewed for docs/privacy/02 B1.3: ids, status and timestamp columns only.
 export async function findKundlisMissingClocks(prisma: PrismaClient, batch: number, leaseMs: number): Promise<string[]> {
   const leaseSecs = Math.ceil(leaseMs / 1000);
   const maxAgeSecs = getSelfV2PressureMaxAgeDays() * 86_400;
-  const retrySecs = getSelfV2PressureRetryHours() * 3_600;
+  const retrySecs = Math.ceil(RETRY_DELAYS_MS[0]! / 1000);
   const want = Math.max(1, getReadingClocks() - 1);
   const rows = await prisma.$queryRaw<{ id: string }[]>`
     SELECT k."id" FROM "kundlis" k
@@ -232,12 +250,20 @@ export async function findKundlisMissingClocks(prisma: PrismaClient, batch: numb
       AND k."digest_status" = 'ready'
       AND k."id" = (SELECT k2."id" FROM "kundlis" k2 WHERE k2."user_id" = k."user_id" ORDER BY k2."created_at" DESC LIMIT 1)
       AND (k."queue_started_at" IS NULL OR k."queue_started_at" < now() - make_interval(secs => ${leaseSecs}))
-      AND (
+      AND ((
         SELECT count(*) FROM "kundli_data" d
         WHERE d."kundli_id" = k."id" AND d."data_type" = 'pressure_inventory'
           AND ((d."status" = 'ready' AND d."fetched_at" > now() - make_interval(secs => ${maxAgeSecs}))
+            OR (d."valid_to" > now())
+            OR (d."status" = 'unsupported')
             OR (d."status" = 'failed' AND d."fetch_started_at" > now() - make_interval(secs => ${retrySecs})))
       ) < ${want}
+      OR EXISTS (
+        SELECT 1 FROM "kundli_data" f
+        WHERE f."kundli_id" = k."id" AND f."data_type" = 'pressure_inventory' AND f."status" = 'failed'
+          AND (f."valid_to" IS NULL OR f."valid_to" <= now())
+          AND (f."fetch_started_at" IS NULL OR f."fetch_started_at" <= now() - make_interval(secs => ${retrySecs}))
+      ))
     ORDER BY (SELECT max(d2."fetched_at") FROM "kundli_data" d2 WHERE d2."kundli_id" = k."id" AND d2."data_type" = 'pressure_inventory') ASC NULLS FIRST
     LIMIT ${batch}`;
   return rows.map((r) => r.id);
@@ -257,7 +283,10 @@ export async function runClockSetPull(deps: WorkerDeps, kundliId: string): Promi
     queueLogError({ event: 'kundli_sync_clock_pull_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });
     return 'error';
   } finally {
-    if (leaseAt) await releaseLease(deps.prisma, kundliId, leaseAt).catch(() => undefined);
+    if (leaseAt) {
+      await releaseLease(deps.prisma, kundliId, leaseAt).catch(() => undefined);
+      await refreshPipeline(deps, kundliId, 'clock');
+    }
   }
 }
 
@@ -293,6 +322,7 @@ export async function runKundliSync(deps: WorkerDeps, kundliId: string, startedA
     }
     await releaseLease(deps.prisma, kundliId, leaseAt);
     leaseAt = null;
+    await refreshPipeline(deps, kundliId, 'sync');
     let reinvoked = false;
     if (result.more) {
       reinvoked = await (deps.invoke ?? invokeKundliSyncAsync)(kundliId);

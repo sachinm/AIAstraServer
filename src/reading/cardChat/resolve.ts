@@ -14,7 +14,8 @@
  * cites, the card's brief, and the person's stated facts. Each is optional: a missing one is left out, never guessed.
  */
 import type { PrismaClient } from '@prisma/client';
-import { getBoardsV3 } from '../../config/env.js';
+import { getBoardsV3, isReadingPersonGateEnabled } from '../../config/env.js';
+import { personForModel, type PersonForModel } from '../person/modelContext.js';
 import { cardCells } from '../cards/oracle.js';
 import { readStoredCardReading } from '../cards/store.js';
 import { cardBriefPrompt } from '../cards/registry.js';
@@ -62,6 +63,9 @@ export interface CardChatResolveDeps {
   readStored?: typeof readStoredCardReading;
   readSlices?: typeof readSlices;
   loadProfile?: (prisma: PrismaClient, userId: string, asOf: string) => Promise<ProfilePack>;
+  /** overrides READING_PERSON_GATE; and the gate's read (default personForModel, role `chat`) */
+  personGate?: boolean;
+  loadPerson?: (prisma: PrismaClient, userId: string, kundliId: string, asOf: string) => Promise<PersonForModel>;
 }
 
 export type ResolveResult = { ok: true; card: ResolvedCard } | { ok: false; error: CardChatError };
@@ -231,16 +235,21 @@ export async function resolveCardContext(deps: CardChatResolveDeps, userId: stri
   const card = r.card;
   const now = (deps.now ?? (() => new Date()))();
   const sliceIds = ['natal.core', 'sky.window', 'year.tp', 'frame', LAYER_CACHE_SLICE_ID, ...card.matters.map((m) => `matter.${m}`)];
-  const [stored, slices, profile] = await Promise.all([
+  const gate = deps.personGate ?? isReadingPersonGateEnabled();
+  const [stored, slices, profile, person] = await Promise.all([
     card.clock ? (deps.readStored ?? readStoredCardReading)(deps.prisma, card.kundliId, card.clock, card.id).catch(() => null) : Promise.resolve(null),
     (deps.readSlices ?? readSlices)(deps.prisma, card.kundliId, sliceIds).catch(() => ({}) as Awaited<ReturnType<typeof readSlices>>),
     (deps.loadProfile ?? loadProfilePack)(deps.prisma, userId, dayOf(now)).catch((): ProfilePack | null => null),
+    // doc 13 §2.4: the gate's lines (a failed read sends nothing personal, never today's block)
+    gate
+      ? (deps.loadPerson ?? ((p, u, k, d) => personForModel(p, { userId: u, kundliId: k }, 'chat', { asOf: d })))(deps.prisma, userId, card.kundliId, dayOf(now)).catch((): PersonForModel => ({ lines: [], fieldsSent: [] }))
+      : Promise.resolve(undefined),
   ]);
   const by = slices as Record<string, RenderedSlice | undefined>;
   let prefix: CardChatPrefix | null = null;
   if (by['sky.window'] && by['year.tp'] && by['frame']) {
-    const sp = sharedPrefix({ natal: by['natal.core'] ?? null, sky: by['sky.window'], year: by['year.tp'], frame: by['frame'] });
-    prefix = { text: sp.text, keys: sp.keys, hash: sp.hash, matchesCard: Boolean(stored?.key && stored.key.includes(`|pre=${sp.hash}|`)) };
+    const sp = sharedPrefix({ natal: by['natal.core'] ?? null, sky: by['sky.window'], year: by['year.tp'], frame: by['frame'] }, dayOf(now));
+    prefix = { text: sp.text, dated: sp.dated, keys: sp.keys, hash: sp.hash, matchesCard: Boolean(stored?.key && stored.key.includes(`|pre=${sp.hash}|`)) };
   }
   const ledger = parseLayer(by[LAYER_CACHE_SLICE_ID]?.text);
   const cells = ledger ? cardCells(ledger, card.matters as CardMatter[]) : [];
@@ -260,6 +269,7 @@ export async function resolveCardContext(deps: CardChatResolveDeps, userId: stri
       prefix,
       brief: promptText(cardBriefPrompt(card.id as Parameters<typeof cardBriefPrompt>[0])),
       profile,
+      ...(person ? { person } : {}),
     },
   };
 }

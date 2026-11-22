@@ -149,6 +149,36 @@ export async function readBuildMarkerDetail(prisma: PrismaClient, kundliId: stri
   }
 }
 
+type MarkerListPrisma = {
+  areaBuild?: {
+    findMany?: (q: { where: Record<string, unknown>; select: { area: true; as_of: true; status: true; result: true } }) => Promise<Array<{ area: string; as_of: Date; status: string; result: unknown }>>;
+  };
+};
+
+/**
+ * A reading build running now for this chart on any board (doc 11 §4.8): a `<board>.reading` marker still `building`
+ * and started at most BUILD_STUCK_MS ago (an older one is taken as dead and does not count). Today's and, near UTC
+ * midnight, yesterday's markers are read, so a build started just before midnight is still seen. One query. Throws on a
+ * failed read (the gate decides what that means).
+ */
+export async function readRunningBuild(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ board: ReadingBoardId; startedAt: string } | null> {
+  const days = [...new Set([dayOf(now).getTime(), dayOf(new Date(now.getTime() - BUILD_STUCK_MS)).getTime()])].map((t) => new Date(t));
+  const find = (prisma as unknown as MarkerListPrisma).areaBuild?.findMany;
+  if (!find) throw new Error('area_builds not readable');
+  const rows = await find({
+    where: { kundli_id: kundliId, area: { in: BOARDS.map(markerArea) }, as_of: { in: days }, status: 'building' },
+    select: { area: true, as_of: true, status: true, result: true },
+  });
+  let best: { board: ReadingBoardId; startedAt: string; t: number } | null = null;
+  for (const r of rows) {
+    if (stateOf(r, now) !== 'building') continue;
+    const t = startedAtOf(r);
+    const board = r.area.replace(/\.reading$/, '') as ReadingBoardId;
+    if (!best || t > best.t) best = { board, startedAt: new Date(t).toISOString(), t };
+  }
+  return best ? { board: best.board, startedAt: best.startedAt } : null;
+}
+
 async function writeBuildMarker(prisma: PrismaClient, userId: string, kundliId: string, board: ReadingBoardId, now: Date, status: 'building' | 'ready' | 'failed', error?: string, clock?: string): Promise<void> {
   try {
     const where = { kundli_id_area_as_of: { kundli_id: kundliId, area: markerArea(board), as_of: dayOf(now) } };
@@ -181,6 +211,8 @@ export interface QueueDeps {
    * `refreshRetry`: set when today's v2 build already failed, so a second fresh reading the same day gets its own key.
    */
   v2Build?: (prisma: PrismaClient, userId: string, kundliId: string, asOf: string, opts?: V2BuildOpts) => Promise<{ status: string; ms?: Record<string, number> }>;
+  /** the reading gate (docs/techniques/11 §4.8; default src/reading/prep/gate.ts readingGate; tests replace it) */
+  readingGate?: (prisma: PrismaClient, kundliId: string) => Promise<{ locked: boolean }>;
 }
 
 export interface V2BuildOpts {
@@ -310,11 +342,22 @@ async function runV2OwnedBuild(deps: QueueDeps, selfDeps: SelfDeps, userId: stri
   return r;
 }
 
-export type QueueOutcome = 'invoked' | 'in_process' | 'already_building' | 'failed_recently' | 'skipped';
+/**
+ * `preparing`: the reading gate is locked (docs/techniques/11 §4.8: the chart is not ready, or a build runs on another
+ * board or clock); nothing was queued or marked.
+ */
+export type QueueOutcome = 'invoked' | 'in_process' | 'already_building' | 'failed_recently' | 'skipped' | 'preparing';
+
+/** The gate, loaded when asked (the gate reads this module's markers; a static import would be a cycle). */
+async function defaultReadingGate(prisma: PrismaClient, kundliId: string): Promise<{ locked: boolean }> {
+  const { readingGate } = await import('../prep/gate.js');
+  return readingGate(prisma, kundliId);
+}
 
 /**
- * Queue one board's reading build for a person unless one is running or failed in the last half hour. Marks the marker
- * `building` first, so the next poll sees it even before the invocation starts. Never throws, never waits for the build.
+ * Queue one board's reading build for a person unless one is running or failed in the last half hour, or the reading
+ * gate is locked. Marks the marker `building` first, so the next poll sees it even before the invocation starts. Never
+ * throws, never waits for the build.
  */
 export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kundliId: string, board: ReadingBoardId, opts: BuildOptions = {}): Promise<QueueOutcome> {
   const now = (deps.now ?? (() => new Date()))();
@@ -322,6 +365,12 @@ export async function queueSelfReadingBuild(deps: QueueDeps, userId: string, kun
   // a build marked on another clock (the person switched clocks since) does not hold this one back (doc 66 §4.4)
   const otherClock = Boolean(opts.clock && marker.clock && marker.clock !== opts.clock);
   if (marker.state === 'building' && !otherClock) return 'already_building';
+  // the one gate every queue door asks (doc 11 §4.8): a chart not ready, or a build running elsewhere, queues nothing
+  const gate = await (deps.readingGate ?? defaultReadingGate)(deps.prisma, kundliId).catch(() => ({ locked: false }));
+  if (gate.locked) {
+    queueLog({ event: 'reading_build_gated', kundli_id: kundliId, board });
+    return 'preparing';
+  }
   // a fresh reading the person asked for (a held question) is not held back by a recent failure when the v2 build owns
   // the You board: that failure gave its question back and the page offers Try again
   const retryAllowed = Boolean(opts.refreshDay) && board === 'self' && selfV2OwnsBoard();

@@ -9,6 +9,7 @@
  * Nothing in this file is astrological arithmetic; every planet, house, window, polarity and strength is an engine value
  * carried through by id.
  */
+import type { PipelineView } from '../pipeline/types.js';
 import type { OracleArea, OracleAreaDoc, AreaCertainty, AreaDate } from './areaDoc.js';
 import type { SelfV2BuildView } from './v2/progress.js';
 
@@ -431,7 +432,7 @@ export interface AreaBrief {
 // Layer 3: model agents
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type SelfV2AgentId = 'family.rasi' | 'family.varga' | 'family.dasha' | 'family.year' | 'family.sky' | 'self.oracle' | 'self.personalizer';
+export type SelfV2AgentId = 'family.rasi' | 'family.moon' | 'family.varga' | 'family.star' | 'family.dasha' | 'family.year' | 'family.sky' | 'self.oracle' | 'self.personalizer';
 
 /** a slice handed to an agent: the stable prefix (cached) and the variable suffix */
 export interface AgentSlice {
@@ -785,8 +786,12 @@ export type LifeLabel = 'career' | 'love' | 'self' | 'home' | 'family' | 'busine
 export type LifeState = 'presses' | 'mixed' | 'supports' | 'quiet';
 
 export interface PersonPortrait {
-  /** character: the Oracle's natal areas as paragraph ids, its patterns, and S6 mind keys */
-  personality: { oracleParagraphs: string[]; patterns: string[]; mindKeys: { feeling: string[]; thinking: string[]; peace: string[]; judgement: string[] } } | null;
+  /**
+   * character: S6 mind keys, and, on the v2 build only, the v2 Oracle's natal areas as paragraph ids and its patterns.
+   * With the v2 reading retired (SELF_V2_RETIRED) there is no v2 Oracle: both are absent (the card Personalizer never
+   * received those paragraphs; plan "retire the v2 Self reading", finding 6).
+   */
+  personality: { oracleParagraphs?: string[]; patterns?: string[]; mindKeys: { feeling: string[]; thinking: string[]; peace: string[]; judgement: string[] } } | null;
   /** what the person has told us, with dates: wizard facts, life events, monthly checks, confirm answers */
   biography: {
     facts: Array<{ key: string; value: string; at: IsoDate | null }>;
@@ -907,6 +912,15 @@ export interface SelfV2CardsResult {
 export interface SelfV2Response {
   /** the build's Oracle quality (null when no build is stored, or one stored before 2026-11-09) */
   quality?: SelfV2Quality | null;
+}
+
+export interface SelfV2Response {
+  /**
+   * Appended 2026-11-22 (docs/techniques/11 rev 4 §4.8): the chart's one status and the reading gate. `locked` true: no
+   * reading may be started (the page shows "Building your chart data" and disables the refresh and card-read controls).
+   * Absent only on a body from a server that predates it.
+   */
+  pipeline?: PipelineView;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

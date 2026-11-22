@@ -20,7 +20,7 @@ import { buildYearFrameV3, loadStoredInventory } from '../self/v3/yearFrame.js';
 import { cmp, renderSliceSet, type SliceInventory } from './render.js';
 import { readSlices, writeSlices } from './store.js';
 import type { RenderedSlice, StoredSlice } from './types.js';
-import { estProviderTokens, shortHash } from '../self/v2/slices.js';
+import { estProviderTokens, shortHash } from './natalPrefix.js';
 
 export interface SliceSetReport {
   /** ids used as stored (hash unchanged) */

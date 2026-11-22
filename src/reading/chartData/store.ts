@@ -18,6 +18,7 @@ import { sealParam } from '../../lib/pii/rawSql.js';
 import { piiHash } from '../../lib/pii/hash.js';
 import { getChartDataFailedMaxTries } from '../../config/env.js';
 import { DIGEST_VERSION } from '../digest/types.js';
+import { isRetryScheduled, PIPELINE_GIVE_UP_FAILURES, retryVerdict } from '../pipeline/retry.js';
 
 export type ItemStatus = 'ready' | 'missing' | 'failed' | 'unsupported';
 export type ItemSource = 'db' | 'legacy' | 'radha' | null;
@@ -144,6 +145,30 @@ export function markFailure(prev: Pick<StoredRow, 'status' | 'error'> | undefine
   return { error: `[failures=${failures} engine=${engine} digest=${digest}] ${message}`.slice(0, 600), validTo: failures >= max ? FAILED_GIVE_UP_UNTIL : null, failures };
 }
 
+/**
+ * docs/techniques/11 §4.2 retry: the `error` and `valid_to` of a new failure of a row the retry schedule covers
+ * (`pipeline/retry.ts`): counted on from the previous failure on the same engine calc version and digest version whatever
+ * its message (an engine 500 rarely repeats its text word for word), and given up at PIPELINE_GIVE_UP_FAILURES. The mark
+ * is the one `markFailure` writes, so `parseFailureMark`, `failedGivenUp` and the sweep SQL read it unchanged.
+ */
+export function countFailure(prev: Pick<StoredRow, 'status' | 'error'> | undefined, message: string, calcVersion: string | null, digest: string = DIGEST_VERSION, max: number = PIPELINE_GIVE_UP_FAILURES): { error: string; validTo: Date | null; failures: number } {
+  const engine = calcVersion ?? '-';
+  const before = prev?.status === 'failed' ? parseFailureMark(prev.error) : null;
+  const failures = before && before.engine === engine && before.digest === digest ? before.failures + 1 : 1;
+  return { error: `[failures=${failures} engine=${engine} digest=${digest}] ${message}`.slice(0, 600), validTo: failures >= max ? FAILED_GIVE_UP_UNTIL : null, failures };
+}
+
+/** The give-up count of a row: the retry schedule's for the registration rows, CHART_DATA_FAILED_MAX_TRIES for a fixed year. */
+export function giveUpMaxFor(variant: string): number {
+  return isRetryScheduled(variant) ? PIPELINE_GIVE_UP_FAILURES : getChartDataFailedMaxTries();
+}
+
+/** A failed row of the retry schedule is due: 1, 5, 15 minutes after its 1st, 2nd, 3rd failure, then every 15 minutes. */
+export function failedRowDue(row: Pick<StoredRow, 'error' | 'fetchedAt'>, now: number): boolean {
+  const failures = parseFailureMark(row.error)?.failures ?? 1;
+  return retryVerdict({ failures, lastAttemptAt: row.fetchedAt }, new Date(now), { giveUpAt: Number.POSITIVE_INFINITY }).state === 'due';
+}
+
 /** A failed row given up on: it failed `max` times the same way, on the type's current calc version and this digest version. */
 export function failedGivenUp(row: Pick<StoredRow, 'status' | 'error' | 'calcVersion' | 'validTo'> | undefined, type: Pick<ChartDataType, 'calcVersion'>, now: number, digest: string = DIGEST_VERSION, max: number = getChartDataFailedMaxTries()): boolean {
   if (!row || row.status !== 'failed' || !row.validTo || row.validTo.getTime() <= now) return false;
@@ -230,6 +255,9 @@ export function needsFetch(row: StoredRow | undefined, type: ChartDataType, now:
     case 'fetching':
       return !row.fetchStartedAt || now - row.fetchStartedAt.getTime() > leaseMs;
     case 'failed':
+      // doc 11 §4.2: a registration row is asked again 1, 5 and 15 minutes after a failure, then at once, and given up
+      // after PIPELINE_GIVE_UP_FAILURES; a fixed year's row keeps the yearly pull's rule (60 s, CHART_DATA_FAILED_MAX_TRIES)
+      if (isRetryScheduled(row.variant)) return !failedGivenUp(row, type, now, DIGEST_VERSION, PIPELINE_GIVE_UP_FAILURES) && failedRowDue(row, now);
       if (failedGivenUp(row, type, now)) return false;
       return !row.fetchedAt || now - row.fetchedAt.getTime() > FAILED_RETRY_MS;
     case 'unsupported':
@@ -345,7 +373,7 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
     if (!stale || !w.type.served || opts.noFetch) {
       out[w.key] = !w.type.served && !row
         ? { key: w.key, id: w.id, variant: w.variant, status: 'unsupported', source: null, payload: null, error: 'Radha does not serve this type yet' }
-        : { ...toItem(w.key, w.id, w.variant, row), ...(failedGivenUp(row, w.type, now()) ? { gaveUp: true } : {}) };
+        : { ...toItem(w.key, w.id, w.variant, row), ...(failedGivenUp(row, w.type, now(), DIGEST_VERSION, giveUpMaxFor(w.variant)) ? { gaveUp: true } : {}) };
       // a stale-but-ready row is still returned when we may not fetch
       continue;
     }
@@ -385,7 +413,7 @@ export async function ensureChartData(deps: EnsureDeps, kundliId: string, keys: 
       if (isUnsupportedError(err)) result = { status: 'unsupported', error: message, calcVersion: w.type.calcVersion };
       else {
         // counted on from the row read before the claim (the claim clears `error`)
-        const mark = markFailure(rowOf(w), message, w.type.calcVersion);
+        const mark = isRetryScheduled(w.variant) ? countFailure(rowOf(w), message, w.type.calcVersion) : markFailure(rowOf(w), message, w.type.calcVersion);
         result = { status: 'failed', error: mark.error, calcVersion: w.type.calcVersion, validTo: mark.validTo };
         if (mark.validTo) console.warn(JSON.stringify({ msg: 'chart row given up after repeated identical failures', type: w.id, variant: w.variant, failures: mark.failures }));
       }
@@ -576,7 +604,8 @@ export async function ensureAnnualCurrent(deps: EnsureDeps, kundliId: string, ty
       const status = isUnsupportedError(err) ? 'unsupported' : 'failed';
       const error = (err as Error).message?.slice(0, 500);
       // a failed pointer counts its repeats like any row (markFailure), from the pointer read before the claim
-      const mark = status === 'failed' ? markFailure(pointers.find((r) => r.dataType === w.id), error ?? 'failed', calcVersion) : null;
+      // doc 11 §4.2: the pointer is a registration row (it blocks the first pass): the retry schedule's count
+      const mark = status === 'failed' ? countFailure(pointers.find((r) => r.dataType === w.id), error ?? 'failed', calcVersion) : null;
       if (mark?.validTo) console.warn(JSON.stringify({ msg: 'chart row given up after repeated identical failures', type: w.id, variant: CURRENT_VARIANT, failures: mark.failures }));
       if (!degraded) await repo.complete(kundliId, pointerKey(w.id), ayanamsa, { status, error: mark?.error ?? error, calcVersion, ...(mark ? { validTo: mark.validTo } : {}) });
       out[w.id] = fail(w.id, error ?? status, status);

@@ -10,7 +10,9 @@
 import type { PrismaClient } from '@prisma/client';
 import { withAgentRun } from '../../../agents/registry.js';
 import { getPersonalizerVoiceVersion, isPersonalizerVoiceByGenderEnabled } from '../../../config/env.js';
+import { callWithContinuation, parseContinuedJson } from '../../llm/continue.js';
 import type { GeminiCallOptions, GeminiResult } from '../../llm/gemini.js';
+import { PLAIN_STORY_MAX_WORDS, PLAIN_STORY_MIN_WORDS, wordCount } from '../../cards/story.js';
 import { markAgentUsed } from '../v2/cache.js';
 import { personalizerCheckOf } from '../v2/failures.js';
 import { timingOf } from '../v2/oracle.js';
@@ -21,6 +23,7 @@ import type { LadderSteps, PersonPortrait, PersonalizerInput, SelfBuildContext, 
 import { parseJson } from './oracle.js';
 import type { OracleCardV3, OracleV3Output, PersonalCardV3, CardId, SelfSectionId } from './types.js';
 import { cardBoardLabel } from '../../cards/registry.js';
+import { gatedPortrait, type PersonForModel } from '../../person/modelContext.js';
 
 export const SELF_V3_PERSONALIZER_PROMPT = 'personalizer/self-v3';
 export const PERSONALIZER_V3_TIMEOUT_MS = 60_000;
@@ -88,6 +91,9 @@ export function renderOracleCards(cards: readonly OracleCardV3[]): string {
   const L: string[] = ['# ORACLE CARDS'];
   for (const c of cards) {
     L.push(`## ${c.card}`, `headline: ${c.headline}`, `certainty: ${c.certainty}`, `gift: ${c.gift}`, `knot: ${c.knot}`);
+    // docs/techniques/09 §3.3: the Personalizer retells the Oracle's technical story in the same order
+    if (c.story) L.push(`story (retell this, in this order, in plain words):\n${c.story.replace(/\s*\{[^{}]+\}/g, '')}`);
+    if (c.beats?.length) L.push(`beats held: ${c.beats.map((b) => `${b.beat}=${b.held}`).join(', ')}`);
     for (const s of c.spans) L.push(`- span ${s.span} ${s.mode} tone=${s.tone}: asks: ${s.asks} | obstacle: ${s.obstacle} | agreement: ${s.agreement}`);
     L.push(`confirm: ${c.confirm ? `${c.confirm.claimId} ${c.confirm.from}..${c.confirm.to}: ${c.confirm.text}` : 'none'}`);
     L.push(`pattern: ${c.pattern ? `${c.pattern.since ?? 'n/a'}..${c.pattern.until ?? 'n/a'}: ${c.pattern.text}` : 'none'}`);
@@ -105,9 +111,41 @@ export interface PersonalizerV3Input {
   profile: PersonalizerInput['profile'];
   portrait: PersonPortrait | null;
   sections: Partial<Record<CardId, readonly SelfSectionId[]>>;
+  /**
+   * docs/techniques/09 §3.3: the guaranteed fields (the plain story, per stretch `growth`, `why`, the ladder always) and
+   * the person's age in whole years and stage of life (never printed). Absent: the doc 70 card face.
+   */
+  story?: { ageYears: number | null; lifeStage: string | null } | null;
+  /**
+   * docs/techniques/13 §2.4, READING_PERSON_GATE=1: the person lines from the gate (`person/modelContext.ts`, role
+   * `personalizer`). Present: THE PERSON is these lines only, the portrait loses its personal blocks and places, and the
+   * age and stage lines come from the gate. Absent (the flag off): today's bytes.
+   */
+  person?: PersonForModel;
+}
+
+const CONFIDENCE_LINES = [
+  '## CONFIDENCE (follow the Oracle card certainty and its beats; never more sure than the Oracle)',
+  '- strong / confirmed: state it with its dates. likely / leaning: "the signs lean toward". possible / open: say what would bring it, and ask. split: give both sides. not promised: never time it.',
+];
+
+/** The suffix with the person from the gate (doc 13 §2.4): no profile, portrait place or biography read here. */
+function gatedSuffix(asOf: string, cards: readonly OracleCardV3[], spans: ReadonlyMap<string, { from: string; to: string }>, input: PersonalizerV3Input, person: PersonForModel): string {
+  return [
+    `TODAY: ${asOf}`,
+    '## SPAN DATES',
+    ...spanDates(cards, spans),
+    '## THE PERSON',
+    ...(person.lines.length ? person.lines : ['(facts not read: assume nothing about work, a partner or children; use no gendered words)']),
+    ...(input.portrait ? portraitLines(gatedPortrait(input.portrait)) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
+    ...(input.story ? CONFIDENCE_LINES : []),
+    '## WRITE: one card for each of these, with the sections the person switched on',
+    ...cards.map((c) => `- ${c.card}: ${cardBoardLabel(c.card)}; sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}${input.story ? '; story, growth, why and ladder always' : ''}`),
+  ].join('\n');
 }
 
 export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[], spans: ReadonlyMap<string, { from: string; to: string }>, input: PersonalizerV3Input): string {
+  if (input.person) return gatedSuffix(asOf, cards, spans, input, input.person);
   const p = input.profile;
   return [
     `TODAY: ${asOf}`,
@@ -119,13 +157,22 @@ export function personalizerV3Suffix(asOf: string, cards: readonly OracleCardV3[
     `last answers: ${p.lastConfirms.map((c) => `${claimKey(c.claimId)}=${c.answer}`).join(', ') || 'none'}`,
     `mood today: ${p.mood ?? 'not given'}`,
     ...(input.portrait ? portraitLines(input.portrait) : ['## PORTRAIT: not built for this call; write from THE PERSON only']),
+    ...(input.story
+      ? [
+          `age in whole years: ${input.story.ageYears ?? 'not known'} (to pitch the reading; never write the age)`,
+          `stage of life: ${input.story.lifeStage ?? 'not known'}`,
+          '## CONFIDENCE (follow the Oracle card certainty and its beats; never more sure than the Oracle)',
+          '- strong / confirmed: state it with its dates. likely / leaning: "the signs lean toward". possible / open: say what would bring it, and ask. split: give both sides. not promised: never time it.',
+        ]
+      : []),
     '## WRITE: one card for each of these, with the sections the person switched on',
-    ...cards.map((c) => `- ${c.card}: ${cardBoardLabel(c.card)}; sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}`),
+    ...cards.map((c) => `- ${c.card}: ${cardBoardLabel(c.card)}; sections ${(input.sections[c.card] ?? ['line', 'year', 'stretch', 'confirm']).join(', ')}${input.story ? '; story, growth, why and ladder always' : ''}`),
   ].join('\n');
 }
 
-export function personalizerV3Schema(cards: readonly CardId[]): Record<string, unknown> {
+export function personalizerV3Schema(cards: readonly CardId[], story = false): Record<string, unknown> {
   const str = (description: string) => ({ type: 'STRING', description });
+  if (story) return personalizerStorySchema(cards);
   return {
     type: 'OBJECT',
     properties: {
@@ -161,6 +208,49 @@ export function personalizerV3Schema(cards: readonly CardId[]): Record<string, u
   };
 }
 
+/**
+ * docs/techniques/09 §3.3: the schema with the guaranteed fields. The plain story is written LAST so a cut lands in prose
+ * and is continued (`llm/continue.ts`); `why`, per-stretch `growth` and the four-step ladder are required on every card.
+ */
+export function personalizerStorySchema(cards: readonly CardId[]): Record<string, unknown> {
+  const str = (description: string) => ({ type: 'STRING', description });
+  return {
+    type: 'OBJECT',
+    properties: {
+      cards: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            card: { type: 'STRING', enum: [...cards] },
+            line: str('one sentence with a date copied from a span'),
+            spans: {
+              type: 'ARRAY',
+              items: {
+                type: 'OBJECT',
+                properties: { span: str('the span id'), asks: str('what this stretch asks of the person'), obstacle: str('the likely obstacle'), step: str('If <cue>, then <action>.'), growth: str('what this stretch is building in the person') },
+                required: ['span', 'asks', 'obstacle', 'step', 'growth'],
+              },
+            },
+            confirm: str("the Oracle's confirm as one yes/no question, or empty"),
+            pattern: str('only when the pattern section is on, else empty'),
+            why: str("why this holds for this person, worded to the Oracle's confidence; no chart term"),
+            ladder: {
+              type: 'OBJECT',
+              properties: { best: str(''), practical: str(''), drift: str(''), floor: str('') },
+              required: ['best', 'practical', 'drift', 'floor'],
+            },
+            story: str(`${PLAIN_STORY_MIN_WORDS}-${PLAIN_STORY_MAX_WORDS} words: the Oracle's story retold in the same order, plain words, no chart term`),
+          },
+          required: ['card', 'line', 'spans', 'confirm', 'pattern', 'why', 'ladder', 'story'],
+          propertyOrdering: ['card', 'line', 'spans', 'confirm', 'pattern', 'why', 'ladder', 'story'],
+        },
+      },
+    },
+    required: ['cards'],
+  };
+}
+
 /** Every date the Oracle cards and the frame carry: the only dates a card face may name. */
 export function v3DateFrame(dates: Iterable<string>): DateFrame {
   const f: DateFrame = { days: new Set(), months: new Set(), years: new Set(), pairs: new Set() };
@@ -173,7 +263,7 @@ export function v3DateFrame(dates: Iterable<string>): DateFrame {
   return f;
 }
 
-export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextCheckContext, sections: readonly SelfSectionId[]): { card: PersonalCardV3 | null; problems: string[]; notes: string[] } {
+export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextCheckContext, sections: readonly SelfSectionId[], story = false): { card: PersonalCardV3 | null; problems: string[]; notes: string[] } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const problems: string[] = [];
   const notes: string[] = [];
@@ -200,7 +290,9 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
     text(`span ${os.span} asks`, asks);
     text(`span ${os.span} obstacle`, obstacle);
     text(`span ${os.span} step`, step);
-    spans.push({ span: os.span, asks, obstacle, step });
+    const growth = story ? T(`span ${os.span} growth`, g.growth) : '';
+    if (story) text(`span ${os.span} growth`, growth);
+    spans.push({ span: os.span, asks, obstacle, step, ...(growth ? { growth } : {}) });
   }
 
   let confirm: string | null = T('confirm', o.confirm) || null;
@@ -212,16 +304,26 @@ export function checkPersonalCard(raw: unknown, oracle: OracleCardV3, c: TextChe
   if (pattern && (!sections.includes('pattern') || !oracle.pattern)) pattern = null;
   let ladder: LadderSteps | null = null;
   const ld = (o.ladder ?? {}) as Record<string, unknown>;
-  if (sections.includes('ladder')) {
+  // docs/techniques/09 §3.3 (SOUL.md §3): with the story contract the four-step ladder is guaranteed on every card
+  if (story || sections.includes('ladder')) {
     const steps = { best: T('ladder best', ld.best), practical: T('ladder practical', ld.practical), drift: T('ladder drift', ld.drift), floor: T('ladder floor', ld.floor) };
     const empty = Object.entries(steps).find(([, v]) => !v);
-    if (empty) notes.push(`ladder dropped: ${empty[0]} empty`);
+    if (empty && story) problems.push(`ladder ${empty[0]}: empty (four steps on every card)`);
+    else if (empty) notes.push(`ladder dropped: ${empty[0]} empty`);
     else ladder = steps;
   }
-  // docs/dashboards/13 phase 5: optional; a missing or empty `why` never refuses the card (docs 82, 84)
+  // docs/dashboards/13 phase 5: optional on the doc 70 face; guaranteed with the story contract (doc 09 §3.3)
   const why = T('why', o.why) || null;
+  if (story && !why) problems.push('why: empty');
+  let plain = '';
+  if (story) {
+    plain = T('story', o.story);
+    const n = wordCount(plain);
+    // the floor counts words only (AGENTS.md "Reading depth is a release gate", rule 1; no word lists)
+    if (n < PLAIN_STORY_MIN_WORDS) problems.push(`story: ${n} words; at least ${PLAIN_STORY_MIN_WORDS}, in the order of the Oracle story`);
+  }
   if (problems.length) return { card: null, problems, notes };
-  return { card: { card: oracle.card, line, spans, confirm, pattern, ladder, ...(why ? { why } : {}) }, problems, notes };
+  return { card: { card: oracle.card, line, spans, confirm, pattern, ladder, ...(why ? { why } : {}), ...(plain ? { story: plain } : {}) }, problems, notes };
 }
 
 export interface PersonalizerV3Deps {
@@ -231,6 +333,11 @@ export interface PersonalizerV3Deps {
   /** the agent and technique the run is logged under (default `self.personalizer`, `self.v3.cards`) */
   agentId?: string;
   technique?: string;
+  /** docs/techniques/09 §3.1: the output ceiling and wall time of each call (default 4,096 and 60 s); continued at the ceiling */
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+  /** false: a one-card prefix (unique per card) is never worth an explicit cache create (doc 86 rule; doc 09 one call per card) */
+  cacheCreate?: boolean;
 }
 
 export interface PersonalizerV3Result {
@@ -321,24 +428,29 @@ export async function runPersonalizerV3(
         const res = await withAgentRun(
           deps.prisma,
           deps.agentId ?? 'self.personalizer',
-          { userId: ctx.userId, kundliId: ctx.kundliId, technique: deps.technique ?? 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
+          { userId: ctx.userId, kundliId: ctx.kundliId, technique: deps.technique ?? 'self.v3.cards', task: `self.v3.personalizer ${c.call} ${ctx.asOf}`, input: { cards: ids.length, ...(input.person ? { fieldsSent: input.person.fieldsSent } : {}) }, charts: [{ type: 'technique_output', variant: 'self.v3.oracle' }] },
           async () => {
-            const g = await deps.callGemini({
+            const limit = deps.timeoutMs ?? PERSONALIZER_V3_TIMEOUT_MS;
+            const o: GeminiCallOptions = {
               model: c.model,
               node: `self.personalizer.v3.${c.call}`,
               system: c.system,
               parts: [c.prefix, c.suffix],
               thinking: 'low',
-              timeoutMs: PERSONALIZER_V3_TIMEOUT_MS,
+              timeoutMs: limit,
+              ...(deps.maxOutputTokens ? { maxOutputTokens: deps.maxOutputTokens } : {}),
+              ...(deps.cacheCreate === false ? { cacheCreate: false } : {}),
               cachePrefix: true,
               cacheOwner: c.cacheOwner,
-              responseSchema: personalizerV3Schema(ids),
-            });
+              responseSchema: personalizerV3Schema(ids, Boolean(input.story)),
+            };
+            // a limit never discards (doc 09 §3.5): continued at the ceiling
+            const g = await callWithContinuation(deps.callGemini, o, { deadlineMs: limit });
             return { value: g, usage: { model: c.model, promptTokens: g.usage?.promptTokens ?? 0, cachedTokens: g.usage?.cachedTokens ?? 0, outputTokens: g.usage?.outputTokens ?? 0, thoughtTokens: g.usage?.thoughtTokens ?? 0 }, output: { chars: g.text.length } };
           },
         );
         markAgentUsed({ cacheOwner: c.cacheOwner }, deps.informUsed);
-        const parsed = res.finishReason === 'MAX_TOKENS' ? null : (parseJson(res.text) as { cards?: unknown } | null);
+        const parsed = parseContinuedJson(res.text) as { cards?: unknown } | null;
         list = parsed && Array.isArray(parsed.cards) ? (parsed.cards as unknown[]) : null;
         timings.push(timingOf('self.personalizer', c.call, c.model, res, performance.now() - t0, list ? 'ok' : 'failed'));
         if (!list) issues.push({ stage: 'personalizer', area: null, check: res.finishReason === 'MAX_TOKENS' ? 'truncated' : 'json_schema', message: `${c.call}: no card document`, callId: c.call });
@@ -353,7 +465,7 @@ export async function runPersonalizerV3(
           if (list) issues.push({ stage: 'personalizer', area: oc.card, check: 'missing_area', message: `${oc.card}: not returned`, callId: c.call });
           continue;
         }
-        const r = checkPersonalCard(raw, oc, check, input.sections[oc.card] ?? ['line', 'year', 'stretch', 'confirm']);
+        const r = checkPersonalCard(raw, oc, check, input.sections[oc.card] ?? ['line', 'year', 'stretch', 'confirm'], Boolean(input.story));
         for (const n of r.notes) issues.push({ stage: 'personalizer', area: oc.card, check: personalizerCheckOf(n), message: `${oc.card}: ${n}`.slice(0, 300), callId: c.call });
         if (r.card) out[oc.card] = r.card;
         else {

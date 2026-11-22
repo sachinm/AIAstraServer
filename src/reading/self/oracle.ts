@@ -28,6 +28,7 @@ import { loadDbReaderCache, saveDbReaderCache, type HeldReader } from '../oracle
 import { PROMPTS, PROMPT_VERSION } from '../prompts/generated.js';
 import { MAX_TP_YEAR_DAYS, runningTithiPravesha, TITHI_PRAVESHA_YEAR_RULE } from '../annual/tithiPravesha.js';
 import { allRunningDashas, mdSpine, runningChain } from './slices.js';
+import { systemDef } from '../clocks/systems.js';
 import { clockLabel, completeSentencesOf, CUT_FINDING_NOTE, MAX_LINE_WORDS, redactEngineTerms, wordCount } from './words.js';
 import { areaCertaintyToLine, areaDocToText, oracleAreaSchema, parseAreaDoc, validateAreaDoc } from './areaDoc.js';
 import { ensurePromptCache } from '../llm/promptCache.js';
@@ -49,8 +50,10 @@ import type {
 
 export type SelfOracleResult = SelfOraclePayload;
 
-export type SelfFamilyAgentId = 'family.rasi' | 'family.varga' | 'family.dasha' | 'family.year' | 'family.sky';
+/** docs/techniques/09 §3.1: seven family readers; `family.moon` and `family.star` read for the v2/v3 build only */
+export type SelfFamilyAgentId = 'family.rasi' | 'family.moon' | 'family.varga' | 'family.star' | 'family.dasha' | 'family.year' | 'family.sky';
 
+/** the v1 board reading's families (the five it was built with; the v2/v3 build reads all seven, `v2/slices.ts` FAMILY_IDS) */
 export const SELF_FAMILY_AGENT_IDS: readonly SelfFamilyAgentId[] = [
   'family.rasi',
   'family.varga',
@@ -252,6 +255,10 @@ export function buildSelfFamilyPacks(
   // Include EVERY stored dasha system across all families (`vimshottari`, `conditional`, `rasi`, `yogini`, `tithi_ashtottari`, `karaka`, `other`)
   for (const sysSummary of allDashas) {
     if (sysSummary.system === clock.system) continue;
+    // docs/techniques/09 decision 2: only verified systems that apply are read (a conditional one only when the
+    // activation marks it applying); flagged, longevity and unchecked systems never reach the reader
+    const sd = systemDef(sysSummary.system);
+    if (!sd || sd.show === 'never' || (sd.show === 'if_applies' && sysSummary.l1?.family !== 'conditional')) continue;
     for (const r of [sysSummary.previous, sysSummary.l1, sysSummary.l2, sysSummary.l3, sysSummary.next]) {
       if (!r) continue;
       const k = `activation:${r.system}/${r.level}/${r.lord ?? r.sign}@${r.from}`;
@@ -299,7 +306,7 @@ export function buildSelfFamilyPacks(
   const tpRun = runningTithiPravesha(view, asOf);
   const tpRow = tpRun.row;
   const mudda = tpRun.varsha;
-  yearLines.push(`TODAY ${asOf}`);
+  // docs/techniques/09 §8 step 4: no date of today in the cached pack (the dynamic part carries TODAY)
   if (tpRow && tpRun.year != null) {
     const ak = `annual:TP${tpRun.year}.D1`;
     yearLines.push(
@@ -312,7 +319,12 @@ export function buildSelfFamilyPacks(
     yearLines.push(`RUNNING YEAR: no Tithi Pravesha year covers TODAY; read no year chart as this year's`);
   }
   if (mudda) yearLines.push(`{annual:VP${mudda.row.year}.D1} CONFIRMING clock (Varshaphala Mudda, confirms only): ${mudda.lord}(${mudda.from}..${mudda.to})`);
-  for (const a of view.annual()) {
+  // docs/techniques/09 §3.1: this and last Tithi Pravesha year only (D1 houses, D9, the routed year charts), never every
+  // stored year in every varga (203k-305k tokens before); the Varshaphal year only confirms, D1 alone
+  const yearsKept = tpRun.year != null ? new Set([tpRun.year, tpRun.year - 1]) : null;
+  const yearVargas = new Set(['D1', 'D9', ...YEAR_ROUTED_VARGAS]);
+  const keptAnnual = view.annual().filter((a) => (yearsKept ? yearsKept.has(a.year) : true) && (a.kind === 'TP' ? yearVargas.has(a.varga) : a.varga === 'D1'));
+  for (const a of keptAnnual) {
     const ak = `annual:${a.kind}${a.year}.${a.varga}`;
     if (!yearKeys.includes(ak)) yearKeys.push(ak);
     const role = a.kind === 'TP' ? (tpRun.year == null ? 'TP' : a.year === tpRun.year ? 'TP running year' : a.year < tpRun.year ? 'TP past year' : 'TP coming year') : 'VP confirming';
@@ -320,7 +332,7 @@ export function buildSelfFamilyPacks(
       `{${ak}} ${a.kind}${a.year}.${a.varga} [${role}]${a.start ? ` from=${a.start} to=${a.end ?? '?'}` : ''} lagna=${a.lagna ?? '-'} yearLord=${a.yearLord ?? '-'}${a.yearLordRetro != null ? `(rx=${a.yearLordRetro})` : ''} muntha=${a.muntha ? `H${a.muntha.house ?? '?'}(${a.muntha.sign ?? '-'})` : '-'}`,
     );
     for (const hc of a.houses) {
-      if (hc.occupants.length > 0 || hc.house === 1 || hc.house === 6 || hc.house === 8 || hc.house === 10) {
+      if (a.varga === 'D1' || hc.occupants.length > 0 || hc.house === 1 || hc.house === 6 || hc.house === 8 || hc.house === 10) {
         yearLines.push(
           `{${ak}} ${a.kind}${a.year}.${a.varga}.H${hc.house} ${hc.sign ?? '-'} lord=${hc.lord ?? '-'}(in H${hc.lordHouse ?? '?'},${hc.lordDignity ?? '?'}) occ=[${hc.occupants.map((o) => `${o.planet}:${o.dignity ?? '?'}`).join(',')}]`,
         );
@@ -392,6 +404,46 @@ export function buildSelfFamilyPacks(
     skyLines.push(`UNIVERSAL_TRANSIT_SKY evaluated via natal SAV bindus, Khara points (K64M/K64L/KD22), and annual return positions.`);
   }
   const skyExpiresAt = skyEndIso ? new Date(`${skyEndIso}T00:00:00Z`) : undefined;
+
+  // 6. family.moon (docs/techniques/09 §4 "From the Moon"): the Moon's sign and the D1 houses with their signs, lords
+  // and occupants. The model reads the houses from the Moon's sign; Node counts nothing.
+  const moonKeys: string[] = [];
+  const moonLines: string[] = [`# FAMILY PACK: family.moon (the chart read from the Moon: the Moon's sign, then each D1 house's sign, lord and occupants; count the houses from the Moon's sign yourself)`];
+  const moonCard = view.planet('D1', 'Mo');
+  if (moonCard) {
+    moonKeys.push('planet:D1.Mo');
+    moonLines.push(`{planet:D1.Mo} Moon in ${moonCard.sign ?? '-'} (H${moonCard.house ?? '?'} from the lagna) star=${moonCard.star ?? '-'} pada=${moonCard.pada ?? '?'} dig=${moonCard.dignity ?? '-'}`);
+  }
+  for (let h = 1; h <= 12; h++) {
+    const hc = view.house('D1', h);
+    if (!hc) continue;
+    const key = `house:D1.h${h}`;
+    moonKeys.push(key);
+    moonLines.push(`{${key}} sign=${hc.sign ?? '-'} lord=${hc.lord ?? '-'}(in ${hc.lordHouse != null ? `H${hc.lordHouse}` : '?'}) occ=[${hc.occupants.map((o) => o.planet).join(',')}] aspGraha=[${hc.aspectedGraha.join(',')}]`);
+  }
+  for (const pt of view.points('D1').filter((x) => ['AL', 'UL', 'A7', 'A10', 'A11'].includes(x.id))) {
+    const key = `point:D1.${pt.id}`;
+    moonKeys.push(key);
+    moonLines.push(`{${key}} ${pt.id}: sign=${pt.sign ?? '-'}`);
+  }
+  const moonPrefix = moonLines.join('\n');
+
+  // 7. family.star (docs/techniques/09 §4 "Star layer"): per planet its star, star lord and pada as stored, and the
+  // star-lord chain. Tara is not stored per planet yet (engine E4): the reader may not compute it.
+  const starKeys: string[] = [];
+  const starLines: string[] = [`# FAMILY PACK: family.star (per planet: its star, star lord, pada and star-lord chain, as stored; tara per planet is not stored yet: do not compute it)`];
+  for (const pl of ['Su', 'Mo', 'Ma', 'Me', 'Ju', 'Ve', 'Sa', 'Ra', 'Ke']) {
+    const pc = view.planet('D1', pl);
+    if (!pc) continue;
+    const key = `planet:D1.${pl}`;
+    starKeys.push(key);
+    starLines.push(`{${key}} ${pl} star=${pc.star ?? '-'} starLord=${pc.starLord ?? '-'} pada=${pc.pada ?? '?'} sign=${pc.sign ?? '-'} H${pc.house ?? '?'} starChain=[${(pc.starChain ?? []).join('->')}]`);
+  }
+  if (st) {
+    starKeys.push('star:profile');
+    starLines.push(`{star:profile} moonStar=${st.moonStar ?? '-'}(lord=${st.moonStarLord ?? '-'}) lagnaStar=${st.lagnaStar ?? '-'} gandanta=[${st.gandanta.join(',')}]`);
+  }
+  const starPrefix = starLines.join('\n');
   const skyHorizonKey = `sky=${sky ? `${sky.from}:${sky.to}:${asOf.slice(0, 7)}` : asOf.slice(0, 7)}`;
   const skyPrefix = skyLines.join('\n');
 
@@ -405,6 +457,26 @@ export function buildSelfFamilyPacks(
       packHash: shortHash(`${v}|rasi|${rasiPrefix}`),
       keys: rasiKeys,
       charts: ['house', 'planet', 'point', 'yoga', 'star'].map((s) => ({ type: `digest.${s}`, variant: v })),
+    },
+    'family.moon': {
+      id: 'family.moon',
+      natal: true,
+      horizonKey: 'natal',
+      prefix: moonPrefix,
+      dynamic: `Read the chart from the Moon: take the Moon's sign as the first house and read each house from there (count the signs yourself from the listed signs), its lord and occupants, and the arudhas as they fall from the Moon. Say where the Moon's view confirms or differs from the lagna's. Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|moon|${moonPrefix}`),
+      keys: moonKeys,
+      charts: ['house', 'planet', 'point'].map((s) => ({ type: `digest.${s}`, variant: v })),
+    },
+    'family.star': {
+      id: 'family.star',
+      natal: true,
+      horizonKey: 'natal',
+      prefix: starPrefix,
+      dynamic: `Read each planet through its star: the star, its lord and where that lord sits, the pada, and the star-lord chain; which planets deliver through which star lords. Tara is not stored: do not compute it. Tag a star-lord rule that is commentary, not classical text. Cite exact {key} evidence in every bullet.`,
+      packHash: shortHash(`${v}|star|${starPrefix}`),
+      keys: starKeys,
+      charts: [{ type: 'digest.planet', variant: v }, { type: 'digest.star', variant: v }],
     },
     'family.varga': {
       id: 'family.varga',
@@ -453,7 +525,14 @@ export function buildSelfFamilyPacks(
 }
 
 /** exported for the v2 build (src/reading/self/v2), which runs the same family readers over its own slices */
+/** the year charts the routes name (doc 08): read in `family.year` beside D1 and D9 (`cards/routing.ts` replaces this when merged) */
+export const YEAR_ROUTED_VARGAS: readonly string[] = ['D10', 'D7', 'D4'];
+
 export const FAMILY_SYSTEM_PROMPTS: Record<SelfFamilyAgentId, string> = {
+  'family.moon':
+    'You are the Moon Chart Family Sub-Agent. Read the natal chart from the Moon (Chandra Lagna): the Moon\'s sign is the first house; read each house from it using the signs listed (count them yourself; nothing is counted for you), its lord, its occupants and the arudhas as they fall from the Moon, and say where the view from the Moon confirms, sharpens or differs from the view from the lagna. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
+  'family.star':
+    'You are the Nakshatra (Star) Family Sub-Agent. For each planet read its star, the star lord and where that lord sits, the pada and the star-lord chain, and say which planets deliver their results through which star lords. Tara per planet is not stored: never compute it. Tag any star-lord rule that is commentary rather than classical text. Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
   'family.rasi':
     'You are the Rasi (D1) Chart Family Sub-Agent for a multi-school Vedic astrology reading (Parashara BPHS, Jaimini Upadesa Sutras, Pt. Sanjay Rath, and Lunar Astro / Bhrigu Nandi Nadi). Read only the provided D1 houses (H1..H12), Argala & Virodhargala, SAV bindus, planets, Shadbala, 5-system avasthas (Baladi, Jagradadi, Deeptadi, Lajjitadi, Shayanadi), solar proximity, dispositor/nakshatra chains, Special Lagnas (AL, SL, HL, GL), Upagrahas (Mandi MD, Gulika GK, Prana/Deha/Mrityu Sphutas), Chara Karakas (AK..DK), yogas, and somatic/anatomical correspondences (head/brain/nerves H1/H3/H5, food intake/diet/neck/throat H2, hands/arms/shoulders H3, heart/chest/lungs/emotional mind H4, internal organs/stomach/digestive fire/liver/weight balance H5/H6, cellular recovery H8, blood flow/circulation Ma/Su/Mo, hips/thighs H9, knees/joints/bones H10, legs/calves/ankles H11, feet/sleep/lymphatic drainage H12). Never invent placements or mention calculation software. Cite `{evidence_key}` on every bullet and end with `VALID_UNTIL: always`.',
   'family.varga':

@@ -94,6 +94,8 @@ export function howItWasRead(ctx: CardChatContext): string {
 }
 
 function personBlock(ctx: CardChatContext): string {
+  // doc 13 §2.4, READING_PERSON_GATE=1: the gate's lines only (no place, no birth time; a failed read sends nothing)
+  if (ctx.person) return ['THE PERSON', ...(ctx.person.lines.length ? ctx.person.lines : ['(facts not read: assume nothing about work, a partner or children)'])].join('\n');
   const p = ctx.profile;
   if (!p) return "THE PERSON\n(facts not read: assume nothing about work, a partner or children)";
   return [
@@ -113,6 +115,7 @@ export function cardChatParts(ctx: CardChatContext, question: string, history: r
   const others = c.boardCards.map((x) => `${x.title} (\`${x.id}\`)`).join('; ');
   const turns = capHistory(history);
   const suffix = [
+    ...(ctx.prefix?.dated ? [ctx.prefix.dated] : []),
     promptText(CARD_CHAT_PROMPT),
     `THE CARD: ${c.title} (\`${c.id}\`, ${CARD_CHAT_BOARD_TITLE[c.board]} board)`,
     `CARD BRIEF\n${ctx.brief || '(no brief stored: keep to the card on screen)'}`,

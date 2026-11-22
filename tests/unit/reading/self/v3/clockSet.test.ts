@@ -56,46 +56,54 @@ const APPLIES: ApplicabilityRow[] = [
   { system: 'ashtottari', names: ['ashtottari'], applies: false },
 ];
 
-describe('resolveReadingClocks (doc 70 §4.1)', () => {
-  it('a kundli with an applicable conditional clock: Vimshottari, Narayana, the year, that clock, Yogini', () => {
+describe('resolveReadingClocks (doc 70 §4.1; doc 09 decision 2: verified systems only)', () => {
+  it('a kundli with an applicable conditional clock: Vimshottari, Narayana, the year, that clock; flagged clocks never', () => {
     const s = resolveReadingClocks('dwisatpathi', STORED, APPLIES);
-    expect(s.clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha', 'dwisatpathi', 'yogini']);
-    expect(s.pulled).toEqual(['vimsottari', 'narayana', 'dwisatpathi', 'yogini']);
+    expect(s.clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha', 'dwisatpathi']);
+    expect(s.pulled).toEqual(['vimsottari', 'narayana', 'dwisatpathi']);
     expect(s.conditional).toBe('dwisatpathi');
-    expect(s.skipped).toContainEqual({ system: 'chara', reason: 'limit' });
+    expect(s.clocks).not.toContain('yogini');
   });
 
-  it('no conditional clock applies: Chara takes the fifth place', () => {
+  it('no conditional clock applies: the verified three, nothing padded in', () => {
     const none = APPLIES.map((r) => ({ ...r, applies: false }));
     const s = resolveReadingClocks('vimsottari', STORED, none);
-    expect(s.clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha', 'yogini', 'chara']);
-    expect(s.pulled).toEqual(['vimsottari', 'narayana', 'yogini', 'chara']);
+    expect(s.clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha']);
+    expect(s.pulled).toEqual(['vimsottari', 'narayana']);
     expect(s.conditional).toBeNull();
     expect(s.skipped).toContainEqual({ system: 'conditional', reason: 'none_applies' });
   });
 
-  it('a spine outside the order is kept first and the last clock drops; the size and order come from env', () => {
+  it('a flagged system named by env is skipped as not verified; a periods-only system is not a reader slot', () => {
+    process.env.READING_CLOCK_ORDER = 'vimsottari,yogini,chara,sudasa,narayana,tithi_pravesha,conditional';
+    const s = resolveReadingClocks('vimsottari', STORED, APPLIES);
+    expect(s.clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha', 'dwisatpathi']);
+    expect(s.skipped).toContainEqual({ system: 'yogini', reason: 'not_verified' });
+    expect(s.skipped).toContainEqual({ system: 'chara', reason: 'not_verified' });
+    expect(s.skipped).toContainEqual({ system: 'sudasa', reason: 'periods_only' });
+  });
+
+  it('the spine is kept first; the size and order come from env', () => {
     const s = resolveReadingClocks('karaka', STORED, APPLIES);
     expect(s.clocks).toEqual(['karaka', 'vimsottari', 'narayana', 'tithi_pravesha', 'dwisatpathi']);
     expect(s.pulled).not.toContain('tithi_pravesha');
     process.env.READING_CLOCKS = '3';
+    // the spine is never dropped: it goes first and the last clock drops
     expect(resolveReadingClocks('dwisatpathi', STORED, APPLIES).clocks).toEqual(['dwisatpathi', 'vimsottari', 'narayana']);
-    // the spine is never dropped
-    expect(resolveReadingClocks('yogini', STORED, APPLIES).clocks).toEqual(['yogini', 'vimsottari', 'narayana']);
     process.env.READING_CLOCKS = '6';
-    process.env.READING_CLOCK_ORDER = 'yogini,tithi_pravesha,conditional';
-    expect(resolveReadingClocks('dwisatpathi', STORED, APPLIES).clocks).toEqual(['yogini', 'tithi_pravesha', 'dwisatpathi']);
+    process.env.READING_CLOCK_ORDER = 'tithi_pravesha,conditional,vimsottari';
+    expect(resolveReadingClocks('dwisatpathi', STORED, APPLIES).clocks).toEqual(['tithi_pravesha', 'dwisatpathi', 'vimsottari']);
   });
 
-  it('a system with no stored periods is skipped; with nothing stored yet every served system counts', () => {
+  it('a system with no stored periods is skipped; with nothing stored yet every served verified system counts', () => {
     const few = present(['vimsottari', 'vimshottari'], ['yogini', 'yogini']);
-    expect(resolveReadingClocks('vimsottari', few, null).clocks).toEqual(['vimsottari', 'tithi_pravesha', 'yogini']);
-    expect(resolveReadingClocks('vimsottari', [], null).clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha', 'yogini', 'chara']);
+    expect(resolveReadingClocks('vimsottari', few, null).clocks).toEqual(['vimsottari', 'tithi_pravesha']);
+    expect(resolveReadingClocks('vimsottari', [], null).clocks).toEqual(['vimsottari', 'narayana', 'tithi_pravesha']);
   });
 
   it('the year frame reads the set beside the spine; without a set, the confirming clocks', () => {
     const s = resolveReadingClocks('dwisatpathi', STORED, APPLIES);
-    expect(otherClocks({ primary: 'dwisatpathi', confirming: ['karaka'], applicable: [] }, s)).toEqual(['vimsottari', 'narayana', 'yogini']);
+    expect(otherClocks({ primary: 'dwisatpathi', confirming: ['karaka'], applicable: [] }, s)).toEqual(['vimsottari', 'narayana']);
     expect(otherClocks({ primary: 'dwisatpathi', confirming: ['karaka'], applicable: ['dwisatpathi'] }, null)).toEqual(['karaka']);
   });
 });
