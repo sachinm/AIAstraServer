@@ -26,7 +26,8 @@ import { logValidation, recordValidationIssues, type RecordMeta } from '../v2/fa
 import { storedWindowsOf } from '../v2/oracle.js';
 import { promptHash, promptText, shortHash } from '../v2/slices.js';
 import type { PersonPortrait, PreparedAgentSlice, SelfBuildContext, SelfV2AgentTiming, ValidationIssue } from '../v2types.js';
-import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnabled, isCardsReadEnabled, isCardsStoryContractEnabled, isLensLinemenEnabled, isReadingClockLayerEnabled } from '../../../config/env.js';
+import { getBoardsV3, getCardsReadMin, getReadingClocksMin, isCardsGroupPackEnabled, isCardsReadEnabled, isCardsStoryContractEnabled, isLensLinemenEnabled, isReadingClockLayerEnabled, isReadingPersonGateEnabled } from '../../../config/env.js';
+import { personForModel } from '../../person/modelContext.js';
 import type { ActivationRow } from '../../digest/activation.js';
 import { anyCardDef } from '../../cards/registry.js';
 import { lensOf } from '../../cards/ownCharts.js';
@@ -522,7 +523,9 @@ async function runSelfV3CardsUnleased(deps: SelfV3StepDeps, i: SelfV3StepInput):
 
         // 3: the Personalizer, one call per Oracle call that kept a card
         const spanDates = new Map(frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
-        const pInput = { profile: { ...profile }, portrait: i.portrait, sections };
+        // doc 13 §2.4: with READING_PERSON_GATE on, the person comes from the gate (off: today's input, unchanged)
+        const person = isReadingPersonGateEnabled() ? await personForModel(deps.prisma, { userId: ctx.userId, kundliId: ctx.kundliId }, 'personalizer', { asOf: ctx.asOf }) : undefined;
+        const pInput = { profile: { ...profile }, portrait: i.portrait, sections, ...(person ? { person } : {}) };
         const pcalls = personalizerV3Calls(ctx, ORACLE_V3_CALLS, oracle.output, spanDates, pInput, promptText(SELF_V3_PERSONALIZER_PROMPT), natal.model);
         const tp = performance.now();
         const repair = (cards: Parameters<typeof personalizerV3Call>[2], note: string) =>

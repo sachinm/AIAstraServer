@@ -1535,6 +1535,16 @@ export function isPersonalizerVoiceByGenderEnabled(): boolean {
   return boolEnv('PERSONALIZER_VOICE_BY_GENDER', true);
 }
 
+/**
+ * docs/techniques/13 §2.4: the one gate for personal data (`src/reading/person/modelContext.ts`). `READING_PERSON_GATE=1`:
+ * the card Personalizer, card chat and Clarify take their person lines from the gate (by role; never a name, email,
+ * phone, place, birth time or coordinates) and record the field names sent on their run row. Off (default): today's
+ * prompt bytes, unchanged.
+ */
+export function isReadingPersonGateEnabled(): boolean {
+  return boolEnv('READING_PERSON_GATE', false);
+}
+
 /** The voice prompt's version: part of the card cache key and the prefix, so a new voice never serves an old card. */
 export const PERSONALIZER_VOICE_VERSION = 'v1';
 

@@ -8,6 +8,7 @@
 import type { LedgerCell } from '../clocks/types.js';
 import type { BoardId, OracleCardV3, PersonalCardV3, SelfV3CardContent } from '../self/v3/types.js';
 import type { ProfilePack } from '../self/v2types.js';
+import type { PersonForModel } from '../person/modelContext.js';
 
 export type CardChatBoard = BoardId;
 export const CARD_CHAT_BOARDS: readonly CardChatBoard[] = ['self', 'love', 'work'];
@@ -148,6 +149,11 @@ export interface CardChatContext {
   /** the brief of the card (prompts/cards/<board>/<id>.md) */
   brief: string;
   profile: ProfilePack | null;
+  /**
+   * docs/techniques/13 §2.4, READING_PERSON_GATE=1: the person from the gate (role `chat`); THE PERSON is these lines
+   * only. Absent (the flag off): THE PERSON is today's block from `profile`.
+   */
+  person?: PersonForModel;
 }
 
 /** one earlier exchange carried into the answer */

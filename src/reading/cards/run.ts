@@ -33,7 +33,9 @@ import {
   isCardsGroupPackEnabled,
   isCardsReadRestEnabled,
   isCardsStoryContractEnabled,
+  isReadingPersonGateEnabled,
 } from '../../config/env.js';
+import { personForModel, type PersonForModel } from '../person/modelContext.js';
 import { lifeStageOf } from '../person/profile.js';
 import { parseRowLines } from '../slices/render.js';
 import { cardStoryInputs, goodUntilOf, storyInputsHash, systemsViewOf, type CardsStoryRunInput } from './storyInputs.js';
@@ -77,6 +79,9 @@ export interface CardsRunDeps {
   readRest?: boolean;
   boardParallel?: number;
   restParallel?: number;
+  /** overrides READING_PERSON_GATE (tests); and the gate's read (default personForModel, role `personalizer`) */
+  personGate?: boolean;
+  loadPerson?: (prisma: PrismaClient, ctx: SelfBuildContext) => Promise<PersonForModel>;
   /** overrides: read in groups on one cached pack (doc 71), and the group sizes */
   groupPack?: boolean;
   groupSizeBoard?: number;
@@ -254,6 +259,12 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
   const ledgerHash = i.ledger ? shortHash(canonicalJson(i.ledger.cells.map((c) => [c.id, c.status, c.tone, c.agree, c.of, c.evidence]))) : '-';
   const frameHash = shortHash(canonicalJson(i.frame.spans.map((s) => [s.from, s.to, s.tone, s.held, s.clocks.map((c) => [c.system, c.tone])])));
   const portraitHash = shortHash(canonicalJson(i.portrait ?? null));
+  // doc 13 §2.4: with READING_PERSON_GATE on the Personalizer's person comes from the gate, read once per run; off,
+  // nothing is read and the prompt is today's. The store key is left as it is (turning the flag on re-reads no stored
+  // card; docs/TODOS.md)
+  const person: PersonForModel | undefined = (deps.personGate ?? isReadingPersonGateEnabled())
+    ? await (deps.loadPerson ?? ((p, c) => personForModel(p, { userId: c.userId, kundliId: c.kundliId }, 'personalizer', { asOf: c.asOf })))(deps.prisma, ctx)
+    : undefined;
   const nowSpan = i.frame.spans.find((s) => s.place === 'now') ?? i.frame.spans[0]!;
   const spanDates = new Map(i.frame.spans.map((s) => [s.id, { from: s.from, to: s.to }]));
   const pHash = [...[READER_SYSTEM_PROMPT, CARD_ORACLE_PROMPT, SELF_V3_PERSONALIZER_PROMPT].map(promptHash), personalizerVoiceToken(ctx.sub.profile?.gender)].join('.');
@@ -409,6 +420,7 @@ export async function readCards(deps: CardsRunDeps, i: CardsRunInput): Promise<C
             portrait: i.portrait,
             sections: { [id]: sections } as PersonalizerV3Input['sections'],
             ...(storyOn ? { story: { ageYears: ctx.sub.profile?.ageYears ?? null, lifeStage: ctx.sub.profile ? lifeStageOf(ctx.sub.profile) : null } } : {}),
+            ...(person ? { person } : {}),
           };
           const system = promptText(SELF_V3_PERSONALIZER_PROMPT);
           const pcall = personalizerV3Call(ctx, `card.${id}.personalizer`, [oc], spanDates, pInput, system, i.model);

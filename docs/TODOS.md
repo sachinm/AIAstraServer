@@ -4335,3 +4335,26 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   the winner is missing and disputed (brightness vs the more northern planet). Engine findings: the saham 30° test
   compares whole signs, not degrees; Vyapara and Shatru sahams share a formula, as do Rajya and Pitri; the annual
   docstring's night-flag default is wrong; `charts.benefics_and_malefics` misnames Mercury counters `mars_*`.
+
+## Filed 2026-11-22 by the person gate and retry build
+
+- **P2 · open · The person gate (`src/reading/person/modelContext.ts`) is built but off.** `READING_PERSON_GATE`
+  (default 0) wires it into the card Personalizer (`cards/run.ts`, `self/v3/build.ts`), card chat (`cardChat/resolve.ts`,
+  `prompt.ts`, `answer.ts`, and the clarified "where do you live" line dropped in `cardChatRoutes.ts`) and Clarify
+  (`clarify/service.ts`, `planner.ts`). With it on, `born in`, `lives in`, `place:`, `BIRTH PLACE`, `CURRENT LOCATION`
+  and the raw `Known profile facts` JSON are not sent, and `fieldsSent` (names only) is on the run's `input_summary`.
+  This closes the two leak entries above (roles pack build; dev session) once the flag is on in production. Who: the
+  deploy session (env on the API Lambda) after the tests below pass. Done: flag on, the two entries deleted.
+- **P2 · open · Person gate tests written, not run** (owner: no test runs this release):
+  `tests/unit/reading/person/modelContext.test.ts`. Only `npx tsc --noEmit` was run. Done: the file passes.
+- **P2 · open · Callers the gate does not cover yet, still sending places with the flag on:** `cards/group.ts`
+  (`buildCardPack` puts `profileLines` with `place:` and `portraitLines` with `born in` / `lives in` into the grouped
+  pack; used only with the story contract off), `self/v2/slices.ts` (the v2 Personalizer) and `reading/now/service.ts`
+  (`profileLines` with `place:`). The card Oracle and the roles unit do not take the `oracle` / `roles` lines yet (the
+  gate serves them; nothing calls it with those roles). Done: each reads `personForModel` by role.
+- **P3 · open · The card store key does not include the gate's lines** (`cards/run.ts` `profileHash`). Turning the flag
+  on re-runs no stored card (no surprise spend), but a new life event (not in `profile.hash`) does not refresh a stored
+  Personalizer card either. Decide with the depth/cost owner whether to stamp the gate hash into the key.
+- **P3 · open · The gate reads the account holder's profile for any kundli of the account** (as `loadProfilePack` does
+  today). A chart of a relative under the same account gets the account holder's sex, age and events. Done: a per-kundli
+  person (the kundli's own birth date and stated sex) when relatives' charts are added.
