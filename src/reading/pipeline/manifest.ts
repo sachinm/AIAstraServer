@@ -19,9 +19,10 @@
 import { parseFailureMark } from '../chartData/store.js';
 import type { ChartDataType } from '../chartData/catalog.js';
 import type { ApplicabilityRow } from '../self/clock.js';
+import { isEngineRefusal, PIPELINE_GIVE_UP_FAILURES } from './retry.js';
 
-/** A failed row is given up and named after this many failures in a row (doc 11 §4.2 retry). */
-export const PIPELINE_GIVE_UP_FAILURES = 6;
+/** A failed row is given up and named after this many failures in a row (doc 11 §4.2 retry; the schedule is retry.ts). */
+export { PIPELINE_GIVE_UP_FAILURES };
 
 export type ItemNeed = 'chat' | 'pass1';
 export type ItemKind = 'row' | 'applicable' | 'dasha' | 'clock' | 'annual_year' | 'level4' | 'digest';
@@ -146,6 +147,8 @@ export function rowState(row: StoredStatusRow | undefined, now: Date): Pick<Mani
     case 'fetching':
       return row.fetchStartedAt && now.getTime() - row.fetchStartedAt.getTime() <= FETCH_LEASE_MS ? { state: 'fetching' } : { state: 'missing' };
     case 'failed': {
+      // the engine refuses this type for this input (retry.ts): never retried, named as unsupported
+      if (isEngineRefusal(parseFailureMark(row.error)?.message ?? row.error)) return { state: 'gap', code: 'unsupported', detail: 'the engine does not serve this for the chart' };
       const failures = failuresOf(row);
       const up = givenUp(row, now);
       return { state: up ? 'gap' : 'retrying', code: 'failed', failures, detail: `${failures} failure${failures === 1 ? '' : 's'}${up ? ', given up' : ''}` };

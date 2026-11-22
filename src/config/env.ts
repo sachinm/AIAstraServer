@@ -1876,6 +1876,15 @@ export function getPipelineRequiredDashas(): string[] {
 }
 
 /**
+ * doc 11 §4.2 retry: a row the engine refuses for its input (a clock's dated rows the engine does not serve) is kept
+ * `unsupported` and not asked again for this many days (`PIPELINE_REFUSED_RECHECK_DAYS`, 1..365, default 30); then it is
+ * asked once more when something needs it (a new engine release may serve it).
+ */
+export function getPipelineRefusedRecheckDays(): number {
+  return parseClampedIntEnv('PIPELINE_REFUSED_RECHECK_DAYS', 30, 1, 365);
+}
+
+/**
  * Years back and ahead of the yearly set the digest sweep keeps filling (`ANNUAL_SPAN_YEARS`, 1..15, default 10: today's
  * span). Doc 11 asks for 15; the deploy session raises it.
  */

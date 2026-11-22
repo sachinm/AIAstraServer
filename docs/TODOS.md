@@ -4358,3 +4358,32 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · The gate reads the account holder's profile for any kundli of the account** (as `loadProfilePack` does
   today). A chart of a relative under the same account gets the account holder's sex, age and events. Done: a per-kundli
   person (the kundli's own birth date and stated sex) when relatives' charts are added.
+- **P2 · open · Retry for failed engine rows (doc 11 step 3, first half) built, not test-run.**
+  `src/reading/pipeline/retry.ts` (1, 5, 15 minutes, then each ask; given up after 6; an engine refusal is
+  `unsupported`), wired into `chartData/store.ts` (`needsFetch`, `countFailure` for natal rows and the annual `current`
+  pointers), `self/sub/pressure.ts` (clock rows: the 24 h `SELF_V2_PRESSURE_RETRY_HOURS` wait is gone; refusals stored
+  `unsupported`; failed clocks outside the set asked while due) and both sweep queries in `services/kundliSyncWorker.ts`
+  (registration: 60 s settle instead of 6 h; clocks: a due failed row picks the chart, which fixes the `kaala` row never
+  being asked). Tests: `tests/unit/reading/pipeline/retry.test.ts`, and `pipeline/manifest.test.ts` and
+  `self/v2/pressure.test.ts` updated for the refusal rule; none run. Done: they pass.
+- **P2 · open · Doc 11 step 3, second half, not done (owner: yearly span and pull unchanged).** The yearly rows
+  (`year=<y>`) keep `ANNUAL_FAILED_BACKOFF_MS` (6 h, `digest/annualSet.ts`) and the give-up at
+  `CHART_DATA_FAILED_MAX_TRIES` (3); this and last year's rows are not yet pulled inside the registration run; no dry run
+  of the wider span. Done: doc 11 step 3's remaining checks.
+- **P3 · open · The 1- and 5-minute waits are "not before" times.** Nothing waits inside a run; the sweep runs every 15
+  minutes, so a failed row is in practice asked again at the next sync run, chat read or sweep after its wait. Done:
+  accepted, or a short re-check inside the sync run's budget.
+- **P3 · open · Rows given up under the old rule (3 failures, `valid_to` 9999) stay settled for the registration sweep.**
+  `needsFetch` now gives up at 6, so a chat read asks them again, but the sweep SQL still treats them as settled until
+  the type's calc version changes. Done: a one-off clear of `valid_to` on those failed rows (a database write: Sachin's
+  OK), or accepted.
+- **P3 · open · The staging `kaala` clock row will be rewritten `unsupported` by the code** (the next clock sweep that
+  picks the chart calls `markClockUnsupported`; no write was made from this session). It is then named
+  `pressure_inventory@system=kaala:unsupported` and asked again only after `PIPELINE_REFUSED_RECHECK_DAYS` (30) if kaala is
+  in the pulled set. The P1 entry above ("The `kaala` clock row fails because the engine refuses it") stays open until the
+  engine serves it or kaala leaves the set.
+- **P3 · open · A registration type the engine refuses is asked again every 24 h for ever** (`store.ts`
+  `UNSUPPORTED_RETRY_MS`, and the sweep counts `unsupported` as settled for 24 h only), when the catalogue says it is
+  served. Not changed here. Done: the same recheck as the clock rows (`PIPELINE_REFUSED_RECHECK_DAYS`).
+- **P3 · open · `SELF_V2_PRESSURE_RETRY_HOURS` is no longer read** (`getSelfV2PressureRetryHours` in `config/env.ts` is
+  unused). Done: removed from env.ts and the Lambda configuration by the deploy session.

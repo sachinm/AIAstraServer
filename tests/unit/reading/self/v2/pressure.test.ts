@@ -124,18 +124,21 @@ describe('pressure_inventory: pull, store, refresh', () => {
     expect(db.rows.size).toBe(2);
   });
 
-  it('a refused pull (engine not deployed: HTTP 400) is silent: no inventory, a gap, no retry for 24 h', async () => {
+  it('a refused pull (the engine refuses the type for this clock: HTTP 400 "Invalid type") is unsupported: no inventory, a gap, not asked again (doc 11 §4.2 retry)', async () => {
     const db = store();
     const fetcher = refused();
     const r1 = await loadPressureInventory(db.prisma, 'k1', 'dwisatpathi', ASOF, { fetcher, kundliRequest: async () => REQ, now: () => NOW });
     expect(r1).toMatchObject({ inventory: null, source: 'none' });
     expect(r1.gaps.join(' ')).toMatch(/pull failed \(Radha 400/);
-    expect(db.rows.get(`k1|pressure_inventory|system=dwisatpathi|LAHIRI`)).toMatchObject({ status: 'failed' });
+    expect(db.rows.get(`k1|pressure_inventory|system=dwisatpathi|LAHIRI`)).toMatchObject({ status: 'unsupported' });
     const r2 = await loadPressureInventory(db.prisma, 'k1', 'dwisatpathi', ASOF, { fetcher, kundliRequest: async () => REQ, now: () => new Date(NOW.getTime() + 3_600_000) });
     expect(r2.inventory).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(r2.gaps.join(' ')).toMatch(/does not serve this clock/);
     const r3 = await loadPressureInventory(db.prisma, 'k1', 'dwisatpathi', ASOF, { fetcher, kundliRequest: async () => REQ, now: () => new Date(NOW.getTime() + 25 * 3_600_000) });
     expect(r3.inventory).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    // looked at again only after PIPELINE_REFUSED_RECHECK_DAYS (default 30)
+    await loadPressureInventory(db.prisma, 'k1', 'dwisatpathi', ASOF, { fetcher, kundliRequest: async () => REQ, now: () => new Date(NOW.getTime() + 31 * DAY) });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
