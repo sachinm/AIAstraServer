@@ -4278,3 +4278,35 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   dasha that simply ends is reported `no_next_period` / `no_running_period`. The script prints "(given up)" for content
   holes, which are never retried; the word only fits failed rows. Done: zero-length periods skipped, a finite dasha's end
   not called a hole, the label fixed.
+
+## Filed 2026-11-22 by the roles pack and person gate build (branch feat/roles-pack-person-gate)
+
+- **The personal-data gate (`src/reading/person/modelContext.ts`) is not built.** The owner stopped the session before
+  module 2 was written (only the roles pack was committed). Who: the next session on this branch. Done: the gate,
+  wired behind `READING_PREP=1` / `READING_PERSON_GATE`, with the tests doc 13 §2.4 and the brief name.
+- **The roles pack tests were written but never run** (`tests/unit/reading/roles/pack.test.ts`; the owner said no test
+  runs on 2026-11-22). Only `npx tsc --noEmit` was run. Done: the file passes, or is fixed until it does.
+- **The Personalizer receives the birth place today (live path).** `person/portrait.ts` `portraitLines` writes
+  `born in: city, region, country` (and `lives in:` and the biography) into the card Personalizer's suffix; doc 13 §2.4
+  says the exact birth place is never sent. Clarify does the same: `clarify/planner.ts` `buildClarifyContextPrefix`
+  writes `BIRTH PLACE` when no current location is stored, and `phraseAsk` adds `Known profile facts`. How known: code
+  read 2026-11-22. Who: the gate build. Done: with the gate on, all three take their person data from the gate.
+- **Node fills chara karaka planets by degree rank** in `digest/load.ts` `backfillLegacyCharaPlanets` (D1 planets sorted
+  by degree, the AK..DK order assigned in Node): astrology in Node on the live path, for digests whose point rows lack
+  `planet`. The roles pack reads the stored rows and `karaka.chara` instead. Done: the legacy digests are rebuilt and the
+  backfill removed.
+- **No badhaka stored for the test chart.** `benefic_malefic` on c584c0a3 has no `badhaka` key and the digest has no
+  `D1.badhaka` point or `badhaka` house class, though `digest/build.ts` reads one. Either the stored row predates the
+  field or the engine does not return it. Who: engine / a re-pull. Done: the key is stored; the roles pack lists
+  `badhaka` under `missing` until then.
+- **Engine free text names the library.** `benefic_malefic.functional.note`, `dasha.applicable[].rule` and the key
+  `benefic_malefic.yogakaraka_pyjhora` carry the library's name in stored rows. The roles pack does not select the notes
+  and renames the key; any other reader that passes these rows to a model may leak it. Done: the engine renames them.
+- **The 2nd and 7th from the upapada are not engine points.** Doc 13 §2.2 (marriage) reads them; only `UL` is stored.
+  Counting from UL in Node is forbidden. Who: engine (a new point type). The roles pack lists them under `missing`.
+- **The optional engine field names in the roles pack are provisional** (`OPTIONAL_ENGINE_FIELDS` in
+  `src/reading/roles/pack.ts`): the engine branch `feat/engine-roles-gaps` had no commits for E-R1..E-R7 on 2026-11-22.
+  Done: the candidate paths match the released field names.
+- **The shared Prisma client did not answer from a local shell** (`src/lib/prisma.ts` with the PII extension: a
+  read-only `kundli.findFirst` hit a 100 s timeout on 2026-11-22; a plain `PrismaClient` answered at once). Not
+  investigated. `scripts/roles-pack-shapes.ts` uses a plain client for that reason.
