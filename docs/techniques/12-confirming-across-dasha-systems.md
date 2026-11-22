@@ -31,7 +31,7 @@ checked and the verdict. Checked on the test chart (2026-11-21):
 | Stored | all | 42 |
 | Conditional, **does not apply** (left out) | Ashtottari, Chaturashiti-sama, Dwadashottari, Panchottari, Shatabdika, Shashtihayani | 6 |
 | Conditional, **not checked by the engine** (left out and named as a gap) | Shodashottari, Shat-trimsha-sama | 2 |
-| **Apply** | Vimshottari, Dwisaptati-sama (its condition holds), and 32 others with no condition | 34 |
+| **Apply** | Vimshottari, Dwisaptati-sama (its condition holds), and 32 others with no condition in BPHS (Tara among them: read, and reported as support; it does not replace Vimshottari until the engine checks Rath's condition for it) | 34 |
 | …of which have a running maha dasha | all but Aayu (its stored periods have a hole from 2016 to 2027) | 33 |
 
 Rev 2 of doc 11 read 41 systems; that was wrong by the eight above. The rule: **a system the engine marks as not
@@ -67,8 +67,12 @@ Every system that applies is **read** (decision of 21 Nov). Only an independent 
 - **Everything else is support, not a vote.** The reading may say "of the 12 other systems that apply, 9 point the
   same way". That sentence never changes the status. More systems agreeing by number alone raises the chance of a
   false agreement (`reports/Vedic dasha systems…` L37).
+- **Who leads the star voice.** The person's reading clock leads: their stored choice, else the conditional dasha that
+  applies, else Vimshottari. That is today's code and matches Rath's practice of using a conditional dasha when its
+  condition holds; BPHS never says it replaces Vimshottari, so Vimshottari is always read beside it. On the test chart
+  Dwisaptati-sama leads.
 - **Inside one voice**, when its members disagree (Vimshottari against the conditional dasha), the voice is "divided"
-  and counts as half: it cannot confirm by itself.
+  and counts as half: with the sign voice it gives "leaning", not "confirmed". The half is a house number too (Ours).
 - **At what level the rule works today.** Narayana is verified at maha dasha level only. So "confirmed" today means:
   the star voice at maha dasha **and** sub-period level, the sign voice at maha dasha level. Sub-period confirmation by
   a sign dasha waits for the engine check of Narayana's sub-periods (doc 07 E1–E2).
@@ -151,3 +155,6 @@ period readers of doc 11 (steps 7–9 there):
    give the pair and no number.
 2. A conditional dasha the engine has not checked is left out, not read as "unverified".
 3. The chapter turn of §5 (both leading voices changing within 12 months) as a named moment in the reading.
+4. Who leads the star voice (§4): the conditional dasha that applies, with Vimshottari beside it; and a divided star
+   voice counting as half. On your chart this decides how often a matter can read "confirmed": Dwisaptati-sama and
+   Vimshottari must agree.

@@ -99,18 +99,19 @@ Integrating Priority #2 capabilities from `docs/reading-engine/80-radha-and-cata
 
 ## Dasha systems read by this technique (rule of 2026-11-21, `docs/techniques/12`)
 
-This section overrides any narrower list of dasha systems above.
+This is the rule the technique is being built to. It replaces any narrower list of dasha systems above **when the
+preparation build of `docs/techniques/11` ships**; until that release the code still reads the systems listed above.
 
 - **Which systems:** every dasha system the engine says applies to the person (`dasha.applicable`). A conditional
   dasha that does not apply, or that the engine has not checked, is not read.
 - **Which periods:** for each of those systems, the **running maha dasha** (with its sub-periods and its closing
   stretch) and the **next maha dasha** (its lord or sign, its start date, its first sub-period, and what changes).
 - **How they confirm:** the star voice (Vimshottari with the conditional dasha that applies) and the sign voice
-  (Narayana) must both point to this technique's significators for "confirmed". Systems of one family are one voice.
-  At most four voices are counted (star, sign, purpose, year); every other system is reported as support and never
-  raises the count. Longevity dashas are read and never named to the person.
+  (Narayana) must both point to this technique's significators for "confirmed". Systems of one family are one voice;
+  every other system is reported as support and never raises the count. How many voices are counted is a house rule
+  awaiting Sachin's confirmation: see `docs/techniques/12` §4 and §9. Longevity dashas are read and never named to the
+  person.
 - **Tested against, for this technique:** the 7th, 5th and 11th with their lords, Venus, D9, UL and A7.
 - **Purpose voice:** Narayana on D9 once the engine casts it; until then Narayana D1, stated.
 - **Where the reading comes from:** the stored cells and the weave of the preparation queue (`docs/techniques/11`
-  §4.4), not a fresh read of the dasha rows. The code and the lens recipes change with that build; until then this
-  technique reads the systems listed above.
+  §4.4), not a fresh read of the dasha rows.

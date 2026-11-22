@@ -15,6 +15,7 @@ Rev 1 is commit `ebc2316`; rev 2 is `f0cb9b5` and `0aa9525`.
 | 6 | The year passes stay **switched off** | Sachin |
 | 7 | **No paid call and no paid test** is in the sequence. The work is built and checked with fakes, dry runs and free measurements | Sachin |
 | 8 | Shared and dashboard-specific results are stored separately, and each technique records which upstream results it used and where they are (§4.5) | Sachin |
+| 10 | **Level 4 is no longer waited for** in pass 1; it is added when its rows arrive (open point G) | needed for the 3–5 minutes; Sachin to confirm |
 | 9 | The index rebuild is done: the database went from 532 MB to 294 MB (`docs/db-maintenance/`) | Sachin's yes |
 
 Nothing in doc 09 is removed: every agent that runs today still runs and writes at least what it writes today.
@@ -42,6 +43,8 @@ Still open, each with the default I will build:
 | C | Lens linemen and the Oracle read the titles of the cards on the person's board, so their answers cannot be prepared before the person chooses | They read the lens's full card list (the same for everyone). A prerequisite; its depth replay needs model runs, so that check stays open until paid runs are allowed |
 | D | Standing yes for preparation spend on every new chart | Built behind `READING_PREP=0`. Nothing is spent until you turn it on |
 | E | Disk size before signups open | About 70 more charts fit now (§1). Decide before opening signups |
+| F | **30 cents.** You set 30 seconds and 30 cents for a dashboard read. With the reading unchanged, 30 cents covers 8 cards today and 4 from January (the model's price doubles); a deck of 11 is about $0.40 today | Nothing is shortened to fit. Your choice of: a cap per card (about $0.04 today), a smaller first deck, or a higher cap for the first reading (free to the person under the 19 Nov rule). Due by 15 December |
+| G | **Level 4.** You asked for the current maha dasha down to level 4. Level-4 rows come from a separate worker that runs one chart at a time, up to 10 minutes each, and has never run for three of the six charts | Pass 1 does not wait: it reads levels 1–3, the status shows "level 4 filling", and the level-4 cells are added when the rows land. Waiting for it keeps your wording exactly and puts the first dashboard at 10 minutes or more whenever two people sign up together |
 
 ## 1. Start (checked 2026-11-21: server `develop`, the staging database and Lambda, read only)
 
@@ -92,8 +95,8 @@ Still open, each with the default I will build:
 
 - A new chart has **one status** from "registered" to "ready": what arrived from the engine, what did not, what is
   being retried.
-- **3 to 5 minutes after signup the You dashboard is ready for cards** (estimate: about 5 and a half with today's pull and
-  digest, about 4 and a half with the two changes in §4.4). Every dashboard is ready about 2 minutes later.
+- **3 to 5 minutes after signup the You dashboard is ready for cards** (estimate: about 5:40 with today's pull and digest,
+  about 4:30 with the two levers in §4.4). Every dashboard is ready about 2 minutes later.
 - When the person chooses cards, the Oracle and the Personalizer are the only things running for that chart: stories on
   screen in about 30 seconds, never more than 60 seconds of waiting.
 - Every dashboard technique reads the running and the next maha dasha of every dasha system that applies, and states
@@ -195,8 +198,9 @@ flowchart TD
 - Each dashboard declares which items it **requires** and which are **optional**. A required gap blocks that dashboard.
   An optional gap is named in the sub-agent's input as "not available" and never filled in. D1, D9, the star voice, the
   sign voice and the Tithi Pravesha year are required everywhere.
-- **Level 4** is asked for at chart ready and **not waited for**: pass 1 reads levels 1–3 and the level-4 cells are
-  added when the rows land. Waiting would put the 3–5 minutes out of reach whenever two people sign up together.
+- **Level 4** is asked for at chart ready and **not waited for** (open point G): pass 1 reads levels 1–3 and the
+  level-4 cells are added when the rows land. Waiting would put the 3–5 minutes out of reach whenever two people sign
+  up together.
 - **Retry:** a row that blocks pass 1 is refetched after 1, 5 and 15 minutes, then at every sweep, in place of the
   6-hour wait. After 6 failures it is given up and named.
 - **Why the dashboards do not wait for the 15 + 15 yearly pull.** Pass 1 needs this year and last year: 56 rows,
@@ -270,19 +274,24 @@ flowchart TD
 
 | Step | Time | Running total |
 |---|---|---|
-| Natal pull, 186 types, 4 engine calls at a time | about 2 min (measured: about 180 rows in the first 2 minutes) | 2:00 |
-| Digest build; this and last year's rows and the clock rows pulled beside it | about 1 min 10 s (measured median 71 s; 1 in 10 takes over 2 min 40 s) | 3:10 |
-| Natal readers and period readers, started the moment the digest lands | about 55 s | 4:05 |
-| Weave | about 35 s | 4:40 |
-| You lens threads | about 45 s | **about 5:25: You is ready for cards** |
-| Love, Work, Lucky layers; eight lens dashboards four at a time | about 1.5 min | about 7:00: every dashboard ready |
+| Natal pull, 186 types, with this and last year's 56 rows, 4 engine calls at a time | about 2 min 15 s (measured: about 180 rows in the first 2 minutes; the 56 extra are an estimate) | 2:15 |
+| Digest build (it writes the dasha rows and the house cards everything below reads) | about 1 min 10 s (**measured**: median 71 s; 1 in 10 takes over 2 min 40 s) | 3:25 |
+| Natal readers and period readers side by side; the clock rows are pulled beside them | about 55 s (estimate) | 4:20 |
+| Weave | about 35 s (estimate) | 4:55 |
+| You lens threads | about 45 s (estimate) | **about 5:40: You is ready for cards** |
+| Love, Work, Lucky layers; eight lens dashboards four at a time | about 1.5 min (estimate) | about 7:10: every dashboard ready |
 
-- The first two rows are measured; the rest are estimates. A slow digest (1 in 10) adds up to 1 min 45 s.
-- **To get from about 5.5 minutes to inside 5:** start the period readers on the dasha rows before the digest finishes
-  (they need the dasha rows and the natal rows, not the digest's house cards), and let the You lens threads start on
-  the cells while the weave runs, taking the weave's status in a short second step. Both are in the build as settings
-  and are measured as soon as paid runs are allowed. That saves about a minute (to roughly 4:30). Three minutes is not reachable while the pull and the digest alone take
-  over three; making the digest faster is the next lever and is filed.
+- Only the pull and the digest are measured. The model steps cannot be measured without paid calls. A slow digest
+  (1 in 10) adds up to 1 min 45 s.
+- Nothing model-related can start before the digest: the digest build writes the dasha rows, and the natal context
+  every agent reads first is cut from it. This and last year's rows are pulled with the natal set so the first digest
+  already holds them (a year that completes later would mark the digest stale and build it again).
+- **Where this lands against 3 to 5 minutes: about 5:40, just outside.** Two levers bring it inside:
+  1. **The digest is the real lever.** It is the one slow step that costs nothing to speed up. At 30 seconds the first
+     dashboard is ready at about 5:00; its slow runs (up to 2 min 56 s) are filed for investigation.
+  2. The You lens threads can start on the cells while the weave runs and take the weave's statuses in a short second
+     step: about 30 seconds saved, at one extra call per lens.
+  With both, about 4:30. Three minutes is not reachable while the pull and the digest alone take over three.
 - **Cost of pass 1:** about $0.85 a chart (range $0.70–1.00), stop at $1.50. Nothing is spent while `READING_PREP=0`.
 
 ### 4.5 Backend: what is shared, what is separate, and how a technique knows
