@@ -21,6 +21,7 @@ import { annualMaxCalls, ensureAnnualSet, type AnnualSetResult } from './annualS
 import { buildDigest, type DigestBuildResult } from './build.js';
 import { markDigestInputsChanged } from './status.js';
 import { DIGEST_VERSION } from './types.js';
+import { recomputePipeline } from '../pipeline/status.js';
 
 export const KUNDLI_DIGEST_SOURCE = 'kundli-digest';
 export const KUNDLI_DIGEST_SWEEP_SOURCE = 'kundli-digest-sweep';
@@ -73,7 +74,11 @@ export interface DigestEventDeps {
   build?: (prisma: PrismaClient, kundliId: string) => Promise<DigestBuildResult>;
   /** replaces the annual top-up (tests) */
   topUp?: (prisma: PrismaClient, kundliId: string, maxCalls: number) => Promise<AnnualSetResult>;
+  /** the chart's one status, recomputed after every build (doc 11 §4.2; default recomputePipeline; never throws) */
+  pipeline?: (prisma: PrismaClient, kundliId: string) => Promise<unknown>;
 }
+
+const defaultPipeline = (prisma: PrismaClient, kundliId: string) => recomputePipeline(prisma, kundliId, { trigger: 'digest' });
 
 const defaultTopUp = (prisma: PrismaClient, kundliId: string, maxCalls: number) => ensureAnnualSet({ repo: prismaChartDataRepo(prisma) }, kundliId, { maxCalls });
 
@@ -91,6 +96,15 @@ async function runTopUp(deps: DigestEventDeps, kundliId: string, maxCalls: numbe
 }
 
 async function runBuild(deps: DigestEventDeps, kundliId: string, trigger: 'event' | 'sweep'): Promise<DigestBuildResult> {
+  try {
+    return await buildOnce(deps, kundliId, trigger);
+  } finally {
+    // the digest decides the dasha checks and the stage: the status row follows every build, built or failed
+    await (deps.pipeline ?? defaultPipeline)(deps.prisma, kundliId).catch(() => undefined);
+  }
+}
+
+async function buildOnce(deps: DigestEventDeps, kundliId: string, trigger: 'event' | 'sweep'): Promise<DigestBuildResult> {
   try {
     return await withAgentRun(deps.prisma, 'digest.build', { task: `digest-${trigger}`, technique: 'digest.build', kundliId, input: { trigger, version: DIGEST_VERSION } }, async () => {
       const r = await (deps.build ?? ((p, id) => buildDigest(p, id, { fetch: true })))(deps.prisma, kundliId);
