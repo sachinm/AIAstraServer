@@ -4218,3 +4218,15 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   11 rev 4 §8 2b leaves `DB_DISK_LIMIT_BYTES` as it is). The 2026-11-10 entry above still calls `scripts/pull-sachin-annual.ts` "disk-guarded"; it
   now only prints the database size and a byte estimate. Done: the deploy session drops the two env vars from the
   Lambda configuration when Sachin agrees.
+
+## Filed 2026-11-22 by the roles research pass (docs/deep-research/roles/)
+
+- **P2 · open · Tracked research files are deleted (uncommitted) in the main checkout** `C:\Users\Owner\Documents\work\AIAstra_Server`:
+  `reports/Sanjay Rath life area readings.md`, `reports/Sanjay Rath method summary.md`, `reports/Sanjay Rath methods and
+  precedence.md`, `reports/Vedic dasha systems and prediction techniques.md` and the `research_notes/Sanjay Rath …/`
+  files. Docs 12 and 13 cite them. Not done by this session. Done: whoever deleted them says why, or `git restore` them.
+- **P3 · open · `deep-research/sanjay-rath/08` contradicts itself:** W7 says speculation appears "only" as the 8th from
+  the D10 lagna; its rule 1.2 links the 5th to speculation.
+- **P3 · open · The roles research's Phaladeepika and Uttara Kalamrita verse numbers come from unproofread OCR** (may be
+  off by one) and its Brihat Jataka meanings are the researcher's reading of the Sanskrit. Check against printed
+  translations before the recipes quote verse numbers to a person.

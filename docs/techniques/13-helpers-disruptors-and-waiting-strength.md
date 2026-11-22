@@ -53,8 +53,9 @@ its occupants and of its significator gives that house's results; BPHS on dasha 
 | Lucky star | The yogada planet (linked to the lagna and the wealth and power lagnas) brings luck whatever its nature | Rath; Student | `11` L32 |
 | Lucky star | The supportive taras from the birth star: Sampat, Kshema, Sadhaka, Mitra, Parama Mitra | Text (BPHS 46.208, for Tara dasha); Modern for natal use | `dashas-other-and-annual/tara-dasha.md` L57; `natal-techniques/23` L40-42 |
 | Fortune | The yogakaraka, and sub-periods of planets related to it, bring prosperity | Text (Laghu Parashari, PD 20.48-49) | `functional-nature-laghu-parashari.md` L68 |
-| Wins friends | The 11th house; the 7th arudha in a kendra, trikona or upachaya from the lagna gives friendship, in the 6th, 8th or 12th enmity; the 4th arudha in the 3rd or 11th from the arudha lagna is friendly | Text (house table); Text (Jaimini Upadesa); Rath | `natal-techniques/02` L26; `jaimini-apparatus/arudha-padas.md` L44; `09` L177 |
-| Wins over enemies | The 6th house is enemies; Harsha viparita yoga "wins over enemies" | Text (house table; Phaladeepika 6) | `02` L31; `natal-techniques/19` L25 |
+| Wins friends | **Mercury is the karaka of friends** and the 4th is "friend" (Phaladeepika 15.15, 2.4, 1.11-12); the 7th arudha in a kendra, trikona or upachaya from the lagna gives friendship, in the 6th, 8th or 12th enmity; the 4th arudha in the 3rd or 11th from the arudha lagna is friendly. The 11th for friends is modern practice only | Text; Text (Jaimini Upadesa); Rath; Modern (11th) | `deep-research/roles/05`; `jaimini-apparatus/arudha-padas.md` L44; `09` L177 |
+| Wins over enemies | The 6th house is enemies; Harsha viparita yoga "wins over enemies" | Text (house table; Phaladeepika 6) | `natal-techniques/02` L26 (rev 1 had the 02 lines swapped); `natal-techniques/19` L25 |
+| Protects, as a group | Benefics in kendras and benefics around a house protect it, as a group of benefics (Phaladeepika 6.8, 6.11; Saravali 41.22-24). **Never "Jupiter protects" in general**; no Rath rule | Text (limited) | `deep-research/roles/08` |
 | **Not a rule** | Jupiter's aspect, or a benefic squeeze (shubha kartari), as a general shield | **Gap**: "No Rath or SJC rule". Never cited as protection | `11` L126; `14` L116 |
 
 ### 2.2 Disruptors
@@ -64,14 +65,17 @@ its occupants and of its significator gives that house's results; BPHS on dasha 
 | Loses calm | Kemadruma (the Moon alone) gives unhappiness, cancelled by named supports | Text (Brihat Jataka 13.6) | `natal-techniques/15` L47, L55 |
 | Loses calm or focus | Hungry and agitated states (kshudhita, kshobhita) damage the houses the planet rules | Text (BPHS 45) | `natal-techniques/10` L72-87 |
 | Squeezed | A malefic squeeze (papa kartari) on a house or planet | Rath | `11` L75 |
-| Gambles and loses | The 5th is speculation; Rath reads speculation as the 8th from the D10 lagna. For loss: mapped to the 5th, 8th and 12th, their lords, and Rahu | Text (signification); Rath (D10 only); **Ours** (the loss mapping) | `14-yoga-dhana.md` L6; `08` L128-133 |
+| Gambles and loses | The habit: Mars with Venus makes a gambler (Brihat Jataka 14.3), Rahu signifies gambling (Uttara Kalamrita V), the 8th from the D10 lagna and the 10th lord in the 5th (Rath). The loss: the 12th from the arudha lagna and the 12th (Rath). "The 5th is speculation" has no verse and is dropped. Losing at it as one condition stays **Ours** | Text; Rath; Ours (the single loss condition) | `deep-research/roles/03` |
 | Breaks a marriage | The 2nd from the upapada sustains marriage; Rahu or malefics in the 2nd or 7th from the upapada show affairs; Venus in the 6th from the arudha lagna, separation (hedged). **Rath's denial rules are included** (Sachin's yes, 2026-11-22) | Rath | `09` L28, L65, L68, L73 |
-| Breaks agreements | Mapped to the 7th (partners, contracts) and the 3rd (signatures, documents), their lords, and Mercury | **Ours** (mapping); Text (signification) | `natal-techniques/02` |
-| Breaks promises | Mapped to the 2nd (speech, the word given) and the 9th (dharma), their lords, and Jupiter | **Ours** (mapping); Text (signification) | `natal-techniques/02` |
-| Loses focus through Mars or Rahu | Mapped to the Moon, the 4th (peace of mind) and the 5th (judgement), and Mars or Rahu joining or aspecting them | **Ours** (mapping) | `natal-techniques/02`; `natal-techniques/10` |
+| Breaks agreements | The 2nd holds documents (Phaladeepika 1.10) and the 7th trade (BPHS 11.8), with their lords and Mercury; Mars with Saturn is "untruthful" (Brihat Jataka 14.3, applied to contracts by us); Rath reads disputes and litigation through the 7th arudha | Text; Rath; Ours (BJ applied to contracts) | `deep-research/roles/01` |
+| Breaks promises | The 2nd lord and the 2nd with malefics make a liar (BPHS 13.13; Phaladeepika 2.3, 2.4, 2.33; Uttara Kalamrita V); Mercury, not Jupiter; Mars, Rahu and Saturn as the planets of falsehood. The 9th stays **Ours** | Text; Ours (the 9th) | `deep-research/roles/02` |
+| Loses calm or focus | The Moon and the 5th afflicted, Mars first, then Saturn, and Ketu (BPHS 45; Phaladeepika 2.10, 2.14, 8.9, 8.22; Uttara Kalamrita V); the 4th for happiness. **Rahu stays Ours**; the 4th as peace of mind is Ours | Text; Ours (Rahu; 4th as peace) | `deep-research/roles/04` |
+| An overpowered benefic | A benefic defeated in planetary war, in an enemy sign or combust gives the weak state's results (Phaladeepika 3.19-20), and its period follows (20.27, 20.30) | Text | `deep-research/roles/06` |
 
-Every "Ours" row is dated by the steps of §2's note, and the reading names it as a reading of the houses, not a
-classical rule.
+Every remaining "Ours" row is dated by the steps of §2's note, and the reading names it as a reading of the houses,
+not a classical rule. Sources for this table: `docs/deep-research/roles/` (2026-11-22). Its Phaladeepika and Uttara
+Kalamrita verse numbers come from unproofread OCR and may be off by one; its Brihat Jataka meanings need checking
+against a printed translation.
 
 **Marriage denial (included, Sachin 2026-11-22).** The Oracle reads Rath's denial rules with their tag. The wording
 follows SOUL.md and doc 09 decision 3: the Personalizer never tells a person they will not marry; it says what the
@@ -101,7 +105,10 @@ L17, L44-46). Sachin: we have the birth date, so use the dates a personal readin
 planet's maturity date** for the person (engine request E-R7: birth date plus the table's age, the table set by an
 environment variable). The Oracle states it as a date ("from March 2014") with the tag "tradition", and weighs it below
 the dasha: a maturity date never raises a status by itself. Rath's "years of fortune" are cited only through a summary
-and are not used until checked in print.
+and are not used until checked in print (they match the maturity ages for six planets; Jupiter differs, 33-34 against
+16). **Above the maturity dates** sit the sourced age rules: Phaladeepika 20.33 (a good middle life when Jupiter, the
+Moon's sign lord and the lagna lord are in kendras; its rising-sign clause may be about the dasha and is held) and
+Rath's yoga-placement ages (`deep-research/roles/07`).
 
 **"Within this maha dasha."** For each helper, disruptor and waiting planet the Oracle names when it is active inside
 the running maha dasha: its own sub-period, the sub-periods of planets tied to it, and the next maha dasha if it
