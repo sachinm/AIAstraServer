@@ -44,7 +44,9 @@ export interface GateFacts {
 export function gateRule(f: GateFacts): { locked: boolean; reason: PipelineView['reason'] } {
   if (f.chartStatus === 'failed') return { locked: false, reason: null };
   if (f.chartStatus === 'pending' || f.chartStatus === 'building') return { locked: true, reason: 'chart' };
-  if (f.digestStatus !== 'ready') return { locked: true, reason: 'chart' };
+  // `stale` means a full digest exists and newer engine rows arrived: the chart is readable, so it does not lock
+  // (dev session, 2026-11-22: otherwise every engine release would lock every existing chart for minutes)
+  if (!digestUsable(f.digestStatus)) return { locked: true, reason: 'chart' };
   if (f.runningBuild) return { locked: true, reason: 'building' };
   return { locked: false, reason: null };
 }
@@ -55,8 +57,12 @@ export function fallbackStage(f: GateFacts): PipelineStage {
   if (f.chartStatus === 'pending') return f.anyRows ? 'pulling' : 'registered';
   if (f.chartStatus === 'building') return 'pulling';
   if (f.digestStatus === 'building') return 'chart_ready';
-  if (f.digestStatus !== 'ready') return 'checking';
+  if (!digestUsable(f.digestStatus)) return 'checking';
   return 'ready';
+}
+
+function digestUsable(status: string | null): boolean {
+  return status === 'ready' || status === 'stale';
 }
 
 /** PURE. The view: the stored row's stage and progress when there is one and it agrees with the lock, else the fallback. */

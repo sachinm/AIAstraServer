@@ -47,7 +47,7 @@ describe('the rule', () => {
     expect(gateRule(facts({ chartStatus: 'pending' }))).toEqual({ locked: true, reason: 'chart' });
     expect(gateRule(facts({ chartStatus: 'building' }))).toEqual({ locked: true, reason: 'chart' });
     expect(gateRule(facts({ digestStatus: 'building' }))).toEqual({ locked: true, reason: 'chart' });
-    expect(gateRule(facts({ digestStatus: 'stale' }))).toEqual({ locked: true, reason: 'chart' });
+    expect(gateRule(facts({ digestStatus: 'stale' }))).toEqual({ locked: false, reason: null });
     expect(gateRule(facts({ runningBuild: true }))).toEqual({ locked: true, reason: 'building' });
   });
 
