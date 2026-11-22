@@ -51,7 +51,8 @@ Still open, each with the default I will build:
 |---|---|
 | Registration invokes the server's own Lambda (900 s timeout) with a `kundli-sync` event. A lease on `kundlis.queue_started_at` keeps two workers off one chart. A 15-minute sweep picks up what is incomplete | `services/kundliSyncWorker.ts:1-31,166-177,384-447`; Lambda config |
 | The pull is the engine catalogue: 186 natal types and 7 yearly types marked served. Each stored row has a status: ready, fetching, failed or unsupported. Up to 4 engine calls run at once, 250 ms apart | `chartData/registration.ts`; `kundli_data`; `config/env.ts:159-161` |
-| For the newest chart about 180 rows landed in the first 2 minutes after signup. Signup-to-digest time is **not in the table**: the charts were re-synced together on 15 Nov and `fetched_at` is overwritten on a refetch | `kundli_data.fetched_at`, chart `e1df0fcf` |
+| For the newest chart about 180 rows landed in the first 2 minutes after signup | `kundli_data.fetched_at`, chart `e1df0fcf` |
+| **The digest build takes a median of 71 seconds**; 9 in 10 finish within 163 s; the fastest took 22 s and the slowest 176 s (16 builds in the last 21 days) | CloudWatch, `digest_built` events, read 2026-11-21 |
 | **There is no single status.** A chart has `queue_status`, `facts_status`, `digest_status`, `last_sync_error` and row counts worked out on request | `schema.prisma:113-128`; `services/chartStatusService.ts` |
 | **"Complete" can have holes** (§4.2 explains the three on the test chart). A failed, given-up or unsupported row counts as settled, and nothing lists what is missing | `kundliSyncWorker.ts:340-348`; `chartStatusService.ts:67` |
 | Yearly charts: 10 years back and 10 ahead, Tithi Pravesha and Varsha in D1, D9, D10 only, filled by a sweep at **40 engine calls a run**. That cap is ours, not the engine's | `digest/annualSet.ts:12-16`; `env.ts:1757-1760` |
@@ -91,8 +92,8 @@ Still open, each with the default I will build:
 
 - A new chart has **one status** from "registered" to "ready": what arrived from the engine, what did not, what is
   being retried.
-- **3 to 5 minutes after signup the You dashboard is ready for cards** (estimate: about 5 to 6 with today's pull and
-  digest; §4.4 says what closes the gap). Every dashboard is ready about 2 minutes later.
+- **3 to 5 minutes after signup the You dashboard is ready for cards** (estimate: about 5 and a half with today's pull and
+  digest, about 4 and a half with the two changes in §4.4). Every dashboard is ready about 2 minutes later.
 - When the person chooses cards, the Oracle and the Personalizer are the only things running for that chart: stories on
   screen in about 30 seconds, never more than 60 seconds of waiting.
 - Every dashboard technique reads the running and the next maha dasha of every dasha system that applies, and states
@@ -270,16 +271,18 @@ flowchart TD
 | Step | Time | Running total |
 |---|---|---|
 | Natal pull, 186 types, 4 engine calls at a time | about 2 min (measured: about 180 rows in the first 2 minutes) | 2:00 |
-| Digest build; this and last year's rows and the clock rows pulled beside it | 1 to 1.5 min (the logs' `digest_built` time is being read; §8 step 2) | 3:00–3:30 |
-| Natal readers and period readers, started the moment the digest lands | about 55 s | 4:00–4:30 |
-| Weave | about 35 s | 4:35–5:05 |
-| You lens threads | about 45 s | **5:20–5:50: You is ready for cards** |
-| Love, Work, Lucky layers; eight lens dashboards four at a time | about 1.5 min | about 7:00–7:30: every dashboard ready |
+| Digest build; this and last year's rows and the clock rows pulled beside it | about 1 min 10 s (measured median 71 s; 1 in 10 takes over 2 min 40 s) | 3:10 |
+| Natal readers and period readers, started the moment the digest lands | about 55 s | 4:05 |
+| Weave | about 35 s | 4:40 |
+| You lens threads | about 45 s | **about 5:25: You is ready for cards** |
+| Love, Work, Lucky layers; eight lens dashboards four at a time | about 1.5 min | about 7:00: every dashboard ready |
 
+- The first two rows are measured; the rest are estimates. A slow digest (1 in 10) adds up to 1 min 45 s.
 - **To get from about 5.5 minutes to inside 5:** start the period readers on the dasha rows before the digest finishes
   (they need the dasha rows and the natal rows, not the digest's house cards), and let the You lens threads start on
   the cells while the weave runs, taking the weave's status in a short second step. Both are in the build as settings
-  and are measured as soon as paid runs are allowed. Three minutes is not reachable while the pull alone takes two.
+  and are measured as soon as paid runs are allowed. That saves about a minute (to roughly 4:30). Three minutes is not reachable while the pull and the digest alone take
+  over three; making the digest faster is the next lever and is filed.
 - **Cost of pass 1:** about $0.85 a chart (range $0.70–1.00), stop at $1.50. Nothing is spent while `READING_PREP=0`.
 
 ### 4.5 Backend: what is shared, what is separate, and how a technique knows
@@ -406,8 +409,7 @@ With the streamed hand-off they overlap, so most cards should land inside 45 s a
 
 1. Apply the rule text of §6 and doc 12 to the technique docs (done with rev 3: docs 08, 09 and the per-dashboard
    technique docs).
-2. `pipeline/manifest.ts`, `pipeline/status.ts`, `kundli_pipeline`; read the pull and digest times from the logs and
-   record them here. Done: the test chart reports "complete with named gaps" and names `kaala`, Kalachakra and Aayu.
+2. `pipeline/manifest.ts`, `pipeline/status.ts`, `kundli_pipeline`. Done: the test chart reports "complete with named gaps" and names `kaala`, Kalachakra and Aayu.
 3. `pipeline/retry.ts`, the sweep change, `annualSet.ts` (15 + 15, every Tithi Pravesha divisional chart, this and last
    year inside the sync run, the rest behind). Done: fake-engine test of the 1, 5, 15-minute retry; 868 keys for one
    chart; a dry-run byte estimate. *Parallel with step 4.*

@@ -4125,3 +4125,7 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · `last_analyze` on `kundli_activation` was empty before 2026-11-21** although an `ANALYZE` was run on
   2026-11-19; the statistics counters look reset (a database restart or upgrade to 18.6). No action; noted for the
   next maintenance record.
+- **P2 · open · The digest build is the slowest free step of a new chart.** Median 71 s, p90 163 s, max 176 s over 16
+  builds (CloudWatch `digest_built`, 21 days to 2026-11-21). With a 2-minute pull it puts chart-ready past 3 minutes,
+  so the 3–5 minute target of doc 11 rev 3 depends on it. Done: the slow builds explained (annual rows? activation
+  re-insert?) and the median under 45 s.
