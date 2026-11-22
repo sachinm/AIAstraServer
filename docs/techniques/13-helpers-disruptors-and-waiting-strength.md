@@ -25,9 +25,21 @@ after a certain age, and inside the running maha dasha:
 
 ## 2. How each role is found (the rules the Oracle is given)
 
-The Oracle is given the rule, its tag and the engine fields; **the model judges, Node computes nothing.** Where the
-research has no rule, the Oracle says so and reads the house signification instead, tagged as such, never as a timing
-rule.
+The Oracle is given the rule, its tag and the engine fields; **the model judges, Node computes nothing.**
+
+**Roles with no rule in the research (changed 2026-11-22 on Sachin's question).** Rev 1 said "read from the house
+meaning, labelled, never dated". What was wrong with that: a role that is never dated cannot be acted on, so the card
+would say "watch your word" with no when; and the reading would treat a role differently from every other matter for
+no astrological reason, because classical timing works the same way for any matter (the period of a house's lord, of
+its occupants and of its significator gives that house's results; BPHS on dasha results). The fix:
+
+1. Each such role is mapped to its houses, lords and significators (the mapping table in §2.2; the mapping is **Ours**
+   and labelled so).
+2. It is then judged and dated **exactly like any other matter**: the promise in the birth chart, the pair of doc 12
+   confirming, the year chart placing, transit triggering. A dated statement carries the same status words as any
+   other (confirmed, leaning, open).
+3. A targeted research pass (`docs/deep-research/roles/`) looks for a sourced rule for each mapped role; a sourced rule
+   replaces the mapping when found.
 
 ### 2.1 Helpers
 
@@ -52,10 +64,19 @@ rule.
 | Loses calm | Kemadruma (the Moon alone) gives unhappiness, cancelled by named supports | Text (Brihat Jataka 13.6) | `natal-techniques/15` L47, L55 |
 | Loses calm or focus | Hungry and agitated states (kshudhita, kshobhita) damage the houses the planet rules | Text (BPHS 45) | `natal-techniques/10` L72-87 |
 | Squeezed | A malefic squeeze (papa kartari) on a house or planet | Rath | `11` L75 |
-| Gambles and loses | The 5th is speculation; Rath reads speculation as the 8th from the D10 lagna. No rule for losing at it | Text (signification); Rath (D10 only); **Gap** for loss | `14-yoga-dhana.md` L6; `08` L128-133 |
-| Breaks a marriage | The 2nd from the upapada sustains marriage; Rahu or malefics in the 2nd or 7th from the upapada show affairs; Venus in the 6th from the arudha lagna, separation (hedged). Denial rules are sensitive and need Sachin's yes | Rath | `09` L28, L65, L68, L73 |
-| Breaks agreements or promises | **No rule in the research.** The Oracle reads the 7th (partnerships, contracts) and the 2nd (speech, the word given) by signification and says that it is doing so | **Gap**; Text (signification) | `natal-techniques/02` |
-| Loses focus through Mars or Rahu | **No rule in the research** | **Gap** | — |
+| Gambles and loses | The 5th is speculation; Rath reads speculation as the 8th from the D10 lagna. For loss: mapped to the 5th, 8th and 12th, their lords, and Rahu | Text (signification); Rath (D10 only); **Ours** (the loss mapping) | `14-yoga-dhana.md` L6; `08` L128-133 |
+| Breaks a marriage | The 2nd from the upapada sustains marriage; Rahu or malefics in the 2nd or 7th from the upapada show affairs; Venus in the 6th from the arudha lagna, separation (hedged). **Rath's denial rules are included** (Sachin's yes, 2026-11-22) | Rath | `09` L28, L65, L68, L73 |
+| Breaks agreements | Mapped to the 7th (partners, contracts) and the 3rd (signatures, documents), their lords, and Mercury | **Ours** (mapping); Text (signification) | `natal-techniques/02` |
+| Breaks promises | Mapped to the 2nd (speech, the word given) and the 9th (dharma), their lords, and Jupiter | **Ours** (mapping); Text (signification) | `natal-techniques/02` |
+| Loses focus through Mars or Rahu | Mapped to the Moon, the 4th (peace of mind) and the 5th (judgement), and Mars or Rahu joining or aspecting them | **Ours** (mapping) | `natal-techniques/02`; `natal-techniques/10` |
+
+Every "Ours" row is dated by the steps of §2's note, and the reading names it as a reading of the houses, not a
+classical rule.
+
+**Marriage denial (included, Sachin 2026-11-22).** The Oracle reads Rath's denial rules with their tag. The wording
+follows SOUL.md and doc 09 decision 3: the Personalizer never tells a person they will not marry; it says what the
+chart makes hard, for how long, and what helps, worded to the Oracle's confidence. A "denial" read is always marked
+for the person's confirmation before it is stated as settled.
 
 ### 2.3 Waiting strength
 
@@ -74,27 +95,41 @@ rule.
 So "weak now, delivers in its own sub-period" holds for named conditions only (the rows above), and the Oracle must
 name which one applies. A planet that is simply weak is read with Saravali's warning, not with a promise.
 
-**"After a certain age."** The planet maturity ages (Jupiter 16, Sun 22, Moon 24, Venus 25, Mars 28, Mercury 32,
-Saturn 36, Rahu 42, Ketu 48) are folk practice with no source (`planetary-maturity-ages…` L17, L44-46), and the
-age-36 rule is already a house rule (doc 07). Default: **read and tagged "folk", never a date on its own.** Rath's
-"years of fortune" are cited only through a summary and not checked in print.
+**"After a certain age" (changed 2026-11-22: dated).** The planet maturity ages (Jupiter 16, Sun 22, Moon 24, Venus
+25, Mars 28, Mercury 32, Saturn 36, Rahu 42, Ketu 48) are tradition with no classical source (`planetary-maturity-ages…`
+L17, L44-46). Sachin: we have the birth date, so use the dates a personal reading needs. **The engine returns each
+planet's maturity date** for the person (engine request E-R7: birth date plus the table's age, the table set by an
+environment variable). The Oracle states it as a date ("from March 2014") with the tag "tradition", and weighs it below
+the dasha: a maturity date never raises a status by itself. Rath's "years of fortune" are cited only through a summary
+and are not used until checked in print.
 
 **"Within this maha dasha."** For each helper, disruptor and waiting planet the Oracle names when it is active inside
 the running maha dasha: its own sub-period, the sub-periods of planets tied to it, and the next maha dasha if it
 changes the picture. The dates come from the stored dasha rows, selected by date; nothing is computed.
 
-### 2.4 Boy or girl
+### 2.4 The person: sex, age, stage of life and what we know of them (changed 2026-11-22)
 
-Sachin asked that the purpose read clearly "whether they are boy or girl". Two things:
+Sachin: sex, age and the other facts in memory go to the Personalizer **for every reading and every question**, so
+the answer fits the person's needs, emotional register and stage of life.
 
-- **Wording.** The Personalizer already receives the person's gender for voice (`person/profileLines.ts:92`). It
-  writes for this person, plainly, with no chart term, at their age and stage of life. It never assumes roles from
-  gender and never prints it.
-- **Where a rule differs by sex.** Only one in the research: the spouse significator. Rath reads Jupiter as the
-  husband in a woman's chart (`09` L51, L62); PVR reads Venus for both (`naisargika-karakas.md` L32); it is disputed.
-  The Oracle is given the person's sex **for this rule only**, reads both, and says which it leaned on. The engine
-  takes no gender today; nothing else changes by sex. Rath rejects the gender seed for Chara dasha (`chara-dasha.md`
-  L43-47) and so do we.
+- **One gate for personal data: `src/reading/person/modelContext.ts`.** Every agent asks it for the person, by role;
+  no prompt reads the profile directly. It decides which fields go over the wire to the model, and records on the run
+  row **which fields** were sent (names, never values). Names, email, phone, exact birth place and birth time are never
+  sent (the engine already used them). It is the one place to tighten when the privacy work of `docs/privacy/` lands.
+
+  | Agent | Gets |
+  |---|---|
+  | Card Personalizer, card chat answers, Clarify, every answer to a question | sex; exact age and birth date; stage of life; work, relationship and family facts; dated life events; answers to confirm questions; mood; declined topics; the register they set; the companion memory facts (doc 48) |
+  | Card Oracle, roles unit | sex (the rules that differ by sex); birth date and age (maturity dates, age rules); confirmed life events (to test the chart against what happened). No mood, no register |
+  | Family readers, period readers, weave, lens linemen | nothing personal: they are shared per chart (doc 11 §4.5) |
+
+- **Today** the Personalizer receives gender for voice and an age band (`person/profileLines.ts:92`); card chat
+  receives part of the facts. Both move to the gate.
+- **Wording.** The Personalizer writes for this person plainly, for their stage of life and the register they set,
+  whether a man or a woman. It never assumes roles from sex and never prints the sex or the age.
+- **Where a rule differs by sex.** The spouse significator: Rath reads Jupiter as the husband in a woman's chart (`09`
+  L51, L62); PVR reads Venus for both (`naisargika-karakas.md` L32); disputed. The Oracle reads both and says which it
+  leaned on. Rath rejects the gender seed for Chara dasha (`chara-dasha.md` L43-47) and so do we.
 
 ## 3. The data: what the engine gives today
 
@@ -181,9 +216,16 @@ none of them: it reads the engine fields directly.
 | E-R4 | Named papa and shubha kartari per house and planet; net argala with the 3rd-house malefic rule | squeezed and protected, as Rath reads them |
 | E-R5 | Neecha bhanga conditions 4-8 and the cancelling planet named | "delivers in its own or the canceller's period" |
 | E-R6 | Planetary war for all pairs, not Mars–Saturn only | "overpowered" |
+| E-R7 | Maturity date per planet from the birth date (table by environment variable, tagged tradition) | "after a certain age", as a date |
+
+**Being built from 2026-11-22 (Sachin: "fix E-R1 first", then the engine gaps):** E-R1, then E-R2, E-R3, E-R4 and
+E-R7, on the engine branch `feat/engine-roles-gaps` from `develop`, each with pytest and a new catalogue type or field,
+released through the engine's release path by the deploy session. E-R5 and E-R6 follow.
 
 Server-side pass-throughs (vargottama, vimshopaka, ishta/kashta, friendships, maraka, yogakaraka, the engine's tara
-names) need no engine change: they are stored rows selected into the roles pack.
+names) need no engine change: they are stored rows selected into the roles pack. Being built now on the server branch
+`feat/roles-pack-person-gate`, on the preparation path only, so the live prefix and every stored reading key stay
+unchanged.
 
 ## 6. Steps (inside doc 11's phases)
 
@@ -196,12 +238,11 @@ names) need no engine change: they are stored rows selected into the roles pack.
 5. Paid checks, on Sachin's yes only: the roles unit on the test chart and one deck, compared by hand with an
    astrologer's reading of the same chart.
 
-## 7. For Sachin
+## 7. Sachin's decisions (2026-11-22)
 
-Defaults built unless you say otherwise:
-
-1. Roles with no rule in the research (breaking agreements or promises, losing at gambling, Mars or Rahu taking focus,
-   "what wins friends" as one planet) are read from the house meaning and labelled as such, never dated.
-2. Maturity ages are folk: used as "often from around 28", never as a date.
-3. The person's sex reaches the Oracle for the spouse rule only.
-4. Denial readings for marriage (Rath's sensitive rules) stay out until you say yes.
+1. Roles with no rule in the research are mapped to houses (labelled Ours) and **dated like any other matter**; a
+   research pass looks for sourced rules (§2).
+2. Maturity ages are **dates** from the birth date, supplied by the engine (E-R7), tagged tradition (§2.3).
+3. Sex, age and every fact in memory go to the Personalizer and every answer, through one gate (§2.4).
+4. Rath's marriage-denial rules are **included** (§2.2).
+5. E-R1 first, then the other engine gaps (§5).
