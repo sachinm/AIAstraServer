@@ -4310,3 +4310,28 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **The shared Prisma client did not answer from a local shell** (`src/lib/prisma.ts` with the PII extension: a
   read-only `kundli.findFirst` hit a 100 s timeout on 2026-11-22; a plain `PrismaClient` answered at once). Not
   investigated. `scripts/roles-pack-shapes.ts` uses a plain client for that reason.
+
+## Filed 2026-11-22 by the dev session (web gate and engine roles build reports)
+
+- **P2 · open · Web gate, not test-run:** `feat/prep-gate` (`ece2c5f`, merged to web develop `1aa741d`) was committed
+  without a vitest, lint or Playwright run (owner: no tests for this release). The e2e config builds into the shared
+  `node_modules` junction and empties it first: it needs an override config before `e2e/prep-gate.spec.ts` can run safely.
+- **P2 · open · Web gate gaps:** on a phone's first visit the picker hides the header, so no lock message shows; card
+  chat is not gated (it keeps its own "not ready" 409); the legacy `/api/area/*` GETs carry no `pipeline`, so
+  `ReadingStamp` locks only after its own 409.
+- **P2 · open · Server gate (`feat/prep-p1-status`) not test-run;** the gate tests were never run and some card ids in
+  them are guesses. A clock switch during a running build now answers 409 (doc 66 §4.4 queued it). A gate that cannot
+  read the database stays open.
+- **P2 · open · `saptharishi_nakshathra` is stored "ready" with no periods on all six charts** (found by the manifest).
+  The `kaala` clock row fails because the engine refuses that type for that clock: retrying will not fix it.
+- **P2 · open · Doc 11 step 3 (retry and the yearly pull) not built yet;** the one-statement build claim needs a new
+  column because the build's start time is in an encrypted column.
+- **P2 · open · Personal data to the model today:** the card Personalizer gets the birth place (`portraitLines`, "born
+  in") and Clarify sends `BIRTH PLACE`; doc 13 §2.4 says never. The gate module (`person/modelContext.ts`) is not built
+  yet. `digest/load.ts` `backfillLegacyCharaPlanets` works out chara karakas in Node on the live path.
+- **P3 · open · Engine (`feat/engine-roles-gaps`):** E-R3a (natal sahams), E-R4 (kartari, net argala), E-R7 (maturity
+  dates) committed without pytest; E-R1 and E-R2 tested and merged to engine develop (`1885b59`). Yogada not built:
+  "linked" is undefined in the sources and the ghatika lagna is not exported. E-R6: war already covers all pairs; only
+  the winner is missing and disputed (brightness vs the more northern planet). Engine findings: the saham 30° test
+  compares whole signs, not degrees; Vyapara and Shatru sahams share a formula, as do Rajya and Pitri; the annual
+  docstring's night-flag default is wrong; `charts.benefics_and_malefics` misnames Mercury counters `mars_*`.
