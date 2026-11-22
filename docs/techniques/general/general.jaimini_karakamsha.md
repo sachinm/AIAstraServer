@@ -99,3 +99,10 @@ Priority #2 capabilities from `docs/reading-engine/80-radha-and-catalogue-gap-an
   - Enforces `assertOwnAccount(ctx, targetUserId)` (`src/graphql/rbac.ts`).
   - `KundliDigest` and `TechniqueOutput` encrypted at rest under `SEALED_MODELS` (`pii2:v1` AES-256-GCM).
   - Emits `Cache-Control: private, no-store, no-cache, must-revalidate`.
+
+## Who reads this technique (corrected 2026-11-22, `docs/techniques/11` rev 4 §4.9)
+
+The lines above say this technique feeds `self.v2.oracle` and other Oracle prefixes. Checked on `develop` on 2026-11-22: **it never reached any
+reading code.** No file of the v2 build, the per-card pipeline, the linemen or the family readers reads its output.
+It is a specification only. If it is wanted in readings it needs a supplier and a reader named in
+`docs/techniques/11` §4.9, and nothing in a prompt may name it until then.

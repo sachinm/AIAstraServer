@@ -122,3 +122,10 @@ preparation build of `docs/techniques/11` ships**; until that release the code s
 - **Purpose voice:** all counted voices.
 - **Where the reading comes from:** the stored cells and the weave of the preparation queue (`docs/techniques/11`
   §4.4), not a fresh read of the dasha rows.
+
+## Who reads this technique (corrected 2026-11-22, `docs/techniques/11` rev 4 §4.9)
+
+The lines above say this technique feeds `self.v2.oracle`, `self.v2.personalizer` and a `/you` card. Checked on `develop` on 2026-11-22: **it never reached any
+reading code.** No file of the v2 build, the per-card pipeline, the linemen or the family readers reads its output.
+It is a specification only. If it is wanted in readings it needs a supplier and a reader named in
+`docs/techniques/11` §4.9, and nothing in a prompt may name it until then.

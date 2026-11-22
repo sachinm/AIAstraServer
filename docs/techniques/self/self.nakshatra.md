@@ -97,3 +97,15 @@ Priority #2 capabilities from `docs/reading-engine/80-radha-and-catalogue-gap-an
   - Enforces `assertOwnAccount(ctx, targetUserId)` (`src/graphql/rbac.ts`).
   - Sealed at rest under `SEALED_MODELS` (`KundliDigest`, `TechniqueOutput`, `AreaBuild`) with `pii2:v1` AES-256-GCM.
   - Emits `Cache-Control: private, no-store, no-cache, must-revalidate`.
+
+## Who reads this technique (corrected 2026-11-22, `docs/techniques/11` rev 4 §4.9)
+
+The lines above name `self.v2.oracle` (and other `self.v2.*` ids) as the reader. Checked on `develop` on 2026-11-22:
+
+- **Today** the v2 Self build still runs (its retirement is built behind flags that are off), so the v2 Oracle is
+  still one reader, beside the per-card pipeline.
+- **In the preparation build** this technique's output is read through `self.sub.mind_facts` and the `family.star` reader by the natal core and the dated frame (`slices/natalPrefix.ts`), and from there by the family
+  readers, the period readers, the lens linemen and the card Oracle. The v2 Oracle is not a reader on that
+  path, and the preparation build never goes through `runSelfV2Build`.
+- The technique ids `self.v2.oracle`, `self.v2.personalizer` and `self.v2.hero` are retired in the same change that
+  switches `SELF_V2_RETIRED` on; until then the catalogue keeps them.

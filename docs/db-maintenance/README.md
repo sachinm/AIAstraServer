@@ -14,8 +14,10 @@ could go wrong and how it would be undone, the state after, and what to do diffe
    transactions, and maintenance statements need one session of their own.
 4. **One statement at a time, checked before the next.** No statement that rewrites a whole table (`VACUUM FULL`,
    `CLUSTER`, `ALTER TABLE … SET`) without its own yes: those lock the table and need as much free disk again.
-5. **Check the disk first.** A rebuild writes a full new copy before the old one is dropped. Stop if the database size
-   plus the copy would pass 70 % of the disk (`DB_DISK_LIMIT_BYTES` × 0.7, the same line the disk guard uses).
+5. **Check the disk first, by hand.** A rebuild writes a full new copy before the old one is dropped. Measure the
+   database size (`pg_database_size`) and the size of what is being copied, and stop if the two together would pass
+   70 % of the disk (5 GB on staging). This is a check the person running the action makes: the code's disk guard was
+   removed on 2026-11-22 on Sachin's instruction, so nothing in code stops a write when the disk is nearly full.
 6. **Never print the database URL or any value from `.env`.**
 7. **File what you find** in `docs/TODOS.md`.
 

@@ -5,6 +5,10 @@
   First asked on 2026-11-19.
 - **Run by:** the dev session (Claude), from the dev machine, over `DIRECT_URL`.
 - **Status:** done on 2026-11-21 (03:12–03:14 UTC on 22 Nov). All three rebuilt with `CONCURRENTLY`; the fallback was not needed.
+- **Note added 2026-11-22:** the disk guard this record mentions (`src/reading/digest/diskGuard.ts`) was removed on
+  Sachin's instruction the day after. The lines below describe the state on 21 Nov and are left as written. Where
+  they say "the guard", read "the 70 % line of the 5 GB disk", which is now a manual check (README rule 5). The
+  re-check rule at the end (index size over 1.5 times the table) still stands.
 
 ## Why
 

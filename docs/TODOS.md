@@ -4129,3 +4129,60 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
   builds (CloudWatch `digest_built`, 21 days to 2026-11-21). With a 2-minute pull it puts chart-ready past 3 minutes,
   so the 3–5 minute target of doc 11 rev 3 depends on it. Done: the slow builds explained (annual rows? activation
   re-insert?) and the median under 45 s.
+
+## Filed 2026-11-22 by the doc 11 rev 4 planning session (docs/techniques/11 rev 4, 12 rev 2)
+
+- **P1 · open · The Love and Work house layers are astrology worked out in Node.** Dignity by text match
+  (`area/houseLayers.ts:137-138`), score points and strong/moderate/weak grades (`:457-475`), a confidence from counting
+  votes (`:898-901`), the D1/D10 split verdict (`career.ts:241-251`) and the age-36 switch
+  (`dashaAssessment.ts:124-126`). The file headers say Node computes nothing (`houseLayers.ts:6`,
+  `cards/techniques.ts:8-9`). The card pack reads these layers today. Doc 11 rev 4 does not store them as prepared
+  answers and does not give them to the linemen. Done: the engine supplies the fields (doc 07 E6), the Node grading is
+  deleted, and the depth replay shows no card lost anything.
+- **P1 · open · The v2 Self build is the only door to the whole reading pipeline.** Sub-techniques, briefs, natal
+  context, family readers, clocks, linemen and the cards of You, Love and Work run only inside `runSelfV2Build`
+  (`self/v2/build.ts:192`), reached only when `SELF_V2_BUILD=1` (`synthesisValidity.ts:22-24`, `buildEvent.ts:207`).
+  Turning that flag off to "retire v2" stops every reading. Doc 11 rev 4 §4.9: the preparation chart job calls each
+  supplier directly; a test runs it with `SELF_V2_BUILD=0`.
+- **P2 · open · Three things have no supplier once `SELF_V2_RETIRED=1`:** the hero's question, tone, strip, "eases at"
+  and next check (`v2api/response.ts:191-200`); the quality score (`v2api/response.ts:206`, `boards/v3Service.ts:256`);
+  the behaviour patterns in the portrait (`person/portrait.ts:173-187`). Doc 11 rev 4 §4.9 names a supplier for each.
+  Done: all three in before the flag is switched.
+- **P2 · open · The techniques catalogue still books the family readers and the natal context to `self.v2.oracle`**
+  (`techniques/catalog.ts:2239-2298`, `subagentCachePlan.ts:171-175,474-502`, `families/run.ts:92`), lists 5 of the 7
+  readers, and `self.card.reading` does not declare the natal context, findings or sub-techniques it reads. Twelve
+  technique docs say they "feed v2" (ten under `docs/techniques/self/`, `general/general.jaimini_karakamsha.md`,
+  `general/general.sudarshana_chakra.md`); four of them (`character_arc`, `personality_joy`, karakamsha, sudarshana)
+  never reached any code.
+- **P2 · open · The family-reader prompts are strings in code, outside the prompt version hash**
+  (`self/oracle.ts:456,531-548`; `scripts/embed-prompts.mjs:30` hashes `.md` files only), and natal findings are kept
+  10 years (`oracle/prewarm.ts:213`). Editing a reader's prompt changes no key, so the old finding is served; and an
+  edit to any `.md` prompt re-reads all seven. Doc 11 rev 4: one prompt file and one hash per reader.
+- **P2 · open · The natal context is not natal-only.** Its reading frame carries running periods, windows "started
+  in the last 12 months / ending in the next 6", live transits and the year (`slices/natalPrefix.ts:211-281`), and only
+  the 12 Self area briefs (`:282-292`). Love and Work agents read it. Doc 11 rev 4: a natal core with no date and a
+  dated frame, on the preparation path only (the live prefix stays byte-identical).
+- **P2 · open · The build lock is check-then-write** (`self/buildEvent.ts:321-329`): two invocations can both pass and
+  build the same board. A build still `building` after 10 minutes is run again (`:27,130`). Doc 11 rev 4: a
+  single-statement claim.
+- **P2 · open · A card read before its lens thread exists is bought again when the thread arrives** (the thread text
+  and the findings are in `storyInputsHash`, `cards/storyInputs.ts:77`). Doc 11 rev 4: no card is read until
+  preparation is done.
+- **P2 · open · The web ignores the server's build state on the refresh control** (`BoardV3.tsx:728` passes only its
+  own `freshBuilding`) and shows a 409 `building` as an error (`lib/boardRefresh.ts`). Doc 11 rev 4 §4.8 (the gate).
+- **P1 · open · Nothing protects the disk after the guard is removed (Sachin's instruction, 2026-11-22).** A bulk
+  write of dasha rows is no longer refused when the disk is nearly full; that is what took staging down on
+  2026-11-09. At about 49 MB a chart roughly 95 more charts fill the 5 GB disk. The database size is shown on the
+  admin Preparation page. Done: a disk size decided before signups open, or the rows per chart cut (six
+  non-applicable dashas are stored for life; the digest rebuild rewrites every row).
+- **P3 · open · More research files carry the two withdrawn Rath claims** than the list above:
+  `docs/deep-research/sanjay-rath/14-technique-mapping.md` L103, `research_notes/Sanjay Rath life area readings/finance_wealth.md`
+  L133, `research_notes/Billionaire charts dhana yoga dasha/rath_and_jaimini_readings.md` L91,
+  `reports/Sanjay Rath life area readings.md` L240. Also: Tara's condition is given three ways
+  (`sanjay-rath/04` L53 "four or more planets in kendras"; the engine docstring "all four kendras occupied";
+  `dashas-nakshatra/tara.md` L19 "no chart condition"); the closing-sub-period dictum is tagged Rath in
+  `parashari_timing.md` L44 and "secondary" in `dasha-sandhi-and-chidra.md` L16-17; "do not run Chara and Narayana on
+  one board" (`dashas-rasi-jaimini/01` L40) against Chara as "secondary confirmation" (`chara-dasha.md` L118).
+- **P3 · open · Not in the research at all:** KP, Nadi, Jaimini adhyayas 3–4, K.N. Rao's own text on combining
+  dashas, Rath's *Vimsottari and Udu Dasas* ch. 3 (tie-break between conditional dashas), PVR's controlling-planet
+  strength test as an engine field.
