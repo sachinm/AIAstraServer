@@ -134,7 +134,8 @@ export function failuresOf(row: Pick<StoredStatusRow, 'status' | 'error'>): numb
 /** Given up: the store's give-up mark (`valid_to` in the future on a failed row) or PIPELINE_GIVE_UP_FAILURES failures. */
 export function givenUp(row: Pick<StoredStatusRow, 'status' | 'error' | 'validTo'>, now: Date): boolean {
   if (row.status !== 'failed') return false;
-  if (row.validTo && row.validTo.getTime() > now.getTime()) return true;
+  // a give-up mark decides while it is set: a clock row's expires (retry.ts), and it is then being retried again
+  if (row.validTo) return row.validTo.getTime() > now.getTime();
   return failuresOf(row) >= PIPELINE_GIVE_UP_FAILURES;
 }
 

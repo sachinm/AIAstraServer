@@ -163,7 +163,7 @@ export function giveUpMaxFor(variant: string): number {
   return isRetryScheduled(variant) ? PIPELINE_GIVE_UP_FAILURES : getChartDataFailedMaxTries();
 }
 
-/** A failed row of the retry schedule is due: 1, 5, 15 minutes after its 1st, 2nd, 3rd failure, then at once. */
+/** A failed row of the retry schedule is due: 1, 5, 15 minutes after its 1st, 2nd, 3rd failure, then every 15 minutes. */
 export function failedRowDue(row: Pick<StoredRow, 'error' | 'fetchedAt'>, now: number): boolean {
   const failures = parseFailureMark(row.error)?.failures ?? 1;
   return retryVerdict({ failures, lastAttemptAt: row.fetchedAt }, new Date(now), { giveUpAt: Number.POSITIVE_INFINITY }).state === 'due';

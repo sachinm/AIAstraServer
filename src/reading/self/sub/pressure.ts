@@ -19,8 +19,8 @@ import {
 } from '../../../config/env.js';
 import { fetchEngineExport, RadhaHttpError } from '../../../lib/astroKundliClient.js';
 import { CHART_TYPE_BY_ID } from '../../chartData/catalog.js';
-import { countFailure, FAILED_GIVE_UP_UNTIL, parseFailureMark, type KundliRequest, type RadhaFetcher } from '../../chartData/store.js';
-import { clocksToAsk, isEngineRefusal, retryVerdict, type RetryVerdict, type StoredClockRow } from '../../pipeline/retry.js';
+import { countFailure, parseFailureMark, type KundliRequest, type RadhaFetcher } from '../../chartData/store.js';
+import { clocksToAsk, isEngineRefusal, PIPELINE_GIVE_UP_FAILURES, retryVerdict, type RetryVerdict, type StoredClockRow } from '../../pipeline/retry.js';
 import type { Matter, Polarity, PressureBoundary, PressureInventory, PressureKind, PressureRow, Strength } from '../v2types.js';
 import { parseApplicability, resolveClockV2, resolveReadingClocks, type ReadingClockSet } from '../clock.js';
 
@@ -227,22 +227,22 @@ const DAY = 86_400_000;
 const DATE_OF = (d: Date | string | null | undefined): Date | null => (d ? (d instanceof Date ? d : new Date(d)) : null);
 
 /**
- * docs/techniques/11 §4.2 retry, for a clock's stored row: due, waiting (1, 5, 15 minutes after its 1st, 2nd, 3rd failure),
- * given up (PIPELINE_GIVE_UP_FAILURES, or the store's give-up mark in `valid_to`) or unsupported (the engine refuses this
- * type for this clock; looked at again after PIPELINE_REFUSED_RECHECK_DAYS). A row with no failure is due.
+ * docs/techniques/11 §4.2 retry, for a clock's stored row: due, waiting (1, 5, 15 minutes after its 1st, 2nd, 3rd failure,
+ * then 15), given up (its `valid_to` mark, set at the PIPELINE_GIVE_UP_FAILURES-th failure for
+ * PIPELINE_REFUSED_RECHECK_DAYS; due again after it) or unsupported (the engine refuses this type for this clock; looked at
+ * again after PIPELINE_REFUSED_RECHECK_DAYS). A row with no failure is due.
  */
 export function clockRowRetry(row: Pick<KundliDataRow, 'status' | 'error' | 'fetch_started_at' | 'valid_to'>, now: Date): RetryVerdict {
   const failed = row.status === 'failed' || row.status === 'unsupported' || Boolean(row.error);
   if (!failed) return { state: 'due', failures: 0, dueAt: null };
   const mark = parseFailureMark(row.error ?? null);
-  const validTo = DATE_OF(row.valid_to);
   return retryVerdict(
     {
       failures: mark?.failures ?? 1,
       lastAttemptAt: DATE_OF(row.fetch_started_at),
       message: mark?.message ?? row.error ?? null,
       unsupported: row.status === 'unsupported',
-      givenUpMark: Boolean(validTo && validTo.getTime() >= FAILED_GIVE_UP_UNTIL.getTime()),
+      givenUpUntil: DATE_OF(row.valid_to),
     },
     now,
     { refusedRecheckMs: getPipelineRefusedRecheckDays() * DAY },
@@ -374,12 +374,15 @@ export async function loadPressureInventory(prisma: PrismaClient, kundliId: stri
     // this type for this clock is `unsupported` (not asked again); any other failure is counted (`[failures=n …]`) and
     // given up at PIPELINE_GIVE_UP_FAILURES (`valid_to` = the store's give-up mark, which the sweep SQL reads)
     const refusal = isEngineRefusal(error);
-    // a ready row whose last refresh failed carries the failure in `error`: counted as a failed row
-    const prev = row && (row.error || row.status === 'failed') ? { status: 'failed' as const, error: row.error ?? null } : undefined;
+    // a ready row whose last refresh failed carries the failure in `error`: counted as a failed row. A row asked again
+    // after its give-up expired starts the count over.
+    const prevFailures = parseFailureMark(row?.error ?? null)?.failures ?? 0;
+    const prev = row && (row.error || row.status === 'failed') && prevFailures < PIPELINE_GIVE_UP_FAILURES ? { status: 'failed' as const, error: row.error ?? null } : undefined;
     const mark = refusal ? null : countFailure(prev, error, null);
     const status = refusal ? 'unsupported' : 'failed';
     const stored = mark?.error ?? error;
-    const validTo = mark?.validTo ?? null;
+    // given up for PIPELINE_REFUSED_RECHECK_DAYS, then asked again (the sweep SQL reads `valid_to`)
+    const validTo = mark?.validTo ? new Date(now.getTime() + getPipelineRefusedRecheckDays() * DAY) : null;
     await ensureTypeRow(p)
       .then(() =>
         p.kundliData?.upsert?.({
@@ -443,14 +446,13 @@ export async function loadFailedClockRows(prisma: PrismaClient, kundliId: string
     .catch(() => []);
   return rows.map((r) => {
     const mark = parseFailureMark(r.error ?? null);
-    const validTo = DATE_OF(r.valid_to);
     return {
       system: r.variant.replace(/^system=/, ''),
       status: r.status,
       failures: mark?.failures ?? 1,
       lastAttemptAt: DATE_OF(r.fetch_started_at),
       message: mark?.message ?? r.error ?? null,
-      givenUpMark: Boolean(validTo && validTo.getTime() >= FAILED_GIVE_UP_UNTIL.getTime()),
+      givenUpUntil: DATE_OF(r.valid_to),
     };
   });
 }
@@ -475,7 +477,14 @@ export async function ensurePressureInventories(prisma: PrismaClient, kundliId: 
     const now = (deps.now ?? (() => new Date()))();
     const failed = await (deps.loadFailed ?? loadFailedClockRows)(prisma, kundliId).catch((): StoredClockRow[] => []);
     const plan = clocksToAsk(set.pulled, failed, now, { refusedRecheckMs: getPipelineRefusedRecheckDays() * DAY });
-    await Promise.all(plan.refused.map((system) => (deps.markUnsupported ?? markClockUnsupported)(prisma, kundliId, system).catch(() => undefined)));
+    await Promise.all(
+      plan.refused.map((system) =>
+        (deps.markUnsupported ?? markClockUnsupported)(prisma, kundliId, system).catch((e: Error) =>
+          // logged, not thrown: a row left `failed` makes the sweep pick the chart again, and the next run retries this
+          console.warn(JSON.stringify({ msg: 'pressure_inventory: refused clock row not marked unsupported', kundliId, system, error: String(e?.message ?? e).slice(0, 160) })),
+        ),
+      ),
+    );
     const clocks = await Promise.all(
       plan.ask.map(async (system) => {
         const r = await load(prisma, kundliId, system, asOf, deps).catch(

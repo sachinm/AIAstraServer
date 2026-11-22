@@ -35,23 +35,31 @@ const KAALA_ERR = 'validation_error: Invalid export type: pressure_inventory';
 describe('the schedule: 1, 5, 15 minutes, then every sweep, given up after 6', () => {
   it('the waits after each failure', () => {
     expect(RETRY_DELAYS_MS).toEqual([1 * MIN, 5 * MIN, 15 * MIN]);
-    expect([1, 2, 3, 4, 5].map(retryDelayMs)).toEqual([1 * MIN, 5 * MIN, 15 * MIN, 0, 0]);
+    // then a sweep's interval (15 minutes), never three asks a second apart
+    expect([1, 2, 3, 4, 5].map(retryDelayMs)).toEqual([1 * MIN, 5 * MIN, 15 * MIN, 15 * MIN, 15 * MIN]);
     expect(PIPELINE_GIVE_UP_FAILURES).toBe(6);
   });
 
-  it('on a fake clock: waiting before each delay, due after it; given up at the 6th failure', () => {
+  it('on a fake clock: waiting until each delay has passed, due after it; given up at the 6th failure', () => {
     const last = at(0);
     const v = (failures: number, after: number) => retryVerdict({ failures, lastAttemptAt: last }, at(after)).state;
-    expect(v(1, 59_000)).toBe('waiting');
-    expect(v(1, 1 * MIN)).toBe('due');
-    expect(v(2, 4 * MIN + 59_000)).toBe('waiting');
-    expect(v(2, 5 * MIN)).toBe('due');
-    expect(v(3, 14 * MIN)).toBe('waiting');
-    expect(v(3, 15 * MIN)).toBe('due');
-    expect(v(4, 0)).toBe('due');
-    expect(v(5, 0)).toBe('due');
+    expect(v(1, 1 * MIN)).toBe('waiting');
+    expect(v(1, 1 * MIN + 1)).toBe('due');
+    expect(v(2, 5 * MIN)).toBe('waiting');
+    expect(v(2, 5 * MIN + 1)).toBe('due');
+    expect(v(3, 15 * MIN)).toBe('waiting');
+    expect(v(3, 15 * MIN + 1)).toBe('due');
+    expect(v(4, 10 * MIN)).toBe('waiting');
+    expect(v(4, 15 * MIN + 1)).toBe('due');
+    expect(v(5, 15 * MIN + 1)).toBe('due');
     expect(v(6, 60 * MIN)).toBe('given_up');
     expect(retryVerdict({ failures: 2, lastAttemptAt: last }, at(0)).dueAt?.getTime()).toBe(T0 + 5 * MIN);
+  });
+
+  it('a give-up mark holds until it passes, then the row is due again', () => {
+    const until = at(30 * 24 * 60 * MIN);
+    expect(retryVerdict({ failures: 6, lastAttemptAt: at(0), givenUpUntil: until }, at(29 * 24 * 60 * MIN)).state).toBe('given_up');
+    expect(retryVerdict({ failures: 6, lastAttemptAt: at(0), givenUpUntil: until }, at(30 * 24 * 60 * MIN + 1)).state).toBe('due');
   });
 
   it('a registration row (natal or `current`) follows it in needsFetch; a fixed year keeps its 60 s rule', () => {
@@ -61,9 +69,9 @@ describe('the schedule: 1, 5, 15 minutes, then every sweep, given up after 6', (
       error: `[failures=${failures} engine=${type.calcVersion ?? '-'} digest=x] boom`, fetchStartedAt: null, fetchedAt: at(0), validTo: null,
     });
     expect(needsFetch(row(2), type, T0 + 2 * MIN, 90_000)).toBe(false);
-    expect(needsFetch(row(2), type, T0 + 5 * MIN, 90_000)).toBe(true);
+    expect(needsFetch(row(2), type, T0 + 5 * MIN + 1, 90_000)).toBe(true);
     expect(needsFetch(row(3), type, T0 + 10 * MIN, 90_000)).toBe(false);
-    expect(failedRowDue(row(3), T0 + 15 * MIN)).toBe(true);
+    expect(failedRowDue(row(3), T0 + 15 * MIN + 1)).toBe(true);
     // the yearly rows are not this step's (their own pull and backoff stay)
     expect(needsFetch(row(3, 'year=2030'), type, T0 + 2 * MIN, 90_000)).toBe(true);
   });
@@ -125,7 +133,7 @@ describe('give-up after 6 names the gap', () => {
     expect(countFailure(prev, 'x', '3', 'd1').failures).toBe(1);
   });
 
-  it('a natal row failing on every ask: asked at 0, +1, +5, +15 min and two sweeps, then given up and never asked again', async () => {
+  it('a natal row failing on every ask: asked after 1, 5, 15 minutes and two more sweeps, then given up and never asked again', async () => {
     const repo = memRepo();
     const fetcher = vi.fn(async () => {
       throw new Error('Radha 500: engine down');
@@ -139,8 +147,8 @@ describe('give-up after 6 names the gap', () => {
       await ensureChartData({ repo, fetcher }, 'k1', [key], { now: () => clock });
       if (fetcher.mock.calls.length > before) calls.push(m);
     }
-    // 0 (1st), +1 (2nd), +5 after it (3rd), +15 after it (4th), then at once (5th, 6th): given up
-    expect(calls).toEqual([0, 1, 6, 21, 22, 23]);
+    // asked every minute: 0 (1st), past 1 min (2nd), past 5 (3rd), past 15 (4th), then past a sweep's 15 (5th, 6th): given up
+    expect(calls).toEqual([0, 2, 8, 24, 40, 56]);
     const row = [...repo.rows.values()][0]!;
     expect(parseFailureMark(row.error)?.failures).toBe(PIPELINE_GIVE_UP_FAILURES);
     expect(row.validTo?.getTime()).toBe(FAILED_GIVE_UP_UNTIL.getTime());
@@ -165,8 +173,14 @@ describe('give-up after 6 names the gap', () => {
     expect(pulls).toBe(PIPELINE_GIVE_UP_FAILURES);
     const row = db.rows.get('k1|pressure_inventory|system=yogini|LAHIRI')!;
     expect(row).toMatchObject({ status: 'failed' });
-    expect((row.valid_to as Date).getTime()).toBe(FAILED_GIVE_UP_UNTIL.getTime());
+    // given up for PIPELINE_REFUSED_RECHECK_DAYS (30) from the 6th failure, then asked again with the count started over
+    const until = at(56 * MIN + 30 * 24 * 60 * MIN);
+    expect((row.valid_to as Date).getTime()).toBe(until.getTime());
     expect(clockRowRetry(row as never, at(200 * MIN)).state).toBe('given_up');
+    expect(clockRowRetry(row as never, new Date(until.getTime() + 1)).state).toBe('due');
+    await loadPressureInventory(db.prisma, 'k1', 'yogini', '2026-11-22', { fetcher, kundliRequest: async () => REQ, now: () => new Date(until.getTime() + 1) });
+    expect(fetcher).toHaveBeenCalledTimes(PIPELINE_GIVE_UP_FAILURES + 1);
+    expect(parseFailureMark(String(db.rows.get('k1|pressure_inventory|system=yogini|LAHIRI')!.error))?.failures).toBe(1);
   });
 });
 
@@ -189,15 +203,15 @@ describe('a failed clock row is asked again', () => {
     });
     await loadPressureInventory(db.prisma, 'k1', 'yogini', '2026-11-22', { fetcher: fail, kundliRequest: async () => REQ, now: () => at(0) });
     const ok = vi.fn<RadhaFetcher>(async () => ENGINE as unknown);
-    const r = await loadPressureInventory(db.prisma, 'k1', 'yogini', '2026-11-22', { fetcher: ok, kundliRequest: async () => REQ, now: () => at(1 * MIN) });
+    const r = await loadPressureInventory(db.prisma, 'k1', 'yogini', '2026-11-22', { fetcher: ok, kundliRequest: async () => REQ, now: () => at(1 * MIN + 1000) });
     expect(ok).toHaveBeenCalledTimes(1);
     expect(r.source).toBe('pulled');
     expect(db.rows.get('k1|pressure_inventory|system=yogini|LAHIRI')).toMatchObject({ status: 'ready', valid_to: null });
 
     const set = ['vimsottari', 'narayana', 'dwisatpathi', 'yogini'];
-    const stored = [{ system: 'chara', status: 'failed', failures: 2, lastAttemptAt: at(0), message: 'Radha 500: down', givenUpMark: false }];
+    const stored = [{ system: 'chara', status: 'failed', failures: 2, lastAttemptAt: at(0), message: 'Radha 500: down', givenUpUntil: null }];
     expect(clocksToAsk(set, stored, at(4 * MIN)).ask).toEqual(set);
-    expect(clocksToAsk(set, stored, at(5 * MIN)).ask).toEqual([...set, 'chara']);
+    expect(clocksToAsk(set, stored, at(5 * MIN + 1000)).ask).toEqual([...set, 'chara']);
     expect(clocksToAsk(set, [{ ...stored[0]!, failures: 6 }], at(60 * MIN)).ask).toEqual(set);
   });
 
@@ -208,8 +222,8 @@ describe('a failed clock row is asked again', () => {
       now: () => at(30 * MIN),
       loadSet: async () => ({ spine: 'vimsottari', clocks: [], pulled: ['vimsottari', 'narayana'], conditional: null, skipped: [] }) as never,
       loadFailed: async () => [
-        { system: 'chara', status: 'failed', failures: 1, lastAttemptAt: at(0), message: 'Radha 500: down', givenUpMark: false },
-        { system: 'kaala', status: 'failed', failures: 1, lastAttemptAt: new Date('2026-11-10T00:38:08Z'), message: KAALA_ERR, givenUpMark: false },
+        { system: 'chara', status: 'failed', failures: 1, lastAttemptAt: at(0), message: 'Radha 500: down', givenUpUntil: null },
+        { system: 'kaala', status: 'failed', failures: 1, lastAttemptAt: new Date('2026-11-10T00:38:08Z'), message: KAALA_ERR, givenUpUntil: null },
       ],
       markUnsupported: async (_p, _k, system) => void marked.push(system),
       load: (async (_p: unknown, _k: string, system: string) => (asked.push(system), { inventory: null, source: 'none', gaps: [] })) as never,
@@ -234,7 +248,7 @@ describe('an engine refusal is not retried', () => {
     expect(retryVerdict({ failures: 1, lastAttemptAt: last, message: KAALA_ERR }, new Date('2026-12-11T00:00:00Z')).state).toBe('due');
     const row: StoredStatusRow = { dataType: 'pressure_inventory', variant: 'system=kaala', status: 'failed', calcVersion: null, error: KAALA_ERR, fetchStartedAt: last, fetchedAt: last, validTo: null };
     expect(rowState(row, new Date('2026-11-22T10:00:00Z'))).toMatchObject({ state: 'gap', code: 'unsupported' });
-    expect(clocksToAsk(['vimsottari'], [{ system: 'kaala', status: 'failed', failures: 1, lastAttemptAt: last, message: KAALA_ERR, givenUpMark: false }], new Date('2026-11-22T10:00:00Z'))).toEqual({ ask: ['vimsottari'], refused: ['kaala'] });
+    expect(clocksToAsk(['vimsottari'], [{ system: 'kaala', status: 'failed', failures: 1, lastAttemptAt: last, message: KAALA_ERR, givenUpUntil: null }], new Date('2026-11-22T10:00:00Z'))).toEqual({ ask: ['vimsottari'], refused: ['kaala'] });
   });
 
   it('a refused pull is stored unsupported and never asked again within the recheck', async () => {

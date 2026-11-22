@@ -1,8 +1,9 @@
 /**
  * Retry for failed engine rows (docs/techniques/11 rev 4 §4.2 "Retry"; step 3, first half). A row that blocks the first
- * pass and fails is asked again after 1, 5 and 15 minutes, then whenever it is next asked (each 15-minute sweep), in place
- * of the old long waits (the 6-hour sweep settle, the 24-hour clock wait); after PIPELINE_GIVE_UP_FAILURES failures in a
- * row it is given up and named as a gap. A row the engine refuses for that input (it answers "invalid export type" or
+ * pass and fails is asked again after 1, 5 and 15 minutes, then every sweep (15 minutes), in place of the old long waits
+ * (the 6-hour sweep settle, the 24-hour clock wait); after PIPELINE_GIVE_UP_FAILURES failures in a row it is given up and
+ * named as a gap. A registration row stays given up until the engine's calc version or the digest version changes (the
+ * store's rule); a clock row's give-up expires after PIPELINE_REFUSED_RECHECK_DAYS and the count starts over. A row the engine refuses for that input (it answers "invalid export type" or
  * "unsupported": the `kaala` clock row of the test chart) is kept `unsupported`, named, and not retried: it is looked at
  * again only after PIPELINE_REFUSED_RECHECK_DAYS, when something asks for it.
  *
@@ -20,13 +21,19 @@
 /** A failed row is given up and named after this many failures in a row (doc 11 §4.2). */
 export const PIPELINE_GIVE_UP_FAILURES = 6;
 
-/** The waits after the 1st, 2nd and 3rd failure; from the 4th on a row is due at once (each sweep). */
+/** The waits after the 1st, 2nd and 3rd failure. */
 export const RETRY_DELAYS_MS: readonly number[] = [60_000, 5 * 60_000, 15 * 60_000];
 
-/** The wait before asking again after `failures` failures in a row: 1, 5, 15 minutes, then none. */
+/**
+ * "Then at every sweep": from the 4th failure on, the wait is the sweep's interval (the EventBridge rule runs the sweep
+ * every 15 minutes), so the last three tries are spread over three sweeps, not spent on three reads a second apart.
+ */
+export const RETRY_EVERY_SWEEP_MS = 15 * 60_000;
+
+/** The wait before asking again after `failures` failures in a row: 1, 5, 15 minutes, then a sweep's interval. */
 export function retryDelayMs(failures: number): number {
   if (!Number.isFinite(failures) || failures <= 0) return 0;
-  return RETRY_DELAYS_MS[Math.floor(failures) - 1] ?? 0;
+  return RETRY_DELAYS_MS[Math.floor(failures) - 1] ?? RETRY_EVERY_SWEEP_MS;
 }
 
 /** The registration rows the schedule covers: every variant but a fixed year (`year=<y>`, the annual set's pull). */
@@ -54,8 +61,8 @@ export interface RetryInput {
   message?: string | null;
   /** the row is already `unsupported` */
   unsupported?: boolean;
-  /** the store's give-up mark is set (`valid_to` = FAILED_GIVE_UP_UNTIL) */
-  givenUpMark?: boolean;
+  /** the row's give-up mark (`valid_to`): given up until then, due again after (a clock row's give-up expires) */
+  givenUpUntil?: Date | null;
 }
 
 export interface RetryVerdict {
@@ -67,8 +74,8 @@ export interface RetryVerdict {
 
 /**
  * What to do with one failed (or refused) row now. Refused: `unsupported` until `refusedRecheckMs` after the last
- * attempt, then `due` once more. Given up at `giveUpAt` failures or with the store's mark. Otherwise due when the delay
- * after its last attempt has passed.
+ * attempt, then `due` once more. With a give-up mark: given up until it passes, then due (the count starts over). Given up
+ * at `giveUpAt` failures. Otherwise due once more than the delay after its last attempt has passed.
  */
 export function retryVerdict(r: RetryInput, now: Date, opts: { giveUpAt?: number; refusedRecheckMs?: number } = {}): RetryVerdict {
   const failures = Math.max(1, Math.floor(r.failures || 1));
@@ -76,11 +83,14 @@ export function retryVerdict(r: RetryInput, now: Date, opts: { giveUpAt?: number
   if (r.unsupported || isEngineRefusal(r.message)) {
     const recheck = opts.refusedRecheckMs ?? 30 * 86_400_000;
     const dueAt = new Date((last ?? now.getTime()) + recheck);
-    return { state: last != null && now.getTime() >= dueAt.getTime() ? 'due' : 'unsupported', failures, dueAt };
+    return { state: last != null && now.getTime() > dueAt.getTime() ? 'due' : 'unsupported', failures, dueAt };
   }
-  if (r.givenUpMark || failures >= (opts.giveUpAt ?? PIPELINE_GIVE_UP_FAILURES)) return { state: 'given_up', failures, dueAt: null };
-  const dueAt = new Date((last ?? now.getTime()) + retryDelayMs(failures));
-  return { state: now.getTime() >= dueAt.getTime() ? 'due' : 'waiting', failures, dueAt };
+  if (r.givenUpUntil) return now.getTime() > r.givenUpUntil.getTime() ? { state: 'due', failures, dueAt: r.givenUpUntil } : { state: 'given_up', failures, dueAt: r.givenUpUntil };
+  if (failures >= (opts.giveUpAt ?? PIPELINE_GIVE_UP_FAILURES)) return { state: 'given_up', failures, dueAt: null };
+  // `last` unknown: due now; otherwise due once the wait has passed (strictly, as the store's old 60 s rule)
+  if (last == null) return { state: 'due', failures, dueAt: now };
+  const dueAt = new Date(last + retryDelayMs(failures));
+  return { state: now.getTime() > dueAt.getTime() ? 'due' : 'waiting', failures, dueAt };
 }
 
 /** One stored clock row that failed or was refused, as the clock retry reads it. */
@@ -90,7 +100,8 @@ export interface StoredClockRow {
   failures: number;
   lastAttemptAt: Date | null;
   message: string | null;
-  givenUpMark: boolean;
+  /** the give-up mark (`valid_to`) of the row, if any */
+  givenUpUntil: Date | null;
 }
 
 /**
@@ -104,7 +115,7 @@ export function clocksToAsk(set: readonly string[], stored: readonly StoredClock
   const refused: string[] = [];
   for (const r of stored) {
     if (r.status !== 'failed') continue;
-    const v = retryVerdict({ failures: r.failures, lastAttemptAt: r.lastAttemptAt, message: r.message, givenUpMark: r.givenUpMark }, now, opts);
+    const v = retryVerdict({ failures: r.failures, lastAttemptAt: r.lastAttemptAt, message: r.message, givenUpUntil: r.givenUpUntil }, now, opts);
     if (v.state === 'unsupported') {
       refused.push(r.system);
       continue;
