@@ -1842,3 +1842,42 @@ export function getLuckyRetrogradeAvoidMap(): LuckyRetrogradeAvoidConfig {
     stationaryKarakaPenalty: parseClampedIntEnv('LUCKY_STATIONARY_KARAKA_PENALTY', 3, 0, 5),
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The reading prepared ahead (docs/techniques/11 rev 4): one status per chart, the gate, the retry and the yearly span
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * `READING_PREP=1` turns on the preparation queue (doc 11 §4.3, phase 2). Off (default 0): no queue exists, the stages
+ * used are registered → pulling → checking → chart_ready → ready, and the gate locks on the chart status, the digest and
+ * a running build only (§4.8, first version).
+ */
+export function isReadingPrepEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.READING_PREP?.trim() === '1';
+}
+
+/**
+ * The dasha systems whose stored periods are required everywhere (doc 11 §4.2: "the star voice, the sign voice"; doc 12
+ * §3: Vimshottari and Narayana). A hole in one of them makes the chart incomplete; a hole in any other system that applies
+ * is a named gap. Env `PIPELINE_REQUIRED_DASHAS` (comma list of stored system ids; default `vimsottari,narayana`).
+ */
+export function getPipelineRequiredDashas(): string[] {
+  return listEnv('PIPELINE_REQUIRED_DASHAS', ['vimsottari', 'narayana']);
+}
+
+/**
+ * Years back and ahead of the yearly set the digest sweep keeps filling (`ANNUAL_SPAN_YEARS`, 1..15, default 10: today's
+ * span). Doc 11 asks for 15; the deploy session raises it.
+ */
+export function getAnnualSpanYears(): number {
+  return parseClampedIntEnv('ANNUAL_SPAN_YEARS', 10, 1, 15);
+}
+
+/**
+ * `ANNUAL_TP_ALL_VARGAS=1`: the yearly set draws the Tithi Pravesha chart in every divisional chart the engine casts it in
+ * (doc 11 §4.2: 20 charts) and adds the Tajaka year row. Off (default): today's set, Tithi Pravesha and Varsha in D1, D9
+ * and D10 only.
+ */
+export function isAnnualTpAllVargas(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ANNUAL_TP_ALL_VARGAS?.trim() === '1';
+}

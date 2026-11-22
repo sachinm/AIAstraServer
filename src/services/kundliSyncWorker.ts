@@ -24,6 +24,7 @@ import { loadRegistrationPlan, type RegistrationPlan } from '../reading/chartDat
 import { CURRENT_VARIANT } from '../reading/chartData/store.js';
 import { readingBuildFactsEnabled } from '../reading/config.js';
 import { buildFactsForKundli } from '../reading/data/factsBuilder.js';
+import { recomputePipeline } from '../reading/pipeline/status.js';
 import { enqueueKundliSync, processKundliSyncQueue, processOneKundliRow, type KundliQueueDeps, type KundliRowWithUser } from './kundliQueueService.js';
 
 export const KUNDLI_SYNC_SOURCE = 'aiastra';
@@ -186,6 +187,15 @@ export interface WorkerDeps {
   invoke?: (kundliId: string) => Promise<boolean>;
   /** The reading clock set's inventories (doc 70 §4.1); default ensurePressureInventories. Never throws. */
   ensurePressure?: (prisma: PrismaClient, kundliId: string, asOf: string) => Promise<unknown>;
+  /** The chart's one status, recomputed at the end of every sync and clock run (doc 11 §4.2); default recomputePipeline */
+  pipeline?: (prisma: PrismaClient, kundliId: string, trigger: 'sync' | 'clock') => Promise<unknown>;
+}
+
+const defaultPipeline = (prisma: PrismaClient, kundliId: string, trigger: 'sync' | 'clock') => recomputePipeline(prisma, kundliId, { trigger });
+
+/** Recompute the status row; never throws (doc 11 §4.2: the stored rows stay the truth, the row follows them). */
+async function refreshPipeline(deps: WorkerDeps, kundliId: string, trigger: 'sync' | 'clock'): Promise<void> {
+  await (deps.pipeline ?? defaultPipeline)(deps.prisma, kundliId, trigger).catch(() => undefined);
 }
 
 /**
@@ -257,7 +267,10 @@ export async function runClockSetPull(deps: WorkerDeps, kundliId: string): Promi
     queueLogError({ event: 'kundli_sync_clock_pull_failed', kundli_id: kundliId, error: (err as Error).message?.slice(0, 300) });
     return 'error';
   } finally {
-    if (leaseAt) await releaseLease(deps.prisma, kundliId, leaseAt).catch(() => undefined);
+    if (leaseAt) {
+      await releaseLease(deps.prisma, kundliId, leaseAt).catch(() => undefined);
+      await refreshPipeline(deps, kundliId, 'clock');
+    }
   }
 }
 
@@ -293,6 +306,7 @@ export async function runKundliSync(deps: WorkerDeps, kundliId: string, startedA
     }
     await releaseLease(deps.prisma, kundliId, leaseAt);
     leaseAt = null;
+    await refreshPipeline(deps, kundliId, 'sync');
     let reinvoked = false;
     if (result.more) {
       reinvoked = await (deps.invoke ?? invokeKundliSyncAsync)(kundliId);

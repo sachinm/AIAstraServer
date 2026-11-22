@@ -26,6 +26,8 @@ import { areaLayoutRegistry, emptyLayout, mergeLayoutPatch, readBoardLayout, val
 import { applySelfFeatures, cardWindows, railFromSpans } from '../self/v3/response.js';
 import type { BoardReadingView, CardReadError, CardReadState, LayoutError, SelfBoardLayoutView, SelfV3CardContent, SelfV3CardView, SelfV3Response } from '../self/v3/types.js';
 import { lensValidity, NO_LENS_REFRESH } from './lensValidity.js';
+import { readingGate, type ReadingGateFn } from '../prep/gate.js';
+import type { PipelineView } from '../pipeline/types.js';
 import { effectiveOptions, shapeSelfCard, type BoardOptions, type CardOptions } from './cardOptions.js';
 import {
   boardFactsOf,
@@ -199,7 +201,10 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
   let doc: CardsStateDoc = doc0;
   let queued: BoardV3CardId[] = [];
   const deck = lensDeck(board, layout.cards, lens);
-  if (!deps.readOnly && !doc0.opened?.[board] && deck.length >= getCardsReadMinArea()) {
+  // doc 11 §4.8: while the gate is locked the board is not marked opened and nothing is queued, so its free first
+  // reading is still made on the first open after the gate opens
+  const gated = Boolean(v2.pipeline?.locked);
+  if (!deps.readOnly && !gated && !doc0.opened?.[board] && deck.length >= getCardsReadMinArea()) {
     // the deck's own rows (the board-wide read above is capped and could leave a read card out of its window)
     const own = (await (deps.readCardReadings ?? readCardReadings)(deps.prisma, kundliId, v2.body.clock.system, deck).catch(() => null)) as Partial<Record<string, SelfV3CardContent>> | null;
     const has = (id: string) => Boolean(read[id] ?? own?.[id]);
@@ -240,6 +245,7 @@ export async function getBoardV3(deps: BoardV3Deps, userId: string, board: AreaV
     lenses: V3_LENSES[board].map((l) => ({ id: l.id, title: l.title, suggested: starters(board, l.id, facts, age) })),
     activeLens: lens,
     defaultLens: dflt,
+    ...(v2.pipeline ? { pipeline: v2.pipeline } : {}),
   };
   return { body: applySelfFeatures<BoardV3CardView, BoardV3Response>(body, resolveFeatures(featureContext(plan, overrides)), board), queued };
 }
@@ -273,8 +279,9 @@ function emptyBody(board: AreaV3Board, v2: SelfV2Response, lens: BoardLens | nul
   };
 }
 
+/** `pipeline`: the reading gate was locked (docs/techniques/11 §4.8); the layout is saved, nothing is queued */
 export type PutBoardLayoutResult =
-  | { ok: true; layout: SelfBoardLayoutView<BoardV3CardId>; reading?: { queued: BoardV3CardId[] } }
+  | { ok: true; layout: SelfBoardLayoutView<BoardV3CardId>; reading?: { queued: BoardV3CardId[] }; pipeline?: PipelineView }
   | { ok: false; status: 409; error: 'stale_layout'; layout: SelfBoardLayoutView<BoardV3CardId> }
   | { ok: false; status: 400 | 404; error: LayoutError | 'no_kundli'; detail?: string };
 
@@ -285,6 +292,8 @@ export interface BoardQueueDeps {
   readCardReadings?: typeof readCardReadings;
   clockOf?: (prisma: PrismaClient, kundliId: string) => Promise<string | null>;
   loadProfile?: (prisma: PrismaClient, userId: string, asOf: string) => Promise<ProfilePack>;
+  /** the reading gate (docs/techniques/11 rev 4 §4.8; default `readingGate`) */
+  readingGate?: ReadingGateFn;
 }
 
 async function preferredClock(prisma: PrismaClient, kundliId: string): Promise<string | null> {
@@ -316,6 +325,9 @@ export async function putBoardV3Layout(prisma: PrismaClient, userId: string, boa
 
 async function queueLensDeck(prisma: PrismaClient, userId: string, kundliId: string, board: AreaV3Board, layout: SelfBoardLayoutView<BoardV3CardId>, deps: BoardQueueDeps): Promise<PutBoardLayoutResult> {
   if (!(deps.cardsRead ?? isCardsReadEnabled())) return { ok: true, layout };
+  // doc 11 §4.8: the layout is saved; while the gate is locked no card is marked and no build starts
+  const pipeline = await (deps.readingGate ?? readingGate)(prisma, kundliId);
+  if (pipeline.locked) return { ok: true, layout, reading: { queued: [] }, pipeline };
   try {
     const now = (deps.now ?? (() => new Date()))();
     let lens: BoardLens;
@@ -347,7 +359,10 @@ async function queueLensDeck(prisma: PrismaClient, userId: string, kundliId: str
 }
 
 /** `already_read`: Try again is for a failed, stuck or never-read card; a good reading is refreshed with its lens (paid) */
-export type ReadBoardCardResult = { ok: true; status: 202; state: 'queued' } | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError | 'already_read' };
+export type ReadBoardCardResult =
+  | { ok: true; status: 202; state: 'queued' }
+  | { ok: false; status: 400 | 404 | 409 | 503; error: CardReadError | 'already_read' }
+  | { ok: false; status: 409; error: 'preparing'; pipeline: PipelineView };
 
 /** POST /api/board/:board/v3/cards/:id/read: queue or retry one card of this board. */
 export async function readBoardV3Card(prisma: PrismaClient, userId: string, board: AreaV3Board, cardId: string, deps: BoardQueueDeps = {}): Promise<ReadBoardCardResult> {
@@ -367,6 +382,9 @@ export async function readBoardV3Card(prisma: PrismaClient, userId: string, boar
     const have = clock ? ((await (deps.readCardReadings ?? readCardReadings)(prisma, kundliId, clock, [def.id]).catch(() => ({}))) as Partial<Record<string, unknown>>) : {};
     if (have[def.id]) return { ok: false, status: 409, error: 'already_read' };
   }
+  // doc 11 §4.8: no card is marked and no build queued while the gate is locked
+  const pipeline = await (deps.readingGate ?? readingGate)(prisma, kundliId);
+  if (pipeline.locked) return { ok: false, status: 409, error: 'preparing', pipeline };
   // no day cap (docs/billing/README.md "Spend cap per operation"): the build this queues is its own operation, its own budget
   await updateCardsState(prisma, userId, kundliId, now, (d) => {
     d.cards[def.id] = { state: 'queued', at: now.toISOString() };

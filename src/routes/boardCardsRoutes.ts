@@ -16,7 +16,7 @@ import { getBoardsV3, getSelfV3RouteBudgetMs } from '../config/env.js';
 import { putBoardV3Layout, type BoardQueueDeps } from '../reading/boards/v3Service.js';
 import { BOARD_V3_OFF } from './boardV3Routes.js';
 import { SELF_V2_CACHE_CONTROL } from './selfV2Routes.js';
-import { BudgetExceeded, withinBudget } from './selfV3Routes.js';
+import { BudgetExceeded, layoutBody, withinBudget } from './selfV3Routes.js';
 
 export interface BoardCardsRouteDeps {
   prisma: PrismaClient;
@@ -78,7 +78,8 @@ export function registerBoardCardsRoutes(app: express.Express, deps: BoardCardsR
         const r = await withinBudget(putBoardV3Layout(deps.prisma, userId, b, req.body, deps.v3 ?? {}), deps.v3?.budgetMs ?? getSelfV3RouteBudgetMs());
         if (!r.ok && r.status === 409) return res.status(409).json({ error: r.error, layout: r.layout });
         if (!r.ok) return res.status(r.status).json({ error: r.error, ...('detail' in r && r.detail ? { detail: r.detail } : {}) });
-        return res.status(200).json(r.reading ? { ...r.layout, reading: r.reading } : r.layout);
+        // a locked reading gate (docs/techniques/11 §4.8): saved, nothing queued, `pipeline` says why
+        return res.status(200).json(layoutBody(r));
       } catch (e) {
         if (e instanceof BudgetExceeded) {
           res.setHeader('Retry-After', '1');

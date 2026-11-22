@@ -8,6 +8,8 @@
  *   PUT  /api/self/v2/clock    { system } → 202 { usage, status:'building', alsoChanges:['love','work'] }
  *                                | 200 { usage, status:'unchanged', alsoChanges:[] }  already the board's clock, no charge
  *                                | 400 unknown_system | 400 not_applicable | 404 no_kundli   (never 402: billing/02 §9)
+ *                                | 409 { error, code: 'preparing', pipeline }  the reading gate is locked (docs/techniques/11
+ *                                  §4.8): nothing charged, stored or queued
  *   POST /api/self/v2/confirm  { claimId, answer: yes|partly|no|skip } → 204 | 400 bad_claim | bad_answer
  *   POST /api/self/v2/mood     { mood: heavy|mixed|fine } → 204 | 400 bad_mood
  *
@@ -19,6 +21,7 @@ import type { RequireUser } from '../auth/requestAuth.js';
 import { isSelfV2Enabled } from '../config/env.js';
 import { assertOwnAccount } from '../graphql/rbac.js';
 import { getSelfV2, switchClock, writeConfirm, writeMood, type SelfV2Deps } from '../reading/self/v2api/service.js';
+import { preparingRefusal } from '../reading/pipeline/types.js';
 
 export interface SelfV2RouteDeps {
   prisma: PrismaClient;
@@ -72,6 +75,7 @@ export function registerSelfV2Routes(app: express.Express, deps: SelfV2RouteDeps
     if (!userId) return;
     try {
       const r = await switchClock(v2, userId, (req.body as { system?: unknown } | undefined)?.system);
+      if (!r.ok && r.error === 'preparing') return res.status(409).json(preparingRefusal(r.pipeline));
       if (!r.ok) return res.status(r.status).json({ error: r.error });
       return res.status(r.status).json(r.body);
     } catch (e) {

@@ -16,6 +16,9 @@
  *                                          lens), one question per lens per day; its first reading is free
  *                                          (src/reading/boards/lensRefresh.ts) → 200 { status:'queued', lens, queued,
  *                                          charged, first?, repeat?, usage } | 409 not_due | not_ready | 402 | 404 | 400
+ *                                          Every board: 409 { error, code: 'preparing', pipeline } while the reading gate
+ *                                          is locked (docs/techniques/11 §4.8): nothing held, built or queued. A 409
+ *                                          `building` carries the same `pipeline` block
  *   POST /api/area/:area/checks            area career|self|love; { month: 'YYYY-MM', side: support|test,
  *                                          answer: yes|partly|no|skip } → 204 | 400 | 404 unknown area
  */
@@ -34,6 +37,8 @@ import { selfBoardDates } from '../reading/self/synthesisValidity.js';
 import { selfDeeperReadingReady } from '../reading/self/boardState.js';
 import { logChatProviderError, publicCodeFromChatProviderError } from '../services/publicChatError.js';
 import { refreshBoardLens, type LensRefreshDeps, type LensRefreshGate } from '../reading/boards/lensRefresh.js';
+import { readingGate, type ReadingGateFn } from '../reading/prep/gate.js';
+import { preparingRefusal, type PipelineView } from '../reading/pipeline/types.js';
 
 export interface AreaRouteDeps {
   prisma: PrismaClient;
@@ -54,6 +59,8 @@ export interface AreaRouteDeps {
   lens?: Omit<LensRefreshDeps, 'prisma' | 'gate' | 'now'>;
   /** tests: whether a You board card was read without a technical story (default selfDeeperReadingReady) */
   selfDeeperReady?: (prisma: PrismaClient, kundliId: string) => Promise<boolean>;
+  /** tests: the reading gate (docs/techniques/11 rev 4 §4.8; default `readingGate`) */
+  readingGate?: ReadingGateFn;
 }
 
 export function isAreaEnabled(): boolean {
@@ -113,7 +120,14 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
   boardRoute('self', getSelfBoard);
   boardRoute('love', getLoveBoard);
 
-  const queueDeps: QueueDeps = { prisma: deps.prisma, now: deps.now, ...(deps.queue ?? {}) };
+  const askGate = (kundliId: string) => (deps.readingGate ?? readingGate)(deps.prisma, kundliId);
+  const queueDeps: QueueDeps = { prisma: deps.prisma, now: deps.now, ...(deps.readingGate ? { readingGate: deps.readingGate } : {}), ...(deps.queue ?? {}) };
+  /** the 409 of a queue answer that started nothing: the gate's refusal, or the existing `building` / `not_ready` */
+  const notQueued = async (kundliId: string, outcome: string, pipeline: PipelineView) => {
+    if (outcome === 'preparing') return { status: 409, body: preparingRefusal(await askGate(kundliId)) as unknown as Record<string, unknown> };
+    if (outcome === 'already_building') return { status: 409, body: { error: 'building', code: 'building', pipeline: { ...pipeline, locked: true, reason: 'building' as const } } };
+    return { status: 409, body: { error: 'not_ready', code: 'not_ready', pipeline } };
+  };
   const BOARDS: readonly BoardCharge[] = ['self', 'love', 'work'];
   app.post('/api/boards/:board/refresh', async (req, res) => {
     const userId = await deps.requireUser(req, res);
@@ -121,6 +135,10 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
     const board = req.params.board as BoardCharge;
     if (!BOARDS.includes(board)) return res.status(400).json({ error: 'unknown_board' });
     // docs/billing/03 per-lens refresh: a Love/Work board on v3 refreshes its active lens, one question per lens per day
+    // doc 11 §4.8: no reading starts while the chart is being prepared or a build runs; asked before anything is held
+    const k0 = await kundliOf(userId).catch(() => null);
+    const pipeline = k0 ? await askGate(k0.id) : null;
+    if (pipeline?.locked) return res.status(409).json(preparingRefusal(pipeline));
     if (board !== 'self' && (getBoardsV3() as readonly string[]).includes(board)) {
       try {
         const r = await refreshBoardLens({ prisma: deps.prisma, gate: lensGate, ...(deps.now ? { now: deps.now } : {}), ...(deps.lens ?? {}) }, userId, board, (req.body as { lens?: unknown } | undefined)?.lens);
@@ -145,7 +163,10 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
         // plan "retire the v2 Self reading" step 2: no Self card was ever read, so this is the board's first reading,
         // free (docs/billing/03 "automatic builds only when nothing was ever stored"): queued with no question held
         const outcome = await queueSelfReadingBuild(queueDeps, userId, kundli.id, 'self');
-        if (outcome !== 'invoked' && outcome !== 'in_process') return res.status(409).json({ error: outcome === 'already_building' ? 'building' : 'not_ready', code: outcome === 'already_building' ? 'building' : 'not_ready' });
+        if (outcome !== 'invoked' && outcome !== 'in_process') {
+          const r = await notQueued(kundli.id, outcome, pipeline ?? (await askGate(kundli.id)));
+          return res.status(r.status).json(r.body);
+        }
         const usage = await gate.getStatus(userId);
         return res.status(202).json({ status: 'building', first: true, charged: false, ...(usage ? { usage } : {}) });
       }
@@ -172,7 +193,8 @@ export function registerAreaRoutes(app: express.Express, deps: AreaRouteDeps): b
       const outcome = await queueSelfReadingBuild(queueDeps, userId, kundli.id, 'self', { refreshDay: day });
       if (outcome !== 'invoked' && outcome !== 'in_process') {
         await gate.settleBoardRefresh(userId, board, day, false);
-        return res.status(409).json({ error: outcome === 'already_building' ? 'building' : 'not_ready', code: outcome === 'already_building' ? 'building' : 'not_ready' });
+        const r = await notQueued(kundli.id, outcome, pipeline ?? (await askGate(kundli.id)));
+        return res.status(r.status).json(r.body);
       }
       const usage = await gate.getStatus(userId);
       return res.status(202).json({ status: 'building', ...(usage ? { usage } : {}) });

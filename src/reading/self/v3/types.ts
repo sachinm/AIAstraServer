@@ -7,6 +7,7 @@
  *
  * Nothing here is astrological arithmetic. Every boundary, tone and evidence key is a stored engine value carried by id.
  */
+import type { PipelineView } from '../../pipeline/types.js';
 import type { BoardCardOptions, BoardOptions, CardOptions } from '../../boards/cardOptions.js';
 import type { AreaCertainty } from '../areaDoc.js';
 import type {
@@ -509,6 +510,8 @@ export interface SelfV3Response {
    * omitted); it is absent only on a body from a server that predates this field.
    */
   headerLine?: string | null;
+  /** docs/techniques/11 rev 4 §4.8: the chart's one status and the reading gate (the same block as GET /api/self/v2) */
+  pipeline?: PipelineView;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

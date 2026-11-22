@@ -148,6 +148,7 @@ model Kundli {
   validationFailures ReadingValidationFailure[]
   boardLayouts       BoardLayout[]
   slices             KundliSlice[]
+  pipeline           KundliPipeline?
 
   @@map("kundlis")
 }
@@ -1707,4 +1708,27 @@ model UserNotification {
   @@index([user_id, dismissed_at, created_at(sort: Desc)], map: "idx_user_notifications_inbox")
   @@index([user_id, read_at], map: "idx_user_notifications_unread")
   @@map("user_notifications")
+}
+
+/// M56 (docs/techniques/11 rev 4 §4.2): the one status row per chart, recomputed from the stored rows at the end of every
+/// sync, digest and clock run (src/reading/pipeline/status.ts). The stored rows stay the truth; this row is what the gate,
+/// the queue and the admin page read. Plain: stage, verdict, counts and named gaps (type ids, system ids, dates), no value
+/// the engine returned and no error text.
+model KundliPipeline {
+  kundli_id  String   @id @map("kundli_id")
+  /// registered | pulling | checking | chart_ready | preparing | ready | blocked | paused
+  stage      String
+  /// complete | complete_with_gaps | incomplete
+  verdict    String
+  /// [{ id, kind, code, required, detail }]: what is missing or wrong, by name
+  gaps       Json     @default("[]")
+  done       Int      @default(0)
+  total      Int      @default(0)
+  /// counts per item state and the verdict per need ({ chat, pass1 })
+  counts     Json     @default("{}")
+  updated_at DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  kundli     Kundli   @relation(fields: [kundli_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "kundli_pipeline_kundli_fkey")
+
+  @@index([stage], map: "idx_kundli_pipeline_stage")
+  @@map("kundli_pipeline")
 }

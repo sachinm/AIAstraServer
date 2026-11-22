@@ -20,6 +20,8 @@ import { buildSelfV2Response, noKundliResponse } from './response.js';
 import { defaultReadSelfV2Latest, NOTHING_STORED, type ReadSelfV2Latest, type SelfV2Latest } from './storeContract.js';
 import { isSelfBoardFromCards, isSelfV2Retired } from '../../../config/env.js';
 import { readSelfBoardState, type SelfBoardState } from '../boardState.js';
+import { readingGate, type ReadingGateFn } from '../../prep/gate.js';
+import type { PipelineView } from '../../pipeline/types.js';
 
 export interface SelfV2Deps {
   prisma: PrismaClient;
@@ -51,7 +53,17 @@ export interface SelfV2Deps {
   v2Retired?: boolean;
   /** the Self board state from the card rows (default `readSelfBoardState`) */
   boardState?: (prisma: PrismaClient, kundliId: string, clock: string, today: string, readAt: string | null) => Promise<SelfBoardState>;
+  /** the reading gate (docs/techniques/11 rev 4 §4.8; default `readingGate`): locked, nothing is queued */
+  readingGate?: ReadingGateFn;
 }
+
+/** The chart's one status and the gate; a failed read never locks (the gate itself never throws). */
+function gateOf(deps: SelfV2Deps, kundliId: string): Promise<PipelineView> {
+  return (deps.readingGate ?? readingGate)(deps.prisma, kundliId);
+}
+
+/** What a locked gate makes of the board's status: a build running is `pending` (the page polls), else `preparing`. */
+const lockedStatus = (g: PipelineView): SelfV2Response['status'] => (g.reason === 'building' ? 'pending' : 'preparing');
 
 /**
  * The `refresh` block of GET /api/self/v2. A read that fails shows nothing due (never a button that 409s). `building` and
@@ -110,8 +122,11 @@ async function clockFor(deps: SelfV2Deps, kundliId: string, preferred: string | 
   return resolveClockV2(preferred, present, applicability);
 }
 
-/** `kundliId`: the chart the body was read for (null without one), so a caller does not look it up again */
-export type GetSelfV2Result = { body: SelfV2Response; queued: QueueOutcome | null; kundliId?: string | null };
+/**
+ * `kundliId`: the chart the body was read for (null without one), so a caller does not look it up again. `pipeline`: the
+ * gate as read for this body (also `body.pipeline`); a caller that would queue anything checks `pipeline.locked` first.
+ */
+export type GetSelfV2Result = { body: SelfV2Response; queued: QueueOutcome | null; kundliId?: string | null; pipeline?: PipelineView };
 
 /** GET /api/self/v2 for the signed-in person. */
 export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSelfV2Result> {
@@ -120,7 +135,9 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   if (!kundli) return { body: noKundliResponse(), queued: null, kundliId: null };
   const now = (deps.now ?? (() => new Date()))();
   const asOf = dayOf(now);
-  if (deps.boardFromCards ?? isSelfBoardFromCards()) return getSelfV2FromCards(deps, userId, kundli, now);
+  // the gate overlaps every read below; it is awaited only where a build would be queued, and served on the body
+  const gateP = gateOf(deps, kundli.id);
+  if (deps.boardFromCards ?? isSelfBoardFromCards()) return getSelfV2FromCards(deps, userId, kundli, now, gateP);
   // everything that does not need the clock starts now and overlaps the clock read
   const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
   // on the default path the refresh block's build marker is the same `area_builds` row the progress markers read
@@ -144,12 +161,16 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
   const refresh = early ?? (await refreshView(deps, kundli.id, asOf, now, sharedMarker, latest.oracleRow));
 
   const nothingStored = !latest.cards && !latest.oracle;
+  const gate = await gateP;
   let status: SelfV2Response['status'] = 'ok';
   let queued: QueueOutcome | null = null;
   if (nothingStored && latest.status !== 'failed') {
     if (kundli.digest_status && kundli.digest_status !== 'ready') {
       await (deps.queueDigest ?? defaultQueueDigest)(prisma, kundli.id).catch((e) => console.warn('[self:v2] digest queue failed:', (e as Error).message));
       status = 'preparing';
+    } else if (gate.locked) {
+      // doc 11 §4.8: no reading starts while the chart is being prepared or another build runs; nothing is queued
+      status = lockedStatus(gate);
     } else {
       queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary);
       status = 'pending';
@@ -166,7 +187,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     const q = markers?.queue.state;
     // a board served by its v3 cards (latest `ok` with no v2 cards, doc 83 step 1) is not re-built on every new day
     const retry = q === 'stuck' || q === 'failed' || (!latest.cards && latest.status !== 'ok' && (q === 'none' || q === undefined));
-    if (retry && (!kundli.digest_status || kundli.digest_status === 'ready')) {
+    if (retry && (!kundli.digest_status || kundli.digest_status === 'ready') && !gate.locked) {
       queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary).catch((e) => {
         console.warn('[self:v2] re-queue failed:', (e as Error).message);
         return 'skipped' as const;
@@ -178,7 +199,7 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
     queued === null && markers
       ? buildView(markers.queue, markers.v2, now, false)
       : await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
-  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued, kundliId: kundli.id };
+  return { body: { ...buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), pipeline: gate }, queued, kundliId: kundli.id, pipeline: gate };
 }
 
 /**
@@ -194,7 +215,13 @@ export async function getSelfV2(deps: SelfV2Deps, userId: string): Promise<GetSe
  * With SELF_V2_RETIRED=1 the v2 rows are not read at all (`v2.card`, `details`, `hero` and `quality` are null); without
  * it they are served as before beside the card state.
  */
-async function getSelfV2FromCards(deps: SelfV2Deps, userId: string, kundli: { id: string; preferred_dasha: string | null; digest_status: string | null }, now: Date): Promise<GetSelfV2Result> {
+async function getSelfV2FromCards(
+  deps: SelfV2Deps,
+  userId: string,
+  kundli: { id: string; preferred_dasha: string | null; digest_status: string | null },
+  now: Date,
+  gateP: Promise<PipelineView>,
+): Promise<GetSelfV2Result> {
   const prisma = deps.prisma;
   const asOf = dayOf(now);
   const markersP = (deps.progressMarkers ?? defaultProgressMarkers)(prisma, kundli.id, now).catch(() => null);
@@ -212,12 +239,16 @@ async function getSelfV2FromCards(deps: SelfV2Deps, userId: string, kundli: { id
   ]);
   const q = markers?.queue.state;
   const digestReady = !kundli.digest_status || kundli.digest_status === 'ready';
+  const gate = await gateP;
   let status: SelfV2Response['status'] = 'ok';
   let queued: QueueOutcome | null = null;
   if (state.nothingStored) {
     if (!digestReady) {
       await (deps.queueDigest ?? defaultQueueDigest)(prisma, kundli.id).catch((e) => console.warn('[self:v2] digest queue failed:', (e as Error).message));
       status = 'preparing';
+    } else if (gate.locked && q !== 'building') {
+      // doc 11 §4.8: the free first build waits for the gate; nothing is queued
+      status = lockedStatus(gate);
     } else if (q === undefined || q === 'none' || q === 'stuck' || q === 'failed') {
       queued = await (deps.queueBuild ?? defaultQueueBuild)(prisma, userId, kundli.id, clock.primary).catch((e) => {
         console.warn('[self:v2] build queue failed:', (e as Error).message);
@@ -243,7 +274,7 @@ async function getSelfV2FromCards(deps: SelfV2Deps, userId: string, kundli: { id
     queued === null && markers
       ? buildView(markers.queue, markers.v2, now, false)
       : await progressFor(deps, kundli.id, now, queued === 'invoked' || queued === 'in_process' || queued === 'already_building');
-  return { body: buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), queued, kundliId: kundli.id };
+  return { body: { ...buildSelfV2Response({ status, latest, clock, profile, floors, refresh, build }), pipeline: gate }, queued, kundliId: kundli.id, pipeline: gate };
 }
 
 async function defaultProgressMarkers(prisma: PrismaClient, kundliId: string, now: Date): Promise<{ queue: QueueMarkerView; v2: V2MarkerView }> {
@@ -264,6 +295,7 @@ async function progressFor(deps: SelfV2Deps, kundliId: string, now: Date, queued
 
 export type SwitchClockResult =
   | { ok: false; status: 400 | 404; error: 'unknown_system' | 'not_applicable' | 'no_kundli' }
+  | { ok: false; status: 409; error: 'preparing'; pipeline: PipelineView }
   | { ok: true; status: 200 | 202; body: { usage: PlanStatus | null; status: 'building' | 'unchanged'; alsoChanges: Array<'love' | 'work'> }; charged: BoardChargeOutcome | 'none' };
 
 const SYSTEM_RE = /^[a-z0-9_]{1,40}$/;
@@ -291,6 +323,9 @@ export async function switchClock(deps: SelfV2Deps, userId: string, system: unkn
     return { ok: true, status: 200, body: { usage: await gate.getStatus(userId), status: 'unchanged', alsoChanges: [] }, charged: 'none' };
   }
 
+  // doc 11 §4.8: a switch queues a reading build; while the gate is locked nothing is charged, stored or queued
+  const pipeline = await gateOf(deps, kundli.id);
+  if (pipeline.locked) return { ok: false, status: 409, error: 'preparing', pipeline };
   const now = (deps.now ?? (() => new Date()))();
   const charged = await gate.chargeClock(userId, dayOf(now), system);
   await prisma.kundli.update({ where: { id: kundli.id }, data: { preferred_dasha: system } });

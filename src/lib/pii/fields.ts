@@ -82,6 +82,9 @@ export const SEALED_MODELS: Record<string, SealedModel> = {
   // activation rows hold only system ids, period lords or signs, dates and house numbers, queried by range and house (GIN):
   // plain, like timeline_calibration (docs/TODOS.md, digest-core)
   KundliActivation: { table: 'kundli_activation', owner: { via: 'kundli_id' }, fields: {} },
+  // M56 (docs/techniques/11 §4.2): the one status row per chart: stage, verdict, counts and named gaps (type ids, system
+  // ids, dates like the activation rows); no engine value and no error text. Plain, like kundli_activation
+  KundliPipeline: { table: 'kundli_pipeline', owner: { via: 'kundli_id' }, fields: {} },
   KundliTransitOverlay: { table: 'kundli_transit_overlays', owner: { via: 'kundli_id' }, fields: { payload: json } },
   // only rows with a kundli_id belong to a person; global rows (kundli_id null) stay plain
   TransitSnapshot: { table: 'transit_snapshots', owner: { via: 'kundli_id' }, ownerOptional: true, fields: { snapshot: json } },
