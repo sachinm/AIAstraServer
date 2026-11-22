@@ -4186,3 +4186,23 @@ Each entry names the atlas pair that shows it. Nothing here was fixed; the atlas
 - **P3 · open · Not in the research at all:** KP, Nadi, Jaimini adhyayas 3–4, K.N. Rao's own text on combining
   dashas, Rath's *Vimsottari and Udu Dasas* ch. 3 (tie-break between conditional dashas), PVR's controlling-planet
   strength test as an engine field.
+
+## Filed 2026-11-22 by the helpers and disruptors check (docs/techniques/13)
+
+- **P1 · open · Yogi / avayogi is always false.** The engine's charter `vector_5_yogi_avayogi` reads
+  `sphutas.get("yogi_planet")` (engine `avasthas_export.py:439-441`) while `_build_sphutas` returns only
+  `{chart, sphutas}` (`natal_export.py:604-617`). The promise layer's yogi gift and avayogi knot
+  (`self/sub/promise.ts:61-86`) therefore never fire. Engine request E-R1 of doc 13.
+- **P1 · open · The protection layer still scores Jupiter's aspect +2** on houses, karakas and points
+  (`area/houseLayers.ts:398,412,418`), although doc 09 removed it as unsourced ("no Rath or SJC rule",
+  `deep-research/sanjay-rath/11` L126). Node astrology; the card pack reads it.
+- **P2 · open · The 5th tara is never flagged:** `BAD_TARA` matches "pratyak" (`houseLayers.ts:632-633`) but the engine
+  names it "Pratyari". A Node regex over engine labels; doc 13 reads the engine's names directly.
+- **P2 · open · Engine facts pulled for every chart but never given to the agents:** vargottama, vimshopaka,
+  ishta/kashta, planetary friendships (`relations`), maraka, yogakaraka (digest types `digest/types.ts:111-166`).
+  Doc 13 §3 passes them through to the roles pack.
+- **P3 · open · Engine requests E-R2 to E-R6 of doc 13:** eclipse flag; yogada and natal sahams; named kartari and net
+  argala; neecha bhanga conditions 4-8; planetary war for all pairs.
+- **P3 · open · No rule in the research** for breaking agreements or promises, losing at speculation, Mars or Rahu
+  taking focus, "what wins friends" as one planet, an "overpowered benefic", or a sourced age rule (maturity ages are
+  folk). Doc 13 reads these by house meaning and labels them.
